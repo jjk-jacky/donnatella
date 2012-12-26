@@ -11,7 +11,9 @@ window_destroy_cb (GtkWidget *window, gpointer data)
 static void
 tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, FsTree *fstree)
 {
-    fstree_add_root (fstree, "/home/jjacky");
+    gboolean show_hidden;
+    if (fstree_get_show_hidden (fstree, &show_hidden))
+        fstree_set_show_hidden (fstree, !show_hidden);
 }
 
 static void

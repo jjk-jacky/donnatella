@@ -201,6 +201,32 @@ row_collapsed_cb (GtkTreeView   *tree,
 }
 
 gboolean
+fstree_set_show_hidden (FsTree *fstree, gboolean show_hidden)
+{
+    FsTreePrivate *priv;
+
+    g_return_val_if_fail (IS_FSTREE (fstree), FALSE);
+
+    priv = fstree->priv;
+    if (priv->show_hidden == show_hidden)
+        return FALSE;
+    priv->show_hidden = show_hidden;
+    gtk_tree_model_filter_refilter (GTK_TREE_MODEL_FILTER (
+                gtk_tree_view_get_model (GTK_TREE_VIEW (fstree))));
+    return TRUE;
+}
+
+gboolean
+fstree_get_show_hidden (FsTree *fstree, gboolean *show_hidden)
+{
+    g_return_val_if_fail (IS_FSTREE (fstree), FALSE);
+    g_return_val_if_fail (show_hidden != NULL, FALSE);
+
+    *show_hidden = fstree->priv->show_hidden;
+    return TRUE;
+}
+
+gboolean
 fstree_add_root (FsTree *fstree, const gchar *root)
 {
     GtkTreeView         *tree;
