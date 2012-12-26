@@ -5,6 +5,7 @@
 
 struct _FsTreePrivate
 {
+    guint show_hidden : 1;
     guint is_minitree : 1;
 };
 
@@ -19,8 +20,13 @@ fstree_class_init (FsTreeClass *klass)
 static void
 fstree_init (FsTree *fstree)
 {
-    fstree->priv = G_TYPE_INSTANCE_GET_PRIVATE (fstree, TYPE_FSTREE,
+    FsTreePrivate *priv;
+
+    priv = fstree->priv = G_TYPE_INSTANCE_GET_PRIVATE (fstree, TYPE_FSTREE,
             FsTreePrivate);
+
+    priv->show_hidden = 1;
+    priv->is_minitree = 0;
 }
 
 static gboolean
@@ -65,8 +71,7 @@ static gboolean
 fill_folders (GtkTreeView   *tree,
               GtkTreeIter   *iter,
               const gchar   *root,
-              GDir          *dir,
-              gboolean       is_first)
+              GDir          *dir)
 {
     GtkTreeModelFilter  *filter;
     GtkTreeModel        *model;
@@ -89,25 +94,11 @@ fill_folders (GtkTreeView   *tree,
         }
         if (g_file_test ((s) ? s : buf, G_FILE_TEST_IS_DIR))
         {
-            if (is_first)
-            {
-                /* get first parent, aka a "fake"/blank node */
-                gtk_tree_model_iter_children (model, &new_iter, iter);
-                gtk_tree_store_set (store, &new_iter,
-                        FST_COL_FULL_NAME,      (s) ? s : buf,
-                        FST_COL_DISPLAY_NAME,   name,
-                        FST_COL_WAS_EXPANDED,   FALSE,
-                        -1);
-                is_first = FALSE;
-            }
-            else
-            {
-                gtk_tree_store_insert_with_values (store, &new_iter, iter, -1,
-                        FST_COL_FULL_NAME,      (s) ? s : buf,
-                        FST_COL_DISPLAY_NAME,   name,
-                        FST_COL_WAS_EXPANDED,   FALSE,
-                        -1);
-            }
+            gtk_tree_store_insert_with_values (store, &new_iter, iter, -1,
+                    FST_COL_FULL_NAME,      (s) ? s : buf,
+                    FST_COL_DISPLAY_NAME,   name,
+                    FST_COL_WAS_EXPANDED,   FALSE,
+                    -1);
             if (has_folder ((s) ? s : buf))
                 /* insert a fake node, because we haven't populated the children yet */
                 gtk_tree_store_insert_with_values (store, NULL, &new_iter, 0,
@@ -115,13 +106,27 @@ fill_folders (GtkTreeView   *tree,
                         FST_COL_DISPLAY_NAME,   NULL,
                         FST_COL_WAS_EXPANDED,   FALSE,
                         -1);
-            if (s)
-                g_free (s);
         }
         if (s)
             g_free (s);
     }
     return TRUE;
+}
+
+static gboolean
+visible_func (GtkTreeModel  *_model,
+              GtkTreeIter   *_iter,
+              gpointer       data)
+{
+    FsTree *fstree = FSTREE (data);
+    FsTreePrivate *priv = fstree->priv;
+    gchar *s = NULL;
+
+    if (priv->show_hidden)
+        return TRUE;
+
+    gtk_tree_model_get (_model, _iter, FST_COL_DISPLAY_NAME, &s, -1);
+    return !s || *s != '.';
 }
 
 static void
@@ -135,7 +140,7 @@ row_expanded_cb (GtkTreeView    *tree,
     GtkTreeModel        *_model;
     gboolean             was_expanded;
     GDir                *dir;
-    const gchar         *root;
+    gchar               *root;
 
     _model = gtk_tree_view_get_model (tree);
     gtk_tree_model_get (_model, _iter,
@@ -151,23 +156,33 @@ row_expanded_cb (GtkTreeView    *tree,
         dir = g_dir_open (root, 0, &err);
         if (err)
         {
+            g_free (root);
             g_clear_error (&err);
             return;
         }
 
         store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (filter));
         gtk_tree_model_filter_convert_iter_to_child_iter (filter, &iter, _iter);
-        if (!fill_folders (tree, &iter, root, dir, TRUE))
+        if (!fill_folders (tree, &iter, root, dir))
         {
             // remove all children
         }
         else
+        {
+            GtkTreeIter iter_blank;
+
             gtk_tree_store_set (store, &iter,
                     FST_COL_WAS_EXPANDED, TRUE,
                     -1);
+            /* remove first parent, aka "fake"/blank node */
+            gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
+                    &iter_blank, &iter);
+            gtk_tree_store_remove (store, &iter_blank);
+        }
 
         g_dir_close (dir);
     }
+    g_free (root);
 }
 
 static void
@@ -276,6 +291,7 @@ fstree_new (const gchar *root)
     /* create a filter */
     model_filter = gtk_tree_model_filter_new (model, NULL);
     filter = GTK_TREE_MODEL_FILTER (model_filter);
+    gtk_tree_model_filter_set_visible_func (filter, visible_func, tree, NULL);
     /* add to tree */
     gtk_tree_view_set_model (tree, model_filter);
 
