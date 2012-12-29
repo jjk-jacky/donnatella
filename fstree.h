@@ -15,11 +15,32 @@ typedef struct _FsTree          FsTree;
 typedef struct _FsTreePrivate   FsTreePrivate;
 typedef struct _FsTreeClass     FsTreeClass;
 
+typedef struct _FsTreeNode      FsTreeNode;
+typedef gboolean              (*has_children_fn)    (const FsTreeNode   *node);
+typedef gboolean              (*fill_children_fn)   (const FsTreeNode   *node,
+                                                     FsTree             *fstree,
+                                                     GtkTreeIter        *iter);
+
+struct _FsTreeNode
+{
+    char                *key;
+    char                *name;
+    char                *tooltip;
+    has_children_fn      has_children;
+    fill_children_fn     fill_children;
+};
+
+typedef enum
+{
+    FST_EXPAND_NEVER = 0,
+    FST_EXPAND_PARTIAL,
+    FST_EXPAND_FULL
+} expand_state_t;
+
 enum
 {
-    FST_COL_FULL_NAME = 0,
-    FST_COL_DISPLAY_NAME,
-    FST_COL_WAS_EXPANDED,
+    FST_COL_NODE = 0,
+    FST_COL_EXPAND_STATE,
     FST_NB_COLS
 };
 
