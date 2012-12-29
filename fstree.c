@@ -340,7 +340,12 @@ utf8_collate_key (const gchar   *str,
             {
                 /* filenames starting with those characters will be sorted
                  * before others */
+                case '.':
+                    if (!dot_first && p == str)
+                        break;
+                    /* Fall through */
                 case '-':
+                case '=':
                 case '+':
                 case ' ':
                 case '#':
