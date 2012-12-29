@@ -15,7 +15,8 @@ typedef struct _FsTree          FsTree;
 typedef struct _FsTreePrivate   FsTreePrivate;
 typedef struct _FsTreeClass     FsTreeClass;
 
-typedef struct _FsTreeNode      FsTreeNode;
+typedef struct _FsTreeNode          FsTreeNode;
+typedef struct _FsTreeNodeFolder    FsTreeNodeFolder;
 typedef gboolean              (*has_children_fn)    (const FsTreeNode   *node);
 typedef gboolean              (*fill_children_fn)   (const FsTreeNode   *node,
                                                      FsTree             *fstree,
@@ -29,6 +30,14 @@ struct _FsTreeNode
     has_children_fn      has_children;
     fill_children_fn     fill_children;
 };
+
+struct _FsTreeNodeFolder
+{
+    FsTreeNode  parent;
+};
+
+#define FSTREE_NODE(n)          (&(n)->parent)
+#define FSTREE_NODE_FOLDER(n)   ((FsTreeNodeFolder *) n)
 
 typedef enum
 {
