@@ -4,11 +4,17 @@
 #include <stdlib.h>
 #include "fstree.h"
 
-static FsTreeNode *new_folder_node (const gchar *root);
-
 struct _FsTreePrivate
 {
+    /* sorting options */
+    guint sort_dot_first : 1;
+    guint sort_special_first : 1;
+    guint sort_natural_order : 1;
+
+    /* show hidden places (.folders) */
     guint show_hidden : 1;
+
+    /* MiniTree mode */
     guint is_minitree : 1;
 };
 
@@ -28,8 +34,11 @@ fstree_init (FsTree *fstree)
     priv = fstree->priv = G_TYPE_INSTANCE_GET_PRIVATE (fstree, TYPE_FSTREE,
             FsTreePrivate);
 
-    priv->show_hidden = 1;
-    priv->is_minitree = 0;
+    priv->sort_dot_first     = 1;
+    priv->sort_special_first = 1;
+    priv->sort_natural_order = 1;
+    priv->show_hidden        = 0;
+    priv->is_minitree        = 0;
 }
 
 static gboolean
@@ -266,7 +275,11 @@ rend_fn (GtkTreeViewColumn  *column,
 #define COLLATION_SENTINEL  "\1\1\1"
 
 static gchar *
-utf8_collate_key (const gchar *str, gssize len)
+utf8_collate_key (const gchar   *str,
+                  gssize         len,
+                  gboolean       dot_first,
+                  gboolean       special_first,
+                  gboolean       natural_order)
 {
     GString *result;
     GString *append;
@@ -289,7 +302,7 @@ utf8_collate_key (const gchar *str, gssize len)
     /* No need to use utf8 functions, since we're only looking for ascii chars */
     for (prev = p = str; p < end; ++p)
     {
-        if (prefix < 2)
+        if (special_first && prefix < 2)
             switch (*p)
             {
                 /* filenames starting with those characters will be sorted
@@ -321,8 +334,9 @@ utf8_collate_key (const gchar *str, gssize len)
         switch (*p)
         {
             case '.':
-                if (0&&p == str)
+                if (!dot_first && p == str)
                     break;
+
                 if (prev != p)
                 {
                     collate_key = g_utf8_collate_key (prev, p - prev);
@@ -346,6 +360,9 @@ utf8_collate_key (const gchar *str, gssize len)
             case '7':
             case '8':
             case '9':
+                if (!natural_order)
+                    break;
+
                 if (prev != p)
                 {
                     collate_key = g_utf8_collate_key (prev, p - prev);
@@ -432,11 +449,13 @@ sort_func (GtkTreeModel *model,
            GtkTreeIter  *iter2,
            gpointer      data)
 {
-    FsTreeNode *node1;
-    FsTreeNode *node2;
-    gchar *key1;
-    gchar *key2;
-    gint   ret;
+    FsTree          *fstree = FSTREE (data);
+    FsTreePrivate   *priv;
+    FsTreeNode      *node1;
+    FsTreeNode      *node2;
+    gchar           *key1;
+    gchar           *key2;
+    gint             ret;
 
     gtk_tree_model_get (model, iter1, FST_COL_NODE, &node1, -1);
     gtk_tree_model_get (model, iter2, FST_COL_NODE, &node2, -1);
@@ -447,8 +466,16 @@ sort_func (GtkTreeModel *model,
     else if (!node2)
         return 1;
 
-    key1 = utf8_collate_key (node1->name, -1);
-    key2 = utf8_collate_key (node2->name, -1);
+    priv = fstree->priv;
+
+    key1 = utf8_collate_key (node1->name, -1,
+            priv->sort_dot_first,
+            priv->sort_special_first,
+            priv->sort_natural_order);
+    key2 = utf8_collate_key (node2->name, -1,
+            priv->sort_dot_first,
+            priv->sort_special_first,
+            priv->sort_natural_order);
     ret = strcmp (key1, key2);
     g_free (key1);
     g_free (key2);
@@ -592,7 +619,7 @@ fstree_new (FsTreeNode *node)
 
     /* sort */
     gtk_tree_sortable_set_sort_func (GTK_TREE_SORTABLE (model),
-            FST_COL_NODE, sort_func, NULL, NULL);
+            FST_COL_NODE, sort_func, tree, NULL);
     gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (model),
             FST_COL_NODE, GTK_SORT_ASCENDING);
 
