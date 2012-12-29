@@ -16,33 +16,21 @@ typedef struct _FsTreePrivate   FsTreePrivate;
 typedef struct _FsTreeClass     FsTreeClass;
 
 typedef struct _FsTreeNode          FsTreeNode;
-typedef struct _FsTreeNodeFolder    FsTreeNodeFolder;
-typedef gboolean              (*has_children_fn)    (const FsTreeNode  *node);
-typedef FsTreeNode **         (*get_children_fn)    (const FsTreeNode  *node,
-                                                     GError           **error);
+typedef gboolean            (*has_children_fn)  (const FsTreeNode   *node,
+                                                 gpointer            data);
+typedef FsTreeNode **       (*get_children_fn)  (const FsTreeNode   *node,
+                                                 gpointer            data,
+                                                 GError            **error);
+typedef void                (*destroy_node_fn)  (gchar              *key,
+                                                 gchar              *name,
+                                                 gchar              *tooltip,
+                                                 gpointer            data);
 
 #define FST_ERROR       g_quark_from_static_string ("FsTree-Error")
 enum
 {
     FST_ERROR_NOMEM
 } fst_error_t;
-
-struct _FsTreeNode
-{
-    char                *key;
-    char                *name;
-    char                *tooltip;
-    has_children_fn      has_children;
-    get_children_fn     get_children;
-};
-
-struct _FsTreeNodeFolder
-{
-    FsTreeNode  parent;
-};
-
-#define FSTREE_NODE(n)          (&(n)->parent)
-#define FSTREE_NODE_FOLDER(n)   ((FsTreeNodeFolder *) n)
 
 typedef enum
 {
@@ -71,19 +59,27 @@ struct _FsTreeClass
     GtkTreeViewClass parent_class;
 };
 
-GType           fstree_get_type                         (void) G_GNUC_CONST;
+GType           fstree_get_type                     (void) G_GNUC_CONST;
 
-GtkWidget *     fstree_new                              (FsTreeNode *node);
-gboolean        fstree_add_root                         (FsTree *fstree,
-                                                         FsTreeNode *node);
-gboolean        fstree_set_root                         (FsTree *fstree,
-                                                         FsTreeNode *node);
-FsTreeNode *    fstree_node_new_folder                  (const gchar *path);
-void            fstree_free_node_folder                 (FsTreeNode *node);
-gboolean        fstree_set_show_hidden                  (FsTree *fstree,
-                                                         gboolean show_hidden);
-gboolean        fstree_get_show_hidden                  (FsTree *fstree,
-                                                         gboolean *show_hidden);
+GtkWidget *     fstree_new                          (FsTreeNode     *node);
+gboolean        fstree_add_root                     (FsTree         *fstree,
+                                                     FsTreeNode     *node);
+gboolean        fstree_set_root                     (FsTree         *fstree,
+                                                     FsTreeNode     *node);
+FsTreeNode *    fstree_node_new                     (gchar          *key,
+                                                     gchar          *name,
+                                                     gchar          *tooltip,
+                                                     has_children_fn has_children,
+                                                     get_children_fn get_children,
+                                                     gpointer        data,
+                                                     destroy_node_fn destroy_node);
+void            fstree_node_free                    (FsTreeNode     *node);
+FsTreeNode *    fstree_node_new_folder              (const gchar    *path);
+void            fstree_free_node_folder             (FsTreeNode     *node);
+gboolean        fstree_set_show_hidden              (FsTree         *fstree,
+                                                     gboolean        show_hidden);
+gboolean        fstree_get_show_hidden              (FsTree         *fstree,
+                                                     gboolean       *show_hidden);
 
 G_END_DECLS
 

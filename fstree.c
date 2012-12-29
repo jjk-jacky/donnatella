@@ -18,6 +18,23 @@ struct _FsTreePrivate
     guint is_minitree : 1;
 };
 
+struct _FsTreeNode
+{
+    /* "public" stuff */
+    char                *key;
+    char                *name;
+    char                *tooltip;
+    has_children_fn      has_children;
+    get_children_fn      get_children;
+    gpointer             data;
+    destroy_node_fn      destroy_node;
+
+    /* private stuff */
+    GtkTreeIter        **iters;
+    gint                 alloc_iters;
+    gint                 nb_iters;
+};
+
 G_DEFINE_TYPE (FsTree, fstree, GTK_TYPE_TREE_VIEW);
 
 static void
@@ -42,7 +59,7 @@ fstree_init (FsTree *fstree)
 }
 
 static gboolean
-has_folder (const FsTreeNode *fstreenode)
+has_folder (const FsTreeNode *fstreenode, gpointer data)
 {
     GError      *err = NULL;
     GDir        *dir;
@@ -82,7 +99,8 @@ has_folder (const FsTreeNode *fstreenode)
 
 static FsTreeNode **
 get_folders (const FsTreeNode   *node,
-              GError            **error)
+             gpointer            data,
+             GError            **error)
 {
     GError       *err       = NULL;
     FsTreeNode  **children  = NULL;
@@ -166,6 +184,46 @@ get_folders (const FsTreeNode   *node,
 }
 
 FsTreeNode *
+fstree_node_new (gchar              *key,
+                 gchar              *name,
+                 gchar              *tooltip,
+                 has_children_fn     has_children,
+                 get_children_fn     get_children,
+                 gpointer            data,
+                 destroy_node_fn     destroy_node)
+{
+    FsTreeNode *node;
+
+    node = calloc (1, sizeof (*node));
+    if (!node)
+        return NULL;
+
+    node->key           = key;
+    node->name          = name;
+    node->tooltip       = tooltip;
+    node->has_children  = has_children;
+    node->get_children  = get_children;
+    node->data          = data;
+    node->destroy_node  = destroy_node;
+
+    return node;
+}
+
+void
+fstree_node_free (FsTreeNode *node)
+{
+    if (node->destroy_node)
+        node->destroy_node (node->key, node->name, node->tooltip, node->data);
+    free (node);
+}
+
+static void
+free_node_folder (gchar *key, gchar *name, gchar *tooltip, gpointer data)
+{
+    free (key);
+}
+
+FsTreeNode *
 fstree_node_new_folder (const gchar *root)
 {
     FsTreeNode *node;
@@ -179,19 +237,12 @@ fstree_node_new_folder (const gchar *root)
     /* unless this is root ("/") we go past the / for display */
     if (node->name[1] != '\0')
         ++(node->name);
-    node->tooltip      = node->key;
-    node->has_children = has_folder;
-    node->get_children = get_folders;
-    return node;
-}
+    node->tooltip       = node->key;
+    node->has_children  = has_folder;
+    node->get_children  = get_folders;
+    node->destroy_node  = free_node_folder;
 
-void
-fstree_free_node_folder (FsTreeNode *node)
-{
-    if (!node)
-        return;
-    free (node->key);
-    free (node);
+    return node;
 }
 
 static gboolean
@@ -232,7 +283,7 @@ row_expanded_cb (GtkTreeView    *tree,
     {
         FsTreeNode         **children;
 
-        children = node->get_children (node, &err);
+        children = node->get_children (node, node->data, &err);
         if (err)
         {
             printf ("failed to get children\n");
@@ -255,7 +306,7 @@ row_expanded_cb (GtkTreeView    *tree,
                         FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
                         -1);
                 if ((*child)->has_children && (*child)->get_children
-                        && (*child)->has_children (*child))
+                        && (*child)->has_children (*child, (*child)->data))
                     /* insert a fake node, because we haven't populated the children
                      * yet */
                     gtk_tree_store_insert_with_values (store, NULL, &new_iter, 0,
@@ -564,7 +615,8 @@ fstree_add_root (FsTree *fstree, FsTreeNode *node)
             FST_COL_NODE,           node,
             FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
             -1);
-    if (node->has_children && node->get_children && node->has_children (node))
+    if (node->has_children && node->get_children
+            && node->has_children (node, node->data))
         /* insert a fake node, because we haven't populated the children yet */
         gtk_tree_store_insert_with_values (store, NULL, &iter, 0,
                 FST_COL_NODE,           NULL,
