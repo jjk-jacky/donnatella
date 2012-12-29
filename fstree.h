@@ -17,10 +17,15 @@ typedef struct _FsTreeClass     FsTreeClass;
 
 typedef struct _FsTreeNode          FsTreeNode;
 typedef struct _FsTreeNodeFolder    FsTreeNodeFolder;
-typedef gboolean              (*has_children_fn)    (const FsTreeNode   *node);
-typedef gboolean              (*fill_children_fn)   (const FsTreeNode   *node,
-                                                     FsTree             *fstree,
-                                                     GtkTreeIter        *iter);
+typedef gboolean              (*has_children_fn)    (const FsTreeNode  *node);
+typedef FsTreeNode **         (*get_children_fn)    (const FsTreeNode  *node,
+                                                     GError           **error);
+
+#define FST_ERROR       g_quark_from_static_string ("FsTree-Error")
+enum
+{
+    FST_ERROR_NOMEM
+} fst_error_t;
 
 struct _FsTreeNode
 {
@@ -28,7 +33,7 @@ struct _FsTreeNode
     char                *name;
     char                *tooltip;
     has_children_fn      has_children;
-    fill_children_fn     fill_children;
+    get_children_fn     get_children;
 };
 
 struct _FsTreeNodeFolder

@@ -80,33 +80,27 @@ has_folder (const FsTreeNode *fstreenode)
     return ret;
 }
 
-static gboolean
-fill_folders (const FsTreeNode  *node,
-              FsTree            *fstree,
-              GtkTreeIter       *iter)
+static FsTreeNode **
+get_folders (const FsTreeNode   *node,
+              GError            **error)
 {
-    GError              *err = NULL;
-    GtkTreeModelFilter  *filter;
-    GtkTreeModel        *model;
-    GtkTreeStore        *store;
-    GtkTreeIter          new_iter;
-    GDir                *dir;
-    const gchar         *name;
-    gchar                buf[1024];
-    gchar               *s;
-    gboolean             ret = TRUE;
+    GError       *err       = NULL;
+    FsTreeNode  **children  = NULL;
+    gint          nb        = 0;
+    gint          alloc     = 0;
+    GDir         *dir;
+    const gchar  *name;
+    gchar         buf[1024];
+    gchar        *s;
+
+    g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
     dir = g_dir_open (node->key, 0, &err);
     if (err)
     {
-        g_clear_error (&err);
-        return FALSE;
+        g_propagate_error (error, err);
+        return NULL;
     }
-
-    filter = GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (
-                GTK_TREE_VIEW (fstree)));
-    model = gtk_tree_model_filter_get_model (filter);
-    store = GTK_TREE_STORE (model);
 
     while ((name = g_dir_read_name (dir)))
     {
@@ -132,25 +126,43 @@ fill_folders (const FsTreeNode  *node,
             {
                 if (s)
                     g_free (s);
-                ret = FALSE;
+                free (children);
+                children = NULL;
+                g_set_error (error, FST_ERROR, FST_ERROR_NOMEM,
+                        "Out of memory: cannot create new node");
                 break;
             }
-            gtk_tree_store_insert_with_values (store, &new_iter, iter, -1,
-                    FST_COL_NODE,           child,
-                    FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
-                    -1);
-            if (has_folder (child))
-                /* insert a fake node, because we haven't populated the children yet */
-                gtk_tree_store_insert_with_values (store, NULL, &new_iter, 0,
-                        FST_COL_NODE,           NULL,
-                        FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
-                        -1);
+
+            if (++nb >= alloc)
+            {
+                FsTreeNode **c;
+
+                alloc += 23;
+                c = realloc (children, alloc * sizeof (*children));
+                if (!c)
+                {
+                    if (s)
+                        g_free (s);
+                    free (children);
+                    children = NULL;
+                    g_set_error (error, FST_ERROR, FST_ERROR_NOMEM,
+                            "Out of memory: cannot create children nodes");
+                    break;
+                }
+                children = c;
+            }
+            children[nb - 1] = child;
         }
         if (s)
             g_free (s);
     }
     g_dir_close (dir);
-    return ret;
+
+    /* ensure it's NULL terminated */
+    if (children)
+        children[nb] = NULL;
+
+    return children;
 }
 
 FsTreeNode *
@@ -167,9 +179,9 @@ fstree_node_new_folder (const gchar *root)
     /* unless this is root ("/") we go past the / for display */
     if (node->name[1] != '\0')
         ++(node->name);
-    node->tooltip       = node->key;
-    node->has_children  = has_folder;
-    node->fill_children = fill_folders;
+    node->tooltip      = node->key;
+    node->has_children = has_folder;
+    node->get_children = get_folders;
     return node;
 }
 
@@ -207,7 +219,6 @@ row_expanded_cb (GtkTreeView    *tree,
     GError              *err = NULL;
     GtkTreeModelFilter  *filter;
     GtkTreeModel        *_model;
-    gboolean             was_expanded;
     FsTreeNode          *node;
     expand_state_t       expand_state;
 
@@ -216,30 +227,52 @@ row_expanded_cb (GtkTreeView    *tree,
             FST_COL_NODE,           &node,
             FST_COL_EXPAND_STATE,   &expand_state,
             -1);
+
     if (expand_state == FST_EXPAND_NEVER)
     {
-        GtkTreeModelFilter  *filter = GTK_TREE_MODEL_FILTER (_model);
-        GtkTreeStore        *store;
-        GtkTreeIter          iter;
+        FsTreeNode         **children;
 
-        store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (filter));
-        gtk_tree_model_filter_convert_iter_to_child_iter (filter, &iter, _iter);
-        if (!node->fill_children (node, FSTREE (tree), &iter))
+        children = node->get_children (node, &err);
+        if (err)
         {
-            // remove all children
-            printf ("fail fill children\n");
+            printf ("failed to get children\n");
         }
         else
         {
-            GtkTreeIter iter_blank;
+            GtkTreeModelFilter  *filter = GTK_TREE_MODEL_FILTER (_model);
+            GtkTreeStore        *store;
+            GtkTreeIter          iter;
+            GtkTreeIter          new_iter;
+            FsTreeNode         **child;
 
+            store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (filter));
+            gtk_tree_model_filter_convert_iter_to_child_iter (filter, &iter, _iter);
+
+            for (child = children; *child; ++child)
+            {
+                gtk_tree_store_insert_with_values (store, &new_iter, &iter, -1,
+                        FST_COL_NODE,           *child,
+                        FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
+                        -1);
+                if ((*child)->has_children && (*child)->get_children
+                        && (*child)->has_children (*child))
+                    /* insert a fake node, because we haven't populated the children
+                     * yet */
+                    gtk_tree_store_insert_with_values (store, NULL, &new_iter, 0,
+                            FST_COL_NODE,           *child,
+                            FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
+                            -1);
+            }
+            free (children);
+
+            /* update expand state */
             gtk_tree_store_set (store, &iter,
                     FST_COL_EXPAND_STATE, FST_EXPAND_FULL,
                     -1);
             /* remove first parent, aka "fake"/blank node */
             gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
-                    &iter_blank, &iter);
-            gtk_tree_store_remove (store, &iter_blank);
+                    &new_iter, &iter);
+            gtk_tree_store_remove (store, &new_iter);
         }
     }
 }
@@ -526,7 +559,7 @@ fstree_add_root (FsTree *fstree, FsTreeNode *node)
             FST_COL_NODE,           node,
             FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
             -1);
-    if (node->has_children && node->has_children (node))
+    if (node->has_children && node->get_children && node->has_children (node))
         /* insert a fake node, because we haven't populated the children yet */
         gtk_tree_store_insert_with_values (store, NULL, &iter, 0,
                 FST_COL_NODE,           NULL,
