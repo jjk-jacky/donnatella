@@ -301,10 +301,22 @@ row_expanded_cb (GtkTreeView    *tree,
 
             for (child = children; *child; ++child)
             {
-                gtk_tree_store_insert_with_values (store, &new_iter, &iter, -1,
-                        FST_COL_NODE,           *child,
-                        FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
-                        -1);
+                if (child == children)
+                {
+                    /* for the first one, let's re-use the "fake"/blank node
+                     * that was thre to provide the collapser */
+                    gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
+                            &new_iter, &iter);
+                    gtk_tree_store_set (store, &new_iter,
+                            FST_COL_NODE,           *child,
+                            FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
+                            -1);
+                }
+                else
+                    gtk_tree_store_insert_with_values (store, &new_iter, &iter, -1,
+                            FST_COL_NODE,           *child,
+                            FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
+                            -1);
                 if ((*child)->has_children && (*child)->get_children
                         && (*child)->has_children (*child, (*child)->data))
                     /* insert a fake node, because we haven't populated the children
@@ -320,10 +332,6 @@ row_expanded_cb (GtkTreeView    *tree,
             gtk_tree_store_set (store, &iter,
                     FST_COL_EXPAND_STATE, FST_EXPAND_FULL,
                     -1);
-            /* remove first parent, aka "fake"/blank node */
-            gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
-                    &new_iter, &iter);
-            gtk_tree_store_remove (store, &new_iter);
         }
     }
 }
