@@ -381,7 +381,6 @@ utf8_collate_key (const gchar   *str,
     gchar *collate_key;
     gint digits;
     gint leading_zeros;
-    gint prefix = 0;
 
     if (len < 0)
         len = strlen (str);
@@ -390,44 +389,41 @@ utf8_collate_key (const gchar   *str,
     append = g_string_sized_new (0);
 
     end = str + len;
+    p = str;
+
+    if (special_first)
+    {
+        const gchar *s = str;
+        gboolean prefix = FALSE;
+
+        while ((s = g_utf8_find_next_char (s, end)))
+        {
+            gunichar c;
+
+            c = g_utf8_get_char (s);
+            if (!g_unichar_isalnum (c))
+            {
+                if (!prefix)
+                    prefix = TRUE;
+            }
+            else
+            {
+                if (prefix)
+                {
+                    /* adding the string itself and not a collate_key
+                     * so that ! comes before - */
+                    g_string_append_len (result, str, s - str);
+                    g_string_append (result, COLLATION_SENTINEL "\1");
+                    p += s - str;
+                }
+                break;
+            }
+        }
+    }
 
     /* No need to use utf8 functions, since we're only looking for ascii chars */
-    for (prev = p = str; p < end; ++p)
+    for (prev = p; p < end; ++p)
     {
-        if (special_first && prefix < 2)
-            switch (*p)
-            {
-                /* filenames starting with those characters will be sorted
-                 * before others */
-                case '.':
-                    if (!dot_first && p == str)
-                        break;
-                    /* Fall through */
-                case '-':
-                case '=':
-                case '+':
-                case ' ':
-                case '#':
-                case '$':
-                case '!':
-                    if (prefix == 0)
-                        ++prefix;
-                    break;
-
-                default:
-                    if (prefix == 1)
-                    {
-                        if (prev != p)
-                        {
-                            /* adding the string itself and not a collate_key
-                             * so that ! comes before - */
-                            g_string_append_len (result, prev, p - prev);
-                        }
-                        g_string_append (result, COLLATION_SENTINEL "\1");
-                    }
-                    prefix = 2;
-            }
-
         switch (*p)
         {
             case '.':
