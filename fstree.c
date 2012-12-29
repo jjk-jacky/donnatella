@@ -118,7 +118,7 @@ fill_folders (const FsTreeNode  *node,
         {
             FsTreeNode *child;
 
-            child = new_folder_node ((s) ? s : buf);
+            child = fstree_node_new_folder ((s) ? s : buf);
             if (!child)
             {
                 if (s)
@@ -144,8 +144,8 @@ fill_folders (const FsTreeNode  *node,
     return ret;
 }
 
-static FsTreeNode *
-new_folder_node (const gchar *root)
+FsTreeNode *
+fstree_node_new_folder (const gchar *root)
 {
     FsTreeNode *node;
 
@@ -164,8 +164,8 @@ new_folder_node (const gchar *root)
     return node;
 }
 
-static void
-free_folder_node (FsTreeNode *node)
+void
+fstree_free_node_folder (FsTreeNode *node)
 {
     if (!node)
         return;
@@ -482,28 +482,24 @@ fstree_get_show_hidden (FsTree *fstree, gboolean *show_hidden)
 }
 
 gboolean
-fstree_add_root (FsTree *fstree, const gchar *root)
+fstree_add_root (FsTree *fstree, FsTreeNode *node)
 {
     GtkTreeView     *tree;
     GtkTreeStore    *store;
     GtkTreeIter      iter;
-    FsTreeNode      *node;
 
     g_return_val_if_fail (IS_FSTREE (fstree), FALSE);
-    g_return_val_if_fail (root != NULL, FALSE);
+    g_return_val_if_fail (node != NULL, FALSE);
 
     tree = GTK_TREE_VIEW (fstree);
     store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (
             GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (tree))));
 
-    node = new_folder_node (root);
-    if (!node)
-        return FALSE;
     gtk_tree_store_insert_with_values (store, &iter, NULL, 0,
             FST_COL_NODE,           node,
             FST_COL_EXPAND_STATE,   FST_EXPAND_NEVER,
             -1);
-    if (node->has_children (node))
+    if (node->has_children && node->has_children (node))
         /* insert a fake node, because we haven't populated the children yet */
         gtk_tree_store_insert_with_values (store, NULL, &iter, 0,
                 FST_COL_NODE,           NULL,
@@ -514,7 +510,7 @@ fstree_add_root (FsTree *fstree, const gchar *root)
 }
 
 gboolean
-fstree_set_root (FsTree *fstree, const gchar *root)
+fstree_set_root (FsTree *fstree, FsTreeNode *node)
 {
     GtkTreeView         *tree;
     GtkTreeModel        *model_filter;
@@ -523,8 +519,11 @@ fstree_set_root (FsTree *fstree, const gchar *root)
     GtkTreeSelection    *sel;
 
     g_return_val_if_fail (IS_FSTREE (fstree), FALSE);
-    if (!root)
-        root = "/";
+
+    if (!node)
+        node = fstree_node_new_folder ("/");
+    if (!node)
+        return FALSE;
 
     tree = GTK_TREE_VIEW (fstree);
     model_filter = gtk_tree_view_get_model (tree);
@@ -532,7 +531,7 @@ fstree_set_root (FsTree *fstree, const gchar *root)
     sel = gtk_tree_view_get_selection (tree);
 
     gtk_tree_store_clear (GTK_TREE_STORE (model));
-    if (!fstree_add_root (fstree, root))
+    if (!fstree_add_root (fstree, node))
         return FALSE;
 
     if (!gtk_tree_model_get_iter_first (model_filter, &iter))
@@ -546,7 +545,7 @@ fstree_set_root (FsTree *fstree, const gchar *root)
 }
 
 GtkWidget *
-fstree_new (const gchar *root)
+fstree_new (FsTreeNode *node)
 {
     GtkWidget           *w;
     GtkTreeView         *tree;
@@ -598,7 +597,7 @@ fstree_new (const gchar *root)
             FST_COL_NODE, GTK_SORT_ASCENDING);
 
     /* fill tree */
-    fstree_set_root (FSTREE (tree), root);
+    fstree_set_root (FSTREE (tree), node);
 
     /* connetc to some signals */
     g_signal_connect (G_OBJECT (tree), "row-expanded",

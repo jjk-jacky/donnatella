@@ -19,7 +19,7 @@ tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, FsTree *fstree)
 static void
 tb_new_root_clicked_cb (GtkToolButton *tb_btn, FsTree *fstree)
 {
-    fstree_set_root (fstree, "/home/jjacky");
+    fstree_set_root (fstree, fstree_node_new_folder ("/home/jjacky"));
 }
 
 int

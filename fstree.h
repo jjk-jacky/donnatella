@@ -57,17 +57,19 @@ struct _FsTreeClass
     GtkTreeViewClass parent_class;
 };
 
-GType       fstree_get_type                         (void) G_GNUC_CONST;
+GType           fstree_get_type                         (void) G_GNUC_CONST;
 
-GtkWidget * fstree_new                              (const gchar *root);
-gboolean    fstree_add_root                         (FsTree *fstree,
-                                                     const gchar *root);
-gboolean    fstree_set_root                         (FsTree *fstree,
-                                                     const gchar *root);
-gboolean    fstree_set_show_hidden                  (FsTree *fstree,
-                                                     gboolean show_hidden);
-gboolean    fstree_get_show_hidden                  (FsTree *fstree,
-                                                     gboolean *show_hidden);
+GtkWidget *     fstree_new                              (FsTreeNode *node);
+gboolean        fstree_add_root                         (FsTree *fstree,
+                                                         FsTreeNode *node);
+gboolean        fstree_set_root                         (FsTree *fstree,
+                                                         FsTreeNode *node);
+FsTreeNode *    fstree_node_new_folder                  (const gchar *path);
+void            fstree_free_node_folder                 (FsTreeNode *node);
+gboolean        fstree_set_show_hidden                  (FsTree *fstree,
+                                                         gboolean show_hidden);
+gboolean        fstree_get_show_hidden                  (FsTree *fstree,
+                                                         gboolean *show_hidden);
 
 G_END_DECLS
 
