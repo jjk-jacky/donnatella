@@ -67,7 +67,9 @@ struct _FsTreeProviderInterface
                                              FsTreeNode      *node);
 
     /* virtual table */
-    FsTreeNode *    (*get_node)             (FsTreeProvider  *provider);
+    FsTreeNode *    (*get_node)             (FsTreeProvider  *provider,
+                                             const gchar     *location,
+                                             GError         **error);
     FsTreeNode **   (*get_children)         (FsTreeProvider  *provider,
                                              FsTreeNode      *node,
                                              GError         **error);
@@ -75,7 +77,9 @@ struct _FsTreeProviderInterface
 
 GType           fstree_provider_get_type        (void) G_GNUC_CONST;
 
-FsTreeNode *    fstree_provider_get_node        (FsTreeProvider  *provider);
+FsTreeNode *    fstree_provider_get_node        (FsTreeProvider  *provider,
+                                                 const gchar     *location,
+                                                 GError         **error);
 FsTreeNode **   fstree_provider_get_children    (FsTreeProvider  *provider,
                                                  FsTreeNode      *node,
                                                  GError         **error);
