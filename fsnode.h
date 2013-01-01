@@ -4,6 +4,17 @@
 
 G_BEGIN_DECLS
 
+#define FSNODE_ERROR            g_quark_from_static_string ("FsNode-Error")
+typedef enum
+{
+    FSNODE_ERROR_NOMEM,
+    FSNODE_ERROR_ALREADY_EXISTS,
+    FSNODE_ERROR_NOT_FOUND,
+    FSNODE_ERROR_READ_ONLY,
+    FSNODE_ERROR_INVALID_TYPE,
+    FSNODE_ERROR_OTHER
+} FsNodeError;
+
 #define TYPE_FSNODE             (fsnode_get_type ())
 #define FSNODE(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), TYPE_FSNODE, FsNode))
 #define FSNODE_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass), TYPE_FSNODE, FsNodeClass))
@@ -15,8 +26,20 @@ typedef struct _FsNode          FsNode;
 typedef struct _FsNodeClass     FsNodeClass;
 typedef struct _FsNodePrivate   FsNodePrivate;
 
-typedef gboolean (*get_value_fn) (FsNode *node, const gchar *name, GValue *value);
-typedef gboolean (*set_value_fn) (FsNode *node, const gchar *name, const GValue *value);
+/* function used from set_value_fn implementations, to update values */
+typedef void        (*set_fn)       (FsNode         *node,
+                                     const gchar    *name,
+                                     GValue         *value);
+/* functions called by a node to get/set a property value */
+typedef gboolean    (*get_value_fn) (FsNode         *node,
+                                     const gchar    *name,
+                                     set_fn          set_value,
+                                     GError        **error);
+typedef gboolean    (*set_value_fn) (FsNode         *node,
+                                     const gchar    *name,
+                                     set_fn          set_value,
+                                     GValue         *value,
+                                     GError        **error);
 
 struct _FsNode
 {
@@ -28,11 +51,17 @@ struct _FsNode
 struct _FsNodeClass
 {
     GObjectClass parent;
+
+    void        (*node_deleted)         (FsNode *node);
 };
 
 GType           fsnode_get_type         (void) G_GNUC_CONST;
 
-FsNode *        fsnode_new              (void);
+FsNode *        fsnode_new              (FsProvider      *provider,
+                                         const gchar     *location);
+FsNode *        fsnode_new_from_node    (FsProvider      *provider,
+                                         const gchar     *location,
+                                         FsNode          *sce);
 gboolean        fsnode_add_property     (FsNode          *node,
                                          const gchar     *name,
                                          GType            type,
@@ -40,13 +69,20 @@ gboolean        fsnode_add_property     (FsNode          *node,
                                          get_value_fn     get_value,
                                          set_value_fn     set_value,
                                          GError         **error);
-void            fsnode_set              (FsNode          *node,
-                                         const gchar     *first_property_name,
-                                         ...);
+gboolean        fsnode_set_property     (FsNode          *node,
+                                         const gchar     *name,
+                                         GValue          *value,
+                                         GError         **error);
 void            fsnode_get              (FsNode          *node,
+                                         GError         **error,
                                          const gchar     *first_property_name,
                                          ...);
 void            fsnode_refresh          (FsNode          *node);
+void            fsnode_add_iter         (FsNode          *node,
+                                         GtkTreeIter     *iter);
+gboolean        fsnode_remove_iter      (FsNode          *node,
+                                         GtkTreeIter     *iter);
+GtkTreeIter **  fsnode_get_iters        (FsNode          *node);
 
 G_END_DECLS
 
