@@ -253,7 +253,28 @@ get_valist (FsNode       *node,
         gchar *err;
 
         prop = g_hash_table_lookup (props, (gpointer) name);
-        /* FIXME get_value maybe?? */
+        if (!prop)
+        {
+            g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_NOT_FOUND,
+                    "Node has no property %s", name);
+            break;
+        }
+        if (!prop->has_value)
+        {
+            GError *err_local = NULL;
+
+            /* we remove the reader lock, to allow get_value to do its work
+             * and call set_prop, which needs a writer lock obviously */
+            g_rw_lock_reader_unlock (&node->priv->props_lock);
+            if (!prop->get_value (node, name, set_prop, &err_local))
+            {
+                g_propagate_error (error, err_local);
+                return;
+            }
+            g_rw_lock_reader_lock (&node->priv->props_lock);
+            /* let's assume prop is still valid. Properties cannot be removed,
+             * so it has to still exists after all */
+        }
         G_VALUE_LCOPY (&(prop->value), va_args, 0, &err);
         if (err)
         {
