@@ -9,7 +9,9 @@ struct _FsNodePrivate
     FsProvider  *provider;
     const gchar *location;
     GHashTable  *props;
+    GRWLock      props_lock;
     GPtrArray   *iters;
+    GMutex       iters_mutex;
 };
 
 typedef struct
@@ -63,8 +65,10 @@ fsnode_new (FsProvider  *provider,
     priv->location = location;
     priv->props = g_hash_table_new_full (g_str_hash, g_str_equal,
             NULL, free_prop);
+    g_rw_lock_init (&priv->props_lock);
     priv->iters = g_ptr_array_new_with_free_func (
             (GDestroyNotify) gtk_tree_iter_free);
+    g_mutex_init (&priv->iters_mutex);
 
     g_object_ref_sink (provider);
 
@@ -107,8 +111,10 @@ fsnode_add_property (FsNode          *node,
     /* set_value is optional (can be read-only) */
 
     priv = node->priv;
+    g_rw_lock_writer_lock (&priv->props_lock);
     if (g_hash_table_contains (priv->props, name))
     {
+        g_rw_lock_writer_unlock (&priv->props_lock);
         g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_ALREADY_EXISTS,
                 "Node already contains a property %s", name);
         return FALSE;
@@ -130,6 +136,7 @@ fsnode_add_property (FsNode          *node,
         }
         else
         {
+            g_rw_lock_writer_unlock (&priv->props_lock);
             g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_INVALID_TYPE,
                     "Invalid format for initial value of new property %s: "
                     "property is %s, initial value is %s",
@@ -142,6 +149,7 @@ fsnode_add_property (FsNode          *node,
     }
     /* add prop to the hash table */
     g_hash_table_insert (priv->props, (gpointer) name, prop);
+    g_rw_lock_writer_unlock (&priv->props_lock);
 
     return TRUE;
 }
@@ -156,6 +164,7 @@ set_prop (FsNode        *node,
     g_return_if_fail (IS_FSNODE (node));
     g_return_if_fail (name != NULL);
 
+    g_rw_lock_writer_lock (&node->priv->props_lock);
     prop = g_hash_table_lookup (node->priv->props, (gpointer) name);
     if (prop)
     {
@@ -165,6 +174,7 @@ set_prop (FsNode        *node,
          * so if they get it wrong, they're seriously bugged */
         prop->has_value = TRUE;
     }
+    g_rw_lock_writer_unlock (&node->priv->props_lock);
 }
 
 gboolean
@@ -175,14 +185,18 @@ fsnode_set_property (FsNode          *node,
 {
     GError *err = NULL;
     FsNodeProp *prop;
+    FsNodePrivate *priv;
 
     g_return_val_if_fail (IS_FSNODE (node), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
     g_return_val_if_fail (value != NULL, FALSE);
 
-    prop = g_hash_table_lookup (node->priv->props, (gpointer) name);
+    priv = node->priv;
+    g_rw_lock_reader_lock (&priv->props_lock);
+    prop = g_hash_table_lookup (priv->props, (gpointer) name);
     if (!prop)
     {
+        g_rw_lock_reader_unlock (&priv->props_lock);
         g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_NOT_FOUND,
                 "Node does not have a property %s", name);
         return FALSE;
@@ -190,6 +204,7 @@ fsnode_set_property (FsNode          *node,
 
     if (!prop->set_value)
     {
+        g_rw_lock_reader_unlock (&priv->props_lock);
         g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_READ_ONLY,
                 "Property %s on node cannot be set", name);
         return FALSE;
@@ -197,6 +212,7 @@ fsnode_set_property (FsNode          *node,
 
     if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&(prop->value))))
     {
+        g_rw_lock_reader_unlock (&priv->props_lock);
         g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_INVALID_TYPE,
                 "Property %s on node is of type %s, value passed is %s",
                 name,
@@ -205,6 +221,11 @@ fsnode_set_property (FsNode          *node,
         return FALSE;
     }
 
+    /* we unlock now, because the provider/whoever will do the work, might take
+     * a while (slow fs, network connection, some timing out...) and during
+     * this time, no need to keep a lock for nothing. The set_prop will use a
+     * writer lock of course */
+    g_rw_lock_reader_unlock (&priv->props_lock);
     if (!prop->set_value (node, name, set_prop, value, &err))
     {
         g_propagate_error (error, err);
@@ -224,6 +245,7 @@ get_valist (FsNode       *node,
     const gchar *name;
 
     props = node->priv->props;
+    g_rw_lock_reader_lock (&node->priv->props_lock);
     name = first_property_name;
     while (name)
     {
@@ -231,6 +253,7 @@ get_valist (FsNode       *node,
         gchar *err;
 
         prop = g_hash_table_lookup (props, (gpointer) name);
+        /* FIXME get_value maybe?? */
         G_VALUE_LCOPY (&(prop->value), va_args, 0, &err);
         if (err)
         {
@@ -243,6 +266,7 @@ get_valist (FsNode       *node,
         }
         name = va_arg (va_args, gchar *);
     }
+    g_rw_lock_reader_unlock (&node->priv->props_lock);
 }
 
 void
@@ -270,7 +294,9 @@ void
 fsnode_refresh (FsNode *node)
 {
     g_return_if_fail (IS_FSNODE (node));
+    g_rw_lock_writer_lock (&node->priv->props_lock);
     g_hash_table_foreach (node->priv->props, unset_has_value, NULL);
+    g_rw_lock_writer_unlock (&node->priv->props_lock);
 }
 
 void
@@ -278,7 +304,9 @@ fsnode_add_iter (FsNode      *node,
                  GtkTreeIter *iter)
 {
     g_return_if_fail (IS_FSNODE (node));
+    g_mutex_lock (&node->priv->iters_mutex);
     g_ptr_array_add (node->priv->iters, (gpointer) gtk_tree_iter_copy (iter));
+    g_mutex_unlock (&node->priv->iters_mutex);
 }
 
 gboolean
@@ -290,6 +318,7 @@ fsnode_remove_iter (FsNode      *node,
     guint i;
 
     iters = node->priv->iters;
+    g_mutex_lock (&node->priv->iters_mutex);
     for (i = 0, len = iters->len; i < len; ++i)
     {
         GtkTreeIter *iter_arr = iters->pdata[i];
@@ -301,15 +330,26 @@ fsnode_remove_iter (FsNode      *node,
                 && iter->user_data3 == iter_arr->user_data3)
         {
             g_ptr_array_remove_index_fast (iters, i);
+            g_mutex_unlock (&node->priv->iters_mutex);
             return TRUE;
         }
     }
+    g_mutex_unlock (&node->priv->iters_mutex);
     return FALSE;
 }
 
 GtkTreeIter **
 fsnode_get_iters (FsNode *node)
 {
+    GPtrArray *iters;
+    GtkTreeIter **ret;
+
     g_return_val_if_fail (IS_FSNODE (node), NULL);
-    return (GtkTreeIter **) (node->priv->iters->pdata);
+
+    iters = node->priv->iters;
+    g_mutex_lock (&node->priv->iters_mutex);
+    ret = g_memdup (iters->pdata, sizeof (*ret) * (iters->len + 1));
+    g_mutex_unlock (&node->priv->iters_mutex);
+    ret[iters->len] = NULL;
+    return ret;
 }
