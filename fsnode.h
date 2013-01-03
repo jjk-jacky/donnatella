@@ -51,8 +51,6 @@ struct _FsNode
 struct _FsNodeClass
 {
     GObjectClass parent;
-
-    void        (*node_deleted)         (FsNode *node);
 };
 
 GType           fsnode_get_type         (void) G_GNUC_CONST;
@@ -62,8 +60,10 @@ FsNode *        fsnode_new              (FsProvider      *provider,
 FsNode *        fsnode_new_from_node    (FsProvider      *provider,
                                          const gchar     *location,
                                          FsNode          *sce);
+FsProvider *    fsnode_get_provider     (FsNode          *node);
+const gchar *   fsnode_get_location     (FsNode          *node);
 gboolean        fsnode_add_property     (FsNode          *node,
-                                         const gchar     *name,
+                                         gchar           *name,
                                          GType            type,
                                          GValue          *value,
                                          get_value_fn     get_value,

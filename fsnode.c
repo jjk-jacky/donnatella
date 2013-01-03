@@ -2,6 +2,7 @@
 typedef struct _FsProvider FsProvider;
 
 #include <gtk/gtk.h>
+#include <string.h>     /* memset() */
 #include "fsnode.h"
 
 struct _FsNodePrivate
@@ -23,12 +24,15 @@ typedef struct
     set_value_fn set_value;
 } FsNodeProp;
 
+static void fsnode_finalize (GObject *object);
+
 static void
 fsnode_class_init (FsNodeClass *klass)
 {
     GObjectClass *o_class;
 
     o_class = G_OBJECT_CLASS (klass);
+    o_class->finalize = fsnode_finalize;
     g_type_class_add_private (klass, sizeof (FsNodePrivate));
 }
 
@@ -40,7 +44,25 @@ fsnode_init (FsNode *node)
             FsNodePrivate);
 }
 
-G_DEFINE_TYPE (FsNode, fsnode, G_TYPE_INITIALLY_UNOWNED)
+G_DEFINE_TYPE (FsNode, fsnode, G_TYPE_OBJECT)
+
+static void
+fsnode_finalize (GObject *object)
+{
+    FsNodePrivate *priv;
+
+    priv = FSNODE (object)->priv;
+    /* it is said that dispose should do the unref-ing, but at the same time
+     * the object is supposed to be able to be "revived" from dispose, and we
+     * need a ref to provider to survive... */
+    g_object_unref (priv->provider);
+    g_hash_table_destroy (priv->props);
+    g_rw_lock_clear (&priv->props_lock);
+    g_ptr_array_free (priv->iters, TRUE);
+    g_mutex_clear (&priv->iters_mutex);
+
+    G_OBJECT_CLASS (fsnode_parent_class)->finalize (object);
+}
 
 /* used to free properties when removed from hash table */
 static void
@@ -64,13 +86,13 @@ fsnode_new (FsProvider  *provider,
     priv->provider = provider;
     priv->location = location;
     priv->props = g_hash_table_new_full (g_str_hash, g_str_equal,
-            NULL, free_prop);
+            g_free, free_prop);
     g_rw_lock_init (&priv->props_lock);
     priv->iters = g_ptr_array_new_with_free_func (
             (GDestroyNotify) gtk_tree_iter_free);
     g_mutex_init (&priv->iters_mutex);
 
-    g_object_ref_sink (provider);
+    g_object_ref (provider);
 
     return node;
 }
@@ -81,20 +103,58 @@ fsnode_new_from_node (FsProvider    *provider,
                       FsNode        *sce)
 {
     FsNode *node;
-    FsNodePrivate *priv;
+    GHashTable *props;
+    GHashTableIter iter;
+    gpointer key, value;
 
-    g_return_val_if_fail (IS_FSPROVIDER (provider), NULL);
-    g_return_val_if_fail (location != NULL, NULL);
     g_return_val_if_fail (IS_FSNODE (sce), NULL);
 
+    /* create a new node */
     node = fsnode_new (provider, location);
-    priv = node->priv;
-    /* TODO ... */
+
+    g_return_val_if_fail (IS_FSNODE (node), NULL);
+
+    /* and copy over all the properties */
+    props = node->priv->props;
+    g_rw_lock_reader_lock (&sce->priv->props_lock);
+    g_hash_table_iter_init (&iter, sce->priv->props);
+    while (g_hash_table_iter_next (&iter, &key, &value))
+    {
+        FsNodeProp *prop;
+        FsNodeProp *prop_sce = value;
+
+        prop = g_slice_copy (sizeof (*prop), prop_sce);
+        /* for the GValue we'll need to reset the memory, re-init it */
+        memset (&prop->value, 0, sizeof (GValue));
+        g_value_init (&prop->value, G_VALUE_TYPE (&prop_sce->value));
+        /* and if there's a value, re-copy it over */
+        if (prop->has_value)
+            g_value_copy (&prop_sce->value, &prop->value);
+
+        g_hash_table_insert (props, (gpointer) g_strdup (key), value);
+    }
+    g_rw_lock_reader_unlock (&sce->priv->props_lock);
+
+    return node;
+}
+
+FsProvider *
+fsnode_get_provider (FsNode *node)
+{
+    g_return_val_if_fail (IS_FSNODE (node), NULL);
+    return node->priv->provider;
+}
+
+const gchar *
+fsnode_get_location (FsNode *node)
+{
+    g_return_val_if_fail (IS_FSNODE (node), NULL);
+    return node->priv->location;
 }
 
 gboolean
 fsnode_add_property (FsNode          *node,
-                     const gchar     *name,
+                     gchar           *name,
                      GType            type,
                      GValue          *value,
                      get_value_fn     get_value,
@@ -103,7 +163,6 @@ fsnode_add_property (FsNode          *node,
 {
     FsNodePrivate   *priv;
     FsNodeProp      *prop;
-    GValue          *prop_value;
 
     g_return_val_if_fail (IS_FSNODE (node), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
@@ -119,19 +178,18 @@ fsnode_add_property (FsNode          *node,
                 "Node already contains a property %s", name);
         return FALSE;
     }
-    /* allocate a new GValue to hold the property value */
+    /* allocate a new FsNodeProp to hold the property value */
     prop = g_slice_new0 (FsNodeProp);
     prop->get_value = get_value;
     prop->set_value = set_value;
-    /* get GValue and init it */
-    prop_value = &(prop->value);
-    g_value_init (prop_value, type);
+    /* init the GValue */
+    g_value_init (&prop->value, type);
     /* do we have an init value to set? */
     if (value != NULL)
     {
         if (G_VALUE_HOLDS (value, type))
         {
-            g_value_copy (value, prop_value);
+            g_value_copy (value, &prop->value);
             prop->has_value = TRUE;
         }
         else
@@ -142,13 +200,13 @@ fsnode_add_property (FsNode          *node,
                     "property is %s, initial value is %s",
                     name,
                     g_type_name (type),
-                    g_type_name (G_VALUE_TYPE (prop_value)));
+                    g_type_name (G_VALUE_TYPE (&prop->value)));
             g_slice_free (FsNodeProp, prop);
             return FALSE;
         }
     }
     /* add prop to the hash table */
-    g_hash_table_insert (priv->props, (gpointer) name, prop);
+    g_hash_table_insert (priv->props, (gpointer) g_strdup (name), prop);
     g_rw_lock_writer_unlock (&priv->props_lock);
 
     return TRUE;
@@ -305,18 +363,19 @@ fsnode_get (FsNode       *node,
     va_end (va_args);
 }
 
-static void
-unset_has_value (gpointer key, gpointer value, gpointer data)
-{
-    ((FsNodeProp *) value)->has_value = FALSE;
-}
-
 void
 fsnode_refresh (FsNode *node)
 {
+    GHashTableIter iter;
+    gpointer key, value;
+
     g_return_if_fail (IS_FSNODE (node));
     g_rw_lock_writer_lock (&node->priv->props_lock);
-    g_hash_table_foreach (node->priv->props, unset_has_value, NULL);
+    g_hash_table_iter_init (&iter, node->priv->props);
+    while (g_hash_table_iter_next (&iter, &key, &value))
+    {
+        ((FsNodeProp *) value)->has_value = FALSE;
+    }
     g_rw_lock_writer_unlock (&node->priv->props_lock);
 }
 
