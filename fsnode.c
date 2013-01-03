@@ -316,7 +316,7 @@ get_valist (FsNode       *node,
         if (!prop)
         {
             g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_NOT_FOUND,
-                    "Node has no property %s", name);
+                    "Node does not have a property %s", name);
             break;
         }
         if (!prop->has_value)
@@ -379,59 +379,4 @@ fsnode_refresh (FsNode *node)
         ((FsNodeProp *) value)->has_value = FALSE;
     }
     g_rw_lock_writer_unlock (&node->priv->props_lock);
-}
-
-void
-fsnode_add_iter (FsNode      *node,
-                 GtkTreeIter *iter)
-{
-    g_return_if_fail (IS_FSNODE (node));
-    g_mutex_lock (&node->priv->iters_mutex);
-    g_ptr_array_add (node->priv->iters, (gpointer) gtk_tree_iter_copy (iter));
-    g_mutex_unlock (&node->priv->iters_mutex);
-}
-
-gboolean
-fsnode_remove_iter (FsNode      *node,
-                    GtkTreeIter *iter)
-{
-    GPtrArray *iters;
-    guint len;
-    guint i;
-
-    iters = node->priv->iters;
-    g_mutex_lock (&node->priv->iters_mutex);
-    for (i = 0, len = iters->len; i < len; ++i)
-    {
-        GtkTreeIter *iter_arr = iters->pdata[i];
-
-        /* same iter (i.e. they point to the same row) ? */
-        if (iter->stamp && iter_arr->stamp
-                && iter->user_data == iter_arr->user_data
-                && iter->user_data2 == iter_arr->user_data2
-                && iter->user_data3 == iter_arr->user_data3)
-        {
-            g_ptr_array_remove_index_fast (iters, i);
-            g_mutex_unlock (&node->priv->iters_mutex);
-            return TRUE;
-        }
-    }
-    g_mutex_unlock (&node->priv->iters_mutex);
-    return FALSE;
-}
-
-GtkTreeIter **
-fsnode_get_iters (FsNode *node)
-{
-    GPtrArray *iters;
-    GtkTreeIter **ret;
-
-    g_return_val_if_fail (IS_FSNODE (node), NULL);
-
-    iters = node->priv->iters;
-    g_mutex_lock (&node->priv->iters_mutex);
-    ret = g_memdup (iters->pdata, sizeof (*ret) * (iters->len + 1));
-    g_mutex_unlock (&node->priv->iters_mutex);
-    ret[iters->len] = NULL;
-    return ret;
 }

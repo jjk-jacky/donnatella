@@ -78,11 +78,6 @@ void            fsnode_get              (FsNode          *node,
                                          const gchar     *first_property_name,
                                          ...);
 void            fsnode_refresh          (FsNode          *node);
-void            fsnode_add_iter         (FsNode          *node,
-                                         GtkTreeIter     *iter);
-gboolean        fsnode_remove_iter      (FsNode          *node,
-                                         GtkTreeIter     *iter);
-GtkTreeIter **  fsnode_get_iters        (FsNode          *node);
 
 G_END_DECLS
 
