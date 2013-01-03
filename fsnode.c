@@ -1,8 +1,10 @@
 
 typedef struct _FsProvider FsProvider;
+#define IS_FSPROVIDER(o)    NULL
 
 #include <gtk/gtk.h>
-#include <string.h>     /* memset() */
+#include <gobject/gvaluecollector.h>    /* G_VALUE_LCOPY */
+#include <string.h>                     /* memset() */
 #include "fsnode.h"
 
 struct _FsNodePrivate

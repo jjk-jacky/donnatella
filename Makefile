@@ -1,4 +1,4 @@
-SRC = main.c fstree.c fstreeprovider.c fstreenodestd.c
+SRC = main.c fstree.c fsnode.c
 OBJ = ${SRC:.c=.o}
 
 GTK_FLAGS := `pkg-config --cflags --libs gtk+-3.0`
