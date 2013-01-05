@@ -19,7 +19,7 @@ struct _FmNodePrivate
 
 typedef struct
 {
-    /* name is the key in the hash table */
+    const gchar *name; /* this pointer is also used as key in the hask table */
     GValue       value;
     gboolean     has_value; /* is value set, or do we need to call get_value? */
     get_value_fn get_value;
@@ -68,8 +68,12 @@ fmnode_finalize (GObject *object)
 
 /* used to free properties when removed from hash table */
 static void
-free_prop (gpointer prop)
+free_prop (gpointer _prop)
 {
+    FmNodeProp *prop = _prop;
+
+    /* prop->name will be free-d through g_hash_table_destroy */
+    g_value_unset (&prop->value);
     g_slice_free (FmNodeProp, prop);
 }
 
@@ -188,6 +192,7 @@ fmnode_add_property (FmNode          *node,
     }
     /* allocate a new FmNodeProp to hold the property value */
     prop = g_slice_new0 (FmNodeProp);
+    prop->name      = g_strdup (name);
     prop->get_value = get_value;
     prop->set_value = set_value;
     /* init the GValue */
@@ -214,7 +219,7 @@ fmnode_add_property (FmNode          *node,
         }
     }
     /* add prop to the hash table */
-    g_hash_table_insert (priv->props, (gpointer) g_strdup (name), prop);
+    g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
     g_rw_lock_writer_unlock (&priv->props_lock);
 
     return TRUE;
@@ -295,31 +300,23 @@ fmnode_set_property (FmNode          *node,
 
 struct set_property
 {
-    FmNode  *node;
-    gchar   *name;
-    GValue  *value;
+    FmNode      *node;
+    FmNodeProp  *prop;
+    GValue      *value;
 };
 
 static gboolean
 set_property (FmTask *task, struct set_property *data)
 {
     GError *err = NULL;
-    FmNodePrivate *priv;
-    FmNodeProp *prop;
     GValue value = G_VALUE_INIT;
     gboolean ret;
 
-    priv = data->node->priv;
-    g_rw_lock_reader_lock (&priv->props_lock);
-    /* we *will* find prop, it was tested before this task was even created,
-     * and properties cannot be removed */
-    prop = g_hash_table_lookup (priv->props, (gpointer) data->name);
-    g_rw_lock_reader_unlock (&priv->props_lock);
-
-    /* FIXME: set_value should get FmTask* to check for cancellation */
-    ret = prop->set_value (data->node, data->name, data->value, &err);
+    /* TODO: set_value should get FmTask* to check for cancellation */
+    ret = data->prop->set_value (data->node, data->prop->name, data->value, &err);
     if (!ret)
         fmtask_take_error (task, err);
+    /* set the return value */
     g_value_init (&value, G_TYPE_BOOLEAN);
     g_value_set_boolean (&value, ret);
     fmtask_set_ret_value (task, &value);
@@ -327,10 +324,24 @@ set_property (FmTask *task, struct set_property *data)
 
     /* free memory */
     g_object_unref (data->node);
-    g_free (data->name);
+    g_value_unset (data->value);
+    g_free (data->value);
     g_slice_free (struct set_property, data);
 
+    /* this defines the task's state */
     return ret;
+}
+
+static GValue *
+duplicate_gvalue (const GValue *src)
+{
+    GValue *dst;
+
+    dst = g_new0 (GValue, 1);
+    g_value_init (dst, G_VALUE_TYPE (src));
+    g_value_copy (src, dst);
+
+    return dst;
 }
 
 FmTask *
@@ -338,26 +349,25 @@ set_property_task (FmNode        *node,
                    const gchar   *name,
                    GValue        *value,
                    GCallback      callback,
-                   gpointer       data,
+                   gpointer       callback_data,
                    GError       **error)
 {
     FmNodeProp *prop;
     FmTask *task;
-    struct set_property *task_data;
+    struct set_property *data;
 
     if (!set_property_checks (node, name, value, error, &prop))
         return NULL;
 
-    task_data = g_slice_new (struct set_property);
+    data = g_slice_new (struct set_property);
     /* take a ref on node, for the task */
     g_object_ref (node);
-    task_data->node  = node;
-    task_data->name  = g_strdup (name);
-    /* FIXME: we need to copy this */
-    task_data->value = value;
-    task = fmtask_new (set_property, task_data);
+    data->node = node;
+    data->prop = prop;
+    data->value = duplicate_gvalue (value);
+    task = fmtask_new (set_property, data);
     if (callback)
-        g_signal_connect (task, "finish", callback, data);
+        g_signal_connect (task, "finish", callback, callback_data);
     fmtask_manager_add_task (task);
 
     return task;
