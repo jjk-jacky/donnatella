@@ -12,7 +12,6 @@ progress
 
     api:
 fmTask *        new                 (func, data)
-gulong          connect             (task, callback, data, destroy_fn)
 gboolean        cancel              (task)
 gboolean        is_cancelled        (task)
 fmTaskState     get_state           (task)

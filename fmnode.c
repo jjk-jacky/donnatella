@@ -305,17 +305,19 @@ struct set_property
     GValue      *value;
 };
 
-static gboolean
+static FmTaskState
 set_property (FmTask *task, struct set_property *data)
 {
     GError *err = NULL;
     GValue value = G_VALUE_INIT;
     gboolean ret;
 
-    /* TODO: set_value should get FmTask* to check for cancellation */
+    /* TODO: set_value should get a pointer to an int, as long as it's 0 it can
+     * do its work, as soon as it's 1 the task is being cancelled. This int
+     * should come from fmTask, but can also be supported w/out a task ofc */
     ret = data->prop->set_value (data->node, data->prop->name, data->value, &err);
     if (!ret)
-        fmtask_take_error (task, err);
+        fmtask_propagate_error (task, err);
     /* set the return value */
     g_value_init (&value, G_TYPE_BOOLEAN);
     g_value_set_boolean (&value, ret);
@@ -329,7 +331,8 @@ set_property (FmTask *task, struct set_property *data)
     g_slice_free (struct set_property, data);
 
     /* this defines the task's state */
-    return ret;
+    return (ret) ? FMTASK_SUCCESS :
+        fmtask_is_cancelled (task) ? FMTASK_CANCELLED : FMTASK_ERROR;
 }
 
 static GValue *
