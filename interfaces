@@ -1,0 +1,50 @@
+
+fmNode: GObject
+
+fmNode *        new                 (provider, location, is_container)
+fmNode *        new_from_node       (provider, location, is_container, node_sce)
+fmProvider *    get_provider        (node)
+gchar *         get_location        (node)
+gboolean        add_property        (node, prop_name, type, value, get_value, set_value, error)
+gboolean        set_property        (node, prop_name, value, error)
+void            set_property_async  (node, prop_name, value, cancellable, callback, data)
+gboolean        set_property_finish (node, result, error)
+void            get                 (node, error, name, ...)
+void            refresh             (node)
+gboolean        is_container        (node)
+gchar *         set_location        (node, new_location)
+void            set_property_value  (node, prop_name, value)
+
+fmProvider: GInterface
+
+    signals:
+// new node created, for plugins to add properties, etc
+node-created                        (provider, node)
+// "file" has been deleted, node is "invalid"
+node-removed                        (provider, node)
+// node location changed
+node-location-updated               (provider, node, old_location)
+// property on node was updated
+node-updated::property              (provider, node)
+// got children of node
+node-children                       (provider, node, children)
+// node has a new child (i.e. for tree, not list)
+node-new-child                      (provider, node, child)
+// node has a new "content" (i.e. for list, not tree)
+node-new-content                    (provider, node, content)
+
+    api:
+fmProvider *    new                 (void)
+fmNode *        get_node            (provider, location, container_only, error)
+void            get_node_async      (provider, location, container_only, cancellable, callback, data)
+fmNode *        get_node_finish     (provider, result, error)
+fmNode **       get_content         (provider, node)
+void            get_content_async   (provider, node, cancellable, callback, data)
+fmNode **       get_content_finish  (provider, node, result, error)
+fmNode **       get_children        (provider, node)
+void            get_children_async  (provider, node, cancellable, callback, data)
+fmNode **       get_children_finish (provider, node, result, error)
+gboolean        remove_node         (provider, node)
+void            remove_node_async   (provider, node, cancellable, callback, data)
+gboolean        remove_node_finish  (provider, node, result, error)
+

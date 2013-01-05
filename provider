@@ -1,0 +1,15 @@
+
+- flg_is_last++
+
+- lock HT
+- flg_is_last--
+- if !flg_is_last abort
+- remove node
+- unlock HT
+- unref node
+
+- lock HT
+- get node
+- ref node --> toggle flg_is_last
+- unlock HT
+
