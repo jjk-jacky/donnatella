@@ -1,6 +1,7 @@
 
-typedef struct _FmProvider FmProvider;
+typedef struct _FmProvider  FmProvider;
 #define IS_FMPROVIDER(o)    NULL
+typedef struct _FmTask      FmTask;
 
 #include <gtk/gtk.h>
 #include <gobject/gvaluecollector.h>    /* G_VALUE_LCOPY */
@@ -292,72 +293,74 @@ fmnode_set_property (FmNode          *node,
     return TRUE;
 }
 
-static void
-set_property (FmNode             *node,
-              const gchar        *name,
-              GValue             *value,
-              GCancellable       *cancellable,
-              GSimpleAsyncResult *result)
+struct set_property
+{
+    FmNode  *node;
+    gchar   *name;
+    GValue  *value;
+};
+
+static gboolean
+set_property (FmTask *task, struct set_property *data)
 {
     GError *err = NULL;
-    FmNodeProp *prop;
     FmNodePrivate *priv;
+    FmNodeProp *prop;
+    GValue value = G_VALUE_INIT;
     gboolean ret;
 
-    priv = node->priv;
+    priv = data->node->priv;
     g_rw_lock_reader_lock (&priv->props_lock);
-    prop = g_hash_table_lookup (priv->props, (gpointer) name);
+    /* we *will* find prop, it was tested before this task was even created,
+     * and properties cannot be removed */
+    prop = g_hash_table_lookup (priv->props, (gpointer) data->name);
     g_rw_lock_reader_unlock (&priv->props_lock);
 
-    ret = prop->set_value (node, name, value, &err);
+    /* FIXME: set_value should get FmTask* to check for cancellation */
+    ret = prop->set_value (data->node, data->name, data->value, &err);
     if (!ret)
-        g_simple_async_result_take_error (result, err);
-    g_simple_async_result_set_op_res_gboolean (result, ret);
-    g_simple_async_result_complete_in_idle (result);
-    g_object_unref (result);
+        fmtask_take_error (task, err);
+    g_value_init (&value, G_TYPE_BOOLEAN);
+    g_value_set_boolean (&value, ret);
+    fmtask_set_ret_value (task, &value);
+    g_value_unset (&value);
+
+    /* free memory */
+    g_object_unref (data->node);
+    g_free (data->name);
+    g_slice_free (struct set_property, data);
+
+    return ret;
 }
 
-void
-fmnode_set_property_async (FmNode                 *node,
-                           const gchar            *name,
-                           GValue                 *value,
-                           GCancellable           *cancellable,
-                           GAsyncReadyCallback     callback,
-                           gpointer                data)
+FmTask *
+set_property_task (FmNode        *node,
+                   const gchar   *name,
+                   GValue        *value,
+                   GCallback      callback,
+                   gpointer       data,
+                   GError       **error)
 {
-    GSimpleAsyncResult *result;
-    GError *err = NULL;
     FmNodeProp *prop;
+    FmTask *task;
+    struct set_property *task_data;
 
-    if (!set_property_checks (node, name, value, &err, &prop))
-    {
-        g_simple_async_report_take_gerror_in_idle (G_OBJECT (node),
-                callback,
-                data,
-                err);
-        return;
-    }
+    if (!set_property_checks (node, name, value, error, &prop))
+        return NULL;
 
-    result = g_simple_async_result_new (G_OBJECT (node),
-            callback,
-            data,
-            fmnode_set_property_async);
-    start_in_thread (set_property, node, name, value, cancellable, result);
-}
+    task_data = g_slice_new (struct set_property);
+    /* take a ref on node, for the task */
+    g_object_ref (node);
+    task_data->node  = node;
+    task_data->name  = g_strdup (name);
+    /* FIXME: we need to copy this */
+    task_data->value = value;
+    task = fmtask_new (set_property, task_data);
+    if (callback)
+        g_signal_connect (task, "finish", callback, data);
+    fmtask_manager_add_task (task);
 
-gboolean
-fmnode_set_property_finish (FmNode                 *node,
-                            GAsyncResult           *result,
-                            GError                **error)
-{
-    GSimpleAsyncResult *res = (GSimpleAsyncResult *) result;
-
-    g_return_val_if_fail (g_simple_async_result_is_valid (result,
-                G_OBJECT (node),
-                fmnode_set_property_async), FALSE);
-
-    g_simple_async_result_propagate_error (res, error);
-    return g_simple_async_result_get_op_res_gboolean (res);
+    return task;
 }
 
 static void

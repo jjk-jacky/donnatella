@@ -11,7 +11,7 @@ desc
 progress
 
     api:
-fmTask *        new                 (priority, func, data)
+fmTask *        new                 (func, data)
 gulong          connect             (task, callback, data, destroy_fn)
 gboolean        cancel              (task)
 gboolean        is_cancelled        (task)
@@ -19,6 +19,7 @@ fmTaskState     get_state           (task)
 void            get_error           (task, error)
 void            get_ret_value       (task, value)
 void            set_error           (task, domain, code, fmt, ...)
+void            take_error          (task, error)
 void            set_ret_value       (task, value)
 
 fmNode: GObject
