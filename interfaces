@@ -1,3 +1,25 @@
+fmTask: GObject
+
+    signals:
+// task finished (might be error/cancelled)
+finish                              (task)
+
+    properties:
+// desc that can be general, or include file being copied, etc
+desc
+// -1 if n/a; else pctg (0.42 = 42%)
+progress
+
+    api:
+fmTask *        new                 (priority, func, data)
+gulong          connect             (task, callback, data, destroy_fn)
+gboolean        cancel              (task)
+gboolean        is_cancelled        (task)
+fmTaskState     get_state           (task)
+void            get_error           (task, error)
+void            get_ret_value       (task, value)
+void            set_error           (task, domain, code, fmt, ...)
+void            set_ret_value       (task, value)
 
 fmNode: GObject
 
@@ -7,8 +29,7 @@ fmProvider *    get_provider        (node)
 gchar *         get_location        (node)
 gboolean        add_property        (node, prop_name, type, value, get_value, set_value, error)
 gboolean        set_property        (node, prop_name, value, error)
-void            set_property_async  (node, prop_name, value, cancellable, callback, data)
-gboolean        set_property_finish (node, result, error)
+fmTask *        set_property_task   (node, prop_name, value, callback, data, error)
 void            get                 (node, error, name, ...)
 void            refresh             (node)
 gboolean        is_container        (node)
@@ -38,13 +59,10 @@ fmProvider *    new                 (void)
 fmNode *        get_node            (provider, location, container_only, error)
 void            get_node_async      (provider, location, container_only, cancellable, callback, data)
 fmNode *        get_node_finish     (provider, result, error)
-fmNode **       get_content         (provider, node)
-void            get_content_async   (provider, node, cancellable, callback, data)
-fmNode **       get_content_finish  (provider, node, result, error)
-fmNode **       get_children        (provider, node)
-void            get_children_async  (provider, node, cancellable, callback, data)
-fmNode **       get_children_finish (provider, node, result, error)
-gboolean        remove_node         (provider, node)
-void            remove_node_async   (provider, node, cancellable, callback, data)
-gboolean        remove_node_finish  (provider, node, result, error)
+fmNode **       get_content         (provider, node, error)
+fmTask *        get_content_task    (provider, node, callback, data, error)
+fmNode **       get_children        (provider, node, error)
+fmTask *        get_children_task   (provider, node, callback, data, error)
+gboolean        remove_node         (provider, node, error)
+fmTask *        remove_node_task    (provider, node, callback, data, error)
 
