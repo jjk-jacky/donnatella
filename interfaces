@@ -36,6 +36,10 @@ void            set_property_value  (node, prop_name, value)
 
 fmProvider: GInterface
 
+    properties:
+// domain (read-only)
+domain
+
     signals:
 // new node created, for plugins to add properties, etc
 node-created                        (provider, node)
@@ -44,7 +48,7 @@ node-removed                        (provider, node)
 // node location changed
 node-location-updated               (provider, node, old_location)
 // property on node was updated
-node-updated::property              (provider, node)
+node-updated::property              (provider, node, name)
 // got children of node
 node-children                       (provider, node, children)
 // node has a new child (i.e. for tree, not list)
@@ -55,8 +59,7 @@ node-new-content                    (provider, node, content)
     api:
 fmProvider *    new                 (void)
 fmNode *        get_node            (provider, location, container_only, error)
-void            get_node_async      (provider, location, container_only, cancellable, callback, data)
-fmNode *        get_node_finish     (provider, result, error)
+fmTask *        get_node_task       (provider, location, container_only, cb, cb_data, error)
 fmNode **       get_content         (provider, node, error)
 fmTask *        get_content_task    (provider, node, callback, data, error)
 fmNode **       get_children        (provider, node, error)
