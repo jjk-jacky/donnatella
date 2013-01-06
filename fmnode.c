@@ -339,7 +339,7 @@ set_property (FmTask *task, struct set_property *data)
     /* free memory *
     g_object_unref (data->node);
     g_value_unset (data->value);
-    g_free (data->value);
+    g_slice_free (GValue, data->value);
     g_slice_free (struct set_property, data);
 
     /* this defines the task's state *
@@ -352,7 +352,7 @@ duplicate_gvalue (const GValue *src)
 {
     GValue *dst;
 
-    dst = g_new0 (GValue, 1);
+    dst = g_slice_new0 (GValue);
     g_value_init (dst, G_VALUE_TYPE (src));
     g_value_copy (src, dst);
 
