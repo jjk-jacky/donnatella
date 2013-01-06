@@ -85,6 +85,28 @@ struct _FmProviderInterface
 
 GType           fmprovider_get_type             (void) G_GNUC_CONST;
 
+/* signals */
+void            fmprovider_node_created         (FmProvider  *provider,
+                                                 FmNode      *node);
+void            fmprovider_node_removed         (FmProvider  *provider,
+                                                 FmProvider  *node);
+void            fmprovider_node_location_updated    (FmProvider  *provider,
+                                                     FmNode      *node,
+                                                     const gchar *old_location);
+void            fmprovider_node_updated         (FmProvider  *provider,
+                                                 FmNode      *node,
+                                                 const gchar *name);
+void            fmprovider_node_children        (FmProvider  *provider,
+                                                 FmNode      *node,
+                                                 FmNode     **children);
+void            fmprovider_node_new_child       (FmProvider  *provider,
+                                                 FmNode      *node,
+                                                 FmNode      *child);
+void            fmprovider_node_new_content     (FmProvider  *provider,
+                                                 FmNode      *node,
+                                                 FmNode      *content);
+
+/* API */
 FmNode *        fmprovider_get_node             (FmProvider  *provider,
                                                  const gchar *location,
                                                  gboolean     is_container,

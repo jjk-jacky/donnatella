@@ -64,7 +64,7 @@ fmprovider_default_init (FmProviderInterface *klass)
     fmprovider_signals[NODE_UPDATED] =
         g_signal_new ("node-updated",
             TYPE_FMPROVIDER,
-            G_SIGNAL_RUN_LAST,
+            G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
             G_STRUCT_OFFSET (FmProviderInterface, node_updated),
             NULL,
             NULL,
@@ -112,6 +112,93 @@ fmprovider_default_init (FmProviderInterface *klass)
 }
 
 G_DEFINE_INTERFACE (FmProvider, fmprovider, G_TYPE_OBJECT)
+
+void
+fmprovider_node_created (FmProvider  *provider,
+                         FmNode      *node)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+
+    g_signal_emit (provider, fmprovider_signals[NODE_CREATED], 0, node);
+}
+
+void
+fmprovider_node_removed (FmProvider  *provider,
+                         FmProvider  *node)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+
+    g_signal_emit (provider, fmprovider_signals[NODE_REMOVED], 0, node);
+}
+
+void
+fmprovider_node_location_updated (FmProvider  *provider,
+                                  FmNode      *node,
+                                  const gchar *old_location)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+    g_return_if_fail (old_location != NULL);
+
+    g_signal_emit (provider, fmprovider_signals[NODE_LOCATION_UPDATED], 0,
+            node, old_location);
+}
+
+void
+fmprovider_node_updated (FmProvider  *provider,
+                         FmNode      *node,
+                         const gchar *name)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+    g_return_if_fail (name != NULL);
+
+    g_signal_emit (provider, fmprovider_signals[NODE_UPDATED],
+            g_quark_from_string (name),
+            node, name);
+}
+
+void
+fmprovider_node_children (FmProvider  *provider,
+                          FmNode      *node,
+                          FmNode     **children)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+    g_return_if_fail (IS_FMNODE (*children));
+
+    g_signal_emit (provider, fmprovider_signals[NODE_CREATED], 0,
+            node, children);
+}
+
+void
+fmprovider_node_new_child (FmProvider  *provider,
+                           FmNode      *node,
+                           FmNode      *child)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+    g_return_if_fail (IS_FMNODE (child));
+
+    g_signal_emit (provider, fmprovider_signals[NODE_NEW_CHILD], 0,
+            node, child);
+}
+
+void
+fmprovider_node_new_content (FmProvider  *provider,
+                             FmNode      *node,
+                             FmNode      *content)
+{
+    g_return_if_fail (IS_FMPROVIDER (provider));
+    g_return_if_fail (IS_FMNODE (node));
+    g_return_if_fail (IS_FMNODE (content));
+
+    g_signal_emit (provider, fmprovider_signals[NODE_NEW_CONTENT], 0,
+            node, content);
+}
+
 
 FmNode *
 fmprovider_get_node (FmProvider  *provider,
