@@ -1,22 +1,20 @@
 fmTask: GObject
 
-    signals:
-// task finished (might be error/cancelled)
-finish                              (task)
-
     properties:
-// desc that can be general, or include file being copied, etc
+// general desc of the task (read-only)
 desc
-// -1 if n/a; else pctg (0.42 = 42%)
+// current op (e.g. file being copied) (write-only-for-func)
+status
+// -1 if n/a; else pctg (0.42 = 42%) (write-only-for-func)
 progress
 
     api:
-fmTask *        new                 (func, data)
-gboolean        cancel              (task)
-gboolean        is_cancelled        (task)
+fmTask *        new                 (desc, func, data, callback, callback_data)
+void            cancel              (task)
 fmTaskState     get_state           (task)
-void            get_error           (task, error)
-void            get_ret_value       (task, value)
+gboolean        get_error           (task, error)
+gboolean        get_ret_value       (task, value)
+gboolean        is_cancelled        (task)
 void            set_error           (task, domain, code, fmt, ...)
 void            take_error          (task, error)
 void            set_ret_value       (task, value)

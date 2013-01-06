@@ -12,6 +12,7 @@ struct _FmNodePrivate
 {
     FmProvider  *provider;
     gchar       *location;
+    gboolean     is_container;
     GMutex       location_mutex;
     GHashTable  *props;
     GRWLock      props_lock;
@@ -93,6 +94,7 @@ fmnode_new (FmProvider  *provider,
     priv->provider = provider;
     priv->location = g_strdup (location);
     g_mutex_init (&priv->location_mutex);
+    priv->is_container = is_container;
     priv->props = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, free_prop);
     g_rw_lock_init (&priv->props_lock);
@@ -162,6 +164,14 @@ fmnode_get_location (FmNode *node)
     loc = g_strdup (node->priv->location);
     g_mutex_unlock (&node->priv->location_mutex);
     return loc;
+}
+
+gboolean
+fmnode_is_container (FmNode *node)
+{
+    g_return_val_if_fail (IS_FMNODE (node), FALSE);
+
+    return node->priv->is_container;
 }
 
 gboolean
@@ -298,6 +308,8 @@ fmnode_set_property (FmNode          *node,
     return TRUE;
 }
 
+/************************
+
 struct set_property
 {
     FmNode      *node;
@@ -314,23 +326,23 @@ set_property (FmTask *task, struct set_property *data)
 
     /* TODO: set_value should get a pointer to an int, as long as it's 0 it can
      * do its work, as soon as it's 1 the task is being cancelled. This int
-     * should come from fmTask, but can also be supported w/out a task ofc */
+     * should come from fmTask, but can also be supported w/out a task ofc *
     ret = data->prop->set_value (data->node, data->prop->name, data->value, &err);
     if (!ret)
-        fmtask_propagate_error (task, err);
-    /* set the return value */
+        fmtask_take_error (task, err);
+    /* set the return value *
     g_value_init (&value, G_TYPE_BOOLEAN);
     g_value_set_boolean (&value, ret);
     fmtask_set_ret_value (task, &value);
     g_value_unset (&value);
 
-    /* free memory */
+    /* free memory *
     g_object_unref (data->node);
     g_value_unset (data->value);
     g_free (data->value);
     g_slice_free (struct set_property, data);
 
-    /* this defines the task's state */
+    /* this defines the task's state *
     return (ret) ? FMTASK_SUCCESS :
         fmtask_is_cancelled (task) ? FMTASK_CANCELLED : FMTASK_ERROR;
 }
@@ -363,23 +375,22 @@ set_property_task (FmNode        *node,
         return NULL;
 
     data = g_slice_new (struct set_property);
-    /* take a ref on node, for the task */
+    /* take a ref on node, for the task *
     g_object_ref (node);
     data->node = node;
     data->prop = prop;
     data->value = duplicate_gvalue (value);
-    task = fmtask_new (set_property, data);
-    if (callback)
-        g_signal_connect (task, "finish", callback, callback_data);
+    task = fmtask_new (NULL, set_property, data, callback, callback_data);
     fmtask_manager_add_task (task);
 
     return task;
 }
+***************************/
 
 static void
-get_valist (FsNode       *node,
+get_valist (FmNode       *node,
             GError      **error,
-            const gchar  *first_property_name,
+            const gchar  *first_name,
             va_list       va_args)
 {
     GHashTable *props;
@@ -387,16 +398,16 @@ get_valist (FsNode       *node,
 
     props = node->priv->props;
     g_rw_lock_reader_lock (&node->priv->props_lock);
-    name = first_property_name;
+    name = first_name;
     while (name)
     {
-        FsNodeProp *prop;
+        FmNodeProp *prop;
         gchar *err;
 
         prop = g_hash_table_lookup (props, (gpointer) name);
         if (!prop)
         {
-            g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_NOT_FOUND,
+            g_set_error (error, FMNODE_ERROR, FMNODE_ERROR_NOT_FOUND,
                     "Node does not have a property %s", name);
             break;
         }
@@ -405,9 +416,9 @@ get_valist (FsNode       *node,
             GError *err_local = NULL;
 
             /* we remove the reader lock, to allow get_value to do its work
-             * and call set_prop, which needs a writer lock obviously */
+             * and call set_property_value, which uses a writer lock obviously */
             g_rw_lock_reader_unlock (&node->priv->props_lock);
-            if (!prop->get_value (node, name, set_prop, &err_local))
+            if (!prop->get_value (node, name, &err_local))
             {
                 g_propagate_error (error, err_local);
                 return;
@@ -419,7 +430,7 @@ get_valist (FsNode       *node,
         G_VALUE_LCOPY (&(prop->value), va_args, 0, &err);
         if (err)
         {
-            g_set_error (error, FSNODE_ERROR, FSNODE_ERROR_OTHER,
+            g_set_error (error, FMNODE_ERROR, FMNODE_ERROR_OTHER,
                     "Failed to get node property %s: %s",
                     name,
                     err);
@@ -432,44 +443,63 @@ get_valist (FsNode       *node,
 }
 
 void
-fsnode_get (FsNode       *node,
+fmnode_get (FmNode       *node,
             GError      **error,
-            const gchar  *first_property_name,
+            const gchar  *first_name,
             ...)
 {
     va_list va_args;
 
-    g_return_if_fail (IS_FSNODE (node));
+    g_return_if_fail (IS_FMNODE (node));
 
-    va_start (va_args, first_property_name);
-    get_valist (node, error, first_property_name, va_args);
+    va_start (va_args, first_name);
+    get_valist (node, error, first_name, va_args);
     va_end (va_args);
 }
 
 void
-fsnode_refresh (FsNode *node)
+fsmode_refresh (FmNode *node)
 {
     GHashTableIter iter;
     gpointer key, value;
 
-    g_return_if_fail (IS_FSNODE (node));
+    g_return_if_fail (IS_FMNODE (node));
     g_rw_lock_writer_lock (&node->priv->props_lock);
     g_hash_table_iter_init (&iter, node->priv->props);
     while (g_hash_table_iter_next (&iter, &key, &value))
     {
-        ((FsNodeProp *) value)->has_value = FALSE;
+        ((FmNodeProp *) value)->has_value = FALSE;
     }
     g_rw_lock_writer_unlock (&node->priv->props_lock);
 }
 
-static void
-set_prop (FsNode        *node,
-          const gchar   *name,
-          GValue        *value)
+gchar *
+fmnode_set_location (FmNode      *node,
+                     const gchar *new_location)
 {
-    FsNodeProp *prop;
+    gchar *old_location;
 
-    g_return_if_fail (IS_FSNODE (node));
+    g_return_val_if_fail (IS_FMNODE (node), NULL);
+
+    g_mutex_lock (&node->priv->location_mutex);
+    old_location = node->priv->location;
+    node->priv->location = g_strdup (new_location);
+    g_mutex_unlock (&node->priv->location_mutex);
+
+    /* as usual, nodes do not have signals, it'll be up to the provider (only
+     * one that should use this function) to emit the signal. That's why we
+     * send it the old_location, and it's his job to free it */
+    return old_location;
+}
+
+void
+set_property_value (FmNode        *node,
+                    const gchar   *name,
+                    GValue        *value)
+{
+    FmNodeProp *prop;
+
+    g_return_if_fail (IS_FMNODE (node));
     g_return_if_fail (name != NULL);
 
     g_rw_lock_writer_lock (&node->priv->props_lock);

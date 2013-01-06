@@ -58,6 +58,7 @@ FmNode *        fmnode_new_from_node        (FmProvider             *provider,
                                              FmNode                 *sce);
 FmProvider *    fmnode_get_provider         (FmNode                 *node);
 gchar *         fmnode_get_location         (FmNode                 *node);
+gboolean        fmnode_is_container         (FmNode                 *node);
 gboolean        fmnode_add_property         (FmNode                 *node,
                                              const gchar            *name,
                                              GType                   type,
@@ -69,21 +70,19 @@ gboolean        fmnode_set_property         (FmNode                 *node,
                                              const gchar            *name,
                                              GValue                 *value,
                                              GError                **error);
-void            fmnode_set_property_async   (FmNode                 *node,
+/********
+FmTask *        fmnode_set_property_task    (FmNode                 *node,
                                              const gchar            *name,
                                              GValue                 *value,
-                                             GCancellable           *cancellable,
-                                             GAsyncReadyCallback     callback,
-                                             gpointer                data);
-gboolean        fmnode_set_property_finish  (FmNode                 *node,
-                                             GAsyncResult           *result,
+                                             GCallback               callback,
+                                             gpointer                callback_data,
                                              GError                **error);
+***************/
 void            fmnode_get                  (FmNode                 *node,
                                              GError                **error,
                                              const gchar            *first_name,
                                              ...);
 void            fmnode_refresh              (FmNode                 *node);
-gboolean        fmnode_is_container         (FmNode                 *node);
 gchar *         fmnode_set_location         (FmNode                 *node,
                                              const gchar            *new_location);
 void            fmnode_set_property_value   (FmNode                 *node,
