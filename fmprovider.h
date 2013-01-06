@@ -89,7 +89,7 @@ GType           fmprovider_get_type             (void) G_GNUC_CONST;
 void            fmprovider_node_created         (FmProvider  *provider,
                                                  FmNode      *node);
 void            fmprovider_node_removed         (FmProvider  *provider,
-                                                 FmProvider  *node);
+                                                 FmNode      *node);
 void            fmprovider_node_location_updated    (FmProvider  *provider,
                                                      FmNode      *node,
                                                      const gchar *old_location);

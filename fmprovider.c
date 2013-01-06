@@ -27,6 +27,14 @@ static guint fmprovider_signals[NB_SIGNALS] = { 0 };
 static void
 fmprovider_default_init (FmProviderInterface *klass)
 {
+    g_object_interface_install_property (klass,
+            g_param_spec_string (
+                "domain",
+                "domain",
+                "Domain handled by the provider",
+                NULL,
+                G_PARAM_READABLE | G_PARAM_CONSTRUCT_ONLY));
+
     fmprovider_signals[NODE_CREATED] =
         g_signal_new ("node-created",
             TYPE_FMPROVIDER,
@@ -125,7 +133,7 @@ fmprovider_node_created (FmProvider  *provider,
 
 void
 fmprovider_node_removed (FmProvider  *provider,
-                         FmProvider  *node)
+                         FmNode      *node)
 {
     g_return_if_fail (IS_FMPROVIDER (provider));
     g_return_if_fail (IS_FMNODE (node));
