@@ -53,7 +53,7 @@ FmNode *        fmnode_new                  (FmProvider             *provider,
                                              const gchar            *location,
                                              gboolean                is_container);
 FmNode *        fmnode_new_from_node        (FmProvider             *provider,
-                                             const gchar            *location
+                                             const gchar            *location,
                                              gboolean                is_container,
                                              FmNode                 *sce);
 FmProvider *    fmnode_get_provider         (FmNode                 *node);
