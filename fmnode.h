@@ -50,15 +50,20 @@ struct _FmNodeClass
 GType           fmnode_get_type             (void) G_GNUC_CONST;
 
 FmNode *        fmnode_new                  (FmProvider             *provider,
-                                             const gchar            *location,
-                                             gboolean                is_container);
+                                             get_value_fn            location_get,
+                                             set_value_fn            location_set,
+                                             get_value_fn            is_container_get,
+                                             set_value_fn            is_container_set,
+                                             get_value_fn            has_children_get,
+                                             set_value_fn            has_children_set);
 FmNode *        fmnode_new_from_node        (FmProvider             *provider,
-                                             const gchar            *location,
-                                             gboolean                is_container,
+                                             get_value_fn            location_get,
+                                             set_value_fn            location_set,
+                                             get_value_fn            is_container_get,
+                                             set_value_fn            is_container_set,
+                                             get_value_fn            has_children_get,
+                                             set_value_fn            has_children_set,
                                              FmNode                 *sce);
-FmProvider *    fmnode_get_provider         (FmNode                 *node);
-gchar *         fmnode_get_location         (FmNode                 *node);
-gboolean        fmnode_is_container         (FmNode                 *node);
 gboolean        fmnode_add_property         (FmNode                 *node,
                                              const gchar            *name,
                                              GType                   type,
@@ -83,8 +88,6 @@ void            fmnode_get                  (FmNode                 *node,
                                              const gchar            *first_name,
                                              ...);
 void            fmnode_refresh              (FmNode                 *node);
-gchar *         fmnode_set_location         (FmNode                 *node,
-                                             const gchar            *new_location);
 void            fmnode_set_property_value   (FmNode                 *node,
                                              const gchar            *name,
                                              GValue                 *value);

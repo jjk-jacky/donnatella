@@ -21,17 +21,13 @@ void            set_ret_value       (task, value)
 
 fmNode: GObject
 
-fmNode *        new                 (provider, location, is_container)
-fmNode *        new_from_node       (provider, location, is_container, node_sce)
-fmProvider *    get_provider        (node)
-gchar *         get_location        (node)
+fmNode *        new                 (provider, loc_get, loc_set, cont_get, cont_set, chdn_get, chdn_set)
+fmNode *        new_from_node       (provider, loc_get, loc_set, cont_get, cont_set, chdn_get, chdn_set, node_sce)
 gboolean        add_property        (node, prop_name, type, value, get_value, set_value, error)
 gboolean        set_property        (node, prop_name, value, error)
 fmTask *        set_property_task   (node, prop_name, value, callback, data, error)
 void            get                 (node, error, name, ...)
 void            refresh             (node)
-gboolean        is_container        (node)
-gchar *         set_location        (node, new_location)
 void            set_property_value  (node, prop_name, value)
 
 fmProvider: GInterface
