@@ -63,3 +63,14 @@ fmTask *        get_children_task   (provider, node, callback, data, error)
 gboolean        remove_node         (provider, node, error)
 fmTask *        remove_node_task    (provider, node, callback, data, error)
 
+Provider: Base Class
+
+Handles all the hash_table business, with the recursive mutex to be thread safe
+and the toggle-lock on nodes to free memory when needed, etc
+
+Requires implementations to provide the following virtual methods:
+fmNode *        get_node            (provider, location, error)
+fmNode **       get_content         (provider, node, error)
+fmNode **       get_children        (provider, node, error)
+gboolean        remove_node         (provider, node, error)
+

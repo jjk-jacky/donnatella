@@ -211,7 +211,7 @@ fmprovider_node_new_content (FmProvider  *provider,
 FmNode *
 fmprovider_get_node (FmProvider  *provider,
                      const gchar *location,
-                     gboolean     is_container,
+                     gboolean     container_only,
                      GError     **error)
 {
     FmProviderInterface *interface;
@@ -224,14 +224,14 @@ fmprovider_get_node (FmProvider  *provider,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_node != NULL, NULL);
 
-    return (*interface->get_node) (provider, location, is_container, error);
+    return (*interface->get_node) (provider, location, container_only, error);
 }
 
 /*************
 FmTask *
 fmprovider_get_node_task (FmProvider     *provider,
                           const gchar    *location,
-                          gboolean        is_container,
+                          gboolean        container_only,
                           GCallback       callback,
                           gpointer        callback_data,
                           GError        **error)
@@ -246,7 +246,7 @@ fmprovider_get_node_task (FmProvider     *provider,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_node_task != NULL, NULL);
 
-    return (*interface->get_node_task) (provider, location, is_container,
+    return (*interface->get_node_task) (provider, location, container_only,
             callback, callback_data, error);
 }
 *********/
@@ -257,9 +257,15 @@ fmprovider_get_content (FmProvider   *provider,
                         GError      **error)
 {
     FmProviderInterface *interface;
+    FmProvider *p;
 
     g_return_val_if_fail (IS_FMPROVIDER (provider), NULL);
     g_return_val_if_fail (IS_FMNODE (node), NULL);
+
+    /* make sure the provider is the node's provider */
+    p = fmnode_get (node, NULL, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
 
     interface = FMPROVIDER_GET_INTERFACE (provider);
 
@@ -278,9 +284,15 @@ fmprovider_get_content_task (FmProvider  *provider,
                              GError     **error)
 {
     FmProviderInterface *interface;
+    FmProvider *p;
 
     g_return_val_if_fail (IS_FMPROVIDER (provider), NULL);
     g_return_val_if_fail (IS_FMNODE (node), NULL);
+
+    /* make sure the provider is the node's provider *
+    p = fmnode_get (node, NULL, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
 
     interface = FMPROVIDER_GET_INTERFACE (provider);
 
@@ -298,9 +310,15 @@ fmprovider_get_children (FmProvider  *provider,
                          GError     **error)
 {
     FmProviderInterface *interface;
+    FmProvider *p;
 
     g_return_val_if_fail (IS_FMPROVIDER (provider), NULL);
     g_return_val_if_fail (IS_FMNODE (node), NULL);
+
+    /* make sure the provider is the node's provider */
+    p = fmnode_get (node, NULL, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
 
     interface = FMPROVIDER_GET_INTERFACE (provider);
 
@@ -319,9 +337,15 @@ fmprovider_get_children_task (FmProvider     *provider,
                               GError        **error)
 {
     FmProviderInterface *interface;
+    FmProvider *p;
 
     g_return_val_if_fail (IS_FMPROVIDER (provider), NULL);
     g_return_val_if_fail (IS_FMNODE (node), NULL);
+
+    /* make sure the provider is the node's provider *
+    p = fmnode_get (node, NULL, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
 
     interface = FMPROVIDER_GET_INTERFACE (provider);
 
@@ -339,9 +363,15 @@ fmprovider_remove_node (FmProvider   *provider,
                         GError      **error)
 {
     FmProviderInterface *interface;
+    FmProvider *p;
 
     g_return_val_if_fail (IS_FMPROVIDER (provider), FALSE);
     g_return_val_if_fail (IS_FMNODE (node), FALSE);
+
+    /* make sure the provider is the node's provider */
+    p = fmnode_get (node, NULL, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
 
     interface = FMPROVIDER_GET_INTERFACE (provider);
 
@@ -360,9 +390,15 @@ fmprovider_remove_node_task (FmProvider  *provider,
                              GError     **error)
 {
     FmProviderInterface *interface;
+    FmProvider *p;
 
     g_return_val_if_fail (IS_FMPROVIDER (provider), FALSE);
     g_return_val_if_fail (IS_FMNODE (node), FALSE);
+
+    /* make sure the provider is the node's provider *
+    p = fmnode_get (node, NULL, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
 
     interface = FMPROVIDER_GET_INTERFACE (provider);
 

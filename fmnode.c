@@ -9,6 +9,60 @@ typedef struct _FmTask      FmTask;
 #include <string.h>                     /* memset(); strcmp() */
 #include "fmnode.h"
 
+/**
+ * SECTION:fmnode
+ * @Short_description: An object holding dynamic properties
+ * @See_also: #FmProvider
+ *
+ * An #FmNode is an object representing an "item" (e.g. a file) from a domain.
+ * They should only be created by the #FmProvider of that domain, while anything
+ * else needing a node to reference/act on such item goes through the provider.
+ *
+ * The reason for this object is that GObject have a defined set of properties,
+ * while every node can have a different set of properties based on many outside
+ * factors.
+ * For example, nodes from different domains might not share the same
+ * properties, and even nodes within the same domain could have properties
+ * others do not (e.g. the node for "img.png" could have properties "width" and
+ * "height" owned by some plugin, whereas a text file will not have those).
+ *
+ * A few set of properties are required to exists for things to work properly:
+ * - provider : a reference to the #FmProvider of the node
+ * - location : string, the location of the node
+ * - name : string, the "display name" of the node
+ * - is_container : boolean, whether the node can "contain" other nodes
+ * - has_children : boolean, whether the node does have "children" or not
+ *
+ * A node is a container when it can "hold" other nodes, e.g. the node of a
+ * folder is a container, since a folder can contain other nodes (files, etc)
+ * The content of the node is referred to as "content"
+ *
+ * A node can also have "children" (e.g. a folder has subfolders). While content
+ * and children might be the same, children might only be a (small) subset of
+ * content, or even a completely different set.
+ * A node is a container if it can have content and/or children. In effect, only
+ * container nodes will be shown on the #FmTree where only children will be
+ * listed as subnodes. Similarly, making a location/node the current one will
+ * have its content listed on the #FmList.
+ *
+ * Nodes do not have signals, any and all relevent signal for a node will occur
+ * on its provider. For this reason, anyone who needs to work on a node should
+ * first connect to the relevent signals on its provider first.
+ *
+ * <refsect2 id="FmNode-properties">
+ * <title>Properties</title>
+ * Upon creation, the provider will create the required properties, and add all
+ * other applicable ones. TODO: Plugins might then add some as well...
+ *
+ * A property is defined by its name, #GType, a getter function and,
+ * optionnally, a setter function.
+ * The getter is required, the setter will allow the property's value to be
+ * changed, e.g. to rename a file, change its permissions, etc
+ *
+ * FIXME: ...
+ * </refsect2>
+ */
+
 struct _FmNodePrivate
 {
     FmProvider  *provider;

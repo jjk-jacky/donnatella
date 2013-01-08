@@ -41,12 +41,12 @@ struct _FmProviderInterface
     /* virtual table */
     FmNode *        (*get_node)                 (FmProvider  *provider,
                                                  const gchar *location,
-                                                 gboolean     is_container,
+                                                 gboolean     container_only,
                                                  GError     **error);
 /************
     FmTask *        (*get_node_task)            (FmProvider  *provider,
                                                  const gchar *location,
-                                                 gboolean     is_container,
+                                                 gboolean     container_only,
                                                  GCallback    callback,
                                                  gpointer     callback_data
                                                  GError     **error);
@@ -109,12 +109,12 @@ void            fmprovider_node_new_content     (FmProvider  *provider,
 /* API */
 FmNode *        fmprovider_get_node             (FmProvider  *provider,
                                                  const gchar *location,
-                                                 gboolean     is_container,
+                                                 gboolean     container_only,
                                                  GError     **error);
 /**********
 FmTask *        fmprovider_get_node_task        (FmProvider  *provider,
                                                  const gchar *location,
-                                                 gboolean     is_container,
+                                                 gboolean     container_only,
                                                  GCallback    callback,
                                                  gpointer     callback_data,
                                                  GError     **error);
