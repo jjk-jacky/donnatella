@@ -1,8 +1,8 @@
-SRC = main.c fstree.c fmnode.c fmprovider.c fsprovider.c
+SRC = util.c node.c
 OBJ = ${SRC:.c=.o}
 
-GTK_FLAGS := `pkg-config --cflags --libs gtk+-3.0`
-CFLAGS := -Wall -Wextra -g $(CFLAGS) $(GTK_FLAGS)
+GOBJECT_FLAGS := `pkg-config --cflags --libs gobject-2.0`
+CFLAGS := -Wall -Wextra -g $(CFLAGS) $(GOBJECT_FLAGS)
 
 all: donna
 
