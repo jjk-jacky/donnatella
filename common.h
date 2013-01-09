@@ -41,18 +41,16 @@ typedef enum
     DONNA_TASK_FAILED
 } DonnaTaskState;
 
-typedef struct _DonnaProvider           DonnaProvider;
-typedef struct _DonnaProviderClass      DonnaProviderClass;
-typedef struct _DonnaProviderPrivate    DonnaProviderPrivate;
 
-#define DONNA_TYPE_PROVIDER             (donna_provider_get_type ())
-#define DONNA_PROVIDER(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_PROVIDER, DonnaProvider))
-#define DONNA_PROVIDER_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass), DONNA_TYPE_PROVIDER, DonnaProviderClass))
-#define DONNA_IS_PROVIDER(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_PROVIDER))
-#define DONNA_IS_PROVIDER_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass), DONNA_TYPE_PROVIDER))
-#define DONNA_PROVIDER_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_PROVIDER, DonnaProviderClass))
+typedef struct _DonnaProvider               DonnaProvider; /* dummy typedef */
+typedef struct _DonnaProviderInterface      DonnaProviderInterface;
 
-GType           donna_provider_get_type (void) G_GNUC_CONST;
+#define DONNA_TYPE_PROVIDER                 (donna_provider_get_type ())
+#define DONNA_PROVIDER(obj)                 (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_PROVIDER, DonnaProvider))
+#define DONNA_IS_PROVIDER(obj)              (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_PROVIDER))
+#define DONNA_PROVIDER_GET_INTERFACE(obj)   (G_TYPE_INSTANCE_GET_INTERFACE ((obj), DONNA_TYPE_PROVIDER, DonnaProviderInterface))
+
+GType           donna_provider_get_type     (void) G_GNUC_CONST;
 
 G_END_DECLS
 

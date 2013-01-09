@@ -24,8 +24,7 @@ fmNode: GObject
 fmNode *        new                 (provider, loc_get, loc_set, cont_get, cont_set, chdn_get, chdn_set)
 fmNode *        new_from_node       (provider, loc_get, loc_set, cont_get, cont_set, chdn_get, chdn_set, node_sce)
 gboolean        add_property        (node, prop_name, type, value, get_value, set_value, error)
-gboolean        set_property        (node, prop_name, value, error)
-fmTask *        set_property_task   (node, prop_name, value, callback, data, error)
+fmTask *        set_property        (node, prop_name, value, callback, data, error)
 void            get                 (node, error, name, ...)
 void            refresh             (node)
 void            set_property_value  (node, prop_name, value)
@@ -41,8 +40,6 @@ domain
 node-created                        (provider, node)
 // "file" has been deleted, node is "invalid"
 node-removed                        (provider, node)
-// node location changed
-node-location-updated               (provider, node, old_location)
 // property on node was updated
 node-updated::property              (provider, node, name)
 // got children of node
@@ -53,15 +50,10 @@ node-new-child                      (provider, node, child)
 node-new-content                    (provider, node, content)
 
     api:
-fmProvider *    new                 (void)
-fmNode *        get_node            (provider, location, container_only, error)
-fmTask *        get_node_task       (provider, location, container_only, cb, cb_data, error)
-fmNode **       get_content         (provider, node, error)
-fmTask *        get_content_task    (provider, node, callback, data, error)
-fmNode **       get_children        (provider, node, error)
-fmTask *        get_children_task   (provider, node, callback, data, error)
-gboolean        remove_node         (provider, node, error)
-fmTask *        remove_node_task    (provider, node, callback, data, error)
+fmTask *        get_node            (provider, location, cb, cb_data, error)
+fmTask *        get_content         (provider, node, callback, data, error)
+fmTask *        get_children        (provider, node, callback, data, error)
+fmTask *        remove_node         (provider, node, callback, data, error)
 
 Provider: Base Class
 

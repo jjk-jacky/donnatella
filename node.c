@@ -269,7 +269,7 @@ set_property (DonnaTask *task, struct set_property *data)
     GValue value = G_VALUE_INIT;
     gboolean ret;
 
-    /* TODO: set_value should get a pointer to an int, as long as it's 0 it can
+    /* FIXME: set_value should get a pointer to an int, as long as it's 0 it can
      * do its work, as soon as it's 1 the task is being cancelled. This int
      * should come from fmTask, but can also be supported w/out a task ofc */
     ret = data->prop->set_value (data->node, data->prop->name, data->value, &err);
