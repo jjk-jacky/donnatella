@@ -1,20 +1,28 @@
 fmTask: GObject
 
     properties:
-// general desc of the task (read-only)
+// general desc of the task (read-only) (NULL for internal tasks)
 desc
+// priority
+priority
 // current op (e.g. file being copied) (write-only-for-func)
 status
 // -1 if n/a; else pctg (0.42 = 42%) (write-only-for-func)
 progress
+// fmTaskState
+state
 
     api:
-fmTask *        new                 (desc, func, data, callback, callback_data)
+fmTask *        new                 (desc, func, data, cb, cb_data, t_out, t_out_cb, t_out_data)
 void            cancel              (task)
-fmTaskState     get_state           (task)
+void            pause               (task)
+void            resume              (task)
 gboolean        get_error           (task, error)
+// for cb
 gboolean        get_ret_value       (task, value)
+// for func
 gboolean        is_cancelled        (task)
+void            update              (task, has_progress, progress, has_status, status, ...)
 void            set_error           (task, domain, code, fmt, ...)
 void            take_error          (task, error)
 void            set_ret_value       (task, value)
@@ -61,7 +69,7 @@ Handles all the hash_table business, with the recursive mutex to be thread safe
 and the toggle-lock on nodes to free memory when needed, etc
 
 Requires implementations to provide the following virtual methods:
-fmNode *        get_node            (provider, location, error)
+fmNode *        new_node            (provider, location, error)
 fmNode **       get_content         (provider, node, error)
 fmNode **       get_children        (provider, node, error)
 gboolean        remove_node         (provider, node, error)
