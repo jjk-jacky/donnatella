@@ -1,4 +1,4 @@
-SRC = util.c node.c provider.c
+SRC = util.c node.c provider.c provider-base.c
 OBJ = ${SRC:.c=.o}
 
 GOBJECT_FLAGS := `pkg-config --cflags --libs gobject-2.0`

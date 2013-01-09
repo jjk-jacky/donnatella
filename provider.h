@@ -85,7 +85,7 @@ DonnaTask * donna_provider_get_content      (DonnaProvider   *provider,
 DonnaTask * donna_provider_get_children     (DonnaProvider   *provider,
                                              DonnaNode       *node,
                                              GCallback        callback,
-                                             gpointer         callback_data
+                                             gpointer         callback_data,
                                              GError         **error);
 DonnaTask * donna_provider_remove_node      (DonnaProvider   *provider,
                                              DonnaNode       *node,
