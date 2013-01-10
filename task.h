@@ -22,6 +22,14 @@ typedef enum
     DONNA_TASK_FAILED
 } DonnaTaskState;
 
+typedef enum
+{
+    DONNA_TASK_INT_UNKNOWN,
+    DONNA_TASK_INT_RUNNING,
+    DONNA_TASK_INT_PAUSING,
+    DONNA_TASK_INT_CANCELLING
+} DonnaTaskIntState;
+
 typedef DonnaTaskState  (*task_fn)          (DonnaTask  *task,
                                              gpointer    data);
 typedef void            (*task_timeout_fn)  (DonnaTask  *task,
@@ -42,37 +50,39 @@ struct _DonnaTaskClass
     GObjectClass parent;
 };
 
-DonnaTask *     donna_task_new              (gchar              *desc,
-                                             task_fn             func,
-                                             gpointer            data,
-                                             task_callback_fn    callback,
-                                             gpointer            callback_data,
-                                             guint               timeout_delay,
-                                             task_timeout_fn     timeout_callback,
-                                             gpointer            timeout_data);
-void            donna_task_cancel           (DonnaTask          *task);
-void            donna_task_pause            (DonnaTask          *task);
-void            donna_task_resume           (DonnaTask          *task);
-gboolean        donna_task_get_error        (DonnaTask          *task,
-                                             GError             *error);
-gboolean        donna_task_get_return_value (DonnaTask          *task,
-                                             GValue             *value);
-gboolean        donna_is_cancelled          (DonnaTask          *task);
-void            donna_task_update           (DonnaTask          *task,
-                                             gboolean            has_progress,
-                                             gdouble             progress,
-                                             gboolean            has_status,
-                                             const gchar        *status_fmt,
-                                             ...);
-void            donna_task_set_error        (DonnaTask          *task,
-                                             GQuark              domain,
-                                             gint                code,
-                                             const gchar        *format,
-                                             ...);
-void            donna_task_take_error       (DonnaTask          *task,
-                                             GError            **error);
-void            donna_task_set_return_value (DonnaTask          *task,
-                                             const GValue       *value);
+DonnaTask *         donna_task_new              (gchar              *desc,
+                                                 task_fn             func,
+                                                 gpointer            data,
+                                                 task_callback_fn    callback,
+                                                 gpointer            callback_data,
+                                                 guint               timeout_delay,
+                                                 task_timeout_fn     timeout_callback,
+                                                 gpointer            timeout_data);
+void                donna_task_cancel           (DonnaTask          *task);
+void                donna_task_pause            (DonnaTask          *task);
+void                donna_task_resume           (DonnaTask          *task);
+gboolean            donna_task_get_error        (DonnaTask          *task,
+                                                 GError            **error);
+gboolean            donna_task_get_return_value (DonnaTask          *task,
+                                                 GValue             *value);
+int                 donna_task_get_fd           (DonnaTask          *task);
+DonnaTaskIntState   donna_task_get_int_state    (DonnaTask          *task);
+gboolean            donna_task_is_cancelling    (DonnaTask          *task);
+void                donna_task_update           (DonnaTask          *task,
+                                                 gboolean            has_progress,
+                                                 gdouble             progress,
+                                                 gboolean            has_status,
+                                                 const gchar        *status_fmt,
+                                                 ...);
+void                donna_task_set_error        (DonnaTask          *task,
+                                                 GQuark              domain,
+                                                 gint                code,
+                                                 const gchar        *format,
+                                                 ...);
+void                donna_task_take_error       (DonnaTask          *task,
+                                                 GError            **error);
+void                donna_task_set_return_value (DonnaTask          *task,
+                                                 const GValue       *value);
 
 G_END_DECLS
 

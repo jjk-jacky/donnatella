@@ -21,7 +21,9 @@ gboolean        get_error           (task, error)
 // for cb
 gboolean        get_ret_value       (task, value)
 // for func
-gboolean        is_cancelled        (task)
+int             get_fd              (task)
+fmTaskIntState  get_internal_state  (task)
+gboolean        is_cancelling       (task)
 void            update              (task, has_progress, progress, has_status, status, ...)
 void            set_error           (task, domain, code, fmt, ...)
 void            take_error          (task, error)
