@@ -15,20 +15,28 @@ typedef enum
 
 typedef enum
 {
+    DONNA_TASK_PRIORITY_LOW,
+    DONNA_TASK_PRIORITY_NORMAL,
+    DONNA_TASK_PRIORITY_HIGH
+} DonnaTaskPriority;
+
+typedef enum
+{
+    /* task not started */
     DONNA_TASK_WAITING,
+    /* function running */
     DONNA_TASK_RUNNING,
+    /* user asked to pause */
+    DONNA_TASK_PAUSING,
+    /* function is paused */
+    DONNA_TASK_PAUSED,
+    /* user asked to cancel */
+    DONNA_TASK_CANCELLING,
+    /* function done, return codes: */
     DONNA_TASK_DONE,
     DONNA_TASK_CANCELLED,
     DONNA_TASK_FAILED
 } DonnaTaskState;
-
-typedef enum
-{
-    DONNA_TASK_INT_UNKNOWN,
-    DONNA_TASK_INT_RUNNING,
-    DONNA_TASK_INT_PAUSING,
-    DONNA_TASK_INT_CANCELLING
-} DonnaTaskIntState;
 
 typedef DonnaTaskState  (*task_fn)          (DonnaTask  *task,
                                              gpointer    data);
@@ -61,12 +69,11 @@ DonnaTask *         donna_task_new              (gchar              *desc,
 void                donna_task_cancel           (DonnaTask          *task);
 void                donna_task_pause            (DonnaTask          *task);
 void                donna_task_resume           (DonnaTask          *task);
-gboolean            donna_task_get_error        (DonnaTask          *task,
-                                                 GError            **error);
+GError *            donna_task_get_error        (DonnaTask          *task);
 gboolean            donna_task_get_return_value (DonnaTask          *task,
+                                                 gboolean           *has_value,
                                                  GValue             *value);
 int                 donna_task_get_fd           (DonnaTask          *task);
-DonnaTaskIntState   donna_task_get_int_state    (DonnaTask          *task);
 gboolean            donna_task_is_cancelling    (DonnaTask          *task);
 void                donna_task_update           (DonnaTask          *task,
                                                  gboolean            has_progress,

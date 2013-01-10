@@ -31,16 +31,6 @@ typedef struct _DonnaTaskPrivate        DonnaTaskPrivate;
 
 GType           donna_task_get_type     (void) G_GNUC_CONST;
 
-typedef enum
-{
-    DONNA_TASK_WAITING,
-    DONNA_TASK_RUNNING,
-    DONNA_TASK_PAUSED,
-    DONNA_TASK_CANCELLED,
-    DONNA_TASK_COMPLETED,
-    DONNA_TASK_FAILED
-} DonnaTaskState;
-
 
 typedef struct _DonnaProvider               DonnaProvider; /* dummy typedef */
 typedef struct _DonnaProviderInterface      DonnaProviderInterface;
