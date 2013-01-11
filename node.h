@@ -3,6 +3,7 @@
 #define __DONNA_NODE_H__
 
 #include "common.h"
+#include "task.h"
 
 G_BEGIN_DECLS
 
@@ -21,10 +22,10 @@ typedef enum
 typedef gboolean    (*get_value_fn) (DonnaNode      *node,
                                      const gchar    *name,
                                      GError        **error);
-typedef gboolean    (*set_value_fn) (DonnaNode      *node,
+typedef gboolean    (*set_value_fn) (DonnaTask      *task,
+                                     DonnaNode      *node,
                                      const gchar    *name,
-                                     GValue         *value,
-                                     GError        **error);
+                                     GValue         *value);
 struct _DonnaNode
 {
     GObject parent;
@@ -66,9 +67,11 @@ gboolean        donna_node_add_property     (DonnaNode              *node,
 DonnaTask *     donna_node_set_property     (DonnaNode              *node,
                                              const gchar            *name,
                                              GValue                 *value,
-                                             GCallback               callback,
+                                             task_callback_fn        callback,
                                              gpointer                callback_data,
-                                             GError                **error);
+                                             guint                   timeout,
+                                             task_timeout_fn         timeout_fn,
+                                             gpointer                timeout_data);
 void            donna_node_get              (DonnaNode              *node,
                                              GError                **error,
                                              const gchar            *first_name,

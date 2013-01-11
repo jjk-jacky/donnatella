@@ -265,20 +265,15 @@ struct set_property
 static DonnaTaskState
 set_property (DonnaTask *task, struct set_property *data)
 {
-    GError *err = NULL;
     GValue value = G_VALUE_INIT;
-    gboolean ret;
+    DonnaTaskState ret;
 
-    /* FIXME: set_value should get a pointer to an int, as long as it's 0 it can
-     * do its work, as soon as it's 1 the task is being cancelled. This int
-     * should come from fmTask, but can also be supported w/out a task ofc */
-    ret = data->prop->set_value (data->node, data->prop->name, data->value, &err);
-    if (!ret)
-        donna_task_take_error (task, err);
+    ret = data->prop->set_value (task, data->node, data->prop->name, data->value);
+
     /* set the return value */
     g_value_init (&value, G_TYPE_BOOLEAN);
-    g_value_set_boolean (&value, ret);
-    donna_task_set_ret_value (task, &value);
+    g_value_set_boolean (&value, (ret == DONNA_TASK_DONE));
+    donna_task_set_return_value (task, &value);
     g_value_unset (&value);
 
     /* free memory */
@@ -287,20 +282,19 @@ set_property (DonnaTask *task, struct set_property *data)
     g_slice_free (GValue, data->value);
     g_slice_free (struct set_property, data);
 
-    /* this defines the task's state */
-    return (ret) ? DONNA_TASK_COMPLETED
-        : (donna_task_is_cancelled (task)
-                ? DONNA_TASK_CANCELLED
-                : DONNA_TASK_FAILED);
+    return ret;
 }
 
 DonnaTask *
-set_property_task (DonnaNode     *node,
-                   const gchar   *name,
-                   GValue        *value,
-                   GCallback      callback,
-                   gpointer       callback_data,
-                   GError       **error)
+set_property_task (DonnaNode        *node,
+                   const gchar      *name,
+                   GValue           *value,
+                   task_callback_fn  callback,
+                   gpointer          callback_data,
+                   guint             timeout,
+                   task_timeout_fn   timeout_fn,
+                   gpointer          timeout_data,
+                   GError          **error)
 {
     DonnaNodePrivate *priv;
     DonnaNodeProp *prop;
@@ -355,8 +349,10 @@ set_property_task (DonnaNode     *node,
     data->node = node;
     data->prop = prop;
     data->value = duplicate_gvalue (value);
-    task = donna_task_new (NULL, set_property, data, callback, callback_data);
-    donna_task_manager_add_task (task);
+    task = donna_task_new (NULL /* internal task */,
+            (task_fn) set_property, data,
+            callback, callback_data,
+            timeout, timeout_fn, timeout_data);
 
     return task;
 }
