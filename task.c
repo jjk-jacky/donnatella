@@ -2,7 +2,9 @@
 #include <glib-object.h>
 #include <sys/eventfd.h>
 #include <unistd.h>         /* read(), write(), close() */
+#include <stdarg.h>         /* va_args stuff */
 #include "task.h"
+#include "util.h"           /* duplicate_gvalue() */
 
 struct _DonnaTaskPrivate
 {
@@ -25,6 +27,7 @@ struct _DonnaTaskPrivate
     gpointer             callback_data;
     /* task timeout */
     guint                timeout;
+    guint                timeout_delay;
     task_timeout_fn      timeout_fn;
     gpointer             timeout_data;
 
@@ -238,11 +241,116 @@ donna_task_new (gchar              *desc,
     priv->task_data = data;
     priv->callback_fn = callback;
     priv->callback_data = callback_data;
-    priv->timeout = timeout_delay;
+    priv->timeout = 0;
+    priv->timeout_delay = timeout_delay;
     priv->timeout_fn = timeout_callback;
     priv->timeout_data = timeout_data;
 
     return task;
+}
+
+static gboolean
+notify_state_change_cb (gpointer data)
+{
+    g_object_notify_by_pspec (G_OBJECT (data),
+            donna_task_properties[PROP_STATE]);
+
+    return FALSE;
+}
+#define notify_state_change(task)   \
+    g_main_context_invoke (NULL, notify_state_change_cb, task)
+
+static gboolean
+timeout_cb (gpointer data)
+{
+    DonnaTask *task = (DonnaTask *) data;
+    DonnaTaskPrivate *priv = task->priv;
+
+    LOCK_TASK (task);
+
+    /* make sure the timeout shall be triggered (it could have been removed
+     * right before we took the lock) */
+    if (priv->timeout == 0)
+    {
+        UNLOCK_TASK (task);
+        return FALSE;
+    }
+
+    /* remove the timeout */
+    g_source_remove (priv->timeout);
+    priv->timeout = 0;
+
+    /* call the timeout callback under lock (to ensure if task_fn ends
+     * meanwhile (this is in main thread), it'll wait for the timeout callback
+     * to end) */
+    priv->timeout_fn (task, priv->timeout_data);
+
+    /* done */
+    UNLOCK_TASK (task);
+    return FALSE;
+}
+
+void
+donna_task_run (DonnaTask *task)
+{
+    DonnaTaskPrivate *priv;
+    gboolean timeout_called = FALSE;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
+
+    LOCK_TASK (task);
+
+    /* can only run/start from waiting */
+    if (priv->state != DONNA_TASK_WAITING)
+    {
+        UNLOCK_TASK (task);
+        return;
+    }
+
+    /* we take a ref on the task, to ensure it won't die while running */
+    g_object_ref (task);
+
+    /* install the timeout (will be triggered on main thread) */
+    if (priv->timeout_fn)
+        priv->timeout = g_timeout_add (priv->timeout_delay, timeout_cb, task);
+
+    /* let's switch and release the lock */
+    priv->state = DONNA_TASK_RUNNING;
+    UNLOCK_TASK (task);
+
+    /* notify change of state (in main thread, to avoiding blocking/delaying
+     * the task function) */
+    notify_state_change (task);
+
+    /* do the work & get new state */
+    priv->state = priv->task_fn (task, priv->task_data);
+
+    /* get the lock back */
+    LOCK_TASK (task);
+
+    /* remove the timeout if it's still there */
+    if (priv->timeout > 0)
+    {
+        g_source_remove (priv->timeout);
+        priv->timeout = 0;
+    }
+    else if (priv->timeout_fn)
+        timeout_called = TRUE;
+
+    /* we're done with the lock */
+    UNLOCK_TASK (task);
+
+    /* trigger the callback */
+    priv->callback_fn (task, timeout_called, priv->callback_data);
+
+    /* notify change of state */
+    g_object_notify_by_pspec (G_OBJECT (task),
+            donna_task_properties[PROP_STATE]);
+
+    /* done with our reference */
+    g_object_unref (task);
 }
 
 void
@@ -280,6 +388,9 @@ donna_task_cancel (DonnaTask *task)
         g_cond_signal (&priv->cond);
 
     UNLOCK_TASK (task);
+
+    /* we don't notify the change of state, because it's a "transitional" state,
+     * and we should only notify once the function returns */
 }
 
 void
@@ -309,6 +420,9 @@ donna_task_pause (DonnaTask *task)
     }
 
     UNLOCK_TASK (task);
+
+    /* we don't notify the change of state, because it's a "transitional" state,
+     * and we should only notify once we changed to PAUSED */
 }
 
 void
@@ -337,6 +451,10 @@ donna_task_resume (DonnaTask *task)
         g_cond_signal (&priv->cond);
 
     UNLOCK_TASK (task);
+
+    /* notify change of state */
+    g_object_notify_by_pspec (G_OBJECT (task),
+            donna_task_properties[PROP_STATE]);
 }
 
 GError *
@@ -384,12 +502,17 @@ donna_task_get_fd (DonnaTask *task)
     g_return_val_if_fail (DONNA_IS_TASK (task), -1);
 
     priv = task->priv;
+
+    LOCK_TASK (task);
+
     /* though this function should only called once, by task_fn, and therefore
      * this should always be true... let's avoid re-creating another one */
     if (priv->fd == -1)
     {
         priv->fd = eventfd (0, EFD_CLOEXEC | EFD_NONBLOCK);
     }
+
+    UNLOCK_TASK (task);
 
     return priv->fd;
 }
@@ -415,6 +538,9 @@ donna_task_is_cancelling (DonnaTask *task)
             {
                 gboolean ret;
                 priv->state = DONNA_TASK_PAUSED;
+                /* notify change of state (in main thread, to avoid risks of
+                 * deadlocks since we have a lock on the task) */
+                notify_state_change (task);
                 /* wait for a change of state */
                 while (priv->state == DONNA_TASK_PAUSED)
                     g_cond_wait (&priv->cond, &priv->mutex);
@@ -448,32 +574,119 @@ donna_task_is_cancelling (DonnaTask *task)
 }
 
 void
-donna_task_update (DonnaTask          *task,
-                   gboolean            has_progress,
-                   gdouble             progress,
-                   gboolean            has_status,
-                   const gchar        *status_fmt,
+donna_task_update (DonnaTask    *task,
+                   gboolean      has_progress,
+                   gdouble       progress,
+                   gboolean      has_status,
+                   const gchar  *status_fmt,
                    ...)
 {
+    DonnaTaskPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
+
+    if (has_progress)
+    {
+        priv->progress = progress;
+        g_object_notify_by_pspec (G_OBJECT (task),
+                donna_task_properties[PROP_PROGRESS]);
+    }
+
+    if (has_status)
+    {
+        LOCK_TASK (task);
+
+        if (priv->status)
+            g_free (priv->status);
+
+        if (status_fmt)
+        {
+            va_list args;
+
+            va_start (args, status_fmt);
+            priv->status = g_strdup_vprintf (status_fmt, args);
+            va_end (args);
+        }
+        else
+            priv->status = NULL;
+
+        UNLOCK_TASK (task);
+
+        g_object_notify_by_pspec (G_OBJECT (task),
+                donna_task_properties[PROP_STATUS]);
+    }
 }
 
 void
-donna_task_set_error (DonnaTask          *task,
-                      GQuark              domain,
-                      gint                code,
-                      const gchar        *format,
+donna_task_set_error (DonnaTask     *task,
+                      GQuark         domain,
+                      gint           code,
+                      const gchar   *format,
                       ...)
 {
+    DonnaTaskPrivate *priv;
+    va_list args;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
+
+    LOCK_TASK (task);
+
+    if (priv->error)
+        g_error_free (priv->error);
+
+    va_start (args, format);
+    priv->error = g_error_new_valist (domain, code, format, args);
+    va_end (args);
+
+    UNLOCK_TASK (task);
 }
 
 void
-donna_task_take_error (DonnaTask          *task,
-                       GError            **error)
+donna_task_take_error (DonnaTask *task,
+                       GError    *error)
 {
+    DonnaTaskPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
+
+    LOCK_TASK (task);
+
+    if (priv->error)
+        g_error_free (priv->error);
+
+    priv->error = error;
+
+    UNLOCK_TASK (task);
 }
 
 void
-donna_task_set_return_value (DonnaTask          *task,
-                             const GValue       *value)
+donna_task_set_return_value (DonnaTask      *task,
+                             const GValue   *value)
 {
+    DonnaTaskPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
+
+    LOCK_TASK (task);
+
+    if (!priv->value)
+    {
+        priv->value = duplicate_gvalue (value);
+    }
+    else
+    {
+        g_value_unset (priv->value);
+        g_value_init (priv->value, G_VALUE_TYPE (value));
+        g_value_copy (value, priv->value);
+    }
+
+    UNLOCK_TASK (task);
 }

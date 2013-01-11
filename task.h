@@ -87,7 +87,7 @@ void                donna_task_set_error        (DonnaTask          *task,
                                                  const gchar        *format,
                                                  ...);
 void                donna_task_take_error       (DonnaTask          *task,
-                                                 GError            **error);
+                                                 GError             *error);
 void                donna_task_set_return_value (DonnaTask          *task,
                                                  const GValue       *value);
 
