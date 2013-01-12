@@ -3,6 +3,7 @@
 #include <gobject/gvaluecollector.h>    /* G_VALUE_LCOPY */
 #include <string.h>                     /* memset() */
 #include "node.h"
+#include "provider.h"                   /* donna_provider_node_updated() */
 #include "util.h"
 #include "macros.h"                     /* streq() */
 
@@ -677,6 +678,8 @@ set_property_value (DonnaNode     *node,
                     GValue        *value)
 {
     DonnaNodeProp *prop;
+    GValue old_value = G_VALUE_INIT;
+    gboolean has_old_value = FALSE;
 
     g_return_if_fail (DONNA_IS_NODE (node));
     g_return_if_fail (name != NULL);
@@ -685,6 +688,15 @@ set_property_value (DonnaNode     *node,
     prop = g_hash_table_lookup (node->priv->props, (gpointer) name);
     if (prop)
     {
+        if (prop->has_value)
+        {
+            has_old_value = TRUE;
+            /* make a copy of the old value (for signal) */
+            g_value_init (&old_value, G_VALUE_TYPE (&(prop->value)));
+            g_value_copy (&(prop->value), &old_value);
+        }
+
+        /* copy the new value over */
         g_value_copy (value, &(prop->value));
         /* we assume it worked, w/out checking types, etc because this should
          * only be used by providers and such, on properties they are handling,
@@ -692,4 +704,8 @@ set_property_value (DonnaNode     *node,
         prop->has_value = TRUE;
     }
     g_rw_lock_writer_unlock (&node->priv->props_lock);
+
+    donna_provider_node_updated (node->priv->provider, node, name,
+            (has_old_value) ? &old_value : NULL);
+    g_value_unset (&old_value);
 }
