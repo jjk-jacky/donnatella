@@ -14,29 +14,31 @@ state
 
     api:
 fmTask *        new                 (desc, func, data, cb, cb_data, t_out, t_out_cb, t_out_data)
+void            run                 (task)
 void            cancel              (task)
 void            pause               (task)
 void            resume              (task)
-gboolean        get_error           (task, error)
+const GError *  get_error           (task)
 // for cb
-gboolean        get_ret_value       (task, value)
+const GValue *  get_ret_value       (task)
 // for func
 int             get_fd              (task)
-fmTaskIntState  get_internal_state  (task)
 gboolean        is_cancelling       (task)
 void            update              (task, has_progress, progress, has_status, status, ...)
 void            set_error           (task, domain, code, fmt, ...)
 void            take_error          (task, error)
 void            set_ret_value       (task, value)
+GValue *        take_ret_value      (task)
+void            release_ret_value   (task)
 
 fmNode: GObject
 
 fmNode *        new                 (provider, loc_get, loc_set, cont_get, cont_set, chdn_get, chdn_set)
 fmNode *        new_from_node       (provider, loc_get, loc_set, cont_get, cont_set, chdn_get, chdn_set, node_sce)
 gboolean        add_property        (node, prop_name, type, value, get_value, set_value, error)
-fmTask *        set_property        (node, prop_name, value, callback, data, error)
-void            get                 (node, error, name, ...)
-void            refresh             (node)
+fmTask *        set_property        (node, prop_name, value, cb, cb_data, timeout{,_cb,_data}, error)
+void            get                 (node, name, ...)
+void            refresh             (node, cb, cb_data, timeout{,_cb,_data}, name, ...)
 void            set_property_value  (node, prop_name, value)
 
 fmProvider: GInterface

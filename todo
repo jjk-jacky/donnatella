@@ -1,4 +1,2 @@
 
-- getter for node props should get an *fmTask for cancellation
-- do a node_get from cache only, then one from cache in task/thread
 

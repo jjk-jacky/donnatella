@@ -66,6 +66,7 @@ DonnaTask *         donna_task_new              (gchar              *desc,
                                                  guint               timeout_delay,
                                                  task_timeout_fn     timeout_callback,
                                                  gpointer            timeout_data);
+void                donna_task_run              (DonnaTask          *task);
 void                donna_task_cancel           (DonnaTask          *task);
 void                donna_task_pause            (DonnaTask          *task);
 void                donna_task_resume           (DonnaTask          *task);
