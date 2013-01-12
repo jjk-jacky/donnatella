@@ -90,6 +90,8 @@ void                donna_task_take_error       (DonnaTask          *task,
                                                  GError             *error);
 void                donna_task_set_return_value (DonnaTask          *task,
                                                  const GValue       *value);
+GValue *            donna_task_take_return_value (DonnaTask         *task);
+void                donna_task_release_return_value (DonnaTask      *task);
 
 G_END_DECLS
 

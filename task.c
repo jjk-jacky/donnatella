@@ -490,6 +490,9 @@ donna_task_get_return_value (DonnaTask  *task,
     if (!g_value_type_compatible (G_VALUE_TYPE (src), G_VALUE_TYPE (value)))
         return FALSE;
 
+    /* FIXME: instead, why not send the pointer to the GValue, so no need to
+     * copy or anything, it gets free when the task is finalized (and one can
+     * still do a g_value_copy shall they want/need to */
     g_value_copy (src, value);
     return TRUE;
 }
@@ -687,6 +690,37 @@ donna_task_set_return_value (DonnaTask      *task,
         g_value_init (priv->value, G_VALUE_TYPE (value));
         g_value_copy (value, priv->value);
     }
+
+    UNLOCK_TASK (task);
+}
+
+GValue *
+donna_task_grab_return_value (DonnaTask *task)
+{
+    DonnaTaskPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TASK (task), NULL);
+
+    priv = task->priv;
+
+    LOCK_TASK (task);
+
+    if (!priv->value)
+        priv->value = g_slice_new0 (GValue);
+
+    /* we de NOT unlock the task, this is done by release_reutrn_value below */
+
+    return priv->value;
+}
+
+void
+donna_task_release_return_value (DonnaTask *task)
+{
+    DonnaTaskPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
 
     UNLOCK_TASK (task);
 }

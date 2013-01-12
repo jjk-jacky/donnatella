@@ -73,10 +73,16 @@ DonnaTask *     donna_node_set_property     (DonnaNode              *node,
                                              task_timeout_fn         timeout_fn,
                                              gpointer                timeout_data);
 void            donna_node_get              (DonnaNode              *node,
-                                             GError                **error,
                                              const gchar            *first_name,
                                              ...);
-void            donna_node_refresh          (DonnaNode              *node);
+DonnaTask *     donna_node_refresh          (DonnaNode              *node,
+                                             task_callback_fn        callback,
+                                             gpointer                callback_data,
+                                             guint                   timeout,
+                                             task_timeout_fn         timeout_callback,
+                                             gpointer                timeout_data,
+                                             const gchar            *first_name,
+                                             ...);
 void            donna_node_set_property_value   (DonnaNode          *node,
                                                  const gchar        *name,
                                                  GValue             *value);
