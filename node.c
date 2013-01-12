@@ -572,16 +572,17 @@ node_refresh (DonnaTask *task, gpointer _data)
 
             if (done)
                 /* done, so we remove it from names. this will free the string,
-                 * and get the last element moved to the current one, effectively
-                 * replacing it. So next iteration we don't need to move inside the
-                 * array */
+                 * and get the last element moved to the current one,
+                 * effectively replacing it. So next iteration we don't need to
+                 * move inside the array */
                 g_ptr_array_remove_index_fast (names, i);
             else
                 /* move to the next element */
                 ++i;
         }
-        /* names now only contains the names of non-refreshed properties, it's our
-         * return value. (refreshed isn't needed anymore, and can be freed) */
+        /* names now only contains the names of non-refreshed properties, it's
+         * our return value. (refreshed isn't needed anymore, and can be freed)
+         * */
         g_free (g_ptr_array_free (refreshed, FALSE));
 
         /* because the return value must be a NULL-terminated array */
@@ -598,7 +599,7 @@ node_refresh (DonnaTask *task, gpointer _data)
         g_ptr_array_free (names, FALSE);
     }
 
-    /* free memory */
+    /* free memory (names & refreshed have been taken care of already) */
     g_object_unref (data->node);
     g_slice_free (struct refresh_data, data);
 
