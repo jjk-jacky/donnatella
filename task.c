@@ -457,15 +457,11 @@ donna_task_resume (DonnaTask *task)
             donna_task_properties[PROP_STATE]);
 }
 
-GError *
-donna_task_get_error (DonnaTask  *task)
+const GError *
+donna_task_get_error (DonnaTask *task)
 {
     g_return_val_if_fail (DONNA_IS_TASK (task), NULL);
-
-    if (!task->priv->error)
-        return NULL;
-
-    return g_error_copy (task->priv->error);
+    return (const GError *) task->priv->error;
 }
 
 const GValue *
