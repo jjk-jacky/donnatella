@@ -268,7 +268,8 @@ set_property (DonnaTask *task, struct set_property *data)
     GValue value = G_VALUE_INIT;
     DonnaTaskState ret;
 
-    ret = data->prop->set_value (task, data->node, data->prop->name, data->value);
+    ret = data->prop->set_value (task, data->node, data->prop->name,
+            (const GValue *) data->value);
 
     /* set the return value */
     g_value_init (&value, G_TYPE_BOOLEAN);
@@ -530,8 +531,7 @@ node_refresh (DonnaTask *task, gpointer _data)
         if (done)
             continue;
 
-        /* TODO: get the error message? */
-        if (!prop->get_value (data->node, names->pdata[i], NULL))
+        if (!prop->get_value (task, data->node, names->pdata[i]))
             ret = DONNA_TASK_FAILED;
     }
 
@@ -664,7 +664,7 @@ donna_node_refresh (DonnaNode           *node,
     data->node = g_object_ref (node);
     data->names = names;
 
-    task = donna_task_new (NULL,
+    task = donna_task_new (NULL /* internal task */,
             node_refresh,   data,
             callback,       callback_data,
             timeout,        timeout_callback, timeout_data);

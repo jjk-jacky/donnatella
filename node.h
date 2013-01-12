@@ -19,13 +19,13 @@ typedef enum
 } DonnaNodeError;
 
 /* functions called by a node to get/set a property value */
-typedef gboolean    (*get_value_fn) (DonnaNode      *node,
-                                     const gchar    *name,
-                                     GError        **error);
+typedef gboolean    (*get_value_fn) (DonnaTask      *task,
+                                     DonnaNode      *node,
+                                     const gchar    *name);
 typedef gboolean    (*set_value_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
                                      const gchar    *name,
-                                     GValue         *value);
+                                     const GValue   *value);
 struct _DonnaNode
 {
     GObject parent;
