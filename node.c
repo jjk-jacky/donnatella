@@ -390,7 +390,10 @@ get_valist (DonnaNode    *node,
         prop = g_hash_table_lookup (props, (gpointer) name);
         if (!prop)
         {
+            gpointer ptr;
+
             *has_value = FALSE;
+            ptr = va_arg (va_args, gpointer);
             goto next;
         }
         *has_value = prop->has_value;
@@ -423,7 +426,6 @@ struct refresh_data
     DonnaNode   *node;
     GPtrArray   *names;
     GPtrArray   *refreshed;
-    GMutex       mutex;
 };
 
 static void 
@@ -433,25 +435,30 @@ node_updated_cb (DonnaProvider       *provider,
                  const GValue        *old_value,
                  struct refresh_data *data)
 {
-    gchar **names;
+    GPtrArray *names;
+    GPtrArray *refreshed;
+    guint      i;
 
     if (data->node != node)
         return;
 
-    g_mutex_lock (&data->mutex);
+    names = data->names;
+    refreshed = data->refreshed;
+
     /* is the updated property one we're "watching" */
-    for (names = (gchar **) data->names->pdata; names && *names; ++names)
+    for (i = 0; i < names->len; ++i)
     {
-        if (streq (*names, name))
+        if (streq (names->pdata[i], name))
         {
-            gchar **n;
-            gboolean done = FALSE;
+            guint    j;
+            gboolean done;
 
             /* make sure it isn't already in refreshed */
-            for (n = (gchar **) data->refreshed->pdata; n && *n; ++n)
+            done = FALSE;
+            for (j = 0; j < refreshed->len; ++j)
             {
                 /* refreshed contains the *same pointers* as names */
-                if (*n == *names)
+                if (refreshed->pdata[j] == names->pdata[i])
                 {
                     done = TRUE;
                     break;
@@ -459,33 +466,31 @@ node_updated_cb (DonnaProvider       *provider,
             }
 
             if (!done)
-                g_ptr_array_add (data->refreshed, *names);
+                g_ptr_array_add (refreshed, names->pdata[i]);
 
             break;
         }
     }
-    g_mutex_unlock (&data->mutex);
 }
 
 static DonnaTaskState
 node_refresh (DonnaTask *task, gpointer _data)
 {
     struct refresh_data *data;
-    DonnaNodePrivate *priv;
-    GHashTable *props;
-    gulong sig;
-    gchar **names;
-    DonnaTaskState ret;
-    GValue *value;
+    DonnaNodePrivate    *priv;
+    GHashTable          *props;
+    gulong               sig;
+    GPtrArray           *names;
+    GPtrArray           *refreshed;
+    guint                i;
+    DonnaTaskState       ret;
+    GValue              *value;
 
     data = (struct refresh_data *) _data;
     priv = data->node->priv;
-
+    names = data->names;
+    refreshed = data->refreshed = g_ptr_array_sized_new (names->len);
     ret = DONNA_TASK_DONE;
-    data->refreshed = g_ptr_array_sized_new (data->names->len);
-    /* the mutex is used in case another thread will update the same properties
-     * we're interrested in on this node */
-    g_mutex_init (&data->mutex);
 
     /* connect to the provider's signal, so we know which properties are
      * actually refreshed */
@@ -493,11 +498,11 @@ node_refresh (DonnaTask *task, gpointer _data)
             G_CALLBACK (node_updated_cb), _data);
 
     props = priv->props;
-    for (names = (gchar **) data->names->pdata; names && *names; ++names)
+    for (i = 0; i < names->len; ++i)
     {
-        DonnaNodeProp *prop;
-        gchar **n;
-        gboolean done = FALSE;
+        DonnaNodeProp   *prop;
+        guint            j;
+        gboolean         done;
 
         if (donna_task_is_cancelling (task))
         {
@@ -506,28 +511,27 @@ node_refresh (DonnaTask *task, gpointer _data)
         }
 
         g_rw_lock_reader_lock (&priv->props_lock);
-        prop = g_hash_table_lookup (props, (gpointer) *names);
+        prop = g_hash_table_lookup (props, names->pdata[i]);
         g_rw_lock_reader_unlock (&priv->props_lock);
         if (!prop)
             continue;
 
-        g_mutex_lock (&data->mutex);
         /* only call the getter if the prop hasn't already been refreshed */
-        for (n = (gchar **) data->refreshed->pdata; n && *n; ++n)
+        done = FALSE;
+        for (j = 0; j < refreshed->len; ++j)
         {
             /* refreshed contains the *same pointers* as names */
-            if (*n == *names)
+            if (refreshed->pdata[j] == names->pdata[i])
             {
                 done = TRUE;
                 break;
             }
         }
-        g_mutex_unlock (&data->mutex);
         if (done)
             continue;
 
-        /* TODO: get the error message.. */
-        if (!prop->get_value (data->node, *names, NULL))
+        /* TODO: get the error message? */
+        if (!prop->get_value (data->node, names->pdata[i], NULL))
             ret = DONNA_TASK_FAILED;
     }
 
@@ -535,26 +539,31 @@ node_refresh (DonnaTask *task, gpointer _data)
      * from the getter, so in this thread, so it would have been processed. */
     g_signal_handler_disconnect (priv->provider, sig);
 
-    g_ptr_array_set_free_func (data->names, g_free);
+    g_ptr_array_set_free_func (names, g_free);
     /* did everything get refreshed? */
-    if (data->names->len == data->refreshed->len)
+    if (names->len == refreshed->len)
     {
         /* we don't set a return value. A lack of return value (or NULL) will
          * mean that no properties was not refreshed */
-        g_free (g_ptr_array_free (data->refreshed, FALSE));
-        g_ptr_array_free (data->names, TRUE);
+        g_free (g_ptr_array_free (refreshed, FALSE));
+        g_ptr_array_free (names, TRUE);
+        /* force the return state to DONE, since all properties were refreshed.
+         * In the odd chance that the getter for prop1 failed (returned FALSE)
+         * but e.g. the getter for prop2 did take care of both prop1 & prop2 */
+        ret = DONNA_TASK_DONE;
     }
     else
     {
         /* construct the list of non-refreshed properties */
-        for (guint i = 0; i < data->names->len; )
+        for (i = 0; i < names->len; )
         {
-            gchar **n;
-            gboolean done = FALSE;
+            guint    j;
+            gboolean done;
 
-            for (n = (gchar **) data->refreshed->pdata; n && *n; ++n)
+            done = FALSE;
+            for (j = 0; j < refreshed->len; ++j)
             {
-                if (*n == data->names->pdata[i])
+                if (refreshed->pdata[j] == names->pdata[i])
                 {
                     done = TRUE;
                     break;
@@ -566,29 +575,31 @@ node_refresh (DonnaTask *task, gpointer _data)
                  * and get the last element moved to the current one, effectively
                  * replacing it. So next iteration we don't need to move inside the
                  * array */
-                g_ptr_array_remove_index_fast (data->names, i);
+                g_ptr_array_remove_index_fast (names, i);
             else
                 /* move to the next element */
                 ++i;
         }
         /* names now only contains the names of non-refreshed properties, it's our
          * return value. (refreshed isn't needed anymore, and can be freed) */
-        g_free (g_ptr_array_free (data->refreshed, FALSE));
+        g_free (g_ptr_array_free (refreshed, FALSE));
 
-        /* set the return value. the task will take ownership of names->pdata, so
-         * we shouldn't free it, only names itself */
+        /* because the return value must be a NULL-terminated array */
+        g_ptr_array_add (names, NULL);
+
+        /* set the return value. the task will take ownership of names->pdata,
+         * so we shouldn't free it, only names itself */
         value = donna_task_take_return_value (task);
         g_value_init (value, G_TYPE_STRV);
-        g_value_take_boxed (value, data->names->pdata);
+        g_value_take_boxed (value, names->pdata);
         donna_task_release_return_value (task);
 
         /* free names (but not the pdata, now owned by the task's return value */
-        g_ptr_array_free (data->names, FALSE);
+        g_ptr_array_free (names, FALSE);
     }
 
     /* free memory */
     g_object_unref (data->node);
-    g_mutex_clear (&data->mutex);
     g_slice_free (struct refresh_data, data);
 
     return ret;
@@ -615,7 +626,7 @@ donna_node_refresh (DonnaNode           *node,
         va_list     va_args;
         gpointer    name;
 
-        names = g_ptr_array_sized_new (2);
+        names = g_ptr_array_new ();
 
         va_start (va_args, first_name);
         name = (gpointer) first_name;
