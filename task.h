@@ -70,9 +70,7 @@ void                donna_task_cancel           (DonnaTask          *task);
 void                donna_task_pause            (DonnaTask          *task);
 void                donna_task_resume           (DonnaTask          *task);
 GError *            donna_task_get_error        (DonnaTask          *task);
-gboolean            donna_task_get_return_value (DonnaTask          *task,
-                                                 gboolean           *has_value,
-                                                 GValue             *value);
+const GValue *      donna_task_get_return_value (DonnaTask          *task);
 int                 donna_task_get_fd           (DonnaTask          *task);
 gboolean            donna_task_is_cancelling    (DonnaTask          *task);
 void                donna_task_update           (DonnaTask          *task,

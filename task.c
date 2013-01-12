@@ -468,33 +468,11 @@ donna_task_get_error (DonnaTask  *task)
     return g_error_copy (task->priv->error);
 }
 
-gboolean
-donna_task_get_return_value (DonnaTask  *task,
-                             gboolean   *has_value,
-                             GValue     *value)
+const GValue *
+donna_task_get_return_value (DonnaTask *task)
 {
-    GValue *src;
-
-    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
-    g_return_val_if_fail (has_value != NULL, FALSE);
-    g_return_val_if_fail (G_IS_VALUE (value), FALSE);
-
-    src = task->priv->value;
-    if (!src)
-    {
-        *has_value = FALSE;
-        return TRUE;
-    }
-
-    *has_value = TRUE;
-    if (!g_value_type_compatible (G_VALUE_TYPE (src), G_VALUE_TYPE (value)))
-        return FALSE;
-
-    /* FIXME: instead, why not send the pointer to the GValue, so no need to
-     * copy or anything, it gets free when the task is finalized (and one can
-     * still do a g_value_copy shall they want/need to */
-    g_value_copy (src, value);
-    return TRUE;
+    g_return_val_if_fail (DONNA_IS_TASK (task), NULL);
+    return (const GValue *) task->priv->value;
 }
 
 int
