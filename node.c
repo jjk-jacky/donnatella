@@ -127,6 +127,16 @@ donna_node_new (DonnaProvider   *provider,
     g_value_set_string (&prop->value, location);
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
 
+
+    prop = g_slice_new0 (DonnaNodeProp);
+    prop->name      = g_strdup ("name");
+    prop->get_value = name_get;
+    prop->set_value = name_set;
+    prop->has_value = TRUE;
+    g_value_init (&prop->value, G_TYPE_STRING);
+    g_value_set_string (&prop->value, name);
+    g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
+
     prop = g_slice_new0 (DonnaNodeProp);
     prop->name      = g_strdup ("is_container");
     prop->get_value = is_container_get;
@@ -661,7 +671,7 @@ donna_node_refresh (DonnaNode           *node,
     GPtrArray           *names;
     struct refresh_data *data;
 
-    g_return_val_if_fail (DONNA_IS_NODE (task), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     if (first_name)
     {

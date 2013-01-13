@@ -325,7 +325,6 @@ provider_base_get_content (DonnaProvider    *provider,
                            GError          **error)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProviderBasePrivate *priv;
     DonnaProvider *provider_node;
     gboolean is_container;
     DonnaTask *task;
@@ -382,7 +381,6 @@ provider_base_get_children (DonnaProvider    *provider,
                             GError          **error)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProviderBasePrivate *priv;
     DonnaProvider *provider_node;
     gboolean is_container;
     DonnaTask *task;
@@ -439,7 +437,6 @@ provider_base_remove_node (DonnaProvider    *provider,
                            GError          **error)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProviderBasePrivate *priv;
     DonnaProvider *provider_node;
     gboolean is_container;
     DonnaTask *task;

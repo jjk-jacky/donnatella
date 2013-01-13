@@ -728,11 +728,6 @@ donna_task_grab_return_value (DonnaTask *task)
 void
 donna_task_release_return_value (DonnaTask *task)
 {
-    DonnaTaskPrivate *priv;
-
     g_return_if_fail (DONNA_IS_TASK (task));
-
-    priv = task->priv;
-
     UNLOCK_TASK (task);
 }
