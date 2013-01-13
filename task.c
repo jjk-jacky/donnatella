@@ -22,14 +22,17 @@ struct _DonnaTaskPrivate
     /* task function */
     task_fn              task_fn;
     gpointer             task_data;
+    GDestroyNotify       task_destroy;
     /* task callback */
     task_callback_fn     callback_fn;
     gpointer             callback_data;
+    GDestroyNotify       callback_destroy;
     /* task timeout */
     guint                timeout;
     guint                timeout_delay;
     task_timeout_fn      timeout_fn;
     gpointer             timeout_data;
+    GDestroyNotify       timeout_destroy;
 
     /* lock to change the task state (also for handling timeout) */
     GMutex               mutex;
@@ -41,6 +44,9 @@ struct _DonnaTaskPrivate
     GValue              *value;
     /* to hold the error */
     GError              *error;
+
+    guint                task_ran : 1;
+    guint                timeout_ran : 1;
 };
 
 #define LOCK_TASK(task)     g_mutex_lock (&task->priv->mutex)
@@ -160,6 +166,16 @@ donna_task_finalize (GObject *object)
     g_mutex_clear (&priv->mutex);
     g_cond_clear (&priv->cond);
 
+    if (!priv->task_ran)
+    {
+        if (priv->task_data && priv->task_destroy)
+            priv->task_destroy (priv->task_data);
+        if (priv->callback_data && priv->callback_destroy)
+            priv->callback_destroy (priv->callback_data);
+    }
+    if (!priv->timeout_ran && priv->timeout_data && priv->timeout_destroy)
+        priv->timeout_destroy (priv->timeout_data);
+
     G_OBJECT_CLASS (donna_task_parent_class)->finalize (object);
 }
 
@@ -223,11 +239,14 @@ DonnaTask *
 donna_task_new (gchar              *desc,
                 task_fn             func,
                 gpointer            data,
+                GDestroyNotify      destroy,
                 task_callback_fn    callback,
                 gpointer            callback_data,
+                GDestroyNotify      callback_destroy,
                 guint               timeout_delay,
                 task_timeout_fn     timeout_callback,
-                gpointer            timeout_data)
+                gpointer            timeout_data,
+                GDestroyNotify      timeout_destroy)
 {
     DonnaTask *task;
     DonnaTaskPrivate *priv;
@@ -239,12 +258,17 @@ donna_task_new (gchar              *desc,
 
     priv->task_fn = func;
     priv->task_data = data;
+    priv->task_destroy = destroy;
+    priv->task_ran = 0;
     priv->callback_fn = callback;
     priv->callback_data = callback_data;
+    priv->callback_destroy = callback_destroy;
     priv->timeout = 0;
     priv->timeout_delay = timeout_delay;
     priv->timeout_fn = timeout_callback;
     priv->timeout_data = timeout_data;
+    priv->timeout_destroy = timeout_destroy;
+    priv->timeout_ran = 0;
 
     return task;
 }
@@ -272,7 +296,12 @@ timeout_cb (gpointer data)
      * right before we took the lock) */
     if (priv->timeout == 0)
     {
+        if (!priv->timeout_ran && priv->timeout_data && priv->timeout_destroy)
+            priv->timeout_destroy (priv->timeout_data);
+        priv->timeout_ran = 1;
+
         UNLOCK_TASK (task);
+
         return FALSE;
     }
 
@@ -284,6 +313,7 @@ timeout_cb (gpointer data)
      * meanwhile (this is in main thread), it'll wait for the timeout callback
      * to end) */
     priv->timeout_fn (task, priv->timeout_data);
+    priv->timeout_ran = 1;
 
     /* done */
     UNLOCK_TASK (task);
@@ -329,12 +359,20 @@ donna_task_run (DonnaTask *task)
 
     /* get the lock back */
     LOCK_TASK (task);
+    priv->task_ran = 1;
 
     /* remove the timeout if it's still there */
     if (priv->timeout > 0)
     {
         g_source_remove (priv->timeout);
         priv->timeout = 0;
+
+        if (priv->timeout_data && priv->timeout_destroy)
+            priv->timeout_destroy (priv->timeout_data);
+
+        /* it did not actually ran, but we set the flag to indicate the data was
+         * destroy-ed */
+        priv->timeout_ran = 1;
     }
     else if (priv->timeout_fn)
         timeout_called = TRUE;
@@ -682,7 +720,7 @@ donna_task_grab_return_value (DonnaTask *task)
     if (!priv->value)
         priv->value = g_slice_new0 (GValue);
 
-    /* we de NOT unlock the task, this is done by release_reutrn_value below */
+    /* we de NOT unlock the task, this is done by release_return_value below */
 
     return priv->value;
 }

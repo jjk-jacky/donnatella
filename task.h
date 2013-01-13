@@ -61,11 +61,14 @@ struct _DonnaTaskClass
 DonnaTask *         donna_task_new              (gchar              *desc,
                                                  task_fn             func,
                                                  gpointer            data,
+                                                 GDestroyNotify      destroy,
                                                  task_callback_fn    callback,
                                                  gpointer            callback_data,
+                                                 GDestroyNotify      callback_destroy,
                                                  guint               timeout_delay,
                                                  task_timeout_fn     timeout_callback,
-                                                 gpointer            timeout_data);
+                                                 gpointer            timeout_data,
+                                                 GDestroyNotify      timeout_destroy);
 void                donna_task_run              (DonnaTask          *task);
 void                donna_task_cancel           (DonnaTask          *task);
 void                donna_task_pause            (DonnaTask          *task);
