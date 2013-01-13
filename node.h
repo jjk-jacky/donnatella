@@ -20,11 +20,9 @@ typedef enum
 
 /* functions called by a node to get/set a property value */
 typedef gboolean    (*get_value_fn) (DonnaTask      *task,
-                                     DonnaNode      *node,
-                                     const gchar    *name);
+                                     DonnaNode      *node);
 typedef gboolean    (*set_value_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
-                                     const gchar    *name,
                                      const GValue   *value);
 struct _DonnaNode
 {
@@ -39,24 +37,32 @@ struct _DonnaNodeClass
 };
 
 DonnaNode *     donna_node_new              (DonnaProvider          *provider,
+                                             const gchar            *location,
                                              get_value_fn            location_get,
                                              set_value_fn            location_set,
+                                             const gchar            *name,
                                              get_value_fn            name_get,
                                              set_value_fn            name_set,
+                                             gboolean                is_container,
                                              get_value_fn            is_container_get,
                                              set_value_fn            is_container_set,
+                                             gboolean                has_children,
                                              get_value_fn            has_children_get,
                                              set_value_fn            has_children_set);
 DonnaNode *     donna_node_new_from_node    (DonnaProvider          *provider,
+                                             const gchar            *location,
                                              get_value_fn            location_get,
                                              set_value_fn            location_set,
+                                             const gchar            *name,
                                              get_value_fn            name_get,
                                              set_value_fn            name_set,
+                                             gboolean                is_container,
                                              get_value_fn            is_container_get,
                                              set_value_fn            is_container_set,
+                                             gboolean                has_children,
                                              get_value_fn            has_children_get,
                                              set_value_fn            has_children_set,
-                                             DonnaNode              *sce);
+                                             DonnaNode              *source_node);
 gboolean        donna_node_add_property     (DonnaNode              *node,
                                              const gchar            *name,
                                              GType                   type,
@@ -69,23 +75,30 @@ DonnaTask *     donna_node_set_property     (DonnaNode              *node,
                                              GValue                 *value,
                                              task_callback_fn        callback,
                                              gpointer                callback_data,
+                                             GDestroyNotify          callback_destroy,
                                              guint                   timeout,
                                              task_timeout_fn         timeout_fn,
-                                             gpointer                timeout_data);
+                                             gpointer                timeout_data,
+                                             GDestroyNotify          timeout_destroy,
+                                             GError                **error);
 void            donna_node_get              (DonnaNode              *node,
                                              const gchar            *first_name,
                                              ...);
 DonnaTask *     donna_node_refresh          (DonnaNode              *node,
                                              task_callback_fn        callback,
                                              gpointer                callback_data,
+                                             GDestroyNotify          callback_destroy,
                                              guint                   timeout,
                                              task_timeout_fn         timeout_callback,
                                              gpointer                timeout_data,
+                                             GDestroyNotify          timeout_destroy,
                                              const gchar            *first_name,
                                              ...);
 void            donna_node_set_property_value   (DonnaNode          *node,
                                                  const gchar        *name,
                                                  GValue             *value);
+int             donna_node_inc_toggle_count (DonnaNode              *node);
+int             donna_node_dec_toggle_count (DonnaNode              *node);
 
 G_END_DECLS
 

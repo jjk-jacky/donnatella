@@ -143,7 +143,7 @@ donna_task_init (DonnaTask *task)
     g_cond_init (&priv->cond);
 }
 
-G_DEFINE_TYPE (DonnaTask, donna_task, G_TYPE_OBJECT)
+G_DEFINE_TYPE (DonnaTask, donna_task, G_TYPE_INITIALLY_UNOWNED)
 
 static void
 donna_task_finalize (GObject *object)

@@ -12,11 +12,12 @@ struct _DonnaNodePrivate
     DonnaProvider   *provider;
     GHashTable      *props;
     GRWLock          props_lock;
+    int              toggle_count;
 };
 
 typedef struct
 {
-    const gchar *name; /* this pointer is also used as key in the hask table */
+    const gchar *name; /* this pointer is also used as key in the hash table */
     GValue       value;
     gboolean     has_value; /* is value set, or do we need to call get_value? */
     get_value_fn get_value;
@@ -41,6 +42,7 @@ donna_node_init (DonnaNode *node)
     node->priv = G_TYPE_INSTANCE_GET_PRIVATE (node,
             DONNA_TYPE_NODE,
             DonnaNodePrivate);
+    node->priv->toggle_count = 1;
 }
 
 G_DEFINE_TYPE (DonnaNode, donna_node, G_TYPE_OBJECT)
@@ -75,12 +77,16 @@ free_prop (gpointer _prop)
 
 DonnaNode *
 donna_node_new (DonnaProvider   *provider,
+                const gchar     *location,
                 get_value_fn     location_get,
                 set_value_fn     location_set,
+                const gchar     *name,
                 get_value_fn     name_get,
                 set_value_fn     name_set,
+                gboolean         is_container,
                 get_value_fn     is_container_get,
                 set_value_fn     is_container_set,
+                gboolean         has_children,
                 get_value_fn     has_children_get,
                 set_value_fn     has_children_set)
 {
@@ -89,7 +95,10 @@ donna_node_new (DonnaProvider   *provider,
     DonnaNodeProp *prop;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (location != NULL, NULL);
     g_return_val_if_fail (location_get != NULL, NULL);
+    g_return_val_if_fail (name != NULL, NULL);
+    g_return_val_if_fail (name_get != NULL, NULL);
     g_return_val_if_fail (is_container_get != NULL, NULL);
     g_return_val_if_fail (has_children_get != NULL, NULL);
 
@@ -113,21 +122,27 @@ donna_node_new (DonnaProvider   *provider,
     prop->name      = g_strdup ("location");
     prop->get_value = location_get;
     prop->set_value = location_set;
+    prop->has_value = TRUE;
     g_value_init (&prop->value, G_TYPE_STRING);
+    g_value_set_string (&prop->value, location);
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
 
     prop = g_slice_new0 (DonnaNodeProp);
     prop->name      = g_strdup ("is_container");
     prop->get_value = is_container_get;
     prop->set_value = is_container_set;
+    prop->has_value = TRUE;
     g_value_init (&prop->value, G_TYPE_BOOLEAN);
+    g_value_set_boolean (&prop->value, is_container);
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
 
     prop = g_slice_new0 (DonnaNodeProp);
     prop->name      = g_strdup ("has_children");
     prop->get_value = has_children_get;
     prop->set_value = has_children_set;
+    prop->has_value = TRUE;
     g_value_init (&prop->value, G_TYPE_BOOLEAN);
+    g_value_set_boolean (&prop->value, has_children);
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
 
     return node;
@@ -135,12 +150,16 @@ donna_node_new (DonnaProvider   *provider,
 
 DonnaNode *
 donna_node_new_from_node (DonnaProvider *provider,
+                          const gchar   *location,
                           get_value_fn   location_get,
                           set_value_fn   location_set,
+                          const gchar   *name,
                           get_value_fn   name_get,
                           set_value_fn   name_set,
+                          gboolean       is_container,
                           get_value_fn   is_container_get,
                           set_value_fn   is_container_set,
+                          gboolean       has_children,
                           get_value_fn   has_children_get,
                           set_value_fn   has_children_set,
                           DonnaNode     *sce)
@@ -155,10 +174,10 @@ donna_node_new_from_node (DonnaProvider *provider,
 
     /* create a new node */
     node = donna_node_new (provider,
-            location_get, location_set,
-            name_get, name_set,
-            is_container_get, is_container_set,
-            has_children_get, has_children_set);
+            location, location_get, location_set,
+            name, name_get, name_set,
+            is_container, is_container_get, is_container_set,
+            has_children, has_children_get, has_children_set);
 
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
@@ -263,13 +282,22 @@ struct set_property
     GValue          *value;
 };
 
+static void
+free_set_property (struct set_property *data)
+{
+    g_object_unref (data->node);
+    g_value_unset (data->value);
+    g_slice_free (GValue, data->value);
+    g_slice_free (struct set_property, data);
+}
+
 static DonnaTaskState
 set_property (DonnaTask *task, struct set_property *data)
 {
     GValue value = G_VALUE_INIT;
     DonnaTaskState ret;
 
-    ret = data->prop->set_value (task, data->node, data->prop->name,
+    ret = data->prop->set_value (task, data->node,
             (const GValue *) data->value);
 
     /* set the return value */
@@ -278,25 +306,23 @@ set_property (DonnaTask *task, struct set_property *data)
     donna_task_set_return_value (task, &value);
     g_value_unset (&value);
 
-    /* free memory */
-    g_object_unref (data->node);
-    g_value_unset (data->value);
-    g_slice_free (GValue, data->value);
-    g_slice_free (struct set_property, data);
+    free_set_property (data);
 
     return ret;
 }
 
 DonnaTask *
-set_property_task (DonnaNode        *node,
-                   const gchar      *name,
-                   GValue           *value,
-                   task_callback_fn  callback,
-                   gpointer          callback_data,
-                   guint             timeout,
-                   task_timeout_fn   timeout_fn,
-                   gpointer          timeout_data,
-                   GError          **error)
+donna_node_set_property (DonnaNode        *node,
+                         const gchar      *name,
+                         GValue           *value,
+                         task_callback_fn  callback,
+                         gpointer          callback_data,
+                         GDestroyNotify    callback_destroy,
+                         guint             timeout,
+                         task_timeout_fn   timeout_fn,
+                         gpointer          timeout_data,
+                         GDestroyNotify    timeout_destroy,
+                         GError          **error)
 {
     DonnaNodePrivate *priv;
     DonnaNodeProp *prop;
@@ -352,9 +378,9 @@ set_property_task (DonnaNode        *node,
     data->prop = prop;
     data->value = duplicate_gvalue (value);
     task = donna_task_new (NULL /* internal task */,
-            (task_fn) set_property, data,
-            callback, callback_data,
-            timeout, timeout_fn, timeout_data);
+            (task_fn) set_property, data, (GDestroyNotify) free_set_property,
+            callback, callback_data, callback_destroy,
+            timeout, timeout_fn, timeout_data, timeout_destroy);
 
     return task;
 }
@@ -376,14 +402,11 @@ get_valist (DonnaNode    *node,
         DonnaNodeProp *prop;
         gchar *err;
 
-        has_value = va_arg (va_args, gboolean *);
-
         /* special property, that doesn't actually exists in the hash table */
         if (streq (name, "provider"))
         {
             DonnaProvider **p;
 
-            *has_value = TRUE;
             p = va_arg (va_args, DonnaProvider **);
             *p = g_object_ref (node->priv->provider);
             goto next;
@@ -398,8 +421,14 @@ get_valist (DonnaNode    *node,
             ptr = va_arg (va_args, gpointer);
             goto next;
         }
-        *has_value = prop->has_value;
-        if (*has_value)
+        if (!streq (name, "location") && !streq (name, "name")
+                && !streq (name, "is_container")
+                && !streq (name, "has_children"))
+        {
+            has_value = va_arg (va_args, gboolean *);
+            *has_value = prop->has_value;
+        }
+        if (prop->has_value)
             G_VALUE_LCOPY (&(prop->value), va_args, 0, &err);
         if (err)
             g_free (err);
@@ -532,7 +561,7 @@ node_refresh (DonnaTask *task, gpointer _data)
         if (done)
             continue;
 
-        if (!prop->get_value (task, data->node, names->pdata[i]))
+        if (!prop->get_value (task, data->node))
             ret = DONNA_TASK_FAILED;
     }
 
@@ -607,13 +636,24 @@ node_refresh (DonnaTask *task, gpointer _data)
     return ret;
 }
 
+static void
+free_refresh_data (struct refresh_data *data)
+{
+    g_object_unref (data->node);
+    g_ptr_array_free (data->names, TRUE);
+    g_free (g_ptr_array_free (data->refreshed, FALSE));
+    g_slice_free (struct refresh_data, data);
+}
+
 DonnaTask *
 donna_node_refresh (DonnaNode           *node,
                     task_callback_fn     callback,
                     gpointer             callback_data,
+                    GDestroyNotify       callback_destroy,
                     guint                timeout,
                     task_timeout_fn      timeout_callback,
                     gpointer             timeout_data,
+                    GDestroyNotify       timeout_destroy,
                     const gchar         *first_name,
                     ...)
 {
@@ -634,6 +674,7 @@ donna_node_refresh (DonnaNode           *node,
         name = (gpointer) first_name;
         while (name)
         {
+            /* TODO: check property exists on node, else fill a GError? */
             name = (gpointer) g_strdup (name);
             g_ptr_array_add (names, name);
             name = va_arg (va_args, gpointer);
@@ -666,9 +707,9 @@ donna_node_refresh (DonnaNode           *node,
     data->names = names;
 
     task = donna_task_new (NULL /* internal task */,
-            node_refresh,   data,
-            callback,       callback_data,
-            timeout,        timeout_callback, timeout_data);
+            node_refresh, data, (GDestroyNotify) free_refresh_data,
+            callback, callback_data, callback_destroy,
+            timeout, timeout_callback, timeout_data, timeout_destroy);
     return task;
 }
 
@@ -708,4 +749,18 @@ set_property_value (DonnaNode     *node,
     donna_provider_node_updated (node->priv->provider, node, name,
             (has_old_value) ? &old_value : NULL);
     g_value_unset (&old_value);
+}
+
+int
+donna_node_inc_toggle_count (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), -1);
+    return ++node->priv->toggle_count;
+}
+
+int
+donna_node_dec_toggle_count (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), -1);
+    return --node->priv->toggle_count;
 }

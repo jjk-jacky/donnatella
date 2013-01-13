@@ -182,11 +182,16 @@ donna_provider_node_new_content (DonnaProvider  *provider,
 /* API */
 
 DonnaTask *
-donna_provider_get_node (DonnaProvider  *provider,
-                         const gchar    *location,
-                         GCallback       callback,
-                         gpointer        callback_data,
-                         GError        **error)
+donna_provider_get_node (DonnaProvider    *provider,
+                         const gchar      *location,
+                         task_callback_fn callback,
+                         gpointer         callback_data,
+                         GDestroyNotify   callback_destroy,
+                         guint            timeout,
+                         task_timeout_fn  timeout_callback,
+                         gpointer         timeout_data,
+                         GDestroyNotify   timeout_destroy,
+                         GError         **error)
 {
     DonnaProviderInterface *interface;
 
@@ -199,14 +204,21 @@ donna_provider_get_node (DonnaProvider  *provider,
     g_return_val_if_fail (interface->get_node!= NULL, NULL);
 
     return (*interface->get_node) (provider, location,
-            callback, callback_data, error);
+            callback, callback_data, callback_destroy,
+            timeout, timeout_callback, timeout_data, timeout_destroy,
+            error);
 }
 
 DonnaTask *
 donna_provider_get_content (DonnaProvider    *provider,
                             DonnaNode        *node,
-                            GCallback         callback,
+                            task_callback_fn  callback,
                             gpointer          callback_data,
+                            GDestroyNotify    callback_destroy,
+                            guint             timeout,
+                            task_timeout_fn   timeout_callback,
+                            gpointer          timeout_data,
+                            GDestroyNotify    timeout_destroy,
                             GError          **error)
 {
     DonnaProviderInterface *interface;
@@ -216,7 +228,7 @@ donna_provider_get_content (DonnaProvider    *provider,
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider */
-    donna_node_get (node, NULL, "provider", &p, NULL);
+    donna_node_get (node, "provider", &p, NULL);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 
@@ -226,14 +238,21 @@ donna_provider_get_content (DonnaProvider    *provider,
     g_return_val_if_fail (interface->get_content != NULL, NULL);
 
     return (*interface->get_content) (provider, node,
-            callback, callback_data, error);
+            callback, callback_data, callback_destroy,
+            timeout, timeout_callback, timeout_data, timeout_destroy,
+            error);
 }
 
 DonnaTask *
 donna_provider_get_children (DonnaProvider   *provider,
                              DonnaNode       *node,
-                             GCallback        callback,
+                             task_callback_fn callback,
                              gpointer         callback_data,
+                             GDestroyNotify   callback_destroy,
+                             guint            timeout,
+                             task_timeout_fn  timeout_callback,
+                             gpointer         timeout_data,
+                             GDestroyNotify   timeout_destroy,
                              GError         **error)
 {
     DonnaProviderInterface *interface;
@@ -243,7 +262,7 @@ donna_provider_get_children (DonnaProvider   *provider,
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider */
-    donna_node_get (node, NULL, "provider", &p, NULL);
+    donna_node_get (node, "provider", &p, NULL);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 
@@ -253,15 +272,22 @@ donna_provider_get_children (DonnaProvider   *provider,
     g_return_val_if_fail (interface->get_children != NULL, NULL);
 
     return (*interface->get_children) (provider, node,
-            callback, callback_data, error);
+            callback, callback_data, callback_destroy,
+            timeout, timeout_callback, timeout_data, timeout_destroy,
+            error);
 }
 
 DonnaTask *
-donna_provider_remove_node (DonnaProvider  *provider,
-                            DonnaNode      *node,
-                            GCallback    callback,
-                            gpointer     callback_data,
-                            GError     **error)
+donna_provider_remove_node (DonnaProvider   *provider,
+                            DonnaNode       *node,
+                            task_callback_fn callback,
+                            gpointer         callback_data,
+                            GDestroyNotify   callback_destroy,
+                            guint            timeout,
+                            task_timeout_fn  timeout_callback,
+                            gpointer         timeout_data,
+                            GDestroyNotify   timeout_destroy,
+                            GError         **error)
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
@@ -270,7 +296,7 @@ donna_provider_remove_node (DonnaProvider  *provider,
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
     /* make sure the provider is the node's provider */
-    donna_node_get (node, NULL, "provider", &p, NULL);
+    donna_node_get (node, "provider", &p, NULL);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 
@@ -280,5 +306,7 @@ donna_provider_remove_node (DonnaProvider  *provider,
     g_return_val_if_fail (interface->remove_node != NULL, FALSE);
 
     return (*interface->remove_node) (provider, node,
-            callback, callback_data, error);
+            callback, callback_data, callback_destroy,
+            timeout, timeout_callback, timeout_data, timeout_destroy,
+            error);
 }

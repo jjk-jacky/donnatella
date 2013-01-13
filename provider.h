@@ -3,6 +3,7 @@
 #define __DONNA_PROVIDER_H__
 
 #include "common.h"
+#include "task.h"
 
 G_BEGIN_DECLS
 
@@ -32,23 +33,43 @@ struct _DonnaProviderInterface
     /* virtual table */
     DonnaTask *     (*get_node)             (DonnaProvider   *provider,
                                              const gchar     *location,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
     DonnaTask *     (*get_content)          (DonnaProvider   *provider,
                                              DonnaNode       *node,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
     DonnaTask *     (*get_children)         (DonnaProvider   *provider,
                                              DonnaNode       *node,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
     DonnaTask *     (*remove_node)          (DonnaProvider   *provider,
                                              DonnaNode       *node,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
 };
 
@@ -74,23 +95,43 @@ void    donna_provider_node_new_content     (DonnaProvider   *provider,
 /* API */
 DonnaTask * donna_provider_get_node         (DonnaProvider   *provider,
                                              const gchar     *location,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
 DonnaTask * donna_provider_get_content      (DonnaProvider   *provider,
                                              DonnaNode       *node,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
 DonnaTask * donna_provider_get_children     (DonnaProvider   *provider,
                                              DonnaNode       *node,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
 DonnaTask * donna_provider_remove_node      (DonnaProvider   *provider,
                                              DonnaNode       *node,
-                                             GCallback        callback,
+                                             task_callback_fn callback,
                                              gpointer         callback_data,
+                                             GDestroyNotify   callback_destroy,
+                                             guint            timeout,
+                                             task_timeout_fn  timeout_callback,
+                                             gpointer         timeout_data,
+                                             GDestroyNotify   timeout_destroy,
                                              GError         **error);
 
 

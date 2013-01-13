@@ -3,6 +3,7 @@
 #define __DONNA_PROVIDER_BASE_H__
 
 #include "common.h"
+#include "task.h"
 
 G_BEGIN_DECLS
 
@@ -29,9 +30,23 @@ struct _DonnaProviderBaseClass
     GObjectClass parent;
 
     /* virtual table */
-    DonnaNode *         (*new_node)         (DonnaProvider   *provider,
-                                             const gchar     *location,
-                                             GError         **error);
+    DonnaNode *     (*get_cached_node)      (DonnaProviderBase  *provider,
+                                             const gchar        *location);
+    void            (*add_node_to_cache)    (DonnaProviderBase  *provider,
+                                             DonnaNode          *node);
+
+    DonnaTaskState  (*new_node)             (DonnaProvider  *provider,
+                                             DonnaTask      *task,
+                                             const gchar    *location);
+    DonnaTaskState  (*get_content)          (DonnaProvider  *provider,
+                                             DonnaTask      *task,
+                                             DonnaNode      *node);
+    DonnaTaskState  (*get_children)         (DonnaProvider  *provider,
+                                             DonnaTask      *task,
+                                             DonnaNode      *node);
+    DonnaTaskState  (*remove_node)          (DonnaProvider  *provider,
+                                             DonnaTask      *task,
+                                             DonnaNode      *node);
 };
 
 GType           donna_provider_base_get_type    (void) G_GNUC_CONST;
