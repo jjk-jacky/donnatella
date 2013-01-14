@@ -571,6 +571,9 @@ node_refresh (DonnaTask *task, gpointer _data)
             ret = DONNA_TASK_FAILED;
     }
 
+    if (donna_task_is_cancelling (task))
+        ret = DONNA_TASK_CANCELLED;
+
     /* disconnect our handler -- any signal that we care about would have come
      * from the getter, so in this thread, so it would have been processed. */
     g_signal_handler_disconnect (priv->provider, sig);
