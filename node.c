@@ -86,7 +86,6 @@ donna_node_new (DonnaProvider   *provider,
                 gboolean         is_container,
                 get_value_fn     is_container_get,
                 set_value_fn     is_container_set,
-                gboolean         has_children,
                 get_value_fn     has_children_get,
                 set_value_fn     has_children_set)
 {
@@ -150,9 +149,7 @@ donna_node_new (DonnaProvider   *provider,
     prop->name      = g_strdup ("has_children");
     prop->get_value = has_children_get;
     prop->set_value = has_children_set;
-    prop->has_value = TRUE;
     g_value_init (&prop->value, G_TYPE_BOOLEAN);
-    g_value_set_boolean (&prop->value, has_children);
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
 
     return node;
@@ -169,7 +166,6 @@ donna_node_new_from_node (DonnaProvider *provider,
                           gboolean       is_container,
                           get_value_fn   is_container_get,
                           set_value_fn   is_container_set,
-                          gboolean       has_children,
                           get_value_fn   has_children_get,
                           set_value_fn   has_children_set,
                           DonnaNode     *sce)
@@ -187,7 +183,7 @@ donna_node_new_from_node (DonnaProvider *provider,
             location, location_get, location_set,
             name, name_get, name_set,
             is_container, is_container_get, is_container_set,
-            has_children, has_children_get, has_children_set);
+            has_children_get, has_children_set);
 
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
