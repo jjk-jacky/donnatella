@@ -97,8 +97,10 @@ provider_base_init (DonnaProviderBase *provider)
     g_rec_mutex_init (&priv->nodes_mutex);
 }
 
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderBase, provider_base, G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_base_provider_init))
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (DonnaProviderBase, provider_base,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_base_provider_init)
+        )
 
 static void
 provider_base_finalize (GObject *object)
