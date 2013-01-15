@@ -1,6 +1,11 @@
 
 #include <gtk/gtk.h>
-#include "fstree.h"
+#include "tree.h"
+#include "provider.h"
+#include "provider-fs.h"
+#include "task.h"
+
+static DonnaProviderFs *provider_fs;
 
 static void
 window_destroy_cb (GtkWidget *window, gpointer data)
@@ -9,17 +14,39 @@ window_destroy_cb (GtkWidget *window, gpointer data)
 }
 
 static void
-tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, FsTree *fstree)
+tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTree *tree)
 {
     gboolean show_hidden;
-    if (fstree_get_show_hidden (fstree, &show_hidden))
-        fstree_set_show_hidden (fstree, !show_hidden);
+    if (donna_tree_get_show_hidden (tree, &show_hidden))
+        donna_tree_set_show_hidden (tree, !show_hidden);
 }
 
 static void
-tb_new_root_clicked_cb (GtkToolButton *tb_btn, FsTree *fstree)
+new_root_cb (DonnaTask *task, gboolean timeout_called, gpointer data)
 {
-    fstree_set_root (fstree, fstree_node_new_folder ("/home/jjacky"));
+    DonnaNode       *node;
+    const GValue    *value;
+
+    value = donna_task_get_return_value (task);
+    node = DONNA_NODE (g_value_dup_object (value));
+
+    donna_tree_set_root (DONNA_TREE (data), node);
+}
+
+static void
+tb_new_root_clicked_cb (GtkToolButton *tb_btn, DonnaTree *tree)
+{
+    DonnaTask *task;
+
+    task = donna_provider_get_node (DONNA_PROVIDER (provider_fs),
+            "/", //"/home/jjacky",
+            new_root_cb, tree, NULL,
+            0, NULL, NULL, NULL,
+            NULL);
+    /* FIXME: in new thread */
+    g_object_ref_sink (task);
+    donna_task_run (task);
+    g_object_unref (task);
 }
 
 int
@@ -42,6 +69,8 @@ main (int argc, char *argv[])
     GtkTreeView     *list;
 
     gtk_init (&argc, &argv);
+
+    provider_fs = donna_provider_fs_new ();
 
     /* main window */
     _window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -81,7 +110,7 @@ main (int argc, char *argv[])
     gtk_widget_show (_paned);
 
     /* tree */
-    _tree = fstree_new (NULL);
+    _tree = donna_tree_new (NULL);
     tree = GTK_TREE_VIEW (_tree);
     /* scrolled window */
     _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
