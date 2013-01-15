@@ -406,7 +406,7 @@ get_valist (DonnaNode    *node,
     while (name)
     {
         DonnaNodeProp *prop;
-        gchar *err;
+        gchar *err = NULL;
 
         /* special property, that doesn't actually exists in the hash table */
         if (streq (name, "provider"))
@@ -435,7 +435,17 @@ get_valist (DonnaNode    *node,
             *has_value = prop->has_value;
         }
         if (prop->has_value)
-            G_VALUE_LCOPY (&(prop->value), va_args, 0, &err);
+        {
+            GValue value = G_VALUE_INIT;
+            g_value_init (&value, G_VALUE_TYPE (&prop->value));
+            g_value_copy (&prop->value, &value);
+            G_VALUE_LCOPY (&prop->value, va_args, 0, &err);
+        }
+        else
+        {
+            gpointer ptr;
+            ptr = va_arg (va_args, gpointer);
+        }
         if (err)
             g_free (err);
 next:
