@@ -7,11 +7,22 @@
 
 struct _DonnaProviderBasePrivate
 {
+    gchar       *domain;
     GHashTable  *nodes;
     GRecMutex    nodes_mutex;
 };
 
-static void             provider_base_finalize          (GObject *object);
+#define PROP_DOMAIN     1
+
+static void             provider_base_finalize          (GObject*object);
+static void             provider_base_get_property      (GObject        *object,
+                                                         guint           id,
+                                                         GValue         *value,
+                                                         GParamSpec     *pspec);
+static void             provider_base_set_property      (GObject        *object,
+                                                         guint           id,
+                                                         const GValue   *value,
+                                                         GParamSpec     *pspec);
 
 /* DonnaProviderBase */
 static DonnaNode *      provider_base_get_cached_node   (DonnaProviderBase  *provider,
@@ -71,7 +82,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
 }
 
 static void
-provider_base_class_init (DonnaProviderBaseClass *klass)
+donna_provider_base_class_init (DonnaProviderBaseClass *klass)
 {
     GObjectClass *o_class;
 
@@ -79,13 +90,16 @@ provider_base_class_init (DonnaProviderBaseClass *klass)
     klass->add_node_to_cache = provider_base_add_node_to_cache;
 
     o_class = (GObjectClass *) klass;
+    o_class->set_property = provider_base_set_property;
+    o_class->get_property = provider_base_get_property;
     o_class->finalize = provider_base_finalize;
 
+    g_object_class_override_property (o_class, PROP_DOMAIN, "domain");
     g_type_class_add_private (klass, sizeof (DonnaProviderBasePrivate));
 }
 
 static void
-provider_base_init (DonnaProviderBase *provider)
+donna_provider_base_init (DonnaProviderBase *provider)
 {
     DonnaProviderBasePrivate *priv;
 
@@ -97,7 +111,7 @@ provider_base_init (DonnaProviderBase *provider)
     g_rec_mutex_init (&priv->nodes_mutex);
 }
 
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (DonnaProviderBase, provider_base,
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (DonnaProviderBase, donna_provider_base,
         G_TYPE_OBJECT,
         G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_base_provider_init)
         )
@@ -109,11 +123,43 @@ provider_base_finalize (GObject *object)
 
     priv = DONNA_PROVIDER_BASE (object)->priv;
 
+    g_free (priv->domain);
     g_hash_table_destroy (priv->nodes);
     g_rec_mutex_clear (&priv->nodes_mutex);
 
     /* chain up */
-    G_OBJECT_CLASS (provider_base_parent_class)->finalize (object);
+    G_OBJECT_CLASS (donna_provider_base_parent_class)->finalize (object);
+}
+
+static void
+provider_base_get_property (GObject        *object,
+                            guint           id,
+                            GValue         *value,
+                            GParamSpec     *pspec)
+{
+    if (id != PROP_DOMAIN)
+    {
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, id, pspec);
+        return;
+    }
+
+    g_value_set_string (value, DONNA_PROVIDER_BASE (object)->priv->domain);
+}
+
+static void
+provider_base_set_property (GObject        *object,
+                            guint           id,
+                            const GValue   *value,
+                            GParamSpec     *pspec)
+{
+    if (id != PROP_DOMAIN)
+    {
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, id, pspec);
+        return;
+    }
+
+    /* domain is contructor-only, so no need to check/free a previous value */
+    DONNA_PROVIDER_BASE (object)->priv->domain = g_value_dup_string (value);
 }
 
 static DonnaNode *
