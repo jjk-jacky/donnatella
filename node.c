@@ -429,8 +429,7 @@ get_valist (DonnaNode    *node,
             goto next;
         }
         if (!streq (name, "location") && !streq (name, "name")
-                && !streq (name, "is_container")
-                && !streq (name, "has_children"))
+                && !streq (name, "is_container"))
         {
             has_value = va_arg (va_args, gboolean *);
             *has_value = prop->has_value;
