@@ -4,6 +4,7 @@
 #include <string.h>                     /* memset() */
 #include "node.h"
 #include "provider.h"                   /* donna_provider_node_updated() */
+#include "task.h"
 #include "util.h"
 #include "macros.h"                     /* streq() */
 
@@ -733,7 +734,7 @@ donna_node_refresh (DonnaNode           *node,
 }
 
 void
-set_property_value (DonnaNode     *node,
+donna_node_set_property_value (DonnaNode     *node,
                     const gchar   *name,
                     GValue        *value)
 {
