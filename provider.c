@@ -2,6 +2,7 @@
 #include <glib-object.h>
 #include "provider.h"
 #include "node.h"
+#include "closures.h"
 
 enum
 {
@@ -25,7 +26,7 @@ donna_provider_default_init (DonnaProviderInterface *klass)
                 "domain",
                 "Domain handled by the provider",
                 NULL,
-                G_PARAM_READABLE | G_PARAM_CONSTRUCT_ONLY));
+                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
     donna_provider_signals[NODE_CREATED] =
         g_signal_new ("node-created",
@@ -56,12 +57,12 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             G_STRUCT_OFFSET (DonnaProviderInterface, node_updated),
             NULL,
             NULL,
-            g_cclosure_marshal_VOID__BOXED, /* FIXME: _STRING_BOXED */
+            g_cclosure_user_marshal_VOID__BOXED_STRING_BOXED,
             G_TYPE_NONE,
             3,
             DONNA_TYPE_NODE,
             G_TYPE_STRING,
-            G_TYPE_BOXED);
+            G_TYPE_VALUE);
     donna_provider_signals[NODE_CHILDREN] =
         g_signal_new ("node-children",
             DONNA_TYPE_PROVIDER,
@@ -69,7 +70,7 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             G_STRUCT_OFFSET (DonnaProviderInterface, node_children),
             NULL,
             NULL,
-            g_cclosure_marshal_VOID__BOXED, /* FIXME: _BOXED_ARRAY */
+            g_cclosure_user_marshal_VOID__BOXED_BOXED_BOXED,
             G_TYPE_NONE,
             2,
             DONNA_TYPE_NODE,
@@ -81,7 +82,7 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             G_STRUCT_OFFSET (DonnaProviderInterface, node_new_child),
             NULL,
             NULL,
-            g_cclosure_marshal_VOID__BOXED, /* FIXME: _BOXED */
+            g_cclosure_user_marshal_VOID__BOXED_BOXED,
             G_TYPE_NONE,
             2,
             DONNA_TYPE_NODE,
@@ -93,7 +94,7 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             G_STRUCT_OFFSET (DonnaProviderInterface, node_new_content),
             NULL,
             NULL,
-            g_cclosure_marshal_VOID__BOXED, /* FIXME: _BOXED */
+            g_cclosure_user_marshal_VOID__BOXED_BOXED,
             G_TYPE_NONE,
             2,
             DONNA_TYPE_NODE,
