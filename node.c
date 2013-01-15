@@ -768,7 +768,8 @@ donna_node_set_property_value (DonnaNode     *node,
 
     donna_provider_node_updated (node->priv->provider, node, name,
             (has_old_value) ? &old_value : NULL);
-    g_value_unset (&old_value);
+    if (has_old_value)
+        g_value_unset (&old_value);
 }
 
 int
