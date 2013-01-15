@@ -1,8 +1,9 @@
-SRC = util.c node.c provider.c provider-base.c task.c provider-fs.c
+SRC = main.c util.c node.c provider.c provider-base.c task.c provider-fs.c \
+	  tree.c closures.c
 OBJ = ${SRC:.c=.o}
 
-GOBJECT_FLAGS := `pkg-config --cflags --libs gobject-2.0`
-CFLAGS := -Wall -Wextra -g $(CFLAGS) $(GOBJECT_FLAGS)
+GTK_FLAGS := `pkg-config --cflags --libs gtk+-3.0`
+CFLAGS := -Wall -Wextra -g $(CFLAGS) $(GTK_FLAGS)
 
 all: donna
 
