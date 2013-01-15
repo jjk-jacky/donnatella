@@ -639,7 +639,7 @@ node_refresh (DonnaTask *task, gpointer _data)
 
         /* set the return value. the task will take ownership of names->pdata,
          * so we shouldn't free it, only names itself */
-        value = donna_task_take_return_value (task);
+        value = donna_task_grab_return_value (task);
         g_value_init (value, G_TYPE_STRV);
         g_value_take_boxed (value, names->pdata);
         donna_task_release_return_value (task);

@@ -166,7 +166,7 @@ provider_fs_new_node (DonnaProvider  *provider,
     DONNA_PROVIDER_BASE_GET_CLASS (provider)->add_node_to_cache (
             DONNA_PROVIDER_BASE (provider), node);
 
-    value = donna_task_take_return_value (task);
+    value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
     /* take_object to not increment the ref count, as it was already done for
      * this task when adding it to the cache (add_node_to_cache) */

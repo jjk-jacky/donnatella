@@ -239,7 +239,7 @@ return_node (DonnaTask *task, DonnaNode *node)
 {
     GValue *value;
 
-    value = donna_task_take_return_value (task);
+    value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
     /* take_object to not increment the ref count, as it was already done for
      * this task when creating it (to ensure the node wouldn't go away e.g.
