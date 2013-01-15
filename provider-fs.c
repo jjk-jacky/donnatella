@@ -29,7 +29,7 @@ static DonnaTaskState   provider_fs_remove_node     (DonnaProvider  *provider,
 
 
 static void
-provider_fs_class_init (DonnaProviderFsClass *klass)
+donna_provider_fs_class_init (DonnaProviderFsClass *klass)
 {
     DonnaProviderBaseClass *pb_class;
     GObjectClass *o_class;
@@ -41,12 +41,13 @@ provider_fs_class_init (DonnaProviderFsClass *klass)
     o_class = (GObjectClass *) klass;
     o_class->finalize = provider_fs_finalize;
 
-    g_type_class_add_private (klass, sizeof (DonnaProviderFsPrivate));
+//    g_type_class_add_private (klass, sizeof (DonnaProviderFsPrivate));
 }
 
 static void
-provider_fs_init (DonnaProviderFs *provider)
+donna_provider_fs_init (DonnaProviderFs *provider)
 {
+    return;
     DonnaProviderFsPrivate *priv;
 
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
@@ -54,17 +55,17 @@ provider_fs_init (DonnaProviderFs *provider)
             DonnaProviderFsPrivate);
 }
 
-G_DEFINE_TYPE (DonnaProviderFs, provider_fs, DONNA_TYPE_PROVIDER_BASE)
+G_DEFINE_TYPE (DonnaProviderFs, donna_provider_fs, DONNA_TYPE_PROVIDER_BASE)
 
 static void
 provider_fs_finalize (GObject *object)
 {
-    DonnaProviderFsPrivate *priv;
+//    DonnaProviderFsPrivate *priv;
 
-    priv = DONNA_PROVIDER_FS (object)->priv;
+//    priv = DONNA_PROVIDER_FS (object)->priv;
 
     /* chain up */
-    G_OBJECT_CLASS (provider_fs_parent_class)->finalize (object);
+    G_OBJECT_CLASS (donna_provider_fs_parent_class)->finalize (object);
 }
 
 static gboolean
@@ -195,4 +196,12 @@ provider_fs_remove_node (DonnaProvider  *provider,
                          DonnaTask      *task,
                          DonnaNode      *node)
 {
+}
+
+DonnaProviderFs *
+donna_provider_fs_new (void)
+{
+    return DONNA_PROVIDER_FS (g_object_new (DONNA_TYPE_PROVIDER_FS,
+                "domain", "fs",
+                NULL));
 }
