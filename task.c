@@ -81,11 +81,15 @@ donna_task_class_init (DonnaTaskClass *klass)
     GObjectClass *o_class;
 
     o_class = G_OBJECT_CLASS (klass);
+    o_class->set_property = donna_task_set_property;
+    o_class->get_property = donna_task_get_property;
+    o_class->finalize = donna_task_finalize;
+
     donna_task_properties[PROP_DESC] = g_param_spec_string ("desc",
             "desc",
             "Task description",
             NULL,
-            G_PARAM_READABLE | G_PARAM_CONSTRUCT_ONLY);
+            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
     donna_task_properties[PROP_PRIORITY] = g_param_spec_int ("priority",
             "priority",
             "Task priority",
@@ -105,7 +109,7 @@ donna_task_class_init (DonnaTaskClass *klass)
             1.0, /* maximum */
             0.0, /* default */
             G_PARAM_READABLE);
-    donna_task_properties[PROP_STATUS] = g_param_spec_int ("state",
+    donna_task_properties[PROP_STATE] = g_param_spec_int ("state",
             "state",
             "Task current state",
             DONNA_TASK_WAITING, /* minimum */
@@ -116,9 +120,6 @@ donna_task_class_init (DonnaTaskClass *klass)
     g_object_class_install_properties (o_class, NB_PROPERTIES,
             donna_task_properties);
 
-    o_class->set_property = donna_task_set_property;
-    o_class->get_property = donna_task_get_property;
-    o_class->finalize = donna_task_finalize;
     g_type_class_add_private (klass, sizeof (DonnaTaskPrivate));
 }
 
@@ -189,6 +190,10 @@ donna_task_set_property (GObject        *object,
 
     switch (id)
     {
+        case PROP_DESC:
+            task->priv->desc = (gchar *) g_value_get_string (value);
+            break;
+
         case PROP_PRIORITY:
             task->priv->priority = g_value_get_int (value);
             break;
