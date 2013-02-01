@@ -18,11 +18,80 @@ typedef enum
     DONNA_NODE_ERROR_OTHER
 } DonnaNodeError;
 
-/* functions called by a node to get/set a property value */
-typedef gboolean    (*get_value_fn) (DonnaTask      *task,
-                                     DonnaNode      *node);
-typedef gboolean    (*set_value_fn) (DonnaTask      *task,
+typedef enum
+{
+    DONNA_NODE_ITEM,
+    DONNA_NODE_CONTAINER,
+    DONNA_NODE_EXTENDED
+} DonnaNodeType;
+
+typedef enum
+{
+    DONNA_NODE_VALUE_NONE = 0,
+    DONNA_NODE_VALUE_NEED_REFRESH,
+    DONNA_NODE_VALUE_SET
+} DonnaNodeHasValue;
+
+const gchar *node_basic_properties[] =
+{
+    "provider",
+    "domain",
+    "location",
+    "node-type",
+    "name",
+    "icon",
+    "full-name",
+    "size",
+    "ctime",
+    "mtime",
+    "atime",
+    "perms",
+    "user",
+    "group",
+    "type",
+    NULL
+};
+
+typedef enum
+{
+    /* NODE_TYPE, NAME and ICON are required/always exists */
+    DONNA_NODE_FULL_NAME_EXISTS     = (1 << 0),
+    DONNA_NODE_SIZE_EXISTS          = (1 << 1),
+    DONNA_NODE_CTIME_EXISTS         = (1 << 2),
+    DONNA_NODE_MTIME_EXISTS         = (1 << 3),
+    DONNA_NODE_ATIME_EXISTS         = (1 << 4),
+    DONNA_NODE_PERMS_EXISTS         = (1 << 5),
+    DONNA_NODE_USER_EXISTS          = (1 << 6),
+    DONNA_NODE_GROUP_EXISTS         = (1 << 7),
+    DONNA_NODE_TYPE_EXISTS          = (1 << 8),
+
+    DONNA_NODE_NODE_TYPE_WRITABLE   = (1 << 9),
+    DONNA_NODE_NAME_WRITABLE        = (1 << 10),
+    DONNA_NODE_ICON_WRITABLE        = (1 << 11),
+    DONNA_NODE_FULL_NAME_WRITABLE   = (1 << 12),
+    DONNA_NODE_SIZE_WRITABLE        = (1 << 13),
+    DONNA_NODE_CTIME_WRITABLE       = (1 << 14),
+    DONNA_NODE_MTIME_WRITABLE       = (1 << 15),
+    DONNA_NODE_ATIME_WRITABLE       = (1 << 16),
+    DONNA_NODE_PERMS_WRITABLE       = (1 << 17),
+    DONNA_NODE_USER_WRITABLE        = (1 << 18),
+    DONNA_NODE_GROUP_WRITABLE       = (1 << 19),
+    DONNA_NODE_TYPE_WRITABLE        = (1 << 20),
+} DonnaNodeFlags;
+
+#define DONNA_NODE_ALL_EXISTS   (DONNA_NODE_FULL_NAME_EXISTS    \
+        | DONNA_NODE_SIZE_EXISTS  | DONNA_NODE_CTIME_EXISTS     \
+        | DONNA_NODE_MTIME_EXISTS | DONNA_NODE_ATIME_EXISTS     \
+        | DONNA_NODE_PERMS_EXISTS | DONNA_NODE_USER_EXISTS      \
+        | DONNA_NODE_GROUP_EXISTS | DONNA_NODE_TYPE_EXISTS)
+
+/* functions called by a node to refresh/set a property value */
+typedef gboolean    (*refresher_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
+                                     const gchar    *name);
+typedef gboolean    (*setter_fn)    (DonnaTask      *task,
+                                     DonnaNode      *node,
+                                     const gchar    *name,
                                      const GValue   *value);
 struct _DonnaNode
 {
@@ -38,60 +107,33 @@ struct _DonnaNodeClass
 
 DonnaNode *     donna_node_new              (DonnaProvider          *provider,
                                              const gchar            *location,
-                                             get_value_fn            location_get,
-                                             set_value_fn            location_set,
+                                             DonnaNodeType           node_type,
+                                             refresher_fn            refresher,
+                                             setter_fn               setter,
                                              const gchar            *name,
-                                             get_value_fn            name_get,
-                                             set_value_fn            name_set,
-                                             gboolean                is_container,
-                                             get_value_fn            is_container_get,
-                                             set_value_fn            is_container_set,
-                                             get_value_fn            has_children_get,
-                                             set_value_fn            has_children_set);
+                                             const gchar            *icon,
+                                             DonnaNodeFlags          flags);
 DonnaNode *     donna_node_new_from_node    (DonnaProvider          *provider,
                                              const gchar            *location,
-                                             get_value_fn            location_get,
-                                             set_value_fn            location_set,
-                                             const gchar            *name,
-                                             get_value_fn            name_get,
-                                             set_value_fn            name_set,
-                                             gboolean                is_container,
-                                             get_value_fn            is_container_get,
-                                             set_value_fn            is_container_set,
-                                             get_value_fn            has_children_get,
-                                             set_value_fn            has_children_set,
                                              DonnaNode              *source_node);
 gboolean        donna_node_add_property     (DonnaNode              *node,
                                              const gchar            *name,
                                              GType                   type,
                                              GValue                 *value,
-                                             get_value_fn            get_value,
-                                             set_value_fn            set_value,
-                                             GError                **error);
-DonnaTask *     donna_node_set_property     (DonnaNode              *node,
-                                             const gchar            *name,
-                                             GValue                 *value,
-                                             task_callback_fn        callback,
-                                             gpointer                callback_data,
-                                             GDestroyNotify          callback_destroy,
-                                             guint                   timeout,
-                                             task_timeout_fn         timeout_fn,
-                                             gpointer                timeout_data,
-                                             GDestroyNotify          timeout_destroy,
+                                             refresher_fn            refresher,
+                                             setter_fn               setter,
                                              GError                **error);
 void            donna_node_get              (DonnaNode              *node,
+                                             gboolean                is_blocking,
                                              const gchar            *first_name,
                                              ...);
-DonnaTask *     donna_node_refresh          (DonnaNode              *node,
-                                             task_callback_fn        callback,
-                                             gpointer                callback_data,
-                                             GDestroyNotify          callback_destroy,
-                                             guint                   timeout,
-                                             task_timeout_fn         timeout_callback,
-                                             gpointer                timeout_data,
-                                             GDestroyNotify          timeout_destroy,
+DonnaTask *     donna_node_refresh_task     (DonnaNode              *node,
                                              const gchar            *first_name,
                                              ...);
+DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
+                                                 const gchar        *name,
+                                                 GValue             *value,
+                                                 GError            **error);
 void            donna_node_set_property_value   (DonnaNode          *node,
                                                  const gchar        *name,
                                                  GValue             *value);
