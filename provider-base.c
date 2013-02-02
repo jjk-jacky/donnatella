@@ -7,78 +7,43 @@
 
 struct _DonnaProviderBasePrivate
 {
-    gchar       *domain;
     GHashTable  *nodes;
     GRecMutex    nodes_mutex;
 };
 
-#define PROP_DOMAIN     1
-
 static void             provider_base_finalize          (GObject*object);
-static void             provider_base_get_property      (GObject        *object,
-                                                         guint           id,
-                                                         GValue         *value,
-                                                         GParamSpec     *pspec);
-static void             provider_base_set_property      (GObject        *object,
-                                                         guint           id,
-                                                         const GValue   *value,
-                                                         GParamSpec     *pspec);
 
 /* DonnaProviderBase */
-static DonnaNode *      provider_base_get_cached_node   (DonnaProviderBase  *provider,
-                                                         const gchar        *location);
-static void             provider_base_add_node_to_cache (DonnaProviderBase  *provider,
-                                                         DonnaNode          *node);
+static DonnaNode *      provider_base_get_cached_node (
+                                            DonnaProviderBase   *provider,
+                                            const gchar         *location);
+static void             provider_base_add_node_to_cache (
+                                            DonnaProviderBase   *provider,
+                                            DonnaNode           *node);
 
 /* DonnaProvider */
-static DonnaTask *      provider_base_get_node      (DonnaProvider    *provider,
-                                                     const gchar      *location,
-                                                     task_callback_fn  callback,
-                                                     gpointer          callback_data,
-                                                     GDestroyNotify    callback_destroy,
-                                                     guint             timeout,
-                                                     task_timeout_fn   timeout_callback,
-                                                     gpointer          timeout_data,
-                                                     GDestroyNotify    timeout_destroy,
-                                                     GError          **error);
-static DonnaTask *      provider_base_get_content   (DonnaProvider    *provider,
-                                                     DonnaNode        *node,
-                                                     task_callback_fn  callback,
-                                                     gpointer          callback_data,
-                                                     GDestroyNotify    callback_destroy,
-                                                     guint             timeout,
-                                                     task_timeout_fn   timeout_callback,
-                                                     gpointer          timeout_data,
-                                                     GDestroyNotify    timeout_destroy,
-                                                     GError          **error);
-static DonnaTask *      provider_base_get_children  (DonnaProvider    *provider,
-                                                     DonnaNode        *node,
-                                                     task_callback_fn  callback,
-                                                     gpointer          callback_data,
-                                                     GDestroyNotify    callback_destroy,
-                                                     guint             timeout,
-                                                     task_timeout_fn   timeout_callback,
-                                                     gpointer          timeout_data,
-                                                     GDestroyNotify    timeout_destroy,
-                                                     GError          **error);
-static DonnaTask *      provider_base_remove_node   (DonnaProvider    *provider,
-                                                     DonnaNode        *node,
-                                                     task_callback_fn  callback,
-                                                     gpointer          callback_data,
-                                                     GDestroyNotify    callback_destroy,
-                                                     guint             timeout,
-                                                     task_timeout_fn   timeout_callback,
-                                                     gpointer          timeout_data,
-                                                     GDestroyNotify    timeout_destroy,
-                                                     GError          **error);
+static DonnaTask *      provider_base_get_node_task (
+                                            DonnaProvider       *provider,
+                                            const gchar         *location);
+static DonnaTask *      provider_base_has_node_children_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node,
+                                            DonnaNodeType        node_types);
+static DonnaTask *      provider_base_get_node_children_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node,
+                                            DonnaNodeType        node_types);
+static DonnaTask *      provider_base_remove_node_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
 {
-    interface->get_node = provider_base_get_node;
-    interface->get_content = provider_base_get_content;
-    interface->get_children = provider_base_get_children;
-    interface->remove_node = provider_base_remove_node;
+    interface->get_node_task          = provider_base_get_node_task;
+    interface->has_node_children_task = provider_base_has_node_children_task;
+    interface->get_node_children_task = provider_base_get_node_children_task;
+    interface->remove_node_task       = provider_base_remove_node_task;
 }
 
 static void
@@ -86,15 +51,12 @@ donna_provider_base_class_init (DonnaProviderBaseClass *klass)
 {
     GObjectClass *o_class;
 
-    klass->get_cached_node = provider_base_get_cached_node;
+    klass->get_cached_node   = provider_base_get_cached_node;
     klass->add_node_to_cache = provider_base_add_node_to_cache;
 
     o_class = (GObjectClass *) klass;
-    o_class->set_property = provider_base_set_property;
-    o_class->get_property = provider_base_get_property;
     o_class->finalize = provider_base_finalize;
 
-    g_object_class_override_property (o_class, PROP_DOMAIN, "domain");
     g_type_class_add_private (klass, sizeof (DonnaProviderBasePrivate));
 }
 
@@ -123,7 +85,6 @@ provider_base_finalize (GObject *object)
 
     priv = DONNA_PROVIDER_BASE (object)->priv;
 
-    g_free (priv->domain);
     g_hash_table_destroy (priv->nodes);
     g_rec_mutex_clear (&priv->nodes_mutex);
 
@@ -131,37 +92,7 @@ provider_base_finalize (GObject *object)
     G_OBJECT_CLASS (donna_provider_base_parent_class)->finalize (object);
 }
 
-static void
-provider_base_get_property (GObject        *object,
-                            guint           id,
-                            GValue         *value,
-                            GParamSpec     *pspec)
-{
-    if (id != PROP_DOMAIN)
-    {
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, id, pspec);
-        return;
-    }
-
-    g_value_set_string (value, DONNA_PROVIDER_BASE (object)->priv->domain);
-}
-
-static void
-provider_base_set_property (GObject        *object,
-                            guint           id,
-                            const GValue   *value,
-                            GParamSpec     *pspec)
-{
-    if (id != PROP_DOMAIN)
-    {
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, id, pspec);
-        return;
-    }
-
-    /* domain is contructor-only, so no need to check/free a previous value */
-    DONNA_PROVIDER_BASE (object)->priv->domain = g_value_dup_string (value);
-}
-
+/* must be called while mutex is locked */
 static DonnaNode *
 provider_base_get_cached_node (DonnaProviderBase *provider,
                                const gchar       *location)
@@ -190,12 +121,12 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
         gchar *location;
 
         c = donna_node_dec_toggle_count (node);
-        if (c)
+        if (c > 0)
         {
             g_rec_mutex_unlock (&provider->priv->nodes_mutex);
             return;
         }
-        donna_node_get (node, "location", &location, NULL);
+        donna_node_get (node, FALSE, "location", &location, NULL);
         g_hash_table_remove (provider->priv->nodes, location);
         g_rec_mutex_unlock (&provider->priv->nodes_mutex);
         g_object_unref (node);
@@ -208,6 +139,7 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
     }
 }
 
+/* must be called while mutex is locked */
 static void
 provider_base_add_node_to_cache (DonnaProviderBase *provider,
                                  DonnaNode         *node)
@@ -218,11 +150,15 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
     g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
 
-    donna_node_get (node, "provider", &p, "location", &location, NULL);
+    donna_node_get (node, FALSE, "provider", &p, "location", &location, NULL);
 
     /* make sure the provider is the node's provider */
     g_object_unref (p);
-    g_return_if_fail (p == provider);
+    if (p != provider)
+    {
+        g_free (location);
+        g_return_if_fail (p == provider);
+    }
 
     /* add a toggleref, so when we have the last reference on the node, we
      * can let it go (Note: this adds a (strong) reference to node) */
@@ -252,14 +188,14 @@ return_node (DonnaTask *task, DonnaNode *node)
 
 struct get_node_data
 {
-    DonnaProvider   *provider;
-    gchar           *location;
+    DonnaProviderBase   *provider_base;
+    gchar               *location;
 };
 
 static void
 free_get_node_data (struct get_node_data *data)
 {
-    g_object_unref (data->provider);
+    g_object_unref (data->provider_base);
     g_free (data->location);
     g_slice_free (struct get_node_data, data);
 }
@@ -267,17 +203,15 @@ free_get_node_data (struct get_node_data *data)
 static DonnaTaskState
 get_node (DonnaTask *task, struct get_node_data *data)
 {
-    DonnaProviderBase *p;
     DonnaProviderBasePrivate *priv;
     DonnaNode *node;
     DonnaTaskState ret;
 
-    p = (DonnaProviderBase *) data->provider;
-    priv = p->priv;
+    priv = data->provider_base->priv;
 
     g_rec_mutex_lock (&priv->nodes_mutex);
     /* first make sure it wasn't created before the task started */
-    node = provider_base_get_cached_node (p, data->location);
+    node = provider_base_get_cached_node (data->provider_base, data->location);
     if (node)
     {
         g_rec_mutex_unlock (&priv->nodes_mutex);
@@ -286,8 +220,10 @@ get_node (DonnaTask *task, struct get_node_data *data)
 
     /* create the node. It is new_node's responsability to call
      * add_node_to_cache */
-    ret = DONNA_PROVIDER_BASE_GET_CLASS (p)->new_node (data->provider,
-            task, data->location);
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (data->provider_base)->new_node (
+            data->provider_base,
+            task,
+            data->location);
     g_rec_mutex_unlock (&priv->nodes_mutex);
 
     free_get_node_data (data);
@@ -295,16 +231,8 @@ get_node (DonnaTask *task, struct get_node_data *data)
 }
 
 static DonnaTask *
-provider_base_get_node (DonnaProvider    *provider,
-                        const gchar      *location,
-                        task_callback_fn  callback,
-                        gpointer          callback_data,
-                        GDestroyNotify    callback_destroy,
-                        guint             timeout,
-                        task_timeout_fn   timeout_callback,
-                        gpointer          timeout_data,
-                        GDestroyNotify    timeout_destroy,
-                        GError          **error)
+provider_base_get_node_task (DonnaProvider    *provider,
+                             const gchar      *location)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
     DonnaProviderBasePrivate *priv;
@@ -319,138 +247,133 @@ provider_base_get_node (DonnaProvider    *provider,
     node = provider_base_get_cached_node (p, location);
     if (node)
     {
-        task = donna_task_new (NULL /* internal task */,
-                (task_fn) return_node, g_object_ref (node), g_object_unref,
-                callback, callback_data, callback_destroy,
-                timeout, timeout_callback, timeout_data, timeout_destroy);
+        task = donna_task_new ((task_fn) return_node, g_object_ref (node),
+                g_object_unref);
     }
     else
     {
         struct get_node_data *data;
 
         data = g_slice_new0 (struct get_node_data);
-        data->provider = g_object_ref (provider);
+        data->provider_base = g_object_ref (p);
         data->location = g_strdup (location);
-        task = donna_task_new (NULL /* internal task */,
-                (task_fn) get_node, data, (GDestroyNotify) free_get_node_data,
-                callback, callback_data, callback_destroy,
-                timeout, timeout_callback, timeout_data, timeout_destroy);
+        task = donna_task_new ((task_fn) get_node, data,
+                (GDestroyNotify) free_get_node_data);
     }
     g_rec_mutex_unlock (&priv->nodes_mutex);
 
     return task;
 }
 
-static DonnaTaskState
-get_content (DonnaTask *task, DonnaNode *node)
+struct node_children_data
 {
-    DonnaProviderBase *provider_base;
-    DonnaProvider *provider;
+    DonnaProviderBase   *provider_base;
+    DonnaNode           *node;
+    DonnaNodeType        node_types;
+};
+
+static void
+free_node_children_data (struct node_children_data *data)
+{
+    g_object_unref (data->node);
+    g_slice_free (struct node_children_data, data);
+}
+
+static DonnaTaskState
+has_children (DonnaTask *task, struct node_children_data *data)
+{
     DonnaTaskState ret;
 
-    donna_node_get (node, "provider", &provider, NULL);
-    provider_base = (DonnaProviderBase *) provider;
-
-    g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
-    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider)->get_content (provider,
-            task, node);
-    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
-    g_object_unref (node);
-    g_object_unref (provider);
+    /* this is only to figure out whether node has children (of the given
+     * node_type(s)) or not, there shouldn't be a need to check for/create
+     * nodes, so there's no reason to have a lock */
+/*    g_rec_mutex_lock (&data->provider_base->priv->nodes_mutex);   */
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (data->provider_base)->has_children (
+            data->provider_base,
+            task,
+            data->node,
+            data->node_types);
+/*    g_rec_mutex_unlock (&data->provider_base->priv->nodes_mutex); */
+    free_node_children_data (data);
     return ret;
 }
 
 static DonnaTask *
-provider_base_get_content (DonnaProvider    *provider,
-                           DonnaNode        *node,
-                           task_callback_fn  callback,
-                           gpointer          callback_data,
-                           GDestroyNotify    callback_destroy,
-                           guint             timeout,
-                           task_timeout_fn   timeout_callback,
-                           gpointer          timeout_data,
-                           GDestroyNotify    timeout_destroy,
-                           GError          **error)
+provider_base_has_node_children_task (DonnaProvider *provider,
+                                      DonnaNode     *node,
+                                      DonnaNodeType  node_types)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
     DonnaProvider *provider_node;
-    gboolean is_container;
-    DonnaTask *task;
+    DonnaNodeType node_type;
+    struct node_children_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
-    donna_node_get (node,
-            "provider",     &provider_node,
-            "is_container", &is_container,
+    donna_node_get (node, FALSE,
+            "provider",  &provider_node,
+            "note-type", &node_type,
             NULL);
     /* make sure the provider is the node's provider */
     g_object_unref (provider_node);
     g_return_val_if_fail (provider_node == provider, NULL);
     /* make sure the node is a container */
-    g_return_val_if_fail (is_container, NULL);
+    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER
+            || node_type & DONNA_NODE_EXTENDED, NULL);
 
-    task = donna_task_new (NULL /* internal task */,
-            (task_fn) get_content, g_object_ref (node), g_object_unref,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy);
-    return task;
+    data = g_slice_new0 (struct node_children_data);
+    data->node       = g_object_ref (node);
+    data->node_types = node_types;
+    return donna_task_new ((task_fn) has_children, data,
+            (GDestroyNotify) free_node_children_data);
 }
 
 static DonnaTaskState
-get_children (DonnaTask *task, DonnaNode *node)
+get_children (DonnaTask *task, struct node_children_data *data)
 {
-    DonnaProviderBase *provider_base;
-    DonnaProvider *provider;
     DonnaTaskState ret;
 
-    donna_node_get (node, "provider", &provider, NULL);
-    provider_base = (DonnaProviderBase *) provider;
-
-    g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
-    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider)->get_children (provider,
-            task, node);
-    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
-    g_object_unref (node);
-    g_object_unref (provider);
+    g_rec_mutex_lock (&data->provider_base->priv->nodes_mutex);
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (data->provider_base)->get_children (
+            data->provider_base,
+            task,
+            data->node,
+            data->node_types);
+    g_rec_mutex_unlock (&data->provider_base->priv->nodes_mutex);
+    free_node_children_data (data);
     return ret;
 }
 
 static DonnaTask *
-provider_base_get_children (DonnaProvider    *provider,
-                            DonnaNode        *node,
-                            task_callback_fn  callback,
-                            gpointer          callback_data,
-                            GDestroyNotify    callback_destroy,
-                            guint             timeout,
-                            task_timeout_fn   timeout_callback,
-                            gpointer          timeout_data,
-                            GDestroyNotify    timeout_destroy,
-                            GError          **error)
+provider_base_get_node_children_task (DonnaProvider  *provider,
+                                      DonnaNode      *node,
+                                      DonnaNodeType   node_types)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
     DonnaProvider *provider_node;
-    gboolean is_container;
-    DonnaTask *task;
+    DonnaNodeType node_type;
+    struct node_children_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
-    donna_node_get (node,
-            "provider",     &provider_node,
-            "is_container", &is_container,
+    donna_node_get (node, FALSE,
+            "provider",  &provider_node,
+            "note-type", &node_type,
             NULL);
     /* make sure the provider is the node's provider */
     g_object_unref (provider_node);
     g_return_val_if_fail (provider_node == provider, NULL);
     /* make sure the node is a container */
-    g_return_val_if_fail (is_container, NULL);
+    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER
+            || node_type & DONNA_NODE_EXTENDED, NULL);
 
-    task = donna_task_new (NULL /* internal task */,
-            (task_fn) get_children, g_object_ref (node), g_object_unref,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy);
-    return task;
+    data = g_slice_new0 (struct node_children_data);
+    data->node       = g_object_ref (node);
+    data->node_types = node_types;
+    return donna_task_new ((task_fn) get_children, data,
+            (GDestroyNotify) free_node_children_data);
 }
 
 static DonnaTaskState
@@ -460,12 +383,14 @@ remove_node (DonnaTask *task, DonnaNode *node)
     DonnaProvider *provider;
     DonnaTaskState ret;
 
-    donna_node_get (node, "provider", &provider, NULL);
+    donna_node_get (node, FALSE, "provider", &provider, NULL);
     provider_base = (DonnaProviderBase *) provider;
 
     g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
-    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider)->remove_node (provider,
-            task, node);
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->remove_node (
+            provider_base,
+            task,
+            node);
     g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
     g_object_unref (node);
     g_object_unref (provider);
@@ -473,38 +398,24 @@ remove_node (DonnaTask *task, DonnaNode *node)
 }
 
 static DonnaTask *
-provider_base_remove_node (DonnaProvider    *provider,
-                           DonnaNode        *node,
-                           task_callback_fn  callback,
-                           gpointer          callback_data,
-                           GDestroyNotify    callback_destroy,
-                           guint             timeout,
-                           task_timeout_fn   timeout_callback,
-                           gpointer          timeout_data,
-                           GDestroyNotify    timeout_destroy,
-                           GError          **error)
+provider_base_remove_node_task (DonnaProvider   *provider,
+                                DonnaNode       *node)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
     DonnaProvider *provider_node;
-    gboolean is_container;
-    DonnaTask *task;
+    DonnaNodeType node_type;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
-    donna_node_get (node,
-            "provider",     &provider_node,
-            "is_container", &is_container,
+    donna_node_get (node, FALSE,
+            "provider",  &provider_node,
+            "note-type", &node_type,
             NULL);
     /* make sure the provider is the node's provider */
     g_object_unref (provider_node);
     g_return_val_if_fail (provider_node == provider, NULL);
-    /* make sure the node is a container */
-    g_return_val_if_fail (is_container, NULL);
 
-    task = donna_task_new (NULL /* internal task */,
-            (task_fn) remove_node, g_object_ref (node), g_object_unref,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy);
-    return task;
+    return donna_task_new ((task_fn) remove_node, g_object_ref (node),
+            g_object_unref);
 }

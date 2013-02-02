@@ -3,6 +3,7 @@
 #define __DONNA_PROVIDER_BASE_H__
 
 #include "common.h"
+#include "node.h"
 #include "task.h"
 
 G_BEGIN_DECLS
@@ -35,18 +36,20 @@ struct _DonnaProviderBaseClass
     void            (*add_node_to_cache)    (DonnaProviderBase  *provider,
                                              DonnaNode          *node);
 
-    DonnaTaskState  (*new_node)             (DonnaProvider  *provider,
-                                             DonnaTask      *task,
-                                             const gchar    *location);
-    DonnaTaskState  (*get_content)          (DonnaProvider  *provider,
-                                             DonnaTask      *task,
-                                             DonnaNode      *node);
-    DonnaTaskState  (*get_children)         (DonnaProvider  *provider,
-                                             DonnaTask      *task,
-                                             DonnaNode      *node);
-    DonnaTaskState  (*remove_node)          (DonnaProvider  *provider,
-                                             DonnaTask      *task,
-                                             DonnaNode      *node);
+    DonnaTaskState  (*new_node)             (DonnaProviderBase  *provider,
+                                             DonnaTask          *task,
+                                             const gchar        *location);
+    DonnaTaskState  (*has_children)         (DonnaProviderBase  *provider,
+                                             DonnaTask          *task,
+                                             DonnaNode          *node,
+                                             DonnaNodeType       node_types);
+    DonnaTaskState  (*get_children)         (DonnaProviderBase  *provider,
+                                             DonnaTask          *task,
+                                             DonnaNode          *node,
+                                             DonnaNodeType       node_types);
+    DonnaTaskState  (*remove_node)          (DonnaProviderBase  *provider,
+                                             DonnaTask          *task,
+                                             DonnaNode          *node);
 };
 
 GType           donna_provider_base_get_type    (void) G_GNUC_CONST;
