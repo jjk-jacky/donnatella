@@ -26,6 +26,25 @@ enum
     NB_BASIC_PROPS
 };
 
+/* index of the first required prop in node_basic_properties; i.e. after the
+ * internal (e.g. provider) ones */
+#define FIRST_REQUIRED_PROP 4
+/* list the writable flags so we can use them easily */
+static DonnaNodeFlags prop_writable_flags[] =
+{
+    DONNA_NODE_NAME_WRITABLE,
+    DONNA_NODE_ICON_WRITABLE,
+    DONNA_NODE_FULL_NAME_WRITABLE,
+    DONNA_NODE_SIZE_WRITABLE,
+    DONNA_NODE_CTIME_WRITABLE,
+    DONNA_NODE_MTIME_WRITABLE,
+    DONNA_NODE_ATIME_WRITABLE,
+    DONNA_NODE_PERMS_WRITABLE,
+    DONNA_NODE_USER_WRITABLE,
+    DONNA_NODE_GROUP_WRITABLE,
+    DONNA_NODE_TYPE_WRITABLE
+};
+
 struct _DonnaNodePrivate
 {
     /* internal properties */
@@ -390,7 +409,7 @@ get_valist (DonnaNode   *node,
 
         /* basic properties: might not have a value, so there's a has_value */
         i = 0;
-        for (s = (gchar **) node_basic_properties[FIRST_BASIC_PROP]; s; ++s, ++i)
+        for (s = (gchar **) &node_basic_properties[FIRST_BASIC_PROP]; *s; ++s, ++i)
         {
             if (streq (name, *s))
             {
@@ -761,26 +780,6 @@ donna_node_refresh_task (DonnaNode   *node,
 
 
 
-DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
-                                                 const gchar        *name,
-                                                 GValue             *value,
-                                                 GError            **error);
-void            donna_node_set_property_value   (DonnaNode          *node,
-                                                 const gchar        *name,
-                                                 GValue             *value);
-int             donna_node_inc_toggle_count (DonnaNode              *node);
-int             donna_node_dec_toggle_count (DonnaNode              *node);
-
-
-
-
-
-
-
-
-
-
-
 struct set_property
 {
     DonnaNode       *node;
@@ -794,6 +793,9 @@ free_set_property (struct set_property *data)
     g_object_unref (data->node);
     g_value_unset (data->value);
     g_slice_free (GValue, data->value);
+    /* no refresher == "fake" DonnaNodeProp for a basic property */
+    if (!data->prop->refresher)
+        g_slice_free (DonnaNodeProp, data->prop);
     g_slice_free (struct set_property, data);
 }
 
@@ -818,78 +820,145 @@ set_property (DonnaTask *task, struct set_property *data)
 }
 
 DonnaTask *
-donna_node_set_property (DonnaNode        *node,
-                         const gchar      *name,
-                         GValue           *value,
-                         task_callback_fn  callback,
-                         gpointer          callback_data,
-                         GDestroyNotify    callback_destroy,
-                         guint             timeout,
-                         task_timeout_fn   timeout_fn,
-                         gpointer          timeout_data,
-                         GDestroyNotify    timeout_destroy,
-                         GError          **error)
+donna_node_set_property_task (DonnaNode     *node,
+                              const gchar   *name,
+                              GValue        *value,
+                              GError       **error)
 {
     DonnaNodePrivate *priv;
     DonnaNodeProp *prop;
     DonnaTask *task;
     struct set_property *data;
+    const gchar **s;
+    gint i;
 
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
     g_return_val_if_fail (value != NULL, FALSE);
+    priv = node->priv;
+    prop = NULL;
 
-    if (streq (name, "provider"))
+    /* internal properties cannot be set */
+    if (streq (name, "provider") || streq (name, "domain")
+            || streq (name, "location") || streq (name, "node-type"))
     {
         g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
-                "Property %s on node cannot be set", name);
+                "Internal property %s on node cannot be set", name);
         return NULL;
     }
 
-    priv = node->priv;
-    g_rw_lock_reader_lock (&priv->props_lock);
-    prop = g_hash_table_lookup (priv->props, (gpointer) name);
-    /* the lock is for the hash table only. the DonnaNodeProp isn't going
-     * anywhere, nor can it change, so we can let it go now. The only thing that
-     * can happen is a change of value, but the type will/can not change */
-    g_rw_lock_reader_unlock (&priv->props_lock);
+    /* if it's a basic properties, check it can be set */
+    for (s = &node_basic_properties[FIRST_REQUIRED_PROP], i = 0; *s; ++s, ++i)
+    {
+        if (streq (name, *s))
+        {
+            /* TODO: check if the property exists on the node */
+
+            if (!(priv->flags & prop_writable_flags[i]))
+            {
+                g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
+                        "Property %s on node cannot be set", name);
+                return NULL;
+            }
+
+            /* check the type of value */
+            if (i < 2)
+            {
+                /* 0 == name || 1 == icon */
+                if (!G_VALUE_HOLDS (value, G_TYPE_STRING))
+                {
+                    g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
+                            "Property %s on node is of type %s, value passed is %s",
+                            name,
+                            g_type_name (G_TYPE_STRING),
+                            g_type_name (G_VALUE_TYPE (value)));
+                    return NULL;
+                }
+            }
+            else
+            {
+                /* basic_props[i - 2] */
+                i -= 2;
+                if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&(priv->basic_props[i].value))))
+                {
+                    g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
+                            "Property %s on node is of type %s, value passed is %s",
+                            name,
+                            g_type_name (G_VALUE_TYPE (&priv->basic_props[i].value)),
+                            g_type_name (G_VALUE_TYPE (value)));
+                    return NULL;
+                }
+            }
+
+            /* let's create a "fake" DonnaNodeProp for the task */
+            prop = g_slice_new0 (DonnaNodeProp);
+            /* *s isn't going anywhere */
+            prop->name = *s;
+            /* this will indicate it's a "fake" one, and must be free-d */
+            prop->refresher = NULL;
+            /* this (alongside name) is what will be used */
+            prop->setter = priv->setter;
+            break;
+        }
+    }
+
     if (!prop)
     {
-        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_NOT_FOUND,
-                "Node does not have a property %s", name);
-        return NULL;
-    }
+        g_rw_lock_reader_lock (&priv->props_lock);
+        prop = g_hash_table_lookup (priv->props, (gpointer) name);
+        /* the lock is for the hash table only. the DonnaNodeProp isn't going
+         * anywhere, nor can it change, so we can let it go now. The only thing that
+         * can happen is a change of value, but the type will/can not change */
+        g_rw_lock_reader_unlock (&priv->props_lock);
+        if (!prop)
+        {
+            g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_NOT_FOUND,
+                    "Node does not have a property %s", name);
+            return NULL;
+        }
 
-    if (!prop->set_value)
-    {
-        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
-                "Property %s on node cannot be set", name);
-        return NULL;
-    }
+        if (!prop->setter)
+        {
+            g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
+                    "Property %s on node cannot be set", name);
+            return NULL;
+        }
 
-    if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&(prop->value))))
-    {
-        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
-                "Property %s on node is of type %s, value passed is %s",
-                name,
-                g_type_name (G_VALUE_TYPE (&(prop->value))),
-                g_type_name (G_VALUE_TYPE (value)));
-        return NULL;
+        if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&prop->value)))
+        {
+            g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
+                    "Property %s on node is of type %s, value passed is %s",
+                    name,
+                    g_type_name (G_VALUE_TYPE (&prop->value)),
+                    g_type_name (G_VALUE_TYPE (value)));
+            return NULL;
+        }
     }
 
     data = g_slice_new (struct set_property);
     /* take a ref on node, for the task */
-    g_object_ref (node);
-    data->node = node;
+    data->node = g_object_ref (node);
     data->prop = prop;
     data->value = duplicate_gvalue (value);
-    task = donna_task_new (NULL /* internal task */,
-            (task_fn) set_property, data, (GDestroyNotify) free_set_property,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_fn, timeout_data, timeout_destroy);
-
-    return task;
+    return donna_task_new ((task_fn) set_property, data,
+            (GDestroyNotify) free_set_property);
 }
+
+void            donna_node_set_property_value   (DonnaNode          *node,
+                                                 const gchar        *name,
+                                                 GValue             *value);
+int             donna_node_inc_toggle_count (DonnaNode              *node);
+int             donna_node_dec_toggle_count (DonnaNode              *node);
+
+
+
+
+
+
+
+
+
+
 
 void
 donna_node_set_property_value (DonnaNode     *node,
