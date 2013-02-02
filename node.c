@@ -503,9 +503,264 @@ donna_node_get (DonnaNode   *node,
     va_end (va_args);
 }
 
-DonnaTask *     donna_node_refresh_task     (DonnaNode              *node,
-                                             const gchar            *first_name,
-                                             ...);
+struct refresh_data
+{
+    DonnaNode   *node;
+    GPtrArray   *names;
+    GPtrArray   *refreshed;
+};
+
+static void
+node_updated_cb (DonnaProvider       *provider,
+                 DonnaNode           *node,
+                 const gchar         *name,
+                 struct refresh_data *data)
+{
+    GPtrArray *names;
+    GPtrArray *refreshed;
+    guint      i;
+
+    if (data->node != node)
+        return;
+
+    names = data->names;
+    refreshed = data->refreshed;
+
+    /* is the updated property one we're "watching" */
+    for (i = 0; i < names->len; ++i)
+    {
+        if (streq (names->pdata[i], name))
+        {
+            guint    j;
+            gboolean done;
+
+            /* make sure it isn't already in refreshed */
+            done = FALSE;
+            for (j = 0; j < refreshed->len; ++j)
+            {
+                /* refreshed contains the *same pointers* as names */
+                if (refreshed->pdata[j] == names->pdata[i])
+                {
+                    done = TRUE;
+                    break;
+                }
+            }
+
+            if (!done)
+                g_ptr_array_add (refreshed, names->pdata[i]);
+
+            break;
+        }
+    }
+}
+
+static DonnaTaskState
+node_refresh (DonnaTask *task, gpointer _data)
+{
+    struct refresh_data *data;
+    DonnaNodePrivate    *priv;
+    GHashTable          *props;
+    gulong               sig;
+    GPtrArray           *names;
+    GPtrArray           *refreshed;
+    guint                i;
+    DonnaTaskState       ret;
+    GValue              *value;
+
+    data = (struct refresh_data *) _data;
+    priv = data->node->priv;
+    names = data->names;
+    refreshed = data->refreshed = g_ptr_array_sized_new (names->len);
+    ret = DONNA_TASK_DONE;
+
+    /* connect to the provider's signal, so we know which properties are
+     * actually refreshed */
+    sig = g_signal_connect (priv->provider, "node-updated",
+            G_CALLBACK (node_updated_cb), _data);
+
+    props = priv->props;
+    for (i = 0; i < names->len; ++i)
+    {
+        DonnaNodeProp   *prop;
+        guint            j;
+        gboolean         done;
+
+        if (donna_task_is_cancelling (task))
+        {
+            ret = DONNA_TASK_CANCELLED;
+            break;
+        }
+
+        g_rw_lock_reader_lock (&priv->props_lock);
+        prop = g_hash_table_lookup (props, names->pdata[i]);
+        g_rw_lock_reader_unlock (&priv->props_lock);
+        if (!prop)
+            continue;
+
+        /* only call the refresher if the prop hasn't already been refreshed */
+        done = FALSE;
+        for (j = 0; j < refreshed->len; ++j)
+        {
+            /* refreshed contains the *same pointers* as names */
+            if (refreshed->pdata[j] == names->pdata[i])
+            {
+                done = TRUE;
+                break;
+            }
+        }
+        if (done)
+            continue;
+
+        if (!prop->refresher (task, data->node, prop->name))
+            ret = DONNA_TASK_FAILED;
+    }
+
+    if (donna_task_is_cancelling (task))
+        ret = DONNA_TASK_CANCELLED;
+
+    /* disconnect our handler -- any signal that we care about would have come
+     * from the refresher, so in this thread, so it would have been processed. */
+    g_signal_handler_disconnect (priv->provider, sig);
+
+    g_ptr_array_set_free_func (names, g_free);
+    /* did everything get refreshed? */
+    if (names->len == refreshed->len)
+    {
+        /* we don't set a return value. A lack of return value (or NULL) will
+         * mean that no properties was not refreshed */
+        g_free (g_ptr_array_free (refreshed, FALSE));
+        g_ptr_array_free (names, TRUE);
+        /* force the return state to DONE, since all properties were refreshed.
+         * In the odd chance that the refresher for prop1 failed (returned
+         * FALSE) but e.g. the getter for prop2 did take care of both prop1 &
+         * prop2 */
+        ret = DONNA_TASK_DONE;
+    }
+    else
+    {
+        /* construct the list of non-refreshed properties */
+        for (i = 0; i < names->len; )
+        {
+            guint    j;
+            gboolean done;
+
+            done = FALSE;
+            for (j = 0; j < refreshed->len; ++j)
+            {
+                if (refreshed->pdata[j] == names->pdata[i])
+                {
+                    done = TRUE;
+                    break;
+                }
+            }
+
+            if (done)
+                /* done, so we remove it from names. this will free the string,
+                 * and get the last element moved to the current one,
+                 * effectively replacing it. So next iteration we don't need to
+                 * move inside the array */
+                g_ptr_array_remove_index_fast (names, i);
+            else
+                /* move to the next element */
+                ++i;
+        }
+        /* names now only contains the names of non-refreshed properties, it's
+         * our return value. (refreshed isn't needed anymore, and can be freed)
+         * */
+        g_free (g_ptr_array_free (refreshed, FALSE));
+
+        /* because the return value must be a NULL-terminated array */
+        g_ptr_array_add (names, NULL);
+
+        /* set the return value. the task will take ownership of names->pdata,
+         * so we shouldn't free it, only names itself */
+        value = donna_task_grab_return_value (task);
+        g_value_init (value, G_TYPE_STRV);
+        g_value_take_boxed (value, names->pdata);
+        donna_task_release_return_value (task);
+
+        /* free names (but not the pdata, now owned by the task's return value */
+        g_ptr_array_free (names, FALSE);
+    }
+
+    /* free memory (names & refreshed have been taken care of already) */
+    g_object_unref (data->node);
+    g_slice_free (struct refresh_data, data);
+
+    return ret;
+}
+
+static void
+free_refresh_data (struct refresh_data *data)
+{
+    g_object_unref (data->node);
+    g_ptr_array_free (data->names, TRUE);
+    g_free (g_ptr_array_free (data->refreshed, FALSE));
+    g_slice_free (struct refresh_data, data);
+}
+
+DonnaTask *
+donna_node_refresh_task (DonnaNode   *node,
+                         const gchar *first_name,
+                         ...)
+{
+    GPtrArray           *names;
+    struct refresh_data *data;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+
+    if (!first_name /* DONNA_NODE_REFRESH_SET_VALUES */
+            || streq (first_name, DONNA_NODE_REFRESH_ALL_VALUES))
+    {
+        GHashTableIter iter;
+        gpointer key, value;
+
+        /* we'll send the list of all properties, because node_refresh() needs
+         * to know which refresher to call, and it can't have a lock on the hash
+         * table since the refresher will call set_property_value which needs to
+         * take a writer lock... */
+
+        g_rw_lock_reader_lock (&node->priv->props_lock);
+        names = g_ptr_array_sized_new (g_hash_table_size (node->priv->props));
+        g_hash_table_iter_init (&iter, node->priv->props);
+        while (g_hash_table_iter_next (&iter, &key, &value))
+        {
+            if (first_name || ((DonnaNodeProp *)value)->has_value)
+            {
+                value = (gpointer) g_strdup ((gchar *) key);
+                g_ptr_array_add (names, value);
+            }
+        }
+        g_rw_lock_reader_unlock (&node->priv->props_lock);
+    }
+    else
+    {
+        va_list     va_args;
+        gpointer    name;
+
+        names = g_ptr_array_new ();
+
+        va_start (va_args, first_name);
+        name = (gpointer) first_name;
+        while (name)
+        {
+            /* TODO: check property exists on node, else fill a GError? */
+            name = (gpointer) g_strdup (name);
+            g_ptr_array_add (names, name);
+            name = va_arg (va_args, gpointer);
+        }
+        va_end (va_args);
+    }
+
+    data = g_slice_new0 (struct refresh_data);
+    data->node = g_object_ref (node);
+    data->names = names;
+
+    return donna_task_new (node_refresh, data, (GDestroyNotify) free_refresh_data);
+}
+
+
+
 DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
                                                  const gchar        *name,
                                                  GValue             *value,
@@ -633,269 +888,6 @@ donna_node_set_property (DonnaNode        *node,
             callback, callback_data, callback_destroy,
             timeout, timeout_fn, timeout_data, timeout_destroy);
 
-    return task;
-}
-struct refresh_data
-{
-    DonnaNode   *node;
-    GPtrArray   *names;
-    GPtrArray   *refreshed;
-};
-
-static void 
-node_updated_cb (DonnaProvider       *provider,
-                 DonnaNode           *node,
-                 const gchar         *name,
-                 const GValue        *old_value,
-                 struct refresh_data *data)
-{
-    GPtrArray *names;
-    GPtrArray *refreshed;
-    guint      i;
-
-    if (data->node != node)
-        return;
-
-    names = data->names;
-    refreshed = data->refreshed;
-
-    /* is the updated property one we're "watching" */
-    for (i = 0; i < names->len; ++i)
-    {
-        if (streq (names->pdata[i], name))
-        {
-            guint    j;
-            gboolean done;
-
-            /* make sure it isn't already in refreshed */
-            done = FALSE;
-            for (j = 0; j < refreshed->len; ++j)
-            {
-                /* refreshed contains the *same pointers* as names */
-                if (refreshed->pdata[j] == names->pdata[i])
-                {
-                    done = TRUE;
-                    break;
-                }
-            }
-
-            if (!done)
-                g_ptr_array_add (refreshed, names->pdata[i]);
-
-            break;
-        }
-    }
-}
-
-static DonnaTaskState
-node_refresh (DonnaTask *task, gpointer _data)
-{
-    struct refresh_data *data;
-    DonnaNodePrivate    *priv;
-    GHashTable          *props;
-    gulong               sig;
-    GPtrArray           *names;
-    GPtrArray           *refreshed;
-    guint                i;
-    DonnaTaskState       ret;
-    GValue              *value;
-
-    data = (struct refresh_data *) _data;
-    priv = data->node->priv;
-    names = data->names;
-    refreshed = data->refreshed = g_ptr_array_sized_new (names->len);
-    ret = DONNA_TASK_DONE;
-
-    /* connect to the provider's signal, so we know which properties are
-     * actually refreshed */
-    sig = g_signal_connect (priv->provider, "node-updated",
-            G_CALLBACK (node_updated_cb), _data);
-
-    props = priv->props;
-    for (i = 0; i < names->len; ++i)
-    {
-        DonnaNodeProp   *prop;
-        guint            j;
-        gboolean         done;
-
-        if (donna_task_is_cancelling (task))
-        {
-            ret = DONNA_TASK_CANCELLED;
-            break;
-        }
-
-        g_rw_lock_reader_lock (&priv->props_lock);
-        prop = g_hash_table_lookup (props, names->pdata[i]);
-        g_rw_lock_reader_unlock (&priv->props_lock);
-        if (!prop)
-            continue;
-
-        /* only call the getter if the prop hasn't already been refreshed */
-        done = FALSE;
-        for (j = 0; j < refreshed->len; ++j)
-        {
-            /* refreshed contains the *same pointers* as names */
-            if (refreshed->pdata[j] == names->pdata[i])
-            {
-                done = TRUE;
-                break;
-            }
-        }
-        if (done)
-            continue;
-
-        if (!prop->get_value (task, data->node))
-            ret = DONNA_TASK_FAILED;
-    }
-
-    if (donna_task_is_cancelling (task))
-        ret = DONNA_TASK_CANCELLED;
-
-    /* disconnect our handler -- any signal that we care about would have come
-     * from the getter, so in this thread, so it would have been processed. */
-    g_signal_handler_disconnect (priv->provider, sig);
-
-    g_ptr_array_set_free_func (names, g_free);
-    /* did everything get refreshed? */
-    if (names->len == refreshed->len)
-    {
-        /* we don't set a return value. A lack of return value (or NULL) will
-         * mean that no properties was not refreshed */
-        g_free (g_ptr_array_free (refreshed, FALSE));
-        g_ptr_array_free (names, TRUE);
-        /* force the return state to DONE, since all properties were refreshed.
-         * In the odd chance that the getter for prop1 failed (returned FALSE)
-         * but e.g. the getter for prop2 did take care of both prop1 & prop2 */
-        ret = DONNA_TASK_DONE;
-    }
-    else
-    {
-        /* construct the list of non-refreshed properties */
-        for (i = 0; i < names->len; )
-        {
-            guint    j;
-            gboolean done;
-
-            done = FALSE;
-            for (j = 0; j < refreshed->len; ++j)
-            {
-                if (refreshed->pdata[j] == names->pdata[i])
-                {
-                    done = TRUE;
-                    break;
-                }
-            }
-
-            if (done)
-                /* done, so we remove it from names. this will free the string,
-                 * and get the last element moved to the current one,
-                 * effectively replacing it. So next iteration we don't need to
-                 * move inside the array */
-                g_ptr_array_remove_index_fast (names, i);
-            else
-                /* move to the next element */
-                ++i;
-        }
-        /* names now only contains the names of non-refreshed properties, it's
-         * our return value. (refreshed isn't needed anymore, and can be freed)
-         * */
-        g_free (g_ptr_array_free (refreshed, FALSE));
-
-        /* because the return value must be a NULL-terminated array */
-        g_ptr_array_add (names, NULL);
-
-        /* set the return value. the task will take ownership of names->pdata,
-         * so we shouldn't free it, only names itself */
-        value = donna_task_grab_return_value (task);
-        g_value_init (value, G_TYPE_STRV);
-        g_value_take_boxed (value, names->pdata);
-        donna_task_release_return_value (task);
-
-        /* free names (but not the pdata, now owned by the task's return value */
-        g_ptr_array_free (names, FALSE);
-    }
-
-    /* free memory (names & refreshed have been taken care of already) */
-    g_object_unref (data->node);
-    g_slice_free (struct refresh_data, data);
-
-    return ret;
-}
-
-static void
-free_refresh_data (struct refresh_data *data)
-{
-    g_object_unref (data->node);
-    g_ptr_array_free (data->names, TRUE);
-    g_free (g_ptr_array_free (data->refreshed, FALSE));
-    g_slice_free (struct refresh_data, data);
-}
-
-DonnaTask *
-donna_node_refresh (DonnaNode           *node,
-                    task_callback_fn     callback,
-                    gpointer             callback_data,
-                    GDestroyNotify       callback_destroy,
-                    guint                timeout,
-                    task_timeout_fn      timeout_callback,
-                    gpointer             timeout_data,
-                    GDestroyNotify       timeout_destroy,
-                    const gchar         *first_name,
-                    ...)
-{
-    DonnaTask           *task;
-    GPtrArray           *names;
-    struct refresh_data *data;
-
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    if (first_name)
-    {
-        va_list     va_args;
-        gpointer    name;
-
-        names = g_ptr_array_new ();
-
-        va_start (va_args, first_name);
-        name = (gpointer) first_name;
-        while (name)
-        {
-            /* TODO: check property exists on node, else fill a GError? */
-            name = (gpointer) g_strdup (name);
-            g_ptr_array_add (names, name);
-            name = va_arg (va_args, gpointer);
-        }
-        va_end (va_args);
-    }
-    else
-    {
-        GHashTableIter iter;
-        gpointer key, value;
-
-        /* we'll send the list of all properties, because node_refresh() needs
-         * to know which getter to call, and it can't have a lock on the hash
-         * table since the getter will call set_property_value which needs to
-         * take a writer lock... */
-
-        g_rw_lock_reader_lock (&node->priv->props_lock);
-        names = g_ptr_array_sized_new (g_hash_table_size (node->priv->props));
-        g_hash_table_iter_init (&iter, node->priv->props);
-        while (g_hash_table_iter_next (&iter, &key, &value))
-        {
-            value = (gpointer) g_strdup ((gchar *) key);
-            g_ptr_array_add (names, value);
-        }
-        g_rw_lock_reader_unlock (&node->priv->props_lock);
-    }
-
-    data = g_slice_new0 (struct refresh_data);
-    data->node = g_object_ref (node);
-    data->names = names;
-
-    task = donna_task_new (NULL /* internal task */,
-            node_refresh, data, (GDestroyNotify) free_refresh_data,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy);
     return task;
 }
 

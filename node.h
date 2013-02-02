@@ -33,6 +33,9 @@ typedef enum
     DONNA_NODE_VALUE_ERROR
 } DonnaNodeHasValue;
 
+#define DONNA_NODE_REFRESH_SET_VALUES       NULL
+#define DONNA_NODE_REFRESH_ALL_VALUES       "-all"
+
 const gchar *node_basic_properties[] =
 {
     "provider",
