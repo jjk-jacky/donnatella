@@ -20,9 +20,9 @@ typedef enum
 
 typedef enum
 {
-    DONNA_NODE_ITEM,
-    DONNA_NODE_CONTAINER,
-    DONNA_NODE_EXTENDED
+    DONNA_NODE_ITEM         = (1 << 0),
+    DONNA_NODE_CONTAINER    = (1 << 1),
+    DONNA_NODE_EXTENDED     = (1 << 2)
 } DonnaNodeType;
 
 typedef enum
