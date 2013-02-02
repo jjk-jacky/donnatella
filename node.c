@@ -944,29 +944,12 @@ donna_node_set_property_task (DonnaNode     *node,
             (GDestroyNotify) free_set_property);
 }
 
-void            donna_node_set_property_value   (DonnaNode          *node,
-                                                 const gchar        *name,
-                                                 GValue             *value);
-int             donna_node_inc_toggle_count (DonnaNode              *node);
-int             donna_node_dec_toggle_count (DonnaNode              *node);
-
-
-
-
-
-
-
-
-
-
-
 void
 donna_node_set_property_value (DonnaNode     *node,
-                    const gchar   *name,
-                    GValue        *value)
+                               const gchar   *name,
+                               GValue        *value)
 {
     DonnaNodeProp *prop;
-    GValue old_value = G_VALUE_INIT;
     gboolean has_old_value = FALSE;
 
     g_return_if_fail (DONNA_IS_NODE (node));
@@ -976,14 +959,6 @@ donna_node_set_property_value (DonnaNode     *node,
     prop = g_hash_table_lookup (node->priv->props, (gpointer) name);
     if (prop)
     {
-        if (prop->has_value)
-        {
-            has_old_value = TRUE;
-            /* make a copy of the old value (for signal) */
-            g_value_init (&old_value, G_VALUE_TYPE (&(prop->value)));
-            g_value_copy (&(prop->value), &old_value);
-        }
-
         /* copy the new value over */
         g_value_copy (value, &(prop->value));
         /* we assume it worked, w/out checking types, etc because this should
@@ -993,10 +968,8 @@ donna_node_set_property_value (DonnaNode     *node,
     }
     g_rw_lock_writer_unlock (&node->priv->props_lock);
 
-    donna_provider_node_updated (node->priv->provider, node, name,
-            (has_old_value) ? &old_value : NULL);
-    if (has_old_value)
-        g_value_unset (&old_value);
+    if (prop)
+        donna_provider_node_updated (node->priv->provider, node, name);
 }
 
 int
