@@ -6,21 +6,21 @@
 
 G_BEGIN_DECLS
 
-/* VOID:BOXED,STRING,BOXED (closures.def:1) */
-extern void g_cclosure_user_marshal_VOID__BOXED_STRING_BOXED (GClosure     *closure,
-                                                              GValue       *return_value,
-                                                              guint         n_param_values,
-                                                              const GValue *param_values,
-                                                              gpointer      invocation_hint,
-                                                              gpointer      marshal_data);
+/* VOID:BOXED,STRING (closures.def:1) */
+extern void g_cclosure_user_marshal_VOID__BOXED_STRING (GClosure     *closure,
+                                                        GValue       *return_value,
+                                                        guint         n_param_values,
+                                                        const GValue *param_values,
+                                                        gpointer      invocation_hint,
+                                                        gpointer      marshal_data);
 
-/* VOID:BOXED,BOXED,BOXED (closures.def:2) */
-extern void g_cclosure_user_marshal_VOID__BOXED_BOXED_BOXED (GClosure     *closure,
-                                                             GValue       *return_value,
-                                                             guint         n_param_values,
-                                                             const GValue *param_values,
-                                                             gpointer      invocation_hint,
-                                                             gpointer      marshal_data);
+/* VOID:BOXED,UINT,BOXED (closures.def:2) */
+extern void g_cclosure_user_marshal_VOID__BOXED_UINT_BOXED (GClosure     *closure,
+                                                            GValue       *return_value,
+                                                            guint         n_param_values,
+                                                            const GValue *param_values,
+                                                            gpointer      invocation_hint,
+                                                            gpointer      marshal_data);
 
 /* VOID:BOXED,BOXED (closures.def:3) */
 extern void g_cclosure_user_marshal_VOID__BOXED_BOXED (GClosure     *closure,

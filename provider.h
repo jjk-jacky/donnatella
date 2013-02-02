@@ -3,6 +3,7 @@
 #define __DONNA_PROVIDER_H__
 
 #include "common.h"
+#include "node.h"
 #include "task.h"
 
 G_BEGIN_DECLS
@@ -12,128 +13,63 @@ struct _DonnaProviderInterface
     GTypeInterface parent;
 
     /* signals */
-    void            (*node_created)         (DonnaProvider   *provider,
-                                             DonnaNode       *node);
-    void            (*node_removed)         (DonnaProvider   *provider,
-                                             DonnaNode       *node);
-    void            (*node_updated)         (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             const gchar     *name,
-                                             const GValue    *old_value);
-    void            (*node_children)        (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             DonnaNode      **children);
-    void            (*node_new_child)       (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             DonnaNode       *child);
-    void            (*node_new_content)     (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             DonnaNode       *content);
+    void            (*new_node)                     (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
+    void            (*node_updated)                 (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     const gchar    *name);
+    void            (*node_removed)                 (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
+    void            (*node_children)                (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNodeType   node_types,
+                                                     DonnaNode     **children);
+    void            (*node_new_child)               (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNode      *child);
 
     /* virtual table */
-    DonnaTask *     (*get_node)             (DonnaProvider   *provider,
-                                             const gchar     *location,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-    DonnaTask *     (*get_content)          (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-    DonnaTask *     (*get_children)         (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-    DonnaTask *     (*remove_node)          (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
+    const gchar *   (*get_domain)                   (DonnaProvider  *provider);
+    DonnaTask *     (*get_node_task)                (DonnaProvider  *provider,
+                                                     const gchar    *location);
+    DonnaTask *     (*has_node_children_task)       (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNodeType   node_types);
+    DonnaTask *     (*get_node_children_task)       (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNodeType   node_types);
+    DonnaTask *     (*remove_node_task)             (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
 };
 
 /* signals */
-void    donna_provider_node_created         (DonnaProvider   *provider,
-                                             DonnaNode       *node);
-void    donna_provider_node_removed         (DonnaProvider   *provider,
-                                             DonnaNode       *node);
-void    donna_provider_node_updated         (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             const gchar     *name,
-                                             const GValue    *old_value);
-void    donna_provider_node_children        (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             DonnaNode      **children);
-void    donna_provider_node_new_child       (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             DonnaNode       *child);
-void    donna_provider_node_new_content     (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             DonnaNode       *content);
+void    donna_provider_node_created                 (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
+void    donna_provider_node_updated                 (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     const gchar    *name);
+void    donna_provider_node_removed                 (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
+void    donna_provider_node_children                (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNodeType   node_types,
+                                                     DonnaNode     **children);
+void    donna_provider_node_new_child               (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNode      *child);
 
 /* API */
-DonnaTask * donna_provider_get_node         (DonnaProvider   *provider,
-                                             const gchar     *location,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-DonnaTask * donna_provider_get_content      (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-DonnaTask * donna_provider_get_children     (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-DonnaTask * donna_provider_remove_node      (DonnaProvider   *provider,
-                                             DonnaNode       *node,
-                                             task_callback_fn callback,
-                                             gpointer         callback_data,
-                                             GDestroyNotify   callback_destroy,
-                                             guint            timeout,
-                                             task_timeout_fn  timeout_callback,
-                                             gpointer         timeout_data,
-                                             GDestroyNotify   timeout_destroy,
-                                             GError         **error);
-
+const gchar * donna_get_domain                      (DonnaProvider  *provider);
+DonnaTask * donna_provider_get_node_task            (DonnaProvider  *provider,
+                                                     const gchar    *location);
+DonnaTask * donna_provider_has_node_children_task   (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNodeType   node_types);
+DonnaTask * donna_provider_get_node_children_task   (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNodeType   node_types);
+DonnaTask * donna_provider_remove_node_task         (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
 
 G_END_DECLS
 

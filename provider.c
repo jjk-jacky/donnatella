@@ -6,12 +6,11 @@
 
 enum
 {
-    NODE_CREATED,
-    NODE_REMOVED,
+    NEW_NODE,
     NODE_UPDATED,
+    NODE_REMOVED,
     NODE_CHILDREN,
     NODE_NEW_CHILD,
-    NODE_NEW_CONTENT,
     NB_SIGNALS
 };
 
@@ -20,30 +19,11 @@ static guint donna_provider_signals[NB_SIGNALS] = { 0 };
 static void
 donna_provider_default_init (DonnaProviderInterface *klass)
 {
-    g_object_interface_install_property (klass,
-            g_param_spec_string (
-                "domain",
-                "domain",
-                "Domain handled by the provider",
-                NULL,
-                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
-
-    donna_provider_signals[NODE_CREATED] =
-        g_signal_new ("node-created",
+    donna_provider_signals[NEW_NODE] =
+        g_signal_new ("new-node",
             DONNA_TYPE_PROVIDER,
             G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET (DonnaProviderInterface, node_created),
-            NULL,
-            NULL,
-            g_cclosure_marshal_VOID__BOXED,
-            G_TYPE_NONE,
-            1,
-            DONNA_TYPE_NODE);
-    donna_provider_signals[NODE_REMOVED] =
-        g_signal_new ("node-removed",
-            DONNA_TYPE_PROVIDER,
-            G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET (DonnaProviderInterface, node_removed),
+            G_STRUCT_OFFSET (DonnaProviderInterface, new_node),
             NULL,
             NULL,
             g_cclosure_marshal_VOID__BOXED,
@@ -57,12 +37,22 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             G_STRUCT_OFFSET (DonnaProviderInterface, node_updated),
             NULL,
             NULL,
-            g_cclosure_user_marshal_VOID__BOXED_STRING_BOXED,
+            g_cclosure_user_marshal_VOID__BOXED_STRING,
             G_TYPE_NONE,
-            3,
+            2,
             DONNA_TYPE_NODE,
-            G_TYPE_STRING,
-            G_TYPE_VALUE);
+            G_TYPE_STRING);
+    donna_provider_signals[NODE_REMOVED] =
+        g_signal_new ("node-removed",
+            DONNA_TYPE_PROVIDER,
+            G_SIGNAL_RUN_LAST,
+            G_STRUCT_OFFSET (DonnaProviderInterface, node_removed),
+            NULL,
+            NULL,
+            g_cclosure_marshal_VOID__BOXED,
+            G_TYPE_NONE,
+            1,
+            DONNA_TYPE_NODE);
     donna_provider_signals[NODE_CHILDREN] =
         g_signal_new ("node-children",
             DONNA_TYPE_PROVIDER,
@@ -70,28 +60,17 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             G_STRUCT_OFFSET (DonnaProviderInterface, node_children),
             NULL,
             NULL,
-            g_cclosure_user_marshal_VOID__BOXED_BOXED_BOXED,
+            g_cclosure_user_marshal_VOID__BOXED_UINT_BOXED,
             G_TYPE_NONE,
-            2,
+            3,
             DONNA_TYPE_NODE,
-            DONNA_TYPE_NODE);
+            G_TYPE_UINT,
+            G_TYPE_PTR_ARRAY);
     donna_provider_signals[NODE_NEW_CHILD] =
         g_signal_new ("node-new-child",
             DONNA_TYPE_PROVIDER,
             G_SIGNAL_RUN_LAST,
             G_STRUCT_OFFSET (DonnaProviderInterface, node_new_child),
-            NULL,
-            NULL,
-            g_cclosure_user_marshal_VOID__BOXED_BOXED,
-            G_TYPE_NONE,
-            2,
-            DONNA_TYPE_NODE,
-            DONNA_TYPE_NODE);
-    donna_provider_signals[NODE_NEW_CONTENT] =
-        g_signal_new ("node-new-content",
-            DONNA_TYPE_PROVIDER,
-            G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET (DonnaProviderInterface, node_new_content),
             NULL,
             NULL,
             g_cclosure_user_marshal_VOID__BOXED_BOXED,
@@ -106,13 +85,27 @@ G_DEFINE_INTERFACE (DonnaProvider, donna_provider, G_TYPE_OBJECT)
 /* signals */
 
 void
-donna_provider_node_created (DonnaProvider  *provider,
-                             DonnaNode      *node)
+donna_provider_new_node (DonnaProvider  *provider,
+                         DonnaNode      *node)
 {
     g_return_if_fail (DONNA_IS_PROVIDER (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
 
-    g_signal_emit (provider, donna_provider_signals[NODE_CREATED], 0, node);
+    g_signal_emit (provider, donna_provider_signals[NEW_NODE], 0, node);
+}
+
+void
+donna_provider_node_updated (DonnaProvider  *provider,
+                             DonnaNode      *node,
+                             const gchar    *name)
+{
+    g_return_if_fail (DONNA_IS_PROVIDER (provider));
+    g_return_if_fail (DONNA_IS_NODE (node));
+    g_return_if_fail (name != NULL);
+
+    g_signal_emit (provider, donna_provider_signals[NODE_UPDATED],
+            g_quark_from_string (name),
+            node, name);
 }
 
 void
@@ -126,31 +119,17 @@ donna_provider_node_removed (DonnaProvider  *provider,
 }
 
 void
-donna_provider_node_updated (DonnaProvider  *provider,
-                             DonnaNode      *node,
-                             const gchar    *name,
-                             const GValue   *value)
-{
-    g_return_if_fail (DONNA_IS_PROVIDER (provider));
-    g_return_if_fail (DONNA_IS_NODE (node));
-    g_return_if_fail (name != NULL);
-
-    g_signal_emit (provider, donna_provider_signals[NODE_UPDATED],
-            g_quark_from_string (name),
-            node, name, value);
-}
-
-void
 donna_provider_node_children (DonnaProvider  *provider,
                               DonnaNode      *node,
+                              DonnaNodeType   node_types,
                               DonnaNode     **children)
 {
     g_return_if_fail (DONNA_IS_PROVIDER (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
     g_return_if_fail (DONNA_IS_NODE (*children));
 
-    g_signal_emit (provider, donna_provider_signals[NODE_CREATED], 0,
-            node, children);
+    g_signal_emit (provider, donna_provider_signals[NODE_CHILDREN], 0,
+            node, node_types, children);
 }
 
 void
@@ -166,33 +145,27 @@ donna_provider_node_new_child (DonnaProvider  *provider,
             node, child);
 }
 
-void
-donna_provider_node_new_content (DonnaProvider  *provider,
-                                 DonnaNode      *node,
-                                 DonnaNode      *content)
-{
-    g_return_if_fail (DONNA_IS_PROVIDER (provider));
-    g_return_if_fail (DONNA_IS_NODE (node));
-    g_return_if_fail (DONNA_IS_NODE (content));
-
-    g_signal_emit (provider, donna_provider_signals[NODE_NEW_CONTENT], 0,
-            node, content);
-}
-
 
 /* API */
 
+const gchar *
+donna_get_domain (DonnaProvider  *provider)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_domain != NULL, NULL);
+
+    return (*interface->get_domain) (provider);
+}
+
 DonnaTask *
-donna_provider_get_node (DonnaProvider    *provider,
-                         const gchar      *location,
-                         task_callback_fn callback,
-                         gpointer         callback_data,
-                         GDestroyNotify   callback_destroy,
-                         guint            timeout,
-                         task_timeout_fn  timeout_callback,
-                         gpointer         timeout_data,
-                         GDestroyNotify   timeout_destroy,
-                         GError         **error)
+donna_provider_get_node_task (DonnaProvider    *provider,
+                              const gchar      *location)
 {
     DonnaProviderInterface *interface;
 
@@ -202,25 +175,64 @@ donna_provider_get_node (DonnaProvider    *provider,
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
     g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_node!= NULL, NULL);
+    g_return_val_if_fail (interface->get_node_task != NULL, NULL);
 
-    return (*interface->get_node) (provider, location,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy,
-            error);
+    return (*interface->get_node_task) (provider, location);
 }
 
 DonnaTask *
-donna_provider_get_content (DonnaProvider    *provider,
-                            DonnaNode        *node,
-                            task_callback_fn  callback,
-                            gpointer          callback_data,
-                            GDestroyNotify    callback_destroy,
-                            guint             timeout,
-                            task_timeout_fn   timeout_callback,
-                            gpointer          timeout_data,
-                            GDestroyNotify    timeout_destroy,
-                            GError          **error)
+donna_provider_has_node_children_task (DonnaProvider  *provider,
+                                       DonnaNode      *node,
+                                       DonnaNodeType   node_types)
+{
+    DonnaProviderInterface *interface;
+    DonnaProvider *p;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    g_return_val_if_fail (node_types > 0, NULL);
+
+    /* make sure the provider is the node's provider */
+    donna_node_get (node, FALSE, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->has_node_children_task != NULL, NULL);
+
+    return (*interface->has_node_children_task) (provider, node, node_types);
+}
+
+DonnaTask *
+donna_provider_get_node_children_task (DonnaProvider  *provider,
+                                       DonnaNode      *node,
+                                       DonnaNodeType   node_types)
+{
+    DonnaProviderInterface *interface;
+    DonnaProvider *p;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    g_return_val_if_fail (node_types > 0, NULL);
+
+    /* make sure the provider is the node's provider */
+    donna_node_get (node, FALSE, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_node_children_task != NULL, NULL);
+
+    return (*interface->get_node_children_task) (provider, node, node_types);
+}
+
+DonnaTask *
+donna_provider_remove_node_task (DonnaProvider  *provider,
+                                 DonnaNode      *node)
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
@@ -229,85 +241,14 @@ donna_provider_get_content (DonnaProvider    *provider,
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider */
-    donna_node_get (node, "provider", &p, NULL);
+    donna_node_get (node, FALSE, "provider", &p, NULL);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
     g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_content != NULL, NULL);
+    g_return_val_if_fail (interface->remove_node_task != NULL, NULL);
 
-    return (*interface->get_content) (provider, node,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy,
-            error);
-}
-
-DonnaTask *
-donna_provider_get_children (DonnaProvider   *provider,
-                             DonnaNode       *node,
-                             task_callback_fn callback,
-                             gpointer         callback_data,
-                             GDestroyNotify   callback_destroy,
-                             guint            timeout,
-                             task_timeout_fn  timeout_callback,
-                             gpointer         timeout_data,
-                             GDestroyNotify   timeout_destroy,
-                             GError         **error)
-{
-    DonnaProviderInterface *interface;
-    DonnaProvider *p;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    /* make sure the provider is the node's provider */
-    donna_node_get (node, "provider", &p, NULL);
-    g_object_unref (p);
-    g_return_val_if_fail (p == provider, NULL);
-
-    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
-
-    g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_children != NULL, NULL);
-
-    return (*interface->get_children) (provider, node,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy,
-            error);
-}
-
-DonnaTask *
-donna_provider_remove_node (DonnaProvider   *provider,
-                            DonnaNode       *node,
-                            task_callback_fn callback,
-                            gpointer         callback_data,
-                            GDestroyNotify   callback_destroy,
-                            guint            timeout,
-                            task_timeout_fn  timeout_callback,
-                            gpointer         timeout_data,
-                            GDestroyNotify   timeout_destroy,
-                            GError         **error)
-{
-    DonnaProviderInterface *interface;
-    DonnaProvider *p;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), FALSE);
-    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-
-    /* make sure the provider is the node's provider */
-    donna_node_get (node, "provider", &p, NULL);
-    g_object_unref (p);
-    g_return_val_if_fail (p == provider, NULL);
-
-    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
-
-    g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->remove_node != NULL, FALSE);
-
-    return (*interface->remove_node) (provider, node,
-            callback, callback_data, callback_destroy,
-            timeout, timeout_callback, timeout_data, timeout_destroy,
-            error);
+    return (*interface->remove_node_task) (provider, node);
 }
