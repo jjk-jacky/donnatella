@@ -403,6 +403,30 @@ get_valist (DonnaNode   *node,
                 }
                 else
                 {
+                    if (*has_value == DONNA_NODE_VALUE_NEED_REFRESH && is_blocking)
+                    {
+                        /* we need to release the lock, since the refresher
+                         * should call set_property_value, hence need a writer
+                         * lock */
+                        g_rw_lock_reader_unlock (&priv->props_lock);
+                        if (priv->refresher (NULL /* no task */, node, name))
+                        {
+                            g_rw_lock_reader_lock (&priv->props_lock);
+                            /* check if the value has actually been set */
+                            *has_value = priv->basic_props[i].has_value;
+                            if (*has_value == DONNA_NODE_VALUE_SET)
+                            {
+                                G_VALUE_LCOPY (&priv->basic_props[i].value,
+                                        va_args, 0, &err);
+                                if (err)
+                                    g_free (err);
+                                goto next;
+                            }
+                        }
+                        else
+                            g_rw_lock_reader_lock (&priv->props_lock);
+                        *has_value = DONNA_NODE_VALUE_ERROR;
+                    }
                     gpointer ptr;
                     ptr = va_arg (va_args, gpointer);
                 }
@@ -412,13 +436,43 @@ get_valist (DonnaNode   *node,
 
         /* other properties */
         prop = g_hash_table_lookup (props, (gpointer) name);
-        if (!prop || !prop->has_value)
+
+        if (!prop)
         {
             gpointer ptr;
 
-            *has_value = (prop)
-                ? DONNA_NODE_VALUE_NEED_REFRESH
-                : DONNA_NODE_VALUE_NONE;
+            *has_value = DONNA_NODE_VALUE_NONE;
+            ptr = va_arg (va_args, gpointer);
+        }
+        else if (!prop->has_value)
+        {
+            gpointer ptr;
+
+            if (is_blocking)
+            {
+                /* release the lock for refresher */
+                g_rw_lock_reader_unlock (&priv->props_lock);
+                if (prop->refresher (NULL /* no task */, node, name))
+                {
+                    g_rw_lock_reader_lock (&priv->props_lock);
+                    /* check if the value has actually been set. We can still
+                     * use prop because the property cannot be removed, so the
+                     * reference is still valid. */
+                    if (prop->has_value)
+                    {
+                        *has_value = DONNA_NODE_VALUE_SET;
+                        G_VALUE_LCOPY (&prop->value, va_args, 0, &err);
+                        if (err)
+                            g_free (err);
+                        goto next;
+                    }
+                }
+                else
+                    g_rw_lock_reader_lock (&priv->props_lock);
+                *has_value = DONNA_NODE_VALUE_ERROR;
+            }
+            else
+                *has_value = DONNA_NODE_VALUE_NEED_REFRESH;
             ptr = va_arg (va_args, gpointer);
         }
         else /* prop->has_value == TRUE */
@@ -431,7 +485,7 @@ get_valist (DonnaNode   *node,
 next:
         name = va_arg (va_args, gchar *);
     }
-    g_rw_lock_reader_unlock (&node->priv->props_lock);
+    g_rw_lock_reader_unlock (&priv->props_lock);
 }
 
 void

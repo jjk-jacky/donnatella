@@ -29,7 +29,8 @@ typedef enum
 {
     DONNA_NODE_VALUE_NONE = 0,
     DONNA_NODE_VALUE_NEED_REFRESH,
-    DONNA_NODE_VALUE_SET
+    DONNA_NODE_VALUE_SET,
+    DONNA_NODE_VALUE_ERROR
 } DonnaNodeHasValue;
 
 const gchar *node_basic_properties[] =
