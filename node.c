@@ -161,7 +161,6 @@ donna_node_new (DonnaProvider   *provider,
 {
     DonnaNode *node;
     DonnaNodePrivate *priv;
-    DonnaNodeProp *prop;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
     g_return_val_if_fail (location != NULL, NULL);
@@ -349,7 +348,6 @@ get_valist (DonnaNode   *node,
     DonnaNodePrivate *priv;
     GHashTable *props;
     const gchar *name;
-    gboolean *has_value;
 
     priv = node->priv;
     props = priv->props;
@@ -446,8 +444,7 @@ get_valist (DonnaNode   *node,
                             g_rw_lock_reader_lock (&priv->props_lock);
                         *has_value = DONNA_NODE_VALUE_ERROR;
                     }
-                    gpointer ptr;
-                    ptr = va_arg (va_args, gpointer);
+                    va_arg (va_args, gpointer);
                 }
                 goto next;
             }
@@ -458,15 +455,11 @@ get_valist (DonnaNode   *node,
 
         if (!prop)
         {
-            gpointer ptr;
-
             *has_value = DONNA_NODE_VALUE_NONE;
-            ptr = va_arg (va_args, gpointer);
+            va_arg (va_args, gpointer);
         }
         else if (!prop->has_value)
         {
-            gpointer ptr;
-
             if (is_blocking)
             {
                 /* release the lock for refresher */
@@ -492,7 +485,7 @@ get_valist (DonnaNode   *node,
             }
             else
                 *has_value = DONNA_NODE_VALUE_NEED_REFRESH;
-            ptr = va_arg (va_args, gpointer);
+            va_arg (va_args, gpointer);
         }
         else /* prop->has_value == TRUE */
         {
@@ -775,10 +768,9 @@ donna_node_refresh_task (DonnaNode   *node,
     data->node = g_object_ref (node);
     data->names = names;
 
-    return donna_task_new (node_refresh, data, (GDestroyNotify) free_refresh_data);
+    return donna_task_new ((task_fn) node_refresh, data,
+            (GDestroyNotify) free_refresh_data);
 }
-
-
 
 struct set_property
 {
@@ -827,7 +819,6 @@ donna_node_set_property_task (DonnaNode     *node,
 {
     DonnaNodePrivate *priv;
     DonnaNodeProp *prop;
-    DonnaTask *task;
     struct set_property *data;
     const gchar **s;
     gint i;
@@ -950,7 +941,6 @@ donna_node_set_property_value (DonnaNode     *node,
                                GValue        *value)
 {
     DonnaNodeProp *prop;
-    gboolean has_old_value = FALSE;
 
     g_return_if_fail (DONNA_IS_NODE (node));
     g_return_if_fail (name != NULL);
