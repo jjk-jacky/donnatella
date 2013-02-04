@@ -59,7 +59,7 @@ void    donna_provider_node_new_child               (DonnaProvider  *provider,
                                                      DonnaNode      *child);
 
 /* API */
-const gchar * donna_get_domain                      (DonnaProvider  *provider);
+const gchar * donna_provider_get_domain             (DonnaProvider  *provider);
 DonnaTask * donna_provider_get_node_task            (DonnaProvider  *provider,
                                                      const gchar    *location);
 DonnaTask * donna_provider_has_node_children_task   (DonnaProvider  *provider,

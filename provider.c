@@ -149,7 +149,7 @@ donna_provider_node_new_child (DonnaProvider  *provider,
 /* API */
 
 const gchar *
-donna_get_domain (DonnaProvider  *provider)
+donna_provider_get_domain (DonnaProvider  *provider)
 {
     DonnaProviderInterface *interface;
 

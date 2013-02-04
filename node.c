@@ -376,7 +376,7 @@ get_valist (DonnaNode   *node,
         else if (streq (name, "domain"))
         {
             s = va_arg (va_args, gchar **);
-            *s = priv->provider->domain;
+            *s = (gchar *) donna_provider_get_domain (priv->provider);
             goto next;
         }
         else if (streq (name, "location"))
