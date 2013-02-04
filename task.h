@@ -15,6 +15,7 @@ typedef enum
 
 typedef enum
 {
+    DONNA_TASK_PRIORITY_UNKNOWN,    /* donna_task_get_priority (not_a_task) */
     DONNA_TASK_PRIORITY_LOW,
     DONNA_TASK_PRIORITY_NORMAL,
     DONNA_TASK_PRIORITY_HIGH
@@ -22,7 +23,11 @@ typedef enum
 
 typedef enum
 {
-    /* task not started */
+    /* dona_task_get_state (not_a_task) */
+    DONNA_TASK_STATE_UNKNOWN,
+    /* task not started, no auto-start (by task manager) */
+    DONNA_TASK_STOPPED,
+    /* task not started, auto-start (by task manager) */
     DONNA_TASK_WAITING,
     /* function running */
     DONNA_TASK_RUNNING,
@@ -37,14 +42,20 @@ typedef enum
     DONNA_TASK_CANCELLED,
     DONNA_TASK_FAILED
 } DonnaTaskState;
+/* task hasn't ran yet */
+#define DONNA_TASK_PRE_RUN      (DONNA_TASK_STOPPED | DONNA_TASK_WAITING)
+/* task has ran */
+#define DONNA_TASK_POST_RUN     (DONNA_TASK_DONE | DONNA_TASK_CANCELLED \
+        | DONNA_TASK_FAILED)
 
-typedef DonnaTaskState  (*task_fn)          (DonnaTask  *task,
-                                             gpointer    data);
-typedef void            (*task_timeout_fn)  (DonnaTask  *task,
-                                             gpointer    data);
-typedef void            (*task_callback_fn) (DonnaTask  *task,
-                                             gboolean    timeout_called,
-                                             gpointer    data);
+typedef DonnaTaskState  (*task_fn)              (DonnaTask  *task,
+                                                 gpointer    data);
+typedef void            (*task_timeout_fn)      (DonnaTask  *task,
+                                                 gpointer    data);
+typedef void            (*task_callback_fn)     (DonnaTask  *task,
+                                                 gboolean    timeout_called,
+                                                 gpointer    data);
+typedef DonnaTask *     (*task_duplicate_fn)    (gpointer    data);
 
 struct _DonnaTask
 {
@@ -56,25 +67,71 @@ struct _DonnaTask
 struct _DonnaTaskClass
 {
     GObjectClass parent;
+
+    /* signals */
+    void            (*updated)                  (DonnaTask          *task,
+                                                 gboolean            new_progress,
+                                                 gdouble             progress,
+                                                 gboolean            new_status,
+                                                 gchar              *status);
+    void            (*new_state)                (DonnaTask          *task,
+                                                 DonnaTaskState      state);
+    void            (*new_priority)             (DonnaTask          *task,
+                                                 DonnaTaskPriority   priority);
 };
 
-DonnaTask *         donna_task_new              (gchar              *desc,
-                                                 task_fn             func,
+DonnaTask *         donna_task_new              (task_fn             func,
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
+DonnaTask *         donna_task_new_full         (task_fn             func,
                                                  gpointer            data,
                                                  GDestroyNotify      destroy,
+                                                 DonnaTaskUi        *taskui,
+                                                 gchar             **devices,
+                                                 DonnaTaskPriority   priority,
+                                                 gboolean            autostart,
+                                                 gchar              *desc);
+gboolean            donna_task_set_taskui       (DonnaTask          *task,
+                                                 DonnaTaskUi        *taskui);
+gboolean            donna_task_set_devices      (DonnaTask          *task,
+                                                 gchar             **devices);
+gboolean            donna_task_set_duplicator   (DonnaTask          *task,
+                                                 task_duplicate_fn   duplicate,
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
+
+gboolean            donna_task_set_desc         (DonnaTask          *task,
+                                                 gchar              *desc);
+gboolean            donna_task_set_priority     (DonnaTask          *task,
+                                                 DonnaTaskPriority   priority);
+gboolean            donna_task_set_autostart    (DonnaTask          *task,
+                                                 gboolean            autostart);
+gboolean            donna_task_set_callback     (DonnaTask          *task,
                                                  task_callback_fn    callback,
-                                                 gpointer            callback_data,
-                                                 GDestroyNotify      callback_destroy,
-                                                 guint               timeout_delay,
-                                                 task_timeout_fn     timeout_callback,
-                                                 gpointer            timeout_data,
-                                                 GDestroyNotify      timeout_destroy);
-void                donna_task_run              (DonnaTask          *task);
-void                donna_task_cancel           (DonnaTask          *task);
-void                donna_task_pause            (DonnaTask          *task);
-void                donna_task_resume           (DonnaTask          *task);
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
+gboolean            donna_task_set_timeout      (DonnaTask          *task,
+                                                 guint               delay,
+                                                 task_timeout_fn     timeout,
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
+
+gchar **            donna_task_get_devices      (DonnaTask          *task);
+DonnaTaskPriority   donna_task_get_priority     (DonnaTask          *task);
+gchar *             donna_task_get_desc         (DonnaTask          *task);
+DonnaTaskUi *       donna_task_get_taskui       (DonnaTask          *task);
+DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
+gdouble             donna_task_get_progress     (DonnaTask          *task);
+gchar *             donna_task_get_status       (DonnaTask          *task);
 const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);
+gboolean            donna_task_can_be_duplicated(DonnaTask          *task);
+DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task);
+void                donna_task_run              (DonnaTask          *task);
+void                donna_task_pause            (DonnaTask          *task);
+void                donna_task_resume           (DonnaTask          *task);
+void                donna_task_cancel           (DonnaTask          *task);
+
 int                 donna_task_get_fd           (DonnaTask          *task);
 gboolean            donna_task_is_cancelling    (DonnaTask          *task);
 void                donna_task_update           (DonnaTask          *task,
@@ -92,7 +149,7 @@ void                donna_task_take_error       (DonnaTask          *task,
                                                  GError             *error);
 void                donna_task_set_return_value (DonnaTask          *task,
                                                  const GValue       *value);
-GValue *            donna_task_grab_return_value (DonnaTask         *task);
+GValue *            donna_task_grab_return_value(DonnaTask          *task);
 void                donna_task_release_return_value (DonnaTask      *task);
 
 G_END_DECLS
