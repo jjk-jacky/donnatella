@@ -3,6 +3,7 @@
 #define __DONNA_TASK_H__
 
 #include "common.h"
+#include "taskui.h"
 
 G_BEGIN_DECLS
 

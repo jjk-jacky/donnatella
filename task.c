@@ -764,6 +764,7 @@ signal_updated_cb (gpointer data)
             su_data->status);
     g_free (su_data->status);
     g_slice_free (struct signal_updated_data, su_data);
+    return FALSE;
 }
 
 void
