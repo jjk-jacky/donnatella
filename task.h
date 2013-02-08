@@ -124,6 +124,7 @@ DonnaTaskUi *       donna_task_get_taskui       (DonnaTask          *task);
 DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
 gdouble             donna_task_get_progress     (DonnaTask          *task);
 gchar *             donna_task_get_status       (DonnaTask          *task);
+DonnaNode **        donna_task_get_nodes_for_selection (DonnaTask   *task);
 const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);
 gboolean            donna_task_can_be_duplicated(DonnaTask          *task);
@@ -141,6 +142,8 @@ void                donna_task_update           (DonnaTask          *task,
                                                  gboolean            has_status,
                                                  const gchar        *status_fmt,
                                                  ...);
+void                donna_task_set_nodes_for_selection (DonnaTask   *task,
+                                                 DonnaNode         **nodes);
 void                donna_task_set_error        (DonnaTask          *task,
                                                  GQuark              domain,
                                                  gint                code,

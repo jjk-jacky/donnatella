@@ -49,6 +49,8 @@ struct _DonnaTaskPrivate
     GCond                cond;
     /* fd that can be used to help handle cancel/pause stuff */
     int                  fd;
+    /* NULL-terminated array of nodes to be selected on List */
+    DonnaNode          **nodes_for_selection;
     /* to hold the return value */
     GValue              *value;
     /* to hold the error */
@@ -138,6 +140,7 @@ donna_task_init (DonnaTask *task)
     priv->state     = DONNA_TASK_WAITING;
     priv->devices   = NULL;
     priv->fd        = -1;
+    priv->nodes_for_selection = NULL;
     priv->value     = NULL;
     priv->error     = NULL;
     g_mutex_init (&priv->mutex);
@@ -145,6 +148,17 @@ donna_task_init (DonnaTask *task)
 }
 
 G_DEFINE_TYPE (DonnaTask, donna_task, G_TYPE_INITIALLY_UNOWNED)
+
+static void
+free_nodes_array (DonnaNode **nodes)
+{
+    DonnaNode **n;
+    if (!nodes)
+        return;
+    for (n = nodes; *n; ++n)
+        g_object_unref (*n);
+    g_free (nodes);
+}
 
 static void
 donna_task_finalize (GObject *object)
@@ -157,6 +171,7 @@ donna_task_finalize (GObject *object)
     g_free (priv->status);
     if (priv->fd >= 0)
         close (priv->fd);
+    free_nodes_array (priv->nodes_for_selection);
     if (priv->value)
     {
         g_value_unset (priv->value);
@@ -408,6 +423,13 @@ donna_task_get_status (DonnaTask *task)
     status = g_strdup (task->priv->status);
     UNLOCK_TASK (task);
     return status;
+}
+
+DonnaNode **
+donna_task_get_nodes_for_selection (DonnaTask *task)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), NULL);
+    return task->priv->nodes_for_selection;
 }
 
 const GError *
@@ -811,6 +833,14 @@ donna_task_update (DonnaTask    *task,
 
     /* emit signal updated in main thread */
     g_main_context_invoke (NULL, signal_updated_cb, su_data);
+}
+
+void
+donna_task_set_nodes_for_selection (DonnaTask *task, DonnaNode **nodes)
+{
+    g_return_if_fail (DONNA_IS_TASK (task));
+    free_nodes_array (task->priv->nodes_for_selection);
+    task->priv->nodes_for_selection = nodes;
 }
 
 void
