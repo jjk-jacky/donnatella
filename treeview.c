@@ -1,56 +1,82 @@
 
 #include <gtk/gtk.h>
-#include <string.h>
-#include <stdlib.h>
-#include "tree.h"
+#include "treeview.h"
+#include "common.h"
 #include "node.h"
 #include "task.h"
 
-struct _DonnaTreePrivate
+enum
 {
-    /* sorting options */
-    guint sort_dot_first : 1;
-    guint sort_special_first : 1;
-    guint sort_natural_order : 1;
+    DONNA_TREE_COL_NODE = 0,
+    DONNA_TREE_COL_EXPAND_STATE,
+    DONNA_TREE_COL_NAME,
+    DONNA_TREE_COL_ICON,
+    DONNA_TREE_COL_BOX,
+    DONNA_TREE_COL_HIGHLIGHT,
+    DONNA_TREE_NB_COLS
+};
 
+enum
+{
+    DONNA_LIST_COL_NODE = 0,
+    DONNA_LIST_NB_COLS
+};
+
+/* this column exists in both modes, and must have the same id */
+#define DONNA_TREEVIEW_COL_NODE     0
+
+typedef enum
+{
+    DONNA_TREEVIEW_EXPAND_NEVER = 0,
+    DONNA_TREEVIEW_EXPAND_WIP,
+    DONNA_TREEVIEW_EXPAND_PARTIAL,
+    DONNA_TREEVIEW_EXPAND_FULL
+} DonnaTreeViewExpand;
+
+struct _DonnaTreeViewPrivate
+{
+    DonnaTreeViewMode   mode;
+
+    /* both modes */
     /* show hidden places (.folders) */
     guint show_hidden : 1;
 
-    /* MiniTree mode */
+    /* mode Tree */
+    /* MiniTree */
     guint is_minitree : 1;
+    /* DonnaTreeViewSync */
+    guint sync : 2;
+
+    /* mode List */
 };
 
-static void     donna_tree_row_collapsed            (GtkTreeView    *treev,
+#define is_tree(tree)   (tree->priv->mode == DONNA_TREEVIEW_MODE_TREE)
+
+static void     donna_treeview_row_collapsed        (GtkTreeView    *tree,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
 
-G_DEFINE_TYPE (DonnaTree, donna_tree, GTK_TYPE_TREE_VIEW);
+G_DEFINE_TYPE (DonnaTreeView, donna_treeview, GTK_TYPE_TREE_VIEW);
 
 static void
-donna_tree_class_init (DonnaTreeClass *klass)
+donna_treeview_class_init (DonnaTreeViewClass *klass)
 {
     GtkTreeViewClass *tv_class;
 
     tv_class = GTK_TREE_VIEW_CLASS (klass);
-    tv_class->row_collapsed = donna_tree_row_collapsed;
+    tv_class->row_collapsed = donna_treeview_row_collapsed;
 //    tv_class->test_expand_row = fn;
 
-    g_type_class_add_private (klass, sizeof (DonnaTreePrivate));
+    g_type_class_add_private (klass, sizeof (DonnaTreeViewPrivate));
 }
 
 static void
-donna_tree_init (DonnaTree *tree)
+donna_treeview_init (DonnaTreeView *tv)
 {
-    DonnaTreePrivate *priv;
+    DonnaTreeViewPrivate *priv;
 
-    priv = tree->priv = G_TYPE_INSTANCE_GET_PRIVATE (tree, DONNA_TYPE_TREE,
-            DonnaTreePrivate);
-
-    priv->sort_dot_first     = 1;
-    priv->sort_special_first = 1;
-    priv->sort_natural_order = 1;
-    priv->show_hidden        = 0;
-    priv->is_minitree        = 0;
+    priv = tv->priv = G_TYPE_INSTANCE_GET_PRIVATE (tv, DONNA_TYPE_TREEVIEW,
+            DonnaTreeViewPrivate);
 }
 
 static gboolean
@@ -58,20 +84,20 @@ visible_func (GtkTreeModel  *_model,
               GtkTreeIter   *_iter,
               gpointer       data)
 {
-    DonnaTreePrivate *priv;
+    DonnaTreeViewPrivate *priv;
     DonnaNode *node;
     gchar *name;
     gboolean ret;
 
-    priv = DONNA_TREE (data)->priv;
+    priv = DONNA_TREEVIEW (data)->priv;
     if (priv->show_hidden)
         return TRUE;
 
-    gtk_tree_model_get (_model, _iter, DONNA_TREE_COL_NODE, &node, -1);
+    gtk_tree_model_get (_model, _iter, DONNA_TREEVIEW_COL_NODE, &node, -1);
     if (!node)
         return FALSE;
 
-    donna_node_get (node, "name", &name, NULL);
+    donna_node_get (node, FALSE, "name", &name, NULL);
     ret = *name != '.';
     g_free (name);
     g_object_unref (node);
@@ -80,7 +106,7 @@ visible_func (GtkTreeModel  *_model,
 }
 
 static void
-donna_tree_row_collapsed (GtkTreeView   *treev,
+donna_tree_row_collapsed (GtkTreeView   *tree,
                           GtkTreeIter   *_iter,
                           GtkTreePath   *_path)
 {
@@ -90,7 +116,7 @@ donna_tree_row_collapsed (GtkTreeView   *treev,
      * scrollbar anymore, it remains there.
      * Since we only have one column, we trigger an autosize to get rid of the
      * horizontal scrollbar (or adjust its size) */
-    gtk_tree_view_columns_autosize (treev);
+    gtk_tree_view_columns_autosize (tree);
 }
 
 static void
