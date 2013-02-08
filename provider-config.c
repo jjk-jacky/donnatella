@@ -25,23 +25,15 @@ struct extra
 {
     enum extra_type   type;
     /* NULL-terminated array of values to present as choices. LIST_INT should be
-     * of form "x:string" where x is the integer value */
+     * of form "n:string" where n is the integer value */
     gchar           **values;
-};
-
-struct group
-{
-    /* name of the option/group, because the key in the hashtable is child */
-    gchar       *option;
-    /* name of the option to use when listing children. Defaults to name */
-    gchar       *name;
-    /* if TRUE we don't use name above, and use a dynamic counter */
-    gboolean     is_indexed;
 };
 
 struct option
 {
-    /* priv->groups if a group; NULL for standard (bool, int, etc) types, else
+    /* name of the option */
+    gchar       *name;
+    /* priv->root if a category; NULL for standard (bool, int, etc) types, else
      * the key to search for in priv->extras */
     gpointer     extra;
     /* the actual value, or a pointer to the struct group if extra ==
@@ -55,10 +47,8 @@ struct _DonnaProviderConfigPrivate
 {
     /* extra formats of options (list, list-int, etc) */
     GHashTable  *extras;
-    /* groups are a block of options making an "object" : columns, etc */
-    GHashTable  *groups;
-    /* all existing options */
-    GHashTable  *options;
+    /* root of config */
+    GNode       *root;
 };
 
 static void             provider_config_finalize    (GObject    *object);
@@ -81,8 +71,7 @@ static DonnaTask *      provider_config_remove_node_task (
 
 
 static void free_extra  (struct extra  *extra);
-static void free_group  (struct group  *group);
-static void free_option (struct option *option);
+static void free_option (GNode *root, struct option *option);
 
 static void
 provider_config_provider_init (DonnaProviderInterface *interface)
@@ -108,16 +97,16 @@ static void
 donna_provider_config_init (DonnaProviderConfig *provider)
 {
     DonnaProviderConfigPrivate *priv;
+    struct option *option;
 
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_CONFIG,
             DonnaProviderConfigPrivate);
     priv->extras = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_extra);
-    priv->groups = g_hash_table_new_full (g_str_hash, g_str_equal,
-            g_free, (GDestroyNotify) free_group);
-    priv->options = g_hash_table_new_full (g_str_hash, g_str_equal,
-            g_free, (GDestroyNotify) free_option);
+    option = g_new0 (struct option, 1);
+    priv->root = g_node_new (option);
+    option->extra = priv->root;
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
@@ -135,23 +124,25 @@ free_extra (struct extra *extra)
 }
 
 static void
-free_group (struct group *group)
-{
-    if (!group)
-        return;
-    g_free (group->name);
-    g_free (group->option);
-    g_free (group);
-}
-
-static void
-free_option (struct option *option)
+free_option (GNode *root, struct option *option)
 {
     if (!option)
         return;
-    g_free (option->extra);
+    g_free (option->name);
+    if (option->extra != root)
+    {
+        g_free (option->extra);
+        g_value_unset (&option->value);
+    }
     g_object_unref (option->node);
     g_free (option);
+}
+
+static gboolean
+free_node (GNode *node, gpointer data)
+{
+    free_option (data, node->data);
+    return FALSE;
 }
 
 static void
@@ -162,8 +153,9 @@ provider_config_finalize (GObject *object)
     priv = DONNA_PROVIDER_CONFIG (object)->priv;
 
     g_hash_table_destroy (priv->extras);
-    g_hash_table_destroy (priv->groups);
-    g_hash_table_destroy (priv->options);
+    g_node_traverse (priv->root, G_IN_ORDER, G_TRAVERSE_ALL, -1, free_node,
+            priv->root);
+    g_node_destroy (priv->root);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_config_parent_class)->finalize (object);
@@ -442,85 +434,77 @@ donna_config_load_config_def (DonnaProviderConfig *config, gchar *data)
 
             g_hash_table_insert (priv->extras, g_strdup (section->name), extra);
         }
-        else if (streq (s, "group"))
-        {
-            struct parsed_data *parsed;
-            struct group *group;
-            struct option *option;
-            gchar *child = NULL;
-
-            if (g_hash_table_contains (priv->options, section->name))
-            {
-                /* all we know is that an option already exists by that name,
-                 * but this function is supposed to be called prior to loading
-                 * the config, so the only options that can exist at this point
-                 * are, indeed, groups */
-                g_warning ("Cannot define group '%s', group already exists",
-                        section->name);
-                continue;
-            }
-
-            group = g_new0 (struct group, 1);
-            group->option = g_strdup (section->name);
-            for (parsed = section->value; parsed; parsed = parsed->next)
-            {
-                if (streq (parsed->name, "name"))
-                    if (!group->name)
-                        group->name = g_strdup (parsed->value);
-                    else
-                        g_warning ("Cannot redefine option '%s' for group '%s'",
-                                parsed->name, group->option);
-                else if (streq (parsed->name, "child"))
-                    if (!child)
-                        child = g_strdup (parsed->value);
-                    else
-                        g_warning ("Cannot redefine option '%s' for group '%s'",
-                                parsed->name, group->option);
-                else if (streq (parsed->name, "indexed"))
-                    group->is_indexed = streq (parsed->value, "1");
-                else if (!streq (parsed->name, "type"))
-                    g_warning ("Invalid option '%s' in definition of group '%s'",
-                            parsed->name, section->name);
-            }
-
-            if (!child)
-            {
-                size_t len;
-
-                /* defaults to the name of the group */
-                child = g_strdup (group->option);
-                /* minus the last "s" if there's one */
-                len = strlen (child) - 1;
-                if (child[len] == 's')
-                    child[len] = '\0';
-            }
-
-            /* now that we know the child, make sure it isn't already used */
-            if (g_hash_table_contains (priv->groups, child))
-            {
-                g_warning ("Cannot use '%s' as child for group '%s', already in use",
-                        child, section->name);
-                g_free (child);
-                free_group (group);
-                continue;
-            }
-
-            g_hash_table_insert (priv->groups, child, group);
-
-            /* create an option for the group (via provider, it lists all the
-             * "items" in the group) */
-            option = g_new0 (struct option, 1);
-            option->extra = priv->groups;
-            g_value_init (&option->value, G_TYPE_POINTER);
-            g_value_set_pointer (&option->value, group);
-            g_hash_table_insert (priv->options, g_strdup (group->option), option);
-        }
         else
             g_warning ("Unknown type '%s' for definition '%s'", s, section->name);
     }
 
     free_parsed_data_section (first_section);
     g_free (data);
+    return TRUE;
+}
+
+static inline GNode *
+get_child_node (GNode *parent, gchar *name)
+{
+    GNode *node;
+
+    for (node = parent->children; node; node = node->next)
+        if (streq (g_value_get_string (&((struct option *) node->data)->value),
+                    name))
+            return node;
+
+    return NULL;
+}
+
+static gboolean
+ensure_categories (DonnaProviderConfig *config, gchar *name)
+{
+    GNode *root;
+    GNode *parent;
+    GNode *node;
+    gchar *s;
+
+    /* skip the main root, if specified */
+    if (*name == '/')
+        ++name;
+
+    parent = root = config->priv->root;
+    for (;;)
+    {
+        s = strchr (name, '/');
+        if (s)
+            *s = '\0';
+
+        node = get_child_node (parent, name);
+        if (node)
+            /* make sure it's a category */
+            if (!(((struct option *) node->data)->extra == root))
+            {
+                if (s)
+                    *s = '/';
+                return FALSE;
+            }
+        else
+        {
+            /* create category/node */
+            struct option *option;
+
+            option = g_new0 (struct option, 1);
+            option->name = g_strdup (name);
+            option->extra = root;
+            node = g_node_append_data (parent, option);
+        }
+
+        if (s)
+        {
+            *s = '/';
+            name = s + 1;
+            parent = node;
+        }
+        else
+            break;
+    }
+
     return TRUE;
 }
 
