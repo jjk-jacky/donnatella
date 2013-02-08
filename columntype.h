@@ -2,6 +2,7 @@
 #ifndef __DONNA_COLUMNTYPE_H__
 #define __DONNA_COLUMNTYPE_H__
 
+#include <gtk/gtk.h>
 #include "common.h"
 
 G_BEGIN_DECLS
@@ -16,12 +17,22 @@ typedef struct _DonnaColumnTypeInterface    DonnaColumnTypeInterface;
 
 GType           donna_columntype_get_type   (void) G_GNUC_CONST;
 
+/* name of the "fake" groups in which options will be placed in data, to allow
+ * easy parsing using g_key_file_* API */
+#define DONNA_COLUMNTYPE_OPTIONS_GROUP      "options"
+
 typedef struct
 {
-    gchar           *type;
-    gpointer         data;
-    GDestroyNotify   destroy;
+    gchar           type;
+    gpointer        data;
+    GDestroyNotify  destroy;
 } DonnaRenderer;
+
+#define DONNA_COLUMNTYPE_RENDERER_TEXT      't'
+#define DONNA_COLUMNTYPE_RENDERER_PIXBUF    'p'
+#define DONNA_COLUMNTYPE_RENDERER_PROGRESS  'P'
+#define DONNA_COLUMNTYPE_RENDERER_COMBO     'c'
+#define DONNA_COLUMNTYPE_RENDERER_TOGGLE    'T'
 
 struct _DonnaColumnTypeInterface
 {
@@ -30,13 +41,16 @@ struct _DonnaColumnTypeInterface
     /* virtual table */
     gpointer            (*parse_options)    (DonnaColumnType    *ct,
                                              gchar              *data);
-    DonnaRenderer **    (*get_renderers)    (DonnaColumnType    *ct,
+    void                (*free_options)     (DonnaColumnType    *ct,
                                              gpointer            options);
+    gint                (*get_renderers)    (DonnaColumnType    *ct,
+                                             gpointer            options,
+                                             DonnaRenderer     **renderers);
     void                (*render)           (DonnaColumnType    *ct,
                                              gpointer            options,
                                              DonnaNode          *node,
-                                             GtkCellRenderer    *renderer,
-                                             gpointer            data);
+                                             gpointer            data,
+                                             GtkCellRenderer    *renderer);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
                                              gpointer            options);
     gboolean            (*handle_context)   (DonnaColumnType    *ct,
@@ -55,13 +69,16 @@ struct _DonnaColumnTypeInterface
 
 gpointer        donna_columntype_parse_options  (DonnaColumnType    *ct,
                                                  gchar              *data);
-DonnaRenderer **donna_columntype_get_renderers  (DonnaColumnType    *ct,
+void            donna_columntype_free_options   (DonnaColumnType    *ct,
                                                  gpointer            options);
+gint            donna_columntype_get_renderers  (DonnaColumnType    *ct,
+                                                 gpointer            options,
+                                                 DonnaRenderer     **renderers);
 void            donna_columntype_render         (DonnaColumnType    *ct,
                                                  gpointer            options,
                                                  DonnaNode          *node,
-                                                 GtkCellRenderer    *renderer,
-                                                 gpointer            data);
+                                                 gpointer            data,
+                                                 GtkCellRenderer    *renderer);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  gpointer            options);
 gboolean        donna_columntype_handle_context (DonnaColumnType    *ct,

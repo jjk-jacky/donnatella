@@ -1,5 +1,4 @@
 
-#include <gtk/gtk.h>
 #include "columntype.h"
 
 static void
@@ -24,28 +23,45 @@ donna_columntype_parse_options (DonnaColumnType *ct, gchar *data)
     return (*interface->parse_options) (ct, data);
 }
 
-DonnaRenderer **
-donna_columntype_get_renderers (DonnaColumnType    *ct,
-                                gpointer            options)
+void
+donna_columntype_free_options (DonnaColumnType *ct, gpointer options)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_if_fail (DONNA_IS_COLUMNTYPE (ct));
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
-    g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_renderers != NULL, NULL);
+    g_return_if_fail (interface != NULL);
+    g_return_if_fail (interface->free_options != NULL);
 
-    return (*interface->get_renderers) (ct, options);
+    if (options)
+        return (*interface->free_options) (ct, options);
+}
+
+gint
+donna_columntype_get_renderers (DonnaColumnType  *ct,
+                                gpointer          options,
+                                DonnaRenderer   **renderers)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, 0);
+    g_return_val_if_fail (interface->get_renderers != NULL, 0);
+
+    return (*interface->get_renderers) (ct, options, renderers);
 }
 
 void
 donna_columntype_render (DonnaColumnType    *ct,
                          gpointer            options,
                          DonnaNode          *node,
-                         GtkCellRenderer    *renderer,
-                         gpointer            data)
+                         gpointer            data,
+                         GtkCellRenderer    *renderer)
 {
     DonnaColumnTypeInterface *interface;
 
