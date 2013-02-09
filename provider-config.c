@@ -55,6 +55,8 @@ struct _DonnaProviderConfigPrivate
     GHashTable  *extras;
     /* root of config */
     GNode       *root;
+    /* config lock */
+    GRWLock      lock;
 };
 
 static void             provider_config_finalize    (GObject    *object);
@@ -118,6 +120,7 @@ donna_provider_config_init (DonnaProviderConfig *provider)
     g_value_set_int (&option->value, 1);
     priv->root = g_node_new (option);
     option->extra = priv->root;
+    g_rw_lock_init (&priv->lock);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
@@ -176,6 +179,7 @@ provider_config_finalize (GObject *object)
     g_node_traverse (priv->root, G_IN_ORDER, G_TRAVERSE_ALL, -1, free_node,
             priv->root);
     g_node_destroy (priv->root);
+    g_rw_lock_clear (&priv->lock);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_config_parent_class)->finalize (object);
@@ -516,6 +520,7 @@ donna_config_load_config_def (DonnaProviderConfig *config, gchar *data)
     return TRUE;
 }
 
+/* assumes a lock on config */
 static inline GNode *
 get_child_node (GNode *parent, gchar *name)
 {
@@ -529,6 +534,7 @@ get_child_node (GNode *parent, gchar *name)
     return NULL;
 }
 
+/* assumes a writer lock on config */
 static GNode *
 ensure_categories (DonnaProviderConfig *config, gchar *name)
 {
@@ -662,6 +668,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
     re_uint     = g_regex_new ("^[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
     re_double   = g_regex_new ("^[0-9]+\\.[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
 
+    g_rw_lock_writer_lock (&priv->lock);
     for (section = first_section; section; section = section->next)
     {
         struct parsed_data *parsed;
@@ -833,6 +840,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
             }
         }
     }
+    g_rw_lock_writer_unlock (&priv->lock);
 
     g_regex_unref (re_int);
     g_regex_unref (re_uint);
