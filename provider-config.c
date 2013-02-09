@@ -42,7 +42,8 @@ struct option
      * the key to search for in priv->extras */
     gpointer     extra;
     /* the actual value, or a pointer to the struct group if extra ==
-     * priv->groups */
+     * priv->groups. An int for categories, the next index to use when
+     * auto-creating subcategories (e.g. for "arrangements/" and such) */
     GValue       value;
     /* if the node is loaded, else NULL */
     DonnaNode   *node;
@@ -110,6 +111,11 @@ donna_provider_config_init (DonnaProviderConfig *provider)
     priv->extras = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_extra);
     option = g_new0 (struct option, 1);
+    /* categories hold the next index for auto-creation of subcategories. It
+     * shouldn't be used on root, doesn't make much sense, but this avoids
+     * special cases for that & free-ing stuff */
+    g_value_init (&option->value, G_TYPE_INT);
+    g_value_set_int (&option->value, 1);
     priv->root = g_node_new (option);
     option->extra = priv->root;
 }
@@ -146,10 +152,8 @@ free_option (GNode *root, struct option *option)
         return;
     g_free (option->name);
     if (option->extra != root)
-    {
         g_free (option->extra);
-        g_value_unset (&option->value);
-    }
+    g_value_unset (&option->value);
     g_object_unref (option->node);
     g_free (option);
 }
@@ -538,32 +542,62 @@ ensure_categories (DonnaProviderConfig *config, gchar *name)
         ++name;
 
     parent = root = config->priv->root;
+    /* if name is "/" there's nothing to check, the config root exists */
+    if (*name == '\0')
+        return root;
+
     for (;;)
     {
         s = strchr (name, '/');
         if (s)
             *s = '\0';
 
-        node = get_child_node (parent, name);
-        if (node)
+        /* string ended with / i.e. we should auto-create a new category */
+        if (*name == '\0')
         {
-            /* make sure it's a category */
-            if (((struct option *) node->data)->extra != root)
-            {
-                if (s)
-                    *s = '/';
-                return NULL;
-            }
+            struct option *option;
+            gint i;
+
+            /* the GValue for categories hold an integer value with the next
+             * index to use for such cases */
+            option = parent->data;
+            i = g_value_get_int (&option->value);
+            g_value_set_int (&option->value, ++i);
+
+            option = g_new0 (struct option, 1);
+            option->name = g_strdup_printf ("%d", i);
+            option->extra = root;
+            g_value_init (&option->value, G_TYPE_INT);
+            g_value_set_int (&option->value, 1);
+            node = g_node_append_data (parent, option);
         }
         else
         {
-            /* create category/node */
-            struct option *option;
+            node = get_child_node (parent, name);
+            if (node)
+            {
+                /* make sure it's a category */
+                if (((struct option *) node->data)->extra != root)
+                {
+                    if (s)
+                        *s = '/';
+                    return NULL;
+                }
+            }
+            else
+            {
+                /* create category/node */
+                struct option *option;
 
-            option = g_new0 (struct option, 1);
-            option->name = g_strdup (name);
-            option->extra = root;
-            node = g_node_append_data (parent, option);
+                option = g_new0 (struct option, 1);
+                option->name = g_strdup (name);
+                option->extra = root;
+                /* category hold an index, next number to use for auto-creating
+                 * sub-categories. (See above) */
+                g_value_init (&option->value, G_TYPE_INT);
+                g_value_set_int (&option->value, 1);
+                node = g_node_append_data (parent, option);
+            }
         }
 
         if (s)
