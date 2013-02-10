@@ -8,6 +8,12 @@
 
 G_BEGIN_DECLS
 
+#define DONNA_PROVIDER_ERROR        g_quark_from_static_string ("DonnaProvider-Error")
+typedef enum
+{
+    DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+} DonnaProviderError;
+
 struct _DonnaProviderInterface
 {
     GTypeInterface parent;
