@@ -92,7 +92,7 @@ typedef enum
 typedef gboolean    (*refresher_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
                                      const gchar    *name);
-typedef gboolean    (*setter_fn)    (DonnaTask      *task,
+typedef DonnaTaskState (*setter_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
                                      const gchar    *name,
                                      const GValue   *value);
@@ -139,7 +139,7 @@ DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
                                                  GError            **error);
 void            donna_node_set_property_value   (DonnaNode          *node,
                                                  const gchar        *name,
-                                                 GValue             *value);
+                                                 const GValue       *value);
 int             donna_node_inc_toggle_count (DonnaNode              *node);
 int             donna_node_dec_toggle_count (DonnaNode              *node);
 

@@ -360,6 +360,7 @@ get_valist (DonnaNode   *node,
     {
         DonnaNodeProp     *prop;
         DonnaNodeHasValue *has_value;
+        GValue *value;
         gchar **s;
         gint i;
         gchar *err = NULL;
@@ -454,13 +455,11 @@ get_valist (DonnaNode   *node,
         }
 
         /* other properties */
+        value = va_arg (va_args, GValue *);
         prop = g_hash_table_lookup (props, (gpointer) name);
 
         if (!prop)
-        {
             *has_value = DONNA_NODE_VALUE_NONE;
-            va_arg (va_args, gpointer);
-        }
         else if (!prop->has_value)
         {
             if (is_blocking)
@@ -476,9 +475,8 @@ get_valist (DonnaNode   *node,
                     if (prop->has_value)
                     {
                         *has_value = DONNA_NODE_VALUE_SET;
-                        G_VALUE_LCOPY (&prop->value, va_args, 0, &err);
-                        if (err)
-                            g_free (err);
+                        g_value_init (value, G_VALUE_TYPE (&prop->value));
+                        g_value_copy (&prop->value, value);
                         goto next;
                     }
                 }
@@ -488,14 +486,12 @@ get_valist (DonnaNode   *node,
             }
             else
                 *has_value = DONNA_NODE_VALUE_NEED_REFRESH;
-            va_arg (va_args, gpointer);
         }
         else /* prop->has_value == TRUE */
         {
             *has_value = DONNA_NODE_VALUE_SET;
-            G_VALUE_LCOPY (&prop->value, va_args, 0, &err);
-            if (err)
-                g_free (err);
+            g_value_init (value, G_VALUE_TYPE (&prop->value));
+            g_value_copy (&prop->value, value);
         }
 next:
         name = va_arg (va_args, gchar *);
@@ -941,7 +937,7 @@ donna_node_set_property_task (DonnaNode     *node,
 void
 donna_node_set_property_value (DonnaNode     *node,
                                const gchar   *name,
-                               GValue        *value)
+                               const GValue  *value)
 {
     DonnaNodeProp *prop;
 
