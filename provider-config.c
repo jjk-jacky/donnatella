@@ -57,6 +57,8 @@ struct _DonnaProviderConfigPrivate
     GNode       *root;
     /* config lock */
     GRWLock      lock;
+    /* a recursive mutex to handle (toggle ref) nodes */
+    GRecMutex    nodes_mutex;
 };
 
 static void             provider_config_finalize    (GObject    *object);
@@ -121,6 +123,7 @@ donna_provider_config_init (DonnaProviderConfig *provider)
     priv->root = g_node_new (option);
     option->extra = priv->root;
     g_rw_lock_init (&priv->lock);
+    g_rec_mutex_init (&priv->nodes_mutex);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
@@ -180,6 +183,7 @@ provider_config_finalize (GObject *object)
             priv->root);
     g_node_destroy (priv->root);
     g_rw_lock_clear (&priv->lock);
+    g_rec_mutex_clear (&priv->nodes_mutex);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_config_parent_class)->finalize (object);
@@ -529,7 +533,7 @@ get_child_node (GNode *parent, gchar *name)
     GNode *node;
 
     for (node = parent->children; node; node = node->next)
-        if (streq (g_value_get_string (&((struct option *) node->data)->value),
+        if (streq (((struct option *) node->data)->name,
                     name))
             return node;
 
@@ -819,7 +823,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                 /* string */
                 else
                 {
-                    size_t len;
+                    gsize len;
                     gchar *v = parsed->value;
 
                     /* remove quotes for quoted values */
@@ -856,8 +860,8 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
 /*** ACCESSING CONFIGURATION ***/
 
 /* assumes reader lock on config */
-static struct option *
-get_option (GNode *root, gchar *name)
+static GNode *
+get_option_node (GNode *root, gchar *name)
 {
     GNode *node;
     gchar *s;
@@ -898,7 +902,20 @@ get_option (GNode *root, gchar *name)
             break;
     }
 
-    return (struct option *) node->data;
+    return node;
+}
+
+/* assumes reader lock on config */
+static inline struct option *
+get_option (GNode *root, gchar *name)
+{
+    GNode *node;
+
+    node = get_option_node (root, name);
+    if (node)
+        return (struct option *) node->data;
+    else
+        return NULL;
 }
 
 #define _get_option(type, get_value)    do      {                       \
@@ -1010,7 +1027,16 @@ donna_config_get_string (DonnaProviderConfig    *config,
         ret = TRUE;                                                     \
     }                                                                   \
     if (ret)                                                            \
+    {                                                                   \
         value_set (&option->value, value);                              \
+        if (g_object_ref (option->node))                                \
+        {                                                               \
+            donna_node_set_property_value (option->node,                \
+                    "option-value",                                     \
+                    &option->value);                                    \
+            g_object_unref (option->node);                              \
+        }                                                               \
+    }                                                                   \
     g_rw_lock_writer_unlock (&priv->lock);                              \
                                                                         \
     return ret;                                                         \
@@ -1134,4 +1160,289 @@ donna_config_remove_category (DonnaProviderConfig    *config,
                               gchar                  *name)
 {
     return _remove_option (config, name, TRUE);
+}
+
+/*** PROVIDER INTERFACE ***/
+
+static gboolean
+node_prop_refresher (DonnaTask   *task,
+                     DonnaNode   *node,
+                     const gchar *name)
+{
+    /* config is always up-to-date */
+    return TRUE;
+}
+
+static DonnaTaskState
+node_prop_setter (DonnaTask     *task,
+                  DonnaNode     *node,
+                  const gchar   *name,
+                  const GValue  *value)
+{
+    DonnaProvider *provider;
+    DonnaProviderConfigPrivate *priv;
+    struct option *option;
+    gchar *location;
+    gboolean is_set_value;
+
+    is_set_value = streq (name, "option-value");
+    if (is_set_value || streq (name, "name"))
+    {
+        donna_node_get (node, FALSE,
+                "provider", &provider,
+                "location", &location,
+                NULL);
+        if (G_UNLIKELY (!DONNA_IS_PROVIDER_CONFIG (provider)))
+        {
+            const gchar *domain;
+
+            donna_node_get (node, FALSE, "domain", &domain, NULL);
+            g_warning ("Property setter of 'config' was called on a wrong node: '%s:%s'",
+                    domain, location);
+
+            donna_task_set_error (task, DONNA_NODE_ERROR,
+                    DONNA_NODE_ERROR_OTHER,
+                    "Wrong provider");
+            g_object_unref (provider);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+        priv = DONNA_PROVIDER_CONFIG (provider)->priv;
+
+        g_rw_lock_writer_lock (&priv->lock);
+        option = get_option (priv->root, location);
+        if (!option)
+        {
+            g_warning ("Unable to find option '%s' while trying to change its value through the associated node",
+                    location);
+
+            donna_task_set_error (task, DONNA_NODE_ERROR,
+                    DONNA_NODE_ERROR_NOT_FOUND,
+                    "Option '%s' does not exists",
+                    location);
+            g_object_unref (provider);
+            g_free (location);
+            g_rw_lock_writer_unlock (&priv->lock);
+            return DONNA_TASK_FAILED;
+        }
+
+        if (G_UNLIKELY (!G_VALUE_HOLDS (value,
+                        (is_set_value) ? G_VALUE_TYPE (&option->value)
+                        : G_TYPE_STRING)))
+        {
+            donna_task_set_error (task, DONNA_NODE_ERROR,
+                    DONNA_NODE_ERROR_INVALID_TYPE,
+                    (is_set_value) ? "Option '%s' is of type '%s', value passed is '%s'"
+                    : "Property '%s' is of type '%s', value passed if '%s'",
+                    (is_set_value) ? location : "name",
+                    g_type_name ((is_set_value) ? G_VALUE_TYPE (&option->value)
+                        : G_TYPE_STRING),
+                    g_type_name (G_VALUE_TYPE (value)));
+            g_object_unref (provider);
+            g_free (location);
+            g_rw_lock_writer_unlock (&priv->lock);
+            return DONNA_TASK_FAILED;
+        }
+
+        if (is_set_value)
+            /* set the new value */
+            g_value_copy (value, &option->value);
+        else
+        {
+            /* rename option */
+            g_free (option->name);
+            option->name = g_value_dup_string (value);
+        }
+        g_rw_lock_writer_unlock (&priv->lock);
+
+        /* update the node */
+        donna_node_set_property_value (node, (is_set_value) ? name : "name", value);
+
+        g_object_unref (provider);
+        g_free (location);
+        return DONNA_TASK_DONE;
+    }
+
+    /* should never happened, since the only WRITABLE properties on our nodes
+     * are the ones dealt with above */
+    return DONNA_TASK_FAILED;
+}
+
+struct get_node_data
+{
+    DonnaProviderConfig *config;
+    gchar               *location;
+};
+
+static void
+free_get_node_data (struct get_node_data *data)
+{
+    g_object_unref (data->config);
+    g_free (data->location);
+    g_slice_free (struct get_node_data, data);
+}
+
+static void
+node_toggle_ref_cb (DonnaProviderConfig *config,
+                    DonnaNode           *node,
+                    gboolean             is_last)
+{
+    int c;
+
+    g_rec_mutex_lock (&config->priv->nodes_mutex);
+    if (is_last)
+    {
+        GNode *gnode;
+        gchar *location;
+
+        c = donna_node_dec_toggle_count (node);
+        if (c > 0)
+        {
+            g_rec_mutex_unlock (&config->priv->nodes_mutex);
+            return;
+        }
+        donna_node_get (node, FALSE, "location", &location, NULL);
+        gnode = get_option_node (config->priv->root, location);
+        if (G_UNLIKELY (!gnode))
+            g_warning ("Unable to find option '%s' while processing toggle_ref for the associated node",
+                    location);
+        else
+            ((struct option *) gnode->data)->node = NULL;
+        g_rec_mutex_unlock (&config->priv->nodes_mutex);
+        g_object_unref (node);
+        g_free (location);
+    }
+    else
+    {
+        donna_node_inc_toggle_count (node);
+        g_rec_mutex_unlock (&config->priv->nodes_mutex);
+    }
+}
+
+static DonnaTaskState
+return_option_node (DonnaTask *task, struct get_node_data *data)
+{
+    DonnaProviderConfigPrivate *priv;
+    GNode *gnode;
+    struct option *option;
+    GValue *value;
+    gboolean node_created = FALSE;
+
+    priv = data->config->priv;
+
+    g_rw_lock_reader_lock (&priv->lock);
+    gnode = get_option_node (priv->root, data->location);
+    if (!gnode)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Option '%s' does not exists",
+                data->location);
+        g_rw_lock_reader_unlock (&priv->lock);
+        return DONNA_TASK_FAILED;
+    }
+    option = gnode->data;
+
+    g_rec_mutex_lock (&priv->nodes_mutex);
+    if (!option->node)
+    {
+        /* we need to create the node */
+        option->node = donna_node_new (DONNA_PROVIDER (data->config),
+                data->location,
+                (option->extra == priv->root) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+                node_prop_refresher,
+                node_prop_setter,
+                option->name,
+                NULL /* no icon */,
+                DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_NAME_WRITABLE);
+
+        /* if an option, add some properties */
+        if (option->extra != priv->root)
+        {
+            /* is this an extra? */
+            if (option->extra)
+            {
+                GValue val = G_VALUE_INIT;
+
+                g_value_init (&val, G_TYPE_STRING);
+                g_value_set_string (&val, option->extra);
+                donna_node_add_property (option->node,
+                        "option-extra",
+                        G_TYPE_STRING,
+                        &val,
+                        node_prop_refresher,
+                        NULL /* no setter */,
+                        NULL);
+                g_value_unset (&val);
+            }
+
+            /* add the value of the option */
+            donna_node_add_property (option->node,
+                    "option-value",
+                    G_VALUE_TYPE (&option->value),
+                    &option->value,
+                    node_prop_refresher,
+                    node_prop_setter,
+                    NULL);
+        }
+
+        /* add a toggleref, so when we have the last reference on the node, we
+         * can let it go (Note: this adds a (strong) reference to node) */
+        g_object_add_toggle_ref (G_OBJECT (option->node),
+                (GToggleNotify) node_toggle_ref_cb,
+                data->config);
+        node_created = TRUE;
+    }
+    g_rec_mutex_unlock (&priv->nodes_mutex);
+
+    /* set node as return value */
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_OBJECT);
+    if (node_created)
+        /* if the node was just created, adding the toggle_ref took a strong
+         * reference on it, so we just send this extra ref to the task */
+        g_value_take_object (value, option->node);
+    else
+        g_value_set_object (value, option->node);
+    donna_task_release_return_value (task);
+
+    g_rw_lock_reader_unlock (&priv->lock);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTask *
+provider_config_get_node_task (DonnaProvider       *provider,
+                               const gchar         *location)
+{
+    struct get_node_data *data;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
+    g_return_val_if_fail (location != NULL, NULL);
+
+    data = g_slice_new0 (struct get_node_data);
+    data->config = g_object_ref (provider);
+    data->location = g_strdup (location);
+
+    return donna_task_new ((task_fn) return_option_node, data,
+            (GDestroyNotify) free_get_node_data);
+}
+
+static DonnaTask *
+provider_config_has_node_children_task (DonnaProvider       *provider,
+                                        DonnaNode           *node,
+                                        DonnaNodeType        node_types)
+{
+}
+
+static DonnaTask *
+provider_config_get_node_children_task (DonnaProvider       *provider,
+                                        DonnaNode           *node,
+                                        DonnaNodeType        node_types)
+{
+}
+
+static DonnaTask *
+provider_config_remove_node_task (DonnaProvider       *provider,
+                                  DonnaNode           *node)
+{
 }
