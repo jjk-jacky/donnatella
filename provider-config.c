@@ -1329,36 +1329,19 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
     }
 }
 
-static DonnaTaskState
-return_option_node (DonnaTask *task, struct get_node_data *data)
+/* assumes a lock on nodes_mutex */
+static gboolean
+ensure_option_has_node (DonnaProviderConfig *config,
+                        gchar               *location,
+                        struct option       *option)
 {
-    DonnaProviderConfigPrivate *priv;
-    GNode *gnode;
-    struct option *option;
-    GValue *value;
-    gboolean node_created = FALSE;
+    DonnaProviderConfigPrivate *priv = config->priv;
 
-    priv = data->config->priv;
-
-    g_rw_lock_reader_lock (&priv->lock);
-    gnode = get_option_node (priv->root, data->location);
-    if (!gnode)
-    {
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
-                "Option '%s' does not exists",
-                data->location);
-        g_rw_lock_reader_unlock (&priv->lock);
-        return DONNA_TASK_FAILED;
-    }
-    option = gnode->data;
-
-    g_rec_mutex_lock (&priv->nodes_mutex);
     if (!option->node)
     {
         /* we need to create the node */
-        option->node = donna_node_new (DONNA_PROVIDER (data->config),
-                data->location,
+        option->node = donna_node_new (DONNA_PROVIDER (config),
+                location,
                 (option->extra == priv->root) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
                 node_prop_refresher,
                 node_prop_setter,
@@ -1400,9 +1383,39 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
          * can let it go (Note: this adds a (strong) reference to node) */
         g_object_add_toggle_ref (G_OBJECT (option->node),
                 (GToggleNotify) node_toggle_ref_cb,
-                data->config);
-        node_created = TRUE;
+                config);
+        return TRUE;
     }
+    else
+        return FALSE;
+}
+
+static DonnaTaskState
+return_option_node (DonnaTask *task, struct get_node_data *data)
+{
+    DonnaProviderConfigPrivate *priv;
+    GNode *gnode;
+    struct option *option;
+    GValue *value;
+    gboolean node_created = FALSE;
+
+    priv = data->config->priv;
+
+    g_rw_lock_reader_lock (&priv->lock);
+    gnode = get_option_node (priv->root, data->location);
+    if (!gnode)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Option '%s' does not exists",
+                data->location);
+        g_rw_lock_reader_unlock (&priv->lock);
+        return DONNA_TASK_FAILED;
+    }
+    option = gnode->data;
+
+    g_rec_mutex_lock (&priv->nodes_mutex);
+    node_created = ensure_option_has_node (data->config, data->location, option);
     g_rec_mutex_unlock (&priv->nodes_mutex);
 
     /* set node as return value */
@@ -1442,6 +1455,7 @@ struct node_children_data
     DonnaProviderConfig *config;
     DonnaNode           *node;
     DonnaNodeType        node_types;
+    gboolean             is_getting_children;
 };
 
 static void
@@ -1452,15 +1466,17 @@ free_node_children_data (struct node_children_data *data)
 }
 
 static DonnaTaskState
-node_has_children (DonnaTask *task, struct node_children_data *data)
+node_children (DonnaTask *task, struct node_children_data *data)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *gnode;
     gchar *location;
+    gsize len;
     gboolean want_item;
     gboolean want_categories;
     GValue *value;
-    gboolean found = FALSE;
+    gboolean match;
+    GPtrArray *arr;
 
     donna_node_get (data->node, FALSE, "location", &location, NULL);
     priv = data->config->priv;
@@ -1477,39 +1493,77 @@ node_has_children (DonnaTask *task, struct node_children_data *data)
         g_free (location);
         return DONNA_TASK_FAILED;
     }
-    g_free (location);
 
     want_item = data->node_types & DONNA_NODE_ITEM;
     want_categories = data->node_types & DONNA_NODE_CONTAINER;
+
+    if (data->is_getting_children)
+    {
+        arr = g_ptr_array_new ();
+        len = strlen (location) + 2; /* 1 for NULL, 1 for trailing / */
+    }
 
     for (gnode = gnode->children; gnode; gnode = gnode->next)
     {
         struct option *option;
 
+        match = FALSE;
         option = gnode->data;
         /* category? */
         if (option->extra == priv->root)
         {
             if (want_categories)
-            {
-                found = TRUE;
-                break;
-            }
+                match = TRUE;
         }
         else if (want_item)
+            match = TRUE;
+
+        if (match)
         {
-            found = TRUE;
-            break;
+            if (data->is_getting_children)
+            {
+                gchar buf[255];
+                gchar *s;
+
+                if (len + strlen (option->name) > 255)
+                {
+                    s = g_strdup_printf ("%s/%s", location, option->name);
+                }
+                else
+                {
+                    s = buf;
+                    sprintf (s, "%s/%s", location, option->name);
+                }
+
+                g_rec_mutex_lock (&priv->nodes_mutex);
+                ensure_option_has_node (data->config, s, option);
+                g_ptr_array_add (arr, g_object_ref (option->node));
+                g_rec_mutex_unlock (&priv->nodes_mutex);
+
+                if (s != buf)
+                    g_free (s);
+            }
+            else
+                break;
         }
     }
 
     value = donna_task_grab_return_value (task);
-    g_value_init (value, G_TYPE_BOOLEAN);
-    g_value_set_boolean (value, found);
+    if (data->is_getting_children)
+    {
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        g_value_take_boxed (value, arr);
+    }
+    else
+    {
+        g_value_init (value, G_TYPE_BOOLEAN);
+        g_value_set_boolean (value, match);
+    }
     donna_task_release_return_value (task);
 
     g_rw_lock_reader_unlock (&priv->lock);
     free_node_children_data (data);
+    g_free (location);
     return DONNA_TASK_DONE;
 }
 
@@ -1539,8 +1593,9 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
     data->config     = DONNA_PROVIDER_CONFIG (provider);
     data->node       = g_object_ref (node);
     data->node_types = node_types;
+    data->is_getting_children = FALSE;
 
-    return donna_task_new ((task_fn) node_has_children, data,
+    return donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
 }
 
@@ -1549,6 +1604,31 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
                                         DonnaNode           *node,
                                         DonnaNodeType        node_types)
 {
+    DonnaProvider *provider_node;
+    DonnaNodeType node_type;
+    struct node_children_data *data;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+
+    donna_node_get (node, FALSE,
+            "provider",  &provider_node,
+            "node-type", &node_type,
+            NULL);
+    /* make sure the provider is the node's provider */
+    g_object_unref (provider_node);
+    g_return_val_if_fail (provider_node != provider, NULL);
+    /* make sure the node is a container */
+    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER, NULL);
+
+    data = g_slice_new0 (struct node_children_data);
+    data->config     = DONNA_PROVIDER_CONFIG (provider);
+    data->node       = g_object_ref (node);
+    data->node_types = node_types;
+    data->is_getting_children = TRUE;
+
+    return donna_task_new ((task_fn) node_children, data,
+            (GDestroyNotify) free_node_children_data);
 }
 
 static DonnaTask *
