@@ -240,7 +240,6 @@ provider_base_get_node_task (DonnaProvider    *provider,
     DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
-    g_return_val_if_fail (location != NULL, NULL);
 
     priv = p->priv;
     g_rec_mutex_lock (&priv->nodes_mutex);
@@ -303,24 +302,9 @@ provider_base_has_node_children_task (DonnaProvider *provider,
                                       DonnaNode     *node,
                                       DonnaNodeType  node_types)
 {
-    DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProvider *provider_node;
-    DonnaNodeType node_type;
     struct node_children_data *data;
 
-    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    donna_node_get (node, FALSE,
-            "provider",  &provider_node,
-            "note-type", &node_type,
-            NULL);
-    /* make sure the provider is the node's provider */
-    g_object_unref (provider_node);
-    g_return_val_if_fail (provider_node == provider, NULL);
-    /* make sure the node is a container */
-    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER
-            || node_type & DONNA_NODE_EXTENDED, NULL);
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     data = g_slice_new0 (struct node_children_data);
     data->node       = g_object_ref (node);
@@ -350,24 +334,9 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
                                       DonnaNode      *node,
                                       DonnaNodeType   node_types)
 {
-    DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProvider *provider_node;
-    DonnaNodeType node_type;
     struct node_children_data *data;
 
-    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    donna_node_get (node, FALSE,
-            "provider",  &provider_node,
-            "note-type", &node_type,
-            NULL);
-    /* make sure the provider is the node's provider */
-    g_object_unref (provider_node);
-    g_return_val_if_fail (provider_node == provider, NULL);
-    /* make sure the node is a container */
-    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER
-            || node_type & DONNA_NODE_EXTENDED, NULL);
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     data = g_slice_new0 (struct node_children_data);
     data->node       = g_object_ref (node);
@@ -401,20 +370,7 @@ static DonnaTask *
 provider_base_remove_node_task (DonnaProvider   *provider,
                                 DonnaNode       *node)
 {
-    DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProvider *provider_node;
-    DonnaNodeType node_type;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    donna_node_get (node, FALSE,
-            "provider",  &provider_node,
-            "note-type", &node_type,
-            NULL);
-    /* make sure the provider is the node's provider */
-    g_object_unref (provider_node);
-    g_return_val_if_fail (provider_node == provider, NULL);
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     return donna_task_new ((task_fn) remove_node, g_object_ref (node),
             g_object_unref);
