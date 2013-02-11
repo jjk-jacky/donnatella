@@ -1297,18 +1297,25 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
                     DonnaNode           *node,
                     gboolean             is_last)
 {
-    int c;
+    /* we need to lock the config before we can lock the nodes. We need to lock
+     * the nodes here in case this is triggered w/ is_last=TRUE while at the
+     * same time (i.e. in another thread) there's a get_option_node that
+     * happens.
+     * See same stuff in provider-base.c for more */
 
+    g_rw_lock_reader_lock (&config->priv->lock);
     g_rec_mutex_lock (&config->priv->nodes_mutex);
     if (is_last)
     {
         GNode *gnode;
         gchar *location;
+        int c;
 
         c = donna_node_dec_toggle_count (node);
         if (c > 0)
         {
             g_rec_mutex_unlock (&config->priv->nodes_mutex);
+            g_rw_lock_reader_unlock (&config->priv->lock);
             return;
         }
         donna_node_get (node, FALSE, "location", &location, NULL);
@@ -1318,15 +1325,14 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
                     location);
         else
             ((struct option *) gnode->data)->node = NULL;
-        g_rec_mutex_unlock (&config->priv->nodes_mutex);
         g_object_unref (node);
         g_free (location);
     }
     else
-    {
         donna_node_inc_toggle_count (node);
-        g_rec_mutex_unlock (&config->priv->nodes_mutex);
-    }
+
+    g_rec_mutex_unlock (&config->priv->nodes_mutex);
+    g_rw_lock_reader_unlock (&config->priv->lock);
 }
 
 /* assumes a lock on nodes_mutex */
@@ -1410,6 +1416,7 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
                 "Option '%s' does not exists",
                 data->location);
         g_rw_lock_reader_unlock (&priv->lock);
+        free_get_node_data (data);
         return DONNA_TASK_FAILED;
     }
     option = gnode->data;
@@ -1430,6 +1437,7 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
     donna_task_release_return_value (task);
 
     g_rw_lock_reader_unlock (&priv->lock);
+    free_get_node_data (data);
     return DONNA_TASK_DONE;
 }
 
@@ -1535,8 +1543,10 @@ node_children (DonnaTask *task, struct node_children_data *data)
                 }
 
                 g_rec_mutex_lock (&priv->nodes_mutex);
-                ensure_option_has_node (data->config, s, option);
-                g_ptr_array_add (arr, g_object_ref (option->node));
+                /* if node wasn't just created, we need to take a ref on it */
+                if (!ensure_option_has_node (data->config, s, option))
+                    g_object_ref (option->node);
+                g_ptr_array_add (arr, option->node);
                 g_rec_mutex_unlock (&priv->nodes_mutex);
 
                 if (s != buf)
@@ -1604,8 +1614,35 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
             (GDestroyNotify) free_node_children_data);
 }
 
+static DonnaTaskState
+node_remove_option (DonnaTask *task, DonnaNode *node)
+{
+    DonnaProvider *provider;
+    gchar *location;
+    DonnaNodeType node_type;
+    gboolean ret;
+
+    donna_node_get (node, FALSE,
+            "provider",  &provider,
+            "location",  &location,
+            "node-type", &node_type,
+            NULL);
+    ret =_remove_option (DONNA_PROVIDER_CONFIG (provider), location,
+            (node_type == DONNA_NODE_CONTAINER));
+    g_free (location);
+    g_object_unref (node);
+    g_object_unref (provider);
+
+    return (ret) ? DONNA_TASK_DONE : DONNA_TASK_FAILED;
+}
+
 static DonnaTask *
 provider_config_remove_node_task (DonnaProvider       *provider,
                                   DonnaNode           *node)
 {
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
+
+    return donna_task_new ((task_fn) node_remove_option,
+            g_object_ref (node),
+            g_object_unref);
 }

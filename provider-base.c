@@ -113,12 +113,48 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
                     DonnaNode           *node,
                     gboolean             is_last)
 {
-    int c;
+    /* Here's why we use a recursive mutex for nodes: in case at the same time
+     * (i.e. in 2 threads) we have someone unref-ing the node making us the
+     * owner of the last ref (hence this toggle_ref is_last=TRUE triggered), and
+     * someone asking for this node.
+     * To ensure that we don't remove the node from our hashtable & unref it
+     * while in another thread taking another ref on it and returning the node
+     * to someone - which would lead to troubles - we use a rec_mutex.
+     *
+     * T1: unref node, trigger toggle_ref (is_last=TRUE)
+     * T2: ask for node, lock rec_mutex
+     * T1: toggle_ref waits for rec_mutex
+     * T2: adds a ref, trigger toggle_ref (is_last=FALSE)
+     * T2: toggle_ref gets rec_mutex and calls node_inc (1->2)
+     * T2: unlocks rec_mutex (twice)
+     * T1: gets rec_mutex, calls node_dec (2->1) and does nothing
+     *
+     * If T1 has locked rec_mutex, it would have unref-d the node, and by the
+     * time T2 got the rec_mutex, the node would be gone, and would have to be
+     * recreated.
+     *
+     * In simpler terms, here are the two threads:
+     *
+     * T1: toggle_ref when we own the last ref
+     * - lock RM
+     * - flg_is_last--
+     * - if flg_is_last>0 unlock RM, abort
+     * - remove node
+     * - unlock RM
+     * - unref node
+     *
+     * T2: asking for the node
+     * - lock RM
+     * - get node
+     * - ref node --> toggle_ref: lock RM, flg_is_last++, unlock RM
+     * - unlock RM
+     */
 
     g_rec_mutex_lock (&provider->priv->nodes_mutex);
     if (is_last)
     {
         gchar *location;
+        int c;
 
         c = donna_node_dec_toggle_count (node);
         if (c > 0)
