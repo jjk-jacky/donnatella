@@ -57,7 +57,8 @@ struct _DonnaProviderConfigPrivate
     GNode       *root;
     /* config lock */
     GRWLock      lock;
-    /* a recursive mutex to handle (toggle ref) nodes */
+    /* a recursive mutex to handle (toggle ref) nodes. Should only be locked
+     * after a lock on config (GRWLock above), reader is good enough */
     GRecMutex    nodes_mutex;
 };
 
@@ -864,6 +865,139 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
     free_parsed_data_section (first_section);
     g_free (data);
     return TRUE;
+}
+
+/*** EXPORTING CONFIGURATION ***/
+
+static void
+export_config (DonnaProviderConfigPrivate   *priv,
+               GNode                        *node,
+               GString                      *str_loc,
+               GString                      *str,
+               gboolean                      do_options)
+{
+    GNode *child;
+
+    for (child = node->children; child; child = child->next)
+    {
+        struct option *option = child->data;
+
+        if (do_options)
+        {
+            if (option->extra)
+            {
+                if (G_VALUE_HOLDS (&option->value, G_TYPE_STRING))
+                {
+                    const gchar *s;
+
+                    s = g_value_get_string (&option->value);
+                    if (isblank (s[0]) || isblank (s[strlen (s)]))
+                        g_string_append_printf (str, "%s:%s=\"%s\"\n",
+                                option->name,
+                                (gchar *) option->extra,
+                                s);
+                    else
+                        g_string_append_printf (str, "%s:%s=%s\n",
+                                option->name,
+                                (gchar *) option->extra,
+                                s);
+                }
+                else
+                {
+                    g_string_append_printf (str, "%s:%s=%d\n",
+                            option->name,
+                            (gchar *) option->extra,
+                            g_value_get_int (&option->value));
+                }
+            }
+            else
+            {
+                switch (G_VALUE_TYPE (&option->value))
+                {
+                    case G_TYPE_BOOLEAN:
+                        g_string_append_printf (str, "%s=%s\n",
+                                option->name,
+                                (g_value_get_boolean (&option->value))
+                                ? "true" : "false");
+                        break;
+                    case G_TYPE_UINT:
+                        g_string_append_printf (str, "%s=%u\n",
+                                option->name,
+                                g_value_get_uint (&option->value));
+                        break;
+                    case G_TYPE_INT:
+                        {
+                            gint i;
+
+                            i = g_value_get_int (&option->value);
+                            if (i >= 0)
+                                g_string_append_printf (str, "%s=+%d\n",
+                                        option->name,
+                                        g_value_get_int (&option->value));
+                            else
+                                g_string_append_printf (str, "%s=%d\n",
+                                        option->name,
+                                        g_value_get_int (&option->value));
+                            break;
+                        }
+                    case G_TYPE_DOUBLE:
+                        g_string_append_printf (str, "%s=%lf\n",
+                                option->name,
+                                g_value_get_double (&option->value));
+                        break;
+                    case G_TYPE_STRING:
+                        {
+                            const gchar *s;
+
+                            s = g_value_get_string (&option->value);
+                            if (isblank (s[0]) || isblank (s[strlen (s)]))
+                                g_string_append_printf (str, "%s=\"%s\"\n",
+                                        option->name,
+                                        s);
+                            else
+                                g_string_append_printf (str, "%s=%s\n",
+                                        option->name,
+                                        s);
+                            break;
+                        }
+                }
+            }
+        }
+        else if (option->extra == priv->root)
+        {
+            gsize len;
+
+            len = strlen (option->name) + 1; /* +1 for / below */
+            g_string_append_c (str_loc, '/');
+            g_string_append (str_loc, option->name);
+            g_string_append_printf (str, "[%s]\n", str_loc->str);
+            export_config (priv, child, str_loc, str, TRUE);
+            g_string_erase (str_loc, len, -1);
+        }
+    }
+    export_config (priv, node, str_loc, str, FALSE);
+}
+
+gchar *
+donna_config_export_config (DonnaProviderConfig *config)
+{
+    DonnaProviderConfigPrivate *priv;
+    GNode *node;
+    GString *str;
+    GString *str_loc;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), NULL);
+    priv = config->priv;
+    str = g_string_sized_new (2048);
+    str_loc = g_string_sized_new (23); /* random size, to hold section's name */
+
+    g_rw_lock_reader_lock (&priv->lock);
+    for (node = priv->root; node; node = node->next)
+        export_config (priv, node->children, str_loc, str, TRUE);
+    g_rw_lock_reader_unlock (&priv->lock);
+
+    g_string_free (str_loc, TRUE);
+    return g_string_free (str, FALSE);
 }
 
 /*** ACCESSING CONFIGURATION ***/

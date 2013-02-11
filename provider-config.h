@@ -33,6 +33,7 @@ gboolean    donna_config_load_config_def        (DonnaProviderConfig    *config,
                                                  gchar                  *data);
 gboolean    donna_config_load_config            (DonnaProviderConfig    *config,
                                                  gchar                  *data);
+gchar *     donna_config_export_config          (DonnaProviderConfig *config);
 gboolean    donna_config_get_boolean            (DonnaProviderConfig    *config,
                                                  gchar                  *name,
                                                  gboolean               *value);
