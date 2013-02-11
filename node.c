@@ -8,6 +8,26 @@
 #include "util.h"
 #include "macros.h"                     /* streq() */
 
+const gchar *node_basic_properties[] =
+{
+    "provider",
+    "domain",
+    "location",
+    "node-type",
+    "name",
+    "icon",
+    "full-name",
+    "size",
+    "ctime",
+    "mtime",
+    "atime",
+    "perms",
+    "user",
+    "group",
+    "type",
+    NULL
+};
+
 /* index of the first basic prop in node_basic_properties; i.e. after the
  * internal (e.g. provider) and required (e.g. name) ones */
 #define FIRST_BASIC_PROP    6

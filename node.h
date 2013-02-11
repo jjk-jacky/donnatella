@@ -36,25 +36,7 @@ typedef enum
 #define DONNA_NODE_REFRESH_SET_VALUES       NULL
 #define DONNA_NODE_REFRESH_ALL_VALUES       "-all"
 
-const gchar *node_basic_properties[] =
-{
-    "provider",
-    "domain",
-    "location",
-    "node-type",
-    "name",
-    "icon",
-    "full-name",
-    "size",
-    "ctime",
-    "mtime",
-    "atime",
-    "perms",
-    "user",
-    "group",
-    "type",
-    NULL
-};
+extern const gchar *node_basic_properties[];
 
 typedef enum
 {
