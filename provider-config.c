@@ -290,7 +290,7 @@ parse_data (gchar *data)
         {
             struct parsed_data *new_section;
 
-            e = strchr (data, ']');
+            e = strchr (++data, ']');
             if (!e)
             {
                 g_warning ("Invalid section definition at line %d, "
@@ -884,6 +884,9 @@ export_config (DonnaProviderConfigPrivate   *priv,
 
         if (do_options)
         {
+            if (option->extra == priv->root)
+                continue;
+
             if (option->extra)
             {
                 if (G_VALUE_HOLDS (&option->value, G_TYPE_STRING))
@@ -891,7 +894,8 @@ export_config (DonnaProviderConfigPrivate   *priv,
                     const gchar *s;
 
                     s = g_value_get_string (&option->value);
-                    if (isblank (s[0]) || isblank (s[strlen (s)]))
+                    if (isblank (s[0])
+                            || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
                         g_string_append_printf (str, "%s:%s=\"%s\"\n",
                                 option->name,
                                 (gchar *) option->extra,
@@ -950,7 +954,8 @@ export_config (DonnaProviderConfigPrivate   *priv,
                             const gchar *s;
 
                             s = g_value_get_string (&option->value);
-                            if (isblank (s[0]) || isblank (s[strlen (s)]))
+                            if (isblank (s[0])
+                                    || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
                                 g_string_append_printf (str, "%s=\"%s\"\n",
                                         option->name,
                                         s);
@@ -967,22 +972,26 @@ export_config (DonnaProviderConfigPrivate   *priv,
         {
             gsize len;
 
-            len = strlen (option->name) + 1; /* +1 for / below */
-            g_string_append_c (str_loc, '/');
+            len = strlen (option->name);
+            if (str_loc->len)
+            {
+                g_string_append_c (str_loc, '/');
+                ++len;
+            }
             g_string_append (str_loc, option->name);
             g_string_append_printf (str, "[%s]\n", str_loc->str);
             export_config (priv, child, str_loc, str, TRUE);
             g_string_erase (str_loc, len, -1);
         }
     }
-    export_config (priv, node, str_loc, str, FALSE);
+    if (do_options)
+        export_config (priv, node, str_loc, str, FALSE);
 }
 
 gchar *
 donna_config_export_config (DonnaProviderConfig *config)
 {
     DonnaProviderConfigPrivate *priv;
-    GNode *node;
     GString *str;
     GString *str_loc;
 
@@ -992,8 +1001,7 @@ donna_config_export_config (DonnaProviderConfig *config)
     str_loc = g_string_sized_new (23); /* random size, to hold section's name */
 
     g_rw_lock_reader_lock (&priv->lock);
-    for (node = priv->root; node; node = node->next)
-        export_config (priv, node->children, str_loc, str, TRUE);
+    export_config (priv, priv->root, str_loc, str, TRUE);
     g_rw_lock_reader_unlock (&priv->lock);
 
     g_string_free (str_loc, TRUE);
@@ -1172,12 +1180,11 @@ donna_config_get_string (DonnaProviderConfig    *config,
     if (ret)                                                            \
     {                                                                   \
         value_set (&option->value, value);                              \
-        if (g_object_ref (option->node))                                \
+        if (option->node)                                               \
         {                                                               \
             donna_node_set_property_value (option->node,                \
                     "option-value",                                     \
                     &option->value);                                    \
-            g_object_unref (option->node);                              \
         }                                                               \
     }                                                                   \
     g_rw_lock_writer_unlock (&priv->lock);                              \
