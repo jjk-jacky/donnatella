@@ -894,7 +894,8 @@ export_config (DonnaProviderConfigPrivate   *priv,
                     const gchar *s;
 
                     s = g_value_get_string (&option->value);
-                    if (isblank (s[0])
+                    if (streq (s, "true") || streq (s, "false")
+                            || isblank (s[0])
                             || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
                         g_string_append_printf (str, "%s:%s=\"%s\"\n",
                                 option->name,
@@ -954,7 +955,8 @@ export_config (DonnaProviderConfigPrivate   *priv,
                             const gchar *s;
 
                             s = g_value_get_string (&option->value);
-                            if (isblank (s[0])
+                            if (streq (s, "true") || streq (s, "false")
+                                    || isblank (s[0])
                                     || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
                                 g_string_append_printf (str, "%s=\"%s\"\n",
                                         option->name,
@@ -972,12 +974,9 @@ export_config (DonnaProviderConfigPrivate   *priv,
         {
             gsize len;
 
-            len = strlen (option->name);
-            if (str_loc->len)
-            {
+            len = str_loc->len;
+            if (len)
                 g_string_append_c (str_loc, '/');
-                ++len;
-            }
             g_string_append (str_loc, option->name);
             g_string_append_printf (str, "[%s]\n", str_loc->str);
             export_config (priv, child, str_loc, str, TRUE);
