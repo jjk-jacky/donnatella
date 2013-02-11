@@ -1068,18 +1068,25 @@ get_option (GNode *root, gchar *name)
         return NULL;
 }
 
-#define _get_option(type, get_value)    do      {                       \
+#define _get_option(type, get_value)    do  {                           \
     DonnaProviderConfigPrivate *priv;                                   \
     struct option *option;                                              \
     gboolean ret;                                                       \
+    gchar *n;                                                           \
                                                                         \
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
     g_return_val_if_fail (name != NULL, FALSE);                         \
     g_return_val_if_fail (value != NULL, FALSE);                        \
                                                                         \
+    n = (gchar *) name;                                                 \
+    if (*n == '/')                                                      \
+        ++n;                                                            \
+    if (strchr (n, '/'))                                                \
+        n = g_strdup (n);                                               \
+                                                                        \
     priv = config->priv;                                                \
     g_rw_lock_reader_lock (&priv->lock);                                \
-    option = get_option (priv->root, name);                             \
+    option = get_option (priv->root, n);                                \
     if (option)                                                         \
         ret = G_VALUE_HOLDS (&option->value, type);                     \
     else                                                                \
@@ -1088,12 +1095,15 @@ get_option (GNode *root, gchar *name)
         *value = get_value (&option->value);                            \
     g_rw_lock_reader_unlock (&priv->lock);                              \
                                                                         \
+    if (n != name && n != name + 1)                                     \
+        g_free (n);                                                     \
+                                                                        \
     return ret;                                                         \
 } while (0)
 
 gboolean
 donna_config_get_boolean (DonnaProviderConfig    *config,
-                          gchar                  *name,
+                          const gchar            *name,
                           gboolean               *value)
 {
     _get_option (G_TYPE_BOOLEAN, g_value_get_boolean);
@@ -1101,7 +1111,7 @@ donna_config_get_boolean (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_get_int (DonnaProviderConfig    *config,
-                      gchar                  *name,
+                      const gchar            *name,
                       gint                   *value)
 {
     _get_option (G_TYPE_INT, g_value_get_int);
@@ -1109,7 +1119,7 @@ donna_config_get_int (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_get_uint (DonnaProviderConfig    *config,
-                       gchar                  *name,
+                       const gchar            *name,
                        guint                  *value)
 {
     _get_option (G_TYPE_UINT, g_value_get_uint);
@@ -1117,7 +1127,7 @@ donna_config_get_uint (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_get_double (DonnaProviderConfig    *config,
-                         gchar                  *name,
+                         const gchar            *name,
                          gdouble                *value)
 {
     _get_option (G_TYPE_DOUBLE, g_value_get_double);
@@ -1125,7 +1135,7 @@ donna_config_get_double (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_get_string (DonnaProviderConfig    *config,
-                         gchar                  *name,
+                         const gchar            *name,
                          gchar                 **value)
 {
     _get_option (G_TYPE_STRING, g_value_dup_string);
@@ -1136,19 +1146,26 @@ donna_config_get_string (DonnaProviderConfig    *config,
     GNode *parent;                                                      \
     GNode *node;                                                        \
     struct option *option;                                              \
+    gchar *n;                                                           \
     gchar *s;                                                           \
     gboolean ret;                                                       \
                                                                         \
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
     g_return_val_if_fail (name != NULL, FALSE);                         \
                                                                         \
+    n = (gchar *) name;                                                 \
+    if (*n == '/')                                                      \
+        ++n;                                                            \
+    if (strchr (n, '/'))                                                \
+        n = g_strdup (n);                                               \
+                                                                        \
     priv = config->priv;                                                \
     g_rw_lock_writer_lock (&priv->lock);                                \
-    s = strrchr (name + 1, '/');                                        \
+    s = strrchr (n, '/');                                               \
     if (s)                                                              \
     {                                                                   \
         *s = '\0';                                                      \
-        parent = ensure_categories (config, name);                      \
+        parent = ensure_categories (config, n);                         \
         if (!parent)                                                    \
         {                                                               \
             *s = '/';                                                   \
@@ -1159,7 +1176,7 @@ donna_config_get_string (DonnaProviderConfig    *config,
     }                                                                   \
     else                                                                \
     {                                                                   \
-        s = name;                                                       \
+        s = n;                                                          \
         parent = priv->root;                                            \
     }                                                                   \
     node = get_child_node (parent, s);                                  \
@@ -1188,12 +1205,15 @@ donna_config_get_string (DonnaProviderConfig    *config,
     }                                                                   \
     g_rw_lock_writer_unlock (&priv->lock);                              \
                                                                         \
+    if (n != name && n != name + 1)                                     \
+        g_free (n);                                                     \
+                                                                        \
     return ret;                                                         \
 } while (0)
 
 gboolean
 donna_config_set_boolean (DonnaProviderConfig    *config,
-                          gchar                  *name,
+                          const gchar            *name,
                           gboolean                value)
 {
     _set_option (G_TYPE_BOOLEAN, g_value_set_boolean);
@@ -1201,7 +1221,7 @@ donna_config_set_boolean (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_set_int (DonnaProviderConfig    *config,
-                      gchar                  *name,
+                      const gchar            *name,
                       gint                    value)
 {
     _set_option (G_TYPE_INT, g_value_set_int);
@@ -1209,7 +1229,7 @@ donna_config_set_int (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_set_uint (DonnaProviderConfig    *config,
-                       gchar                  *name,
+                       const gchar            *name,
                        guint                   value)
 {
     _set_option (G_TYPE_UINT, g_value_set_uint);
@@ -1217,7 +1237,7 @@ donna_config_set_uint (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_set_double (DonnaProviderConfig    *config,
-                         gchar                  *name,
+                         const gchar            *name,
                          gdouble                 value)
 {
     _set_option (G_TYPE_DOUBLE, g_value_set_double);
@@ -1225,7 +1245,7 @@ donna_config_set_double (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_set_string (DonnaProviderConfig    *config,
-                         gchar                  *name,
+                         const gchar            *name,
                          gchar                  *value)
 {
     _set_option (G_TYPE_STRING, g_value_set_string);
@@ -1233,7 +1253,7 @@ donna_config_set_string (DonnaProviderConfig    *config,
 
 gboolean
 donna_config_take_string (DonnaProviderConfig    *config,
-                          gchar                  *name,
+                          const gchar            *name,
                           gchar                  *value)
 {
     _set_option (G_TYPE_STRING, g_value_take_string);
@@ -1300,16 +1320,44 @@ _remove_option (DonnaProviderConfig *config, gchar *name, gboolean category)
 
 gboolean
 donna_config_remove_option (DonnaProviderConfig    *config,
-                            gchar                  *name)
+                            const gchar            *name)
 {
-    return _remove_option (config, name, FALSE);
+    gboolean ret;
+    gchar *n;
+
+    n = (gchar *) name;
+    if (*n == '/')
+        ++n;
+    if (strchr (n, '/'))
+        n = g_strdup (n);
+
+    ret = _remove_option (config, n, FALSE);
+
+    if (n != name && n != name + 1)
+        g_free (n);
+
+    return ret;
 }
 
 gboolean
 donna_config_remove_category (DonnaProviderConfig    *config,
-                              gchar                  *name)
+                              const gchar            *name)
 {
-    return _remove_option (config, name, TRUE);
+    gboolean ret;
+    gchar *n;
+
+    n = (gchar *) name;
+    if (*n == '/')
+        ++n;
+    if (strchr (n, '/'))
+        n = g_strdup (n);
+
+    ret = _remove_option (config, n, TRUE);
+
+    if (n != name && n != name + 1)
+        g_free (n);
+
+    return ret;
 }
 
 /*** PROVIDER INTERFACE ***/

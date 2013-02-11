@@ -35,42 +35,42 @@ gboolean    donna_config_load_config            (DonnaProviderConfig    *config,
                                                  gchar                  *data);
 gchar *     donna_config_export_config          (DonnaProviderConfig *config);
 gboolean    donna_config_get_boolean            (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gboolean               *value);
 gboolean    donna_config_get_int                (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gint                   *value);
 gboolean    donna_config_get_uint               (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  guint                  *value);
 gboolean    donna_config_get_double             (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gdouble                *value);
 gboolean    donna_config_get_string             (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gchar                 **value);
 gboolean    donna_config_set_boolean            (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gboolean                value);
 gboolean    donna_config_set_int                (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gint                    value);
 gboolean    donna_config_set_uint               (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  guint                   value);
 gboolean    donna_config_set_double             (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gdouble                 value);
 gboolean    donna_config_set_string             (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gchar                  *value);
 gboolean    donna_config_take_string            (DonnaProviderConfig    *config,
-                                                 gchar                  *name,
+                                                 const gchar            *name,
                                                  gchar                  *value);
 gboolean    donna_config_remove_option          (DonnaProviderConfig    *config,
-                                                 gchar                  *name);
+                                                 const gchar            *name);
 gboolean    donna_config_remove_category        (DonnaProviderConfig    *config,
-                                                 gchar                  *name);
+                                                 const gchar            *name);
 
 G_END_DECLS
 
