@@ -4,8 +4,13 @@
 
 G_BEGIN_DECLS
 
+#include <glib.h>
 #include <string.h>
 
+/* somehow this one is missing in GLib */
+#ifndef g_info
+#define g_info(...)     g_log (G_LOG_DOMAIN, G_LOG_LEVEL_INFO, __VA_ARGS__)
+#endif
 
 #define streq(s1, s2)           (strcmp  ((s1), (s2)) == 0)
 #define streqn(s1, s2, n)       (strncmp ((s1), (s2), (n)) == 0)
