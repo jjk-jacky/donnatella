@@ -559,7 +559,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
     GNode *root;
     GNode *parent;
     GNode *node;
-    gchar *s;
+    const gchar *s;
 
     /* skip the main root, if specified */
     if (*name == '/')
@@ -578,11 +578,12 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             struct option *option;
             gint i;
 
+            s = name;
             /* the GValue for categories hold an integer value with the next
              * index to use for such cases */
             option = parent->data;
             i = g_value_get_int (&option->value);
-            g_value_set_int (&option->value, ++i);
+            g_value_set_int (&option->value, i + 1);
 
             option = g_new0 (struct option, 1);
             option->name = g_strdup_printf ("%d", i);
@@ -972,7 +973,10 @@ export_config (DonnaProviderConfigPrivate   *priv,
             len = str_loc->len;
             if (len)
                 g_string_append_c (str_loc, '/');
-            g_string_append (str_loc, option->name);
+            /* name starting with a number is invalid, so this is an
+             * auto-indexed category. In that case, we don't export the name */
+            if (option->name[0] < '0' || option->name[0] > '9')
+                g_string_append (str_loc, option->name);
             g_string_append_printf (str, "[%s]\n", str_loc->str);
             export_config (priv, child, str_loc, str, TRUE);
             g_string_erase (str_loc, len, -1);
