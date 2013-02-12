@@ -1,4 +1,5 @@
 
+#define _GNU_SOURCE             /* strchrnul() in string.h */
 #include <glib-object.h>
 #include <stdio.h>              /* sscanf() */
 #include <string.h>
@@ -538,13 +539,14 @@ donna_config_load_config_def (DonnaProviderConfig *config, gchar *data)
 
 /* assumes a lock on config */
 static inline GNode *
-get_child_node (GNode *parent, gchar *name)
+get_child_node (GNode *parent, const gchar *name, gsize len)
 {
     GNode *node;
 
     for (node = parent->children; node; node = node->next)
-        if (streq (((struct option *) node->data)->name,
-                    name))
+        if (streqn (((struct option *) node->data)->name,
+                    name,
+                    len))
             return node;
 
     return NULL;
@@ -552,7 +554,7 @@ get_child_node (GNode *parent, gchar *name)
 
 /* assumes a writer lock on config */
 static GNode *
-ensure_categories (DonnaProviderConfig *config, gchar *name)
+ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
 {
     GNode *root;
     GNode *parent;
@@ -570,10 +572,6 @@ ensure_categories (DonnaProviderConfig *config, gchar *name)
 
     for (;;)
     {
-        s = strchr (name, '/');
-        if (s)
-            *s = '\0';
-
         /* string ended with / i.e. we should auto-create a new category */
         if (*name == '\0')
         {
@@ -595,16 +593,13 @@ ensure_categories (DonnaProviderConfig *config, gchar *name)
         }
         else
         {
-            node = get_child_node (parent, name);
+            s = strchrnul (name, '/');
+            node = get_child_node (parent, name, s - name);
             if (node)
             {
                 /* make sure it's a category */
                 if (((struct option *) node->data)->extra != root)
-                {
-                    if (s)
-                        *s = '/';
                     return NULL;
-                }
             }
             else
             {
@@ -612,7 +607,7 @@ ensure_categories (DonnaProviderConfig *config, gchar *name)
                 struct option *option;
 
                 option = g_new0 (struct option, 1);
-                option->name = g_strdup (name);
+                option->name = g_strndup (name, s - name);
                 option->extra = root;
                 /* category hold an index, next number to use for auto-creating
                  * sub-categories. (See above) */
@@ -622,14 +617,14 @@ ensure_categories (DonnaProviderConfig *config, gchar *name)
             }
         }
 
-        if (s)
+        if (*s == '\0' || len == (gsize) (s - name))
+            break;
+        else
         {
-            *s = '/';
+            len -= s - name + 1;
             name = s + 1;
             parent = node;
         }
-        else
-            break;
     }
 
     return node;
@@ -691,7 +686,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
 
         if (section->name)
         {
-            parent = ensure_categories (config, section->name);
+            parent = ensure_categories (config, section->name, strlen (section->name));
             if (!parent)
             {
                 g_warning ("Invalid category '%s'; skipping to next section",
@@ -1011,7 +1006,7 @@ donna_config_export_config (DonnaProviderConfig *config)
 
 /* assumes reader lock on config */
 static GNode *
-get_option_node (GNode *root, gchar *name)
+get_option_node (GNode *root, const gchar *name)
 {
     GNode *node;
     gchar *s;
@@ -1027,29 +1022,20 @@ get_option_node (GNode *root, gchar *name)
     node = root;
     for (;;)
     {
-        s = strchr (name, '/');
-        if (s)
-            *s = '\0';
+        s = strchrnul (name, '/');
 
         if (*name != '\0')
-            node = get_child_node (node, name);
+            node = get_child_node (node, name, s - name);
         else
             node = NULL;
 
         if (!node)
-        {
-            if (s)
-                *s = '/';
             return NULL;
-        }
 
-        if (s)
-        {
-            *s = '/';
-            name = s + 1;
-        }
-        else
+        if (*s == '\0')
             break;
+        else
+            name = s + 1;
     }
 
     return node;
@@ -1057,7 +1043,7 @@ get_option_node (GNode *root, gchar *name)
 
 /* assumes reader lock on config */
 static inline struct option *
-get_option (GNode *root, gchar *name)
+get_option (GNode *root, const gchar *name)
 {
     GNode *node;
 
@@ -1072,21 +1058,14 @@ get_option (GNode *root, gchar *name)
     DonnaProviderConfigPrivate *priv;                                   \
     struct option *option;                                              \
     gboolean ret;                                                       \
-    gchar *n;                                                           \
                                                                         \
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
     g_return_val_if_fail (name != NULL, FALSE);                         \
     g_return_val_if_fail (value != NULL, FALSE);                        \
                                                                         \
-    n = (gchar *) name;                                                 \
-    if (*n == '/')                                                      \
-        ++n;                                                            \
-    if (strchr (n, '/'))                                                \
-        n = g_strdup (n);                                               \
-                                                                        \
     priv = config->priv;                                                \
     g_rw_lock_reader_lock (&priv->lock);                                \
-    option = get_option (priv->root, n);                                \
+    option = get_option (priv->root, name);                             \
     if (option)                                                         \
         ret = G_VALUE_HOLDS (&option->value, type);                     \
     else                                                                \
@@ -1094,9 +1073,6 @@ get_option (GNode *root, gchar *name)
     if (ret)                                                            \
         *value = get_value (&option->value);                            \
     g_rw_lock_reader_unlock (&priv->lock);                              \
-                                                                        \
-    if (n != name && n != name + 1)                                     \
-        g_free (n);                                                     \
                                                                         \
     return ret;                                                         \
 } while (0)
@@ -1146,40 +1122,35 @@ donna_config_get_string (DonnaProviderConfig    *config,
     GNode *parent;                                                      \
     GNode *node;                                                        \
     struct option *option;                                              \
-    gchar *n;                                                           \
-    gchar *s;                                                           \
+    const gchar *s;                                                     \
     gboolean ret;                                                       \
                                                                         \
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
     g_return_val_if_fail (name != NULL, FALSE);                         \
                                                                         \
-    n = (gchar *) name;                                                 \
-    if (*n == '/')                                                      \
-        ++n;                                                            \
-    if (strchr (n, '/'))                                                \
-        n = g_strdup (n);                                               \
+    if (*name == '/')                                                   \
+        ++name;                                                         \
                                                                         \
     priv = config->priv;                                                \
     g_rw_lock_writer_lock (&priv->lock);                                \
-    s = strrchr (n, '/');                                               \
+    s = strrchr (name, '/');                                            \
     if (s)                                                              \
     {                                                                   \
-        *s = '\0';                                                      \
-        parent = ensure_categories (config, n);                         \
+        parent = ensure_categories (config, name, s - name);            \
         if (!parent)                                                    \
         {                                                               \
-            *s = '/';                                                   \
             g_rw_lock_writer_unlock (&priv->lock);                      \
             return FALSE;                                               \
         }                                                               \
-        *s++ = '/';                                                     \
+        ++s;                                                            \
     }                                                                   \
     else                                                                \
     {                                                                   \
-        s = n;                                                          \
+        s = name;                                                       \
         parent = priv->root;                                            \
     }                                                                   \
-    node = get_child_node (parent, s);                                  \
+                                                                        \
+    node = get_child_node (parent, s, strlen (s));                      \
     if (node)                                                           \
     {                                                                   \
         option = node->data;                                            \
@@ -1204,9 +1175,6 @@ donna_config_get_string (DonnaProviderConfig    *config,
         }                                                               \
     }                                                                   \
     g_rw_lock_writer_unlock (&priv->lock);                              \
-                                                                        \
-    if (n != name && n != name + 1)                                     \
-        g_free (n);                                                     \
                                                                         \
     return ret;                                                         \
 } while (0)
@@ -1260,39 +1228,42 @@ donna_config_take_string (DonnaProviderConfig    *config,
 }
 
 static inline gboolean
-_remove_option (DonnaProviderConfig *config, gchar *name, gboolean category)
+_remove_option (DonnaProviderConfig *config,
+                const gchar *name,
+                gboolean category)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *parent;
     GNode *node;
     struct option *option;
-    gchar *s;
+    const gchar *s;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
 
+    if (*name == '/')
+        ++name;
+
     priv = config->priv;
     g_rw_lock_writer_lock (&priv->lock);
-    s = strrchr (name + 1, '/');
+    s = strrchr (name, '/');
     if (s)
     {
-        *s = '\0';
-        parent = ensure_categories (config, name);
+        parent = ensure_categories (config, name, s - name);
         if (!parent)
         {
-            *s = '/';
             g_rw_lock_writer_unlock (&priv->lock);
             return FALSE;
         }
-        *s++ = '/';
+        ++s;
     }
     else
     {
         s = name;
         parent = priv->root;
     }
-    node = get_child_node (parent, s);
+    node = get_child_node (parent, s, strlen (s));
     if (!node)
     {
         g_rw_lock_writer_unlock (&priv->lock);
@@ -1322,42 +1293,14 @@ gboolean
 donna_config_remove_option (DonnaProviderConfig    *config,
                             const gchar            *name)
 {
-    gboolean ret;
-    gchar *n;
-
-    n = (gchar *) name;
-    if (*n == '/')
-        ++n;
-    if (strchr (n, '/'))
-        n = g_strdup (n);
-
-    ret = _remove_option (config, n, FALSE);
-
-    if (n != name && n != name + 1)
-        g_free (n);
-
-    return ret;
+    return _remove_option (config, name, FALSE);
 }
 
 gboolean
 donna_config_remove_category (DonnaProviderConfig    *config,
                               const gchar            *name)
 {
-    gboolean ret;
-    gchar *n;
-
-    n = (gchar *) name;
-    if (*n == '/')
-        ++n;
-    if (strchr (n, '/'))
-        n = g_strdup (n);
-
-    ret = _remove_option (config, n, TRUE);
-
-    if (n != name && n != name + 1)
-        g_free (n);
-
-    return ret;
+    return _remove_option (config, name, TRUE);
 }
 
 /*** PROVIDER INTERFACE ***/
