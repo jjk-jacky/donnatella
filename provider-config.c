@@ -63,6 +63,9 @@ struct _DonnaProviderConfigPrivate
     GRecMutex    nodes_mutex;
 };
 
+#define option_is_category(opt, root)    \
+    (((struct option *) opt)->extra == root)
+
 static void             provider_config_finalize    (GObject    *object);
 
 /* DonnaProvider */
@@ -115,7 +118,7 @@ donna_provider_config_init (DonnaProviderConfig *provider)
             DonnaProviderConfigPrivate);
     priv->extras = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_extra);
-    option = g_new0 (struct option, 1);
+    option = g_slice_new0 (struct option);
     /* categories hold the next index for auto-creation of subcategories. It
      * shouldn't be used on root, doesn't make much sense, but this avoids
      * special cases for that & free-ing stuff */
@@ -164,7 +167,7 @@ free_option (DonnaProviderConfig *config, struct option *option, gboolean is_rem
     if (is_removing && option->node)
         donna_provider_node_removed (DONNA_PROVIDER (config), option->node);
     g_object_unref (option->node);
-    g_free (option);
+    g_slice_free (struct option, option);
 }
 
 static gboolean
@@ -585,7 +588,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             i = g_value_get_int (&option->value);
             g_value_set_int (&option->value, i + 1);
 
-            option = g_new0 (struct option, 1);
+            option = g_slice_new0 (struct option);
             option->name = g_strdup_printf ("%d", i);
             option->extra = root;
             g_value_init (&option->value, G_TYPE_INT);
@@ -598,8 +601,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             node = get_child_node (parent, name, s - name);
             if (node)
             {
-                /* make sure it's a category */
-                if (((struct option *) node->data)->extra != root)
+                if (!option_is_category (node->data, root))
                     return NULL;
             }
             else
@@ -607,7 +609,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
                 /* create category/node */
                 struct option *option;
 
-                option = g_new0 (struct option, 1);
+                option = g_slice_new0 (struct option);
                 option->name = g_strndup (name, s - name);
                 option->extra = root;
                 /* category hold an index, next number to use for auto-creating
@@ -687,7 +689,9 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
 
         if (section->name)
         {
-            parent = ensure_categories (config, section->name, strlen (section->name));
+            parent = ensure_categories (config,
+                    section->name,
+                    strlen (section->name));
             if (!parent)
             {
                 g_warning ("Invalid category '%s'; skipping to next section",
@@ -719,7 +723,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                     continue;
                 }
 
-                option = g_new0 (struct option, 1);
+                option = g_slice_new0 (struct option);
                 if (extra->type == EXTRA_TYPE_LIST)
                 {
                     if (!is_extra_value (extra, &parsed->value))
@@ -727,7 +731,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
                         *--s = ':';
-                        g_free (option);
+                        g_slice_free (struct option, option);
                         continue;
                     }
                     g_value_init (&option->value, G_TYPE_STRING);
@@ -742,7 +746,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                         g_warning ("Failed to get INT value for option '%s' in '%s', skipped",
                                 parsed->name, section->name);
                         *--s = ':';
-                        g_free (option);
+                        g_slice_free (struct option, option);
                         continue;
                     }
                     if (!is_extra_value (extra, &v))
@@ -750,7 +754,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
                         *--s = ':';
-                        g_free (option);
+                        g_slice_free (struct option, option);
                         continue;
                     }
                     g_value_init (&option->value, G_TYPE_INT);
@@ -768,7 +772,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                 if (streq (parsed->value, "true")
                         || streq (parsed->value, "false"))
                 {
-                    option = g_new0 (struct option, 1);
+                    option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
                     g_value_init (&option->value, G_TYPE_BOOLEAN);
                     g_value_set_boolean (&option->value,
@@ -786,7 +790,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                                 parsed->name, section->name);
                         continue;
                     }
-                    option = g_new0 (struct option, 1);
+                    option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
                     g_value_init (&option->value, G_TYPE_INT);
                     g_value_set_int (&option->value, v);
@@ -803,7 +807,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                                 parsed->name, section->name);
                         continue;
                     }
-                    option = g_new0 (struct option, 1);
+                    option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
                     g_value_init (&option->value, G_TYPE_UINT);
                     g_value_set_uint (&option->value, v);
@@ -820,7 +824,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                                 parsed->name, section->name);
                         continue;
                     }
-                    option = g_new0 (struct option, 1);
+                    option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
                     g_value_init (&option->value, G_TYPE_DOUBLE);
                     g_value_set_double (&option->value, v);
@@ -840,7 +844,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                             (++v)[--len] = '\0';
                     }
 
-                    option = g_new0 (struct option, 1);
+                    option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
                     g_value_init (&option->value, G_TYPE_STRING);
                     g_value_set_string (&option->value, v);
@@ -966,7 +970,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
                 }
             }
         }
-        else if (option->extra == priv->root)
+        else if (option_is_category (option, priv->root))
         {
             gsize len;
 
@@ -1162,7 +1166,7 @@ donna_config_get_string (DonnaProviderConfig    *config,
     }                                                                   \
     else                                                                \
     {                                                                   \
-        option = g_new0 (struct option, 1);                             \
+        option = g_slice_new0 (struct option);                          \
         option->name = g_strdup (s);                                    \
         g_value_init (&option->value, type);                            \
         g_node_append_data (parent, option);                            \
@@ -1239,9 +1243,7 @@ _remove_option (DonnaProviderConfig *config,
     DonnaProviderConfigPrivate *priv;
     GNode *parent;
     GNode *node;
-    struct option *option;
     const gchar *s;
-    gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
@@ -1273,10 +1275,8 @@ _remove_option (DonnaProviderConfig *config,
         g_rw_lock_writer_unlock (&priv->lock);
         return FALSE;
     }
-    option = node->data;
-    /* is it a category? */
-    ret = option->extra == priv->root;
-    if ((category && !ret) || (!category && ret))
+    if ((!category && option_is_category (node->data, priv->root))
+            || (category && !option_is_category (node->data, priv->root)))
     {
         g_rw_lock_writer_unlock (&priv->lock);
         return FALSE;
@@ -1647,12 +1647,8 @@ node_children (DonnaTask *task, struct node_children_data *data)
 
     for (gnode = gnode->children; gnode; gnode = gnode->next)
     {
-        struct option *option;
-
         match = FALSE;
-        option = gnode->data;
-        /* category? */
-        if (option->extra == priv->root)
+        if (option_is_category (gnode->data, priv->root))
         {
             if (want_categories)
                 match = TRUE;
@@ -1664,9 +1660,11 @@ node_children (DonnaTask *task, struct node_children_data *data)
         {
             if (data->is_getting_children)
             {
+                struct option *option;
                 gchar buf[255];
                 gchar *s;
 
+                option = gnode->data;
                 if (len + strlen (option->name) > 255)
                 {
                     s = g_strdup_printf ("%s/%s", location, option->name);
