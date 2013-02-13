@@ -18,25 +18,31 @@ static void             ct_name_finalize            (GObject            *object)
 
 /* ColumnType */
 static gint             ct_name_get_renderers       (DonnaColumnType    *ct,
-                                                     const gchar        *name,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
                                                      DonnaRenderer     **renderers);
 static void             ct_name_render              (DonnaColumnType    *ct,
-                                                     const gchar        *name,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
                                                      DonnaNode          *node,
                                                      gpointer            data,
                                                      GtkCellRenderer    *renderer);
 static GtkMenu *        ct_name_get_options_menu    (DonnaColumnType    *ct,
-                                                     const gchar        *name);
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name);
 static gboolean         ct_name_handle_context      (DonnaColumnType    *ct,
-                                                     const gchar        *name,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
                                                      DonnaNode          *node);
 static gboolean         ct_name_set_tooltip         (DonnaColumnType    *ct,
-                                                     const gchar        *name,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
                                                      DonnaNode          *node,
                                                      gpointer            data,
                                                      GtkTooltip         *tooltip);
 static gint             ct_name_node_cmp            (DonnaColumnType    *ct,
-                                                     const gchar        *name,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
 
@@ -92,7 +98,8 @@ ct_name_finalize (GObject *object)
 
 static gint
 ct_name_get_renderers (DonnaColumnType   *ct,
-                       const gchar       *name,
+                       const gchar       *tv_name,
+                       const gchar       *col_name,
                        DonnaRenderer    **renderers)
 {
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_NAME (ct), 0);
@@ -108,6 +115,7 @@ ct_name_get_renderers (DonnaColumnType   *ct,
 
 static void
 ct_name_render (DonnaColumnType    *ct,
+                const gchar        *tv_name,
                 const gchar        *col_name,
                 DonnaNode          *node,
                 gpointer            data,
@@ -132,7 +140,8 @@ ct_name_render (DonnaColumnType    *ct,
 
 static GtkMenu *
 ct_name_get_options_menu (DonnaColumnType    *ct,
-                          const gchar        *name)
+                          const gchar        *tv_name,
+                          const gchar        *col_name)
 {
     /* FIXME */
     return NULL;
@@ -140,7 +149,8 @@ ct_name_get_options_menu (DonnaColumnType    *ct,
 
 static gboolean
 ct_name_handle_context (DonnaColumnType    *ct,
-                        const gchar        *name,
+                        const gchar        *tv_name,
+                        const gchar        *col_name,
                         DonnaNode          *node)
 {
     /* FIXME */
@@ -149,7 +159,8 @@ ct_name_handle_context (DonnaColumnType    *ct,
 
 static gboolean
 ct_name_set_tooltip (DonnaColumnType    *ct,
-                     const gchar        *name,
+                     const gchar        *tv_name,
+                     const gchar        *col_name,
                      DonnaNode          *node,
                      gpointer            data,
                      GtkTooltip         *tooltip)
@@ -159,22 +170,29 @@ ct_name_set_tooltip (DonnaColumnType    *ct,
 }
 
 static gboolean
-get_sort_option (const gchar *col_name, const gchar *opt_name)
+get_sort_option (const gchar *tv_name,
+                 const gchar *col_name,
+                 const gchar *opt_name)
 {
     extern Donna *donna;
     gchar         buf[128];
     gboolean      value;
 
-    snprintf (buf, 128, "columns/%s/sort_%s", col_name, opt_name);
+    snprintf (buf, 128, "treeviews/%s/columns/%s/sort_%s",
+            tv_name, col_name, opt_name);
     if (!donna_config_get_boolean (donna->config, buf, &value))
     {
-        snprintf (buf, 128, "defaults/sort/%s", opt_name);
+        snprintf (buf, 128, "columns/%s/sort_%s", col_name, opt_name);
         if (!donna_config_get_boolean (donna->config, buf, &value))
         {
-            value = TRUE;
-            if (donna_config_set_boolean (donna->config, buf, value))
-                g_info ("Option '%s' did not exists, initialized to TRUE",
-                        buf);
+            snprintf (buf, 128, "defaults/sort/%s", opt_name);
+            if (!donna_config_get_boolean (donna->config, buf, &value))
+            {
+                value = TRUE;
+                if (donna_config_set_boolean (donna->config, buf, value))
+                    g_info ("Option '%s' did not exists, initialized to TRUE",
+                            buf);
+            }
         }
     }
     return value;
@@ -192,7 +210,8 @@ node_updated_cb (DonnaProvider  *provider,
 
 static inline gchar *
 get_node_key (DonnaColumnType   *ct,
-              const gchar       *name,
+              const gchar       *tv_name,
+              const gchar       *col_name,
               DonnaNode         *node,
               gboolean           dot_first,
               gboolean           special_first,
@@ -202,7 +221,7 @@ get_node_key (DonnaColumnType   *ct,
     gchar  buf[128];
     gchar *key;
 
-    snprintf (buf, 128, "%s-utf8-collate-key", name);
+    snprintf (buf, 128, "%s/%s/utf8-collate-key", tv_name, col_name);
     key = g_object_get_data (G_OBJECT (node), buf);
     /* no key, or invalid (options changed) */
     if (!key || *key != get_options_char (dot_first, special_first, natural_order))
@@ -250,7 +269,8 @@ get_node_key (DonnaColumnType   *ct,
 
 static gint
 ct_name_node_cmp (DonnaColumnType    *ct,
-                  const gchar        *name,
+                  const gchar        *tv_name,
+                  const gchar        *col_name,
                   DonnaNode          *node1,
                   DonnaNode          *node2)
 {
@@ -260,13 +280,13 @@ ct_name_node_cmp (DonnaColumnType    *ct,
     gchar *key1;
     gchar *key2;
 
-    dot_first     = get_sort_option (name, "dot_first");
-    special_first = get_sort_option (name, "special_first");
-    natural_order = get_sort_option (name, "natural_order");
+    dot_first     = get_sort_option (tv_name, col_name, "dot_first");
+    special_first = get_sort_option (tv_name, col_name, "special_first");
+    natural_order = get_sort_option (tv_name, col_name, "natural_order");
 
-    key1 = get_node_key (ct, name, node1,
+    key1 = get_node_key (ct, tv_name, col_name, node1,
             dot_first, special_first, natural_order);
-    key2 = get_node_key (ct, name, node2,
+    key2 = get_node_key (ct, tv_name, col_name, node2,
             dot_first, special_first, natural_order);
 
     return strcmp (key1, key2);
