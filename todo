@@ -1,4 +1,4 @@
-- use SharedValue as wrapper to GValue inside nodes
+- use DonnaSharedString* instead of gchar*
 - provider-config: send signals new_node & node_children
 
 - tree has hashtable, keys are node pointers
@@ -10,7 +10,6 @@
 - columntype: cb to get list of req/opt options
 
 - node: setter should take care of return value, not node
-- node: refresh: bug: cannot refresh name/icon/basic props
 - node: err msg "prop %s on node" should add "node %s:%s",domain,location
 
 - a few recent places (config, etc) need to use GError

@@ -586,9 +586,8 @@ node_updated_cb (DonnaProvider       *provider,
 }
 
 static DonnaTaskState
-node_refresh (DonnaTask *task, gpointer _data)
+node_refresh (DonnaTask *task, struct refresh_data *data)
 {
-    struct refresh_data *data;
     DonnaNodePrivate    *priv;
     GHashTable          *props;
     gulong               sig;
@@ -598,7 +597,6 @@ node_refresh (DonnaTask *task, gpointer _data)
     DonnaTaskState       ret;
     GValue              *value;
 
-    data = (struct refresh_data *) _data;
     priv = data->node->priv;
     names = data->names;
     refreshed = data->refreshed = g_ptr_array_sized_new (names->len);
@@ -607,14 +605,16 @@ node_refresh (DonnaTask *task, gpointer _data)
     /* connect to the provider's signal, so we know which properties are
      * actually refreshed */
     sig = g_signal_connect (priv->provider, "node-updated",
-            G_CALLBACK (node_updated_cb), _data);
+            G_CALLBACK (node_updated_cb), data);
 
     props = priv->props;
     for (i = 0; i < names->len; ++i)
     {
         DonnaNodeProp   *prop;
+        refresher_fn     refresher;
         guint            j;
         gboolean         done;
+        gchar          **s;
 
         if (donna_task_is_cancelling (task))
         {
@@ -622,10 +622,32 @@ node_refresh (DonnaTask *task, gpointer _data)
             break;
         }
 
-        g_rw_lock_reader_lock (&priv->props_lock);
-        prop = g_hash_table_lookup (props, names->pdata[i]);
-        g_rw_lock_reader_unlock (&priv->props_lock);
-        if (!prop)
+        refresher = NULL;
+
+        /* basic properties. We skip internal ones (provider, domain, location,
+         * node-type) since they can't be refreshed (should never be needed
+         * anyway) */
+        j = 0;
+        for (s = (gchar **) &node_basic_properties[FIRST_REQUIRED_PROP]; *s; ++s, ++j)
+        {
+            if (streq (names->pdata[i], *s))
+            {
+                refresher = priv->refresher;
+                break;
+            }
+        }
+
+        if (!refresher)
+        {
+            /* look for other properties then */
+            g_rw_lock_reader_lock (&priv->props_lock);
+            prop = g_hash_table_lookup (props, names->pdata[i]);
+            g_rw_lock_reader_unlock (&priv->props_lock);
+            if (prop)
+                refresher = prop->refresher;
+        }
+
+        if (!refresher)
             continue;
 
         /* only call the refresher if the prop hasn't already been refreshed */
@@ -642,7 +664,7 @@ node_refresh (DonnaTask *task, gpointer _data)
         if (done)
             continue;
 
-        if (!prop->refresher (task, data->node, prop->name))
+        if (!refresher (task, data->node, names->pdata[i]))
             ret = DONNA_TASK_FAILED;
     }
 
