@@ -7,16 +7,16 @@
 G_BEGIN_DECLS
 
 gchar
-get_options_char (gboolean dot_first,
-                  gboolean special_first,
-                  gboolean natural_order);
+sort_get_options_char (gboolean dot_first,
+                       gboolean special_first,
+                       gboolean natural_order);
 
 gchar *
-utf8_collate_key (const gchar   *str,
-                  gssize         len,
-                  gboolean       dot_first,
-                  gboolean       special_first,
-                  gboolean       natural_order);
+sort_get_utf8_collate_key (const gchar   *str,
+                           gssize         len,
+                           gboolean       dot_first,
+                           gboolean       special_first,
+                           gboolean       natural_order);
 
 G_END_DECLS
 

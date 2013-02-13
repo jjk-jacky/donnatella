@@ -13,9 +13,9 @@ enum
 #define COLLATION_SENTINEL  "\1\1\1"
 
 gchar
-get_options_char (gboolean dot_first,
-                  gboolean special_first,
-                  gboolean natural_order)
+sort_get_options_char (gboolean dot_first,
+                       gboolean special_first,
+                       gboolean natural_order)
 {
     gchar c;
 
@@ -31,11 +31,11 @@ get_options_char (gboolean dot_first,
 }
 
 gchar *
-utf8_collate_key (const gchar   *str,
-                  gssize         len,
-                  gboolean       dot_first,
-                  gboolean       special_first,
-                  gboolean       natural_order)
+sort_get_utf8_collate_key (const gchar   *str,
+                           gssize         len,
+                           gboolean       dot_first,
+                           gboolean       special_first,
+                           gboolean       natural_order)
 {
     GString *result;
     GString *append;
@@ -57,7 +57,7 @@ utf8_collate_key (const gchar   *str,
     p = str;
 
     /* store a character so we can check/invalidate the key if options change */
-    c = get_options_char (dot_first, special_first, natural_order);
+    c = sort_get_options_char (dot_first, special_first, natural_order);
     g_string_append_c (result, c);
 
     if (special_first)

@@ -224,7 +224,8 @@ get_node_key (DonnaColumnType   *ct,
     snprintf (buf, 128, "%s/%s/utf8-collate-key", tv_name, col_name);
     key = g_object_get_data (G_OBJECT (node), buf);
     /* no key, or invalid (options changed) */
-    if (!key || *key != get_options_char (dot_first, special_first, natural_order))
+    if (!key || *key != sort_get_options_char (dot_first, special_first,
+                natural_order))
     {
         gchar *s;
 
@@ -259,7 +260,8 @@ get_node_key (DonnaColumnType   *ct,
         }
 
         donna_node_get (node, FALSE, "name", &s, NULL);
-        key = utf8_collate_key (s, -1, dot_first, special_first, natural_order);
+        key = sort_get_utf8_collate_key (s, -1, dot_first, special_first,
+                natural_order);
         g_free (s);
         g_object_set_data_full (G_OBJECT (node), buf, key, g_free);
     }
