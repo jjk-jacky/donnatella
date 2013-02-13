@@ -3,7 +3,32 @@
 #include <string.h>     /* strlen() */
 #include "sort.h"
 
+enum
+{
+    SORT_DOT_FIRST      = (1 << 0),
+    SORT_SPECIAL_FIRST  = (1 << 1),
+    SORT_NATURAL_ORDER  = (1 << 2),
+};
+
 #define COLLATION_SENTINEL  "\1\1\1"
+
+gchar
+get_options_char (gboolean dot_first,
+                  gboolean special_first,
+                  gboolean natural_order)
+{
+    gchar c;
+
+    c = 0;
+    if (dot_first)
+        c |= SORT_DOT_FIRST;
+    if (special_first)
+        c |= SORT_SPECIAL_FIRST;
+    if (natural_order)
+        c |= SORT_NATURAL_ORDER;
+
+    return c;
+}
 
 gchar *
 utf8_collate_key (const gchar   *str,
@@ -18,6 +43,7 @@ utf8_collate_key (const gchar   *str,
     const gchar *prev;
     const gchar *end;
     gchar *collate_key;
+    gchar c;
     gint digits;
     gint leading_zeros;
 
@@ -29,6 +55,10 @@ utf8_collate_key (const gchar   *str,
 
     end = str + len;
     p = str;
+
+    /* store a character so we can check/invalidate the key if options change */
+    c = get_options_char (dot_first, special_first, natural_order);
+    g_string_append_c (result, c);
 
     if (special_first)
     {

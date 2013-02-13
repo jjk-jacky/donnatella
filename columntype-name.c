@@ -11,7 +11,10 @@
 
 struct _DonnaColumnTypeNamePrivate
 {
+    GPtrArray *domains;
 };
+
+static void             ct_name_finalize            (GObject            *object);
 
 /* ColumnType */
 static gint             ct_name_get_renderers       (DonnaColumnType    *ct,
@@ -51,6 +54,11 @@ ct_name_columntype_init (DonnaColumnTypeInterface *interface)
 static void
 donna_column_type_name_class_init (DonnaColumnTypeNameClass *klass)
 {
+    GObjectClass *o_class;
+
+    o_class = (GObjectClass *) klass;
+    o_class->finalize = ct_name_finalize;
+
     g_type_class_add_private (klass, sizeof (DonnaColumnTypeNamePrivate));
 }
 
@@ -62,12 +70,25 @@ donna_column_type_name_init (DonnaColumnTypeName *ct)
     priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_NAME,
             DonnaColumnTypeNamePrivate);
+    priv->domains = g_ptr_array_new ();
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeName, donna_column_type_name,
         G_TYPE_OBJECT,
         G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE_NAME, ct_name_columntype_init)
         )
+
+static void
+ct_name_finalize (GObject *object)
+{
+    DonnaColumnTypeNamePrivate *priv;
+
+    priv = DONNA_COLUMNTYPE_NAME (object)->priv;
+    g_ptr_array_free (priv->domains, TRUE);
+
+    /* chain up */
+    G_OBJECT_CLASS (donna_column_type_name_parent_class)->finalize (object);
+}
 
 static gint
 ct_name_get_renderers (DonnaColumnType   *ct,
@@ -141,13 +162,13 @@ static gboolean
 get_sort_option (const gchar *col_name, const gchar *opt_name)
 {
     extern Donna *donna;
-    gchar         buf[64];
+    gchar         buf[128];
     gboolean      value;
 
-    snprintf (buf, 64, "columns/%s/sort_%s", col_name, opt_name);
+    snprintf (buf, 128, "columns/%s/sort_%s", col_name, opt_name);
     if (!donna_config_get_boolean (donna->config, buf, &value))
     {
-        snprintf (buf, 64, "defaults/sort/%s", opt_name);
+        snprintf (buf, 128, "defaults/sort/%s", opt_name);
         if (!donna_config_get_boolean (donna->config, buf, &value))
         {
             value = TRUE;
@@ -159,6 +180,74 @@ get_sort_option (const gchar *col_name, const gchar *opt_name)
     return value;
 }
 
+static void
+node_updated_cb (DonnaProvider  *provider,
+                 DonnaNode      *node,
+                 const gchar    *name,
+                 gchar          *key)
+{
+    /* removes the data for key */
+    g_object_set_data (G_OBJECT (node), key, NULL);
+}
+
+static inline gchar *
+get_node_key (DonnaColumnType   *ct,
+              const gchar       *name,
+              DonnaNode         *node,
+              gboolean           dot_first,
+              gboolean           special_first,
+              gboolean           natural_order)
+{
+    DonnaColumnTypeNamePrivate *priv;
+    gchar  buf[128];
+    gchar *key;
+
+    snprintf (buf, 128, "%s-utf8-collate-key", name);
+    key = g_object_get_data (G_OBJECT (node), buf);
+    /* no key, or invalid (options changed) */
+    if (!key || *key != get_options_char (dot_first, special_first, natural_order))
+    {
+        gchar *s;
+
+        /* if we're installing the key (i.e. not updating an invalid one) we
+         * need to make sure we're listening on the provider's
+         * node-updated::name signal, to remove the key on rename */
+        if (!key)
+        {
+            const gchar *domain;
+            guint i;
+
+            priv = DONNA_COLUMNTYPE_NAME (ct)->priv;
+            donna_node_get (node, FALSE, "domain", &domain, NULL);
+            for (i = 0; i < priv->domains->len; ++i)
+                if (streq (domain, priv->domains->pdata[i]))
+                    break;
+            /* no match, must connect */
+            if (i >= priv->domains->len)
+            {
+                DonnaProvider *provider;
+
+                donna_node_get (node, FALSE, "provider", &provider, NULL);
+                g_signal_connect_data (provider, "node-updated::name",
+                        G_CALLBACK (node_updated_cb),
+                        g_strdup (buf),
+                        (GClosureNotify) g_free,
+                        0);
+                g_object_unref (provider);
+
+                g_ptr_array_add (priv->domains, (gpointer) domain);
+            }
+        }
+
+        donna_node_get (node, FALSE, "name", &s, NULL);
+        key = utf8_collate_key (s, -1, dot_first, special_first, natural_order);
+        g_free (s);
+        g_object_set_data_full (G_OBJECT (node), buf, key, g_free);
+    }
+
+    return key + 1; /* skip options_char */
+}
+
 static gint
 ct_name_node_cmp (DonnaColumnType    *ct,
                   const gchar        *name,
@@ -168,33 +257,17 @@ ct_name_node_cmp (DonnaColumnType    *ct,
     gboolean dot_first;
     gboolean special_first;
     gboolean natural_order;
-    gchar *name1;
-    gchar *name2;
     gchar *key1;
     gchar *key2;
-    gint   ret;
 
     dot_first     = get_sort_option (name, "dot_first");
     special_first = get_sort_option (name, "special_first");
     natural_order = get_sort_option (name, "natural_order");
 
-    donna_node_get (node1, FALSE, "name", &name1, NULL);
-    donna_node_get (node2, FALSE, "name", &name2, NULL);
+    key1 = get_node_key (ct, name, node1,
+            dot_first, special_first, natural_order);
+    key2 = get_node_key (ct, name, node2,
+            dot_first, special_first, natural_order);
 
-    key1 = utf8_collate_key (name1, -1,
-            dot_first,
-            special_first,
-            natural_order);
-    key2 = utf8_collate_key (name2, -1,
-            dot_first,
-            special_first,
-            natural_order);
-    ret = strcmp (key1, key2);
-
-    g_free (key1);
-    g_free (key1);
-    g_free (name1);
-    g_free (name2);
-
-    return ret;
+    return strcmp (key1, key2);
 }
