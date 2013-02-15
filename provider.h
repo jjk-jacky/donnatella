@@ -49,7 +49,7 @@ struct _DonnaProviderInterface
 };
 
 /* signals */
-void    donna_provider_node_created                 (DonnaProvider  *provider,
+void    donna_provider_new_node                     (DonnaProvider  *provider,
                                                      DonnaNode      *node);
 void    donna_provider_node_updated                 (DonnaProvider  *provider,
                                                      DonnaNode      *node,
