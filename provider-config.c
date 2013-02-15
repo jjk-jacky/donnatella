@@ -1173,16 +1173,13 @@ donna_config_get_string (DonnaProviderConfig    *config,
         ret = TRUE;                                                     \
     }                                                                   \
     if (ret)                                                            \
-    {                                                                   \
         value_set (&option->value, value);                              \
-        if (option->node)                                               \
-        {                                                               \
-            donna_node_set_property_value (option->node,                \
-                    "option-value",                                     \
-                    &option->value);                                    \
-        }                                                               \
-    }                                                                   \
     g_rw_lock_writer_unlock (&priv->lock);                              \
+    /* set value on node after releasing the lock to avoid dead locks */ \
+    if (option->node)                                                   \
+        donna_node_set_property_value (option->node,                    \
+                "option-value",                                         \
+                &option->value);                                        \
                                                                         \
     return ret;                                                         \
 } while (0)
