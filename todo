@@ -1,5 +1,7 @@
 - use DonnaSharedString* instead of gchar*
-- provider-config: send signals new_node & node_children
+- provider-config: send signals node_children
+- config: limit len of names? (columntype-name has 128 for
+  "treeviews/$name/columns/$name/sort_$name")
 
 - tree has hashtable, keys are node pointers
 - use GStringChunk in config for section/extra/option names

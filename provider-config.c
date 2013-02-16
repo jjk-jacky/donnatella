@@ -1521,6 +1521,10 @@ ensure_option_has_node (DonnaProviderConfig *config,
         g_object_add_toggle_ref (G_OBJECT (option->node),
                 (GToggleNotify) node_toggle_ref_cb,
                 config);
+
+        /* have provider emit the new_node signal */
+        donna_provider_new_node (DONNA_PROVIDER (config), option->node);
+
         return TRUE;
     }
     else
