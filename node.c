@@ -246,15 +246,24 @@ donna_node_new_from_node (DonnaProvider *provider,
     g_return_val_if_fail (DONNA_IS_NODE (sce), NULL);
 
     /* create a new node, duplicate of sce but w/ different provider & location */
+    g_rw_lock_reader_lock (&sce->priv->props_lock);
     node = donna_node_new (provider, location,
             sce->priv->node_type, sce->priv->refresher, sce->priv->setter,
             sce->priv->name, sce->priv->flags);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    if (!node)
+    {
+        g_warning ("Failed to create a new node '%s:%s' when trying to make a new node from '%s:%s'",
+                donna_provider_get_domain (provider),
+                location,
+                donna_provider_get_domain (sce->priv->provider),
+                sce->priv->location);
+        g_rw_lock_reader_unlock (&sce->priv->props_lock);
+        return NULL;
+    }
 
     /* and copy over all the (other) properties */
     priv = node->priv;
     props = priv->props;
-    g_rw_lock_reader_lock (&sce->priv->props_lock);
     /* basic props */
     for (i = 0; i < NB_BASIC_PROPS; ++i)
     {
