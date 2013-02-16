@@ -679,8 +679,8 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
         return TRUE;
     }
 
-    re_int      = g_regex_new ("^[+-][0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
-    re_uint     = g_regex_new ("^[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
+    re_int      = g_regex_new ("^[+-][0-9]+$",      G_REGEX_OPTIMIZE, 0, NULL);
+    re_uint     = g_regex_new ("^[0-9]+$",          G_REGEX_OPTIMIZE, 0, NULL);
     re_double   = g_regex_new ("^[0-9]+\\.[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
 
     g_rw_lock_writer_lock (&priv->lock);
@@ -727,8 +727,6 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                 option = g_slice_new0 (struct option);
                 if (extra->type == EXTRA_TYPE_LIST)
                 {
-                    DonnaSharedString *ss;
-
                     if (!is_extra_value (extra, &parsed->value))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
@@ -737,9 +735,9 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                         g_slice_free (struct option, option);
                         continue;
                     }
-                    g_value_init (&option->value, G_TYPE_BOXED);
-                    ss = donna_shared_string_new_dup (parsed->value);
-                    g_value_take_boxed (&option->value, ss);
+                    g_value_init (&option->value, DONNA_TYPE_SHARED_STRING);
+                    donna_g_value_new_shared_string_dup (&option->value,
+                            parsed->value);
                 }
                 else /* EXTRA_TYPE_LIST_INT */
                 {
@@ -837,7 +835,6 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                 /* string */
                 else
                 {
-                    DonnaSharedString *ss;
                     gsize len;
                     gchar *v = parsed->value;
 
@@ -851,9 +848,8 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
 
                     option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
-                    g_value_init (&option->value, G_TYPE_BOXED);
-                    ss = donna_shared_string_new_dup (v);
-                    g_value_take_boxed (&option->value, ss);
+                    g_value_init (&option->value, DONNA_TYPE_SHARED_STRING);
+                    donna_g_value_new_shared_string_dup (&option->value, v);
                     g_node_append_data (parent, option);
 
                     if (v != parsed->value)
@@ -896,13 +892,11 @@ export_config (DonnaProviderConfigPrivate   *priv,
 
             if (option->extra)
             {
-                if (G_VALUE_HOLDS (&option->value, G_TYPE_BOXED))
+                if (G_VALUE_HOLDS (&option->value, DONNA_TYPE_SHARED_STRING))
                 {
-                    DonnaSharedString *ss;
                     const gchar *s;
 
-                    ss = g_value_get_boxed (&option->value);
-                    s = donna_shared_string (ss);
+                    s = donna_g_value_get_shared_string_const_string (&option->value);
                     if (streq (s, "true") || streq (s, "false")
                             || isblank (s[0])
                             || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
@@ -959,13 +953,13 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                 option->name,
                                 g_value_get_double (&option->value));
                         break;
-                    case G_TYPE_BOXED:
+                    default:
+                        if (G_VALUE_TYPE (&option->value) == DONNA_TYPE_SHARED_STRING)
                         {
-                            DonnaSharedString *ss;
                             const gchar *s;
 
-                            ss = g_value_get_boxed (&option->value);
-                            s = donna_shared_string (ss);
+                            s = donna_g_value_get_shared_string_const_string (
+                                    &option->value);
                             if (streq (s, "true") || streq (s, "false")
                                     || isblank (s[0])
                                     || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
@@ -976,8 +970,8 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                 g_string_append_printf (str, "%s=%s\n",
                                         option->name,
                                         s);
-                            break;
                         }
+                        break;
                 }
             }
         }
@@ -1133,7 +1127,7 @@ donna_config_get_shared_string (DonnaProviderConfig    *config,
                                 const gchar            *name,
                                 DonnaSharedString     **value)
 {
-    _get_option (G_TYPE_BOXED, g_value_dup_boxed);
+    _get_option (DONNA_TYPE_SHARED_STRING, donna_g_value_dup_shared_string);
 }
 
 #define _set_option(type, value_set)  do {                              \
@@ -1142,6 +1136,7 @@ donna_config_get_shared_string (DonnaProviderConfig    *config,
     GNode *node;                                                        \
     struct option *option;                                              \
     const gchar *s;                                                     \
+    gboolean ret;                                                       \
                                                                         \
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
     g_return_val_if_fail (name != NULL, FALSE);                         \
@@ -1190,6 +1185,8 @@ donna_config_get_shared_string (DonnaProviderConfig    *config,
         donna_node_set_property_value (option->node,                    \
                 "option-value",                                         \
                 &option->value);                                        \
+                                                                        \
+    return ret;                                                         \
 } while (0)
 
 gboolean
@@ -1197,9 +1194,7 @@ donna_config_set_boolean (DonnaProviderConfig    *config,
                           const gchar            *name,
                           gboolean                value)
 {
-    gboolean ret;
     _set_option (G_TYPE_BOOLEAN, g_value_set_boolean);
-    return ret;
 }
 
 gboolean
@@ -1207,9 +1202,7 @@ donna_config_set_int (DonnaProviderConfig    *config,
                       const gchar            *name,
                       gint                    value)
 {
-    gboolean ret;
     _set_option (G_TYPE_INT, g_value_set_int);
-    return ret;
 }
 
 gboolean
@@ -1217,9 +1210,7 @@ donna_config_set_uint (DonnaProviderConfig    *config,
                        const gchar            *name,
                        guint                   value)
 {
-    gboolean ret;
     _set_option (G_TYPE_UINT, g_value_set_uint);
-    return ret;
 }
 
 gboolean
@@ -1227,9 +1218,7 @@ donna_config_set_double (DonnaProviderConfig    *config,
                          const gchar            *name,
                          gdouble                 value)
 {
-    gboolean ret;
     _set_option (G_TYPE_DOUBLE, g_value_set_double);
-    return ret;
 }
 
 gboolean
@@ -1237,43 +1226,31 @@ donna_config_set_shared_string (DonnaProviderConfig    *config,
                                 const gchar            *name,
                                 DonnaSharedString      *value)
 {
-    gboolean ret;
-    _set_option (G_TYPE_BOXED, g_value_set_boxed);
-    return ret;
+    _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_set_shared_string);
 }
 
 gboolean
-donna_config_set_string_take (DonnaProviderConfig   *config,
-                              const gchar           *name,
-                              gchar                 *string)
+donna_config_take_shared_string (DonnaProviderConfig    *config,
+                                 const gchar            *name,
+                                 DonnaSharedString      *value)
 {
-    DonnaSharedString *value;
-    gboolean ret;
+    _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_take_shared_string);
+}
 
-    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
-    g_return_val_if_fail (name != NULL, FALSE);
-
-    value = donna_shared_string_new_take (string);
-    _set_option (G_TYPE_BOXED, g_value_set_boxed);
-    donna_shared_string_unref (value);
-    return ret;
+gboolean
+donna_config_set_string_take (DonnaProviderConfig    *config,
+                              const gchar            *name,
+                              gchar                  *value)
+{
+    _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_new_shared_string_take);
 }
 
 gboolean
 donna_config_set_string_dup (DonnaProviderConfig   *config,
                              const gchar           *name,
-                             const gchar           *string)
+                             const gchar           *value)
 {
-    DonnaSharedString *value;
-    gboolean ret;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
-    g_return_val_if_fail (name != NULL, FALSE);
-
-    value = donna_shared_string_new_dup (string);
-    _set_option (G_TYPE_BOXED, g_value_set_boxed);
-    donna_shared_string_unref (value);
-    return ret;
+    _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_new_shared_string_dup);
 }
 
 static inline gboolean
@@ -1537,15 +1514,13 @@ ensure_option_has_node (DonnaProviderConfig *config,
             /* is this an extra? */
             if (option->extra)
             {
-                DonnaSharedString *ss;
                 GValue val = G_VALUE_INIT;
 
-                ss = donna_shared_string_new_dup (option->extra);
-                g_value_init (&val, G_TYPE_BOXED);
-                g_value_take_boxed (&val, ss);
+                g_value_init (&val, DONNA_TYPE_SHARED_STRING);
+                donna_g_value_new_shared_string_dup (&val, option->extra);
                 donna_node_add_property (option->node,
                         "option-extra",
-                        G_TYPE_BOXED,
+                        DONNA_TYPE_SHARED_STRING,
                         &val,
                         node_prop_refresher,
                         NULL /* no setter */,

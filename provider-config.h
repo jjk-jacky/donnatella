@@ -66,6 +66,9 @@ gboolean    donna_config_set_double             (DonnaProviderConfig    *config,
 gboolean    donna_config_set_shared_string      (DonnaProviderConfig    *config,
                                                  const gchar            *name,
                                                  DonnaSharedString      *value);
+gboolean    donna_config_take_shared_string     (DonnaProviderConfig    *config,
+                                                 const gchar            *name,
+                                                 DonnaSharedString      *value);
 gboolean    donna_config_set_string_take        (DonnaProviderConfig    *config,
                                                  const gchar            *name,
                                                  gchar                  *value);

@@ -1,4 +1,3 @@
-- make TYPE_SHARED_STRING a fundamental type, not a boxed
 - config manager: signals option_set & option_removed
 - config: limit len of names? (columntype-name has 128 for
   "treeviews/$name/columns/$name/sort_$name")
