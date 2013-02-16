@@ -1,4 +1,5 @@
 - use DonnaSharedString* instead of gchar*
+- config manager: signals option_set & option_removed
 - config: limit len of names? (columntype-name has 128 for
   "treeviews/$name/columns/$name/sort_$name")
 
