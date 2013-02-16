@@ -15,6 +15,9 @@ typedef struct
     get_provider_fn const get_provider;
 } Donna;
 
+
+void        donna_start_internal_task       (DonnaTask  *task);
+
 G_END_DECLS
 
 #endif /* __DONNA_H__ */

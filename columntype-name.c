@@ -128,7 +128,40 @@ ct_name_render (DonnaColumnType    *ct,
 
     if (type == DONNA_COLUMNTYPE_RENDERER_PIXBUF)
     {
-        /* FIXME: icon */
+        DonnaNodeHasValue has_value;
+        GdkPixBuf *pixbuf;
+
+        donna_node_get (node, FALSE, "icon", &has_value, &pixbuf, NULL);
+        if (has_value == DONNA_NODE_VALUE_SET)
+        {
+            g_object_set (renderer, "pixbuf", pixbuf, NULL);
+            g_object_unref (pixbuf);
+        }
+        else
+        {
+            DonnaNodeType node_type;
+
+            donna_node_get (node, FALSE, "node-type", &node_type, NULL);
+            if (node_type == DONNA_NODE_ITEM)
+                g_object_set (renderer, "stock-id", GTK_STOCK_FILE, NULL);
+            else if (node_type == DONNA_NODE_CONTAINER)
+                g_object_set (renderer, "stock-id", GTK_STOCK_DIRECTORY, NULL);
+            else /* DONNA_NODE_EXTENDED */
+                g_object_set (renderer, "stock-id", GTK_STOCK_EXECUTE, NULL);
+
+            if (has_value == DONNA_NODE_VALUE_NEED_REFRESH)
+            {
+                DonnaTask *task;
+
+                /* a default icon was set up, now let's go get the "real" one */
+                task = donna_node_refresh_task (node, "icon", NULL);
+                if (G_LIKELY (task))
+                {
+                    //FIXME:donna_task_set_callback (task, cb, data, destroy);
+                    donna_start_internal_task (task);
+                }
+            }
+        }
     }
     else /* DONNA_COLUMNTYPE_RENDERER_TEXT */
     {
