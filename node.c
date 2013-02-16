@@ -101,6 +101,8 @@ typedef struct
 
 static void donna_node_finalize (GObject *object);
 
+static void free_node_prop (DonnaNodeProp *prop);
+
 static void
 donna_node_class_init (DonnaNodeClass *klass)
 {
@@ -119,6 +121,10 @@ donna_node_init (DonnaNode *node)
     priv = node->priv = G_TYPE_INSTANCE_GET_PRIVATE (node,
             DONNA_TYPE_NODE,
             DonnaNodePrivate);
+
+    priv->props = g_hash_table_new_full (g_str_hash, g_str_equal,
+            g_free, (GDestroyNotify) free_node_prop);
+    g_rw_lock_init (&priv->props_lock);
 
     g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
     g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,  G_TYPE_UINT);
@@ -159,10 +165,8 @@ donna_node_finalize (GObject *object)
 
 /* used to free properties when removed from hash table */
 static void
-free_prop (gpointer _prop)
+free_node_prop (DonnaNodeProp *prop)
 {
-    DonnaNodeProp *prop = _prop;
-
     /* prop->name will be free-d through g_hash_table_destroy, since it is also
      * used as key in there */
     g_value_unset (&prop->value);
@@ -201,9 +205,6 @@ donna_node_new (DonnaProvider   *provider,
     priv->refresher = refresher;
     priv->setter    = setter;
     priv->flags     = flags;
-    priv->props     = g_hash_table_new_full (g_str_hash, g_str_equal,
-            g_free, free_prop);
-    g_rw_lock_init (&priv->props_lock);
     /* we want to store which basic prop exists in basic_props as well. We'll
      * use that so we can just loop other basic_props and see which ones exists,
      * etc */
@@ -292,7 +293,7 @@ gboolean
 donna_node_add_property (DonnaNode       *node,
                          const gchar     *name,
                          GType            type,
-                         GValue          *value,
+                         const GValue    *value,
                          refresher_fn     refresher,
                          setter_fn        setter,
                          GError         **error)
@@ -303,6 +304,7 @@ donna_node_add_property (DonnaNode       *node,
 
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
+    /* initial value is optional */
     g_return_val_if_fail (refresher != NULL, FALSE);
     /* setter is optional (can be read-only) */
 
@@ -335,7 +337,7 @@ donna_node_add_property (DonnaNode       *node,
     /* init the GValue */
     g_value_init (&prop->value, type);
     /* do we have an init value to set? */
-    if (value != NULL)
+    if (value)
     {
         if (G_VALUE_HOLDS (value, type))
         {
@@ -438,9 +440,19 @@ get_valist (DonnaNode   *node,
                 *has_value = priv->basic_props[i].has_value;
                 if (*has_value == DONNA_NODE_VALUE_SET)
                 {
+grab_basic_value:
                     G_VALUE_LCOPY (&priv->basic_props[i].value, va_args, 0, &err);
                     if (err)
+                    {
+                        g_warning (
+                                "Error while trying to copy value of basic property '%s' from node '%s:%s': %s",
+                                name,
+                                donna_provider_get_domain (priv->provider),
+                                priv->location,
+                                err);
                         g_free (err);
+                    }
+                    goto next;
                 }
                 else
                 {
@@ -456,13 +468,7 @@ get_valist (DonnaNode   *node,
                             /* check if the value has actually been set */
                             *has_value = priv->basic_props[i].has_value;
                             if (*has_value == DONNA_NODE_VALUE_SET)
-                            {
-                                G_VALUE_LCOPY (&priv->basic_props[i].value,
-                                        va_args, 0, &err);
-                                if (err)
-                                    g_free (err);
-                                goto next;
-                            }
+                                goto grab_basic_value;
                         }
                         else
                             g_rw_lock_reader_lock (&priv->props_lock);
@@ -762,7 +768,7 @@ donna_node_refresh_task (DonnaNode   *node,
 
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
-    if (!first_name /* DONNA_NODE_REFRESH_SET_VALUES */
+    if (!first_name /* == DONNA_NODE_REFRESH_SET_VALUES */
             || streq (first_name, DONNA_NODE_REFRESH_ALL_VALUES))
     {
         GHashTableIter iter;
@@ -797,7 +803,7 @@ donna_node_refresh_task (DonnaNode   *node,
         name = (gpointer) first_name;
         while (name)
         {
-            /* TODO: check property exists on node, else fill a GError? */
+            /* TODO: check property exists on node, else g_warning ? */
             name = (gpointer) g_strdup (name);
             g_ptr_array_add (names, name);
             name = va_arg (va_args, gpointer);
@@ -884,10 +890,9 @@ donna_node_set_property_task (DonnaNode     *node,
     {
         if (streq (name, *s))
         {
-            /* TODO: check if the property exists on the node */
-
             if (!(priv->flags & prop_writable_flags[i]))
             {
+                /* TODO: check if the property exists on the node? */
                 g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
                         "Property %s on node cannot be set", name);
                 return NULL;

@@ -104,7 +104,7 @@ DonnaNode *     donna_node_new_from_node    (DonnaProvider          *provider,
 gboolean        donna_node_add_property     (DonnaNode              *node,
                                              const gchar            *name,
                                              GType                   type,
-                                             GValue                 *value,
+                                             const GValue           *value,
                                              refresher_fn            refresher,
                                              setter_fn               setter,
                                              GError                **error);
