@@ -1398,7 +1398,7 @@ node_prop_setter (DonnaTask     *task,
         g_rw_lock_writer_unlock (&priv->lock);
 
         /* update the node */
-        donna_node_set_property_value (node, (is_set_value) ? name : "name", value);
+        donna_node_set_property_value (node, name, value);
 
         g_object_unref (provider);
         g_free (location);
