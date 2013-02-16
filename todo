@@ -1,5 +1,4 @@
 - use DonnaSharedString* instead of gchar*
-- provider-config: send signals node_children
 - config: limit len of names? (columntype-name has 128 for
   "treeviews/$name/columns/$name/sort_$name")
 

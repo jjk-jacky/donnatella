@@ -29,7 +29,7 @@ struct _DonnaProviderInterface
     void            (*node_children)                (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,
-                                                     DonnaNode     **children);
+                                                     GPtrArray      *children);
     void            (*node_new_child)               (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNode      *child);
@@ -59,7 +59,7 @@ void    donna_provider_node_removed                 (DonnaProvider  *provider,
 void    donna_provider_node_children                (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,
-                                                     DonnaNode     **children);
+                                                     GPtrArray      *children);
 void    donna_provider_node_new_child               (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNode      *child);

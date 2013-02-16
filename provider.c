@@ -122,11 +122,11 @@ void
 donna_provider_node_children (DonnaProvider  *provider,
                               DonnaNode      *node,
                               DonnaNodeType   node_types,
-                              DonnaNode     **children)
+                              GPtrArray      *children)
 {
     g_return_if_fail (DONNA_IS_PROVIDER (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
-    g_return_if_fail (DONNA_IS_NODE (*children));
+    g_return_if_fail (children != NULL);
 
     g_signal_emit (provider, donna_provider_signals[NODE_CHILDREN], 0,
             node, node_types, children);

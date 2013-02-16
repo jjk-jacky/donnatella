@@ -1597,14 +1597,34 @@ struct node_children_data
     DonnaProviderConfig *config;
     DonnaNode           *node;
     DonnaNodeType        node_types;
-    gboolean             is_getting_children;
+    GPtrArray           *children;  /* NULL for has_children */
+    gint                 ref_count;
 };
 
 static void
 free_node_children_data (struct node_children_data *data)
 {
-    g_object_unref (data->node);
-    g_slice_free (struct node_children_data, data);
+    if (g_atomic_int_dec_and_test (&data->ref_count))
+    {
+        g_object_unref (data->node);
+        if (data->children)
+            /* array might not yet be free-d, if the caller of the get_children
+             * task is still using it. It will then be free-d when the task's
+             * return value is unset, when the task is finalized */
+            g_ptr_array_unref (data->children);
+        g_slice_free (struct node_children_data, data);
+    }
+}
+
+static gboolean
+emit_node_children (struct node_children_data *data)
+{
+    donna_provider_node_children (DONNA_PROVIDER (data->config),
+            data->node,
+            data->node_types,
+            data->children);
+    free_node_children_data (data);
+    return FALSE;
 }
 
 static DonnaTaskState
@@ -1639,11 +1659,8 @@ node_children (DonnaTask *task, struct node_children_data *data)
     want_item = data->node_types & DONNA_NODE_ITEM;
     want_categories = data->node_types & DONNA_NODE_CONTAINER;
 
-    if (data->is_getting_children)
-    {
-        arr = g_ptr_array_new ();
+    if (data->children)
         len = strlen (location) + 2; /* 1 for NULL, 1 for trailing / */
-    }
 
     for (gnode = gnode->children; gnode; gnode = gnode->next)
     {
@@ -1658,7 +1675,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
 
         if (match)
         {
-            if (data->is_getting_children)
+            if (data->children)
             {
                 struct option *option;
                 gchar buf[255];
@@ -1679,7 +1696,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
                 /* if node wasn't just created, we need to take a ref on it */
                 if (!ensure_option_has_node (data->config, s, option))
                     g_object_ref (option->node);
-                g_ptr_array_add (arr, option->node);
+                g_ptr_array_add (data->children, option->node);
                 g_rec_mutex_unlock (&priv->nodes_mutex);
 
                 if (s != buf)
@@ -1691,10 +1708,20 @@ node_children (DonnaTask *task, struct node_children_data *data)
     }
 
     value = donna_task_grab_return_value (task);
-    if (data->is_getting_children)
+    if (data->children)
     {
+        /* set task's return value */
         g_value_init (value, G_TYPE_PTR_ARRAY);
-        g_value_take_boxed (value, arr);
+        /* take its own ref on the array, as ours goes to the signal below */
+        g_value_set_boxed (value, data->children);
+
+        /* take a ref on data */
+        g_atomic_int_inc (&data->ref_count);
+        /* and emit the node_children signal in the main thread */
+        g_idle_add_full (G_PRIORITY_DEFAULT_IDLE,
+                (GSourceFunc) emit_node_children,
+                data,
+                (GDestroyNotify) free_node_children_data);
     }
     else
     {
@@ -1706,6 +1733,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
     g_rw_lock_reader_unlock (&priv->lock);
     free_node_children_data (data);
     g_free (location);
+
     return DONNA_TASK_DONE;
 }
 
@@ -1722,7 +1750,6 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
     data->config     = DONNA_PROVIDER_CONFIG (provider);
     data->node       = g_object_ref (node);
     data->node_types = node_types;
-    data->is_getting_children = FALSE;
 
     return donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
@@ -1741,7 +1768,7 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
     data->config     = DONNA_PROVIDER_CONFIG (provider);
     data->node       = g_object_ref (node);
     data->node_types = node_types;
-    data->is_getting_children = TRUE;
+    data->children   = g_ptr_array_new ();
 
     return donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
