@@ -30,11 +30,12 @@ const gchar *node_basic_properties[] =
 
 /* index of the first basic prop in node_basic_properties; i.e. after the
  * internal (e.g. provider) and required (e.g. name) ones */
-#define FIRST_BASIC_PROP    6
+#define FIRST_BASIC_PROP    5
 /* we "re-list" basic properties here, to save their values */
 enum
 {
-    BASIC_PROP_FULL_NAME = 0,
+    BASIC_PROP_ICON = 0,
+    BASIC_PROP_FULL_NAME,
     BASIC_PROP_SIZE,
     BASIC_PROP_CTIME,
     BASIC_PROP_MTIME,
@@ -154,7 +155,6 @@ donna_node_finalize (GObject *object)
     g_object_unref (priv->provider);
     g_free (priv->location);
     g_free (priv->name);
-    g_free (priv->icon);
     for (i = 0; i < NB_BASIC_PROPS; ++i)
         g_value_unset (&priv->basic_props[i].value);
     g_hash_table_destroy (priv->props);
@@ -180,7 +180,6 @@ donna_node_new (DonnaProvider   *provider,
                 refresher_fn     refresher,
                 setter_fn        setter,
                 const gchar     *name,
-                const gchar     *icon,
                 DonnaNodeFlags   flags)
 {
     DonnaNode *node;
@@ -201,13 +200,14 @@ donna_node_new (DonnaProvider   *provider,
     priv->location  = g_strdup (location);
     priv->node_type = node_type;
     priv->name      = g_strdup (name);
-    priv->icon      = g_strdup (icon);
     priv->refresher = refresher;
     priv->setter    = setter;
     priv->flags     = flags;
     /* we want to store which basic prop exists in basic_props as well. We'll
      * use that so we can just loop other basic_props and see which ones exists,
      * etc */
+    if (flags & DONNA_NODE_ICON_EXISTS)
+        priv->basic_props[BASIC_PROP_ICON].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
     if (flags & DONNA_NODE_FULL_NAME_EXISTS)
         priv->basic_props[BASIC_PROP_FULL_NAME].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
     if (flags & DONNA_NODE_SIZE_EXISTS)
@@ -248,7 +248,7 @@ donna_node_new_from_node (DonnaProvider *provider,
     /* create a new node, duplicate of sce but w/ different provider & location */
     node = donna_node_new (provider, location,
             sce->priv->node_type, sce->priv->refresher, sce->priv->setter,
-            sce->priv->name, sce->priv->icon, sce->priv->flags);
+            sce->priv->name, sce->priv->flags);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* and copy over all the (other) properties */
@@ -420,12 +420,6 @@ get_valist (DonnaNode   *node,
         {
             s = va_arg (va_args, gchar **);
             *s = g_strdup (priv->name);
-            goto next;
-        }
-        else if (streq (name, "icon"))
-        {
-            s = va_arg (va_args, gchar **);
-            *s = g_strdup (priv->icon);
             goto next;
         }
 
@@ -898,10 +892,9 @@ donna_node_set_property_task (DonnaNode     *node,
                 return NULL;
             }
 
-            /* check the type of value */
-            if (i < 2)
+            /* NAME */
+            if (i == 0)
             {
-                /* 0 == name || 1 == icon */
                 if (!G_VALUE_HOLDS (value, G_TYPE_STRING))
                 {
                     g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
@@ -914,8 +907,8 @@ donna_node_set_property_task (DonnaNode     *node,
             }
             else
             {
-                /* basic_props[i - 2] */
-                i -= 2;
+                /* basic_props[i - 1] */
+                --i;
                 if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&(priv->basic_props[i].value))))
                 {
                     g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,

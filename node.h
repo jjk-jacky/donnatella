@@ -40,35 +40,38 @@ extern const gchar *node_basic_properties[];
 
 typedef enum
 {
-    /* NODE_TYPE, NAME and ICON are required/always exists */
-    DONNA_NODE_FULL_NAME_EXISTS     = (1 << 0),
-    DONNA_NODE_SIZE_EXISTS          = (1 << 1),
-    DONNA_NODE_CTIME_EXISTS         = (1 << 2),
-    DONNA_NODE_MTIME_EXISTS         = (1 << 3),
-    DONNA_NODE_ATIME_EXISTS         = (1 << 4),
-    DONNA_NODE_PERMS_EXISTS         = (1 << 5),
-    DONNA_NODE_USER_EXISTS          = (1 << 6),
-    DONNA_NODE_GROUP_EXISTS         = (1 << 7),
-    DONNA_NODE_TYPE_EXISTS          = (1 << 8),
+    /* PROVIDER, DOMAIN, LOCATION, NODE_TYPE are internal/always exist */
+    /* NAME is required/always exists */
+    DONNA_NODE_ICON_EXISTS          = (1 << 0),
+    DONNA_NODE_FULL_NAME_EXISTS     = (1 << 1),
+    DONNA_NODE_SIZE_EXISTS          = (1 << 2),
+    DONNA_NODE_CTIME_EXISTS         = (1 << 3),
+    DONNA_NODE_MTIME_EXISTS         = (1 << 4),
+    DONNA_NODE_ATIME_EXISTS         = (1 << 5),
+    DONNA_NODE_PERMS_EXISTS         = (1 << 6),
+    DONNA_NODE_USER_EXISTS          = (1 << 7),
+    DONNA_NODE_GROUP_EXISTS         = (1 << 8),
+    DONNA_NODE_TYPE_EXISTS          = (1 << 9),
 
-    DONNA_NODE_NAME_WRITABLE        = (1 << 9),
-    DONNA_NODE_ICON_WRITABLE        = (1 << 10),
-    DONNA_NODE_FULL_NAME_WRITABLE   = (1 << 11),
-    DONNA_NODE_SIZE_WRITABLE        = (1 << 12),
-    DONNA_NODE_CTIME_WRITABLE       = (1 << 13),
-    DONNA_NODE_MTIME_WRITABLE       = (1 << 14),
-    DONNA_NODE_ATIME_WRITABLE       = (1 << 15),
-    DONNA_NODE_PERMS_WRITABLE       = (1 << 16),
-    DONNA_NODE_USER_WRITABLE        = (1 << 17),
-    DONNA_NODE_GROUP_WRITABLE       = (1 << 18),
-    DONNA_NODE_TYPE_WRITABLE        = (1 << 19),
+    DONNA_NODE_NAME_WRITABLE        = (1 << 10),
+    DONNA_NODE_ICON_WRITABLE        = (1 << 11),
+    DONNA_NODE_FULL_NAME_WRITABLE   = (1 << 12),
+    DONNA_NODE_SIZE_WRITABLE        = (1 << 13),
+    DONNA_NODE_CTIME_WRITABLE       = (1 << 14),
+    DONNA_NODE_MTIME_WRITABLE       = (1 << 15),
+    DONNA_NODE_ATIME_WRITABLE       = (1 << 16),
+    DONNA_NODE_PERMS_WRITABLE       = (1 << 17),
+    DONNA_NODE_USER_WRITABLE        = (1 << 18),
+    DONNA_NODE_GROUP_WRITABLE       = (1 << 19),
+    DONNA_NODE_TYPE_WRITABLE        = (1 << 20),
 } DonnaNodeFlags;
 
-#define DONNA_NODE_ALL_EXISTS   (DONNA_NODE_FULL_NAME_EXISTS    \
-        | DONNA_NODE_SIZE_EXISTS  | DONNA_NODE_CTIME_EXISTS     \
-        | DONNA_NODE_MTIME_EXISTS | DONNA_NODE_ATIME_EXISTS     \
-        | DONNA_NODE_PERMS_EXISTS | DONNA_NODE_USER_EXISTS      \
-        | DONNA_NODE_GROUP_EXISTS | DONNA_NODE_TYPE_EXISTS)
+#define DONNA_NODE_ALL_EXISTS   (DONNA_NODE_ICON_EXISTS         \
+        | DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_SIZE_EXISTS  \
+        | DONNA_NODE_CTIME_EXISTS | DONNA_NODE_MTIME_EXISTS     \
+        | DONNA_NODE_ATIME_EXISTS | DONNA_NODE_PERMS_EXISTS     \
+        | DONNA_NODE_USER_EXISTS  | DONNA_NODE_GROUP_EXISTS     \
+        | DONNA_NODE_TYPE_EXISTS)
 
 /* functions called by a node to refresh/set a property value */
 typedef gboolean    (*refresher_fn) (DonnaTask      *task,
@@ -96,7 +99,6 @@ DonnaNode *     donna_node_new              (DonnaProvider          *provider,
                                              refresher_fn            refresher,
                                              setter_fn               setter,
                                              const gchar            *name,
-                                             const gchar            *icon,
                                              DonnaNodeFlags          flags);
 DonnaNode *     donna_node_new_from_node    (DonnaProvider          *provider,
                                              const gchar            *location,

@@ -1487,7 +1487,6 @@ ensure_option_has_node (DonnaProviderConfig *config,
                 node_prop_refresher,
                 node_prop_setter,
                 option->name,
-                NULL /* no icon */,
                 DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_NAME_WRITABLE);
 
         /* if an option, add some properties */
