@@ -180,21 +180,12 @@ static void
 provider_base_add_node_to_cache (DonnaProviderBase *provider,
                                  DonnaNode         *node)
 {
-    DonnaProviderBase *p;
     gchar *location;
 
     g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
 
-    donna_node_get (node, FALSE, "provider", &p, "location", &location, NULL);
-
-    /* make sure the provider is the node's provider */
-    g_object_unref (p);
-    if (p != provider)
-    {
-        g_free (location);
-        g_return_if_fail (p == provider);
-    }
+    donna_node_get (node, FALSE, "location", &location, NULL);
 
     /* add a toggleref, so when we have the last reference on the node, we
      * can let it go (Note: this adds a (strong) reference to node) */
