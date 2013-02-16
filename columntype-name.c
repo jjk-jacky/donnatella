@@ -7,6 +7,7 @@
 #include "donna.h"
 #include "conf.h"
 #include "sort.h"
+#include "sharedstring.h"
 #include "macros.h"
 
 struct _DonnaColumnTypeNamePrivate
@@ -122,7 +123,6 @@ ct_name_render (DonnaColumnType    *ct,
                 GtkCellRenderer    *renderer)
 {
     gint type = GPOINTER_TO_INT (data);
-    gchar *name;
 
     g_return_if_fail (DONNA_IS_COLUMNTYPE_NAME (ct));
 
@@ -165,9 +165,11 @@ ct_name_render (DonnaColumnType    *ct,
     }
     else /* DONNA_COLUMNTYPE_RENDERER_TEXT */
     {
+        DonnaSharedString *name;
+
         donna_node_get (node, FALSE, "name", &name, NULL);
-        g_object_set (renderer, "text", name, NULL);
-        g_free (name);
+        g_object_set (renderer, "text", donna_shared_string (name), NULL);
+        donna_shared_string_unref (name);
     }
 }
 
@@ -260,7 +262,7 @@ get_node_key (DonnaColumnType   *ct,
     if (!key || *key != sort_get_options_char (dot_first, special_first,
                 natural_order))
     {
-        gchar *s;
+        DonnaSharedString *name;
 
         /* if we're installing the key (i.e. not updating an invalid one) we
          * need to make sure we're listening on the provider's
@@ -292,10 +294,10 @@ get_node_key (DonnaColumnType   *ct,
             }
         }
 
-        donna_node_get (node, FALSE, "name", &s, NULL);
-        key = sort_get_utf8_collate_key (s, -1, dot_first, special_first,
-                natural_order);
-        g_free (s);
+        donna_node_get (node, FALSE, "name", &name, NULL);
+        key = sort_get_utf8_collate_key (donna_shared_string (name), -1,
+                dot_first, special_first, natural_order);
+        donna_shared_string_unref (name);
         g_object_set_data_full (G_OBJECT (node), buf, key, g_free);
     }
 

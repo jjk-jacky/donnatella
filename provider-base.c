@@ -4,6 +4,7 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
+#include "sharedstring.h"
 
 struct _DonnaProviderBasePrivate
 {
@@ -153,7 +154,7 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
     g_rec_mutex_lock (&provider->priv->nodes_mutex);
     if (is_last)
     {
-        gchar *location;
+        DonnaSharedString *location;
         int c;
 
         c = donna_node_dec_toggle_count (node);
@@ -163,10 +164,11 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
             return;
         }
         donna_node_get (node, FALSE, "location", &location, NULL);
-        g_hash_table_remove (provider->priv->nodes, location);
+        g_hash_table_remove (provider->priv->nodes,
+                donna_shared_string (location));
         g_rec_mutex_unlock (&provider->priv->nodes_mutex);
         g_object_unref (node);
-        g_free (location);
+        donna_shared_string_unref (location);
     }
     else
     {
@@ -180,7 +182,7 @@ static void
 provider_base_add_node_to_cache (DonnaProviderBase *provider,
                                  DonnaNode         *node)
 {
-    gchar *location;
+    DonnaSharedString *location;
 
     g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
@@ -193,8 +195,10 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
                              (GToggleNotify) node_toggle_ref_cb,
                              provider);
 
-    /* add the node to our hash table (location was strdup-ed when we got it) */
-    g_hash_table_insert (provider->priv->nodes, location, node);
+    /* add the node to our hash table */
+    g_hash_table_insert (provider->priv->nodes,
+            g_strdup (donna_shared_string (location)), node);
+    donna_shared_string_unref (location);
 }
 
 static DonnaTaskState

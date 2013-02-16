@@ -2,6 +2,8 @@
 #ifndef __DONNA_PROVIDER_CONFIG_H__
 #define __DONNA_PROVIDER_CONFIG_H__
 
+#include "sharedstring.h"
+
 G_BEGIN_DECLS
 
 #define DONNA_TYPE_PROVIDER_CONFIG              (donna_provider_config_get_type ())
@@ -46,9 +48,9 @@ gboolean    donna_config_get_uint               (DonnaProviderConfig    *config,
 gboolean    donna_config_get_double             (DonnaProviderConfig    *config,
                                                  const gchar            *name,
                                                  gdouble                *value);
-gboolean    donna_config_get_string             (DonnaProviderConfig    *config,
+gboolean    donna_config_get_shared_string      (DonnaProviderConfig    *config,
                                                  const gchar            *name,
-                                                 gchar                 **value);
+                                                 DonnaSharedString     **value);
 gboolean    donna_config_set_boolean            (DonnaProviderConfig    *config,
                                                  const gchar            *name,
                                                  gboolean                value);
@@ -61,12 +63,15 @@ gboolean    donna_config_set_uint               (DonnaProviderConfig    *config,
 gboolean    donna_config_set_double             (DonnaProviderConfig    *config,
                                                  const gchar            *name,
                                                  gdouble                 value);
-gboolean    donna_config_set_string             (DonnaProviderConfig    *config,
+gboolean    donna_config_set_shared_string      (DonnaProviderConfig    *config,
+                                                 const gchar            *name,
+                                                 DonnaSharedString      *value);
+gboolean    donna_config_set_string_take        (DonnaProviderConfig    *config,
                                                  const gchar            *name,
                                                  gchar                  *value);
-gboolean    donna_config_take_string            (DonnaProviderConfig    *config,
+gboolean    donna_config_set_string_dup         (DonnaProviderConfig    *config,
                                                  const gchar            *name,
-                                                 gchar                  *value);
+                                                 const gchar            *value);
 gboolean    donna_config_remove_option          (DonnaProviderConfig    *config,
                                                  const gchar            *name);
 gboolean    donna_config_remove_category        (DonnaProviderConfig    *config,

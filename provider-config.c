@@ -8,6 +8,7 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
+#include "sharedstring.h"
 #include "macros.h"
 
 struct parsed_data
@@ -726,6 +727,8 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                 option = g_slice_new0 (struct option);
                 if (extra->type == EXTRA_TYPE_LIST)
                 {
+                    DonnaSharedString *ss;
+
                     if (!is_extra_value (extra, &parsed->value))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
@@ -734,8 +737,9 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                         g_slice_free (struct option, option);
                         continue;
                     }
-                    g_value_init (&option->value, G_TYPE_STRING);
-                    g_value_set_string (&option->value, parsed->value);
+                    g_value_init (&option->value, G_TYPE_BOXED);
+                    ss = donna_shared_string_new_dup (parsed->value);
+                    g_value_take_boxed (&option->value, ss);
                 }
                 else /* EXTRA_TYPE_LIST_INT */
                 {
@@ -833,6 +837,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
                 /* string */
                 else
                 {
+                    DonnaSharedString *ss;
                     gsize len;
                     gchar *v = parsed->value;
 
@@ -846,8 +851,9 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
 
                     option = g_slice_new0 (struct option);
                     option->name = g_strdup (parsed->name);
-                    g_value_init (&option->value, G_TYPE_STRING);
-                    g_value_set_string (&option->value, v);
+                    g_value_init (&option->value, G_TYPE_BOXED);
+                    ss = donna_shared_string_new_dup (v);
+                    g_value_take_boxed (&option->value, ss);
                     g_node_append_data (parent, option);
 
                     if (v != parsed->value)
@@ -869,6 +875,7 @@ donna_config_load_config (DonnaProviderConfig *config, gchar *data)
 
 /*** EXPORTING CONFIGURATION ***/
 
+/* assumes a (reader) lock on config */
 static void
 export_config (DonnaProviderConfigPrivate   *priv,
                GNode                        *node,
@@ -889,11 +896,13 @@ export_config (DonnaProviderConfigPrivate   *priv,
 
             if (option->extra)
             {
-                if (G_VALUE_HOLDS (&option->value, G_TYPE_STRING))
+                if (G_VALUE_HOLDS (&option->value, G_TYPE_BOXED))
                 {
+                    DonnaSharedString *ss;
                     const gchar *s;
 
-                    s = g_value_get_string (&option->value);
+                    ss = g_value_get_boxed (&option->value);
+                    s = donna_shared_string (ss);
                     if (streq (s, "true") || streq (s, "false")
                             || isblank (s[0])
                             || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
@@ -950,11 +959,13 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                 option->name,
                                 g_value_get_double (&option->value));
                         break;
-                    case G_TYPE_STRING:
+                    case G_TYPE_BOXED:
                         {
+                            DonnaSharedString *ss;
                             const gchar *s;
 
-                            s = g_value_get_string (&option->value);
+                            ss = g_value_get_boxed (&option->value);
+                            s = donna_shared_string (ss);
                             if (streq (s, "true") || streq (s, "false")
                                     || isblank (s[0])
                                     || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
@@ -1118,11 +1129,11 @@ donna_config_get_double (DonnaProviderConfig    *config,
 }
 
 gboolean
-donna_config_get_string (DonnaProviderConfig    *config,
-                         const gchar            *name,
-                         gchar                 **value)
+donna_config_get_shared_string (DonnaProviderConfig    *config,
+                                const gchar            *name,
+                                DonnaSharedString     **value)
 {
-    _get_option (G_TYPE_STRING, g_value_dup_string);
+    _get_option (G_TYPE_BOXED, g_value_dup_boxed);
 }
 
 #define _set_option(type, value_set)  do {                              \
@@ -1131,7 +1142,6 @@ donna_config_get_string (DonnaProviderConfig    *config,
     GNode *node;                                                        \
     struct option *option;                                              \
     const gchar *s;                                                     \
-    gboolean ret;                                                       \
                                                                         \
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
     g_return_val_if_fail (name != NULL, FALSE);                         \
@@ -1180,8 +1190,6 @@ donna_config_get_string (DonnaProviderConfig    *config,
         donna_node_set_property_value (option->node,                    \
                 "option-value",                                         \
                 &option->value);                                        \
-                                                                        \
-    return ret;                                                         \
 } while (0)
 
 gboolean
@@ -1189,7 +1197,9 @@ donna_config_set_boolean (DonnaProviderConfig    *config,
                           const gchar            *name,
                           gboolean                value)
 {
+    gboolean ret;
     _set_option (G_TYPE_BOOLEAN, g_value_set_boolean);
+    return ret;
 }
 
 gboolean
@@ -1197,7 +1207,9 @@ donna_config_set_int (DonnaProviderConfig    *config,
                       const gchar            *name,
                       gint                    value)
 {
+    gboolean ret;
     _set_option (G_TYPE_INT, g_value_set_int);
+    return ret;
 }
 
 gboolean
@@ -1205,7 +1217,9 @@ donna_config_set_uint (DonnaProviderConfig    *config,
                        const gchar            *name,
                        guint                   value)
 {
+    gboolean ret;
     _set_option (G_TYPE_UINT, g_value_set_uint);
+    return ret;
 }
 
 gboolean
@@ -1213,29 +1227,59 @@ donna_config_set_double (DonnaProviderConfig    *config,
                          const gchar            *name,
                          gdouble                 value)
 {
+    gboolean ret;
     _set_option (G_TYPE_DOUBLE, g_value_set_double);
+    return ret;
 }
 
 gboolean
-donna_config_set_string (DonnaProviderConfig    *config,
-                         const gchar            *name,
-                         gchar                  *value)
+donna_config_set_shared_string (DonnaProviderConfig    *config,
+                                const gchar            *name,
+                                DonnaSharedString      *value)
 {
-    _set_option (G_TYPE_STRING, g_value_set_string);
+    gboolean ret;
+    _set_option (G_TYPE_BOXED, g_value_set_boxed);
+    return ret;
 }
 
 gboolean
-donna_config_take_string (DonnaProviderConfig    *config,
-                          const gchar            *name,
-                          gchar                  *value)
+donna_config_set_string_take (DonnaProviderConfig   *config,
+                              const gchar           *name,
+                              gchar                 *string)
 {
-    _set_option (G_TYPE_STRING, g_value_take_string);
+    DonnaSharedString *value;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+
+    value = donna_shared_string_new_take (string);
+    _set_option (G_TYPE_BOXED, g_value_set_boxed);
+    donna_shared_string_unref (value);
+    return ret;
+}
+
+gboolean
+donna_config_set_string_dup (DonnaProviderConfig   *config,
+                             const gchar           *name,
+                             const gchar           *string)
+{
+    DonnaSharedString *value;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+
+    value = donna_shared_string_new_dup (string);
+    _set_option (G_TYPE_BOXED, g_value_set_boxed);
+    donna_shared_string_unref (value);
+    return ret;
 }
 
 static inline gboolean
 _remove_option (DonnaProviderConfig *config,
-                const gchar *name,
-                gboolean category)
+                const gchar         *name,
+                gboolean             category)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *parent;
@@ -1324,7 +1368,7 @@ node_prop_setter (DonnaTask     *task,
     DonnaProvider *provider;
     DonnaProviderConfigPrivate *priv;
     struct option *option;
-    gchar *location;
+    DonnaSharedString *location;
     gboolean is_set_value;
 
     is_set_value = streq (name, "option-value");
@@ -1340,30 +1384,30 @@ node_prop_setter (DonnaTask     *task,
 
             donna_node_get (node, FALSE, "domain", &domain, NULL);
             g_warning ("Property setter of 'config' was called on a wrong node: '%s:%s'",
-                    domain, location);
+                    domain, donna_shared_string (location));
 
             donna_task_set_error (task, DONNA_NODE_ERROR,
                     DONNA_NODE_ERROR_OTHER,
                     "Wrong provider");
             g_object_unref (provider);
-            g_free (location);
+            donna_shared_string_unref (location);
             return DONNA_TASK_FAILED;
         }
         priv = DONNA_PROVIDER_CONFIG (provider)->priv;
 
         g_rw_lock_writer_lock (&priv->lock);
-        option = get_option (priv->root, location);
+        option = get_option (priv->root, donna_shared_string (location));
         if (!option)
         {
             g_warning ("Unable to find option '%s' while trying to change its value through the associated node",
-                    location);
+                    donna_shared_string (location));
 
             donna_task_set_error (task, DONNA_NODE_ERROR,
                     DONNA_NODE_ERROR_NOT_FOUND,
                     "Option '%s' does not exists",
-                    location);
+                    donna_shared_string (location));
             g_object_unref (provider);
-            g_free (location);
+            donna_shared_string_unref (location);
             g_rw_lock_writer_unlock (&priv->lock);
             return DONNA_TASK_FAILED;
         }
@@ -1376,12 +1420,12 @@ node_prop_setter (DonnaTask     *task,
                     DONNA_NODE_ERROR_INVALID_TYPE,
                     (is_set_value) ? "Option '%s' is of type '%s', value passed is '%s'"
                     : "Property '%s' is of type '%s', value passed if '%s'",
-                    (is_set_value) ? location : "name",
+                    (is_set_value) ? donna_shared_string (location) : "name",
                     g_type_name ((is_set_value) ? G_VALUE_TYPE (&option->value)
                         : G_TYPE_STRING),
                     g_type_name (G_VALUE_TYPE (value)));
             g_object_unref (provider);
-            g_free (location);
+            donna_shared_string_unref (location);
             g_rw_lock_writer_unlock (&priv->lock);
             return DONNA_TASK_FAILED;
         }
@@ -1401,7 +1445,7 @@ node_prop_setter (DonnaTask     *task,
         donna_node_set_property_value (node, name, value);
 
         g_object_unref (provider);
-        g_free (location);
+        donna_shared_string_unref (location);
         return DONNA_TASK_DONE;
     }
 
@@ -1440,7 +1484,7 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
     if (is_last)
     {
         GNode *gnode;
-        gchar *location;
+        DonnaSharedString *location;
         int c;
 
         c = donna_node_dec_toggle_count (node);
@@ -1451,14 +1495,15 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
             return;
         }
         donna_node_get (node, FALSE, "location", &location, NULL);
-        gnode = get_option_node (config->priv->root, location);
+        gnode = get_option_node (config->priv->root,
+                donna_shared_string (location));
         if (G_UNLIKELY (!gnode))
             g_warning ("Unable to find option '%s' while processing toggle_ref for the associated node",
-                    location);
+                    donna_shared_string (location));
         else
             ((struct option *) gnode->data)->node = NULL;
         g_object_unref (node);
-        g_free (location);
+        donna_shared_string_unref (location);
     }
     else
         donna_node_inc_toggle_count (node);
@@ -1479,11 +1524,11 @@ ensure_option_has_node (DonnaProviderConfig *config,
     {
         /* we need to create the node */
         option->node = donna_node_new (DONNA_PROVIDER (config),
-                location,
+                donna_shared_string_new_dup (location),
                 (option->extra == priv->root) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
                 node_prop_refresher,
                 node_prop_setter,
-                option->name,
+                donna_shared_string_new_dup (option->name),
                 DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_NAME_WRITABLE);
 
         /* if an option, add some properties */
@@ -1492,13 +1537,15 @@ ensure_option_has_node (DonnaProviderConfig *config,
             /* is this an extra? */
             if (option->extra)
             {
+                DonnaSharedString *ss;
                 GValue val = G_VALUE_INIT;
 
-                g_value_init (&val, G_TYPE_STRING);
-                g_value_set_string (&val, option->extra);
+                ss = donna_shared_string_new_dup (option->extra);
+                g_value_init (&val, G_TYPE_BOXED);
+                g_value_take_boxed (&val, ss);
                 donna_node_add_property (option->node,
                         "option-extra",
-                        G_TYPE_STRING,
+                        G_TYPE_BOXED,
                         &val,
                         node_prop_refresher,
                         NULL /* no setter */,
@@ -1632,27 +1679,26 @@ node_children (DonnaTask *task, struct node_children_data *data)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *gnode;
-    gchar *location;
+    DonnaSharedString *location;
     gsize len;
     gboolean want_item;
     gboolean want_categories;
     GValue *value;
     gboolean match;
-    GPtrArray *arr;
 
     donna_node_get (data->node, FALSE, "location", &location, NULL);
     priv = data->config->priv;
 
     g_rw_lock_reader_lock (&priv->lock);
-    gnode = get_option_node (priv->root, location);
+    gnode = get_option_node (priv->root, donna_shared_string (location));
     if (G_UNLIKELY (!gnode))
     {
         g_warning ("Unable to find option '%s' while processing has_children on the associated node",
-                location);
+                donna_shared_string (location));
 
         g_rw_lock_reader_unlock (&priv->lock);
         free_node_children_data (data);
-        g_free (location);
+        donna_shared_string_unref (location);
         return DONNA_TASK_FAILED;
     }
 
@@ -1660,7 +1706,8 @@ node_children (DonnaTask *task, struct node_children_data *data)
     want_categories = data->node_types & DONNA_NODE_CONTAINER;
 
     if (data->children)
-        len = strlen (location) + 2; /* 1 for NULL, 1 for trailing / */
+        /* 2 == 1 for NULL, 1 for trailing / */
+        len = strlen (donna_shared_string (location)) + 2;
 
     for (gnode = gnode->children; gnode; gnode = gnode->next)
     {
@@ -1684,12 +1731,14 @@ node_children (DonnaTask *task, struct node_children_data *data)
                 option = gnode->data;
                 if (len + strlen (option->name) > 255)
                 {
-                    s = g_strdup_printf ("%s/%s", location, option->name);
+                    s = g_strdup_printf ("%s/%s",
+                            donna_shared_string (location), option->name);
                 }
                 else
                 {
                     s = buf;
-                    sprintf (s, "%s/%s", location, option->name);
+                    sprintf (s, "%s/%s",
+                            donna_shared_string (location), option->name);
                 }
 
                 g_rec_mutex_lock (&priv->nodes_mutex);
@@ -1732,7 +1781,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
 
     g_rw_lock_reader_unlock (&priv->lock);
     free_node_children_data (data);
-    g_free (location);
+    donna_shared_string_unref (location);
 
     return DONNA_TASK_DONE;
 }
@@ -1778,7 +1827,7 @@ static DonnaTaskState
 node_remove_option (DonnaTask *task, DonnaNode *node)
 {
     DonnaProvider *provider;
-    gchar *location;
+    DonnaSharedString *location;
     DonnaNodeType node_type;
     gboolean ret;
 
@@ -1787,9 +1836,10 @@ node_remove_option (DonnaTask *task, DonnaNode *node)
             "location",  &location,
             "node-type", &node_type,
             NULL);
-    ret =_remove_option (DONNA_PROVIDER_CONFIG (provider), location,
+    ret =_remove_option (DONNA_PROVIDER_CONFIG (provider),
+            donna_shared_string (location),
             (node_type == DONNA_NODE_CONTAINER));
-    g_free (location);
+    donna_shared_string_unref (location);
     g_object_unref (node);
     g_object_unref (provider);
 
