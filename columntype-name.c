@@ -129,7 +129,7 @@ ct_name_render (DonnaColumnType    *ct,
     if (type == DONNA_COLUMNTYPE_RENDERER_PIXBUF)
     {
         DonnaNodeHasValue has_value;
-        GdkPixBuf *pixbuf;
+        GdkPixbuf *pixbuf;
 
         donna_node_get (node, FALSE, "icon", &has_value, &pixbuf, NULL);
         if (has_value == DONNA_NODE_VALUE_SET)
