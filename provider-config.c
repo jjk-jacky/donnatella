@@ -1197,6 +1197,47 @@ donna_config_get_shared_string (DonnaConfig          *config,
     _get_option (DONNA_TYPE_SHARED_STRING, donna_g_value_dup_shared_string);
 }
 
+gboolean
+donna_config_list_options (DonnaConfig               *config,
+                           const gchar               *name,
+                           DonnaConfigOptionType      type,
+                           GPtrArray                **options)
+{
+    DonnaProviderConfigPrivate *priv;
+    GNode *node;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+    g_return_val_if_fail (type != 0, FALSE);
+    g_return_val_if_fail (options != NULL, FALSE);
+    g_return_val_if_fail (*options == NULL, FALSE);
+
+    priv = config->priv;
+
+    g_rw_lock_reader_lock (&priv->lock);
+    node = get_option_node (priv->root, name);
+    if (node)
+    {
+        for (node = node->children; node; node = node->next)
+        {
+            if ((type & DONNA_CONFIG_OPTION_TYPE_BOTH)
+                    || (type & DONNA_CONFIG_OPTION_TYPE_CATEGORY
+                        && option_is_category (node->data, priv->root))
+                    || (type & DONNA_CONFIG_OPTION_TYPE_OPTION
+                        && !option_is_category (node->data, priv->root)))
+            {
+                if (!options)
+                    *options = g_ptr_array_new ();
+                g_ptr_array_add (*options,
+                        g_strdup (((struct option *) node->data)->name));
+            }
+        }
+    }
+    g_rw_lock_reader_unlock (&priv->lock);
+
+    return TRUE;
+}
+
 #define _set_option(type, value_set)  do {                              \
     DonnaProviderConfigPrivate *priv;                                   \
     GNode *parent;                                                      \

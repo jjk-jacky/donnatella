@@ -23,6 +23,13 @@ typedef struct _DonnaProviderConfigPrivate      DonnaProviderConfigPrivate;
 
 typedef DonnaProviderConfig     DonnaConfig;
 
+typedef enum
+{
+    DONNA_CONFIG_OPTION_TYPE_OPTION    = (1 << 0),
+    DONNA_CONFIG_OPTION_TYPE_CATEGORY  = (1 << 1),
+    DONNA_CONFIG_OPTION_TYPE_BOTH      = DONNA_CONFIG_OPTION_TYPE_OPTION &
+        DONNA_CONFIG_OPTION_TYPE_CATEGORY,
+} DonnaConfigOptionType;
 
 struct _DonnaProviderConfig
 {
@@ -64,6 +71,10 @@ gboolean    donna_config_get_double             (DonnaConfig            *config,
 gboolean    donna_config_get_shared_string      (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  DonnaSharedString     **value);
+gboolean    donna_config_list_options           (DonnaConfig            *config,
+                                                 const gchar            *name,
+                                                 DonnaConfigOptionType   type,
+                                                 GPtrArray             **options);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gboolean                value);
