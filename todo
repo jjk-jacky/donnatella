@@ -1,6 +1,12 @@
+- columntype: add to interface a virtual get_option()
 - config: add rename_option() ? (only doable through provider now)
 - config: limit len of names? (columntype-name has 128 for
   "treeviews/$name/columns/$name/sort_$name")
+
+- document "option paths" -- e.g. columntype options should be looked for in
+"treeviews/$tv_name/columns/$col_name/$opt_name" and then if not found in
+"columns/$col_name/$opt_name" (and if not found there may be some app-default
+to be looked in "default/$opt_name" or something (might be subcat of defaults))
 
 - tree has hashtable, keys are node pointers
 - set a default log_handler to show g_warning-s, or use a donna_warning
