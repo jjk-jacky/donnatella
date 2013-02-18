@@ -44,53 +44,53 @@ struct _DonnaProviderConfigClass
 
 GType       donna_provider_config_get_type      (void) G_GNUC_CONST;
 /* config manager */
-gboolean    donna_config_load_config_def        (DonnaProviderConfig    *config,
+gboolean    donna_config_load_config_def        (DonnaConfig            *config,
                                                  gchar                  *data);
-gboolean    donna_config_load_config            (DonnaProviderConfig    *config,
+gboolean    donna_config_load_config            (DonnaConfig            *config,
                                                  gchar                  *data);
-gchar *     donna_config_export_config          (DonnaProviderConfig *config);
-gboolean    donna_config_get_boolean            (DonnaProviderConfig    *config,
+gchar *     donna_config_export_config          (DonnaConfig            *config);
+gboolean    donna_config_get_boolean            (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gboolean               *value);
-gboolean    donna_config_get_int                (DonnaProviderConfig    *config,
+gboolean    donna_config_get_int                (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gint                   *value);
-gboolean    donna_config_get_uint               (DonnaProviderConfig    *config,
+gboolean    donna_config_get_uint               (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  guint                  *value);
-gboolean    donna_config_get_double             (DonnaProviderConfig    *config,
+gboolean    donna_config_get_double             (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gdouble                *value);
-gboolean    donna_config_get_shared_string      (DonnaProviderConfig    *config,
+gboolean    donna_config_get_shared_string      (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  DonnaSharedString     **value);
-gboolean    donna_config_set_boolean            (DonnaProviderConfig    *config,
+gboolean    donna_config_set_boolean            (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gboolean                value);
-gboolean    donna_config_set_int                (DonnaProviderConfig    *config,
+gboolean    donna_config_set_int                (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gint                    value);
-gboolean    donna_config_set_uint               (DonnaProviderConfig    *config,
+gboolean    donna_config_set_uint               (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  guint                   value);
-gboolean    donna_config_set_double             (DonnaProviderConfig    *config,
+gboolean    donna_config_set_double             (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gdouble                 value);
-gboolean    donna_config_set_shared_string      (DonnaProviderConfig    *config,
+gboolean    donna_config_set_shared_string      (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  DonnaSharedString      *value);
-gboolean    donna_config_take_shared_string     (DonnaProviderConfig    *config,
+gboolean    donna_config_take_shared_string     (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  DonnaSharedString      *value);
-gboolean    donna_config_set_string_take        (DonnaProviderConfig    *config,
+gboolean    donna_config_set_string_take        (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  gchar                  *value);
-gboolean    donna_config_set_string_dup         (DonnaProviderConfig    *config,
+gboolean    donna_config_set_string_dup         (DonnaConfig            *config,
                                                  const gchar            *name,
                                                  const gchar            *value);
-gboolean    donna_config_remove_option          (DonnaProviderConfig    *config,
+gboolean    donna_config_remove_option          (DonnaConfig            *config,
                                                  const gchar            *name);
-gboolean    donna_config_remove_category        (DonnaProviderConfig    *config,
+gboolean    donna_config_remove_category        (DonnaConfig            *config,
                                                  const gchar            *name);
 
 G_END_DECLS

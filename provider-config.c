@@ -481,7 +481,7 @@ free_parsed_data_section (struct parsed_data *parsed)
 }
 
 gboolean
-donna_config_load_config_def (DonnaProviderConfig *config, gchar *data)
+donna_config_load_config_def (DonnaConfig *config, gchar *data)
 {
     DonnaProviderConfigPrivate *priv;
     struct parsed_data *first_section;
@@ -726,7 +726,7 @@ is_extra_value (struct extra *extra, gpointer value)
 }
 
 gboolean
-donna_config_load_config (DonnaProviderConfig *config, gchar *data)
+donna_config_load_config (DonnaConfig *config, gchar *data)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *parent;
@@ -1063,7 +1063,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
 }
 
 gchar *
-donna_config_export_config (DonnaProviderConfig *config)
+donna_config_export_config (DonnaConfig *config)
 {
     DonnaProviderConfigPrivate *priv;
     GString *str;
@@ -1158,41 +1158,41 @@ get_option (GNode *root, const gchar *name)
 } while (0)
 
 gboolean
-donna_config_get_boolean (DonnaProviderConfig    *config,
-                          const gchar            *name,
-                          gboolean               *value)
+donna_config_get_boolean (DonnaConfig    *config,
+                          const gchar    *name,
+                          gboolean       *value)
 {
     _get_option (G_TYPE_BOOLEAN, g_value_get_boolean);
 }
 
 gboolean
-donna_config_get_int (DonnaProviderConfig    *config,
-                      const gchar            *name,
-                      gint                   *value)
+donna_config_get_int (DonnaConfig    *config,
+                      const gchar    *name,
+                      gint           *value)
 {
     _get_option (G_TYPE_INT, g_value_get_int);
 }
 
 gboolean
-donna_config_get_uint (DonnaProviderConfig    *config,
-                       const gchar            *name,
-                       guint                  *value)
+donna_config_get_uint (DonnaConfig    *config,
+                       const gchar    *name,
+                       guint          *value)
 {
     _get_option (G_TYPE_UINT, g_value_get_uint);
 }
 
 gboolean
-donna_config_get_double (DonnaProviderConfig    *config,
-                         const gchar            *name,
-                         gdouble                *value)
+donna_config_get_double (DonnaConfig    *config,
+                         const gchar    *name,
+                         gdouble        *value)
 {
     _get_option (G_TYPE_DOUBLE, g_value_get_double);
 }
 
 gboolean
-donna_config_get_shared_string (DonnaProviderConfig    *config,
-                                const gchar            *name,
-                                DonnaSharedString     **value)
+donna_config_get_shared_string (DonnaConfig          *config,
+                                const gchar          *name,
+                                DonnaSharedString   **value)
 {
     _get_option (DONNA_TYPE_SHARED_STRING, donna_g_value_dup_shared_string);
 }
@@ -1260,7 +1260,7 @@ donna_config_get_shared_string (DonnaProviderConfig    *config,
 } while (0)
 
 gboolean
-donna_config_set_boolean (DonnaProviderConfig    *config,
+donna_config_set_boolean (DonnaConfig    *config,
                           const gchar            *name,
                           gboolean                value)
 {
@@ -1268,7 +1268,7 @@ donna_config_set_boolean (DonnaProviderConfig    *config,
 }
 
 gboolean
-donna_config_set_int (DonnaProviderConfig    *config,
+donna_config_set_int (DonnaConfig    *config,
                       const gchar            *name,
                       gint                    value)
 {
@@ -1276,49 +1276,49 @@ donna_config_set_int (DonnaProviderConfig    *config,
 }
 
 gboolean
-donna_config_set_uint (DonnaProviderConfig    *config,
-                       const gchar            *name,
-                       guint                   value)
+donna_config_set_uint (DonnaConfig    *config,
+                       const gchar    *name,
+                       guint          value)
 {
     _set_option (G_TYPE_UINT, g_value_set_uint);
 }
 
 gboolean
-donna_config_set_double (DonnaProviderConfig    *config,
-                         const gchar            *name,
-                         gdouble                 value)
+donna_config_set_double (DonnaConfig    *config,
+                         const gchar    *name,
+                         gdouble        value)
 {
     _set_option (G_TYPE_DOUBLE, g_value_set_double);
 }
 
 gboolean
-donna_config_set_shared_string (DonnaProviderConfig    *config,
-                                const gchar            *name,
-                                DonnaSharedString      *value)
+donna_config_set_shared_string (DonnaConfig         *config,
+                                const gchar         *name,
+                                DonnaSharedString   *value)
 {
     _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_set_shared_string);
 }
 
 gboolean
-donna_config_take_shared_string (DonnaProviderConfig    *config,
-                                 const gchar            *name,
-                                 DonnaSharedString      *value)
+donna_config_take_shared_string (DonnaConfig        *config,
+                                 const gchar        *name,
+                                 DonnaSharedString  *value)
 {
     _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_take_shared_string);
 }
 
 gboolean
-donna_config_set_string_take (DonnaProviderConfig    *config,
-                              const gchar            *name,
-                              gchar                  *value)
+donna_config_set_string_take (DonnaConfig    *config,
+                              const gchar    *name,
+                              gchar          *value)
 {
     _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_new_shared_string_take);
 }
 
 gboolean
-donna_config_set_string_dup (DonnaProviderConfig   *config,
-                             const gchar           *name,
-                             const gchar           *value)
+donna_config_set_string_dup (DonnaConfig   *config,
+                             const gchar   *name,
+                             const gchar   *value)
 {
     _set_option (DONNA_TYPE_SHARED_STRING, donna_g_value_new_shared_string_dup);
 }
@@ -1400,15 +1400,15 @@ _remove_option (DonnaProviderConfig *config,
 }
 
 gboolean
-donna_config_remove_option (DonnaProviderConfig    *config,
-                            const gchar            *name)
+donna_config_remove_option (DonnaConfig    *config,
+                            const gchar    *name)
 {
     return _remove_option (config, name, FALSE);
 }
 
 gboolean
-donna_config_remove_category (DonnaProviderConfig    *config,
-                              const gchar            *name)
+donna_config_remove_category (DonnaConfig    *config,
+                              const gchar    *name)
 {
     return _remove_option (config, name, TRUE);
 }

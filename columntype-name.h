@@ -6,7 +6,7 @@
 
 G_BEGIN_DECLS
 
-#define DONNA_TYPE_COLUMNTYPE_NAME              (donna_columntype_name_get_type ())
+#define DONNA_TYPE_COLUMNTYPE_NAME              (donna_column_type_name_get_type ())
 #define DONNA_COLUMNTYPE_NAME(obj)              (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_COLUMNTYPE_NAME, DonnaColumnTypeName))
 #define DONNA_COLUMNTYPE_NAME_CLASS(klass)      (G_TYPE_CHECK_CLASS_CAST ((klass), DONNA_TYPE_COLUMNTYPE_NAME, DonnaColumnTypeNameClass))
 #define DONNA_IS_COLUMNTYPE_NAME(obj)           (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_COLUMNTYPE_NAME))
@@ -29,8 +29,7 @@ struct _DonnaColumnTypeNameClass
     GObjectClass parent;
 };
 
-GType                   donna_columntype_name_get_type  (void) G_GNUC_CONST;
-DonnaColumnTypeName *   donna_columntype_name_new       (void);
+GType                   donna_column_type_name_get_type  (void) G_GNUC_CONST;
 
 G_END_DECLS
 

@@ -16,6 +16,7 @@ typedef struct
 } Donna;
 
 
+void        donna_init                      (int *argc, char **argv[]);
 void        donna_start_internal_task       (DonnaTask  *task);
 
 G_END_DECLS
