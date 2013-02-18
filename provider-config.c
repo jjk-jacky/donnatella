@@ -63,19 +63,24 @@ struct option
 
 struct _DonnaProviderConfigPrivate
 {
+    /* to hold all common strings in config; i.e. option names */
+    GStringChunk    *str_chunk;
     /* extra formats of options (list, list-int, etc) */
-    GHashTable  *extras;
+    GHashTable      *extras;
     /* root of config */
-    GNode       *root;
+    GNode           *root;
     /* config lock */
-    GRWLock      lock;
+    GRWLock          lock;
     /* a recursive mutex to handle (toggle ref) nodes. Should only be locked
      * after a lock on config (GRWLock above), reader is good enough */
-    GRecMutex    nodes_mutex;
+    GRecMutex        nodes_mutex;
 };
 
 #define option_is_category(opt, root)    \
     (((struct option *) opt)->extra == root)
+
+#define str_chunk(priv, string) \
+    g_string_chunk_insert_const (priv->str_chunk, string)
 
 static void             provider_config_finalize    (GObject    *object);
 
@@ -151,8 +156,9 @@ donna_provider_config_init (DonnaProviderConfig *provider)
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_CONFIG,
             DonnaProviderConfigPrivate);
+    priv->str_chunk = g_string_chunk_new (1024);
     priv->extras = g_hash_table_new_full (g_str_hash, g_str_equal,
-            g_free, (GDestroyNotify) free_extra);
+            NULL, (GDestroyNotify) free_extra);
     option = g_slice_new0 (struct option);
     /* categories hold the next index for auto-creation of subcategories. It
      * shouldn't be used on root, doesn't make much sense, but this avoids
@@ -223,9 +229,6 @@ free_option (DonnaProviderConfig *config,
 {
     if (!option)
         return;
-    g_free (option->name);
-    if (option->extra != config->priv->root)
-        g_free (option->extra);
     g_value_unset (&option->value);
     if (option->node)
     {
@@ -259,6 +262,7 @@ provider_config_finalize (GObject *object)
 
     priv = DONNA_PROVIDER_CONFIG (object)->priv;
 
+    g_string_chunk_free (priv->str_chunk);
     g_hash_table_destroy (priv->extras);
     g_node_traverse (priv->root, G_IN_ORDER, G_TRAVERSE_ALL, -1,
             (GNodeTraverseFunc) free_node_data,
@@ -269,6 +273,31 @@ provider_config_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_config_parent_class)->finalize (object);
+}
+
+static gchar *
+str_chunk_len (DonnaProviderConfigPrivate   *priv,
+               const gchar                  *string,
+               gssize                        len)
+{
+    gchar  buf[255];
+    gchar *b = buf;
+    gchar *s;
+
+    /* to easily use auto-numbered categories, we can send NULL as string, and
+     * the number to print as len */
+    if (!string)
+        snprintf (buf, 255, "%d", len);
+    else if (len < 255)
+        snprintf (buf, 255, "%s", string);
+    else
+        b = g_strdup_printf ("%s", string);
+
+    s = g_string_chunk_insert_const (priv->str_chunk, b);
+    if (b != buf)
+        g_free (b);
+
+    return s;
 }
 
 /*** PARSING CONFIGURATION ***/
@@ -536,7 +565,9 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
             extra->type = EXTRA_TYPE_LIST;
             extra->values = values;
 
-            g_hash_table_insert (priv->extras, g_strdup (section->name), extra);
+            g_hash_table_insert (priv->extras,
+                    str_chunk (priv, section->name),
+                    extra);
         }
         else if (streq (s, "list-int"))
         {
@@ -597,7 +628,9 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
             extra->type = EXTRA_TYPE_LIST_INT;
             extra->values = values;
 
-            g_hash_table_insert (priv->extras, g_strdup (section->name), extra);
+            g_hash_table_insert (priv->extras,
+                    str_chunk (priv, section->name),
+                    extra);
         }
         else
             g_warning ("Unknown type '%s' for definition '%s'", s, section->name);
@@ -657,7 +690,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             g_value_set_int (&option->value, i + 1);
 
             option = g_slice_new0 (struct option);
-            option->name = g_strdup_printf ("%d", i);
+            option->name = str_chunk_len (config->priv, NULL, i);
             option->extra = root;
             g_value_init (&option->value, G_TYPE_INT);
             g_value_set_int (&option->value, 1);
@@ -678,7 +711,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
                 struct option *option;
 
                 option = g_slice_new0 (struct option);
-                option->name = g_strndup (name, s - name);
+                option->name = str_chunk_len (config->priv, name, s - name);
                 option->extra = root;
                 /* category hold an index, next number to use for auto-creating
                  * sub-categories. (See above) */
@@ -830,8 +863,8 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     g_value_set_int (&option->value, v);
 
                 }
-                option->name = g_strdup (parsed->name);
-                option->extra = g_strdup (s);
+                option->name = str_chunk (priv, parsed->name);
+                option->extra = str_chunk (priv, s);
                 g_node_append_data (parent, option);
                 *--s = ':';
             }
@@ -842,7 +875,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                         || streq (parsed->value, "false"))
                 {
                     option = g_slice_new0 (struct option);
-                    option->name = g_strdup (parsed->name);
+                    option->name = str_chunk (priv, parsed->name);
                     g_value_init (&option->value, G_TYPE_BOOLEAN);
                     g_value_set_boolean (&option->value,
                             streq (parsed->value, "true"));
@@ -860,7 +893,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                         continue;
                     }
                     option = g_slice_new0 (struct option);
-                    option->name = g_strdup (parsed->name);
+                    option->name = str_chunk (priv, parsed->name);
                     g_value_init (&option->value, G_TYPE_INT);
                     g_value_set_int (&option->value, v);
                     g_node_append_data (parent, option);
@@ -877,7 +910,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                         continue;
                     }
                     option = g_slice_new0 (struct option);
-                    option->name = g_strdup (parsed->name);
+                    option->name = str_chunk (priv, parsed->name);
                     g_value_init (&option->value, G_TYPE_UINT);
                     g_value_set_uint (&option->value, v);
                     g_node_append_data (parent, option);
@@ -894,7 +927,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                         continue;
                     }
                     option = g_slice_new0 (struct option);
-                    option->name = g_strdup (parsed->name);
+                    option->name = str_chunk (priv, parsed->name);
                     g_value_init (&option->value, G_TYPE_DOUBLE);
                     g_value_set_double (&option->value, v);
                     g_node_append_data (parent, option);
@@ -914,7 +947,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     }
 
                     option = g_slice_new0 (struct option);
-                    option->name = g_strdup (parsed->name);
+                    option->name = str_chunk (priv, parsed->name);
                     g_value_init (&option->value, DONNA_TYPE_SHARED_STRING);
                     donna_g_value_new_shared_string_dup (&option->value, v);
                     g_node_append_data (parent, option);
@@ -1228,8 +1261,10 @@ donna_config_list_options (DonnaConfig               *config,
             {
                 if (!options)
                     *options = g_ptr_array_new ();
-                g_ptr_array_add (*options,
-                        g_strdup (((struct option *) node->data)->name));
+                /* we can add option->name because it is in the GStringChunk,
+                 * and therefore isn't going anywhere (even if the option is
+                 * renamed or removed) */
+                g_ptr_array_add (*options, ((struct option *) node->data)->name);
             }
         }
     }
@@ -1280,7 +1315,7 @@ donna_config_list_options (DonnaConfig               *config,
     else                                                                \
     {                                                                   \
         option = g_slice_new0 (struct option);                          \
-        option->name = g_strdup (s);                                    \
+        option->name = str_chunk (priv, s);                             \
         g_value_init (&option->value, type);                            \
         g_node_append_data (parent, option);                            \
         ret = TRUE;                                                     \
@@ -1520,7 +1555,7 @@ node_prop_setter (DonnaTask     *task,
 
         if (G_UNLIKELY (!G_VALUE_HOLDS (value,
                         (is_set_value) ? G_VALUE_TYPE (&option->value)
-                        : G_TYPE_STRING)))
+                        : DONNA_TYPE_SHARED_STRING)))
         {
             donna_task_set_error (task, DONNA_NODE_ERROR,
                     DONNA_NODE_ERROR_INVALID_TYPE,
@@ -1528,7 +1563,7 @@ node_prop_setter (DonnaTask     *task,
                     : "Property '%s' is of type '%s', value passed if '%s'",
                     (is_set_value) ? donna_shared_string (location) : "name",
                     g_type_name ((is_set_value) ? G_VALUE_TYPE (&option->value)
-                        : G_TYPE_STRING),
+                        : DONNA_TYPE_SHARED_STRING),
                     g_type_name (G_VALUE_TYPE (value)));
             g_object_unref (provider);
             donna_shared_string_unref (location);
@@ -1540,11 +1575,9 @@ node_prop_setter (DonnaTask     *task,
             /* set the new value */
             g_value_copy (value, &option->value);
         else
-        {
             /* rename option */
-            g_free (option->name);
-            option->name = g_value_dup_string (value);
-        }
+            option->name = str_chunk (priv,
+                    donna_g_value_get_shared_string_const_string (value));
         g_rw_lock_writer_unlock (&priv->lock);
 
         /* update the node */

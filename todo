@@ -1,8 +1,8 @@
+- config: add rename_option() ? (only doable through provider now)
 - config: limit len of names? (columntype-name has 128 for
   "treeviews/$name/columns/$name/sort_$name")
 
 - tree has hashtable, keys are node pointers
-- use GStringChunk in config for section/extra/option names
 - set a default log_handler to show g_warning-s, or use a donna_warning
 
 - columntype: handle_context: add renderer, x ,y
