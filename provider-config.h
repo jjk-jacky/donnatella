@@ -17,6 +17,13 @@ typedef struct _DonnaProviderConfig             DonnaProviderConfig;
 typedef struct _DonnaProviderConfigClass        DonnaProviderConfigClass;
 typedef struct _DonnaProviderConfigPrivate      DonnaProviderConfigPrivate;
 
+
+#define DONNA_CONFIG(obj)       ((DonnaConfig *) (obj))
+#define DONNA_IS_CONFIG(obj)    DONNA_IS_PROVIDER_CONFIG(obj)
+
+typedef DonnaProviderConfig     DonnaConfig;
+
+
 struct _DonnaProviderConfig
 {
     GObject parent;
@@ -27,6 +34,12 @@ struct _DonnaProviderConfig
 struct _DonnaProviderConfigClass
 {
     GObjectClass parent;
+
+    /* signals -- config manager */
+    void            (*option_set)               (DonnaConfig            *config,
+                                                 const gchar            *name);
+    void            (*option_removed)           (DonnaConfig            *config,
+                                                 const gchar            *name);
 };
 
 GType       donna_provider_config_get_type      (void) G_GNUC_CONST;

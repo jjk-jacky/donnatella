@@ -6,10 +6,20 @@
 #include <ctype.h>              /* isblank() */
 #include "provider-config.h"
 #include "provider.h"
+#include "conf.h"
 #include "node.h"
 #include "task.h"
 #include "sharedstring.h"
 #include "macros.h"
+
+enum
+{
+    OPTION_SET,
+    OPTION_REMOVED,
+    NB_SIGNALS
+};
+
+static guint donna_config_signals[NB_SIGNALS] = { 0 };
 
 struct parsed_data
 {
@@ -102,6 +112,30 @@ donna_provider_config_class_init (DonnaProviderConfigClass *klass)
 {
     GObjectClass *o_class;
 
+    /* signals for the config manager */
+    donna_config_signals[OPTION_SET] =
+        g_signal_new ("option-set",
+                DONNA_TYPE_PROVIDER_CONFIG,
+                G_SIGNAL_RUN_LAST,
+                G_STRUCT_OFFSET (DonnaProviderConfigClass, option_set),
+                NULL,
+                NULL,
+                g_cclosure_marshal_VOID__STRING,
+                G_TYPE_NONE,
+                1,
+                G_TYPE_STRING);
+    donna_config_signals[OPTION_REMOVED] =
+        g_signal_new ("option-removed",
+                DONNA_TYPE_PROVIDER_CONFIG,
+                G_SIGNAL_RUN_LAST,
+                G_STRUCT_OFFSET (DonnaProviderConfigClass, option_removed),
+                NULL,
+                NULL,
+                g_cclosure_marshal_VOID__STRING,
+                G_TYPE_NONE,
+                1,
+                G_TYPE_STRING);
+
     o_class = (GObjectClass *) klass;
     o_class->finalize = provider_config_finalize;
 
@@ -137,6 +171,26 @@ G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
         )
 
 static void
+config_option_set (DonnaConfig *config, const gchar *name)
+{
+    g_return_if_fail (DONNA_IS_CONFIG (config));
+    g_return_if_fail (name != NULL);
+
+    g_signal_emit (config, donna_config_signals[OPTION_SET],
+            0, name);
+}
+
+static void
+config_option_removed (DonnaConfig *config, const gchar *name)
+{
+    g_return_if_fail (DONNA_IS_CONFIG (config));
+    g_return_if_fail (name != NULL);
+
+    g_signal_emit (config, donna_config_signals[OPTION_REMOVED],
+            0, name);
+}
+
+static void
 free_extra (struct extra *extra)
 {
     if (!extra)
@@ -156,8 +210,16 @@ free_extra (struct extra *extra)
     g_free (extra);
 }
 
+struct removing_data
+{
+    DonnaProviderConfig *config;
+    GPtrArray           *nodes;
+};
+
 static void
-free_option (DonnaProviderConfig *config, struct option *option, gboolean is_removing)
+free_option (DonnaProviderConfig *config,
+             struct option       *option,
+             GPtrArray           *nodes)
 {
     if (!option)
         return;
@@ -165,23 +227,28 @@ free_option (DonnaProviderConfig *config, struct option *option, gboolean is_rem
     if (option->extra != config->priv->root)
         g_free (option->extra);
     g_value_unset (&option->value);
-    if (is_removing && option->node)
-        donna_provider_node_removed (DONNA_PROVIDER (config), option->node);
-    g_object_unref (option->node);
+    if (option->node)
+    {
+        if (nodes)
+            /* add for later removal, outside of the lock */
+            g_ptr_array_add (nodes, option->node);
+        else
+            g_object_unref (option->node);
+    }
     g_slice_free (struct option, option);
 }
 
 static gboolean
 free_node_data (GNode *node, DonnaProviderConfig *config)
 {
-    free_option (config, node->data, FALSE);
+    free_option (config, node->data, NULL);
     return FALSE;
 }
 
 static gboolean
-free_node_data_removing (GNode *node, DonnaProviderConfig *config)
+free_node_data_removing (GNode *node, struct removing_data *data)
 {
-    free_option (config, node->data, TRUE);
+    free_option (data->config, node->data, data->nodes);
     return FALSE;
 }
 
@@ -1180,7 +1247,10 @@ donna_config_get_shared_string (DonnaProviderConfig    *config,
     if (ret)                                                            \
         value_set (&option->value, value);                              \
     g_rw_lock_writer_unlock (&priv->lock);                              \
-    /* set value on node after releasing the lock to avoid dead locks */ \
+    /* signal & set value on node after releasing the lock, to avoid
+     * any deadlocks */                                                 \
+    if (ret)                                                            \
+        config_option_set (DONNA_CONFIG (config), name);                \
     if (option->node)                                                   \
         donna_node_set_property_value (option->node,                    \
                 "option-value",                                         \
@@ -1262,6 +1332,8 @@ _remove_option (DonnaProviderConfig *config,
     GNode *parent;
     GNode *node;
     const gchar *s;
+    struct removing_data data;
+    guint i;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
@@ -1301,12 +1373,28 @@ _remove_option (DonnaProviderConfig *config,
     }
 
     /* actually remove the nodes/options */
+    data.config = config;
+    data.nodes  = g_ptr_array_new ();
     g_node_traverse (node, G_IN_ORDER, G_TRAVERSE_ALL, -1,
             (GNodeTraverseFunc) free_node_data_removing,
-            priv->root);
+            &data);
     g_node_destroy (node);
 
     g_rw_lock_writer_unlock (&priv->lock);
+
+    /* signals after releasing the lock, to avoid dead locks */
+    /* config: we oly send one signal, e.g. only the category (no children) */
+    config_option_removed (DONNA_CONFIG (config), name);
+    /* for provider: we must do it for all existing nodes, as it also serves as
+     * a "destroy" i.e. to mean unref it, the node doesn't exist anymore */
+    for (i = 0; i < data.nodes->len; ++i)
+    {
+        donna_provider_node_removed (DONNA_PROVIDER (config),
+                data.nodes->pdata[i]);
+        /* we should be the only ref left, and can let it go now */
+        g_object_unref (data.nodes->pdata[1]);
+    }
+    g_ptr_array_free (data.nodes, TRUE);
 
     return TRUE;
 }

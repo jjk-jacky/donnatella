@@ -4,13 +4,9 @@
 
 #include "provider-config.h"
 
-G_BEGIN_DECLS
-
-#define DONNA_CONFIG(obj)       DONNA_PROVIDER_CONFIG (obj)
-#define DONNA_IS_CONFIG(obj)    DONNA_IS_PROVIDER_CONFIG(obj)
-
-typedef DonnaProviderConfig     DonnaConfig;
-
-G_END_DECLS
+/* empty because we haven't made an interface DonnaConfig (that provider-config
+ * would also implement), but it might happen some day. Until then, all required
+ * API is on provider-config.h but when needing to use the config, one should
+ * include this very conf.h */
 
 #endif /* __DONNA_CONFIG_H__ */
