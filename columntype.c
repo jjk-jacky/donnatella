@@ -8,49 +8,44 @@ donna_columntype_default_init (DonnaColumnTypeInterface *klass)
 
 G_DEFINE_INTERFACE (DonnaColumnType, donna_columntype, G_TYPE_OBJECT)
 
-gint
-donna_columntype_get_renderers (DonnaColumnType  *ct,
-                                const gchar      *tv_name,
-                                const gchar      *col_name,
-                                DonnaRenderer   **renderers)
+const gchar *
+donna_columntype_get_renderers (DonnaColumnType  *ct)
 {
     DonnaColumnTypeInterface *interface;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
-    g_return_val_if_fail (tv_name != NULL, 0);
-    g_return_val_if_fail (col_name != NULL, 0);
-    g_return_val_if_fail (renderers != NULL, 0);
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, 0);
     g_return_val_if_fail (interface->get_renderers != NULL, 0);
 
-    return (*interface->get_renderers) (ct, tv_name, col_name, renderers);
+    return (*interface->get_renderers) (ct);
 }
 
-void
+DonnaTask *
 donna_columntype_render (DonnaColumnType    *ct,
                          const gchar        *tv_name,
                          const gchar        *col_name,
+                         guint               index,
                          DonnaNode          *node,
-                         gpointer            data,
                          GtkCellRenderer    *renderer)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_if_fail (DONNA_IS_COLUMNTYPE (ct));
-    g_return_if_fail (tv_name != NULL);
-    g_return_if_fail (col_name != NULL);
-    g_return_if_fail (DONNA_IS_NODE (node));
-    g_return_if_fail (GTK_IS_CELL_RENDERER (renderer));
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (tv_name != NULL, NULL);
+    g_return_val_if_fail (col_name != NULL, NULL);
+    g_return_val_if_fail (index > 0, NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    g_return_val_if_fail (GTK_IS_CELL_RENDERER (renderer), NULL);
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
-    g_return_if_fail (interface != NULL);
-    g_return_if_fail (interface->render != NULL);
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->render != NULL, NULL);
 
-    return (*interface->render) (ct, tv_name, col_name, node, data, renderer);
+    return (*interface->render) (ct, tv_name, col_name, index, node, renderer);
 }
 
 GtkMenu *
@@ -97,8 +92,8 @@ gboolean
 donna_columntype_set_tooltip (DonnaColumnType    *ct,
                               const gchar        *tv_name,
                               const gchar        *col_name,
+                              guint               index,
                               DonnaNode          *node,
-                              gpointer            data,
                               GtkTooltip         *tooltip)
 {
     DonnaColumnTypeInterface *interface;
@@ -106,6 +101,7 @@ donna_columntype_set_tooltip (DonnaColumnType    *ct,
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
     g_return_val_if_fail (tv_name != NULL, FALSE);
     g_return_val_if_fail (col_name != NULL, FALSE);
+    g_return_val_if_fail (index > 0, FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (GTK_IS_TOOLTIP (tooltip), FALSE);
 
@@ -114,7 +110,7 @@ donna_columntype_set_tooltip (DonnaColumnType    *ct,
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->set_tooltip != NULL, FALSE);
 
-    return (*interface->set_tooltip) (ct, tv_name, col_name, node, data, tooltip);
+    return (*interface->set_tooltip) (ct, tv_name, col_name, index, node, tooltip);
 }
 
 gint

@@ -4,6 +4,7 @@
 
 #include <gtk/gtk.h>
 #include "common.h"
+#include "conf.h"
 
 G_BEGIN_DECLS
 
@@ -17,12 +18,7 @@ typedef struct _DonnaColumnTypeInterface    DonnaColumnTypeInterface;
 
 GType           donna_columntype_get_type   (void) G_GNUC_CONST;
 
-typedef struct
-{
-    gchar           type;
-    gpointer        data;
-    GDestroyNotify  destroy;
-} DonnaRenderer;
+typedef DonnaColumnType *   (*new_ct)       (DonnaConfig        *config);
 
 #define DONNA_COLUMNTYPE_RENDERER_TEXT      't'
 #define DONNA_COLUMNTYPE_RENDERER_PIXBUF    'p'
@@ -35,15 +31,12 @@ struct _DonnaColumnTypeInterface
     GTypeInterface parent;
 
     /* virtual table */
-    gint                (*get_renderers)    (DonnaColumnType    *ct,
+    const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
+    DonnaTask *         (*render)           (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
-                                             DonnaRenderer     **renderers);
-    void                (*render)           (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
+                                             guint               index,
                                              DonnaNode          *node,
-                                             gpointer            data,
                                              GtkCellRenderer    *renderer);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
@@ -55,8 +48,8 @@ struct _DonnaColumnTypeInterface
     gboolean            (*set_tooltip)      (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
+                                             guint               index,
                                              DonnaNode          *node,
-                                             gpointer            data,
                                              GtkTooltip         *tooltip);
     gint                (*node_cmp)         (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
@@ -65,15 +58,12 @@ struct _DonnaColumnTypeInterface
                                              DonnaNode          *node2);
 };
 
-gint            donna_columntype_get_renderers  (DonnaColumnType    *ct,
+const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
+DonnaTask *     donna_columntype_render         (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
-                                                 DonnaRenderer     **renderers);
-void            donna_columntype_render         (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
+                                                 guint               index,
                                                  DonnaNode          *node,
-                                                 gpointer            data,
                                                  GtkCellRenderer    *renderer);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  const gchar        *tv_name,
@@ -85,8 +75,8 @@ gboolean        donna_columntype_handle_context (DonnaColumnType    *ct,
 gboolean        donna_columntype_set_tooltip    (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
+                                                 guint               index,
                                                  DonnaNode          *node,
-                                                 gpointer            data,
                                                  GtkTooltip         *tooltip);
 gint            donna_columntype_node_cmp       (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
