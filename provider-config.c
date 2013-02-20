@@ -1288,7 +1288,12 @@ donna_config_has_category (DonnaConfig *config,
     g_rw_lock_reader_lock (&priv->lock);                                \
     option = get_option (priv->root, b);                                \
     if (option)                                                         \
-        ret = G_VALUE_HOLDS (&option->value, type);                     \
+    {                                                                   \
+        if (!option_is_category (option, priv->root))                   \
+            ret = G_VALUE_HOLDS (&option->value, type);                 \
+        else                                                            \
+            ret = FALSE;                                                \
+    }                                                                   \
     else                                                                \
         ret = FALSE;                                                    \
     if (ret)                                                            \
@@ -1460,7 +1465,8 @@ donna_config_list_options (DonnaConfig               *config,
     if (node)                                                           \
     {                                                                   \
         option = node->data;                                            \
-        ret = G_VALUE_HOLDS (&option->value, type);                     \
+        ret = !option_is_category (option, priv->root)                  \
+            && G_VALUE_HOLDS (&option->value, type);                    \
     }                                                                   \
     else                                                                \
     {                                                                   \
@@ -1476,11 +1482,13 @@ donna_config_list_options (DonnaConfig               *config,
     /* signal & set value on node after releasing the lock, to avoid
      * any deadlocks */                                                 \
     if (ret)                                                            \
+    {                                                                   \
         config_option_set (DONNA_CONFIG (config), b);                   \
-    if (option->node)                                                   \
-        donna_node_set_property_value (option->node,                    \
-                "option-value",                                         \
-                &option->value);                                        \
+        if (option->node)                                               \
+            donna_node_set_property_value (option->node,                \
+                    "option-value",                                     \
+                    &option->value);                                    \
+    }                                                                   \
                                                                         \
     if (b != buf)                                                       \
         g_free (b);                                                     \
