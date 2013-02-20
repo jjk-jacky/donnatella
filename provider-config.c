@@ -1167,6 +1167,99 @@ get_option (GNode *root, const gchar *name)
         return NULL;
 }
 
+#define _has_option(type, want_category)    do  {                       \
+    DonnaProviderConfigPrivate *priv;                                   \
+    struct option *option;                                              \
+    gchar  buf[255];                                                    \
+    gchar *b = buf;                                                     \
+    gint len;                                                           \
+    va_list va_arg;                                                     \
+    gboolean ret;                                                       \
+                                                                        \
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
+    g_return_val_if_fail (fmt != NULL, FALSE);                          \
+                                                                        \
+    va_start (va_arg, fmt);                                             \
+    len = vsnprintf (buf, 255, fmt, va_arg);                            \
+    if (len >= 255)                                                     \
+    {                                                                   \
+        b = g_new (gchar, ++len); /* +1 for NUL */                      \
+        va_end (va_arg);                                                \
+        va_start (va_arg, fmt);                                         \
+        vsnprintf (b, len, fmt, va_arg);                                \
+    }                                                                   \
+    va_end (va_arg);                                                    \
+                                                                        \
+    priv = config->priv;                                                \
+    g_rw_lock_reader_lock (&priv->lock);                                \
+    option = get_option (priv->root, b);                                \
+    if (option)                                                         \
+    {                                                                   \
+        if (want_category)                                              \
+            ret = option_is_category (option, priv->root);              \
+        else if (!option_is_category (option, priv->root))              \
+            ret = G_VALUE_HOLDS (&option->value, type);                 \
+        else                                                            \
+            ret = FALSE;                                                \
+    }                                                                   \
+    else                                                                \
+        ret = FALSE;                                                    \
+    g_rw_lock_reader_unlock (&priv->lock);                              \
+                                                                        \
+    if (b != buf)                                                       \
+        g_free (b);                                                     \
+                                                                        \
+    return ret;                                                         \
+} while (0)
+
+gboolean
+donna_config_has_boolean (DonnaConfig *config,
+                          const gchar *fmt,
+                          ...)
+{
+    _has_option (G_TYPE_BOOLEAN, FALSE);
+}
+
+gboolean
+donna_config_has_int (DonnaConfig *config,
+                      const gchar *fmt,
+                      ...)
+{
+    _has_option (G_TYPE_INT, FALSE);
+}
+
+gboolean
+donna_config_has_uint (DonnaConfig *config,
+                       const gchar *fmt,
+                       ...)
+{
+    _has_option (G_TYPE_UINT, FALSE);
+}
+
+gboolean
+donna_config_has_double (DonnaConfig *config,
+                         const gchar *fmt,
+                         ...)
+{
+    _has_option (G_TYPE_DOUBLE, FALSE);
+}
+
+gboolean
+donna_config_has_shared_string (DonnaConfig *config,
+                                const gchar *fmt,
+                                ...)
+{
+    _has_option (DONNA_TYPE_SHARED_STRING, FALSE);
+}
+
+gboolean
+donna_config_has_category (DonnaConfig *config,
+                           const gchar *fmt,
+                           ...)
+{
+    _has_option (G_TYPE_INVALID /* not used */, TRUE);
+}
+
 #define _get_option(type, get_value)    do  {                           \
     DonnaProviderConfigPrivate *priv;                                   \
     struct option *option;                                              \

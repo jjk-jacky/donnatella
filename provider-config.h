@@ -56,6 +56,24 @@ gboolean    donna_config_load_config_def        (DonnaConfig            *config,
 gboolean    donna_config_load_config            (DonnaConfig            *config,
                                                  gchar                  *data);
 gchar *     donna_config_export_config          (DonnaConfig            *config);
+gboolean    donna_config_has_boolean            (DonnaConfig            *config,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_has_int                (DonnaConfig            *config,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_has_uint               (DonnaConfig            *config,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_has_double             (DonnaConfig            *config,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_has_shared_string      (DonnaConfig            *config,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_has_category           (DonnaConfig            *config,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_get_boolean            (DonnaConfig            *config,
                                                  gboolean               *value,
                                                  const gchar            *fmt,
