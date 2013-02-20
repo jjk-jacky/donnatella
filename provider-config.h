@@ -57,52 +57,68 @@ gboolean    donna_config_load_config            (DonnaConfig            *config,
                                                  gchar                  *data);
 gchar *     donna_config_export_config          (DonnaConfig            *config);
 gboolean    donna_config_get_boolean            (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gboolean               *value);
+                                                 gboolean               *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_get_int                (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gint                   *value);
+                                                 gint                   *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_get_uint               (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 guint                  *value);
+                                                 guint                  *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_get_double             (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gdouble                *value);
+                                                 gdouble                *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_get_shared_string      (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 DonnaSharedString     **value);
+                                                 DonnaSharedString     **value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_list_options           (DonnaConfig            *config,
-                                                 const gchar            *name,
+                                                 GPtrArray             **options,
                                                  DonnaConfigOptionType   type,
-                                                 GPtrArray             **options);
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gboolean                value);
+                                                 gboolean                value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_int                (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gint                    value);
+                                                 gint                    value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_uint               (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 guint                   value);
+                                                 guint                   value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_double             (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gdouble                 value);
+                                                 gdouble                 value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_shared_string      (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 DonnaSharedString      *value);
+                                                 DonnaSharedString      *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_take_shared_string     (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 DonnaSharedString      *value);
+                                                 DonnaSharedString      *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_string_take        (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 gchar                  *value);
+                                                 gchar                  *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_string_dup         (DonnaConfig            *config,
-                                                 const gchar            *name,
-                                                 const gchar            *value);
+                                                 const gchar            *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_remove_option          (DonnaConfig            *config,
-                                                 const gchar            *name);
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_remove_category        (DonnaConfig            *config,
-                                                 const gchar            *name);
+                                                 const gchar            *fmt,
+                                                 ...);
 
 G_END_DECLS
 
