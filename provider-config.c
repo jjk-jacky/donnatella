@@ -2070,9 +2070,12 @@ node_remove_option (DonnaTask *task, DonnaNode *node)
             "location",  &location,
             "node-type", &node_type,
             NULL);
-    ret =_remove_option (DONNA_PROVIDER_CONFIG (provider),
-            donna_shared_string (location),
-            (node_type == DONNA_NODE_CONTAINER));
+    if (node_type != DONNA_NODE_CONTAINER)
+        ret = donna_config_remove_option (DONNA_PROVIDER_CONFIG (provider),
+                donna_shared_string (location));
+    else
+        ret = donna_config_remove_category (DONNA_PROVIDER_CONFIG (provider),
+                donna_shared_string (location));
     donna_shared_string_unref (location);
     g_object_unref (node);
     g_object_unref (provider);
