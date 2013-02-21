@@ -58,6 +58,9 @@ gboolean        donna_tree_view_set_arrangement_selector (
                                                  get_arrangement_fn  arrgmt_sel,
                                                  gpointer            data,
                                                  GDestroyNotify      destroy);
+void            donna_tree_view_build_arrangement (
+                                                 DonnaTreeView      *tree,
+                                                 gboolean            force);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

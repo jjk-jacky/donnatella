@@ -411,7 +411,7 @@ natoi (const gchar *str, gsize len)
     return i;
 }
 
-static gboolean
+static void
 load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
 {
     DonnaTreeViewPrivate *priv  = tree->priv;
@@ -532,6 +532,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
                     *rend;
                     ++index, ++rend)
             {
+                /* TODO: use an external (app-global) renderer loader? */
                 switch (*rend)
                 {
                     case DONNA_COLUMNTYPE_RENDERER_TEXT:
@@ -616,7 +617,8 @@ next:
         list = g_list_delete_link (list, list);
     }
 
-    return TRUE;
+    donna_shared_string_unref (priv->arrangement);
+    priv->arrangement = donna_shared_string_ref (arrangement);
 }
 
 static DonnaSharedString *
@@ -656,6 +658,22 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *new_location)
     }
 
     return ss;
+}
+
+void
+donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaSharedString *ss;
+
+    g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+
+    priv = tree->priv;
+    ss = select_arrangement (tree, priv->location);
+    if (force || !priv->arrangement || !streq (donna_shared_string (ss),
+                donna_shared_string (priv->arrangement)))
+        load_arrangement (tree, ss);
+    donna_shared_string_unref (ss);
 }
 
 GtkWidget *
@@ -732,6 +750,9 @@ donna_tree_view_new (DonnaConfig        *config,
             DONNA_TREE_VIEW_COL_NODE, sort_func, treev, NULL);
     gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (model),
             DONNA_TREE_VIEW_COL_NODE, GTK_SORT_ASCENDING);
+
+    /* columns */
+    donna_tree_view_build_arrangement (tree, FALSE);
 
     return w;
 }
