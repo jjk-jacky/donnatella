@@ -51,6 +51,16 @@ enum tree_sync
     DONNA_TREE_SYNC_FULL
 };
 
+enum
+{
+    RENDERER_TEXT,
+    RENDERER_PIXBUF,
+    RENDERER_PROGRESS,
+    RENDERER_COMBO,
+    RENDERER_TOGGLE,
+    NB_RENDERERS
+};
+
 struct _DonnaTreeViewPrivate
 {
     DonnaConfig         *config;
@@ -67,6 +77,9 @@ struct _DonnaTreeViewPrivate
     get_column_type_fn   get_ct;
     gpointer             get_ct_data;
     GDestroyNotify       get_ct_destroy;
+
+    /* so we re-use the same renderer for all columns */
+    GtkCellRenderer     *renderers[NB_RENDERERS];
 
     /* internal states */
     DonnaSharedString   *arrangement;
@@ -508,8 +521,34 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
                 switch (*rend)
                 {
                     case DONNA_COLUMNTYPE_RENDERER_TEXT:
-                        /* FIXME: re-use same renderer for all columns */
-                        renderer = gtk_cell_renderer_text_new ();
+                        if (!priv->renderers[RENDERER_TEXT])
+                            priv->renderers[RENDERER_TEXT] =
+                                gtk_cell_renderer_text_new ();
+                        renderer = priv->renderers[RENDERER_TEXT];
+                        break;
+                    case DONNA_COLUMNTYPE_RENDERER_PIXBUF:
+                        if (!priv->renderers[RENDERER_PIXBUF])
+                            priv->renderers[RENDERER_PIXBUF] =
+                                gtk_cell_renderer_pixbuf_new ();
+                        renderer = priv->renderers[RENDERER_PIXBUF];
+                        break;
+                    case DONNA_COLUMNTYPE_RENDERER_PROGRESS:
+                        if (!priv->renderers[RENDERER_PROGRESS])
+                            priv->renderers[RENDERER_PROGRESS] =
+                                gtk_cell_renderer_progress_new ();
+                        renderer = priv->renderers[RENDERER_PROGRESS];
+                        break;
+                    case DONNA_COLUMNTYPE_RENDERER_COMBO:
+                        if (!priv->renderers[RENDERER_COMBO])
+                            priv->renderers[RENDERER_COMBO] =
+                                gtk_cell_renderer_combo_new ();
+                        renderer = priv->renderers[RENDERER_COMBO];
+                        break;
+                    case DONNA_COLUMNTYPE_RENDERER_TOGGLE:
+                        if (!priv->renderers[RENDERER_TOGGLE])
+                            priv->renderers[RENDERER_TOGGLE] =
+                                gtk_cell_renderer_toggle_new ();
+                        renderer = priv->renderers[RENDERER_TOGGLE];
                         break;
                     default:
                         g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
