@@ -1,7 +1,7 @@
 
+#define _GNU_SOURCE             /* strchrnul() in string.h */
 #include <gtk/gtk.h>
 #include <string.h>             /* strchr() */
-#include <stdlib.h>             /* atoi() */
 #include "treeview.h"
 #include "common.h"
 #include "node.h"
@@ -398,6 +398,19 @@ donna_tree_view_set_root (DonnaTreeView *tree, DonnaNode *node)
     return TRUE;
 }
 
+static inline gint
+natoi (const gchar *str, gsize len)
+{
+    gint i = 0;
+    for ( ; *str != '\0' && len > 0; ++str, --len)
+    {
+        if (*str < '0' || *str > '9')
+            break;
+        i = (i * 10) + (*str - '0');
+    }
+    return i;
+}
+
 static gboolean
 load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
 {
@@ -405,7 +418,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
     GtkTreeView          *treev = GTK_TREE_VIEW (tree);
     GList                *list;
     DonnaSharedString    *ss_columns = NULL;
-    gchar                *col;
+    const gchar          *col;
     GtkTreeViewColumn    *last_column = NULL;
 
     list = gtk_tree_view_get_columns (treev);
@@ -413,18 +426,21 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
     /* get new set of columns to load */
     if (donna_config_get_shared_string (priv->config, &ss_columns,
                 "%s/columns", donna_shared_string (arrangement)))
-        col = (gchar *) donna_shared_string (ss_columns);
+        col = donna_shared_string (ss_columns);
     else
     {
         g_warning ("No columns defined in '%s/columns'; using 'name'",
                 donna_shared_string (ss_columns));
-        col = (gchar *) "name";
+        col = "name";
     }
 
     for (;;)
     {
-        gchar             *s;
-        gchar             *e;
+        const gchar       *s;
+        const gchar       *e;
+        gsize              len;
+        gchar              buf[64];
+        gchar             *b;
         DonnaSharedString *ss;
         DonnaColumnType   *ct;
         GList             *l;
@@ -433,33 +449,37 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         const gchar       *rend;
         gint               index;
 
-        /* FIXME: col is const */
-        e = strchr (col, ',');
-        if (e)
-            *e = '\0';
+        e = strchrnul (col, ',');
         s = strchr (col, ':');
-        if (s && s < e)
-            *s = '\0';
-        else
+        if (s && s > e)
             s = NULL;
 
+        len = ((s) ? s : e) - col;
+        if (len < 64)
+        {
+            sprintf (buf, "%.*s", len, col);
+            b = buf;
+        }
+        else
+            b = g_strdup_printf ("%.*s", len, col);
+
         if (!donna_config_get_shared_string (priv->config, &ss,
-                    "treeviews/%s/columns/%s/type", priv->name, col))
+                    "treeviews/%s/columns/%s/type", priv->name, b))
         {
             if (!donna_config_get_shared_string (priv->config, &ss,
-                        "columns/%s/type", col))
+                        "columns/%s/type", b))
             {
                 g_warning ("No type defined for column '%s', fallback to its name",
-                        col);
+                        b);
                 ss = NULL;
             }
         }
 
-        ct = priv->get_ct ((ss) ? donna_shared_string (ss) : col);
+        ct = priv->get_ct ((ss) ? donna_shared_string (ss) : b);
         if (!ct)
         {
             g_warning ("Unable to load column type '%s' for column '%s' in treeview '%s'",
-                    (ss) ? donna_shared_string (ss) : col, col, priv->name);
+                    (ss) ? donna_shared_string (ss) : b, b, priv->name);
             if (ss)
                 donna_shared_string_unref (ss);
             goto next;
@@ -485,9 +505,9 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
                 g_object_unref (ct);
                 /* update the name if needed */
                 name = g_object_get_data (G_OBJECT (column), "column-name");
-                if (!streq (name, col))
+                if (!streq (name, b))
                     g_object_set_data_full (G_OBJECT (column), "column-name",
-                            g_strdup (col), g_free);
+                            g_strdup (b), g_free);
                 /* move column */
                 gtk_tree_view_move_column_after (treev, column, last_column);
 
@@ -501,7 +521,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
             column = gtk_tree_view_column_new ();
             /* store the name on it, so we can get it back from e.g. rend_fn */
             g_object_set_data_full (G_OBJECT (column), "column-name",
-                    g_strdup (col), g_free);
+                    g_strdup (b), g_free);
             /* give our ref on the ct to the column */
             g_object_set_data_full (G_OBJECT (column), "column-type",
                     ct, g_object_unref);
@@ -546,7 +566,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
                         break;
                     default:
                         g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
-                                *rend, col, priv->name);
+                                *rend, b, priv->name);
                         continue;
                 }
                 gtk_tree_view_column_set_cell_data_func (column, renderer,
@@ -559,17 +579,17 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
 
         /* sizing stuff */
         if (s)
-            gtk_tree_view_column_set_fixed_width (column, atoi (s + 1));
+            gtk_tree_view_column_set_fixed_width (column, natoi (++s, e - s));
 
         /* set title */
         ss = NULL;
         if (!donna_config_get_shared_string (priv->config, &ss,
-                    "treeviews/%s/columns/%s/title", priv->name, col))
+                    "treeviews/%s/columns/%s/title", priv->name, b))
             if (!donna_config_get_shared_string (priv->config, &ss,
-                        "columns/%s/title", col))
+                        "columns/%s/title", b))
             {
-                g_warning ("No title set for column '%s', using its name", col);
-                gtk_tree_view_column_set_title (column, col);
+                g_warning ("No title set for column '%s', using its name", b);
+                gtk_tree_view_column_set_title (column, b);
             }
         if (ss)
         {
@@ -580,11 +600,9 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         last_column = column;
 
 next:
-        if (s)
-            *s = ':';
-        if (e)
-            *e = ',';
-        else
+        if (b != buf)
+            g_free (b);
+        if (*e == '\0')
             break;
         col = e + 1;
     }
