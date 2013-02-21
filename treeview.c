@@ -7,6 +7,7 @@
 #include "node.h"
 #include "task.h"
 #include "sharedstring.h"
+#include "macros.h"
 
 enum
 {
@@ -395,6 +396,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
     GList                *list;
     DonnaSharedString    *ss_columns = NULL;
     gchar                *col;
+    GtkTreeViewColumn    *last_column = NULL;
 
     if (!priv->get_ct)
     {
@@ -402,12 +404,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         return FALSE;
     }
 
-    /* FIXME: reuse loaded columns of the right type */
-
-    /* remove all current columns */
-    for (list = gtk_tree_view_get_columns (treev); list; list = list->next)
-        gtk_tree_view_remove_column (treev, list->data);
-    g_list_free (list);
+    list = gtk_tree_view_get_columns (treev);
 
     /* get new set of columns to load */
     if (donna_config_get_shared_string (priv->config, &ss_columns,
@@ -426,6 +423,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         gchar             *e;
         DonnaSharedString *ss;
         DonnaColumnType   *ct;
+        GList             *l;
         GtkTreeViewColumn *column;
         GtkCellRenderer   *renderer;
         const gchar       *rend;
@@ -462,40 +460,75 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         }
         donna_shared_string_unref (ss);
 
-        /* create renderer(s) & column */
-        column = gtk_tree_view_column_new ();
-        /* store the name on it, so we can get it back from e.g. rend_fn */
-        g_object_set_data_full (G_OBJECT (column), "column-name",
-                g_strdup (col), g_free);
-        /* give our ref on the ct to the column */
-        g_object_set_data_full (G_OBJECT (column), "column-type",
-                ct, g_object_unref);
+        /* look for an existing column of that type */
+        column = NULL;
+        for (l = list; l; l = l->next)
+        {
+            DonnaColumnType *col_ct;
+
+            col_ct = g_object_get_data (l->data, "column-type");
+            if (col_ct == ct)
+            {
+                gchar *name;
+
+                column = l->data;
+                list = g_list_delete_link (list, l);
+
+                /* column has a ref already, we can release ours */
+                g_object_unref (ct);
+                /* update the name if needed */
+                name = g_object_get_data (G_OBJECT (column), "column-name");
+                if (!streq (name, col))
+                    g_object_set_data_full (G_OBJECT (column), "column-name",
+                            g_strdup (col), g_free);
+                /* move column */
+                gtk_tree_view_move_column_after (treev, column, last_column);
+
+                break;
+            }
+        }
+
+        if (!column)
+        {
+            /* create renderer(s) & column */
+            column = gtk_tree_view_column_new ();
+            /* store the name on it, so we can get it back from e.g. rend_fn */
+            g_object_set_data_full (G_OBJECT (column), "column-name",
+                    g_strdup (col), g_free);
+            /* give our ref on the ct to the column */
+            g_object_set_data_full (G_OBJECT (column), "column-type",
+                    ct, g_object_unref);
+            /* sizing stuff */
+            gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
+            /* load renderers */
+            for (index = 1, rend = donna_columntype_get_renderers (ct);
+                    *rend;
+                    ++index, ++rend)
+            {
+                switch (*rend)
+                {
+                    case DONNA_COLUMNTYPE_RENDERER_TEXT:
+                        /* FIXME: re-use same renderer for all columns */
+                        renderer = gtk_cell_renderer_text_new ();
+                        break;
+                    default:
+                        g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
+                                *rend, col, priv->name);
+                        continue;
+                }
+                gtk_tree_view_column_set_cell_data_func (column, renderer,
+                        rend_fn, GINT_TO_POINTER (index), NULL);
+                gtk_tree_view_column_pack_start (column, renderer, TRUE);
+            }
+            /* add it */
+            gtk_tree_view_append_column (treev, column);
+        }
+
         /* sizing stuff */
-        gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
         if (s)
             gtk_tree_view_column_set_fixed_width (column, atoi (s + 1));
 
-        /* load renderers */
-        for (index = 1, rend = donna_columntype_get_renderers (ct);
-                *rend;
-                ++index, ++rend)
-        {
-            switch (*rend)
-            {
-                case DONNA_COLUMNTYPE_RENDERER_TEXT:
-                    /* FIXME: re-use same renderer for all columns */
-                    renderer = gtk_cell_renderer_text_new ();
-                    break;
-                default:
-                    g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
-                            *rend, col, priv->name);
-                    continue;
-            }
-            gtk_tree_view_column_set_cell_data_func (column, renderer,
-                    rend_fn, GINT_TO_POINTER (index), NULL);
-            gtk_tree_view_column_pack_start (column, renderer, TRUE);
-        }
-
+        /* set title */
         ss = NULL;
         if (!donna_config_get_shared_string (priv->config, &ss,
                     "treeviews/%s/columns/%s/title", priv->name, col))
@@ -511,7 +544,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
             donna_shared_string_unref (ss);
         }
 
-        gtk_tree_view_append_column (treev, column);
+        last_column = column;
 
 next:
         if (s)
@@ -525,6 +558,12 @@ next:
 
     if (ss_columns)
         donna_shared_string_unref (ss_columns);
+    /* remove all columns left unused */
+    while (list)
+    {
+        gtk_tree_view_remove_column (treev, list->data);
+        list = g_list_delete_link (list, list);
+    }
 
     return TRUE;
 }
