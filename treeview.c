@@ -61,6 +61,13 @@ enum
     NB_RENDERERS
 };
 
+enum
+{
+    SORT_UNKNOWN = 0,
+    SORT_ASC,
+    SORT_DESC
+};
+
 struct _DonnaTreeViewPrivate
 {
     DonnaConfig         *config;
@@ -241,20 +248,17 @@ rend_func (GtkTreeViewColumn  *column,
 }
 
 static gint
-sort_func (GtkTreeModel *model,
-           GtkTreeIter  *iter1,
-           GtkTreeIter  *iter2,
-           gpointer      data)
+sort_func (GtkTreeModel      *model,
+           GtkTreeIter       *iter1,
+           GtkTreeIter       *iter2,
+           GtkTreeViewColumn *column)
 {
-    DonnaTreeView           *tree = DONNA_TREE_VIEW (data);
-    DonnaTreeViewPrivate    *priv;
-    DonnaNode               *node1;
-    DonnaNode               *node2;
-    gchar            *name1;
-    gchar            *name2;
-    gchar            *key1;
-    gchar            *key2;
-    gint              ret;
+    DonnaTreeViewPrivate *priv;
+    DonnaColumnType *ct;
+    const gchar *col;
+    DonnaNode *node1;
+    DonnaNode *node2;
+    gint ret;
 
     gtk_tree_model_get (model, iter1, DONNA_TREE_COL_NODE, &node1, -1);
     /* one node could be a "fake" one, i.e. node is a NULL pointer */
@@ -268,15 +272,13 @@ sort_func (GtkTreeModel *model,
         return 1;
     }
 
-    priv = tree->priv;
+    priv = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column))->priv;
+    ct   = g_object_get_data (G_OBJECT (column), "column-type");
+    col  = g_object_get_data (G_OBJECT (column), "column-name");
 
-    /* FIXME */
-    donna_node_get (node1, "name", &name1, NULL);
-    donna_node_get (node2, "name", &name2, NULL);
-
+    ret = donna_columntype_node_cmp (ct, priv->name, col, node1, node2);
     g_object_unref (node1);
     g_object_unref (node2);
-
     return ret;
 }
 
@@ -420,11 +422,17 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
 {
     DonnaTreeViewPrivate *priv  = tree->priv;
     GtkTreeView          *treev = GTK_TREE_VIEW (tree);
+    GtkTreeSortable      *sortable;
     GList                *list;
     DonnaSharedString    *ss_columns = NULL;
+    DonnaSharedString    *ss_sort = NULL;
+    gsize                 sort_len;
+    gint                  sort_order = SORT_UNKNOWN;
     const gchar          *col;
     GtkTreeViewColumn    *last_column = NULL;
+    gint                  sort_id = 0;
 
+    sortable = GTK_TREE_SORTABLE (gtk_tree_view_get_model (treev));
     list = gtk_tree_view_get_columns (treev);
 
     /* get new set of columns to load */
@@ -436,6 +444,21 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         g_warning ("No columns defined in '%s/columns'; using 'name'",
                 donna_shared_string (ss_columns));
         col = "name";
+    }
+
+    /* get sort order */
+    if (donna_config_get_shared_string (priv->config, &ss_sort,
+                "%s/sort", donna_shared_string (arrangement)))
+    {
+        const gchar *sort = donna_shared_string (ss_sort);
+
+        sort_len = strlen (sort);
+        if (sort_len > 2)
+        {
+            sort_len -= 2;
+            if (sort[sort_len] == ':')
+                sort_order = (sort[sort_len + 1] == 'd') ? SORT_DESC : SORT_ASC;
+        }
     }
 
     for (;;)
@@ -602,6 +625,33 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
             donna_shared_string_unref (ss);
         }
 
+        /* sort */
+        gtk_tree_view_column_set_sort_column_id (column, sort_id++);
+        gtk_tree_sortable_set_sort_func (sortable, sort_id - 1,
+                (GtkTreeIterCompareFunc) sort_func, column, NULL);
+        if (ss_sort)
+        {
+            /* SORT_UNKNOWN means we only had a column name (unlikely) */
+            if (sort_order == SORT_UNKNOWN)
+            {
+                if (streq (donna_shared_string (ss_sort), b))
+                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id - 1,
+                            GTK_SORT_ASCENDING);
+            }
+            else
+            {
+                /* ss_sort contains "column:o" */
+                if (strlen (b) == sort_len
+                        && streqn (donna_shared_string (ss_sort), b, sort_len))
+                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id - 1,
+                            (sort_order == SORT_ASC) ? GTK_SORT_ASCENDING
+                            : GTK_SORT_DESCENDING);
+            }
+            donna_shared_string_unref (ss_sort);
+            ss_sort = NULL;
+        }
+        /* TODO else default sort order? */
+
         last_column = column;
 
 next:
@@ -617,6 +667,11 @@ next:
     /* remove all columns left unused */
     while (list)
     {
+        /* though we should never try to sort by a sort_id not used by a column,
+         * let's make sure it that happens, we just get a warning (instead of
+         * dereferencing a pointer pointing nowhere) */
+        gtk_tree_sortable_set_sort_func (sortable, sort_id++, NULL, NULL, NULL);
+        /* remove column */
         gtk_tree_view_remove_column (treev, list->data);
         list = g_list_delete_link (list, list);
     }
@@ -748,12 +803,6 @@ donna_tree_view_new (DonnaConfig        *config,
     sel = gtk_tree_view_get_selection (treev);
     gtk_tree_selection_set_mode (sel, (priv->mode == DONNA_TREE_VIEW_MODE_TREE)
             ? GTK_SELECTION_BROWSE : GTK_SELECTION_MULTIPLE);
-
-    /* sort */
-    gtk_tree_sortable_set_sort_func (GTK_TREE_SORTABLE (model),
-            DONNA_TREE_VIEW_COL_NODE, sort_func, treev, NULL);
-    gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (model),
-            DONNA_TREE_VIEW_COL_NODE, GTK_SORT_ASCENDING);
 
     /* columns */
     donna_tree_view_build_arrangement (tree, FALSE);
