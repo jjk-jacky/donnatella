@@ -458,20 +458,23 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
             if (!donna_config_get_shared_string (priv->config, &ss,
                         "columns/%s/type", col))
             {
-                g_warning ("No definition found for column '%s'", col);
-                goto next;
+                g_warning ("No type defined for column '%s', fallback to its name",
+                        col);
+                ss = NULL;
             }
         }
 
-        ct = priv->get_ct (donna_shared_string (ss), priv->get_ct_data);
+        ct = priv->get_ct ((ss) ? donna_shared_string (ss) : col, priv->get_ct_data);
         if (!ct)
         {
             g_warning ("Unable to load column type '%s' for column '%s' in treeview '%s'",
-                    donna_shared_string (ss), col, priv->name);
-            donna_shared_string_unref (ss);
+                    (ss) ? donna_shared_string (ss) : col, col, priv->name);
+            if (ss)
+                donna_shared_string_unref (ss);
             goto next;
         }
-        donna_shared_string_unref (ss);
+        if (ss)
+            donna_shared_string_unref (ss);
 
         /* look for an existing column of that type */
         column = NULL;
