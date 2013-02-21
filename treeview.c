@@ -65,6 +65,7 @@ struct _DonnaTreeViewPrivate
 {
     DonnaConfig         *config;
     const gchar         *name;
+    get_column_type_fn   get_ct;
 
     run_task_fn          run_task;
     gpointer             run_task_data;
@@ -73,10 +74,6 @@ struct _DonnaTreeViewPrivate
     get_arrangement_fn   get_arrangement;
     gpointer             get_arrangement_data;
     GDestroyNotify       get_arrangement_destroy;
-
-    get_column_type_fn   get_ct;
-    gpointer             get_ct_data;
-    GDestroyNotify       get_ct_destroy;
 
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
@@ -411,12 +408,6 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
     gchar                *col;
     GtkTreeViewColumn    *last_column = NULL;
 
-    if (!priv->get_ct)
-    {
-        g_warning ("No column type loader defined for treeview '%s'", priv->name);
-        return FALSE;
-    }
-
     list = gtk_tree_view_get_columns (treev);
 
     /* get new set of columns to load */
@@ -464,7 +455,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
             }
         }
 
-        ct = priv->get_ct ((ss) ? donna_shared_string (ss) : col, priv->get_ct_data);
+        ct = priv->get_ct ((ss) ? donna_shared_string (ss) : col);
         if (!ct)
         {
             g_warning ("Unable to load column type '%s' for column '%s' in treeview '%s'",
@@ -650,7 +641,9 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *new_location)
 }
 
 GtkWidget *
-donna_tree_view_new (DonnaConfig *config, const gchar *name)
+donna_tree_view_new (DonnaConfig        *config,
+                     const gchar        *name,
+                     get_column_type_fn  get_ct)
 {
     DonnaTreeViewPrivate *priv;
     DonnaTreeView        *tree;
@@ -664,6 +657,7 @@ donna_tree_view_new (DonnaConfig *config, const gchar *name)
 
     g_return_val_if_fail (DONNA_IS_CONFIG (config), NULL);
     g_return_val_if_fail (name != NULL, NULL);
+    g_return_val_if_fail (get_ct != NULL, NULL);
 
     w = g_object_new (DONNA_TYPE_TREE_VIEW, NULL);
     treev = GTK_TREE_VIEW (w);
@@ -672,6 +666,7 @@ donna_tree_view_new (DonnaConfig *config, const gchar *name)
     priv         = tree->priv;
     priv->config = config;
     priv->name   = name;
+    priv->get_ct = get_ct;
 
     load_config (tree);
 

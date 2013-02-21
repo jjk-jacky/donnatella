@@ -30,8 +30,7 @@ typedef void                (*run_task_fn)          (DonnaTask      *task,
                                                      gpointer        data);
 typedef DonnaSharedString * (*get_arrangement_fn)   (DonnaNode      *node,
                                                      gpointer        data);
-typedef DonnaColumnType *   (*get_column_type_fn)   (const gchar    *type,
-                                                     gpointer        data);
+typedef DonnaColumnType *   (*get_column_type_fn)   (const gchar    *type);
 
 struct _DonnaTreeView
 {
@@ -48,7 +47,8 @@ struct _DonnaTreeViewClass
 GType           donna_tree_view_get_type        (void) G_GNUC_CONST;
 
 GtkWidget *     donna_tree_view_new             (DonnaConfig        *config,
-                                                 const gchar        *name);
+                                                 const gchar        *name,
+                                                 get_column_type_fn  get_ct);
 gboolean        donna_tree_view_set_task_runner (DonnaTreeView      *tree,
                                                  run_task_fn         task_runner,
                                                  gpointer            data,
@@ -56,10 +56,6 @@ gboolean        donna_tree_view_set_task_runner (DonnaTreeView      *tree,
 gboolean        donna_tree_view_set_arrangement_selector (
                                                  DonnaTreeView      *tree,
                                                  get_arrangement_fn  arrgmt_sel,
-                                                 gpointer            data,
-                                                 GDestroyNotify      destroy);
-gboolean        donna_tree_view_set_column_type_loader (
-                                                 get_column_type_fn  get_ct,
                                                  gpointer            data,
                                                  GDestroyNotify      destroy);
 /* mode Tree */
