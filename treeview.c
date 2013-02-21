@@ -216,23 +216,27 @@ donna_tree_view_row_collapsed (GtkTreeView   *tree,
 }
 
 static void
-rend_fn (GtkTreeViewColumn  *column,
-         GtkCellRenderer    *renderer,
-         GtkTreeModel       *model,
-         GtkTreeIter        *iter,
-         gpointer            data)
+rend_func (GtkTreeViewColumn  *column,
+           GtkCellRenderer    *renderer,
+           GtkTreeModel       *model,
+           GtkTreeIter        *iter,
+           gpointer            data)
 {
+    DonnaTreeViewPrivate *priv;
+    DonnaColumnType *ct;
     DonnaNode *node;
-    gchar     *name;
+    const gchar *col;
 
     gtk_tree_model_get (model, iter, DONNA_TREE_COL_NODE, &node, -1);
     if (!node)
         return;
 
-    /* FIXME */
-    donna_node_get (node, "name", &name, NULL);
-    g_object_set (renderer, "text", name, NULL);
-    g_free (name);
+    priv = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column))->priv;
+    ct   = g_object_get_data (G_OBJECT (column), "column-type");
+    col  = g_object_get_data (G_OBJECT (column), "column-name");
+
+    donna_columntype_render (ct, priv->name, col, GPOINTER_TO_UINT (data),
+            node, renderer);
     g_object_unref (node);
 }
 
@@ -519,7 +523,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         {
             /* create renderer(s) & column */
             column = gtk_tree_view_column_new ();
-            /* store the name on it, so we can get it back from e.g. rend_fn */
+            /* store the name on it, so we can get it back from e.g. rend_func */
             g_object_set_data_full (G_OBJECT (column), "column-name",
                     g_strdup (b), g_free);
             /* give our ref on the ct to the column */
@@ -571,7 +575,7 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
                         continue;
                 }
                 gtk_tree_view_column_set_cell_data_func (column, renderer,
-                        rend_fn, GINT_TO_POINTER (index), NULL);
+                        rend_func, GINT_TO_POINTER (index), NULL);
                 gtk_tree_view_column_pack_start (column, renderer, TRUE);
             }
             /* add it */
