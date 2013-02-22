@@ -88,8 +88,9 @@ struct _DonnaTreeViewPrivate
     /* internal states */
     DonnaSharedString   *arrangement;
 
-    /* List: current location */
+    /* List: current/future location */
     DonnaNode           *location;
+    DonnaNode           *future_location;
 
     /* "cached" options */
     guint                mode        : 1;
@@ -418,13 +419,16 @@ natoi (const gchar *str, gsize len)
 }
 
 static void
-load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
+load_arrangement (DonnaTreeView     *tree,
+                  DonnaSharedString *arrangement,
+                  DonnaNode         *location)
 {
     DonnaTreeViewPrivate *priv  = tree->priv;
     GtkTreeView          *treev = GTK_TREE_VIEW (tree);
     GtkTreeSortable      *sortable;
     GList                *list;
-    DonnaSharedString    *ss_columns = NULL;
+    DonnaSharedString    *ss;
+    DonnaSharedString    *ss_columns;
     DonnaSharedString    *ss_sort = NULL;
     gsize                 sort_len;
     gint                  sort_order = SORT_UNKNOWN;
@@ -435,18 +439,57 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
     sortable = GTK_TREE_SORTABLE (gtk_tree_view_get_model (treev));
     list = gtk_tree_view_get_columns (treev);
 
-    /* get new set of columns to load */
-    if (donna_config_get_shared_string (priv->config, &ss_columns,
-                "%s/columns", donna_shared_string (arrangement)))
-        col = donna_shared_string (ss_columns);
-    else
+    /* get new set of columns to load. They might not come from the current
+     * arrangement, because e.g. it might always set the sort order. In that
+     * case, we try to get the arrangement:
+     * - for tree: we try the tree default, if that doesn't work we use "name"
+     * - for list: if we have an arrangement selector, we try the arrangement
+     *   for the parent. If we don't have a selector, or there's no parent, we
+     *   try the list default, if that doesn't work we use "name" */
+    ss = donna_shared_string_ref (arrangement);
+    for (;;)
     {
-        g_warning ("No columns defined in '%s/columns'; using 'name'",
-                donna_shared_string (ss_columns));
-        col = "name";
+        if (donna_config_get_shared_string (priv->config, &ss_columns,
+                    "%s/columns", donna_shared_string (ss)))
+        {
+            col = donna_shared_string (ss_columns);
+            break;
+        }
+        else
+        {
+            if (is_tree (tree))
+            {
+                if (streq (donna_shared_string (ss), "arrangements/tree"))
+                {
+                    g_warning ("No columns defined in 'arrangements/tree'; using 'name'");
+                    ss_columns = NULL;
+                    col = "name";
+                    break;
+                }
+                else
+                {
+                    donna_shared_string_unref (ss);
+                    ss = donna_shared_string_new_dup ("arrangements/tree");
+                }
+            }
+            else
+            {
+                /* TODO
+                 * if (arr/list)
+                 *      col=name
+                 *      break
+                 * else
+                 *      if (arr_selector && location=get_parent(location)
+                 *          get_arr_for(location)
+                 *      else
+                 *          arr=arr/list
+                 */
+            }
+        }
     }
+    donna_shared_string_unref (ss);
 
-    /* get sort order */
+    /* get sort order (has to come from the current arrangement) */
     if (donna_config_get_shared_string (priv->config, &ss_sort,
                 "%s/sort", donna_shared_string (arrangement)))
     {
@@ -468,7 +511,6 @@ load_arrangement (DonnaTreeView *tree, DonnaSharedString *arrangement)
         gsize              len;
         gchar              buf[64];
         gchar             *b;
-        DonnaSharedString *ss;
         DonnaColumnType   *ct;
         GList             *l;
         GtkTreeViewColumn *column;
@@ -681,14 +723,14 @@ next:
 }
 
 static DonnaSharedString *
-select_arrangement (DonnaTreeView *tree, DonnaNode *new_location)
+select_arrangement (DonnaTreeView *tree, DonnaNode *location)
 {
     DonnaTreeViewPrivate *priv;
     DonnaSharedString    *ss;
 
     priv = tree->priv;
 
-    if (priv->mode == DONNA_TREE_VIEW_MODE_TREE)
+    if (is_tree (tree))
     {
         if (donna_config_has_category (priv->config,
                     "treeviews/%s/arrangement", priv->name))
@@ -697,11 +739,11 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *new_location)
         else
             ss = donna_shared_string_new_dup ("arrangements/tree");
     }
-    else /* DONNA_TREE_VIEW_MODE_LIST */
+    else
     {
         /* do we have an arrangement selector? */
-        if (priv->get_arrangement && new_location)
-            ss = priv->get_arrangement (new_location, priv->get_arrangement_data);
+        if (priv->get_arrangement && location)
+            ss = priv->get_arrangement (location, priv->get_arrangement_data);
         else
             ss = NULL;
 
@@ -765,7 +807,7 @@ donna_tree_view_new (DonnaConfig        *config,
 
     load_config (tree);
 
-    if (priv->mode == DONNA_TREE_VIEW_MODE_TREE)
+    if (is_tree (tree))
     {
         /* store */
         store = gtk_tree_store_new (DONNA_TREE_NB_COLS,
@@ -781,7 +823,7 @@ donna_tree_view_new (DonnaConfig        *config,
         gtk_tree_view_set_rules_hint (treev, FALSE);
         gtk_tree_view_set_headers_visible (treev, FALSE);
     }
-    else /* DONNA_TREE_VIEW_MODE_LIST */
+    else
     {
         /* store */
         store = gtk_tree_store_new (DONNA_LIST_NB_COLS,
@@ -801,7 +843,7 @@ donna_tree_view_new (DonnaConfig        *config,
 
     /* selection mode */
     sel = gtk_tree_view_get_selection (treev);
-    gtk_tree_selection_set_mode (sel, (priv->mode == DONNA_TREE_VIEW_MODE_TREE)
+    gtk_tree_selection_set_mode (sel, (is_tree (tree))
             ? GTK_SELECTION_BROWSE : GTK_SELECTION_MULTIPLE);
 
     /* columns */
