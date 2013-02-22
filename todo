@@ -1,3 +1,4 @@
+- column: option for default sort order
 - columntype: add to interface a virtual get_option()
 - config: add rename_option() ? (only doable through provider now)
 - config: limit len of names? (columntype-name has 128 for
