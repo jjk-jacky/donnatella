@@ -4,7 +4,6 @@
 #include "columntype.h"
 #include "columntype-name.h"
 #include "node.h"
-#include "donna.h"
 #include "conf.h"
 #include "sort.h"
 #include "sharedstring.h"
@@ -183,25 +182,26 @@ ct_name_set_tooltip (DonnaColumnType    *ct,
 }
 
 static gboolean
-get_sort_option (const gchar *tv_name,
-                 const gchar *col_name,
-                 const gchar *opt_name)
+get_sort_option (DonnaColumnTypeName *ctname,
+                 const gchar         *tv_name,
+                 const gchar         *col_name,
+                 const gchar         *opt_name)
 {
-    extern Donna *donna;
+    DonnaConfig *config = ctname->priv->config;
     gboolean      value;
 
-    if (!donna_config_get_boolean (donna->config, &value,
+    if (!donna_config_get_boolean (config, &value,
                 "treeviews/%s/columns/%s/sort_%s",
                 tv_name, col_name, opt_name))
     {
-        if (!donna_config_get_boolean (donna->config, &value,
+        if (!donna_config_get_boolean (config, &value,
                     "columns/%s/sort_%s", col_name, opt_name))
         {
-            if (!donna_config_get_boolean (donna->config, &value,
+            if (!donna_config_get_boolean (config, &value,
                         "defaults/sort/%s", opt_name))
             {
                 value = TRUE;
-                if (donna_config_set_boolean (donna->config, value,
+                if (donna_config_set_boolean (config, value,
                             "defaults/sort/%s", opt_name))
                     g_info ("Option 'defaults/sort/%s' did not exists, initialized to TRUE",
                             opt_name);
@@ -222,15 +222,15 @@ node_updated_cb (DonnaProvider  *provider,
 }
 
 static inline gchar *
-get_node_key (DonnaColumnType   *ct,
-              const gchar       *tv_name,
-              const gchar       *col_name,
-              DonnaNode         *node,
-              gboolean           dot_first,
-              gboolean           special_first,
-              gboolean           natural_order)
+get_node_key (DonnaColumnTypeName   *ctname,
+              const gchar           *tv_name,
+              const gchar           *col_name,
+              DonnaNode             *node,
+              gboolean               dot_first,
+              gboolean               special_first,
+              gboolean               natural_order)
 {
-    DonnaColumnTypeNamePrivate *priv;
+    DonnaColumnTypeNamePrivate *priv = ctname->priv;
     gchar  buf[128];
     gchar *key;
 
@@ -250,7 +250,6 @@ get_node_key (DonnaColumnType   *ct,
             const gchar *domain;
             guint i;
 
-            priv = DONNA_COLUMNTYPE_NAME (ct)->priv;
             donna_node_get (node, FALSE, "domain", &domain, NULL);
             for (i = 0; i < priv->domains->len; ++i)
                 if (streq (domain, priv->domains->pdata[i]))
@@ -289,19 +288,20 @@ ct_name_node_cmp (DonnaColumnType    *ct,
                   DonnaNode          *node1,
                   DonnaNode          *node2)
 {
+    DonnaColumnTypeName *ctname = DONNA_COLUMNTYPE_NAME (ct);
     gboolean dot_first;
     gboolean special_first;
     gboolean natural_order;
     gchar *key1;
     gchar *key2;
 
-    dot_first     = get_sort_option (tv_name, col_name, "dot_first");
-    special_first = get_sort_option (tv_name, col_name, "special_first");
-    natural_order = get_sort_option (tv_name, col_name, "natural_order");
+    dot_first     = get_sort_option (ctname, tv_name, col_name, "dot_first");
+    special_first = get_sort_option (ctname, tv_name, col_name, "special_first");
+    natural_order = get_sort_option (ctname, tv_name, col_name, "natural_order");
 
-    key1 = get_node_key (ct, tv_name, col_name, node1,
+    key1 = get_node_key (ctname, tv_name, col_name, node1,
             dot_first, special_first, natural_order);
-    key2 = get_node_key (ct, tv_name, col_name, node2,
+    key2 = get_node_key (ctname, tv_name, col_name, node2,
             dot_first, special_first, natural_order);
 
     return strcmp (key1, key2);
