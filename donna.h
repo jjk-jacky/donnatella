@@ -4,20 +4,14 @@
 
 #include "conf.h"
 #include "common.h"
+#include "columntype.h"
 
 G_BEGIN_DECLS
 
-typedef DonnaProvider * (*get_provider_fn) (const gchar *domain);
-
-typedef struct
-{
-    DonnaConfig * const   config;
-    get_provider_fn const get_provider;
-} Donna;
-
+typedef DonnaColumnType *   (*column_type_loader_fn)    (DonnaConfig *config);
 
 void        donna_init                      (int *argc, char **argv[]);
-void        donna_start_internal_task       (DonnaTask  *task);
+void        donna_free                      (void);
 
 G_END_DECLS
 
