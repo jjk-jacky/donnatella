@@ -526,11 +526,11 @@ load_arrangement (DonnaTreeView     *tree,
         len = ((s) ? s : e) - col;
         if (len < 64)
         {
-            sprintf (buf, "%.*s", len, col);
+            sprintf (buf, "%.*s", (int) len, col);
             b = buf;
         }
         else
-            b = g_strdup_printf ("%.*s", len, col);
+            b = g_strdup_printf ("%.*s", (int) len, col);
 
         if (!donna_config_get_shared_string (priv->config, &ss,
                     "treeviews/%s/columns/%s/type", priv->name, b))
@@ -649,7 +649,10 @@ load_arrangement (DonnaTreeView     *tree,
 
         /* sizing stuff */
         if (s)
-            gtk_tree_view_column_set_fixed_width (column, natoi (++s, e - s));
+        {
+            ++s;
+            gtk_tree_view_column_set_fixed_width (column, natoi (s, e - s));
+        }
 
         /* set title */
         ss = NULL;
@@ -773,7 +776,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     ss = select_arrangement (tree, priv->location);
     if (force || !priv->arrangement || !streq (donna_shared_string (ss),
                 donna_shared_string (priv->arrangement)))
-        load_arrangement (tree, ss);
+        load_arrangement (tree, ss, priv->location);
     donna_shared_string_unref (ss);
 }
 
