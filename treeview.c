@@ -151,6 +151,8 @@ donna_tree_view_init (DonnaTreeView *tv)
      * be replacing values often (since head of GSList can change) but don't
      * want the old value to be free-d, obviously */
     priv->hashtable = g_hash_table_new (g_direct_hash, g_direct_equal);
+    /* default task runner. this means no multi-thread, so blocking */
+    priv->run_task = (run_task_fn) donna_task_run;
 }
 
 static void
