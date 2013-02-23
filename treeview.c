@@ -491,46 +491,100 @@ rend_func (GtkTreeViewColumn  *column,
            GtkTreeIter        *iter,
            gpointer            data)
 {
+    DonnaTreeView *tree;
     DonnaTreeViewPrivate *priv;
     DonnaColumnType *ct;
     DonnaNode *node;
     const gchar *col;
     guint index = GPOINTER_TO_UINT (data);
 
-    priv = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column))->priv;
+    tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
+    priv = tree->priv;
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
+    gtk_tree_model_get (model, iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
 
-    gtk_tree_model_get (model, iter, DONNA_TREE_COL_NODE, &node, -1);
-    if (!node)
+    if (is_tree (tree))
     {
         DonnaColumnType *ctname;
 
-        /* this is a "fake" node, shown as a "Please Wait..." */
-        /* we can only do that for a column of type "name" */
-        ctname = priv->get_ct ("name");
-        if (!ctname || ctname != ct)
+        ctname  = priv->get_ct ("name");
+        if (!node)
         {
-            if (ctname)
-                g_object_unref (ctname);
+            /* this is a "fake" node, shown as a "Please Wait..." */
+            /* we can only do that for a column of type "name" */
+            if (!ctname || ctname != ct)
+            {
+                if (ctname)
+                    g_object_unref (ctname);
+                return;
+            }
+            g_object_unref (ctname);
+
+            if (index == 0)
+                /* GtkRendererPixbuf */
+                g_object_set (renderer, "visible", FALSE, NULL);
+            else /* index == 1 */
+                /* GtkRendererText */
+                g_object_set (renderer,
+                        "visible",  TRUE,
+                        "text",     "Please Wait...",
+                        NULL);
+
             return;
         }
-        g_object_unref (ctname);
 
-        if (index == 0)
-            /* GtkRendererPixbuf */
-            g_object_set (renderer, "visible", FALSE, NULL);
-        else /* index == 1 */
-            /* GtkRendererText */
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     "Please Wait...",
-                    NULL);
+        /* do we have some overriding to do? */
+        if (ctname && ctname == ct)
+        {
+            if (index == 0)
+            {
+                /* GtkRendererPixbuf */
+                GdkPixbuf *pixbuf;
 
-        return;
+                gtk_tree_model_get (model, iter,
+                        DONNA_TREE_COL_ICON,    &pixbuf,
+                        -1);
+                if (pixbuf)
+                {
+                    g_object_set (renderer,
+                            "visible",  TRUE,
+                            "pixbuf",   pixbuf,
+                            NULL);
+                    g_object_unref (pixbuf);
+                    g_object_unref (ctname);
+                    g_object_unref (node);
+                    return;
+                }
+            }
+            else /* index == 1 */
+            {
+                /* GtkRendererText */
+                gchar *name;
+
+                gtk_tree_model_get (model, iter,
+                        DONNA_TREE_COL_NAME,    &name,
+                        -1);
+                if (name)
+                {
+                    g_object_set (renderer,
+                            "visible",  TRUE,
+                            "text",     name,
+                            NULL);
+                    g_free (name);
+                    g_object_unref (ctname);
+                    g_object_unref (node);
+                    return;
+                }
+            }
+        }
+
+        if (ctname)
+            g_object_unref (ctname);
     }
+    else if (!node)
+        return;
 
-    /* TODO: if name check COL_NAME/COL_ICON and maybe override stuff */
     donna_columntype_render (ct, priv->name, col, index, node, renderer);
     g_object_unref (node);
 }
