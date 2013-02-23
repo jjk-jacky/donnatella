@@ -2,10 +2,6 @@
 #ifndef __DONNA_PROVIDER_FS_H__
 #define __DONNA_PROVIDER_FS_H__
 
-#include "common.h"
-#include "provider-base.h"
-#include "task.h"
-
 G_BEGIN_DECLS
 
 #define DONNA_TYPE_PROVIDER_FS              (donna_provider_fs_get_type ())
@@ -32,8 +28,6 @@ struct _DonnaProviderFsClass
 };
 
 GType               donna_provider_fs_get_type      (void) G_GNUC_CONST;
-
-DonnaProviderFs *   donna_provider_fs_new           (void);
 
 G_END_DECLS
 
