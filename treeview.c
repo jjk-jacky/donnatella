@@ -487,8 +487,8 @@ visible_func (GtkTreeModel  *_model,
 static void
 rend_func (GtkTreeViewColumn  *column,
            GtkCellRenderer    *renderer,
-           GtkTreeModel       *model,
-           GtkTreeIter        *iter,
+           GtkTreeModel       *_model,
+           GtkTreeIter        *_iter,
            gpointer            data)
 {
     DonnaTreeView *tree;
@@ -502,7 +502,7 @@ rend_func (GtkTreeViewColumn  *column,
     priv = tree->priv;
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
-    gtk_tree_model_get (model, iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
+    gtk_tree_model_get (_model, _iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
 
     if (is_tree (tree))
     {
@@ -542,7 +542,7 @@ rend_func (GtkTreeViewColumn  *column,
                 /* GtkRendererPixbuf */
                 GdkPixbuf *pixbuf;
 
-                gtk_tree_model_get (model, iter,
+                gtk_tree_model_get (_model, _iter,
                         DONNA_TREE_COL_ICON,    &pixbuf,
                         -1);
                 if (pixbuf)
@@ -562,7 +562,7 @@ rend_func (GtkTreeViewColumn  *column,
                 /* GtkRendererText */
                 gchar *name;
 
-                gtk_tree_model_get (model, iter,
+                gtk_tree_model_get (_model, _iter,
                         DONNA_TREE_COL_NAME,    &name,
                         -1);
                 if (name)
