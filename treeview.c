@@ -688,6 +688,7 @@ add_node_to_tree (DonnaTreeView *tree,
     GSList          *list;
     DonnaProvider   *provider;
     DonnaTask       *task;
+    gboolean         added;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -697,11 +698,31 @@ add_node_to_tree (DonnaTreeView *tree,
     store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (
             GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev))));
 
-    /* add a tree node */
-    gtk_tree_store_insert_with_values (store, &iter, parent, 0,
-            DONNA_TREE_COL_NODE,            node,
-            DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
-            -1);
+    /* check if the parent has a "fake" node as child, in which case we'll
+     * re-use it instead of adding a new node */
+    added = FALSE;
+    if (parent && gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
+                &iter, parent))
+    {
+        DonnaNode *n;
+
+        gtk_tree_model_get (GTK_TREE_MODEL (store), &iter,
+                DONNA_TREE_COL_NODE,    &n,
+                -1);
+        if (!n)
+        {
+            gtk_tree_store_set (store, &iter,
+                    DONNA_TREE_COL_NODE,            node,
+                    DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
+                    -1);
+            added = TRUE;
+        }
+    }
+    if (!added)
+        gtk_tree_store_insert_with_values (store, &iter, parent, 0,
+                DONNA_TREE_COL_NODE,            node,
+                DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
+                -1);
     /* add it to our hashtable */
     list = add_to_hashtable (tree->priv, node, &iter);
     /* check the list in case we have another tree node for that node, in which
