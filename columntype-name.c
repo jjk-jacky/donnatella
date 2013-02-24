@@ -79,7 +79,7 @@ donna_column_type_name_init (DonnaColumnTypeName *ct)
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeName, donna_column_type_name,
         G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE_NAME, ct_name_columntype_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_name_columntype_init)
         )
 
 static void
