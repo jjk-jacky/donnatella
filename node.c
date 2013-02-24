@@ -187,9 +187,9 @@ donna_node_new (DonnaProvider       *provider,
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
     g_return_val_if_fail (location != NULL, NULL);
-    g_return_val_if_fail (node_type != DONNA_NODE_ITEM
-            && node_type != DONNA_NODE_CONTAINER
-            && node_type != DONNA_NODE_EXTENDED, NULL);
+    g_return_val_if_fail (node_type == DONNA_NODE_ITEM
+            || node_type == DONNA_NODE_CONTAINER
+            || node_type == DONNA_NODE_EXTENDED, NULL);
     g_return_val_if_fail (refresher != NULL, NULL);
     g_return_val_if_fail (setter != NULL, NULL);
     g_return_val_if_fail (name != NULL, NULL);
