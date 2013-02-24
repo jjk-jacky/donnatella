@@ -153,8 +153,9 @@ ct_name_render (DonnaColumnType    *ct,
 
         donna_node_get (node, FALSE, "name", &name, NULL);
         g_object_set (renderer,
-                "visible",  TRUE,
-                "text",     donna_shared_string (name),
+                "visible",      TRUE,
+                "text",         donna_shared_string (name),
+                "ellipsize",    PANGO_ELLIPSIZE_END,
                 NULL);
         donna_shared_string_unref (name);
     }
