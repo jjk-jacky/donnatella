@@ -338,8 +338,9 @@ provider_base_has_node_children_task (DonnaProvider *provider,
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     data = g_slice_new0 (struct node_children_data);
-    data->node       = g_object_ref (node);
-    data->node_types = node_types;
+    data->provider_base = DONNA_PROVIDER_BASE (provider);
+    data->node          = g_object_ref (node);
+    data->node_types    = node_types;
     return donna_task_new ((task_fn) has_children, data,
             (GDestroyNotify) free_node_children_data);
 }
@@ -370,8 +371,9 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     data = g_slice_new0 (struct node_children_data);
-    data->node       = g_object_ref (node);
-    data->node_types = node_types;
+    data->provider_base = DONNA_PROVIDER_BASE (provider);
+    data->node          = g_object_ref (node);
+    data->node_types    = node_types;
     return donna_task_new ((task_fn) get_children, data,
             (GDestroyNotify) free_node_children_data);
 }
