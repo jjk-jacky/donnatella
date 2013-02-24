@@ -1192,6 +1192,47 @@ donna_tree_view_set_task_runner (DonnaTreeView      *tree,
     return TRUE;
 }
 
+static gboolean
+query_tooltip_cb (GtkTreeView   *treev,
+                  gint           x,
+                  gint           y,
+                  gboolean       keyboard_mode,
+                  GtkTooltip    *tooltip)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeViewColumn *column;
+    GtkTreeModel *_model;
+    GtkTreeIter _iter;
+    gboolean ret = FALSE;
+
+    if (gtk_tree_view_get_tooltip_context (treev, &x, &y, keyboard_mode,
+                &_model, NULL, &_iter))
+    {
+        if (gtk_tree_view_get_path_at_pos (treev, x, y, NULL, &column, NULL, NULL))
+        {
+            DonnaNode *node;
+            DonnaColumnType *ct;
+            const gchar *col;
+
+            gtk_tree_model_get (_model, &_iter,
+                    DONNA_TREE_VIEW_COL_NODE,   &node,
+                    -1);
+
+            ct  = g_object_get_data (G_OBJECT (column), "column-type");
+            col = g_object_get_data (G_OBJECT (column), "column-name");
+
+            priv = DONNA_TREE_VIEW (treev)->priv;
+            /* FIXME we want to give the index, i.e. on which renderer is the
+             * mouse cursor. Not sure how/if that's doable with GTK though. */
+            ret = donna_columntype_set_tooltip (ct, priv->name, col, 1,
+                    node, tooltip);
+
+            g_object_unref (node);
+        }
+    }
+    return ret;
+}
+
 GtkWidget *
 donna_tree_view_new (DonnaConfig        *config,
                      const gchar        *name,
@@ -1213,6 +1254,10 @@ donna_tree_view_new (DonnaConfig        *config,
 
     w = g_object_new (DONNA_TYPE_TREE_VIEW, NULL);
     treev = GTK_TREE_VIEW (w);
+    gtk_tree_view_set_fixed_height_mode (treev, TRUE);
+    g_signal_connect (G_OBJECT (w), "query-tooltip",
+            G_CALLBACK (query_tooltip_cb), NULL);
+    gtk_widget_set_has_tooltip (w, TRUE);
 
     tree         = DONNA_TREE_VIEW (w);
     priv         = tree->priv;

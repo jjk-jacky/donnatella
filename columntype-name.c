@@ -190,8 +190,29 @@ ct_name_set_tooltip (DonnaColumnType    *ct,
                      DonnaNode          *node,
                      GtkTooltip         *tooltip)
 {
-    /* FIXME */
-    return FALSE;
+    DonnaSharedString *ss;
+    DonnaNodeHasValue has;
+
+    /* FIXME:
+     * 1 (icon) : show full-name (using location as fallback only)
+     * 2 (name) : show name if ellipsed, else no tooltip. Not sure how to find
+     * out if the text was ellipsed or not... */
+
+    if (index == 1)
+    {
+        donna_node_get (node, FALSE, "full-name", &has, &ss, NULL);
+        if (has == DONNA_NODE_VALUE_NONE)
+            donna_node_get (node, FALSE, "location", &ss, NULL);
+        /* FIXME: if NEED_REFRESH do a task and whatnot? */
+        else if (has != DONNA_NODE_VALUE_SET)
+            return FALSE;
+    }
+    else
+        donna_node_get (node, FALSE, "name", &ss, NULL);
+
+    gtk_tooltip_set_text (tooltip, donna_shared_string (ss));
+    donna_shared_string_unref (ss);
+    return TRUE;
 }
 
 static gboolean
