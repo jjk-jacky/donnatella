@@ -108,21 +108,16 @@ setter (DonnaTask       *task,
     return DONNA_TASK_FAILED;
 }
 
-static DonnaTaskState
-provider_fs_new_node (DonnaProviderBase  *_provider,
-                      DonnaTask          *task,
-                      const gchar        *location)
+static DonnaNode *
+new_node (DonnaProviderBase *_provider, const gchar *location)
 {
-    DonnaProvider       *provider = DONNA_PROVIDER (_provider);
-    DonnaNodeType        type;
-    const gchar         *name;
-    DonnaNodeFlags       flags;
-    DonnaNode           *node;
-    GValue              *value;
+    DonnaNode       *node;
+    DonnaNodeType    type;
+    const gchar     *name;
+    DonnaNodeFlags   flags;
 
     if (!g_file_test (location, G_FILE_TEST_EXISTS))
-        /* FIXME: set task error */
-        return DONNA_TASK_FAILED;
+        return NULL;
 
     type = (g_file_test (location, G_FILE_TEST_IS_DIR))
         ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM;
@@ -136,16 +131,38 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
 
     flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE;
 
-    node = donna_node_new (provider, donna_shared_string_new_dup (location),
-            type, refresher, setter, donna_shared_string_new_dup (name), flags);
+    node = donna_node_new (DONNA_PROVIDER (_provider),
+            donna_shared_string_new_dup (location),
+            type,
+            refresher,
+            setter,
+            donna_shared_string_new_dup (name),
+            flags);
 
+    /* this adds another reference (from our own) so we send it to the caller */
     DONNA_PROVIDER_BASE_GET_CLASS (_provider)->add_node_to_cache (_provider,
             node);
+
+    return node;
+}
+
+static DonnaTaskState
+provider_fs_new_node (DonnaProviderBase  *_provider,
+                      DonnaTask          *task,
+                      const gchar        *location)
+{
+    DonnaNode *node;
+    GValue    *value;
+
+    node = new_node (_provider, location);
+    if (!node)
+        /* FIXME: set task error */
+        return DONNA_TASK_FAILED;
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
     /* take_object to not increment the ref count, as it was already done for
-     * this task when adding it to the cache (add_node_to_cache) */
+     * this task in new_node */
     g_value_take_object (value, node);
     donna_task_release_return_value (task);
 
@@ -153,17 +170,19 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
 }
 
 static DonnaTaskState
-provider_fs_has_children (DonnaProviderBase  *_provider,
-                          DonnaTask          *task,
-                          DonnaNode          *node,
-                          DonnaNodeType       node_types)
+has_get_children (DonnaProviderBase  *_provider,
+                  DonnaTask          *task,
+                  DonnaNode          *node,
+                  DonnaNodeType       node_types,
+                  gboolean            get_children)
 {
     GError            *err = NULL;
     DonnaSharedString *location;
     GDir              *dir;
     const gchar       *name;
-    gboolean           has_children = FALSE;
+    gboolean           match;
     GValue            *value;
+    GPtrArray         *arr;
 
     if (!(node_types & DONNA_NODE_ITEM || node_types & DONNA_NODE_CONTAINER))
         return DONNA_TASK_FAILED;
@@ -176,6 +195,9 @@ provider_fs_has_children (DonnaProviderBase  *_provider,
         donna_shared_string_unref (location);
         return DONNA_TASK_FAILED;
     }
+
+    if (get_children)
+        arr = g_ptr_array_new_full (16, g_object_unref);
 
     while ((name = g_dir_read_name (dir)))
     {
@@ -195,34 +217,57 @@ provider_fs_has_children (DonnaProviderBase  *_provider,
                     donna_shared_string (location), name) >= 1024)
             b = g_strdup_printf ("%s/%s", donna_shared_string (location), name);
 
-
+        match = FALSE;
         if (node_types & DONNA_NODE_CONTAINER && node_types & DONNA_NODE_ITEM)
-            has_children = TRUE;
+            match = TRUE;
         else
         {
             if (g_file_test (b, G_FILE_TEST_IS_DIR))
             {
                 if (node_types & DONNA_NODE_CONTAINER)
-                    has_children = TRUE;
+                    match = TRUE;
             }
             else
             {
                 if (node_types & DONNA_NODE_ITEM)
-                    has_children = TRUE;
+                    match = TRUE;
             }
         }
 
         if (b != buf)
             g_free (b);
 
-        if (has_children)
-            break;
+        if (match)
+        {
+            if (get_children)
+            {
+                DonnaNode *node;
+
+                node = new_node (_provider, b);
+                if (node)
+                    g_ptr_array_add (arr, node);
+                else
+                    g_warning ("Provider 'fs': Unable to create a node for '%s'",
+                            b);
+            }
+            else
+                break;
+        }
     }
     g_dir_close (dir);
 
     value = donna_task_grab_return_value (task);
-    g_value_init (value, G_TYPE_BOOLEAN);
-    g_value_set_boolean (value, has_children);
+    if (get_children)
+    {
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        /* take our ref on the array */
+        g_value_take_boxed (value, arr);
+    }
+    else
+    {
+        g_value_init (value, G_TYPE_BOOLEAN);
+        g_value_set_boolean (value, match);
+    }
     donna_task_release_return_value (task);
 
     donna_shared_string_unref (location);
@@ -230,15 +275,25 @@ provider_fs_has_children (DonnaProviderBase  *_provider,
 }
 
 static DonnaTaskState
-provider_fs_get_children (DonnaProviderBase  *provider,
+provider_fs_has_children (DonnaProviderBase  *_provider,
                           DonnaTask          *task,
                           DonnaNode          *node,
                           DonnaNodeType       node_types)
 {
+    has_get_children (_provider, task, node, node_types, FALSE);
 }
 
 static DonnaTaskState
-provider_fs_remove_node (DonnaProviderBase  *provider,
+provider_fs_get_children (DonnaProviderBase  *_provider,
+                          DonnaTask          *task,
+                          DonnaNode          *node,
+                          DonnaNodeType       node_types)
+{
+    has_get_children (_provider, task, node, node_types, TRUE);
+}
+
+static DonnaTaskState
+provider_fs_remove_node (DonnaProviderBase  *_provider,
                          DonnaTask          *task,
                          DonnaNode          *node)
 {
