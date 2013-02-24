@@ -287,7 +287,7 @@ str_chunk_len (DonnaProviderConfigPrivate   *priv,
     /* to easily use auto-numbered categories, we can send NULL as string, and
      * the number to print as len */
     if (!string)
-        snprintf (buf, 255, "%d", len);
+        snprintf (buf, 255, "%d", (int) len);
     else if (len < 255)
         snprintf (buf, 255, "%s", string);
     else
@@ -1410,7 +1410,7 @@ donna_config_list_options (DonnaConfig               *config,
     if (b != buf)
         g_free (b);
 
-    return TRUE;
+    return (*options != NULL);
 }
 
 #define _set_option(type, value_set)  do {                              \
@@ -1570,41 +1570,24 @@ donna_config_set_string_dup (DonnaConfig   *config,
 
 static inline gboolean
 _remove_option (DonnaProviderConfig *config,
-                const gchar         *fmt,
-                va_list              va_arg,
+                const gchar         *name,
                 gboolean             category)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *parent;
     GNode *node;
-    gchar  buf[255];
-    gchar *b = buf;
-    gint len;
     const gchar *s;
     struct removing_data data;
     guint i;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
-    g_return_val_if_fail (fmt != NULL, FALSE);
-
-    if (*fmt == '/')
-        ++fmt;
-
-    len = vsnprintf (buf, 255, fmt, va_arg);
-    if (len >= 255)
-    {
-        b = g_new (gchar, ++len); /* +1 for NUL */
-        va_end (va_arg);
-        va_start (va_arg, fmt);
-        vsnprintf (b, len, fmt, va_arg);
-    }
 
     priv = config->priv;
     g_rw_lock_writer_lock (&priv->lock);
-    s = strrchr (b, '/');
+    s = strrchr (name, '/');
     if (s)
     {
-        parent = ensure_categories (config, b, s - b);
+        parent = ensure_categories (config, name, s - name);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -1614,7 +1597,7 @@ _remove_option (DonnaProviderConfig *config,
     }
     else
     {
-        s = b;
+        s = name;
         parent = priv->root;
     }
     node = get_child_node (parent, s, strlen (s));
@@ -1642,7 +1625,7 @@ _remove_option (DonnaProviderConfig *config,
 
     /* signals after releasing the lock, to avoid dead locks */
     /* config: we oly send one signal, e.g. only the category (no children) */
-    config_option_removed (DONNA_CONFIG (config), b);
+    config_option_removed (DONNA_CONFIG (config), name);
     /* for provider: we must do it for all existing nodes, as it also serves as
      * a "destroy" i.e. to mean unref it, the node doesn't exist anymore */
     for (i = 0; i < data.nodes->len; ++i)
@@ -1654,19 +1637,34 @@ _remove_option (DonnaProviderConfig *config,
     }
     g_ptr_array_free (data.nodes, TRUE);
 
-    if (b != buf)
-        g_free (b);
-
     return TRUE;
 }
 
 #define __remove_option(is_category)    do {                    \
+    gchar  buf[255];                                            \
+    gchar *b = buf;                                             \
+    gint len;                                                   \
     va_list  va_arg;                                            \
     gboolean ret;                                               \
                                                                 \
-    va_start (va_arg, fmt);                                     \
-    ret = _remove_option (config, fmt, va_arg, is_category);    \
-    va_end (va_arg);                                            \
+    g_return_val_if_fail (fmt != NULL, FALSE);                  \
+                                                                \
+    if (*fmt == '/')                                            \
+        ++fmt;                                                  \
+                                                                \
+    len = vsnprintf (buf, 255, fmt, va_arg);                    \
+    if (len >= 255)                                             \
+    {                                                           \
+        b = g_new (gchar, ++len); /* +1 for NUL */              \
+        va_end (va_arg);                                        \
+        va_start (va_arg, fmt);                                 \
+        vsnprintf (b, len, fmt, va_arg);                        \
+    }                                                           \
+                                                                \
+    ret = _remove_option (config, b, is_category);              \
+                                                                \
+    if (b != buf)                                               \
+        g_free (b);                                             \
                                                                 \
     return ret;                                                 \
 } while (0)
