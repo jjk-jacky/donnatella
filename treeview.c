@@ -1116,6 +1116,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     DonnaSharedString    *ss;
 
     priv = tree->priv;
+    g_debug ("treeview '%s': select arrangement", priv->name);
 
     if (is_tree (tree))
     {
@@ -1145,6 +1146,8 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
         }
     }
 
+    g_debug ("treeview '%s': selected arrangement: %s", priv->name,
+            (ss) ? donna_shared_string (ss) : "(none)");
     return ss;
 }
 
@@ -1155,6 +1158,8 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     DonnaSharedString *ss;
 
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+    g_debug ("treeiew '%s': build arrangement (force=%d)",
+            tree->priv->name, force);
 
     priv = tree->priv;
     ss = select_arrangement (tree, priv->location);
@@ -1215,10 +1220,12 @@ donna_tree_view_new (DonnaConfig        *config,
     priv->name   = name;
     priv->get_ct = get_ct;
 
+    g_debug ("load_config for new tree '%s'", priv->name);
     load_config (tree);
 
     if (is_tree (tree))
     {
+        g_debug ("treeview '%s': setting up as tree", priv->name);
         /* store */
         store = gtk_tree_store_new (DONNA_TREE_NB_COLS,
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_NODE */
@@ -1235,6 +1242,7 @@ donna_tree_view_new (DonnaConfig        *config,
     }
     else
     {
+        g_debug ("treeview '%s': setting up as list", priv->name);
         /* store */
         store = gtk_tree_store_new (DONNA_LIST_NB_COLS,
                 G_TYPE_OBJECT); /* DONNA_LIST_COL_NODE */
@@ -1243,6 +1251,8 @@ donna_tree_view_new (DonnaConfig        *config,
         gtk_tree_view_set_rules_hint (treev, TRUE);
         gtk_tree_view_set_headers_visible (treev, TRUE);
     }
+
+    g_debug ("treeview '%s': setting up filter & selection", priv->name);
 
     /* we use a filter (to show/hide .files, set Visual Filters, etc) */
     model_filter = gtk_tree_model_filter_new (model, NULL);

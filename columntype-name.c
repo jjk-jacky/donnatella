@@ -326,6 +326,7 @@ donna_column_type_name_new (DonnaConfig *config)
 
     g_return_val_if_fail (DONNA_IS_CONFIG (config), NULL);
 
+    g_debug ("creatig new ColumnTypeName");
     ct = g_object_new (DONNA_TYPE_COLUMNTYPE_NAME, NULL);
     DONNA_COLUMNTYPE_NAME (ct)->priv->config = config;
 
