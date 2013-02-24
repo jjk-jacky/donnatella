@@ -33,9 +33,18 @@ struct argmt
 };
 
 static void
+_run_task (DonnaTask *task)
+{
+    donna_task_run (task);
+    g_object_unref (task);
+}
+
+static void
 run_task (DonnaTask *task)
 {
-    g_thread_unref (g_thread_new ("run-task", (GThreadFunc) donna_task_run, task));
+    g_thread_unref (g_thread_new ("run-task",
+                (GThreadFunc) _run_task,
+                g_object_ref_sink (task)));
 }
 
 static DonnaSharedString *
