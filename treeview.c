@@ -1164,6 +1164,29 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     donna_shared_string_unref (ss);
 }
 
+gboolean
+donna_tree_view_set_task_runner (DonnaTreeView      *tree,
+                                 run_task_fn         task_runner,
+                                 gpointer            data,
+                                 GDestroyNotify      destroy)
+{
+    DonnaTreeViewPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (task_runner != NULL, FALSE);
+
+    priv = tree->priv;
+
+    if (priv->run_task_destroy && priv->run_task_data)
+        priv->run_task_destroy (priv->run_task_data);
+
+    priv->run_task = task_runner;
+    priv->run_task_data = data;
+    priv->run_task_destroy = destroy;
+
+    return TRUE;
+}
+
 GtkWidget *
 donna_tree_view_new (DonnaConfig        *config,
                      const gchar        *name,
