@@ -26,8 +26,6 @@ donna_shared_string_unref (DonnaSharedString *ss)
 static inline DonnaSharedString *
 update_or_new (DonnaSharedString *ss, gpointer string, gboolean need_dup)
 {
-    g_return_val_if_fail (ss != NULL, NULL);
-
     if (!ss || g_atomic_int_get (&ss->ref_count) > 1)
     {
         if (ss)
