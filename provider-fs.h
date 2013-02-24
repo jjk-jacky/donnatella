@@ -2,6 +2,8 @@
 #ifndef __DONNA_PROVIDER_FS_H__
 #define __DONNA_PROVIDER_FS_H__
 
+#include "provider-base.h"
+
 G_BEGIN_DECLS
 
 #define DONNA_TYPE_PROVIDER_FS              (donna_provider_fs_get_type ())

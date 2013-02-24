@@ -2,7 +2,6 @@
 #include <glib-object.h>
 #include <string.h>                 /* strrchr() */
 #include "provider-fs.h"
-#include "provider-base.h"
 #include "provider.h"
 #include "node.h"
 #include "task.h"
@@ -203,7 +202,6 @@ has_get_children (DonnaProviderBase  *_provider,
     {
         gchar  buf[1024];
         gchar *b;
-        gboolean is_dir;
 
         if (donna_task_is_cancelling (task))
         {
@@ -280,7 +278,7 @@ provider_fs_has_children (DonnaProviderBase  *_provider,
                           DonnaNode          *node,
                           DonnaNodeType       node_types)
 {
-    has_get_children (_provider, task, node, node_types, FALSE);
+    return has_get_children (_provider, task, node, node_types, FALSE);
 }
 
 static DonnaTaskState
@@ -289,7 +287,7 @@ provider_fs_get_children (DonnaProviderBase  *_provider,
                           DonnaNode          *node,
                           DonnaNodeType       node_types)
 {
-    has_get_children (_provider, task, node, node_types, TRUE);
+    return has_get_children (_provider, task, node, node_types, TRUE);
 }
 
 static DonnaTaskState
