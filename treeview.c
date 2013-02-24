@@ -280,6 +280,9 @@ node_get_children_callback (DonnaTask                   *task,
         path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->store), &data->iter);
         gtk_tree_view_collapse_row (data->treev, path);
         gtk_tree_path_free (path);
+        gtk_tree_store_set (data->store, &data->iter,
+                DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
+                -1);
 
         /* explain ourself */
         gtk_tree_model_get (GTK_TREE_MODEL (data->store), &data->iter,
@@ -523,10 +526,10 @@ rend_func (GtkTreeViewColumn  *column,
             }
             g_object_unref (ctname);
 
-            if (index == 0)
+            if (index == 1)
                 /* GtkRendererPixbuf */
                 g_object_set (renderer, "visible", FALSE, NULL);
-            else /* index == 1 */
+            else /* index == 2 */
                 /* GtkRendererText */
                 g_object_set (renderer,
                         "visible",  TRUE,
@@ -539,7 +542,7 @@ rend_func (GtkTreeViewColumn  *column,
         /* do we have some overriding to do? */
         if (ctname && ctname == ct)
         {
-            if (index == 0)
+            if (index == 1)
             {
                 /* GtkRendererPixbuf */
                 GdkPixbuf *pixbuf;
@@ -559,7 +562,7 @@ rend_func (GtkTreeViewColumn  *column,
                     return;
                 }
             }
-            else /* index == 1 */
+            else /* index == 2 */
             {
                 /* GtkRendererText */
                 gchar *name;
@@ -794,7 +797,8 @@ load_arrangement (DonnaTreeView     *tree,
     GtkTreeViewColumn    *last_column = NULL;
     gint                  sort_id = 0;
 
-    sortable = GTK_TREE_SORTABLE (gtk_tree_view_get_model (treev));
+    sortable = GTK_TREE_SORTABLE (gtk_tree_model_filter_get_model (
+                GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev))));
     list = gtk_tree_view_get_columns (treev);
 
     /* get new set of columns to load. They might not come from the current
@@ -999,7 +1003,7 @@ load_arrangement (DonnaTreeView     *tree,
                 }
                 gtk_tree_view_column_set_cell_data_func (column, renderer,
                         rend_func, GINT_TO_POINTER (index), NULL);
-                gtk_tree_view_column_pack_start (column, renderer, TRUE);
+                gtk_tree_view_column_pack_start (column, renderer, FALSE);
             }
             /* add it */
             gtk_tree_view_append_column (treev, column);
@@ -1079,7 +1083,8 @@ next:
         list = g_list_delete_link (list, list);
     }
 
-    donna_shared_string_unref (priv->arrangement);
+    if (priv->arrangement)
+        donna_shared_string_unref (priv->arrangement);
     priv->arrangement = donna_shared_string_ref (arrangement);
 }
 
