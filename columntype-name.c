@@ -119,7 +119,7 @@ ct_name_render (DonnaColumnType    *ct,
         donna_node_get (node, FALSE, "icon", &has_value, &pixbuf, NULL);
         if (has_value == DONNA_NODE_VALUE_SET)
         {
-            g_object_set (renderer, "pixbuf", pixbuf, NULL);
+            g_object_set (renderer, "visible", TRUE, "pixbuf", pixbuf, NULL);
             g_object_unref (pixbuf);
         }
         else
@@ -128,11 +128,20 @@ ct_name_render (DonnaColumnType    *ct,
 
             donna_node_get (node, FALSE, "node-type", &node_type, NULL);
             if (node_type == DONNA_NODE_ITEM)
-                g_object_set (renderer, "stock-id", GTK_STOCK_FILE, NULL);
+                g_object_set (renderer,
+                        "visible",  TRUE,
+                        "stock-id", GTK_STOCK_FILE,
+                        NULL);
             else if (node_type == DONNA_NODE_CONTAINER)
-                g_object_set (renderer, "stock-id", GTK_STOCK_DIRECTORY, NULL);
+                g_object_set (renderer,
+                        "visible",  TRUE,
+                        "stock-id", GTK_STOCK_DIRECTORY,
+                        NULL);
             else /* DONNA_NODE_EXTENDED */
-                g_object_set (renderer, "stock-id", GTK_STOCK_EXECUTE, NULL);
+                g_object_set (renderer,
+                        "visible",  TRUE,
+                        "stock-id", GTK_STOCK_EXECUTE,
+                        NULL);
 
             if (has_value == DONNA_NODE_VALUE_NEED_REFRESH)
                 return donna_node_refresh_task (node, "icon", NULL);
@@ -143,7 +152,10 @@ ct_name_render (DonnaColumnType    *ct,
         DonnaSharedString *name;
 
         donna_node_get (node, FALSE, "name", &name, NULL);
-        g_object_set (renderer, "text", donna_shared_string (name), NULL);
+        g_object_set (renderer,
+                "visible",  TRUE,
+                "text",     donna_shared_string (name),
+                NULL);
         donna_shared_string_unref (name);
     }
 
