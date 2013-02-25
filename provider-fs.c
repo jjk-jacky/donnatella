@@ -241,7 +241,10 @@ has_get_children (DonnaProviderBase  *_provider,
             {
                 DonnaNode *node;
 
-                node = new_node (_provider, b);
+                node = DONNA_PROVIDER_BASE_GET_CLASS (_provider)->
+                    get_cached_node (_provider, b);
+                if (!node)
+                    node = new_node (_provider, b);
                 if (node)
                     g_ptr_array_add (arr, node);
                 else
