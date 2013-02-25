@@ -652,6 +652,7 @@ node_has_children_cb (DonnaTask                 *task,
     DonnaTaskState state;
     const GValue *value;
     gboolean has_children;
+    enum tree_expand es;
 
     state = donna_task_get_state (task);
     if (state != DONNA_TASK_DONE)
@@ -670,11 +671,16 @@ node_has_children_cb (DonnaTask                 *task,
     if (!has_children)
         /* remove the fake node */
         gtk_tree_store_remove (data->store, &data->iter_fake);
-    /* update expand state */
-    gtk_tree_store_set (data->store, &data->iter,
-            DONNA_TREE_COL_EXPAND_STATE,
-            (has_children) ? DONNA_TREE_EXPAND_NEVER : DONNA_TREE_EXPAND_NONE,
+    /* update expand state.. */
+    gtk_tree_model_get (GTK_TREE_MODEL (data->store), &data->iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
             -1);
+    /* ..unless there's a get_children in progress */
+    if (es != DONNA_TREE_EXPAND_WIP)
+        gtk_tree_store_set (data->store, &data->iter,
+                DONNA_TREE_COL_EXPAND_STATE,
+                (has_children) ? DONNA_TREE_EXPAND_NEVER : DONNA_TREE_EXPAND_NONE,
+                -1);
 
     free_node_children_data (data);
 }
