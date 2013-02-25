@@ -1217,6 +1217,8 @@ query_tooltip_cb (GtkTreeView   *treev,
             gtk_tree_model_get (_model, &_iter,
                     DONNA_TREE_VIEW_COL_NODE,   &node,
                     -1);
+            if (!node)
+                return FALSE;
 
             ct  = g_object_get_data (G_OBJECT (column), "column-type");
             col = g_object_get_data (G_OBJECT (column), "column-name");
