@@ -307,35 +307,49 @@ node_get_children_callback (DonnaTask                   *task,
 
     value = donna_task_get_return_value (task);
     arr = g_value_get_boxed (value);
-    for (i = 0; i < arr->len; ++i)
+    if (arr->len == 0)
     {
-        DonnaNode *node = arr->pdata[i];
-
-        if (!add_node_to_tree (tree, &data->iter, node))
-        {
-            const gchar *domain;
-            DonnaSharedString *location;
-
-            donna_node_get (node, FALSE,
-                    "domain",   &domain,
-                    "location", &location,
-                    NULL);
-            g_warning ("Treeview '%s': failed to add node for '%s:%s'",
-                    tree->priv->name,
-                    domain,
-                    donna_shared_string (location));
-            donna_shared_string_unref (location);
-        }
+        /* set new expand state */
+        gtk_tree_store_set (data->store, &data->iter,
+                DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
+                -1);
+        /* remove the fake node (if it hasn't already been removed) */
+        if (gtk_tree_model_iter_has_child (GTK_TREE_MODEL (data->store),
+                    &data->iter))
+            gtk_tree_store_remove (data->store, &data->iter_fake);
     }
+    else
+    {
+        for (i = 0; i < arr->len; ++i)
+        {
+            DonnaNode *node = arr->pdata[i];
 
-    /* set new expand state */
-    gtk_tree_store_set (data->store, &data->iter,
-            DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
-            -1);
-    /* and make sure the row gets expanded (since we "blocked" it when clicked */
-    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->store), &data->iter);
-    gtk_tree_view_expand_row (data->treev, path, FALSE);
-    gtk_tree_path_free (path);
+            if (!add_node_to_tree (tree, &data->iter, node))
+            {
+                const gchar *domain;
+                DonnaSharedString *location;
+
+                donna_node_get (node, FALSE,
+                        "domain",   &domain,
+                        "location", &location,
+                        NULL);
+                g_warning ("Treeview '%s': failed to add node for '%s:%s'",
+                        tree->priv->name,
+                        domain,
+                        donna_shared_string (location));
+                donna_shared_string_unref (location);
+            }
+        }
+
+        /* set new expand state */
+        gtk_tree_store_set (data->store, &data->iter,
+                DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
+                -1);
+        /* and make sure the row gets expanded (since we "blocked" it when clicked */
+        path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->store), &data->iter);
+        gtk_tree_view_expand_row (data->treev, path, FALSE);
+        gtk_tree_path_free (path);
+    }
 
     free_node_children_data (data);
 }
