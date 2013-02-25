@@ -1,7 +1,7 @@
 
 #define _GNU_SOURCE             /* strchrnul() in string.h */
 #include <gtk/gtk.h>
-#include <string.h>             /* strchr() */
+#include <string.h>             /* strchr(), memcmp() */
 #include "treeview.h"
 #include "common.h"
 #include "provider.h"
@@ -679,18 +679,6 @@ node_has_children_cb (DonnaTask                 *task,
     free_node_children_data (data);
 }
 
-static inline GSList *
-add_to_hashtable (DonnaTreeViewPrivate *priv, DonnaNode *node, GtkTreeIter *iter)
-{
-    GSList *list;
-
-    list = g_hash_table_lookup (priv->hashtable, node);
-    list = g_slist_append (list, gtk_tree_iter_copy (iter));
-    g_hash_table_insert (priv->hashtable, node, list);
-
-    return list;
-}
-
 static gboolean
 add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *parent,
@@ -700,6 +688,7 @@ add_node_to_tree (DonnaTreeView *tree,
     GtkTreeStore    *store;
     GtkTreeIter      iter;
     GSList          *list;
+    GSList          *l;
     DonnaProvider   *provider;
     DonnaTask       *task;
     gboolean         added;
@@ -725,6 +714,9 @@ add_node_to_tree (DonnaTreeView *tree,
                 -1);
         if (!n)
         {
+            g_debug ("treeview '%s': re-using fake node for %p",
+                    tree->priv->name,
+                    node);
             gtk_tree_store_set (store, &iter,
                     DONNA_TREE_COL_NODE,            node,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
@@ -738,10 +730,57 @@ add_node_to_tree (DonnaTreeView *tree,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                 -1);
     /* add it to our hashtable */
-    list = add_to_hashtable (tree->priv, node, &iter);
+    list = g_hash_table_lookup (tree->priv->hashtable, node);
+    list = g_slist_append (list, gtk_tree_iter_copy (&iter));
+    g_hash_table_insert (tree->priv->hashtable, node, list);
     /* check the list in case we have another tree node for that node, in which
      * case we might get the has_children info from there */
-    /* TODO */
+    for (l = list; l; l = l->next)
+    {
+        GtkTreeIter *i = l->data;
+        enum tree_expand es;
+
+        if (memcmp (&iter, i, sizeof (GtkTreeIter)) == 0)
+            continue;
+
+        gtk_tree_model_get (GTK_TREE_MODEL (store), i,
+                DONNA_TREE_COL_EXPAND_STATE,    &es,
+                -1);
+        switch (es)
+        {
+            /* node has children */
+            case DONNA_TREE_EXPAND_NEVER:
+            case DONNA_TREE_EXPAND_NEVER_FULL:
+            case DONNA_TREE_EXPAND_PARTIAL:
+            case DONNA_TREE_EXPAND_FULL:
+                es = DONNA_TREE_EXPAND_NEVER;
+                break;
+
+            /* node doesn't have children */
+            case DONNA_TREE_EXPAND_NONE:
+                break;
+
+            /* anything else is inconclusive */
+            default:
+                es = DONNA_TREE_EXPAND_UNKNOWN; /* == 0 */
+        }
+
+        if (es)
+        {
+            g_debug ("treeview '%s': setting node %p expand state to %d",
+                    tree->priv->name, node, es);
+            gtk_tree_store_set (store, &iter,
+                    DONNA_TREE_COL_EXPAND_STATE,    es,
+                    -1);
+            if (es == DONNA_TREE_EXPAND_NEVER)
+                /* insert a fake node so the user can ask for expansion */
+                gtk_tree_store_insert_with_values (store,
+                        NULL, &iter, 0,
+                        DONNA_TREE_COL_NODE,    NULL,
+                        -1);
+            return TRUE;
+        }
+    }
     /* get provider to get task to know if it has children */
     donna_node_get (node, FALSE, "provider", &provider, NULL);
     /* TODO if new provider, connect to its signals */
