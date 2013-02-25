@@ -107,7 +107,11 @@ struct _DonnaTreeViewPrivate
     guint                sync_mode   : 2;
 };
 
-#define is_tree(tree)   (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
+#define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
+#define get_filter(treev)   (GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev)))
+#define get_store_from_filter(filter)   \
+    (GTK_TREE_STORE (gtk_tree_model_filter_get_model (filter)))
+#define get_store(treev)    (get_store_from_filter (get_filter (treev)))
 
 static gboolean add_node_to_tree (DonnaTreeView *tree,
                                   GtkTreeIter   *parent,
@@ -269,6 +273,7 @@ node_get_children_callback (DonnaTask                   *task,
     state = donna_task_get_state (task);
     if (state != DONNA_TASK_DONE)
     {
+        GtkTreeModel *model;
         DonnaNode *node;
         const gchar *domain;
         DonnaSharedString *location;
@@ -277,7 +282,8 @@ node_get_children_callback (DonnaTask                   *task,
         /* collapse the node & set it to UNKNOWN (it might have been NEVER
          * before, but we don't know) so if the user tries an expansion again,
          * it is tried again. */
-        path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->store), &data->iter);
+        model = GTK_TREE_MODEL (data->store);
+        path = gtk_tree_model_get_path (model, &data->iter);
         gtk_tree_view_collapse_row (data->treev, path);
         gtk_tree_path_free (path);
         gtk_tree_store_set (data->store, &data->iter,
@@ -285,7 +291,7 @@ node_get_children_callback (DonnaTask                   *task,
                 -1);
 
         /* explain ourself */
-        gtk_tree_model_get (GTK_TREE_MODEL (data->store), &data->iter,
+        gtk_tree_model_get (model, &data->iter,
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
         donna_node_get (node, FALSE,
@@ -361,11 +367,13 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                                  GtkTreeIter    *_iter,
                                  GtkTreePath    *_path)
 {
-    GtkTreeModel *_model;
+    GtkTreeModelFilter *filter;
+    GtkTreeStore *store;
     enum tree_expand expand_state;
 
-    _model = gtk_tree_view_get_model (treev);
-    gtk_tree_model_get (_model, _iter,
+    filter = get_filter (treev);
+    store = get_store_from_filter (filter);
+    gtk_tree_model_get (GTK_TREE_MODEL (filter), _iter,
             DONNA_TREE_COL_EXPAND_STATE,    &expand_state,
             -1);
     switch (expand_state)
@@ -373,14 +381,10 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         /* allow expansion, just update expand state */
         case DONNA_TREE_EXPAND_NEVER_FULL:
             {
-                GtkTreeModelFilter *filter;
-                GtkTreeStore *store;
                 GtkTreeIter iter;
 
-                filter = GTK_TREE_MODEL_FILTER (_model);
-                store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (filter));
-
-                gtk_tree_model_filter_convert_iter_to_child_iter (filter,
+                gtk_tree_model_filter_convert_iter_to_child_iter (
+                        filter,
                         &iter,
                         _iter);
 
@@ -401,18 +405,14 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         case DONNA_TREE_EXPAND_NEVER:
             {
                 DonnaTreeViewPrivate *priv;
-                GtkTreeModelFilter *filter;
-                GtkTreeStore *store;
                 DonnaNode *node;
                 DonnaProvider *provider;
                 DonnaTask *task;
                 struct node_children_data *data;
 
                 priv = DONNA_TREE_VIEW (treev)->priv;
-                filter = GTK_TREE_MODEL_FILTER (_model);
-                store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (filter));
 
-                gtk_tree_model_get (_model, _iter,
+                gtk_tree_model_get (GTK_TREE_MODEL (filter), _iter,
                         DONNA_TREE_COL_NODE,    &node,
                         -1);
                 if (!node)
@@ -463,6 +463,8 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                     DONNA_TREE_VIEW (treev)->priv->name);
             return TRUE;
     }
+    /* never reached -- this is to remove the warning */
+    return FALSE;
 }
 
 static void
@@ -692,22 +694,34 @@ add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *parent,
                   DonnaNode     *node)
 {
-    GtkTreeView     *treev;
-    GtkTreeStore    *store;
-    GtkTreeIter      iter;
-    GSList          *list;
-    GSList          *l;
-    DonnaProvider   *provider;
-    DonnaTask       *task;
-    gboolean         added;
+    const gchar             *domain;
+    DonnaSharedString       *ss;
+    DonnaTreeViewPrivate    *priv;
+    GtkTreeView             *treev;
+    GtkTreeStore            *store;
+    GtkTreeModel            *model;
+    GtkTreeIter              iter;
+    GSList                  *list;
+    GSList                  *l;
+    DonnaProvider           *provider;
+    DonnaTask               *task;
+    gboolean                 added;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    g_return_val_if_fail (is_tree (tree), FALSE);
 
+    priv  = tree->priv;
     treev = GTK_TREE_VIEW (tree);
-    store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (
-            GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev))));
+    store = get_store (treev);
+    model = GTK_TREE_MODEL (store);
+
+    donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
+    g_debug ("treeview '%s': adding new node %p for '%s:%s'",
+            priv->name,
+            node,
+            domain,
+            donna_shared_string (ss));
+    donna_shared_string_unref (ss);
 
     if (!is_tree (tree))
     {
@@ -718,19 +732,15 @@ add_node_to_tree (DonnaTreeView *tree,
     /* check if the parent has a "fake" node as child, in which case we'll
      * re-use it instead of adding a new node */
     added = FALSE;
-    if (parent && gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
-                &iter, parent))
+    if (parent && gtk_tree_model_iter_children (model, &iter, parent))
     {
         DonnaNode *n;
 
-        gtk_tree_model_get (GTK_TREE_MODEL (store), &iter,
+        gtk_tree_model_get (model, &iter,
                 DONNA_TREE_COL_NODE,    &n,
                 -1);
         if (!n)
         {
-            g_debug ("treeview '%s': re-using fake node for %p",
-                    tree->priv->name,
-                    node);
             gtk_tree_store_set (store, &iter,
                     DONNA_TREE_COL_NODE,            node,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
@@ -744,9 +754,9 @@ add_node_to_tree (DonnaTreeView *tree,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                 -1);
     /* add it to our hashtable */
-    list = g_hash_table_lookup (tree->priv->hashtable, node);
+    list = g_hash_table_lookup (priv->hashtable, node);
     list = g_slist_append (list, gtk_tree_iter_copy (&iter));
-    g_hash_table_insert (tree->priv->hashtable, node, list);
+    g_hash_table_insert (priv->hashtable, node, list);
     /* check the list in case we have another tree node for that node, in which
      * case we might get the has_children info from there */
     for (l = list; l; l = l->next)
@@ -757,7 +767,7 @@ add_node_to_tree (DonnaTreeView *tree,
         if (memcmp (&iter, i, sizeof (GtkTreeIter)) == 0)
             continue;
 
-        gtk_tree_model_get (GTK_TREE_MODEL (store), i,
+        gtk_tree_model_get (model, i,
                 DONNA_TREE_COL_EXPAND_STATE,    &es,
                 -1);
         switch (es)
@@ -781,8 +791,6 @@ add_node_to_tree (DonnaTreeView *tree,
 
         if (es)
         {
-            g_debug ("treeview '%s': setting node %p expand state to %d",
-                    tree->priv->name, node, es);
             gtk_tree_store_set (store, &iter,
                     DONNA_TREE_COL_EXPAND_STATE,    es,
                     -1);
@@ -821,11 +829,10 @@ add_node_to_tree (DonnaTreeView *tree,
                 (task_callback_fn) node_has_children_cb,
                 data,
                 (GDestroyNotify) free_node_children_data);
-        tree->priv->run_task (task, tree->priv->run_task_data);
+        priv->run_task (task, priv->run_task_data);
     }
     else
     {
-        const gchar *domain;
         DonnaSharedString *location;
 
         /* insert a fake node, so user can try again by asking to expand it */
@@ -833,10 +840,7 @@ add_node_to_tree (DonnaTreeView *tree,
             DONNA_TREE_COL_NODE,    NULL,
             -1);
 
-        donna_node_get (node, FALSE,
-                "domain",   &domain,
-                "location", &location,
-                NULL);
+        donna_node_get (node, FALSE, "location", &location, NULL);
         g_warning ("Unable to create a task to determine if the node '%s:%s' has children",
                 domain, donna_shared_string (location));
         donna_shared_string_unref (location);
@@ -851,6 +855,8 @@ add_node_to_tree (DonnaTreeView *tree,
 gboolean
 donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node)
 {
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (is_tree (tree), FALSE);
     return add_node_to_tree (tree, NULL, node);
 }
 
@@ -885,8 +891,7 @@ load_arrangement (DonnaTreeView     *tree,
     GtkTreeViewColumn    *last_column = NULL;
     gint                  sort_id = 0;
 
-    sortable = GTK_TREE_SORTABLE (gtk_tree_model_filter_get_model (
-                GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev))));
+    sortable = GTK_TREE_SORTABLE (get_store (treev));
     list = gtk_tree_view_get_columns (treev);
 
     /* get new set of columns to load. They might not come from the current
