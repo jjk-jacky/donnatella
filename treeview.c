@@ -324,6 +324,8 @@ node_get_children_callback (DonnaTask                   *task,
         {
             DonnaNode *node = arr->pdata[i];
 
+            /* FIXME check first if the node isn't already there (minitree and
+             * EXPAND_PARTIAL) */
             if (!add_node_to_tree (tree, &data->iter, node))
             {
                 const gchar *domain;
@@ -706,6 +708,12 @@ add_node_to_tree (DonnaTreeView *tree,
     treev = GTK_TREE_VIEW (tree);
     store = GTK_TREE_STORE (gtk_tree_model_filter_get_model (
             GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev))));
+
+    if (!is_tree (tree))
+    {
+        /* TODO */
+        return TRUE;
+    }
 
     /* check if the parent has a "fake" node as child, in which case we'll
      * re-use it instead of adding a new node */
