@@ -1385,6 +1385,181 @@ donna_tree_view_set_task_runner (DonnaTreeView      *tree,
     return TRUE;
 }
 
+struct set_node_prop_data
+{
+    DonnaTreeView     *tree;
+    DonnaNode         *node;
+    DonnaSharedString *prop;
+};
+
+static void
+free_set_node_prop_data (struct set_node_prop_data *data)
+{
+    donna_shared_string_unref (data->prop);
+    g_free (data);
+}
+
+static void
+set_node_prop_callbak (DonnaTask                 *task,
+                       gboolean                   timeout_called,
+                       struct set_node_prop_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    GSList *list, *l;
+    guint i;
+    GPtrArray *arr;
+
+    /* search column(s) linked to that prop */
+    arr = g_ptr_array_sized_new (1);
+    for (i = 0; i < priv->col_props->len; ++i)
+    {
+        struct col_prop *cp;
+
+        cp = &g_array_index (priv->col_props, struct col_prop, i);
+        if (streq (donna_shared_string (data->prop),
+                    donna_shared_string (cp->prop)))
+            g_ptr_array_add (arr, cp->column);
+    }
+    /* on the off chance there's no columns linked to that prop */
+    if (arr->len == 0)
+    {
+        g_ptr_array_free (arr, TRUE);
+        free_set_node_prop_data (data);
+        return;
+    }
+
+    list = g_hash_table_lookup (priv->hashtable, data->node);
+    for (l = list; l; l = l->next)
+    {
+        GtkTreeIter *iter = l->data;
+
+        for (i = 0; i < arr->len; ++i)
+        {
+            /* TODO g_object_get_data (column) to do -1 on the nb of spins;
+             * if nb==0 then we remove the spinner.
+             * In case of task failure, we set the error message and whatnot */
+        }
+    }
+
+    g_ptr_array_free (arr, TRUE);
+    free_set_node_prop_data (data);
+}
+
+static void
+set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    GSList *list, *l;
+    guint i;
+    GPtrArray *arr;
+
+    /* search column(s) linked to that prop */
+    arr = g_ptr_array_sized_new (1);
+    for (i = 0; i < priv->col_props->len; ++i)
+    {
+        struct col_prop *cp;
+
+        cp = &g_array_index (priv->col_props, struct col_prop, i);
+        if (streq (donna_shared_string (data->prop),
+                    donna_shared_string (cp->prop)))
+            g_ptr_array_add (arr, cp->column);
+    }
+    /* on the off chance there's no columns linked to that prop */
+    if (arr->len == 0)
+    {
+        g_ptr_array_free (arr, TRUE);
+        return;
+    }
+
+    list = g_hash_table_lookup (priv->hashtable, data->node);
+    for (l = list; l; l = l->next)
+    {
+        GtkTreeIter *iter = l->data;
+
+        for (i = 0; i < arr->len; ++i)
+        {
+            /* TODO set spinner on column arr->pdata[i] for iter;
+             * w/ g_object_set_data (column) for the nb of spins */
+        }
+    }
+
+    g_ptr_array_free (arr, TRUE);
+}
+
+gboolean
+donna_tree_view_set_node_property (DonnaTreeView      *tree,
+                                   DonnaNode          *node,
+                                   DonnaSharedString  *prop,
+                                   const GValue       *value)
+{
+    DonnaTreeViewPrivate *priv;
+    GError *err = NULL;
+    GSList *list;
+    DonnaTask *task;
+    struct set_node_prop_data *data;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    g_return_val_if_fail (prop != NULL, FALSE);
+    g_return_val_if_fail (G_IS_VALUE (value), FALSE);
+
+    priv = tree->priv;
+
+    /* make sure the node is on the tree */
+    list = g_hash_table_lookup (priv->hashtable, node);
+    if (!list)
+    {
+        const gchar *domain;
+        DonnaSharedString *ss;
+
+        donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
+        g_warning ("Treeview '%s': Cannot set property '%s' on node '%s:%s', "
+                "the node is not represented in the treeview",
+                priv->name,
+                donna_shared_string (prop),
+                domain,
+                donna_shared_string (ss));
+        donna_shared_string_unref (ss);
+        return FALSE;
+    }
+
+    task = donna_node_set_property_task (node, donna_shared_string (prop),
+            value, &err);
+    if (!task)
+    {
+        const gchar *domain;
+        DonnaSharedString *ss;
+
+        donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
+        g_warning ("Treeview '%s': Cannot set property '%s' on node '%s:%s': %s",
+                priv->name,
+                donna_shared_string (prop),
+                domain,
+                donna_shared_string (ss),
+                err->message);
+        donna_shared_string_unref (ss);
+        g_clear_error (&err);
+        return FALSE;
+    }
+
+    data = g_new0 (struct set_node_prop_data, 1);
+    data->tree = tree;
+    /* don't need to take a ref on node for timeout or cb, since task has one */
+    data->node = node;
+    data->prop = donna_shared_string_ref (prop);
+
+    donna_task_set_timeout (task, 800 /* FIXME an option */,
+            (task_timeout_fn) set_node_prop_timeout,
+            data,
+            (GDestroyNotify) free_set_node_prop_data);
+    donna_task_set_callback (task,
+            (task_callback_fn) set_node_prop_callbak,
+            data,
+            (GDestroyNotify) free_set_node_prop_data);
+    priv->run_task (task, priv->run_task_data);
+    return TRUE;
+}
+
 static gboolean
 query_tooltip_cb (GtkTreeView   *treev,
                   gint           x,

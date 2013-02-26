@@ -61,6 +61,11 @@ gboolean        donna_tree_view_set_arrangement_selector (
 void            donna_tree_view_build_arrangement (
                                                  DonnaTreeView      *tree,
                                                  gboolean            force);
+/* both modes */
+gboolean        donna_tree_view_set_node_property (DonnaTreeView    *tree,
+                                                 DonnaNode          *node,
+                                                 DonnaSharedString  *prop,
+                                                 const GValue       *value);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
