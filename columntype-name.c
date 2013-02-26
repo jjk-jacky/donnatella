@@ -19,6 +19,9 @@ static void             ct_name_finalize            (GObject            *object)
 
 /* ColumnType */
 static const gchar *    ct_name_get_renderers       (DonnaColumnType    *ct);
+static DonnaSharedString ** ct_name_get_props       (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name);
 static GPtrArray *      ct_name_render              (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
@@ -47,12 +50,13 @@ static gint             ct_name_node_cmp            (DonnaColumnType    *ct,
 static void
 ct_name_columntype_init (DonnaColumnTypeInterface *interface)
 {
-    interface->get_renderers          = ct_name_get_renderers;
-    interface->render                 = ct_name_render;
-    interface->get_options_menu       = ct_name_get_options_menu;
-    interface->handle_context         = ct_name_handle_context;
-    interface->set_tooltip            = ct_name_set_tooltip;
-    interface->node_cmp               = ct_name_node_cmp;
+    interface->get_renderers    = ct_name_get_renderers;
+    interface->get_props        = ct_name_get_props;
+    interface->render           = ct_name_render;
+    interface->get_options_menu = ct_name_get_options_menu;
+    interface->handle_context   = ct_name_handle_context;
+    interface->set_tooltip      = ct_name_set_tooltip;
+    interface->node_cmp         = ct_name_node_cmp;
 }
 
 static void
@@ -99,6 +103,21 @@ ct_name_get_renderers (DonnaColumnType   *ct)
 {
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_NAME (ct), NULL);
     return "pt";
+}
+
+static DonnaSharedString **
+ct_name_get_props (DonnaColumnType  *ct,
+                   const gchar      *tv_name,
+                   const gchar      *col_name)
+{
+    DonnaSharedString **ss;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_NAME (ct), NULL);
+
+    ss = g_new0 (DonnaSharedString *, 3);
+    ss[0] = donna_shared_string_new_dup ("name");
+    ss[1] = donna_shared_string_new_dup ("icon");
+    return ss;
 }
 
 static GPtrArray *

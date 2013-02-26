@@ -13,14 +13,33 @@ donna_columntype_get_renderers (DonnaColumnType  *ct)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
-    g_return_val_if_fail (interface != NULL, 0);
-    g_return_val_if_fail (interface->get_renderers != NULL, 0);
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_renderers != NULL, NULL);
 
     return (*interface->get_renderers) (ct);
+}
+
+DonnaSharedString **
+donna_columntype_get_props (DonnaColumnType    *ct,
+                            const gchar        *tv_name,
+                            const gchar        *col_name)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (tv_name != NULL, NULL);
+    g_return_val_if_fail (col_name != NULL, NULL);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_props != NULL, NULL);
+
+    return (*interface->get_props) (ct, tv_name, col_name);
 }
 
 GPtrArray *

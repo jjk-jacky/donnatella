@@ -72,6 +72,12 @@ enum
     SORT_DESC
 };
 
+struct col_prop
+{
+    DonnaSharedString *prop;
+    GtkTreeViewColumn *column;
+};
+
 struct _DonnaTreeViewPrivate
 {
     DonnaConfig         *config;
@@ -89,14 +95,17 @@ struct _DonnaTreeViewPrivate
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
 
-    /* internal states */
+    /* current arrangement */
     DonnaSharedString   *arrangement;
+
+    /* properties used by our columns */
+    GArray              *col_props;
 
     /* List: current/future location */
     DonnaNode           *location;
     DonnaNode           *future_location;
 
-    /* hashtable of nodes on TV */
+    /* hashtable of nodes & their iters on TV */
     GHashTable          *hashtable;
 
     /* list of props on nodes being refreshed (see refresh_node_prop_cb) */
@@ -121,6 +130,7 @@ static gboolean add_node_to_tree (DonnaTreeView *tree,
                                   GtkTreeIter   *parent,
                                   DonnaNode     *node);
 
+static void free_col_prop (struct col_prop *cp);
 
 static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
@@ -161,8 +171,16 @@ donna_tree_view_init (DonnaTreeView *tv)
     priv->hashtable = g_hash_table_new (g_direct_hash, g_direct_equal);
     /* default task runner. this means no multi-thread, so blocking */
     priv->run_task = (run_task_fn) donna_task_run;
-    /* init mutex */
+
     g_mutex_init (&priv->refresh_node_props_mutex);
+    priv->col_props = g_array_new (FALSE, FALSE, sizeof (struct col_prop));
+    g_array_set_clear_func (priv->col_props, (GDestroyNotify) free_col_prop);
+}
+
+static void
+free_col_prop (struct col_prop *cp)
+{
+    donna_shared_string_unref (cp->prop);
 }
 
 static void
@@ -180,6 +198,7 @@ donna_tree_view_finalize (GObject *object)
     g_hash_table_foreach (priv->hashtable, (GHFunc) free_hashtable, NULL);
     g_hash_table_destroy (priv->hashtable);
     g_mutex_clear (&priv->refresh_node_props_mutex);
+    g_array_free (priv->col_props, TRUE);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -1036,6 +1055,10 @@ load_arrangement (DonnaTreeView     *tree,
         }
     }
 
+    /* clear list of props we're watching to refresh tree */
+    if (priv->col_props->len > 0)
+        g_array_set_size (priv->col_props, 0);
+
     for (;;)
     {
         const gchar       *s;
@@ -1049,6 +1072,7 @@ load_arrangement (DonnaTreeView     *tree,
         GtkCellRenderer   *renderer;
         const gchar       *rend;
         gint               index;
+        DonnaSharedString **props;
 
         e = strchrnul (col, ',');
         s = strchr (col, ':');
@@ -1201,6 +1225,26 @@ load_arrangement (DonnaTreeView     *tree,
             gtk_tree_view_column_set_title (column, donna_shared_string (ss));
             donna_shared_string_unref (ss);
         }
+
+        /* props to watch for refresh */
+        props = donna_columntype_get_props (ct, priv->name, b);
+        if (props)
+        {
+            DonnaSharedString **p;
+
+            for (p = props; *p; ++p)
+            {
+                struct col_prop cp;
+
+                cp.prop = *p;
+                cp.column = column;
+                g_array_append_val (priv->col_props, cp);
+            }
+            g_free (props);
+        }
+        else
+            g_warning ("Treeview '%s': column '%s' reports no properties to watch for refresh",
+                    priv->name, b);
 
         /* sort */
         gtk_tree_view_column_set_sort_column_id (column, sort_id++);
