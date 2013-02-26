@@ -118,6 +118,8 @@ void            donna_node_get              (DonnaNode              *node,
 DonnaTask *     donna_node_refresh_task     (DonnaNode              *node,
                                              const gchar            *first_name,
                                              ...);
+DonnaTask *     donna_node_refresh_arr_task (DonnaNode              *node,
+                                             GPtrArray              *props);
 DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
                                                  const gchar        *name,
                                                  GValue             *value,

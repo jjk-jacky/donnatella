@@ -688,7 +688,6 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
      * from the refresher, so in this thread, so it would have been processed. */
     g_signal_handler_disconnect (priv->provider, sig);
 
-    g_ptr_array_set_free_func (names, g_free);
     /* did everything get refreshed? */
     if (names->len == refreshed->len)
     {
@@ -735,18 +734,11 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
          * */
         g_free (g_ptr_array_free (refreshed, FALSE));
 
-        /* because the return value must be a NULL-terminated array */
-        g_ptr_array_add (names, NULL);
-
-        /* set the return value. the task will take ownership of names->pdata,
-         * so we shouldn't free it, only names itself */
+        /* set the return value. the task will take ownership of names */
         value = donna_task_grab_return_value (task);
-        g_value_init (value, G_TYPE_STRV);
-        g_value_take_boxed (value, names->pdata);
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        g_value_take_boxed (value, names);
         donna_task_release_return_value (task);
-
-        /* free names (but not the pdata, now owned by the task's return value */
-        g_ptr_array_free (names, FALSE);
     }
 
     /* free memory (names & refreshed have been taken care of already) */
@@ -787,7 +779,8 @@ donna_node_refresh_task (DonnaNode   *node,
          * take a writer lock... */
 
         g_rw_lock_reader_lock (&node->priv->props_lock);
-        names = g_ptr_array_sized_new (g_hash_table_size (node->priv->props));
+        names = g_ptr_array_new_full (g_hash_table_size (node->priv->props),
+                g_free);
         g_hash_table_iter_init (&iter, node->priv->props);
         while (g_hash_table_iter_next (&iter, &key, &value))
         {
@@ -804,7 +797,7 @@ donna_node_refresh_task (DonnaNode   *node,
         va_list     va_args;
         gpointer    name;
 
-        names = g_ptr_array_new ();
+        names = g_ptr_array_new_with_free_func (g_free);
 
         va_start (va_args, first_name);
         name = (gpointer) first_name;
@@ -820,6 +813,32 @@ donna_node_refresh_task (DonnaNode   *node,
 
     data = g_slice_new0 (struct refresh_data);
     data->node = g_object_ref (node);
+    data->names = names;
+
+    return donna_task_new ((task_fn) node_refresh, data,
+            (GDestroyNotify) free_refresh_data);
+}
+
+DonnaTask *
+donna_node_refresh_arr_task (DonnaNode *node,
+                             GPtrArray *props)
+{
+    GPtrArray *names;
+    guint i;
+    struct refresh_data *data;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    g_return_val_if_fail (props != NULL, NULL);
+    g_return_val_if_fail (props->len > 0, NULL);
+
+    /* because the task will change the array, we need to copy it */
+    names = g_ptr_array_new_full (props->len, g_free);
+    for (i = 0; i < props->len; ++i)
+        g_ptr_array_add (names, g_strdup (props->pdata[i]));
+    g_ptr_array_unref (props);
+
+    data = g_slice_new0 (struct refresh_data);
+    data->node  = g_object_ref (node);
     data->names = names;
 
     return donna_task_new ((task_fn) node_refresh, data,

@@ -19,7 +19,7 @@ static void             ct_name_finalize            (GObject            *object)
 
 /* ColumnType */
 static const gchar *    ct_name_get_renderers       (DonnaColumnType    *ct);
-static DonnaTask *      ct_name_render              (DonnaColumnType    *ct,
+static GPtrArray *      ct_name_render              (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      guint               index,
@@ -101,7 +101,7 @@ ct_name_get_renderers (DonnaColumnType   *ct)
     return "pt";
 }
 
-static DonnaTask *
+static GPtrArray *
 ct_name_render (DonnaColumnType    *ct,
                 const gchar        *tv_name,
                 const gchar        *col_name,
@@ -144,7 +144,13 @@ ct_name_render (DonnaColumnType    *ct,
                         NULL);
 
             if (has_value == DONNA_NODE_VALUE_NEED_REFRESH)
-                return donna_node_refresh_task (node, "icon", NULL);
+            {
+                GPtrArray *arr;
+
+                arr = g_ptr_array_new ();
+                g_ptr_array_add (arr, "icon");
+                return arr;
+            }
         }
     }
     else /* index == 2 */

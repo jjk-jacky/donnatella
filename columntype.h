@@ -32,7 +32,7 @@ struct _DonnaColumnTypeInterface
 
     /* virtual table */
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
-    DonnaTask *         (*render)           (DonnaColumnType    *ct,
+    GPtrArray *         (*render)           (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
                                              guint               index,
@@ -59,7 +59,7 @@ struct _DonnaColumnTypeInterface
 };
 
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
-DonnaTask *     donna_columntype_render         (DonnaColumnType    *ct,
+GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
                                                  guint               index,

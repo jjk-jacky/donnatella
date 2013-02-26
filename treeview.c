@@ -99,6 +99,10 @@ struct _DonnaTreeViewPrivate
     /* hashtable of nodes on TV */
     GHashTable          *hashtable;
 
+    /* list of props on nodes being refreshed (see refresh_node_prop_cb) */
+    GMutex               refresh_node_props_mutex;
+    GSList              *refresh_node_props;
+
     /* "cached" options */
     guint                mode        : 1;
     guint                show_hidden : 1;
@@ -157,6 +161,8 @@ donna_tree_view_init (DonnaTreeView *tv)
     priv->hashtable = g_hash_table_new (g_direct_hash, g_direct_equal);
     /* default task runner. this means no multi-thread, so blocking */
     priv->run_task = (run_task_fn) donna_task_run;
+    /* init mutex */
+    g_mutex_init (&priv->refresh_node_props_mutex);
 }
 
 static void
@@ -173,6 +179,7 @@ donna_tree_view_finalize (GObject *object)
     priv = DONNA_TREE_VIEW (object)->priv;
     g_hash_table_foreach (priv->hashtable, (GHFunc) free_hashtable, NULL);
     g_hash_table_destroy (priv->hashtable);
+    g_mutex_clear (&priv->refresh_node_props_mutex);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -507,6 +514,53 @@ visible_func (GtkTreeModel  *_model,
     return ret;
 }
 
+struct refresh_node_props_data
+{
+    DonnaTreeView *tree;
+    DonnaNode     *node;
+    GPtrArray     *props;
+};
+
+static void
+free_refresh_node_props_data (struct refresh_node_props_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+
+    g_mutex_lock (&priv->refresh_node_props_mutex);
+    priv->refresh_node_props = g_slist_remove (priv->refresh_node_props, data);
+    g_mutex_unlock (&priv->refresh_node_props_mutex);
+
+    g_object_unref (data->node);
+    g_ptr_array_unref (data->props);
+    g_free (data);
+}
+
+/* Usually, upon a provider's node-updated signal, we check if the node is
+ * visible and the property one that our columns use; If so, we trigger a
+ * refresh of that row (i.e. trigger a row-updated on store)
+ * However, there's an exception: a columntype can, on render, give a list of
+ * properties to be refreshed. We then store those properties on
+ * priv->refresh_node_props as we run a task to refresh them. During that time,
+ * those properties (on that node) will *not* trigger a refresh, as they usually
+ * would. Instead, it's only when this callback is triggered that, if the node
+ * is viisble and *all* properties were refreshed, the refresh will be triggered
+ * (on the tree) */
+static void
+refresh_node_prop_cb (DonnaTask                     *task,
+                      gboolean                       timeout_called,
+                      struct refresh_node_props_data *data)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_DONE)
+    {
+        /* no return value means all props were refreshed, i.e. full success */
+        if (!donna_task_get_return_value (task))
+        {
+            /* TODO trigger the refresh of the node if visible */
+        }
+    }
+    free_refresh_node_props_data (data);
+}
+
 static void
 rend_func (GtkTreeViewColumn  *column,
            GtkCellRenderer    *renderer,
@@ -520,6 +574,7 @@ rend_func (GtkTreeViewColumn  *column,
     DonnaNode *node;
     const gchar *col;
     guint index = GPOINTER_TO_UINT (data);
+    GPtrArray *arr;
 
     tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
     priv = tree->priv;
@@ -608,7 +663,29 @@ rend_func (GtkTreeViewColumn  *column,
     else if (!node)
         return;
 
-    donna_columntype_render (ct, priv->name, col, index, node, renderer);
+    arr = donna_columntype_render (ct, priv->name, col, index, node, renderer);
+    if (arr)
+    {
+        DonnaTask *task;
+        struct refresh_node_props_data *data;
+
+        /* ct wants some properties refreshed on node. See refresh_node_prop_cb */
+        data = g_new0 (struct refresh_node_props_data, 1);
+        data->tree  = tree;
+        data->node  = g_object_ref (node);
+        data->props = g_ptr_array_ref (arr);
+
+        g_mutex_lock (&priv->refresh_node_props_mutex);
+        priv->refresh_node_props = g_slist_append (priv->refresh_node_props, data);
+        g_mutex_unlock (&priv->refresh_node_props_mutex);
+
+        task = donna_node_refresh_arr_task (node, arr);
+        donna_task_set_callback (task,
+                (task_callback_fn) refresh_node_prop_cb,
+                data,
+                (GDestroyNotify) free_refresh_node_props_data);
+        priv->run_task (task, priv->run_task_data);
+    }
     g_object_unref (node);
 }
 
