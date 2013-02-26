@@ -532,6 +532,64 @@ next:
     g_rw_lock_reader_unlock (&priv->props_lock);
 }
 
+DonnaNodeHasProp
+donna_node_has_property (DonnaNode   *node,
+                         const gchar *name)
+{
+    DonnaNodePrivate *priv;
+    const gchar **s;
+    guint i;
+    DonnaNodeProp *prop;
+    DonnaNodeHasProp ret;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), DONNA_NODE_PROP_UNKNOWN);
+    g_return_val_if_fail (name != NULL, DONNA_NODE_PROP_UNKNOWN);
+
+    priv = node->priv;
+
+    for (i = 0, s = node_basic_properties; *s; ++s, ++i)
+    {
+        if (streq (name, *s))
+        {
+            /* required; or basic w/ value */
+            if (i < FIRST_BASIC_PROP
+                    || priv->basic_props[i - FIRST_BASIC_PROP].has_value
+                    == DONNA_NODE_VALUE_SET)
+                ret = DONNA_NODE_PROP_EXISTS | DONNA_NODE_PROP_HAS_VALUE;
+            /* basic w/out value */
+            else if (priv->basic_props[i - FIRST_BASIC_PROP].has_value
+                    == DONNA_NODE_VALUE_NEED_REFRESH)
+                ret = DONNA_NODE_PROP_EXISTS;
+            /* basic that doesn't exist */
+            else
+                return DONNA_NODE_PROP_NONE;
+
+            /* internal props are not writable, for the rest we check the flags */
+            if (i >= FIRST_REQUIRED_PROP
+                    && priv->flags & prop_writable_flags[i - FIRST_REQUIRED_PROP])
+                    ret |= DONNA_NODE_PROP_WRITABLE;
+
+            return ret;
+        }
+    }
+
+    g_rw_lock_reader_lock (&priv->props_lock);
+    prop = g_hash_table_lookup (priv->props, name);
+    g_rw_lock_reader_unlock (&priv->props_lock);
+    if (prop)
+    {
+        ret = DONNA_NODE_PROP_EXISTS;
+        if (prop->has_value)
+            ret |= DONNA_NODE_PROP_HAS_VALUE;
+        if (prop->setter)
+            ret |= DONNA_NODE_PROP_WRITABLE;
+    }
+    else
+        ret = DONNA_NODE_PROP_NONE;
+
+    return ret;
+}
+
 void
 donna_node_get (DonnaNode   *node,
                 gboolean     is_blocking,

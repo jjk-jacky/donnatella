@@ -65,14 +65,23 @@ typedef enum
     DONNA_NODE_USER_WRITABLE        = (1 << 18),
     DONNA_NODE_GROUP_WRITABLE       = (1 << 19),
     DONNA_NODE_TYPE_WRITABLE        = (1 << 20),
+
+    DONNA_NODE_ALL_EXISTS           = (DONNA_NODE_ICON_EXISTS
+        | DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_SIZE_EXISTS
+        | DONNA_NODE_CTIME_EXISTS | DONNA_NODE_MTIME_EXISTS
+        | DONNA_NODE_ATIME_EXISTS | DONNA_NODE_PERMS_EXISTS
+        | DONNA_NODE_USER_EXISTS  | DONNA_NODE_GROUP_EXISTS
+        | DONNA_NODE_TYPE_EXISTS)
 } DonnaNodeFlags;
 
-#define DONNA_NODE_ALL_EXISTS   (DONNA_NODE_ICON_EXISTS         \
-        | DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_SIZE_EXISTS  \
-        | DONNA_NODE_CTIME_EXISTS | DONNA_NODE_MTIME_EXISTS     \
-        | DONNA_NODE_ATIME_EXISTS | DONNA_NODE_PERMS_EXISTS     \
-        | DONNA_NODE_USER_EXISTS  | DONNA_NODE_GROUP_EXISTS     \
-        | DONNA_NODE_TYPE_EXISTS)
+typedef enum
+{
+    DONNA_NODE_PROP_UNKNOWN     = (1 << 0),
+    DONNA_NODE_PROP_NONE        = (1 << 1),
+    DONNA_NODE_PROP_EXISTS      = (1 << 2),
+    DONNA_NODE_PROP_HAS_VALUE   = (1 << 3),
+    DONNA_NODE_PROP_WRITABLE    = (1 << 4),
+} DonnaNodeHasProp;
 
 /* functions called by a node to refresh/set a property value */
 typedef gboolean    (*refresher_fn) (DonnaTask      *task,
@@ -111,6 +120,8 @@ gboolean        donna_node_add_property     (DonnaNode              *node,
                                              refresher_fn            refresher,
                                              setter_fn               setter,
                                              GError                **error);
+DonnaNodeHasProp donna_node_has_property    (DonnaNode              *node,
+                                             const gchar            *name);
 void            donna_node_get              (DonnaNode              *node,
                                              gboolean                is_blocking,
                                              const gchar            *first_name,
