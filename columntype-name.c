@@ -34,7 +34,8 @@ static GtkMenu *        ct_name_get_options_menu    (DonnaColumnType    *ct,
 static gboolean         ct_name_handle_context      (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
-                                                     DonnaNode          *node);
+                                                     DonnaNode          *node,
+                                                     DonnaTreeView      *treeview);
 static gboolean         ct_name_set_tooltip         (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
@@ -201,7 +202,8 @@ static gboolean
 ct_name_handle_context (DonnaColumnType    *ct,
                         const gchar        *tv_name,
                         const gchar        *col_name,
-                        DonnaNode          *node)
+                        DonnaNode          *node,
+                        DonnaTreeView      *treeview)
 {
     /* FIXME */
     return FALSE;

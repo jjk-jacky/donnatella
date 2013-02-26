@@ -6,6 +6,7 @@
 #include "common.h"
 #include "conf.h"
 #include "sharedstring.h"
+#include "treeview.h"
 
 G_BEGIN_DECLS
 
@@ -48,7 +49,8 @@ struct _DonnaColumnTypeInterface
     gboolean            (*handle_context)   (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
-                                             DonnaNode          *node);
+                                             DonnaNode          *node,
+                                             DonnaTreeView      *treeview);
     gboolean            (*set_tooltip)      (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
@@ -78,7 +80,8 @@ GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
 gboolean        donna_columntype_handle_context (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
-                                                 DonnaNode          *node);
+                                                 DonnaNode          *node,
+                                                 DonnaTreeView      *treeview);
 gboolean        donna_columntype_set_tooltip    (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,

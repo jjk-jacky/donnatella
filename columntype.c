@@ -90,7 +90,8 @@ gboolean
 donna_columntype_handle_context (DonnaColumnType    *ct,
                                  const gchar        *tv_name,
                                  const gchar        *col_name,
-                                 DonnaNode          *node)
+                                 DonnaNode          *node,
+                                 DonnaTreeView      *treeview)
 {
     DonnaColumnTypeInterface *interface;
 
@@ -98,13 +99,14 @@ donna_columntype_handle_context (DonnaColumnType    *ct,
     g_return_val_if_fail (tv_name != NULL, FALSE);
     g_return_val_if_fail (col_name != NULL, FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (treeview), FALSE);
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->handle_context != NULL, FALSE);
 
-    return (*interface->handle_context) (ct, tv_name, col_name, node);
+    return (*interface->handle_context) (ct, tv_name, col_name, node, treeview);
 }
 
 gboolean
