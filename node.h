@@ -122,7 +122,7 @@ DonnaTask *     donna_node_refresh_arr_task (DonnaNode              *node,
                                              GPtrArray              *props);
 DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
                                                  const gchar        *name,
-                                                 GValue             *value,
+                                                 const GValue       *value,
                                                  GError            **error);
 void            donna_node_set_property_value   (DonnaNode          *node,
                                                  const gchar        *name,

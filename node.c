@@ -887,7 +887,7 @@ set_property (DonnaTask *task, struct set_property *data)
 DonnaTask *
 donna_node_set_property_task (DonnaNode     *node,
                               const gchar   *name,
-                              GValue        *value,
+                              const GValue  *value,
                               GError       **error)
 {
     DonnaNodePrivate *priv;
