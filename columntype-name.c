@@ -294,6 +294,10 @@ get_node_key (DonnaColumnTypeName   *ctname,
                 DonnaProvider *provider;
 
                 donna_node_get (node, FALSE, "provider", &provider, NULL);
+                /* FIXME? (not actually needed since our cb is "self-contained")
+                 * - also connect to a new signal "destroy" when provider is
+                 *   being finalized. in handler, we remove it from the ptrarr
+                 * - when we're finalized, disconnect all hanlers */
                 g_signal_connect_data (provider, "node-updated::name",
                         G_CALLBACK (node_updated_cb),
                         g_strdup (buf),
