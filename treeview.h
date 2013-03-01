@@ -8,18 +8,6 @@
 
 G_BEGIN_DECLS
 
-#define DONNA_TYPE_TREE_VIEW            (donna_tree_view_get_type ())
-#define DONNA_TREE_VIEW(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_TREE_VIEW, DonnaTreeView))
-#define DONNA_TREE_VIEW_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), DONNA_TYPE_TREE_VIEW, DonnaTreeViewClass))
-#define DONNA_IS_TREE_VIEW(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_TREE_VIEW))
-#define DONNA_IS_TREE_VIEW_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((obj), DONNA_TYPE_TREE_VIEW))
-#define DONNA_TREE_VIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_TREE_VIEW, DonnaTreeViewClass))
-
-typedef struct _DonnaTreeView           DonnaTreeView;
-typedef struct _DonnaTreeViewPrivate    DonnaTreeViewPrivate;
-typedef struct _DonnaTreeViewClass      DonnaTreeViewClass;
-
-
 #define DONNA_TREE_VIEW_ERROR            g_quark_from_static_string ("DonnaTreeView-Error")
 enum
 {
@@ -43,8 +31,6 @@ struct _DonnaTreeViewClass
 {
     GtkTreeViewClass parent_class;
 };
-
-GType           donna_tree_view_get_type        (void) G_GNUC_CONST;
 
 GtkWidget *     donna_tree_view_new             (DonnaConfig        *config,
                                                  const gchar        *name,

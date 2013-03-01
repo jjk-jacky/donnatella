@@ -6,7 +6,6 @@
 #include "common.h"
 #include "conf.h"
 #include "sharedstring.h"
-#include "treeview.h"
 
 G_BEGIN_DECLS
 
