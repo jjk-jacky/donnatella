@@ -78,6 +78,16 @@ struct col_prop
     GtkTreeViewColumn *column;
 };
 
+struct provider_signals
+{
+    DonnaProvider   *provider;
+    guint            nb_nodes;
+    gulong           sid_node_updated;
+    gulong           sid_node_removed;
+    gulong           sid_node_children;
+    gulong           sid_node_new_child;
+};
+
 struct _DonnaTreeViewPrivate
 {
     DonnaDonna          *donna;
@@ -98,6 +108,9 @@ struct _DonnaTreeViewPrivate
 
     /* hashtable of nodes & their iters on TV */
     GHashTable          *hashtable;
+
+    /* providers we're connected to */
+    GPtrArray           *providers;
 
     /* list of props on nodes being refreshed (see refresh_node_prop_cb) */
     GMutex               refresh_node_props_mutex;
@@ -122,6 +135,7 @@ static gboolean add_node_to_tree (DonnaTreeView *tree,
                                   DonnaNode     *node);
 
 static void free_col_prop (struct col_prop *cp);
+static void free_provider_signals (struct provider_signals *ps);
 
 static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
@@ -161,6 +175,8 @@ donna_tree_view_init (DonnaTreeView *tv)
      * want the old value to be free-d, obviously */
     priv->hashtable = g_hash_table_new (g_direct_hash, g_direct_equal);
 
+    priv->providers = g_ptr_array_new_with_free_func (
+            (GDestroyNotify) free_provider_signals);
     g_mutex_init (&priv->refresh_node_props_mutex);
     priv->col_props = g_array_new (FALSE, FALSE, sizeof (struct col_prop));
     g_array_set_clear_func (priv->col_props, (GDestroyNotify) free_col_prop);
@@ -170,6 +186,17 @@ static void
 free_col_prop (struct col_prop *cp)
 {
     donna_shared_string_unref (cp->prop);
+}
+
+static void
+free_provider_signals (struct provider_signals *ps)
+{
+    g_signal_handler_disconnect (ps->provider, ps->sid_node_updated);
+    g_signal_handler_disconnect (ps->provider, ps->sid_node_removed);
+    g_signal_handler_disconnect (ps->provider, ps->sid_node_children);
+    g_signal_handler_disconnect (ps->provider, ps->sid_node_new_child);
+    g_object_unref (ps->provider);
+    g_free (ps);
 }
 
 static void
@@ -186,6 +213,7 @@ donna_tree_view_finalize (GObject *object)
     priv = DONNA_TREE_VIEW (object)->priv;
     g_hash_table_foreach (priv->hashtable, (GHFunc) free_hashtable, NULL);
     g_hash_table_destroy (priv->hashtable);
+    g_ptr_array_free (priv->providers, TRUE);
     g_mutex_clear (&priv->refresh_node_props_mutex);
     g_array_free (priv->col_props, TRUE);
 
@@ -883,6 +911,38 @@ node_has_children_cb (DonnaTask                 *task,
     free_node_children_data (data);
 }
 
+static void
+node_updated_cb (DonnaProvider  *provider,
+                 DonnaNode      *node,
+                 const gchar    *name)
+{
+    /* TODO */
+}
+
+static void
+node_removed_cb (DonnaProvider  *provider,
+                 DonnaNode      *node)
+{
+    /* TODO */
+}
+
+static void
+node_children_cb (DonnaProvider  *provider,
+                  DonnaNode      *node,
+                  DonnaNodeType   node_types,
+                  GPtrArray      *children)
+{
+    /* TODO */
+}
+
+static void
+node_new_child_cb (DonnaProvider *provider,
+                   DonnaNode     *node,
+                   DonnaNode     *child)
+{
+    /* TODO */
+}
+
 static gboolean
 add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *parent,
@@ -900,6 +960,7 @@ add_node_to_tree (DonnaTreeView *tree,
     DonnaProvider           *provider;
     DonnaTask               *task;
     gboolean                 added;
+    guint                    i;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -953,6 +1014,7 @@ add_node_to_tree (DonnaTreeView *tree,
     g_hash_table_insert (priv->hashtable, node, list);
     /* check the list in case we have another tree node for that node, in which
      * case we might get the has_children info from there */
+    added = FALSE;
     for (l = list; l; l = l->next)
     {
         GtkTreeIter *i = l->data;
@@ -994,12 +1056,46 @@ add_node_to_tree (DonnaTreeView *tree,
                         NULL, &iter, 0,
                         DONNA_TREE_COL_NODE,    NULL,
                         -1);
-            return TRUE;
+            added = TRUE;
         }
     }
     /* get provider to get task to know if it has children */
     donna_node_get (node, FALSE, "provider", &provider, NULL);
-    /* TODO if new provider, connect to its signals */
+    for (i = 0; i < priv->providers->len; ++i)
+    {
+        struct provider_signals *ps = priv->providers->pdata[i];
+
+        if (ps->provider == provider)
+        {
+            ps->nb_nodes++;
+            break;
+        }
+    }
+    if (i >= priv->providers->len)
+    {
+        struct provider_signals *ps;
+
+        ps = g_new (struct provider_signals, 1);
+        ps->provider = g_object_ref (provider);
+        ps->nb_nodes = 1;
+        ps->sid_node_updated = g_signal_connect (provider, "node-updated",
+                G_CALLBACK (node_updated_cb), NULL);
+        ps->sid_node_removed = g_signal_connect (provider, "node-removed",
+                G_CALLBACK (node_removed_cb), NULL);
+        ps->sid_node_children = g_signal_connect (provider, "node-children",
+                G_CALLBACK (node_children_cb), NULL);
+        ps->sid_node_new_child = g_signal_connect (provider, "node-new-child",
+                G_CALLBACK (node_new_child_cb), NULL);
+
+        g_ptr_array_add (priv->providers, ps);
+    }
+
+    if (added)
+    {
+        g_object_unref (provider);
+        return TRUE;
+    }
+
     task = donna_provider_has_node_children_task (provider, node,
             /* FIXME type of nodes to show must be a config option */
             DONNA_NODE_CONTAINER);
