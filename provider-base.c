@@ -357,6 +357,14 @@ get_children (DonnaTask *task, struct node_children_data *data)
             data->node,
             data->node_types);
     g_rec_mutex_unlock (&data->provider_base->priv->nodes_mutex);
+
+    if (ret == DONNA_TASK_DONE)
+        /* emit node-children */
+        donna_provider_node_children (DONNA_PROVIDER (data->provider_base),
+                data->node,
+                data->node_types,
+                g_value_get_boxed (donna_task_get_return_value (task)));
+
     free_node_children_data (data);
     return ret;
 }
