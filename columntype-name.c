@@ -4,6 +4,7 @@
 #include "columntype.h"
 #include "columntype-name.h"
 #include "node.h"
+#include "donna.h"
 #include "conf.h"
 #include "sort.h"
 #include "sharedstring.h"
@@ -11,7 +12,7 @@
 
 struct _DonnaColumnTypeNamePrivate
 {
-    DonnaConfig *config;
+    DonnaDonna  *donna;
     GPtrArray   *domains;
 };
 
@@ -94,6 +95,7 @@ ct_name_finalize (GObject *object)
 
     priv = DONNA_COLUMNTYPE_NAME (object)->priv;
     g_ptr_array_free (priv->domains, TRUE);
+    g_object_unref (priv->donna);
 
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_name_parent_class)->finalize (object);
@@ -163,6 +165,7 @@ ct_name_render (DonnaColumnType    *ct,
                         "stock-id", GTK_STOCK_EXECUTE,
                         NULL);
 
+            return NULL; /* not done, so it never gets refreshed */
             if (has_value == DONNA_NODE_VALUE_NEED_REFRESH)
             {
                 GPtrArray *arr;
@@ -248,9 +251,10 @@ get_sort_option (DonnaColumnTypeName *ctname,
                  const gchar         *col_name,
                  const gchar         *opt_name)
 {
-    DonnaConfig *config = ctname->priv->config;
+    DonnaConfig *config;
     gboolean      value;
 
+    config = donna_donna_get_config (ctname->priv->donna);
     if (!donna_config_get_boolean (config, &value,
                 "treeviews/%s/columns/%s/sort_%s",
                 tv_name, col_name, opt_name))
@@ -269,6 +273,7 @@ get_sort_option (DonnaColumnTypeName *ctname,
             }
         }
     }
+    g_object_unref (config);
     return value;
 }
 
@@ -373,15 +378,15 @@ ct_name_node_cmp (DonnaColumnType    *ct,
 }
 
 DonnaColumnType *
-donna_column_type_name_new (DonnaConfig *config)
+donna_column_type_name_new (DonnaDonna *donna)
 {
     DonnaColumnType *ct;
 
-    g_return_val_if_fail (DONNA_IS_CONFIG (config), NULL);
+    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
 
     g_debug ("creatig new ColumnTypeName");
     ct = g_object_new (DONNA_TYPE_COLUMNTYPE_NAME, NULL);
-    DONNA_COLUMNTYPE_NAME (ct)->priv->config = config;
+    DONNA_COLUMNTYPE_NAME (ct)->priv->donna = g_object_ref (donna);
 
     return ct;
 }

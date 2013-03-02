@@ -3,6 +3,7 @@
 #define __DONNA_COLUMNTYPE_NAME_H__
 
 #include "columntype.h"
+#include "donna.h"
 
 G_BEGIN_DECLS
 
@@ -31,7 +32,7 @@ struct _DonnaColumnTypeNameClass
 
 GType                   donna_column_type_name_get_type (void) G_GNUC_CONST;
 
-DonnaColumnType *       donna_column_type_name_new      (DonnaConfig *config);
+DonnaColumnType *       donna_column_type_name_new      (DonnaDonna *donna);
 
 G_END_DECLS
 

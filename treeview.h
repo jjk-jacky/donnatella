@@ -5,6 +5,7 @@
 #include "common.h"
 #include "columntype.h"
 #include "conf.h"
+#include "donna.h"
 
 G_BEGIN_DECLS
 
@@ -13,12 +14,6 @@ enum
 {
     DONNA_TREE_VIEW_ERROR_NOMEM
 } DonnaTreeViewError;
-
-typedef void                (*run_task_fn)          (DonnaTask      *task,
-                                                     gpointer        data);
-typedef DonnaSharedString * (*get_arrangement_fn)   (DonnaNode      *node,
-                                                     gpointer        data);
-typedef DonnaColumnType *   (*get_column_type_fn)   (const gchar    *type);
 
 struct _DonnaTreeView
 {
@@ -32,18 +27,8 @@ struct _DonnaTreeViewClass
     GtkTreeViewClass parent_class;
 };
 
-GtkWidget *     donna_tree_view_new             (DonnaConfig        *config,
-                                                 const gchar        *name,
-                                                 get_column_type_fn  get_ct);
-gboolean        donna_tree_view_set_task_runner (DonnaTreeView      *tree,
-                                                 run_task_fn         task_runner,
-                                                 gpointer            data,
-                                                 GDestroyNotify      destroy);
-gboolean        donna_tree_view_set_arrangement_selector (
-                                                 DonnaTreeView      *tree,
-                                                 get_arrangement_fn  arrgmt_sel,
-                                                 gpointer            data,
-                                                 GDestroyNotify      destroy);
+GtkWidget *     donna_tree_view_new             (DonnaDonna         *donna,
+                                                 const gchar        *name);
 void            donna_tree_view_build_arrangement (
                                                  DonnaTreeView      *tree,
                                                  gboolean            force);
