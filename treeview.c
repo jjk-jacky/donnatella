@@ -680,19 +680,18 @@ free_refresh_node_props_data (struct refresh_node_props_data *data)
     g_free (data);
 }
 
-/* Usually, upon a provider's node-updated signal, we check if the node is
- * visible and the property one that our columns use; If so, we trigger a
- * refresh of that row (i.e. trigger a row-updated on store)
+/* Usually, upon a provider's node-updated signal, we check if the node is in
+ * the tree, and if the property is one that our columns use; If so, we trigger
+ * a refresh of that row (i.e. trigger a row-updated on store)
  * However, there's an exception: a columntype can, on render, give a list of
  * properties to be refreshed. We then store those properties on
  * priv->refresh_node_props as we run a task to refresh them. During that time,
  * those properties (on that node) will *not* trigger a refresh, as they usually
- * would. Instead, it's only when this callback is triggered that, if the node
- * is viisble and *all* properties were refreshed, the refresh will be triggered
- * (on the tree) */
+ * would. Instead, it's only when this callback is triggered that, if *all*
+ * properties were refreshed, the refresh will be triggered (on the tree) */
 static void
-refresh_node_prop_cb (DonnaTask                     *task,
-                      gboolean                       timeout_called,
+refresh_node_prop_cb (DonnaTask                      *task,
+                      gboolean                        timeout_called,
                       struct refresh_node_props_data *data)
 {
     if (donna_task_get_state (task) == DONNA_TASK_DONE)
@@ -700,9 +699,31 @@ refresh_node_prop_cb (DonnaTask                     *task,
         /* no return value means all props were refreshed, i.e. full success */
         if (!donna_task_get_return_value (task))
         {
-            /* TODO trigger the refresh of the node if visible */
+            DonnaTreeViewPrivate *priv = data->tree->priv;
+            GtkTreeModel *model;
+            GSList *list;
+
+            list = g_hash_table_lookup (priv->hashtable, data->node);
+            if (!list)
+            {
+                g_warning ("Treeview '%s': refresh_node_prop_cb for missing node",
+                        priv->name);
+                goto bail;
+            }
+
+            model = GTK_TREE_MODEL (get_store (GTK_TREE_VIEW (data->tree)));
+            for ( ; list; list = list->next)
+            {
+                GtkTreeIter *iter = list->data;
+                GtkTreePath *path;
+
+                path = gtk_tree_model_get_path (model, iter);
+                gtk_tree_model_row_changed (model, path, iter);
+                gtk_tree_path_free (path);
+            }
         }
     }
+bail:
     free_refresh_node_props_data (data);
 }
 
@@ -914,14 +935,69 @@ node_has_children_cb (DonnaTask                 *task,
 static void
 node_updated_cb (DonnaProvider  *provider,
                  DonnaNode      *node,
-                 const gchar    *name)
+                 const gchar    *name,
+                 DonnaTreeView  *tree)
 {
-    /* TODO */
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model;
+    GSList *list, *l;
+    guint i;
+
+    /* do we have this node on tree? */
+    l= g_hash_table_lookup (priv->hashtable, node);
+    if (!l)
+        return;
+
+    /* should that property cause a refresh? */
+    for (i = 0; i < priv->col_props->len; ++i)
+    {
+        struct col_prop *cp;
+
+        cp = &g_array_index (priv->col_props, struct col_prop, i);
+        if (streq (name, donna_shared_string (cp->prop)))
+            break;
+    }
+    if (i >= priv->col_props->len)
+        return;
+
+    /* should we ignore this prop/node combo ? See refresh_node_prop_cb */
+    g_mutex_lock (&priv->refresh_node_props_mutex);
+    for (list = priv->refresh_node_props; list; list = list->next)
+    {
+        struct refresh_node_props_data *data = list->data;
+
+        if (data->node == node)
+        {
+            for (i = 0; i < data->props->len; ++i)
+            {
+                if (streq (name, data->props->pdata[i]))
+                    break;
+            }
+            if (i < data->props->len)
+                break;
+        }
+    }
+    g_mutex_unlock (&priv->refresh_node_props_mutex);
+    if (list)
+        return;
+
+    /* trigger refresh on all rows for that node */
+    model = GTK_TREE_MODEL (get_store (GTK_TREE_VIEW (tree)));
+    for ( ; l; l = l->next)
+    {
+        GtkTreeIter *iter = l->data;
+        GtkTreePath *path;
+
+        path = gtk_tree_model_get_path (model, iter);
+        gtk_tree_model_row_changed (model, path, iter);
+        gtk_tree_path_free (path);
+    }
 }
 
 static void
 node_removed_cb (DonnaProvider  *provider,
-                 DonnaNode      *node)
+                 DonnaNode      *node,
+                 DonnaTreeView  *tree)
 {
     /* TODO */
 }
@@ -930,7 +1006,8 @@ static void
 node_children_cb (DonnaProvider  *provider,
                   DonnaNode      *node,
                   DonnaNodeType   node_types,
-                  GPtrArray      *children)
+                  GPtrArray      *children,
+                  DonnaTreeView  *tree)
 {
     /* TODO */
 }
@@ -938,7 +1015,8 @@ node_children_cb (DonnaProvider  *provider,
 static void
 node_new_child_cb (DonnaProvider *provider,
                    DonnaNode     *node,
-                   DonnaNode     *child)
+                   DonnaNode     *child,
+                   DonnaTreeView *tree)
 {
     /* TODO */
 }
@@ -1079,13 +1157,13 @@ add_node_to_tree (DonnaTreeView *tree,
         ps->provider = g_object_ref (provider);
         ps->nb_nodes = 1;
         ps->sid_node_updated = g_signal_connect (provider, "node-updated",
-                G_CALLBACK (node_updated_cb), NULL);
+                G_CALLBACK (node_updated_cb), tree);
         ps->sid_node_removed = g_signal_connect (provider, "node-removed",
-                G_CALLBACK (node_removed_cb), NULL);
+                G_CALLBACK (node_removed_cb), tree);
         ps->sid_node_children = g_signal_connect (provider, "node-children",
-                G_CALLBACK (node_children_cb), NULL);
+                G_CALLBACK (node_children_cb), tree);
         ps->sid_node_new_child = g_signal_connect (provider, "node-new-child",
-                G_CALLBACK (node_new_child_cb), NULL);
+                G_CALLBACK (node_new_child_cb), tree);
 
         g_ptr_array_add (priv->providers, ps);
     }
