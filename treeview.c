@@ -1133,8 +1133,7 @@ add_node_to_tree (DonnaTreeView *tree,
                     -1);
             if (es == DONNA_TREE_EXPAND_NEVER)
                 /* insert a fake node so the user can ask for expansion */
-                gtk_tree_store_insert_with_values (store,
-                        NULL, &iter, 0,
+                gtk_tree_store_insert_with_values (store, NULL, &iter, 0,
                         DONNA_TREE_COL_NODE,    NULL,
                         -1);
             added = TRUE;
@@ -1862,6 +1861,34 @@ query_tooltip_cb (GtkTreeView   *treev,
     return ret;
 }
 
+static void
+selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model;
+    GtkTreeIter iter;
+
+    if (!is_tree (tree))
+        return;
+
+    if (gtk_tree_selection_get_selected (selection, &model, &iter))
+    {
+        DonnaNode *node;
+
+        gtk_tree_model_get (model, &iter,
+                DONNA_TREE_COL_NODE,    &node,
+                -1);
+        if (priv->location != node)
+        {
+            if (priv->location)
+                g_object_unref (priv->location);
+            priv->location = node;
+        }
+        else
+            g_object_unref (node);
+    }
+}
+
 GtkWidget *
 donna_tree_view_new (DonnaDonna         *donna,
                      const gchar        *name)
@@ -1936,6 +1963,9 @@ donna_tree_view_new (DonnaDonna         *donna,
     sel = gtk_tree_view_get_selection (treev);
     gtk_tree_selection_set_mode (sel, (is_tree (tree))
             ? GTK_SELECTION_BROWSE : GTK_SELECTION_MULTIPLE);
+
+    g_signal_connect (G_OBJECT (sel), "changed",
+            G_CALLBACK (selection_changed_cb), tree);
 
     /* columns */
     donna_tree_view_build_arrangement (tree, FALSE);
