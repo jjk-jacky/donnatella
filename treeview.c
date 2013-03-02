@@ -430,6 +430,7 @@ import_children (struct import_children_data *data)
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
         add_node_to_tree (data->tree, data->iter, node);
+        g_object_unref (node);
     } while (gtk_tree_model_iter_next (data->model, data->child));
 
     /* update expand state */
@@ -1080,6 +1081,8 @@ add_node_to_tree (DonnaTreeView *tree,
                     -1);
             added = TRUE;
         }
+        else
+            g_object_unref (n);
     }
     if (!added)
         gtk_tree_store_insert_with_values (store, &iter, parent, 0,
