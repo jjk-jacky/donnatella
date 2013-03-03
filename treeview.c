@@ -2025,17 +2025,17 @@ static void
 selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model;
-    GtkTreeIter iter;
+    GtkTreeModel *_model;
+    GtkTreeIter   _iter;
 
     if (!is_tree (tree))
         return;
 
-    if (gtk_tree_selection_get_selected (selection, &model, &iter))
+    if (gtk_tree_selection_get_selected (selection, &_model, &_iter))
     {
         DonnaNode *node;
 
-        gtk_tree_model_get (model, &iter,
+        gtk_tree_model_get (_model, &_iter,
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
         if (priv->location != node)
