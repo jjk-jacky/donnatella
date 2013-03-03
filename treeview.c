@@ -1,7 +1,7 @@
 
 #define _GNU_SOURCE             /* strchrnul() in string.h */
 #include <gtk/gtk.h>
-#include <string.h>             /* strchr(), memcmp() */
+#include <string.h>             /* strchr() */
 #include "treeview.h"
 #include "common.h"
 #include "provider.h"
@@ -125,11 +125,13 @@ struct _DonnaTreeViewPrivate
     guint                sync_mode   : 2;
 };
 
-/* we *need* to use this when creating an iter, because we use memcmp() to check
- * if two iters are the same, but models don't set/init the user_data they're
- * not using */
+/* we *need* to use this when creating an iter, because we compare *all* values
+ * to determine if two iters match (and models might not always set all values) */
 #define ITER_INIT           { 0, }
-#define itereq(i1, i2)      (memcmp ((i1), (i2), sizeof (GtkTreeIter)) == 0)
+#define itereq(i1, i2)      \
+    ((i1)->stamp == (i2)->stamp && (i1)->user_data == (i2)->user_data   \
+     && (i1)->user_data2 == (i2)->user_data2      \
+     && (i1)->user_data3 == (i2)->user_data3)
 
 #define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 #define get_filter(treev)   (GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev)))
