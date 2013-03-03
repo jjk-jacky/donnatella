@@ -202,6 +202,7 @@ has_get_children (DonnaProviderBase  *_provider,
     {
         gchar  buf[1024];
         gchar *b;
+        const gchar *loc;
 
         if (donna_task_is_cancelling (task))
         {
@@ -211,9 +212,12 @@ has_get_children (DonnaProviderBase  *_provider,
         }
 
         b = buf;
-        if (g_snprintf (buf, 1024, "%s/%s",
-                    donna_shared_string (location), name) >= 1024)
-            b = g_strdup_printf ("%s/%s", donna_shared_string (location), name);
+        loc = donna_shared_string (location);
+        /* root is "/" so it would get us "//bin" */
+        if (loc[0] == '/' && loc[1] == '\0')
+            ++loc;
+        if (g_snprintf (buf, 1024, "%s/%s", loc, name) >= 1024)
+            b = g_strdup_printf ("%s/%s", loc, name);
 
         match = FALSE;
         if (node_types & DONNA_NODE_CONTAINER && node_types & DONNA_NODE_ITEM)
