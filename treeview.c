@@ -124,6 +124,11 @@ struct _DonnaTreeViewPrivate
     guint                sync_mode   : 2;
 };
 
+/* we *need* to use this when creating an iter, because we use memcmp() to check
+ * if two iters are the same, but models don't set/init the user_data they're
+ * not using */
+#define ITER_INIT           { 0, }
+
 #define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 #define get_filter(treev)   (GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev)))
 #define get_store_from_filter(filter)   \
@@ -313,7 +318,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
     DonnaNode *node;
     DonnaProvider *provider;
     guint i;
-    GtkTreeIter parent;
+    GtkTreeIter parent = ITER_INIT;
 
     store = get_store (GTK_TREE_VIEW (tree));
     model = GTK_TREE_MODEL (store);
@@ -389,7 +394,7 @@ set_children (DonnaTreeView *tree,
 
     if (children->len == 0)
     {
-        GtkTreeIter child;
+        GtkTreeIter child = ITER_INIT;
 
         /* set new expand state */
         gtk_tree_store_set (store, iter,
@@ -417,7 +422,7 @@ set_children (DonnaTreeView *tree,
             for ( ; list; list = list->next)
             {
                 GtkTreeIter *i = list->data;
-                GtkTreeIter  p;
+                GtkTreeIter  p = ITER_INIT;
 
                 /* get the parent */
                 if (gtk_tree_model_iter_parent (model, &p, i)
@@ -585,7 +590,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         /* allow expansion, just update expand state */
         case DONNA_TREE_EXPAND_NEVER_FULL:
             {
-                GtkTreeIter iter;
+                GtkTreeIter iter = ITER_INIT;
 
                 gtk_tree_model_filter_convert_iter_to_child_iter (
                         filter,
@@ -631,7 +636,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                 list = g_hash_table_lookup (priv->hashtable, node);
                 if (list)
                 {
-                    GtkTreeIter iter;
+                    GtkTreeIter iter = ITER_INIT;
 
                     gtk_tree_model_filter_convert_iter_to_child_iter (
                             filter,
@@ -654,7 +659,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                         {
                             DonnaTreeView *tree = DONNA_TREE_VIEW (treev);
                             GtkTreeModel *model = GTK_TREE_MODEL (store);
-                            GtkTreeIter child;
+                            GtkTreeIter child = ITER_INIT;
                             struct import_children_data *data;
 
                             /* let's import the children */
@@ -1129,7 +1134,8 @@ static gboolean
 real_node_children_cb (struct node_children_cb_data *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
-    GSList *list;
+    GtkTreeSelection *sel;
+    GtkTreeIter _iter = ITER_INIT, iter = ITER_INIT;
 
     if (priv->location != data->node)
         goto free;
@@ -1138,10 +1144,15 @@ real_node_children_cb (struct node_children_cb_data *data)
     if (!(data->node_types & DONNA_NODE_CONTAINER))
         goto free;
 
-    list = g_hash_table_lookup (priv->hashtable, data->node);
-    for ( ; list; list = list->next)
-        set_children (data->tree, list->data, data->children,
-                FALSE /* don't expand node */);
+    /* now we need to get the actual current row/iter */
+    sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (data->tree));
+    if (!gtk_tree_selection_get_selected (sel, NULL, &_iter))
+        goto free;
+
+    gtk_tree_model_filter_convert_iter_to_child_iter (
+            get_filter (GTK_TREE_VIEW (data->tree)),
+            &iter, &_iter);
+    set_children (data->tree, &iter, data->children, FALSE /* don't expand */);
 
 free:
     g_object_unref (data->node);
@@ -1193,7 +1204,7 @@ add_node_to_tree (DonnaTreeView *tree,
     GtkTreeView             *treev;
     GtkTreeStore            *store;
     GtkTreeModel            *model;
-    GtkTreeIter              iter;
+    GtkTreeIter              iter = ITER_INIT;
     GSList                  *list;
     GSList                  *l;
     DonnaProvider           *provider;
@@ -1988,7 +1999,7 @@ query_tooltip_cb (GtkTreeView   *treev,
     DonnaTreeViewPrivate *priv;
     GtkTreeViewColumn *column;
     GtkTreeModel *_model;
-    GtkTreeIter _iter;
+    GtkTreeIter _iter = ITER_INIT;
     gboolean ret = FALSE;
 
     if (gtk_tree_view_get_tooltip_context (treev, &x, &y, keyboard_mode,
@@ -2026,7 +2037,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *_model;
-    GtkTreeIter   _iter;
+    GtkTreeIter   _iter = ITER_INIT;
 
     if (!is_tree (tree))
         return;
