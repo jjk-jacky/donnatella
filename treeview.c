@@ -119,6 +119,7 @@ struct _DonnaTreeViewPrivate
 
     /* "cached" options */
     guint                mode        : 1;
+    guint                node_types  : 3;
     guint                show_hidden : 1;
     /* mode Tree */
     guint                is_minitree : 1;
@@ -200,10 +201,14 @@ free_col_prop (struct col_prop *cp)
 static void
 free_provider_signals (struct provider_signals *ps)
 {
-    g_signal_handler_disconnect (ps->provider, ps->sid_node_updated);
-    g_signal_handler_disconnect (ps->provider, ps->sid_node_removed);
-    g_signal_handler_disconnect (ps->provider, ps->sid_node_children);
-    g_signal_handler_disconnect (ps->provider, ps->sid_node_new_child);
+    if (ps->sid_node_updated)
+        g_signal_handler_disconnect (ps->provider, ps->sid_node_updated);
+    if (ps->sid_node_removed)
+        g_signal_handler_disconnect (ps->provider, ps->sid_node_removed);
+    if (ps->sid_node_children)
+        g_signal_handler_disconnect (ps->provider, ps->sid_node_children);
+    if (ps->sid_node_new_child)
+        g_signal_handler_disconnect (ps->provider, ps->sid_node_new_child);
     g_object_unref (ps->provider);
     g_free (ps);
 }
@@ -234,7 +239,7 @@ load_config (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv;
     DonnaConfig *config;
-    gint val;
+    guint val;
 
     /* we load/cache some options, because usually we can't just get those when
      * needed, but they need to trigger some refresh or something. So we need to
@@ -265,6 +270,20 @@ load_config (DonnaTreeView *tree)
         val = priv->show_hidden = TRUE;
         donna_config_set_boolean (config, (gboolean) val,
                 "treeviews/%s/show_hidden", priv->name);
+    }
+
+    if (donna_config_get_uint (config, &val,
+                "treeviews/%s/node_types", priv->name))
+        priv->node_types = val;
+    else
+    {
+        /* set default */
+        val = DONNA_NODE_CONTAINER;
+        if (is_tree (tree))
+            val |= DONNA_NODE_ITEM;
+        priv->node_types = val;
+        donna_config_set_uint (config, val,
+                "treeviews/%s/node_types", priv->name);
     }
 
     if (is_tree (tree))
@@ -682,7 +701,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
 
                             /* because the tree's model is filter, and with
                              * filter iters are not persistent, adding nodes
-                             * would invalidate the current iter, thus
+                             * would invalidate the current _iter, thus
                              * generating a warning in the post-signal of the
                              * test-expand-row in GtkTreeView.
                              * So we need to have that code run later */
@@ -704,8 +723,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                 }
                 donna_node_get (node, FALSE, "provider", &provider, NULL);
                 task = donna_provider_get_node_children_task (provider, node,
-                        /* FIXME type of nodes to show must be a config option */
-                        DONNA_NODE_CONTAINER);
+                        priv->node_types);
 
                 data = g_slice_new0 (struct node_children_data);
                 data->treev = treev;
@@ -1146,8 +1164,7 @@ real_node_children_cb (struct node_children_cb_data *data)
     if (priv->location != data->node)
         goto free;
 
-    /* FIXME node_types we show must be an option */
-    if (!(data->node_types & DONNA_NODE_CONTAINER))
+    if (!(data->node_types & priv->node_types))
         goto free;
 
     set_children (data->tree, &priv->location_iter, data->children, FALSE);
@@ -1206,6 +1223,7 @@ add_node_to_tree (DonnaTreeView *tree,
     GSList                  *list;
     GSList                  *l;
     DonnaProvider           *provider;
+    DonnaNodeType            node_type;
     DonnaTask               *task;
     gboolean                 added;
     guint                    i;
@@ -1309,7 +1327,10 @@ add_node_to_tree (DonnaTreeView *tree,
         }
     }
     /* get provider to get task to know if it has children */
-    donna_node_get (node, FALSE, "provider", &provider, NULL);
+    donna_node_get (node, FALSE,
+            "provider",  &provider,
+            "node-type", &node_type,
+            NULL);
     for (i = 0; i < priv->providers->len; ++i)
     {
         struct provider_signals *ps = priv->providers->pdata[i];
@@ -1324,30 +1345,35 @@ add_node_to_tree (DonnaTreeView *tree,
     {
         struct provider_signals *ps;
 
-        ps = g_new (struct provider_signals, 1);
+        ps = g_new0 (struct provider_signals, 1);
         ps->provider = g_object_ref (provider);
         ps->nb_nodes = 1;
         ps->sid_node_updated = g_signal_connect (provider, "node-updated",
                 G_CALLBACK (node_updated_cb), tree);
         ps->sid_node_removed = g_signal_connect (provider, "node-removed",
                 G_CALLBACK (node_removed_cb), tree);
-        ps->sid_node_children = g_signal_connect (provider, "node-children",
-                G_CALLBACK (node_children_cb), tree);
-        ps->sid_node_new_child = g_signal_connect (provider, "node-new-child",
-                G_CALLBACK (node_new_child_cb), tree);
+        if (node_type != DONNA_NODE_ITEM)
+        {
+            ps->sid_node_children = g_signal_connect (provider, "node-children",
+                    G_CALLBACK (node_children_cb), tree);
+            ps->sid_node_new_child = g_signal_connect (provider, "node-new-child",
+                    G_CALLBACK (node_new_child_cb), tree);
+        }
 
         g_ptr_array_add (priv->providers, ps);
     }
 
-    if (added)
+    if (added || node_type == DONNA_NODE_ITEM)
     {
+        if (node_type == DONNA_NODE_ITEM)
+            gtk_tree_store_set (store, &iter,
+                    DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
+                    -1);
         g_object_unref (provider);
         return TRUE;
     }
 
-    task = donna_provider_has_node_children_task (provider, node,
-            /* FIXME type of nodes to show must be a config option */
-            DONNA_NODE_CONTAINER);
+    task = donna_provider_has_node_children_task (provider, node, priv->node_types);
     if (task)
     {
         struct node_children_data *data;
