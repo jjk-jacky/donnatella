@@ -104,6 +104,7 @@ struct _DonnaTreeViewPrivate
 
     /* List: current/future location */
     DonnaNode           *location;
+    GtkTreeIter          location_iter;
     DonnaNode           *future_location;
 
     /* hashtable of nodes & their iters on TV */
@@ -1134,8 +1135,6 @@ static gboolean
 real_node_children_cb (struct node_children_cb_data *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
-    GtkTreeSelection *sel;
-    GtkTreeIter _iter = ITER_INIT, iter = ITER_INIT;
 
     if (priv->location != data->node)
         goto free;
@@ -1144,15 +1143,7 @@ real_node_children_cb (struct node_children_cb_data *data)
     if (!(data->node_types & DONNA_NODE_CONTAINER))
         goto free;
 
-    /* now we need to get the actual current row/iter */
-    sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (data->tree));
-    if (!gtk_tree_selection_get_selected (sel, NULL, &_iter))
-        goto free;
-
-    gtk_tree_model_filter_convert_iter_to_child_iter (
-            get_filter (GTK_TREE_VIEW (data->tree)),
-            &iter, &_iter);
-    set_children (data->tree, &iter, data->children, FALSE /* don't expand */);
+    set_children (data->tree, &priv->location_iter, data->children, FALSE);
 
 free:
     g_object_unref (data->node);
@@ -2036,17 +2027,28 @@ static void
 selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *_model;
     GtkTreeIter   _iter = ITER_INIT;
 
     if (!is_tree (tree))
         return;
 
-    if (gtk_tree_selection_get_selected (selection, &_model, &_iter))
+    if (gtk_tree_selection_get_selected (selection, NULL, &_iter))
     {
+        GtkTreeModelFilter *filter;
+        GtkTreeModel *model;
+        GtkTreeIter iter = ITER_INIT;
         DonnaNode *node;
 
-        gtk_tree_model_get (_model, &_iter,
+        filter = get_filter (GTK_TREE_VIEW (tree));
+        model = GTK_TREE_MODEL (get_store_from_filter (filter));
+        gtk_tree_model_filter_convert_iter_to_child_iter (filter, &iter, &_iter);
+
+        if (memcmp (&priv->location_iter, &iter, sizeof (GtkTreeIter)) == 0)
+            return;
+
+        priv->location_iter = iter;
+
+        gtk_tree_model_get (model, &iter,
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
         if (priv->location != node)
