@@ -129,6 +129,7 @@ struct _DonnaTreeViewPrivate
  * if two iters are the same, but models don't set/init the user_data they're
  * not using */
 #define ITER_INIT           { 0, }
+#define itereq(i1, i2)      (memcmp ((i1), (i2), sizeof (GtkTreeIter)) == 0)
 
 #define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 #define get_filter(treev)   (GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev)))
@@ -427,7 +428,7 @@ set_children (DonnaTreeView *tree,
 
                 /* get the parent */
                 if (gtk_tree_model_iter_parent (model, &p, i)
-                        && memcmp (&p, iter, sizeof (GtkTreeIter)) == 0)
+                        && itereq (&p, iter))
                 {
                     exists = TRUE;
                     break;
@@ -649,7 +650,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                         enum tree_expand es;
 
                         /* skip ourself */
-                        if (memcmp (&iter, i, sizeof (GtkTreeIter)) == 0)
+                        if (itereq (&iter, i))
                             continue;
 
                         gtk_tree_model_get (GTK_TREE_MODEL (store), i,
@@ -1263,7 +1264,7 @@ add_node_to_tree (DonnaTreeView *tree,
         GtkTreeIter *i = l->data;
         enum tree_expand es;
 
-        if (memcmp (&iter, i, sizeof (GtkTreeIter)) == 0)
+        if (itereq (&iter, i))
             continue;
 
         gtk_tree_model_get (model, i,
@@ -2043,7 +2044,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         model = GTK_TREE_MODEL (get_store_from_filter (filter));
         gtk_tree_model_filter_convert_iter_to_child_iter (filter, &iter, &_iter);
 
-        if (memcmp (&priv->location_iter, &iter, sizeof (GtkTreeIter)) == 0)
+        if (itereq (&priv->location_iter, &iter))
             return;
 
         priv->location_iter = iter;
