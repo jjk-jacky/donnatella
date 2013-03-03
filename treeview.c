@@ -311,7 +311,10 @@ node_get_children_timeout (DonnaTask *task, struct node_children_data *data)
     gtk_tree_path_free (path);
 }
 
-static void
+/* similar to gtk_tree_store_remove() this will set iter to next row at that
+ * level, or invalid it if it pointer to the last one.
+ * Returns TRUE if iter is still valid, else FALSE */
+static gboolean
 remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -321,6 +324,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
     DonnaProvider *provider;
     guint i;
     GtkTreeIter parent = ITER_INIT;
+    gboolean ret;
 
     store = get_store (GTK_TREE_VIEW (tree));
     model = GTK_TREE_MODEL (store);
@@ -356,7 +360,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         /* get the parent, in case we're removing its last child */
         gtk_tree_model_iter_parent (model, &parent, iter);
     /* now we can remove the row */
-    gtk_tree_store_remove (store, iter);
+    ret = gtk_tree_store_remove (store, iter);
     /* we have a parent, it has no more children, update expand state */
     if (is_tree (tree) && parent.stamp != 0
             && !gtk_tree_model_iter_has_child (model, &parent))
@@ -380,6 +384,8 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
                 DONNA_TREE_COL_EXPAND_STATE,    es,
                 -1);
     }
+
+    return ret;
 }
 
 static void
@@ -403,10 +409,8 @@ set_children (DonnaTreeView *tree,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
                 -1);
         if (gtk_tree_model_iter_children (model, &child, iter))
-            do
-            {
-                remove_row_from_tree (tree, &child);
-            } while (gtk_tree_model_iter_next (model, &child));
+            while (remove_row_from_tree (tree, &child))
+                ;
     }
     else
     {
@@ -2039,14 +2043,40 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         GtkTreeModel *model;
         GtkTreeIter iter = ITER_INIT;
         DonnaNode *node;
+        enum tree_expand es;
 
         filter = get_filter (GTK_TREE_VIEW (tree));
         model = GTK_TREE_MODEL (get_store_from_filter (filter));
         gtk_tree_model_filter_convert_iter_to_child_iter (filter, &iter, &_iter);
 
-        if (itereq (&priv->location_iter, &iter))
-            return;
+        if (priv->location)
+        {
+            if (itereq (&priv->location_iter, &iter))
+                return;
 
+            gtk_tree_model_get (model, &priv->location_iter,
+                    DONNA_TREE_COL_EXPAND_STATE,    &es,
+                    -1);
+            /* if we had cached children (NEVER_FULL) we go back to NEVER */
+            if (es == DONNA_TREE_EXPAND_NEVER_FULL)
+            {
+                GtkTreeIter child = ITER_INIT;
+
+                if (gtk_tree_model_iter_children (model, &child, &priv->location_iter))
+                    while (remove_row_from_tree (tree, &child))
+                        ;
+
+                /* add a fake row */
+                gtk_tree_store_insert_with_values (GTK_TREE_STORE (model),
+                        NULL, &priv->location_iter, 0,
+                        DONNA_TREE_COL_NODE,    NULL,
+                        -1);
+
+                gtk_tree_store_set (GTK_TREE_STORE (model), &priv->location_iter,
+                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NEVER,
+                        -1);
+            }
+        }
         priv->location_iter = iter;
 
         gtk_tree_model_get (model, &iter,
