@@ -1140,12 +1140,56 @@ node_updated_cb (DonnaProvider  *provider,
     }
 }
 
+struct node_removed_data
+{
+    DonnaTreeView   *tree;
+    DonnaNode       *node;
+};
+
+static gboolean
+real_node_removed_cb (struct node_removed_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    GSList *list;
+    GSList *next;
+
+    list = g_hash_table_lookup (priv->hashtable, data->node);
+    if (!list)
+        goto free;
+
+    for ( ; list; list = next)
+    {
+        GtkTreeIter *iter = list->data;
+
+        next = list->next;
+        list = g_slist_remove (list, iter);
+        remove_row_from_tree (data->tree, iter);
+        gtk_tree_iter_free (iter);
+    }
+    g_hash_table_remove (priv->hashtable, data->node);
+
+free:
+    g_object_unref (data->node);
+    g_free (data);
+    /* don't repeat */
+    return FALSE;
+}
+
 static void
 node_removed_cb (DonnaProvider  *provider,
                  DonnaNode      *node,
                  DonnaTreeView  *tree)
 {
-    /* TODO */
+    struct node_removed_data *data;
+
+    if (!is_tree (tree))
+        return;
+
+    /* we might not be in the main thread, but we need to be */
+    data = g_new (struct node_removed_data, 1);
+    data->tree       = tree;
+    data->node       = g_object_ref (node);
+    g_main_context_invoke (NULL, (GSourceFunc) real_node_removed_cb, data);
 }
 
 struct node_children_cb_data
