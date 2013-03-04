@@ -511,35 +511,12 @@ set_children (DonnaTreeView *tree,
 
         for (i = 0; i < children->len; ++i)
         {
-            DonnaNode *node = children->pdata[i];
-            GSList *list;
-            gboolean exists;
-
-            /* is there already a row for this node at that level? */
-            exists = FALSE;
-            list = g_hash_table_lookup (tree->priv->hashtable, node);
-            for ( ; list; list = list->next)
-            {
-                GtkTreeIter *i = list->data;
-                GtkTreeIter  p = ITER_INIT;
-
-                /* get the parent and compare with our iter to add into */
-                if (gtk_tree_model_iter_parent (model, &p, i)
-                        && itereq (&p, iter))
-                {
-                    exists = TRUE;
-                    break;
-                }
-            }
-            if (exists)
-                continue;
-
-            if (!add_node_to_tree (tree, iter, node))
+            if (!add_node_to_tree (tree, iter, children->pdata[i]))
             {
                 const gchar *domain;
                 DonnaSharedString *location;
 
-                donna_node_get (node, FALSE,
+                donna_node_get (children->pdata[i], FALSE,
                         "domain",   &domain,
                         "location", &location,
                         NULL);
@@ -550,6 +527,7 @@ set_children (DonnaTreeView *tree,
                 donna_shared_string_unref (location);
             }
         }
+        /* FIXME remove old rows not in children anymore */
 
         /* set new expand state */
         gtk_tree_store_set (store, iter,
@@ -1419,6 +1397,23 @@ add_node_to_tree (DonnaTreeView *tree,
     treev = GTK_TREE_VIEW (tree);
     store = get_store (treev);
     model = GTK_TREE_MODEL (store);
+
+    /* is there already a row for this node at that level? */
+    if (parent)
+    {
+        list = g_hash_table_lookup (priv->hashtable, node);
+        for ( ; list; list = list->next)
+        {
+            GtkTreeIter *i = list->data;
+            GtkTreeIter  p = ITER_INIT;
+
+            /* get the parent and compare with our iter to add into */
+            if (gtk_tree_model_iter_parent (model, &p, i)
+                    && itereq (&p, parent))
+                /* already exists under the same parent, nothing to do */
+                return TRUE;
+        }
+    }
 
     donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
     g_debug ("treeview '%s': adding new node %p for '%s:%s'",
