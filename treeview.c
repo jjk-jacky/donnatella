@@ -110,6 +110,16 @@ struct _DonnaTreeViewPrivate
     /* hashtable of nodes & their iters on TV */
     GHashTable          *hashtable;
 
+    /* list of iters to be used by callbacks. Because we use iters in cb's data,
+     * we need to ensure they stay valid. We only use iters from the store, and
+     * they are persistent. However, the row could be removed, thus the iter
+     * wouldn't be valid anymore.
+     * To handle this, whenver an iter is used in a cb's data, a pointer is
+     * added in this list. When a row is removed, any iter pointing to that row
+     * is removed, that way in the cb we can check if the iter is still there or
+     * not. If not, it means it's invalid/the row was removed. */
+    GSList              *watched_iters;
+
     /* providers we're connected to */
     GPtrArray           *providers;
 
@@ -133,6 +143,11 @@ struct _DonnaTreeViewPrivate
     ((i1)->stamp == (i2)->stamp && (i1)->user_data == (i2)->user_data   \
      && (i1)->user_data2 == (i2)->user_data2      \
      && (i1)->user_data3 == (i2)->user_data3)
+
+#define watch_iter(tree, iter)  \
+    tree->priv->watched_iters = g_slist_append (tree->priv->watched_iters, iter)
+#define remove_watch_iter(tree, iter)   \
+    tree->priv->watched_iters = g_slist_remove (tree->priv->watched_iters, iter)
 
 #define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 #define get_filter(treev)   (GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (treev)))
@@ -306,17 +321,48 @@ load_config (DonnaTreeView *tree)
     g_object_unref (config);
 }
 
+static gboolean
+is_watched_iter_valid (DonnaTreeView *tree, GtkTreeIter *iter, gboolean remove)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GSList *l, *prev = NULL;
+
+    l = priv->watched_iters;
+    while (l)
+    {
+        if (l->data == iter)
+        {
+            if (remove)
+            {
+                if (prev)
+                    prev->next = l->next;
+                else
+                    priv->watched_iters = l->next;
+
+                g_slist_free_1 (l);
+            }
+            return TRUE;
+        }
+        else
+        {
+            prev = l;
+            l = prev->next;
+        }
+    }
+    return FALSE;
+}
+
 struct node_children_data
 {
     GtkTreeView  *treev;
     GtkTreeStore *store;
     GtkTreeIter   iter;
-    GtkTreeIter   iter_fake;
 };
 
 static void
 free_node_children_data (struct node_children_data *data)
 {
+    remove_watch_iter (DONNA_TREE_VIEW (data->treev), &data->iter);
     g_slice_free (struct node_children_data, data);
 }
 
@@ -327,6 +373,8 @@ node_get_children_timeout (DonnaTask *task, struct node_children_data *data)
 
     /* we're slow to get the children, let's just show the fake node ("please
      * wait...") */
+    if (!is_watched_iter_valid (DONNA_TREE_VIEW (data->treev), &data->iter, FALSE))
+        return;
     path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->store), &data->iter);
     gtk_tree_view_expand_row (data->treev, path, FALSE);
     gtk_tree_path_free (path);
@@ -344,6 +392,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
     DonnaNode *node;
     DonnaProvider *provider;
     guint i;
+    GSList *l, *prev = NULL;
     GtkTreeIter parent = ITER_INIT;
     gboolean ret;
 
@@ -375,6 +424,29 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         }
         g_object_unref (provider);
         g_object_unref (node);
+    }
+
+    /* remove all watched_iters to this row */
+    l = priv->watched_iters;
+    while (l)
+    {
+        if (itereq (iter, (GtkTreeIter *) l->data))
+        {
+            GSList *next = l->next;
+
+            if (prev)
+                prev->next = next;
+            else
+                priv->watched_iters = next;
+
+            g_slist_free_1 (l);
+            l = next;
+        }
+        else
+        {
+            prev = l;
+            l = l->next;
+        }
     }
 
     if (is_tree (tree))
@@ -506,6 +578,10 @@ node_get_children_callback (DonnaTask                   *task,
     DonnaTaskState   state;
 
     tree = DONNA_TREE_VIEW (data->treev);
+
+    if (!is_watched_iter_valid (tree, &data->iter, TRUE))
+        return;
+
     state = donna_task_get_state (task);
     if (state != DONNA_TASK_DONE)
     {
@@ -568,6 +644,14 @@ import_children (struct import_children_data *data)
 {
     GtkTreePath *path;
 
+    if (!is_watched_iter_valid (data->tree, data->iter, TRUE))
+    {
+        remove_watch_iter (data->tree, data->child);
+        goto free;
+    }
+    if (!is_watched_iter_valid (data->tree, data->child, TRUE))
+        goto free;
+
     do
     {
         DonnaNode *node;
@@ -589,7 +673,7 @@ import_children (struct import_children_data *data)
     gtk_tree_view_expand_row (GTK_TREE_VIEW (data->tree), path, FALSE);
     gtk_tree_path_free (path);
 
-    /* free */
+free:
     gtk_tree_iter_free (data->iter);
     gtk_tree_iter_free (data->child);
     g_free (data);
@@ -710,6 +794,8 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                             data->model = model;
                             data->iter  = gtk_tree_iter_copy (&iter);
                             data->child = gtk_tree_iter_copy (&child);
+                            watch_iter (tree, data->iter);
+                            watch_iter (tree, data->child);
                             g_idle_add ((GSourceFunc) import_children, data);
 
                             gtk_tree_store_set (store, &iter,
@@ -731,9 +817,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                 gtk_tree_model_filter_convert_iter_to_child_iter (filter,
                         &data->iter,
                         _iter);
-                /* iter_fake is the first (and only) child of iter */
-                gtk_tree_model_iter_children (GTK_TREE_MODEL (store),
-                        &data->iter_fake, &data->iter);
+                watch_iter (DONNA_TREE_VIEW (treev), &data->iter);
 
                 /* FIXME: timeout_delay must be an option */
                 donna_task_set_timeout (task, 800,
@@ -1041,40 +1125,96 @@ node_has_children_cb (DonnaTask                 *task,
                       gboolean                   timeout_called,
                       struct node_children_data *data)
 {
-    DonnaNode *node = (DonnaNode *) data;
+    DonnaTreeView *tree = DONNA_TREE_VIEW (data->treev);
+    GtkTreeModel *model = GTK_TREE_MODEL (data->store);
     DonnaTaskState state;
     const GValue *value;
     gboolean has_children;
     enum tree_expand es;
 
+    if (!is_watched_iter_valid (tree, &data->iter, TRUE))
+        goto free;
+
     state = donna_task_get_state (task);
     if (state != DONNA_TASK_DONE)
-    {
         /* we don't know if the node has children, so we'll keep the fake node
          * in, with expand state to UNKNOWN as it is. That way the user can ask
          * for expansion, which could simply have the expander removed if it
          * wasn't needed after all... */
-        free_node_children_data (data);
-        return;
-    }
+        goto free;
 
     value = donna_task_get_return_value (task);
     has_children = g_value_get_boolean (value);
 
-    if (!has_children)
-        /* remove the fake node */
-        gtk_tree_store_remove (data->store, &data->iter_fake);
-    /* update expand state.. */
-    gtk_tree_model_get (GTK_TREE_MODEL (data->store), &data->iter,
+    gtk_tree_model_get (model, &data->iter,
             DONNA_TREE_COL_EXPAND_STATE,    &es,
             -1);
-    /* ..unless there's a get_children in progress */
-    if (es != DONNA_TREE_EXPAND_WIP)
-        gtk_tree_store_set (data->store, &data->iter,
-                DONNA_TREE_COL_EXPAND_STATE,
-                (has_children) ? DONNA_TREE_EXPAND_NEVER : DONNA_TREE_EXPAND_NONE,
-                -1);
+    switch (es)
+    {
+        case DONNA_TREE_EXPAND_UNKNOWN:
+        case DONNA_TREE_EXPAND_NEVER:
+        case DONNA_TREE_EXPAND_WIP:
+            if (!has_children)
+            {
+                GtkTreeIter iter;
 
+                /* remove fake node */
+                if (gtk_tree_model_iter_children (model, &iter, &data->iter))
+                    gtk_tree_store_remove (data->store, &iter);
+                /* update expand state */
+                gtk_tree_store_set (data->store, &data->iter,
+                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
+                        -1);
+            }
+            else
+            {
+                /* fake node already there, we just update the expand state,
+                 * unless we're WIP then we'll let get_children set it right
+                 * once the children have been added */
+                if (es == DONNA_TREE_EXPAND_UNKNOWN)
+                    gtk_tree_store_set (data->store, &data->iter,
+                            DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NEVER,
+                            -1);
+            }
+            break;
+
+        case DONNA_TREE_EXPAND_NEVER_FULL:
+        case DONNA_TREE_EXPAND_PARTIAL:
+        case DONNA_TREE_EXPAND_FULL:
+            if (!has_children)
+            {
+                GtkTreeIter iter;
+
+                /* remove all children */
+                if (gtk_tree_model_iter_children (model, &iter, &data->iter))
+                    while (remove_row_from_tree (tree, &iter))
+                        ;
+                /* update expand state */
+                gtk_tree_store_set (data->store, &data->iter,
+                        DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NONE,
+                        -1);
+            }
+            /* else: children and expand state obviously already good */
+            break;
+
+        case DONNA_TREE_EXPAND_NONE:
+            if (has_children)
+            {
+                /* add fake node */
+                gtk_tree_store_insert_with_values (data->store,
+                        NULL, &data->iter, 0,
+                        DONNA_TREE_COL_NODE,    NULL,
+                        -1);
+                /* update expand state */
+                gtk_tree_store_set (data->store, &data->iter,
+                        DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NEVER,
+                        -1);
+            }
+            /* else: already no fake node */
+            break;
+    }
+
+free:
     free_node_children_data (data);
 }
 
@@ -1427,11 +1567,12 @@ add_node_to_tree (DonnaTreeView *tree,
         data->treev = treev;
         data->store = store;
         data->iter  = iter;
+        watch_iter (tree, &data->iter);
 
         /* insert a fake node so the user can ask for expansion right away (the
          * node will disappear if needed asap) */
         gtk_tree_store_insert_with_values (data->store,
-                &data->iter_fake, &data->iter, 0,
+                NULL, &data->iter, 0,
                 DONNA_TREE_COL_NODE,    NULL,
                 -1);
 
