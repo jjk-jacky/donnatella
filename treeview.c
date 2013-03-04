@@ -1644,8 +1644,6 @@ add_node_to_tree (DonnaTreeView *tree,
         g_warning ("Unable to create a task to determine if the node '%s:%s' has children",
                 domain, donna_shared_string (location));
         donna_shared_string_unref (location);
-        g_object_unref (provider);
-        return FALSE;
     }
 
     g_object_unref (provider);
