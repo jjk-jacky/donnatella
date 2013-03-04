@@ -157,7 +157,8 @@ struct _DonnaTreeViewPrivate
 
 static gboolean add_node_to_tree (DonnaTreeView *tree,
                                   GtkTreeIter   *parent,
-                                  DonnaNode     *node);
+                                  DonnaNode     *node,
+                                  GtkTreeIter   *row);
 
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
@@ -490,6 +491,9 @@ set_children (DonnaTreeView *tree,
     GtkTreeStore *store;
     GtkTreeModel *model;
 
+    if (!is_tree (tree))
+        return;
+
     store = get_store (GTK_TREE_VIEW (tree));
     model = GTK_TREE_MODEL (store);
 
@@ -507,11 +511,32 @@ set_children (DonnaTreeView *tree,
     }
     else
     {
+        GSList *list = NULL;
+        enum tree_expand es;
         guint i;
+
+        gtk_tree_model_get (model, iter,
+                DONNA_TREE_COL_EXPAND_STATE,    &es,
+                -1);
+        if (es == DONNA_TREE_EXPAND_FULL || es == DONNA_TREE_EXPAND_PARTIAL
+                || es == DONNA_TREE_EXPAND_NEVER_FULL)
+        {
+            GtkTreeIter i = ITER_INIT;
+
+            gtk_tree_model_iter_children (model, &i, iter);
+            do
+            {
+                list = g_slist_append (list, gtk_tree_iter_copy (&i));
+            } while (gtk_tree_model_iter_next (model, &i));
+        }
+        else
+            es = DONNA_TREE_EXPAND_UNKNOWN;
 
         for (i = 0; i < children->len; ++i)
         {
-            if (!add_node_to_tree (tree, iter, children->pdata[i]))
+            GtkTreeIter row = ITER_INIT;
+
+            if (!add_node_to_tree (tree, iter, children->pdata[i], &row))
             {
                 const gchar *domain;
                 DonnaSharedString *location;
@@ -526,8 +551,41 @@ set_children (DonnaTreeView *tree,
                         donna_shared_string (location));
                 donna_shared_string_unref (location);
             }
+            else if (es)
+            {
+                GSList *l, *prev = NULL;
+
+                /* remove the iter for that row */
+                l = list;
+                while (l)
+                {
+                    if (itereq ((GtkTreeIter *) l->data, &row))
+                    {
+                        if (prev)
+                            prev->next = l->next;
+                        else
+                            list = l->next;
+
+                        gtk_tree_iter_free (l->data);
+                        g_slist_free_1 (l);
+                        break;
+                    }
+                    prev = l;
+                    l = prev->next;
+                }
+            }
         }
-        /* FIXME remove old rows not in children anymore */
+        /* remove rows not in children */
+        while (list)
+        {
+            GSList *l;
+
+            l = list;
+            remove_row_from_tree (tree, l->data);
+            gtk_tree_iter_free (l->data);
+            list = l->next;
+            g_slist_free_1 (l);
+        }
 
         /* set new expand state */
         gtk_tree_store_set (store, iter,
@@ -637,7 +695,7 @@ import_children (struct import_children_data *data)
         gtk_tree_model_get (data->model, data->child,
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
-        add_node_to_tree (data->tree, data->iter, node);
+        add_node_to_tree (data->tree, data->iter, node, NULL);
         g_object_unref (node);
     } while (gtk_tree_model_iter_next (data->model, data->child));
 
@@ -1208,7 +1266,7 @@ node_updated_cb (DonnaProvider  *provider,
     guint i;
 
     /* do we have this node on tree? */
-    l= g_hash_table_lookup (priv->hashtable, node);
+    l = g_hash_table_lookup (priv->hashtable, node);
     if (!l)
         return;
 
@@ -1377,7 +1435,7 @@ real_new_child_cb (struct new_child_data *data)
     if (!is_tree (data->tree))
     {
         if (priv->location == data->node)
-            add_node_to_tree (data->tree, NULL, data->child);
+            add_node_to_tree (data->tree, NULL, data->child, NULL);
         goto free;
     }
 
@@ -1386,7 +1444,7 @@ real_new_child_cb (struct new_child_data *data)
         goto free;
 
     for ( ; list; list = list->next)
-        add_node_to_tree (data->tree, list->data, data->child);
+        add_node_to_tree (data->tree, list->data, data->child, NULL);
 
 free:
     g_object_unref (data->node);
@@ -1427,7 +1485,8 @@ node_new_child_cb (DonnaProvider *provider,
 static gboolean
 add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *parent,
-                  DonnaNode     *node)
+                  DonnaNode     *node,
+                  GtkTreeIter   *iter_row)
 {
     const gchar             *domain;
     DonnaSharedString       *ss;
@@ -1465,7 +1524,11 @@ add_node_to_tree (DonnaTreeView *tree,
             if (gtk_tree_model_iter_parent (model, &p, i)
                     && itereq (&p, parent))
                 /* already exists under the same parent, nothing to do */
+            {
+                if (iter_row)
+                    *iter_row = *i;
                 return TRUE;
+            }
         }
     }
 
@@ -1509,6 +1572,8 @@ add_node_to_tree (DonnaTreeView *tree,
                 DONNA_TREE_COL_NODE,            node,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                 -1);
+    if (iter_row)
+        *iter_row = iter;
     /* add it to our hashtable */
     list = g_hash_table_lookup (priv->hashtable, node);
     list = g_slist_append (list, gtk_tree_iter_copy (&iter));
@@ -1655,7 +1720,7 @@ donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node)
 {
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (is_tree (tree), FALSE);
-    return add_node_to_tree (tree, NULL, node);
+    return add_node_to_tree (tree, NULL, node, NULL);
 }
 
 static inline gint
