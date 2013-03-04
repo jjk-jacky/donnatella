@@ -451,7 +451,7 @@ set_children (DonnaTreeView *tree,
                 GtkTreeIter *i = list->data;
                 GtkTreeIter  p = ITER_INIT;
 
-                /* get the parent */
+                /* get the parent and compare with our iter to add into */
                 if (gtk_tree_model_iter_parent (model, &p, i)
                         && itereq (&p, iter))
                 {
@@ -1368,6 +1368,7 @@ add_node_to_tree (DonnaTreeView *tree,
                         DONNA_TREE_COL_NODE,    NULL,
                         -1);
             added = TRUE;
+            break;
         }
     }
     /* get provider to get task to know if it has children */
