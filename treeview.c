@@ -1361,13 +1361,67 @@ node_children_cb (DonnaProvider  *provider,
     g_main_context_invoke (NULL, (GSourceFunc) real_node_children_cb, data);
 }
 
+struct new_child_data
+{
+    DonnaTreeView   *tree;
+    DonnaNode       *node;
+    DonnaNode       *child;
+};
+
+static gboolean
+real_new_child_cb (struct new_child_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    GSList *list;
+
+    if (!is_tree (data->tree))
+    {
+        if (priv->location == data->node)
+            add_node_to_tree (data->tree, NULL, data->child);
+        goto free;
+    }
+
+    list = g_hash_table_lookup (priv->hashtable, data->node);
+    if (!list)
+        goto free;
+
+    for ( ; list; list = list->next)
+        add_node_to_tree (data->tree, list->data, data->child);
+
+free:
+    g_object_unref (data->node);
+    g_object_unref (data->child);
+    g_free (data);
+    /* no repeat */
+    return FALSE;
+}
+
 static void
 node_new_child_cb (DonnaProvider *provider,
                    DonnaNode     *node,
                    DonnaNode     *child,
                    DonnaTreeView *tree)
 {
-    /* TODO */
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNodeType type;
+    struct new_child_data *data;
+
+    /* list: unless we're in node, we don't care */
+    if (!is_tree (tree) && priv->location != node)
+        return;
+
+    /* if we don't care for this type of nodes, nothing to do */
+    donna_node_get (child, FALSE, "node-type", &type, NULL);
+    if (!(type & priv->node_types))
+        return;
+
+    /* we can't check if node is in the tree though, because there's no lock,
+     * and we might not be in the main thread, and so we need to be */
+    data = g_new (struct new_child_data, 1);
+    data->tree  = tree;
+    data->node  = g_object_ref (node);
+    data->child = g_object_ref (child);
+    g_main_context_invoke (NULL, (GSourceFunc) real_new_child_cb, data);
 }
 
 static gboolean
