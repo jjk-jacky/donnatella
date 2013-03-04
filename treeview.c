@@ -406,6 +406,8 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
             -1);
     if (node)
     {
+        GSList *list;
+
         /* get its provider */
         donna_node_get (node, FALSE, "provider", &provider, NULL);
         /* and update the nb of nodes we have for this provider */
@@ -424,6 +426,33 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
             }
         }
         g_object_unref (provider);
+
+        /* remove iter for that row in hashtable */
+        l = list = g_hash_table_lookup (priv->hashtable, node);
+        while (l)
+        {
+            if (itereq (iter, (GtkTreeIter *) l->data))
+            {
+                if (prev)
+                    prev->next = l->next;
+                else
+                    list = l->next;
+
+                gtk_tree_iter_free (l->data);
+                g_slist_free_1 (l);
+                break;
+            }
+            else
+            {
+                prev = l;
+                l = l->next;
+            }
+        }
+        if (list)
+            g_hash_table_insert (priv->hashtable, node, list);
+        else
+            g_hash_table_remove (priv->hashtable, node);
+
         g_object_unref (node);
     }
 
@@ -1335,14 +1364,12 @@ real_node_removed_cb (struct node_removed_data *data)
 
     for ( ; list; list = next)
     {
-        GtkTreeIter *iter = list->data;
-
         next = list->next;
-        list = g_slist_remove (list, iter);
-        remove_row_from_tree (data->tree, iter);
-        gtk_tree_iter_free (iter);
+        /* this will remove the row from the list in hashtable. IOW, it will
+         * remove the current list element (list); which is why we took the next
+         * element ahead of time */
+        remove_row_from_tree (data->tree, list->data);
     }
-    g_hash_table_remove (priv->hashtable, data->node);
 
 free:
     g_object_unref (data->node);
@@ -2414,7 +2441,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
                 g_object_unref (priv->location);
             priv->location = node;
         }
-        else
+        else if (node)
             g_object_unref (node);
     }
 }
