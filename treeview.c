@@ -62,6 +62,7 @@ enum
     RENDERER_PROGRESS,
     RENDERER_COMBO,
     RENDERER_TOGGLE,
+    RENDERER_SPINNER,
     NB_RENDERERS
 };
 
@@ -76,6 +77,18 @@ struct col_prop
 {
     DonnaSharedString *prop;
     GtkTreeViewColumn *column;
+};
+
+struct as_col
+{
+    GtkTreeViewColumn *column;
+    guint nb;
+};
+
+struct active_spinners
+{
+    GtkTreeIter *iter;
+    GArray      *as_cols;   /* struct as_col[] */
 };
 
 struct provider_signals
@@ -101,6 +114,11 @@ struct _DonnaTreeViewPrivate
 
     /* properties used by our columns */
     GArray              *col_props;
+
+    /* handling of spinners on columns (when setting node properties) */
+    GPtrArray           *active_spinners;
+    guint                active_spinners_id;
+    guint                active_spinners_pulse;
 
     /* List: current/future location */
     DonnaNode           *location;
@@ -164,6 +182,7 @@ static gboolean add_node_to_tree (DonnaTreeView *tree,
 
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
+static void free_active_spinners (struct active_spinners *as);
 
 static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
@@ -208,6 +227,8 @@ donna_tree_view_init (DonnaTreeView *tv)
     g_mutex_init (&priv->refresh_node_props_mutex);
     priv->col_props = g_array_new (FALSE, FALSE, sizeof (struct col_prop));
     g_array_set_clear_func (priv->col_props, (GDestroyNotify) free_col_prop);
+    priv->active_spinners = g_ptr_array_new_with_free_func (
+            (GDestroyNotify) free_active_spinners);
 }
 
 static void
@@ -232,6 +253,13 @@ free_provider_signals (struct provider_signals *ps)
 }
 
 static void
+free_active_spinners (struct active_spinners *as)
+{
+    g_array_free (as->as_cols, TRUE);
+    g_free (as);
+}
+
+static void
 free_hashtable (gpointer key, GSList *list, gpointer data)
 {
     g_slist_free_full (list, (GDestroyNotify) gtk_tree_iter_free);
@@ -248,6 +276,7 @@ donna_tree_view_finalize (GObject *object)
     g_ptr_array_free (priv->providers, TRUE);
     g_mutex_clear (&priv->refresh_node_props_mutex);
     g_array_free (priv->col_props, TRUE);
+    g_ptr_array_free (priv->active_spinners, TRUE);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -1023,6 +1052,40 @@ bail:
     free_refresh_node_props_data (data);
 }
 
+static gboolean
+spinner_fn (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model;
+    guint i;
+
+    if (!priv->active_spinners_id)
+        return FALSE;
+
+    if (!priv->active_spinners->len)
+    {
+        g_source_remove (priv->active_spinners_id);
+        priv->active_spinners_id = 0;
+        priv->active_spinners_pulse = 0;
+        return FALSE;
+    }
+
+    ++priv->active_spinners_pulse;
+
+    model = get_model (tree);
+    for (i = 0; i < priv->active_spinners->len; ++i)
+    {
+        struct active_spinners *as = priv->active_spinners->pdata[i];
+        GtkTreePath *path;
+
+        path = gtk_tree_model_get_path (model, as->iter);
+        gtk_tree_model_row_changed (model, path, as->iter);
+        gtk_tree_path_free (path);
+    }
+
+    return TRUE;
+}
+
 static void
 rend_func (GtkTreeViewColumn  *column,
            GtkCellRenderer    *renderer,
@@ -1040,6 +1103,55 @@ rend_func (GtkTreeViewColumn  *column,
 
     tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
     priv = tree->priv;
+
+    /* spinner */
+    if (index == 0)
+    {
+        if (priv->active_spinners_id)
+        {
+            GtkTreeModelFilter *filter;
+            GtkTreeIter iter = ITER_INIT;
+            guint i;
+
+            filter = get_filter (tree);
+            gtk_tree_model_filter_convert_iter_to_child_iter (filter,
+                    &iter, _iter);
+
+            for (i = 0; i < priv->active_spinners->len; ++i)
+            {
+                struct active_spinners *as = priv->active_spinners->pdata[i];
+
+                if (itereq (&iter, as->iter))
+                {
+                    guint j;
+
+                    for (j = 0; j < as->as_cols->len; ++j)
+                    {
+                        struct as_col *as_col;
+
+                        as_col = &g_array_index (as->as_cols, struct as_col, j);
+                        if (as_col->column == column)
+                        {
+                            g_object_set (renderer,
+                                    "visible",  TRUE,
+                                    "active",   TRUE,
+                                    "pulse",    priv->active_spinners_pulse,
+                                    NULL);
+                            return;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        g_object_set (renderer,
+                "visible",  FALSE,
+                "active",   FALSE,
+                NULL);
+        return;
+    }
+
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
     gtk_tree_model_get (_model, _iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
@@ -1949,6 +2061,18 @@ load_arrangement (DonnaTreeView     *tree,
                     ct, g_object_unref);
             /* sizing stuff */
             gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
+            /* put our spinner renderer */
+            if (!priv->renderers[RENDERER_SPINNER])
+                priv->renderers[RENDERER_SPINNER] =
+                    gtk_cell_renderer_spinner_new ();
+            gtk_tree_view_column_set_cell_data_func (column,
+                    priv->renderers[RENDERER_SPINNER],
+                    rend_func,
+                    GINT_TO_POINTER (0),
+                    NULL);
+            gtk_tree_view_column_pack_start (column,
+                    priv->renderers[RENDERER_SPINNER],
+                    FALSE);
             /* load renderers */
             for (index = 1, rend = donna_columntype_get_renderers (ct);
                     *rend;
@@ -1986,6 +2110,12 @@ load_arrangement (DonnaTreeView     *tree,
                             priv->renderers[RENDERER_TOGGLE] =
                                 gtk_cell_renderer_toggle_new ();
                         renderer = priv->renderers[RENDERER_TOGGLE];
+                        break;
+                    case DONNA_COLUMNTYPE_RENDERER_SPINNER:
+                        if (!priv->renderers[RENDERER_SPINNER])
+                            priv->renderers[RENDERER_SPINNER] =
+                                gtk_cell_renderer_spinner_new ();
+                        renderer = priv->renderers[RENDERER_SPINNER];
                         break;
                     default:
                         g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
@@ -2206,16 +2336,69 @@ set_node_prop_callbak (DonnaTask                 *task,
         return;
     }
 
-    list = g_hash_table_lookup (priv->hashtable, data->node);
-    for (l = list; l; l = l->next)
+    /* FIXME error message on task failed */
+    /* no timeout called == no spinners set */
+    if (timeout_called)
     {
-        GtkTreeIter *iter = l->data;
-
-        for (i = 0; i < arr->len; ++i)
+        list = g_hash_table_lookup (priv->hashtable, data->node);
+        /* for every row of this node */
+        for (l = list; l; l = l->next)
         {
-            /* TODO g_object_get_data (column) to do -1 on the nb of spins;
-             * if nb==0 then we remove the spinner.
-             * In case of task failure, we set the error message and whatnot */
+            GtkTreeIter *iter = l->data;
+            struct active_spinners *as;
+            guint as_idx;
+            guint j;
+
+            /* is there already an as for this row? */
+            as = NULL;
+            for (i = 0; i < priv->active_spinners->len; ++i)
+            {
+                as = priv->active_spinners->pdata[i];
+                /* we can compare the pointers because active_spinners always
+                 * contains *iter from the hashtable */
+                if (iter == as->iter)
+                    break;
+            }
+
+            if (!as)
+                continue;
+
+            /* in case we need to remove this as */
+            as_idx = i;
+
+            /* for every column using that property */
+            for (i = 0; i < arr->len; ++i)
+            {
+                GtkTreeViewColumn *column = arr->pdata[i];
+                struct as_col *as_col;
+
+                /* does this as already have a spinner for this column? */
+                for (j = 0; j < as->as_cols->len; ++j)
+                {
+                    as_col = &g_array_index (as->as_cols, struct as_col, j);
+                    if (as_col->column == column)
+                        break;
+                }
+                if (j >= as->as_cols->len)
+                    continue;
+
+                if (--as_col->nb == 0)
+                {
+                    /* was this the last column for this row's as ? */
+                    if (as->as_cols->len == 1)
+                        g_ptr_array_remove_index_fast (priv->active_spinners,
+                                as_idx);
+                    else
+                        g_array_remove_index_fast (as->as_cols, j);
+                }
+            }
+        }
+
+        if (!priv->active_spinners->len && priv->active_spinners_id)
+        {
+            g_source_remove (priv->active_spinners_id);
+            priv->active_spinners_id = 0;
+            priv->active_spinners_pulse = 0;
         }
     }
 
@@ -2250,16 +2433,64 @@ set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
     }
 
     list = g_hash_table_lookup (priv->hashtable, data->node);
+    /* for every row of this node */
     for (l = list; l; l = l->next)
     {
         GtkTreeIter *iter = l->data;
+        struct active_spinners *as;
+        guint j;
 
+        /* is there already an as for this row? */
+        for (i = 0; i < priv->active_spinners->len; ++i)
+        {
+            as = priv->active_spinners->pdata[i];
+            /* we can compare the pointers because active_spinners always
+             * contains *iter from the hashtable */
+            if (iter == as->iter)
+                break;
+        }
+
+        if (i >= priv->active_spinners->len)
+        {
+            as = g_new0 (struct active_spinners, 1);
+            as->iter = iter;
+            as->as_cols = g_array_new (FALSE, FALSE, sizeof (struct as_col));
+
+            g_ptr_array_add (priv->active_spinners, as);
+        }
+
+        /* for every column using that property */
         for (i = 0; i < arr->len; ++i)
         {
-            /* TODO set spinner on column arr->pdata[i] for iter;
-             * w/ g_object_set_data (column) for the nb of spins */
+            GtkTreeViewColumn *column = arr->pdata[i];
+            struct as_col *as_col;
+
+            /* does this as already have a spinner for this column? */
+            for (j = 0; j < as->as_cols->len; ++j)
+            {
+                as_col = &g_array_index (as->as_cols, struct as_col, j);
+                if (as_col->column == column)
+                    break;
+            }
+            if (j >= as->as_cols->len)
+                as_col = NULL;
+
+            if (!as_col)
+            {
+                struct as_col as_col_new;
+
+                as_col_new.column = column;
+                as_col_new.nb = 1;
+                g_array_append_val (as->as_cols, as_col_new);
+            }
+            else
+                ++as_col->nb;
         }
     }
+
+    if (!priv->active_spinners_id)
+        priv->active_spinners_id = g_timeout_add (42,
+                (GSourceFunc) spinner_fn, data->tree);
 
     g_ptr_array_free (arr, TRUE);
 }

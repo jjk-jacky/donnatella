@@ -26,6 +26,7 @@ typedef DonnaColumnType *   (*new_ct)       (DonnaConfig        *config);
 #define DONNA_COLUMNTYPE_RENDERER_PROGRESS  'P'
 #define DONNA_COLUMNTYPE_RENDERER_COMBO     'c'
 #define DONNA_COLUMNTYPE_RENDERER_TOGGLE    'T'
+#define DONNA_COLUMNTYPE_RENDERER_SPINNER   'S'
 
 struct _DonnaColumnTypeInterface
 {
