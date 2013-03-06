@@ -2348,6 +2348,7 @@ set_node_prop_callbak (DonnaTask                 *task,
             struct active_spinners *as;
             guint as_idx;
             guint j;
+            GtkTreeViewColumn *col;
 
             /* is there already an as for this row? */
             as = NULL;
@@ -2367,6 +2368,7 @@ set_node_prop_callbak (DonnaTask                 *task,
             as_idx = i;
 
             /* for every column using that property */
+            col = NULL;
             for (i = 0; i < arr->len; ++i)
             {
                 GtkTreeViewColumn *column = arr->pdata[i];
@@ -2390,7 +2392,22 @@ set_node_prop_callbak (DonnaTask                 *task,
                                 as_idx);
                     else
                         g_array_remove_index_fast (as->as_cols, j);
+
+                    col = column;
                 }
+            }
+            if (col)
+            {
+                GtkTreeModel *model;
+                GtkTreePath *path;
+
+                /* make sure a redraw will be done for this row, else the
+                 * last spinner frame stays there until a redraw happens */
+
+                model = get_model (gtk_tree_view_column_get_tree_view (col));
+                path = gtk_tree_model_get_path (model, iter);
+                gtk_tree_model_row_changed (model, path, iter);
+                gtk_tree_path_free (path);
             }
         }
 
