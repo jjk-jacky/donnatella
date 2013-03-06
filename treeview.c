@@ -2482,6 +2482,15 @@ set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
                 as_col_new.column = column;
                 as_col_new.nb = 1;
                 g_array_append_val (as->as_cols, as_col_new);
+
+                /* a bug in GTK means that because when the size of renderer is
+                 * first computed and spinner if not visible, it has a natural
+                 * size of 0 and therefore even when it becomes visible it isn't
+                 * actually drawn.
+                 * This is a hack to workaround this, by enforcing the column to
+                 * re-compute its size now that we'll have the spinner visible,
+                 * so it should have a natural size and actually be drawn */
+                gtk_tree_view_column_queue_resize (column);
             }
             else
                 ++as_col->nb;
