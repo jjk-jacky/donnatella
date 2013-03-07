@@ -68,7 +68,8 @@ shared_string_init (GValue *value)
 static void
 shared_string_free (GValue *value)
 {
-    donna_shared_string_unref (value->data[0].v_pointer);
+    if (value->data[0].v_pointer)
+        donna_shared_string_unref (value->data[0].v_pointer);
 }
 
 static void
