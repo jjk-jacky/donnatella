@@ -12,7 +12,7 @@
 
 struct _DonnaColumnTypeNamePrivate
 {
-    DonnaDonna  *donna;
+    DonnaApp    *app;
     GPtrArray   *domains;
 };
 
@@ -95,7 +95,7 @@ ct_name_finalize (GObject *object)
 
     priv = DONNA_COLUMNTYPE_NAME (object)->priv;
     g_ptr_array_free (priv->domains, TRUE);
-    g_object_unref (priv->donna);
+    g_object_unref (priv->app);
 
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_name_parent_class)->finalize (object);
@@ -254,7 +254,7 @@ get_sort_option (DonnaColumnTypeName *ctname,
     DonnaConfig *config;
     gboolean      value;
 
-    config = donna_donna_get_config (ctname->priv->donna);
+    config = donna_app_get_config (ctname->priv->app);
     if (!donna_config_get_boolean (config, &value,
                 "treeviews/%s/columns/%s/sort_%s",
                 tv_name, col_name, opt_name))
@@ -378,15 +378,15 @@ ct_name_node_cmp (DonnaColumnType    *ct,
 }
 
 DonnaColumnType *
-donna_column_type_name_new (DonnaDonna *donna)
+donna_column_type_name_new (DonnaApp *app)
 {
     DonnaColumnType *ct;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
 
     g_debug ("creatig new ColumnTypeName");
     ct = g_object_new (DONNA_TYPE_COLUMNTYPE_NAME, NULL);
-    DONNA_COLUMNTYPE_NAME (ct)->priv->donna = g_object_ref (donna);
+    DONNA_COLUMNTYPE_NAME (ct)->priv->app = g_object_ref (app);
 
     return ct;
 }

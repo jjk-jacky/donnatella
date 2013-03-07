@@ -150,22 +150,22 @@ donna_donna_finalize (GObject *object)
 }
 
 DonnaConfig *
-donna_donna_get_config (DonnaDonna *donna)
+donna_app_get_config (DonnaDonna *donna)
 {
     g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
     return g_object_ref (donna->priv->config);
 }
 
 DonnaProvider *
-donna_donna_get_provider (DonnaDonna     *donna,
-                          const gchar    *domain)
+donna_app_get_provider (DonnaDonna     *donna,
+                        const gchar    *domain)
 {
     g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
 }
 
 DonnaColumnType *
-donna_donna_get_columntype (DonnaDonna     *donna,
-                            const gchar    *type)
+donna_app_get_columntype (DonnaDonna     *donna,
+                          const gchar    *type)
 {
     DonnaDonnaPrivate *priv;
     gint i;
@@ -188,8 +188,8 @@ donna_donna_get_columntype (DonnaDonna     *donna,
 }
 
 DonnaSharedString *
-donna_donna_get_arrangement (DonnaDonna     *donna,
-                             DonnaNode      *node)
+donna_app_get_arrangement (DonnaDonna     *donna,
+                           DonnaNode      *node)
 {
     DonnaDonnaPrivate *priv;
     GSList *l;
@@ -237,8 +237,8 @@ _run_task (DonnaTask *task)
 }
 
 void
-donna_donna_run_task (DonnaDonna     *donna,
-                      DonnaTask      *task)
+donna_app_run_task (DonnaDonna     *donna,
+                    DonnaTask      *task)
 {
     g_return_if_fail (DONNA_IS_DONNA (donna));
     g_return_if_fail (DONNA_IS_TASK (task));
@@ -282,7 +282,7 @@ window_destroy_cb (GtkWidget *window, gpointer data)
 static void
 tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
 {
-    DonnaConfig *config = donna_donna_get_config (d);
+    DonnaConfig *config = donna_app_get_config (d);
     gboolean v;
     if (donna_config_get_boolean (config, &v, "columns/name/sort_natural_order"))
         donna_config_set_boolean (config, !v, "columns/name/sort_natural_order");
@@ -319,7 +319,7 @@ tb_new_root_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
             "/tmp/test");
     donna_task_set_callback (task, new_root_cb, tree, NULL);
-    donna_donna_run_task (d, task);
+    donna_app_run_task (d, task);
 }
 
 int
@@ -384,7 +384,7 @@ main (int argc, char *argv[])
     gtk_widget_show (_paned);
 
     /* tree */
-    DonnaConfig *config = donna_donna_get_config (d);
+    DonnaConfig *config = donna_app_get_config (d);
     donna_config_set_uint (config, 1, "treeviews/tree/mode");
     donna_config_set_string_dup (config, "name", "treeviews/tree/arrangement/sort");
     g_object_unref (config);

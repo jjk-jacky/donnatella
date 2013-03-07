@@ -103,7 +103,7 @@ struct provider_signals
 
 struct _DonnaTreeViewPrivate
 {
-    DonnaDonna          *donna;
+    DonnaApp            *app;
     const gchar         *name;
 
     /* so we re-use the same renderer for all columns */
@@ -300,7 +300,7 @@ load_config (DonnaTreeView *tree)
      * Might as well save a few function calls... */
 
     priv = tree->priv;
-    config = donna_donna_get_config (priv->donna);
+    config = donna_app_get_config (priv->app);
 
     if (donna_config_get_uint (config, (guint *) &val,
                 "treeviews/%s/mode", priv->name))
@@ -936,7 +936,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                         DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_WIP,
                         -1);
 
-                donna_donna_run_task (priv->donna, task);
+                donna_app_run_task (priv->app, task);
                 g_object_unref (node);
                 g_object_unref (provider);
             }
@@ -1166,7 +1166,7 @@ rend_func (GtkTreeViewColumn  *column,
     {
         DonnaColumnType *ctname;
 
-        ctname = donna_donna_get_columntype (priv->donna, "name");
+        ctname = donna_app_get_columntype (priv->app, "name");
         if (!node)
         {
             /* this is a "fake" node, shown as a "Please Wait..." */
@@ -1264,7 +1264,7 @@ rend_func (GtkTreeViewColumn  *column,
                 (task_callback_fn) refresh_node_prop_cb,
                 data,
                 (GDestroyNotify) free_refresh_node_props_data);
-        donna_donna_run_task (priv->donna, task);
+        donna_app_run_task (priv->app, task);
     }
     g_object_unref (node);
 }
@@ -1839,7 +1839,7 @@ add_node_to_tree (DonnaTreeView *tree,
                 (task_callback_fn) node_has_children_cb,
                 data,
                 (GDestroyNotify) free_node_children_data);
-        donna_donna_run_task (priv->donna, task);
+        donna_app_run_task (priv->app, task);
     }
     else
     {
@@ -1900,7 +1900,7 @@ load_arrangement (DonnaTreeView     *tree,
     GtkTreeViewColumn    *last_column = NULL;
     gint                  sort_id = 0;
 
-    config = donna_donna_get_config (priv->donna);
+    config = donna_app_get_config (priv->app);
     sortable = GTK_TREE_SORTABLE (get_store (tree));
     list = gtk_tree_view_get_columns (treev);
 
@@ -2014,7 +2014,7 @@ load_arrangement (DonnaTreeView     *tree,
             }
         }
 
-        ct = donna_donna_get_columntype (priv->donna,
+        ct = donna_app_get_columntype (priv->app,
                 (ss) ? donna_shared_string (ss) : b);
         if (!ct)
         {
@@ -2234,7 +2234,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     DonnaSharedString    *ss;
 
     priv = tree->priv;
-    config = donna_donna_get_config (priv->donna);
+    config = donna_app_get_config (priv->app);
     g_debug ("treeview '%s': select arrangement", priv->name);
 
     if (is_tree (tree))
@@ -2250,7 +2250,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     {
         /* do we have an arrangement selector? */
         if (location)
-            ss = donna_donna_get_arrangement (priv->donna, location);
+            ss = donna_app_get_arrangement (priv->app, location);
         else
             ss = NULL;
 
@@ -2587,7 +2587,7 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
             (task_callback_fn) set_node_prop_callbak,
             data,
             (GDestroyNotify) free_set_node_prop_data);
-    donna_donna_run_task (priv->donna, task);
+    donna_app_run_task (priv->app, task);
     return TRUE;
 }
 
@@ -2735,7 +2735,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 }
 
 GtkWidget *
-donna_tree_view_new (DonnaDonna         *donna,
+donna_tree_view_new (DonnaApp           *app,
                      const gchar        *name)
 {
     DonnaTreeViewPrivate *priv;
@@ -2748,7 +2748,7 @@ donna_tree_view_new (DonnaDonna         *donna,
     GtkTreeModel         *model_filter;
     GtkTreeSelection     *sel;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (name != NULL, NULL);
 
     w = g_object_new (DONNA_TYPE_TREE_VIEW, NULL);
@@ -2758,10 +2758,10 @@ donna_tree_view_new (DonnaDonna         *donna,
             G_CALLBACK (query_tooltip_cb), NULL);
     gtk_widget_set_has_tooltip (w, TRUE);
 
-    tree         = DONNA_TREE_VIEW (w);
-    priv         = tree->priv;
-    priv->donna  = donna;
-    priv->name   = name;
+    tree        = DONNA_TREE_VIEW (w);
+    priv        = tree->priv;
+    priv->app   = app;
+    priv->name  = name;
 
     g_debug ("load_config for new tree '%s'", priv->name);
     load_config (tree);

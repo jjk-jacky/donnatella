@@ -22,6 +22,11 @@ typedef struct _DonnaDonnaPrivate       DonnaDonnaPrivate;
 
 typedef DonnaColumnType *   (*column_type_loader_fn)    (DonnaDonna *donna);
 
+typedef DonnaDonna                      DonnaApp;
+
+#define DONNA_APP(obj)                  ((DonnaApp *) (obj))
+#define DONNA_IS_APP(obj)               DONNA_IS_DONNA(obj)
+
 struct _DonnaDonna
 {
     GObject parent;
@@ -36,14 +41,14 @@ struct _DonnaDonnaClass
 
 GType               donna_donna_get_type            (void) G_GNUC_CONST;
 
-DonnaConfig *       donna_donna_get_config          (DonnaDonna     *donna);
-DonnaProvider *     donna_donna_get_provider        (DonnaDonna     *donna,
+DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
+DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
-DonnaColumnType *   donna_donna_get_columntype      (DonnaDonna     *donna,
+DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
                                                      const gchar    *type);
-DonnaSharedString * donna_donna_get_arrangement     (DonnaDonna     *donna,
+DonnaSharedString * donna_app_get_arrangement       (DonnaApp       *app,
                                                      DonnaNode      *node);
-void                donna_donna_run_task            (DonnaDonna     *donna,
+void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
 
 G_END_DECLS
