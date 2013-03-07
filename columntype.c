@@ -122,7 +122,6 @@ donna_columntype_set_tooltip (DonnaColumnType    *ct,
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
     g_return_val_if_fail (tv_name != NULL, FALSE);
     g_return_val_if_fail (col_name != NULL, FALSE);
-    g_return_val_if_fail (index > 0, FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (GTK_IS_TOOLTIP (tooltip), FALSE);
 

@@ -154,6 +154,9 @@ struct _DonnaTreeViewPrivate
     guint                sync_mode   : 2;
 };
 
+/* our internel spinner */
+static GtkCellRenderer *spinner = NULL;
+
 /* we *need* to use this when creating an iter, because we compare *all* values
  * to determine if two iters match (and models might not always set all values) */
 #define ITER_INIT           { 0, }
@@ -208,6 +211,9 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     o_class->finalize = donna_tree_view_finalize;
 
     g_type_class_add_private (klass, sizeof (DonnaTreeViewPrivate));
+
+    if (!spinner)
+        spinner = gtk_cell_renderer_spinner_new ();
 }
 
 static void
@@ -2062,65 +2068,55 @@ load_arrangement (DonnaTreeView     *tree,
             /* sizing stuff */
             gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
             /* put our spinner renderer */
-            if (!priv->renderers[RENDERER_SPINNER])
-                priv->renderers[RENDERER_SPINNER] =
-                    gtk_cell_renderer_spinner_new ();
             gtk_tree_view_column_set_cell_data_func (column,
-                    priv->renderers[RENDERER_SPINNER],
+                    spinner,
                     rend_func,
                     GINT_TO_POINTER (0),
                     NULL);
-            gtk_tree_view_column_pack_start (column,
-                    priv->renderers[RENDERER_SPINNER],
-                    FALSE);
+            gtk_tree_view_column_pack_start (column, spinner, FALSE);
             /* load renderers */
             for (index = 1, rend = donna_columntype_get_renderers (ct);
                     *rend;
                     ++index, ++rend)
             {
+                GtkCellRenderer * (*load_renderer) (void);
                 /* TODO: use an external (app-global) renderer loader? */
                 switch (*rend)
                 {
                     case DONNA_COLUMNTYPE_RENDERER_TEXT:
-                        if (!priv->renderers[RENDERER_TEXT])
-                            priv->renderers[RENDERER_TEXT] =
-                                gtk_cell_renderer_text_new ();
                         renderer = priv->renderers[RENDERER_TEXT];
+                        load_renderer = gtk_cell_renderer_text_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_PIXBUF:
-                        if (!priv->renderers[RENDERER_PIXBUF])
-                            priv->renderers[RENDERER_PIXBUF] =
-                                gtk_cell_renderer_pixbuf_new ();
                         renderer = priv->renderers[RENDERER_PIXBUF];
+                        load_renderer = gtk_cell_renderer_pixbuf_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_PROGRESS:
-                        if (!priv->renderers[RENDERER_PROGRESS])
-                            priv->renderers[RENDERER_PROGRESS] =
-                                gtk_cell_renderer_progress_new ();
                         renderer = priv->renderers[RENDERER_PROGRESS];
+                        load_renderer = gtk_cell_renderer_progress_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_COMBO:
-                        if (!priv->renderers[RENDERER_COMBO])
-                            priv->renderers[RENDERER_COMBO] =
-                                gtk_cell_renderer_combo_new ();
                         renderer = priv->renderers[RENDERER_COMBO];
+                        load_renderer = gtk_cell_renderer_combo_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_TOGGLE:
-                        if (!priv->renderers[RENDERER_TOGGLE])
-                            priv->renderers[RENDERER_TOGGLE] =
-                                gtk_cell_renderer_toggle_new ();
                         renderer = priv->renderers[RENDERER_TOGGLE];
+                        load_renderer = gtk_cell_renderer_toggle_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_SPINNER:
-                        if (!priv->renderers[RENDERER_SPINNER])
-                            priv->renderers[RENDERER_SPINNER] =
-                                gtk_cell_renderer_spinner_new ();
                         renderer = priv->renderers[RENDERER_SPINNER];
+                        load_renderer = gtk_cell_renderer_spinner_new;
                         break;
                     default:
                         g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
                                 *rend, b, priv->name);
                         continue;
+                }
+                if (!renderer)
+                {
+                    renderer = load_renderer ();
+                    g_object_set_data (G_OBJECT (renderer), "renderer-type",
+                            GINT_TO_POINTER (*rend));
                 }
                 gtk_tree_view_column_set_cell_data_func (column, renderer,
                         rend_func, GINT_TO_POINTER (index), NULL);
@@ -2604,6 +2600,9 @@ query_tooltip_cb (GtkTreeView   *treev,
 {
     DonnaTreeViewPrivate *priv;
     GtkTreeViewColumn *column;
+#ifdef GTK_IS_JJK
+    GtkCellRenderer *renderer;
+#endif
     GtkTreeModel *_model;
     GtkTreeIter _iter = ITER_INIT;
     gboolean ret = FALSE;
@@ -2611,11 +2610,22 @@ query_tooltip_cb (GtkTreeView   *treev,
     if (gtk_tree_view_get_tooltip_context (treev, &x, &y, keyboard_mode,
                 &_model, NULL, &_iter))
     {
-        if (gtk_tree_view_get_path_at_pos (treev, x, y, NULL, &column, NULL, NULL))
+#ifdef GTK_IS_JJK
+        if (!gtk_tree_view_is_blank_at_pos_full (treev, x, y, NULL, &column,
+                    &renderer, NULL, NULL))
+#else
+        if (!gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
+#endif
         {
             DonnaNode *node;
             DonnaColumnType *ct;
             const gchar *col;
+            guint index = 0;
+
+#ifdef GTK_IS_JJK
+            if (renderer == spinner)
+                return FALSE;
+#endif
 
             gtk_tree_model_get (_model, &_iter,
                     DONNA_TREE_VIEW_COL_NODE,   &node,
@@ -2627,9 +2637,27 @@ query_tooltip_cb (GtkTreeView   *treev,
             col = g_object_get_data (G_OBJECT (column), "column-name");
 
             priv = DONNA_TREE_VIEW (treev)->priv;
-            /* FIXME we want to give the index, i.e. on which renderer is the
-             * mouse cursor. Not sure how/if that's doable with GTK though. */
-            ret = donna_columntype_set_tooltip (ct, priv->name, col, 1,
+#ifdef GTK_IS_JJK
+            if (renderer)
+            {
+                const gchar *rend;
+
+                rend = donna_columntype_get_renderers (ct);
+                if (rend[1] == '\0')
+                    /* only one renderer in this column */
+                    index = 1;
+                else
+                {
+                    gchar r;
+
+                    r = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (renderer),
+                                "renderer-type"));
+                    for (index = 1; *rend && *rend != r; ++index, ++rend)
+                        ;
+                }
+            }
+#endif
+            ret = donna_columntype_set_tooltip (ct, priv->name, col, index,
                     node, tooltip);
 
             g_object_unref (node);
