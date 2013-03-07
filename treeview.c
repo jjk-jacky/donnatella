@@ -307,7 +307,8 @@ load_config (DonnaTreeView *tree)
         priv->mode = val;
     else
     {
-        g_warning ("Unable to find mode for tree '%s'", priv->name);
+        g_warning ("Treeview '%s': Unable to find mode, defaulting to list",
+                priv->name);
         /* set default */
         val = priv->mode = DONNA_TREE_VIEW_MODE_LIST;
         donna_config_set_uint (config, (guint) val,
@@ -602,6 +603,7 @@ set_children (DonnaTreeView *tree,
         {
             GtkTreeIter row = ITER_INIT;
 
+            /* shouldn't be able to fail/return FALSE */
             if (!add_node_to_tree (tree, iter, children->pdata[i], &row))
             {
                 const gchar *domain;
@@ -611,7 +613,7 @@ set_children (DonnaTreeView *tree,
                         "domain",   &domain,
                         "location", &location,
                         NULL);
-                g_warning ("Treeview '%s': failed to add node for '%s:%s'",
+                g_critical ("Treeview '%s': failed to add node for '%s:%s'",
                         tree->priv->name,
                         domain,
                         donna_shared_string (location));
@@ -881,7 +883,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                             if (!gtk_tree_model_iter_children (model,
                                     &child, i))
                             {
-                                g_warning ("Treeview '%s': Inconsistency detected",
+                                g_critical ("Treeview '%s': Inconsistency detected",
                                         priv->name);
                                 continue;
                             }
@@ -944,7 +946,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
 
         /* refuse expansion. This case should never happen */
         case DONNA_TREE_EXPAND_NONE:
-            g_warning ("Treeview '%s' wanted to expand a node without children",
+            g_critical ("Treeview '%s' wanted to expand a node without children",
                     tree->priv->name);
             return TRUE;
     }
@@ -1037,7 +1039,7 @@ refresh_node_prop_cb (DonnaTask                      *task,
             list = g_hash_table_lookup (priv->hashtable, data->node);
             if (!list)
             {
-                g_warning ("Treeview '%s': refresh_node_prop_cb for missing node",
+                g_critical ("Treeview '%s': refresh_node_prop_cb for missing node",
                         priv->name);
                 goto bail;
             }
@@ -1851,8 +1853,8 @@ add_node_to_tree (DonnaTreeView *tree,
             -1);
 
         donna_node_get (node, FALSE, "location", &location, NULL);
-        g_warning ("Unable to create a task to determine if the node '%s:%s' has children",
-                domain, donna_shared_string (location));
+        g_warning ("Treeview '%s': Unable to create a task to determine if the node '%s:%s' has children",
+                priv->name, domain, donna_shared_string (location));
         donna_shared_string_unref (location);
     }
 
@@ -1926,7 +1928,8 @@ load_arrangement (DonnaTreeView     *tree,
             {
                 if (streq (donna_shared_string (ss), "arrangements/tree"))
                 {
-                    g_warning ("No columns defined in 'arrangements/tree'; using 'name'");
+                    g_warning ("Treeview '%s': No columns defined in 'arrangements/tree'; using 'name'",
+                            priv->name);
                     ss_columns = NULL;
                     col = "name";
                     break;
@@ -2008,8 +2011,8 @@ load_arrangement (DonnaTreeView     *tree,
             if (!donna_config_get_shared_string (config, &ss,
                         "columns/%s/type", b))
             {
-                g_warning ("No type defined for column '%s', fallback to its name",
-                        b);
+                g_warning ("Treeview '%s': No type defined for column '%s', fallback to its name",
+                        priv->name, b);
                 ss = NULL;
             }
         }
@@ -2018,8 +2021,8 @@ load_arrangement (DonnaTreeView     *tree,
                 (ss) ? donna_shared_string (ss) : b);
         if (!ct)
         {
-            g_warning ("Unable to load column type '%s' for column '%s' in treeview '%s'",
-                    (ss) ? donna_shared_string (ss) : b, b, priv->name);
+            g_warning ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
+                    priv->name, (ss) ? donna_shared_string (ss) : b, b);
             if (ss)
                 donna_shared_string_unref (ss);
             goto next;
@@ -2108,8 +2111,8 @@ load_arrangement (DonnaTreeView     *tree,
                         load_renderer = gtk_cell_renderer_spinner_new;
                         break;
                     default:
-                        g_warning ("Unknown renderer type '%c' for column '%s' in treeview '%s'",
-                                *rend, b, priv->name);
+                        g_critical ("Treeview '%s': Unknown renderer type '%c' for column '%s'",
+                                priv->name, *rend, b);
                         continue;
                 }
                 if (!renderer)
@@ -2140,7 +2143,8 @@ load_arrangement (DonnaTreeView     *tree,
             if (!donna_config_get_shared_string (config, &ss,
                         "columns/%s/title", b))
             {
-                g_warning ("No title set for column '%s', using its name", b);
+                g_warning ("Treeview '%s': No title set for column '%s', using its name",
+                        priv->name, b);
                 gtk_tree_view_column_set_title (column, b);
             }
         if (ss)
@@ -2166,7 +2170,7 @@ load_arrangement (DonnaTreeView     *tree,
             g_free (props);
         }
         else
-            g_warning ("Treeview '%s': column '%s' reports no properties to watch for refresh",
+            g_critical ("Treeview '%s': column '%s' reports no properties to watch for refresh",
                     priv->name, b);
 
         /* sort */
@@ -2521,7 +2525,8 @@ gboolean
 donna_tree_view_set_node_property (DonnaTreeView      *tree,
                                    DonnaNode          *node,
                                    DonnaSharedString  *prop,
-                                   const GValue       *value)
+                                   const GValue       *value,
+                                   GError           **error)
 {
     DonnaTreeViewPrivate *priv;
     GError *err = NULL;
@@ -2544,7 +2549,8 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
         DonnaSharedString *ss;
 
         donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
-        g_warning ("Treeview '%s': Cannot set property '%s' on node '%s:%s', "
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Cannot set property '%s' on node '%s:%s', "
                 "the node is not represented in the treeview",
                 priv->name,
                 donna_shared_string (prop),
@@ -2562,12 +2568,12 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
         DonnaSharedString *ss;
 
         donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
-        g_warning ("Treeview '%s': Cannot set property '%s' on node '%s:%s': %s",
+        g_propagate_prefixed_error (error, err,
+                "Treeview '%s': Cannot set property '%s' on node '%s:%s': ",
                 priv->name,
                 donna_shared_string (prop),
                 domain,
-                donna_shared_string (ss),
-                err->message);
+                donna_shared_string (ss));
         donna_shared_string_unref (ss);
         g_clear_error (&err);
         return FALSE;

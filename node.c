@@ -233,7 +233,8 @@ donna_node_new (DonnaProvider       *provider,
 DonnaNode *
 donna_node_new_from_node (DonnaProvider     *provider,
                           DonnaSharedString *location,
-                          DonnaNode         *sce)
+                          DonnaNode         *sce,
+                          GError           **error)
 {
     DonnaNode        *node;
     DonnaNodePrivate *priv;
@@ -252,7 +253,8 @@ donna_node_new_from_node (DonnaProvider     *provider,
             sce->priv->name, sce->priv->flags);
     if (!node)
     {
-        g_warning ("Failed to create a new node '%s:%s' when trying to make a new node from '%s:%s'",
+        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_OTHER,
+                "Failed to create a new node '%s:%s' when trying to make a new node from '%s:%s'",
                 donna_provider_get_domain (provider),
                 donna_shared_string (location),
                 donna_provider_get_domain (sce->priv->provider),
@@ -451,7 +453,7 @@ grab_basic_value:
                     G_VALUE_LCOPY (&priv->basic_props[i].value, va_args, 0, &err);
                     if (err)
                     {
-                        g_warning (
+                        g_critical (
                                 "Error while trying to copy value of basic property '%s' from node '%s:%s': %s",
                                 name,
                                 donna_provider_get_domain (priv->provider),

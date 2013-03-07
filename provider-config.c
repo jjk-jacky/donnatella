@@ -1720,12 +1720,10 @@ node_prop_setter (DonnaTask     *task,
             const gchar *domain;
 
             donna_node_get (node, FALSE, "domain", &domain, NULL);
-            g_warning ("Property setter of 'config' was called on a wrong node: '%s:%s'",
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_WRONG_PROVIDER,
+                    "Property setter of 'config' was called on a wrong node: '%s:%s'",
                     domain, donna_shared_string (location));
-
-            donna_task_set_error (task, DONNA_NODE_ERROR,
-                    DONNA_NODE_ERROR_OTHER,
-                    "Wrong provider");
             g_object_unref (provider);
             donna_shared_string_unref (location);
             return DONNA_TASK_FAILED;
@@ -1736,11 +1734,11 @@ node_prop_setter (DonnaTask     *task,
         option = get_option (priv->root, donna_shared_string (location));
         if (!option)
         {
-            g_warning ("Unable to find option '%s' while trying to change its value through the associated node",
+            g_critical ("Unable to find option '%s' while trying to change its value through the associated node",
                     donna_shared_string (location));
 
-            donna_task_set_error (task, DONNA_NODE_ERROR,
-                    DONNA_NODE_ERROR_NOT_FOUND,
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
                     "Option '%s' does not exists",
                     donna_shared_string (location));
             g_object_unref (provider);
@@ -1833,7 +1831,7 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
         gnode = get_option_node (config->priv->root,
                 donna_shared_string (location));
         if (G_UNLIKELY (!gnode))
-            g_warning ("Unable to find option '%s' while processing toggle_ref for the associated node",
+            g_critical ("Unable to find option '%s' while processing toggle_ref for the associated node",
                     donna_shared_string (location));
         else
             ((struct option *) gnode->data)->node = NULL;
@@ -2026,7 +2024,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
     gnode = get_option_node (priv->root, donna_shared_string (location));
     if (G_UNLIKELY (!gnode))
     {
-        g_warning ("Unable to find option '%s' while processing has_children on the associated node",
+        g_critical ("Unable to find option '%s' while processing has_children on the associated node",
                 donna_shared_string (location));
 
         g_rw_lock_reader_unlock (&priv->lock);

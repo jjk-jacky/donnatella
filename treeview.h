@@ -12,7 +12,8 @@ G_BEGIN_DECLS
 #define DONNA_TREE_VIEW_ERROR            g_quark_from_static_string ("DonnaTreeView-Error")
 enum
 {
-    DONNA_TREE_VIEW_ERROR_NOMEM
+    DONNA_TREE_VIEW_ERROR_NOMEM,
+    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
 } DonnaTreeViewError;
 
 struct _DonnaTreeView
@@ -36,7 +37,8 @@ void            donna_tree_view_build_arrangement (
 gboolean        donna_tree_view_set_node_property (DonnaTreeView    *tree,
                                                  DonnaNode          *node,
                                                  DonnaSharedString  *prop,
-                                                 const GValue       *value);
+                                                 const GValue       *value,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

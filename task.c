@@ -758,8 +758,7 @@ donna_task_is_cancelling (DonnaTask *task)
             return TRUE;
 
         default:
-            g_warning ("task_is_cancelling was called on an invalid state (%d), "
-                    "there is definately a bug somewhere",
+            g_critical ("task_is_cancelling was called on an invalid state (%d)",
                     priv->state);
             UNLOCK_TASK (task);
             return FALSE;

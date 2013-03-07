@@ -112,7 +112,8 @@ DonnaNode *     donna_node_new              (DonnaProvider          *provider,
                                              DonnaNodeFlags          flags);
 DonnaNode *     donna_node_new_from_node    (DonnaProvider          *provider,
                                              DonnaSharedString      *location,
-                                             DonnaNode              *source_node);
+                                             DonnaNode              *source_node,
+                                             GError                **error);
 gboolean        donna_node_add_property     (DonnaNode              *node,
                                              const gchar            *name,
                                              GType                   type,
