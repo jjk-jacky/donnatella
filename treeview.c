@@ -82,6 +82,7 @@ struct col_prop
 struct as_col
 {
     GtkTreeViewColumn *column;
+    GPtrArray *tasks;
     guint nb;
 };
 
@@ -154,8 +155,14 @@ struct _DonnaTreeViewPrivate
     guint                sync_mode   : 2;
 };
 
-/* our internel spinner */
-static GtkCellRenderer *spinner = NULL;
+/* our internal renderers */
+enum
+{
+    INTERNAL_RENDERER_SPINNER = 0,
+    INTERNAL_RENDERER_PIXBUF,
+    NB_INTERNAL_RENDERERS
+};
+static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 
 /* we *need* to use this when creating an iter, because we compare *all* values
  * to determine if two iters match (and models might not always set all values) */
@@ -182,6 +189,12 @@ static gboolean add_node_to_tree (DonnaTreeView *tree,
                                   GtkTreeIter   *parent,
                                   DonnaNode     *node,
                                   GtkTreeIter   *row);
+
+static struct active_spinners * get_as_for_row (DonnaTreeView   *tree,
+                                                GtkTreeIter     *iter,
+                                                gboolean         from_hashtable,
+                                                guint           *index,
+                                                gboolean         create);
 
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
@@ -212,8 +225,12 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
 
     g_type_class_add_private (klass, sizeof (DonnaTreeViewPrivate));
 
-    if (!spinner)
-        spinner = gtk_cell_renderer_spinner_new ();
+    if (!int_renderers[INTERNAL_RENDERER_SPINNER])
+        int_renderers[INTERNAL_RENDERER_SPINNER] =
+            gtk_cell_renderer_spinner_new ();
+    if (!int_renderers[INTERNAL_RENDERER_PIXBUF])
+        int_renderers[INTERNAL_RENDERER_PIXBUF] =
+            gtk_cell_renderer_pixbuf_new ();
 }
 
 static void
@@ -1066,6 +1083,7 @@ spinner_fn (DonnaTreeView *tree)
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model;
     guint i;
+    gboolean active = FALSE;
 
     if (!priv->active_spinners_id)
         return FALSE;
@@ -1078,19 +1096,44 @@ spinner_fn (DonnaTreeView *tree)
         return FALSE;
     }
 
-    ++priv->active_spinners_pulse;
-
     model = get_model (tree);
     for (i = 0; i < priv->active_spinners->len; ++i)
     {
         struct active_spinners *as = priv->active_spinners->pdata[i];
         GtkTreePath *path;
+        guint j;
+        gboolean refresh;
+
+        refresh = FALSE;
+        for (j = 0; j < as->as_cols->len; ++j)
+        {
+            struct as_col *as_col;
+
+            as_col = &g_array_index (as->as_cols, struct as_col, j);
+            if (as_col->nb > 0)
+            {
+                active = refresh = TRUE;
+                break;
+            }
+        }
+        if (!refresh)
+            continue;
 
         path = gtk_tree_model_get_path (model, as->iter);
         gtk_tree_model_row_changed (model, path, as->iter);
         gtk_tree_path_free (path);
     }
 
+    if (!active)
+    {
+        /* there are active spinners only for error messages */
+        g_source_remove (priv->active_spinners_id);
+        priv->active_spinners_id = 0;
+        priv->active_spinners_pulse = 0;
+        return FALSE;
+    }
+
+    ++priv->active_spinners_pulse;
     return TRUE;
 }
 
@@ -1113,52 +1156,77 @@ rend_func (GtkTreeViewColumn  *column,
     priv = tree->priv;
 
     /* spinner */
-    if (index == 0)
+    if (index == INTERNAL_RENDERER_SPINNER || index == INTERNAL_RENDERER_PIXBUF)
     {
-        if (priv->active_spinners_id)
+        GtkTreeModelFilter *filter;
+        GtkTreeIter iter = ITER_INIT;
+        struct active_spinners *as;
+
+        if (!priv->active_spinners->len)
         {
-            GtkTreeModelFilter *filter;
-            GtkTreeIter iter = ITER_INIT;
+            g_object_set (renderer,
+                    "visible",  FALSE,
+                    NULL);
+            return;
+        }
+
+        filter = get_filter (tree);
+        gtk_tree_model_filter_convert_iter_to_child_iter (filter,
+                &iter, _iter);
+
+        as = get_as_for_row (tree, &iter, FALSE, NULL, FALSE);
+        if (as)
+        {
             guint i;
 
-            filter = get_filter (tree);
-            gtk_tree_model_filter_convert_iter_to_child_iter (filter,
-                    &iter, _iter);
-
-            for (i = 0; i < priv->active_spinners->len; ++i)
+            for (i = 0; i < as->as_cols->len; ++i)
             {
-                struct active_spinners *as = priv->active_spinners->pdata[i];
+                struct as_col *as_col;
 
-                if (itereq (&iter, as->iter))
+                as_col = &g_array_index (as->as_cols, struct as_col, i);
+                if (as_col->column != column)
+                    continue;
+
+                if (index == INTERNAL_RENDERER_SPINNER)
                 {
-                    guint j;
-
-                    for (j = 0; j < as->as_cols->len; ++j)
+                    if (as_col->nb > 0)
                     {
-                        struct as_col *as_col;
+                        g_object_set (renderer,
+                                "visible",  TRUE,
+                                "active",   TRUE,
+                                "pulse",    priv->active_spinners_pulse,
+                                NULL);
+                        return;
+                    }
+                }
+                else /* INTERNAL_RENDERER_PIXBUF */
+                {
+                    for (i = 0; i < as_col->tasks->len; ++i)
+                    {
+                        DonnaTask *task = as_col->tasks->pdata[i];
 
-                        as_col = &g_array_index (as->as_cols, struct as_col, j);
-                        if (as_col->column == column)
+                        if (donna_task_get_state (task) == DONNA_TASK_FAILED)
                         {
                             g_object_set (renderer,
-                                    "visible",  TRUE,
-                                    "active",   TRUE,
-                                    "pulse",    priv->active_spinners_pulse,
+                                    "visible",      TRUE,
+                                    "stock-id",     GTK_STOCK_DIALOG_WARNING,
+                                    "follow-state", TRUE,
                                     NULL);
                             return;
                         }
                     }
-                    break;
                 }
+                break;
             }
         }
 
         g_object_set (renderer,
                 "visible",  FALSE,
-                "active",   FALSE,
                 NULL);
         return;
     }
+
+    index -= NB_INTERNAL_RENDERERS - 1; /* -1 to start with index 1 */
 
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
@@ -2070,15 +2138,19 @@ load_arrangement (DonnaTreeView     *tree,
                     ct, g_object_unref);
             /* sizing stuff */
             gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
-            /* put our spinner renderer */
-            gtk_tree_view_column_set_cell_data_func (column,
-                    spinner,
-                    rend_func,
-                    GINT_TO_POINTER (0),
-                    NULL);
-            gtk_tree_view_column_pack_start (column, spinner, FALSE);
+            /* put our internal renderers */
+            for (index = 0; index < NB_INTERNAL_RENDERERS; ++index)
+            {
+                gtk_tree_view_column_set_cell_data_func (column,
+                        int_renderers[index],
+                        rend_func,
+                        GINT_TO_POINTER (index),
+                        NULL);
+                gtk_tree_view_column_pack_start (column, int_renderers[index],
+                        FALSE);
+            }
             /* load renderers */
-            for (index = 1, rend = donna_columntype_get_renderers (ct);
+            for (rend = donna_columntype_get_renderers (ct);
                     *rend;
                     ++index, ++rend)
             {
@@ -2307,15 +2379,58 @@ free_set_node_prop_data (struct set_node_prop_data *data)
     g_free (data);
 }
 
+static struct active_spinners *
+get_as_for_row (DonnaTreeView   *tree,
+                GtkTreeIter     *iter,
+                gboolean         from_hashtable,
+                guint           *index,
+                gboolean         create)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    struct active_spinners *as;
+    guint i;
+
+    /* is there already an as for this row? */
+    for (i = 0; i < priv->active_spinners->len; ++i)
+    {
+        as = priv->active_spinners->pdata[i];
+        if ((from_hashtable && iter == as->iter)
+                || (!from_hashtable && itereq (iter, as->iter)))
+            break;
+    }
+
+    if (i >= priv->active_spinners->len)
+    {
+        if (create)
+        {
+            as = g_new0 (struct active_spinners, 1);
+            as->iter = iter;
+            as->as_cols = g_array_new (FALSE, FALSE, sizeof (struct as_col));
+
+            g_ptr_array_add (priv->active_spinners, as);
+        }
+        else
+            as = NULL;
+    }
+
+    if (index)
+        *index = i;
+
+    return as;
+}
+
 static void
 set_node_prop_callbak (DonnaTask                 *task,
                        gboolean                   timeout_called,
                        struct set_node_prop_data *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
-    GSList *list, *l;
+    gboolean task_failed;
+    GSList *list = NULL, *l;
     guint i;
     GPtrArray *arr;
+
+    task_failed = donna_task_get_state (task) == DONNA_TASK_FAILED;
 
     /* search column(s) linked to that prop */
     arr = g_ptr_array_sized_new (1);
@@ -2333,12 +2448,12 @@ set_node_prop_callbak (DonnaTask                 *task,
     {
         g_ptr_array_free (arr, TRUE);
         free_set_node_prop_data (data);
+        /* FIXME error message if FAILED */
         return;
     }
 
-    /* FIXME error message on task failed */
-    /* no timeout called == no spinners set */
-    if (timeout_called)
+    /* timeout called == spinners set; task failed == error message */
+    if (timeout_called || task_failed)
     {
         list = g_hash_table_lookup (priv->hashtable, data->node);
         /* for every row of this node */
@@ -2346,26 +2461,13 @@ set_node_prop_callbak (DonnaTask                 *task,
         {
             GtkTreeIter *iter = l->data;
             struct active_spinners *as;
-            guint as_idx;
+            guint as_idx; /* in case we need to remove this as */
             guint j;
             GtkTreeViewColumn *col;
 
-            /* is there already an as for this row? */
-            as = NULL;
-            for (i = 0; i < priv->active_spinners->len; ++i)
-            {
-                as = priv->active_spinners->pdata[i];
-                /* we can compare the pointers because active_spinners always
-                 * contains *iter from the hashtable */
-                if (iter == as->iter)
-                    break;
-            }
-
+            as = get_as_for_row (data->tree, iter, TRUE, &as_idx, task_failed);
             if (!as)
                 continue;
-
-            /* in case we need to remove this as */
-            as_idx = i;
 
             /* for every column using that property */
             col = NULL;
@@ -2374,7 +2476,7 @@ set_node_prop_callbak (DonnaTask                 *task,
                 GtkTreeViewColumn *column = arr->pdata[i];
                 struct as_col *as_col;
 
-                /* does this as already have a spinner for this column? */
+                /* does this as have a spinner for this column? */
                 for (j = 0; j < as->as_cols->len; ++j)
                 {
                     as_col = &g_array_index (as->as_cols, struct as_col, j);
@@ -2382,17 +2484,38 @@ set_node_prop_callbak (DonnaTask                 *task,
                         break;
                 }
                 if (j >= as->as_cols->len)
-                    continue;
+                {
+                    if (task_failed)
+                    {
+                        struct as_col as_col_new;
+
+                        as_col_new.column = column;
+                        as_col_new.nb = 1; /* will be set to 0 a few lines below */
+                        as_col_new.tasks = g_ptr_array_new_full (1, g_object_unref);
+                        g_ptr_array_add (as_col_new.tasks, g_object_ref (task));
+                        g_array_append_val (as->as_cols, as_col_new);
+                    }
+                    else
+                        continue;
+                }
+
+                if (!task_failed)
+                    g_ptr_array_remove_fast (as_col->tasks, task);
 
                 if (--as_col->nb == 0)
                 {
-                    /* was this the last column for this row's as ? */
-                    if (as->as_cols->len == 1)
-                        g_ptr_array_remove_index_fast (priv->active_spinners,
-                                as_idx);
-                    else
-                        g_array_remove_index_fast (as->as_cols, j);
+                    /* can we remove this as_col? */
+                    if (as_col->tasks->len == 0)
+                    {
+                        /* can we remove the whole as? */
+                        if (as->as_cols->len == 1)
+                            g_ptr_array_remove_index_fast (priv->active_spinners,
+                                    as_idx);
+                        else
+                            g_array_remove_index_fast (as->as_cols, j);
+                    }
 
+                    /* to refresh the row */
                     col = column;
                 }
             }
@@ -2401,16 +2524,35 @@ set_node_prop_callbak (DonnaTask                 *task,
                 GtkTreeModel *model;
                 GtkTreePath *path;
 
-                /* make sure a redraw will be done for this row, else the
-                 * last spinner frame stays there until a redraw happens */
+#ifndef GTK_IS_JJK
+                if (task_failed)
+                    /* a bug in GTK means that because when the size of renderer
+                     * is first computed and renderer if not visible, it has a
+                     * natural size of 0 and therefore even when it becomes
+                     * visible it isn't actually drawn.
+                     * This is a hack to workaround this, by enforcing the
+                     * column to re-compute its size now that we'll have the
+                     * renderer visible, so it should have a natural size and
+                     * actually be drawn */
+                    gtk_tree_view_column_queue_resize (col);
+                else
+#endif
+                {
 
-                model = get_model (gtk_tree_view_column_get_tree_view (col));
-                path = gtk_tree_model_get_path (model, iter);
-                gtk_tree_model_row_changed (model, path, iter);
-                gtk_tree_path_free (path);
+                    /* make sure a redraw will be done for this row, else the
+                     * last spinner frame stays there until a redraw happens */
+
+                    model = get_model (gtk_tree_view_column_get_tree_view (col));
+                    path = gtk_tree_model_get_path (model, iter);
+                    gtk_tree_model_row_changed (model, path, iter);
+                    gtk_tree_path_free (path);
+                }
             }
         }
 
+        /* no more as == we can stop spinner_fn. If there's still one (or more)
+         * but only for error messages, on its next call spinner_fn will see it
+         * and stop itself */
         if (!priv->active_spinners->len && priv->active_spinners_id)
         {
             g_source_remove (priv->active_spinners_id);
@@ -2457,24 +2599,7 @@ set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
         struct active_spinners *as;
         guint j;
 
-        /* is there already an as for this row? */
-        for (i = 0; i < priv->active_spinners->len; ++i)
-        {
-            as = priv->active_spinners->pdata[i];
-            /* we can compare the pointers because active_spinners always
-             * contains *iter from the hashtable */
-            if (iter == as->iter)
-                break;
-        }
-
-        if (i >= priv->active_spinners->len)
-        {
-            as = g_new0 (struct active_spinners, 1);
-            as->iter = iter;
-            as->as_cols = g_array_new (FALSE, FALSE, sizeof (struct as_col));
-
-            g_ptr_array_add (priv->active_spinners, as);
-        }
+        as = get_as_for_row (data->tree, iter, TRUE, NULL, TRUE);
 
         /* for every column using that property */
         for (i = 0; i < arr->len; ++i)
@@ -2490,16 +2615,16 @@ set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
                     break;
             }
             if (j >= as->as_cols->len)
-                as_col = NULL;
-
-            if (!as_col)
             {
                 struct as_col as_col_new;
 
                 as_col_new.column = column;
                 as_col_new.nb = 1;
+                as_col_new.tasks = g_ptr_array_new_full (1, g_object_unref);
                 g_array_append_val (as->as_cols, as_col_new);
+                as_col = &g_array_index (as->as_cols, struct as_col, j);
 
+#ifndef GTK_IS_JJK
                 /* a bug in GTK means that because when the size of renderer is
                  * first computed and spinner if not visible, it has a natural
                  * size of 0 and therefore even when it becomes visible it isn't
@@ -2508,9 +2633,12 @@ set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
                  * re-compute its size now that we'll have the spinner visible,
                  * so it should have a natural size and actually be drawn */
                 gtk_tree_view_column_queue_resize (column);
+#endif
             }
             else
                 ++as_col->nb;
+
+            g_ptr_array_add (as_col->tasks, g_object_ref (task));
         }
     }
 
@@ -2604,6 +2732,7 @@ query_tooltip_cb (GtkTreeView   *treev,
                   gboolean       keyboard_mode,
                   GtkTooltip    *tooltip)
 {
+    DonnaTreeView *tree = DONNA_TREE_VIEW (treev);
     DonnaTreeViewPrivate *priv;
     GtkTreeViewColumn *column;
 #ifdef GTK_IS_JJK
@@ -2628,11 +2757,67 @@ query_tooltip_cb (GtkTreeView   *treev,
             const gchar *col;
             guint index = 0;
 
+            priv = tree->priv;
 #ifdef GTK_IS_JJK
-            if (renderer == spinner)
+            if (renderer == int_renderers[INTERNAL_RENDERER_SPINNER])
                 return FALSE;
-#endif
+            else if (renderer == int_renderers[INTERNAL_RENDERER_PIXBUF])
+            {
+                GtkTreeModelFilter *filter;
+                GtkTreeIter iter = ITER_INIT;
+                struct active_spinners *as;
 
+                filter = get_filter (tree);
+                gtk_tree_model_filter_convert_iter_to_child_iter (filter,
+                        &iter, &_iter);
+
+                as = get_as_for_row (tree, &iter, FALSE, NULL, FALSE);
+                if (as)
+                {
+                    guint i;
+
+                    for (i = 0; i < as->as_cols->len; ++i)
+                    {
+                        struct as_col *as_col;
+                        GString *str;
+
+                        as_col = &g_array_index (as->as_cols, struct as_col, i);
+                        if (as_col->column != column)
+                            continue;
+
+                        str = g_string_new (NULL);
+                        for (i = 0; i < as_col->tasks->len; ++i)
+                        {
+                            DonnaTask *task = as_col->tasks->pdata[i];
+
+                            if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+                            {
+                                const GError *err;
+
+                                if (str->len > 0)
+                                    g_string_append_c (str, '\n');
+
+                                err = donna_task_get_error (task);
+                                if (err)
+                                    g_string_append (str, err->message);
+                                else
+                                    g_string_append (str, "Task failed, no error message");
+                            }
+                        }
+
+                        if (str)
+                        {
+                            gtk_tooltip_set_text (tooltip, str->str);
+                            g_string_free (str, TRUE);
+                            return TRUE;
+                        }
+                        else
+                            return FALSE;
+                    }
+                }
+                return FALSE;
+            }
+#endif
             gtk_tree_model_get (_model, &_iter,
                     DONNA_TREE_VIEW_COL_NODE,   &node,
                     -1);
@@ -2642,7 +2827,6 @@ query_tooltip_cb (GtkTreeView   *treev,
             ct  = g_object_get_data (G_OBJECT (column), "column-type");
             col = g_object_get_data (G_OBJECT (column), "column-name");
 
-            priv = DONNA_TREE_VIEW (treev)->priv;
 #ifdef GTK_IS_JJK
             if (renderer)
             {
@@ -2670,6 +2854,115 @@ query_tooltip_cb (GtkTreeView   *treev,
         }
     }
     return ret;
+}
+
+static gboolean
+button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
+{
+    GtkTreeView *treev = GTK_TREE_VIEW (tree);
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeViewColumn *column;
+#ifdef GTK_IS_JJK
+    GtkCellRenderer *renderer;
+#endif
+    GtkTreeModel *_model;
+    GtkTreeIter _iter = ITER_INIT;
+    gint x, y;
+
+    if (event->button != 1 || event->type != GDK_BUTTON_PRESS)
+        return FALSE;
+
+    x = (gint) event->x;
+    y = (gint) event->y;
+
+    if (gtk_tree_view_get_tooltip_context (treev, &x, &y, 0,
+                &_model, NULL, &_iter))
+    {
+#ifdef GTK_IS_JJK
+        if (!gtk_tree_view_is_blank_at_pos_full (treev, x, y, NULL, &column,
+                    &renderer, NULL, NULL))
+#else
+        if (!gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
+#endif
+        {
+            GtkTreeModelFilter *filter;
+            GtkTreeIter iter = ITER_INIT;
+            struct active_spinners *as;
+
+#ifdef GTK_IS_JJK
+            if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
+                return FALSE;
+#endif
+            filter = get_filter (tree);
+            gtk_tree_model_filter_convert_iter_to_child_iter (filter,
+                    &iter, &_iter);
+
+            as = get_as_for_row (tree, &iter, FALSE, NULL, FALSE);
+            if (as)
+            {
+                guint i;
+
+                for (i = 0; i < as->as_cols->len; ++i)
+                {
+                    GtkTreeModel *model;
+                    struct as_col *as_col;
+                    GString *str;
+                    GtkTreePath *path;
+
+                    as_col = &g_array_index (as->as_cols, struct as_col, i);
+                    if (as_col->column != column)
+                        continue;
+
+                    str = g_string_new (NULL);
+                    for (i = 0; i < as_col->tasks->len; )
+                    {
+                        DonnaTask *task = as_col->tasks->pdata[i];
+
+                        if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+                        {
+                            const GError *err;
+
+                            if (str->len > 0)
+                                g_string_append_c (str, '\n');
+
+                            err = donna_task_get_error (task);
+                            if (err)
+                                g_string_append (str, err->message);
+                            else
+                                g_string_append (str, "Task failed, no error message");
+
+                            /* this will get the last task in the array to i,
+                             * hence to need to move */
+                            g_ptr_array_remove_index_fast (as_col->tasks, i);
+                            /* FIXME remove same task for other node's rows */
+                        }
+                        else
+                            /* move to next task */
+                            ++i;
+                    }
+
+                    if (str)
+                    {
+                        /* FIXME show error */
+                        g_info ("Error: %s", str->str);
+                        g_string_free (str, TRUE);
+                    }
+
+                    /* we can safely assume we found/remove a task, so a refresh
+                     * is in order */
+                    model = gtk_tree_model_filter_get_model (filter);
+                    path = gtk_tree_model_get_path (model, &iter);
+                    gtk_tree_model_row_changed (model, path, &iter);
+                    gtk_tree_path_free (path);
+
+                    /* we've handled it */
+                    return TRUE;
+                }
+            }
+        }
+    }
+
+    return FALSE;
 }
 
 static void
@@ -2760,9 +3053,16 @@ donna_tree_view_new (DonnaApp           *app,
     w = g_object_new (DONNA_TYPE_TREE_VIEW, NULL);
     treev = GTK_TREE_VIEW (w);
     gtk_tree_view_set_fixed_height_mode (treev, TRUE);
+
+    /* tooltip */
     g_signal_connect (G_OBJECT (w), "query-tooltip",
             G_CALLBACK (query_tooltip_cb), NULL);
     gtk_widget_set_has_tooltip (w, TRUE);
+
+    /* click */
+    gtk_widget_add_events (w, GDK_BUTTON_RELEASE_MASK);
+    g_signal_connect (G_OBJECT (w), "button-press-event",
+            G_CALLBACK (button_press_cb), NULL);
 
     tree        = DONNA_TREE_VIEW (w);
     priv        = tree->priv;
