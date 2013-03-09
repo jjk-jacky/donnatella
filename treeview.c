@@ -2730,7 +2730,7 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     donna_task_set_timeout (task, 800 /* FIXME an option */,
             (task_timeout_fn) set_node_prop_timeout,
             data,
-            (GDestroyNotify) free_set_node_prop_data);
+            NULL);
     donna_task_set_callback (task,
             (task_callback_fn) set_node_prop_callbak,
             data,
