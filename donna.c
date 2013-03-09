@@ -52,12 +52,48 @@ donna_donna_class_init (DonnaDonnaClass *klass)
     g_type_class_add_private (klass, sizeof (DonnaDonnaPrivate));
 }
 
+static GThread *mt;
+static void
+log_handler (const gchar    *domain,
+             GLogLevelFlags  log_level,
+             const gchar    *message,
+             gpointer        data)
+{
+    GThread *thread = g_thread_self ();
+    GString *str;
+
+    str = g_string_new (NULL);
+
+    if (thread != mt)
+        g_string_append_printf (str, "[thread %p] ", thread);
+
+    if (log_level & G_LOG_LEVEL_ERROR)
+        g_string_append (str, "ERROR: ");
+    if (log_level & G_LOG_LEVEL_CRITICAL)
+        g_string_append (str, "CRITICAL: ");
+    if (log_level & G_LOG_LEVEL_WARNING)
+        g_string_append (str, "WARNING: ");
+    if (log_level & G_LOG_LEVEL_MESSAGE)
+        g_string_append (str, "MESSAGE: ");
+    if (log_level & G_LOG_LEVEL_INFO)
+        g_string_append (str, "INFO: ");
+    if (log_level & G_LOG_LEVEL_DEBUG)
+        g_string_append (str, "DEBUG: ");
+
+    g_string_append (str,message);
+    puts (str->str);
+    g_string_free (str, TRUE);
+}
+
 static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
     GPtrArray *arr = NULL;
     guint i;
+
+    mt = g_thread_self ();
+    g_log_set_default_handler (log_handler, NULL);
 
     priv = donna->priv = G_TYPE_INSTANCE_GET_PRIVATE (donna,
             DONNA_TYPE_DONNA, DonnaDonnaPrivate);
@@ -110,12 +146,12 @@ skip_arrangements:
 
 G_DEFINE_TYPE (DonnaDonna, donna_donna, G_TYPE_OBJECT)
 
-static GObject *donna = NULL;
 static GObject *
 donna_donna_constructor (GType                   type,
                          guint                   n_params,
                          GObjectConstructParam  *params)
 {
+    static GObject *donna = NULL;
     GObject *obj;
 
     if (!donna)
