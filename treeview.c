@@ -352,7 +352,7 @@ load_config (DonnaTreeView *tree)
     {
         /* set default */
         val = DONNA_NODE_CONTAINER;
-        if (is_tree (tree))
+        if (!is_tree (tree))
             val |= DONNA_NODE_ITEM;
         priv->node_types = val;
         donna_config_set_uint (config, val,
