@@ -2888,6 +2888,7 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
             GtkTreeModelFilter *filter;
             GtkTreeIter iter = ITER_INIT;
             struct active_spinners *as;
+            guint as_idx;
 
 #ifdef GTK_IS_JJK
             if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
@@ -2897,7 +2898,7 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
             gtk_tree_model_filter_convert_iter_to_child_iter (filter,
                     &iter, &_iter);
 
-            as = get_as_for_row (tree, &iter, FALSE, NULL, FALSE);
+            as = get_as_for_row (tree, &iter, FALSE, &as_idx, FALSE);
             if (as)
             {
                 guint i;
@@ -2908,15 +2909,16 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
                     struct as_col *as_col;
                     GString *str;
                     GtkTreePath *path;
+                    guint j;
 
                     as_col = &g_array_index (as->as_cols, struct as_col, i);
                     if (as_col->column != column)
                         continue;
 
                     str = g_string_new (NULL);
-                    for (i = 0; i < as_col->tasks->len; )
+                    for (j = 0; j < as_col->tasks->len; )
                     {
-                        DonnaTask *task = as_col->tasks->pdata[i];
+                        DonnaTask *task = as_col->tasks->pdata[j];
 
                         if (donna_task_get_state (task) == DONNA_TASK_FAILED)
                         {
@@ -2931,14 +2933,25 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
                             else
                                 g_string_append (str, "Task failed, no error message");
 
-                            /* this will get the last task in the array to i,
+                            /* this will get the last task in the array to j,
                              * hence to need to move */
-                            g_ptr_array_remove_index_fast (as_col->tasks, i);
+                            g_ptr_array_remove_index_fast (as_col->tasks, j);
                             /* FIXME remove same task for other node's rows */
+
+                            /* can we remove the as_col? */
+                            if (as_col->nb == 0 && as_col->tasks->len == 0)
+                            {
+                                /* can we remove the whole as? */
+                                if (as->as_cols->len == 1)
+                                    g_ptr_array_remove_index_fast (priv->active_spinners,
+                                            as_idx);
+                                else
+                                    g_array_remove_index_fast (as->as_cols, i);
+                            }
                         }
                         else
                             /* move to next task */
-                            ++i;
+                            ++j;
                     }
 
                     if (str)
