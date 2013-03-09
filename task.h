@@ -25,29 +25,30 @@ typedef enum
 typedef enum
 {
     /* dona_task_get_state (not_a_task) */
-    DONNA_TASK_STATE_UNKNOWN,
+    DONNA_TASK_STATE_UNKNOWN    = (1 << 0),
     /* task not started, no auto-start (by task manager) */
-    DONNA_TASK_STOPPED,
+    DONNA_TASK_STOPPED          = (1 << 1),
     /* task not started, auto-start (by task manager) */
-    DONNA_TASK_WAITING,
+    DONNA_TASK_WAITING          = (1 << 2),
     /* function running */
-    DONNA_TASK_RUNNING,
+    DONNA_TASK_RUNNING          = (1 << 3),
     /* user asked to pause */
-    DONNA_TASK_PAUSING,
+    DONNA_TASK_PAUSING          = (1 << 4),
     /* function is paused */
-    DONNA_TASK_PAUSED,
+    DONNA_TASK_PAUSED           = (1 << 5),
     /* user asked to cancel */
-    DONNA_TASK_CANCELLING,
+    DONNA_TASK_CANCELLING       = (1 << 6),
     /* function done, return codes: */
-    DONNA_TASK_DONE,
-    DONNA_TASK_CANCELLED,
-    DONNA_TASK_FAILED
+    DONNA_TASK_DONE             = (1 << 7),
+    DONNA_TASK_CANCELLED        = (1 << 8),
+    DONNA_TASK_FAILED           = (1 << 9),
+
+    /* task hasn't ran yet */
+    DONNA_TASK_PRE_RUN          = (DONNA_TASK_STOPPED | DONNA_TASK_WAITING),
+    /* task has ran */
+    DONNA_TASK_POST_RUN         = (DONNA_TASK_DONE | DONNA_TASK_CANCELLED
+            | DONNA_TASK_FAILED),
 } DonnaTaskState;
-/* task hasn't ran yet */
-#define DONNA_TASK_PRE_RUN      (DONNA_TASK_STOPPED | DONNA_TASK_WAITING)
-/* task has ran */
-#define DONNA_TASK_POST_RUN     (DONNA_TASK_DONE | DONNA_TASK_CANCELLED \
-        | DONNA_TASK_FAILED)
 
 typedef DonnaTaskState  (*task_fn)              (DonnaTask  *task,
                                                  gpointer    data);
