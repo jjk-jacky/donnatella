@@ -3,6 +3,7 @@
 #define __DONNA_TASK_H__
 
 #include "common.h"
+#include "sharedstring.h"
 #include "taskui.h"
 
 G_BEGIN_DECLS
@@ -92,7 +93,7 @@ DonnaTask *         donna_task_new_full         (task_fn             func,
                                                  gchar             **devices,
                                                  DonnaTaskPriority   priority,
                                                  gboolean            autostart,
-                                                 gchar              *desc);
+                                                 DonnaSharedString  *desc);
 gboolean            donna_task_set_taskui       (DonnaTask          *task,
                                                  DonnaTaskUi        *taskui);
 gboolean            donna_task_set_devices      (DonnaTask          *task,
@@ -103,7 +104,9 @@ gboolean            donna_task_set_duplicator   (DonnaTask          *task,
                                                  GDestroyNotify      destroy);
 
 gboolean            donna_task_set_desc         (DonnaTask          *task,
-                                                 gchar              *desc);
+                                                 DonnaSharedString  *desc);
+gboolean            donna_task_prefix_desc      (DonnaTask          *task,
+                                                 const gchar        *prefix);
 gboolean            donna_task_set_priority     (DonnaTask          *task,
                                                  DonnaTaskPriority   priority);
 gboolean            donna_task_set_autostart    (DonnaTask          *task,
@@ -120,7 +123,7 @@ gboolean            donna_task_set_timeout      (DonnaTask          *task,
 
 gchar **            donna_task_get_devices      (DonnaTask          *task);
 DonnaTaskPriority   donna_task_get_priority     (DonnaTask          *task);
-gchar *             donna_task_get_desc         (DonnaTask          *task);
+DonnaSharedString * donna_task_get_desc         (DonnaTask          *task);
 DonnaTaskUi *       donna_task_get_taskui       (DonnaTask          *task);
 DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
 gdouble             donna_task_get_progress     (DonnaTask          *task);

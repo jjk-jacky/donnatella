@@ -3,14 +3,17 @@
 #include <sys/eventfd.h>
 #include <unistd.h>         /* read(), write(), close() */
 #include <stdarg.h>         /* va_args stuff */
+#include <string.h>         /* strlen() */
+#include <stdio.h>          /* snprintf() */
 #include "task.h"
 #include "util.h"           /* duplicate_gvalue() */
+#include "sharedstring.h"
 #include "closures.h"
 
 struct _DonnaTaskPrivate
 {
     /* task desc */
-    gchar               *desc;
+    DonnaSharedString   *desc;
     /* task priority */
     DonnaTaskPriority    priority;
     /* task status (current operation being done) */
@@ -228,7 +231,7 @@ donna_task_new_full (task_fn             func,
                      gchar             **devices,
                      DonnaTaskPriority   priority,
                      gboolean            autostart,
-                     gchar              *desc)
+                     DonnaSharedString  *desc)
 {
     DonnaTask *task;
     DonnaTaskPrivate *priv;
@@ -251,7 +254,8 @@ donna_task_new_full (task_fn             func,
     priv->priority = priority;
     if (!autostart)
         priv->state = DONNA_TASK_STOPPED;
-    priv->desc = desc;
+    if (desc)
+        priv->desc = donna_shared_string_ref (desc);
 
     return task;
 }
@@ -294,13 +298,40 @@ donna_task_set_duplicator (DonnaTask        *task,
 }
 
 gboolean
-donna_task_set_desc (DonnaTask *task, gchar *desc)
+donna_task_set_desc (DonnaTask *task, DonnaSharedString *desc)
 {
     g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
     g_return_val_if_fail (desc != NULL, FALSE);
 
-    g_free (task->priv->desc);
-    task->priv->desc = g_strdup (desc);
+    if (task->priv->desc)
+        donna_shared_string_unref (task->priv->desc);
+    task->priv->desc = donna_shared_string_ref (desc);
+    return TRUE;
+}
+
+gboolean
+donna_task_prefix_desc (DonnaTask *task, const gchar *prefix)
+{
+    DonnaTaskPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (prefix != NULL, FALSE);
+
+    priv = task->priv;
+
+    if (priv->desc)
+    {
+        gchar *s;
+        gsize len;
+
+        len = strlen (donna_shared_string (priv->desc)) + strlen (prefix) + 1;
+        s = g_new (gchar, len);
+        snprintf (s, len, "%s%s", donna_shared_string (priv->desc), prefix);
+        priv->desc = donna_shared_string_update_take (priv->desc, s);
+    }
+    else
+        priv->desc = donna_shared_string_new_dup (prefix);
+
     return TRUE;
 }
 
@@ -377,16 +408,14 @@ donna_task_get_priority (DonnaTask *task)
     return task->priv->priority;
 }
 
-gchar *
+DonnaSharedString *
 donna_task_get_desc (DonnaTask *task)
 {
-    gchar *desc;
-
     g_return_val_if_fail (DONNA_IS_TASK (task), NULL);
-    LOCK_TASK (task);
-    desc = g_strdup (task->priv->desc);
-    UNLOCK_TASK (task);
-    return desc;
+    if (task->priv->desc)
+        return donna_shared_string_ref (task->priv->desc);
+    else
+        return NULL;
 }
 
 DonnaTaskUi *
