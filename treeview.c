@@ -2493,19 +2493,27 @@ set_node_prop_callbak (DonnaTask                 *task,
                     struct as_col as_col_new;
 
                     as_col_new.column = column;
-                    as_col_new.nb = 1; /* will be set to 0 a few lines below */
+                    /* no as_col means no timeout called, so we can safely set
+                     * nb to 0 */
+                    as_col_new.nb = 0;
                     as_col_new.tasks = g_ptr_array_new_full (1, g_object_unref);
                     g_ptr_array_add (as_col_new.tasks, g_object_ref (task));
                     g_array_append_val (as->as_cols, as_col_new);
+                    as_col = &g_array_index (as->as_cols, struct as_col, j);
                 }
                 else
                     continue;
             }
+            else if (!timeout_called) /* implies task_failed */
+                g_ptr_array_add (as_col->tasks, g_object_ref (task));
 
             if (!task_failed)
                 g_ptr_array_remove_fast (as_col->tasks, task);
 
-            if (--as_col->nb == 0)
+            if (timeout_called)
+                --as_col->nb;
+
+            if (as_col->nb == 0)
             {
                 refresh = TRUE;
 #ifndef GTK_IS_JJK
