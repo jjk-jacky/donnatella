@@ -60,9 +60,15 @@ log_handler (const gchar    *domain,
              gpointer        data)
 {
     GThread *thread = g_thread_self ();
+    time_t now;
+    struct tm *tm;
+    gchar buf[12];
     GString *str;
 
-    str = g_string_new (NULL);
+    now = time (NULL);
+    tm = localtime (&now);
+    strftime (buf, 12, "[%H:%M:%S] ", tm);
+    str = g_string_new (buf);
 
     if (thread != mt)
         g_string_append_printf (str, "[thread %p] ", thread);
