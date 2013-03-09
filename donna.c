@@ -388,7 +388,10 @@ main (int argc, char *argv[])
     donna_config_set_uint (config, 1, "treeviews/tree/mode");
     donna_config_set_string_dup (config, "name", "treeviews/tree/arrangement/sort");
     g_object_unref (config);
-    _tree = donna_tree_view_new (d, "tree");
+    DonnaSharedString *name;
+    name = donna_shared_string_new_dup ("tree");
+    _tree = donna_tree_view_new (d, name);
+    donna_shared_string_unref (name);
     tree = GTK_TREE_VIEW (_tree);
     /* scrolled window */
     _scrolled_window = gtk_scrolled_window_new (NULL, NULL);

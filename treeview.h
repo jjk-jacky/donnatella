@@ -6,6 +6,7 @@
 #include "columntype.h"
 #include "conf.h"
 #include "donna.h"
+#include "sharedstring.h"
 
 G_BEGIN_DECLS
 
@@ -29,7 +30,7 @@ struct _DonnaTreeViewClass
 };
 
 GtkWidget *     donna_tree_view_new             (DonnaDonna         *donna,
-                                                 const gchar        *name);
+                                                 DonnaSharedString  *name);
 void            donna_tree_view_build_arrangement (
                                                  DonnaTreeView      *tree,
                                                  gboolean            force);
