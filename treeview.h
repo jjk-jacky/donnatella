@@ -40,6 +40,9 @@ gboolean        donna_tree_view_set_node_property (DonnaTreeView    *tree,
                                                  DonnaSharedString  *prop,
                                                  const GValue       *value,
                                                  GError            **error);
+gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
+                                                 DonnaNode          *node);
+DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
@@ -47,8 +50,6 @@ gchar *         donna_tree_view_export_tree     (DonnaTreeView      *tree);
 gboolean        donna_tree_view_add_root        (DonnaTreeView      *tree,
                                                  DonnaNode          *node);
 /* Mode List */
-gboolean        donna_tree_view_set_location    (DonnaTreeView      *list,
-                                                 DonnaNode          *node);
 
 G_END_DECLS
 
