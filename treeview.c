@@ -732,11 +732,12 @@ node_get_children_callback (DonnaTask                   *task,
                 "location", &location,
                 NULL);
         error = donna_task_get_error (task);
+        /* FIXME */
         donna_error ("Treeview '%s': Failed to get children for node '%s:%s': %s",
                 get_name (data->tree->priv),
                 domain,
                 donna_shared_string (location),
-                error->message);
+                (error) ? error->message : "No error message");
         donna_shared_string_unref (location);
         g_object_unref (node);
 
@@ -864,6 +865,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
                         -1);
                 if (!node)
                 {
+                    /* FIXME */
                     donna_error ("Treeview '%s': could not get node from model",
                             get_name (priv));
                     return TRUE;
