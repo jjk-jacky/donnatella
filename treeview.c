@@ -9,6 +9,7 @@
 #include "task.h"
 #include "sharedstring.h"
 #include "macros.h"
+#include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
 
 enum
 {
@@ -1247,20 +1248,12 @@ rend_func (GtkTreeViewColumn  *column,
 
     if (is_tree (tree))
     {
-        DonnaColumnType *ctname;
-
-        ctname = donna_app_get_columntype (priv->app, "name");
         if (!node)
         {
             /* this is a "fake" node, shown as a "Please Wait..." */
             /* we can only do that for a column of type "name" */
-            if (!ctname || ctname != ct)
-            {
-                if (ctname)
-                    g_object_unref (ctname);
+            if (G_TYPE_FROM_INSTANCE (ct) != DONNA_TYPE_COLUMNTYPE_NAME)
                 return;
-            }
-            g_object_unref (ctname);
 
             if (index == 1)
                 /* GtkRendererPixbuf */
@@ -1276,7 +1269,7 @@ rend_func (GtkTreeViewColumn  *column,
         }
 
         /* do we have some overriding to do? */
-        if (ctname && ctname == ct)
+        if (G_TYPE_FROM_INSTANCE (ct) == DONNA_TYPE_COLUMNTYPE_NAME)
         {
             if (index == 1)
             {
@@ -1293,7 +1286,6 @@ rend_func (GtkTreeViewColumn  *column,
                             "pixbuf",   pixbuf,
                             NULL);
                     g_object_unref (pixbuf);
-                    g_object_unref (ctname);
                     g_object_unref (node);
                     return;
                 }
@@ -1313,15 +1305,11 @@ rend_func (GtkTreeViewColumn  *column,
                             "text",     name,
                             NULL);
                     g_free (name);
-                    g_object_unref (ctname);
                     g_object_unref (node);
                     return;
                 }
             }
         }
-
-        if (ctname)
-            g_object_unref (ctname);
     }
     else if (!node)
         return;
