@@ -163,6 +163,21 @@ donna_provider_get_domain (DonnaProvider  *provider)
     return (*interface->get_domain) (provider);
 }
 
+DonnaProviderFlags
+donna_provider_get_flags (DonnaProvider *provider)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), DONNA_PROVIDER_FLAG_INVALID);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, DONNA_PROVIDER_FLAG_INVALID);
+    g_return_val_if_fail (interface->get_flags != NULL, DONNA_PROVIDER_FLAG_INVALID);
+
+    return (*interface->get_flags) (provider);
+}
+
 DonnaTask *
 donna_provider_get_node_task (DonnaProvider    *provider,
                               const gchar      *location)
@@ -261,4 +276,27 @@ donna_provider_remove_node_task (DonnaProvider  *provider,
     g_return_val_if_fail (interface->remove_node_task != NULL, NULL);
 
     return (*interface->remove_node_task) (provider, node);
+}
+
+DonnaTask *
+donna_provider_get_node_parent_task (DonnaProvider  *provider,
+                                     DonnaNode      *node)
+{
+    DonnaProviderInterface *interface;
+    DonnaProvider *p;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+
+    /* make sure the provider is the node's provider */
+    donna_node_get (node, FALSE, "provider", &p, NULL);
+    g_object_unref (p);
+    g_return_val_if_fail (p == provider, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_node_parent_task != NULL, NULL);
+
+    return (*interface->get_node_parent_task) (provider, node);
 }

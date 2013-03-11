@@ -85,6 +85,10 @@ struct _DonnaProviderConfigPrivate
 static void             provider_config_finalize    (GObject    *object);
 
 /* DonnaProvider */
+static const gchar *    provider_config_get_domain (
+                                            DonnaProvider       *provider);
+static DonnaProviderFlags provider_config_get_flags (
+                                            DonnaProvider       *provider);
 static DonnaTask *      provider_config_get_node_task (
                                             DonnaProvider       *provider,
                                             const gchar         *location);
@@ -99,6 +103,9 @@ static DonnaTask *      provider_config_get_node_children_task (
 static DonnaTask *      provider_config_remove_node_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node);
+static DonnaTask *      provider_config_get_node_parent_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node);
 
 
 static void free_extra  (struct extra  *extra);
@@ -106,10 +113,13 @@ static void free_extra  (struct extra  *extra);
 static void
 provider_config_provider_init (DonnaProviderInterface *interface)
 {
+    interface->get_domain             = provider_config_get_domain;
+    interface->get_flags              = provider_config_get_flags;
     interface->get_node_task          = provider_config_get_node_task;
     interface->has_node_children_task = provider_config_has_node_children_task;
     interface->get_node_children_task = provider_config_get_node_children_task;
     interface->remove_node_task       = provider_config_remove_node_task;
+    interface->get_node_parent_task   = provider_config_get_node_parent_task;
 }
 
 static void
@@ -1167,6 +1177,34 @@ get_option (GNode *root, const gchar *name)
         return NULL;
 }
 
+/* assumes reader lock on config */
+static gchar *
+get_option_full_name (GNode *root, GNode *gnode)
+{
+    GString *str = NULL;
+
+    for (;;)
+    {
+        struct option *option = gnode->data;
+
+        if (!gnode || gnode == root)
+            break;
+
+        if (str)
+        {
+            g_string_prepend_c (str, '/');
+            g_string_prepend (str, option->name);
+        }
+        else
+            str = g_string_new (option->name);
+
+        gnode = gnode->parent;
+    }
+
+    g_string_prepend_c (str, '/');
+    return g_string_free (str, FALSE);
+}
+
 #define _has_option(type, want_category)    do  {                       \
     DonnaProviderConfigPrivate *priv;                                   \
     struct option *option;                                              \
@@ -1687,6 +1725,21 @@ donna_config_remove_category (DonnaConfig    *config,
 
 /*** PROVIDER INTERFACE ***/
 
+static const gchar *
+provider_config_get_domain (DonnaProvider *provider)
+{
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
+    return "config";
+}
+
+static DonnaProviderFlags
+provider_config_get_flags (DonnaProvider *provider)
+{
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider),
+            DONNA_PROVIDER_FLAG_INVALID);
+    return 0;
+}
+
 static gboolean
 node_prop_refresher (DonnaTask   *task,
                      DonnaNode   *node,
@@ -2187,6 +2240,97 @@ provider_config_remove_node_task (DonnaProvider       *provider,
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
 
     return donna_task_new ((task_fn) node_remove_option,
+            g_object_ref (node),
+            g_object_unref);
+}
+
+static DonnaTaskState
+get_node_parent (DonnaTask *task, DonnaNode *node)
+{
+    DonnaProviderConfig *config;
+    DonnaProviderConfigPrivate *priv;
+    DonnaProvider *provider;
+    DonnaSharedString *location;
+    GNode *gnode;
+    struct option *option;
+    gchar *opt_loc;
+    gboolean node_created;
+    GValue *value;
+
+    donna_node_get (node, FALSE,
+            "provider", &provider,
+            "location", &location,
+            NULL);
+
+    config = DONNA_PROVIDER_CONFIG (provider);
+    priv = config->priv;
+
+    g_rw_lock_reader_lock (&priv->lock);
+    gnode = get_option_node (priv->root, donna_shared_string (location));
+    if (!gnode)
+    {
+        g_rw_lock_reader_unlock (&priv->lock);
+        g_critical ("Unable to find option '%s' while trying to get its parent",
+                donna_shared_string (location));
+
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Internal error, cannot find option '%s'",
+                donna_shared_string (location));
+
+        donna_shared_string_unref (location);
+        g_object_unref (provider);
+        return DONNA_TASK_FAILED;
+    }
+
+    gnode = gnode->parent;
+    if (!gnode)
+    {
+        g_rw_lock_reader_unlock (&priv->lock);
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Node '%s:%s' has no parent",
+                donna_provider_get_domain (provider),
+                donna_shared_string (location));
+
+        donna_shared_string_unref (location);
+        g_object_unref (provider);
+        return DONNA_TASK_FAILED;
+    }
+
+    option = gnode->data;
+    opt_loc = get_option_full_name (priv->root, gnode);
+
+    g_rec_mutex_lock (&priv->nodes_mutex);
+    node_created = ensure_option_has_node (config, opt_loc, option);
+    g_rec_mutex_unlock (&priv->nodes_mutex);
+
+    g_rw_lock_reader_unlock (&priv->lock);
+    g_free (opt_loc);
+
+    /* set node as return value */
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_OBJECT);
+    if (node_created)
+        /* if the node was just created, adding the toggle_ref took a strong
+         * reference on it, so we just send this extra ref to the task */
+        g_value_take_object (value, option->node);
+    else
+        g_value_set_object (value, option->node);
+    donna_task_release_return_value (task);
+
+    g_object_unref (provider);
+    donna_shared_string_unref (location);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTask *
+provider_config_get_node_parent_task (DonnaProvider *provider,
+                                      DonnaNode     *node)
+{
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
+
+    return donna_task_new ((task_fn) get_node_parent,
             g_object_ref (node),
             g_object_unref);
 }

@@ -1,5 +1,7 @@
 
 #include <glib-object.h>
+#include <string.h>
+#include <stdlib.h>
 #include "provider-base.h"
 #include "provider.h"
 #include "node.h"
@@ -37,6 +39,9 @@ static DonnaTask *      provider_base_get_node_children_task (
 static DonnaTask *      provider_base_remove_node_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node);
+static DonnaTask *      provider_base_get_node_parent_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -45,6 +50,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->has_node_children_task = provider_base_has_node_children_task;
     interface->get_node_children_task = provider_base_get_node_children_task;
     interface->remove_node_task       = provider_base_remove_node_task;
+    interface->get_node_parent_task   = provider_base_get_node_parent_task;
 }
 
 static void
@@ -414,5 +420,89 @@ provider_base_remove_node_task (DonnaProvider   *provider,
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     return donna_task_new ((task_fn) remove_node, g_object_ref (node),
+            g_object_unref);
+}
+
+static DonnaTaskState
+get_node_parent (DonnaTask *task, DonnaNode *node)
+{
+    DonnaProviderBase *provider_base;
+    DonnaProvider *provider;
+    DonnaSharedString *location;
+    const gchar *l;
+    DonnaNode *parent;
+    gchar *s;
+    gchar *root_loc;
+    DonnaTaskState ret;
+
+    donna_node_get (node, FALSE,
+            "provider", &provider,
+            "location", &location,
+            NULL);
+    provider_base = (DonnaProviderBase *) provider;
+
+    l = donna_shared_string (location);
+    /* is this a root? */
+    if (l[strlen (l) - 1] == '/')
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Node '%s:%s' has no parent",
+                donna_provider_get_domain (provider),
+                l);
+        donna_shared_string_unref (location);
+        g_object_unref (provider);
+        return DONNA_TASK_FAILED;
+    }
+
+    s = strrchr (donna_shared_string (location), '/');
+    if (s == donna_shared_string (location))
+        root_loc = NULL;
+    else
+        root_loc = strndup (l, s - l - 1);
+    donna_shared_string_unref (location);
+
+    g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
+    parent = provider_base_get_cached_node (provider_base,
+            (root_loc) ? root_loc: "/");
+    if (!parent)
+        /* create the node. It is new_node's responsability to call
+         * add_node_to_cache */
+        ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->new_node (
+                provider_base,
+                task,
+                (root_loc) ? root_loc : "/");
+    else
+    {
+        GValue *value;
+
+        value = donna_task_grab_return_value (task);
+        g_value_init (value, G_TYPE_OBJECT);
+        /* a ref was added for us by provider_base_get_cached_node */
+        g_value_take_object (value, parent);
+        donna_task_release_return_value (task);
+        ret = DONNA_TASK_DONE;
+    }
+
+    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
+    free (root_loc);
+    g_object_unref (provider);
+    return ret;
+}
+
+static DonnaTask *
+provider_base_get_node_parent_task (DonnaProvider   *provider,
+                                    DonnaNode       *node)
+{
+    DonnaProviderFlags flags;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    flags = donna_provider_get_flags (provider);
+    if (flags & DONNA_PROVIDER_FLAG_INVALID || flags & DONNA_PROVIDER_FLAG_FLAT)
+        /* cannot be done */
+        return NULL;
+
+    return donna_task_new ((task_fn) get_node_parent, g_object_ref (node),
             g_object_unref);
 }

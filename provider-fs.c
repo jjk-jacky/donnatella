@@ -15,6 +15,7 @@ static void             provider_fs_finalize        (GObject *object);
 
 /* DonnaProvider */
 static const gchar *    provider_fs_get_domain      (DonnaProvider      *provider);
+static DonnaProviderFlags provider_fs_get_flags     (DonnaProvider      *provider);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_fs_new_node        (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
@@ -35,6 +36,7 @@ static void
 provider_fs_provider_init (DonnaProviderInterface *interface)
 {
     interface->get_domain = provider_fs_get_domain;
+    interface->get_flags  = provider_fs_get_flags;
 }
 
 static void
@@ -79,6 +81,14 @@ provider_fs_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_fs_parent_class)->finalize (object);
+}
+
+static DonnaProviderFlags
+provider_fs_get_flags (DonnaProvider *provider)
+{
+    g_return_val_if_fail (DONNA_IS_PROVIDER_FS (provider),
+            DONNA_PROVIDER_FLAG_INVALID);
+    return 0;
 }
 
 static const gchar *
