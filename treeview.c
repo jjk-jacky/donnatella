@@ -424,14 +424,17 @@ free_node_children_data (struct node_children_data *data)
 static void
 node_get_children_timeout (DonnaTask *task, struct node_children_data *data)
 {
+    GtkTreeIter _iter = ITER_INIT;
     GtkTreePath *path;
 
     /* we're slow to get the children, let's just show the fake node ("please
      * wait...") */
     if (!is_watched_iter_valid (data->tree, &data->iter, FALSE))
         return;
-    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->store),
-            &data->iter);
+    gtk_tree_model_filter_convert_child_iter_to_iter (data->tree->priv->filter,
+            &_iter, &data->iter);
+    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->filter),
+            &_iter);
     gtk_tree_view_expand_row (GTK_TREE_VIEW (data->tree), path, FALSE);
     gtk_tree_path_free (path);
 }
@@ -674,11 +677,15 @@ set_children (DonnaTreeView *tree,
                 -1);
         if (expand)
         {
+            GtkTreeIter  _iter = ITER_INIT;
             GtkTreePath *path;
 
             /* and make sure the row gets expanded (since we "blocked" it when
              * clicked */
-            path = gtk_tree_model_get_path (model, iter);
+            gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
+                    &_iter, iter);
+            path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->filter),
+                    &_iter);
             gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
             gtk_tree_path_free (path);
         }
@@ -699,6 +706,7 @@ node_get_children_callback (DonnaTask                   *task,
     if (state != DONNA_TASK_DONE)
     {
         GtkTreeModel      *model;
+        GtkTreeIter        _iter = ITER_INIT;
         GtkTreePath       *path;
         DonnaNode         *node;
         const gchar       *domain;
@@ -709,7 +717,10 @@ node_get_children_callback (DonnaTask                   *task,
          * before, but we don't know) so if the user tries an expansion again,
          * it is tried again. */
         model = GTK_TREE_MODEL (data->tree->priv->store);
-        path = gtk_tree_model_get_path (model, &data->iter);
+        gtk_tree_model_filter_convert_child_iter_to_iter (data->tree->priv->filter,
+                &_iter, &data->iter);
+        path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->filter),
+                &_iter);
         gtk_tree_view_collapse_row (GTK_TREE_VIEW (data->tree), path);
         gtk_tree_path_free (path);
         gtk_tree_store_set (data->tree->priv->store, &data->iter,
@@ -756,6 +767,7 @@ static gboolean
 import_children (struct import_children_data *data)
 {
     GtkTreeModel *model;
+    GtkTreeIter _iter = ITER_INIT;
     GtkTreePath *path;
 
     if (!is_watched_iter_valid (data->tree, data->iter, TRUE))
@@ -784,7 +796,10 @@ import_children (struct import_children_data *data)
             -1);
 
     /* expand node */
-    path = gtk_tree_model_get_path (model, data->iter);
+    gtk_tree_model_filter_convert_child_iter_to_iter (data->tree->priv->filter,
+            &_iter, data->iter);
+    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->filter),
+            &_iter);
     gtk_tree_view_expand_row (GTK_TREE_VIEW (data->tree), path, FALSE);
     gtk_tree_path_free (path);
 
@@ -2782,16 +2797,18 @@ is_row_accessible (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeView *treev = GTK_TREE_VIEW (tree);
-    GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
+    GtkTreeModel *_model = GTK_TREE_MODEL (priv->filter);
     GtkTreeIter parent = ITER_INIT;
-    GtkTreeIter child  = *iter;
+    GtkTreeIter child;
     GtkTreePath *path;
 
-    while (gtk_tree_model_iter_parent (model, &parent, &child))
+    gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
+            &child, iter);
+    while (gtk_tree_model_iter_parent (_model, &parent, &child))
     {
         gboolean is_expanded;
 
-        path = gtk_tree_model_get_path (model, &parent);
+        path = gtk_tree_model_get_path (_model, &parent);
         is_expanded = gtk_tree_view_row_expanded (treev, path);
         gtk_tree_path_free (path);
         if (!is_expanded)
@@ -2814,7 +2831,7 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeView *treev;
     GSList *list;
-    GtkTreeModel *model;
+    GtkTreeModel *_model;
     GtkTreeIter *iter_cur_root;
     GtkTreeIter *iter_vis = NULL;
     GtkTreeIter *iter_non_vis = NULL;
@@ -2826,7 +2843,7 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
         return NULL;
 
     treev = GTK_TREE_VIEW (tree);
-    model = GTK_TREE_MODEL (priv->store);
+    _model = GTK_TREE_MODEL (priv->filter);
 
     /* just the one? */
     if (!list->next)
@@ -2860,9 +2877,12 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
         if (!iter_vis)
         {
             GtkTreePath *path;
+            GtkTreeIter _iter = ITER_INIT;
 
             /* determine if it is visible or not */
-            path = gtk_tree_model_get_path (model, iter);
+            gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
+                    &_iter, iter);
+            path = gtk_tree_model_get_path (_model, &_iter);
             gtk_tree_view_get_background_area (treev, path, NULL, &rect);
             gtk_tree_path_free (path);
             if (rect.y >= rect_visible.y
@@ -2923,7 +2943,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 {
     GtkTreeView *treev= GTK_TREE_VIEW (tree);
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model;
+    GtkTreeModel *_model;
     GtkTreeIter *last_iter = NULL;
     GtkTreeIter *iter;
     DonnaProvider *provider;
@@ -2936,7 +2956,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     DonnaTask *task;
     const GValue *value;
 
-    model = GTK_TREE_MODEL (priv->store);
+    _model = GTK_TREE_MODEL (priv->filter);
     iter = iter_root;
     donna_node_get (node, FALSE,
             "provider", &provider,
@@ -2945,10 +2965,13 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     loc = donna_shared_string (location);
 
     /* get the node for the given iter_root, our starting point */
-    gtk_tree_model_get (model, iter, DONNA_TREE_COL_NODE, &n, -1);
+    gtk_tree_model_get (GTK_TREE_MODEL (priv->store), iter,
+            DONNA_TREE_COL_NODE,    &n,
+            -1);
     for (;;)
     {
         GtkTreeIter *prev_iter;
+        GtkTreeIter _prev_iter;
         GtkTreePath *path;
         enum tree_expand es;
 
@@ -3031,10 +3054,12 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         }
 
         /* check if the parent (prev_iter) is expanded */
-        path = gtk_tree_model_get_path (model, prev_iter);
+        gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
+                &_prev_iter, prev_iter);
+        path = gtk_tree_model_get_path (_model, &_prev_iter);
         if (!gtk_tree_view_row_expanded (treev, path))
         {
-            gtk_tree_model_get (model, prev_iter,
+            gtk_tree_model_get (_model, &_prev_iter,
                     DONNA_TREE_COL_EXPAND_STATE,    &es,
                     -1);
             if (es == DONNA_TREE_EXPAND_NEVER_FULL)
@@ -3070,6 +3095,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     GtkTreeView *treev = GTK_TREE_VIEW (tree);
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model;
+    GtkTreeModel *_model;
     DonnaProvider *provider;
     DonnaProviderFlags flags;
     DonnaSharedString *location;
@@ -3099,7 +3125,8 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         return get_best_existing_iter_for_node (tree, node, TRUE);
     }
 
-    model = GTK_TREE_MODEL (priv->store);
+    model  = GTK_TREE_MODEL (priv->store);
+    _model = GTK_TREE_MODEL (priv->filter);
     donna_node_get (node, FALSE, "location", &location, NULL);
 
     /* try inside the current branch first */
@@ -3150,10 +3177,13 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
             i = get_iter_expanding_if_needed (tree, i, node, TRUE, FALSE);
             if (i)
             {
+                GtkTreeIter _i = ITER_INIT;
                 GtkTreePath *path;
 
                 /* determine if it is visible or not */
-                path = gtk_tree_model_get_path (model, i);
+                gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
+                        &_i, i);
+                path = gtk_tree_model_get_path (_model, &_i);
                 gtk_tree_view_get_background_area (treev, path, NULL, &rect);
                 gtk_tree_path_free (path);
                 if (rect.y >= rect_visible.y
@@ -3186,10 +3216,13 @@ struct scroll_data
 static gboolean
 scroll_to_iter (struct scroll_data *data)
 {
+    GtkTreeIter _iter = ITER_INIT;
     GtkTreePath *path;
 
-    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->store),
-            data->iter);
+    gtk_tree_model_filter_convert_child_iter_to_iter (data->tree->priv->filter,
+            &_iter, data->iter);
+    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->filter),
+            &_iter);
     gtk_tree_view_scroll_to_cell (GTK_TREE_VIEW (data->tree), path, NULL,
             FALSE, 0.0, 0.0);
     gtk_tree_path_free (path);
@@ -3217,10 +3250,14 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         if (iter)
         {
             struct scroll_data *data;
+            GtkTreeIter _iter = ITER_INIT;
             GtkTreePath *path;
 
             /* we select the new row */
-            path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
+            gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
+                    &_iter, iter);
+            path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->filter),
+                    &_iter);
             gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
             gtk_tree_path_free (path);
 
@@ -3388,6 +3425,7 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
 #ifdef GTK_IS_JJK
     GtkCellRenderer *renderer;
 #endif
+    GtkTreeModel *model;
     GtkTreeModel *_model;
     GtkTreeIter _iter = ITER_INIT;
     gint x, y;
@@ -3431,10 +3469,10 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
                 return FALSE;
             }
 
+            model = GTK_TREE_MODEL (priv->store);
             for (i = 0; i < as->as_cols->len; ++i)
             {
                 struct as_col *as_col;
-                GtkTreeModel *model;
                 GSList *list;
                 GString *str;
                 guint j;
@@ -3488,7 +3526,6 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
 
                 /* we can safely assume we found/removed a task, so a refresh
                  * is in order for every row of this node */
-                model = GTK_TREE_MODEL (priv->store);
                 list = g_hash_table_lookup (priv->hashtable, node);
                 for ( ; list; list = list->next)
                 {
