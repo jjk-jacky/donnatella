@@ -2970,6 +2970,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     gtk_tree_model_get (model, iter, DONNA_TREE_COL_NODE, &n, -1);
     for (;;)
     {
+        GtkTreeIter *prev_iter;
+
         if (n == node)
         {
             /* this _is_ the iter we're looking for */
@@ -3018,7 +3020,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             last_iter = iter;
 
         /* now get the child iter for that node */
-        iter = get_child_iter_for_node (tree, iter, n);
+        prev_iter = iter;
+        iter = get_child_iter_for_node (tree, prev_iter, n);
         if (!iter)
         {
             if (allow_creation)
@@ -3027,13 +3030,13 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 GSList *list;
 
                 /* we need to add a new row */
-                if (!add_node_to_tree (tree, iter, node, &i))
+                if (!add_node_to_tree (tree, prev_iter, n, &i))
                 {
                     /* TODO */
                     return NULL;
                 }
 
-                gtk_tree_store_set (GTK_TREE_STORE (model), iter,
+                gtk_tree_store_set (GTK_TREE_STORE (model), prev_iter,
                         DONNA_TREE_COL_EXPAND_STATE,    (priv->is_minitree)
                         ? DONNA_TREE_EXPAND_PARTIAL : DONNA_TREE_EXPAND_UNKNOWN,
                         -1);
@@ -3043,14 +3046,14 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 
                     /* will import children or start a get_children task in a new
                      * thread */
-                    path = gtk_tree_model_get_path (model, iter);
+                    path = gtk_tree_model_get_path (model, prev_iter);
                     gtk_tree_view_expand_row (treev, path, FALSE);
                     gtk_tree_path_free (path);
                 }
 
                 /* get the iter from the hashtable for the row we added (we
                  * cannot end up return the pointer to a local iter) */
-                list = g_hash_table_lookup (priv->hashtable, node);
+                list = g_hash_table_lookup (priv->hashtable, n);
                 for ( ; list; list = list->next)
                     if (itereq (&i, (GtkTreeIter *) list->data))
                     {
@@ -3141,7 +3144,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
 
             /* get the iter from the hashtable (we cannot end up return the
              * pointer to a local iter) */
-            list = g_hash_table_lookup (priv->hashtable, node);
+            list = g_hash_table_lookup (priv->hashtable, n);
             for ( ; list; list = list->next)
                 if (itereq (&iter, (GtkTreeIter *) list->data))
                 {
@@ -3150,7 +3153,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
                 }
 
             /* find the closest "accesible" iter (expanded, no creation) */
-            i = get_iter_expanding_if_needed (tree, &iter, node, TRUE, FALSE);
+            i = get_iter_expanding_if_needed (tree, i, node, TRUE, FALSE);
             if (i)
             {
                 GtkTreePath *path;
