@@ -3199,12 +3199,71 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         return NULL;
 }
 
+struct scroll_data
+{
+    DonnaTreeView *tree;
+    GtkTreeIter *iter;
+};
+
+static gboolean
+scroll_to_iter (struct scroll_data *data)
+{
+    GtkTreeModel *model;
+    GtkTreePath *path;
+
+    model = get_model (data->tree);
+    path = gtk_tree_model_get_path (model, data->iter);
+    gtk_tree_view_scroll_to_cell (GTK_TREE_VIEW (data->tree), path, NULL,
+            FALSE, 0.0, 0.0);
+    gtk_tree_path_free (path);
+    g_free (data);
+    return FALSE;
+}
+
 gboolean
 donna_tree_view_set_location (DonnaTreeView  *tree,
                               DonnaNode      *node,
                               GError        **error)
 {
-    /* TODO */
+    DonnaTreeViewPrivate *priv;
+    GSList *list;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+
+    priv = tree->priv;
+
+    if (is_tree (tree))
+    {
+        GtkTreeIter *iter;
+
+        iter = get_best_iter_for_node (tree, node, error);
+        if (iter)
+        {
+            struct scroll_data *data;
+            GtkTreePath *path;
+
+            /* we select the new row */
+            path = gtk_tree_model_get_path (get_model (tree), iter);
+            gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
+            gtk_tree_path_free (path);
+
+            /* we'll also want to scroll (back) to it, once other threads that
+             * are getting children and adding them to the tree will be done.
+             * And we're assuming that simply adding this as a idle source
+             * should be enough to be triggered afterwards */
+            data = g_new (struct scroll_data, 1);
+            data->tree = tree;
+            data->iter = iter;
+            g_idle_add ((GSourceFunc) scroll_to_iter, data);
+        }
+
+        return !!iter;
+    }
+    else
+    {
+        /* TODO */
+        return FALSE;
+    }
 }
 
 DonnaNode *
