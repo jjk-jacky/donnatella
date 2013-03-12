@@ -2797,6 +2797,32 @@ get_current_root_iter (DonnaTreeView *tree)
 }
 
 /* mode tree only */
+static gboolean
+is_row_accessible (DonnaTreeView *tree, GtkTreeIter *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeView *treev = GTK_TREE_VIEW (tree);
+    GtkTreeModel *model = get_model (tree);
+    GtkTreeIter parent = ITER_INIT;
+    GtkTreeIter child  = *iter;
+    GtkTreePath *path;
+
+    while (gtk_tree_model_iter_parent (model, &parent, &child))
+    {
+        gboolean is_expanded;
+
+        path = gtk_tree_model_get_path (model, &parent);
+        is_expanded = gtk_tree_view_row_expanded (treev, path);
+        gtk_tree_path_free (path);
+        if (!is_expanded)
+            return FALSE;
+        /* go up */
+        child = parent;
+    }
+    return TRUE;
+}
+
+/* mode tree only */
 /* return the best iter for the given node. Iter must exists on tree, and must
  * be expanded unless even_collapsed is TRUE.
  * This is how we get the new current location in DONNA_TREE_SYNC_NODES */
@@ -2827,15 +2853,8 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
     /* just the one? */
     if (!list->next)
     {
-        GtkTreePath *path;
-
-        path = gtk_tree_model_get_path (model, list->data);
-        if (even_collapsed || gtk_tree_view_row_expanded (treev, path))
-        {
-            gtk_tree_path_free (path);
+        if (even_collapsed || is_row_accesible (tree, list->data))
             return list->data;
-        }
-        gtk_tree_path_free (path);
         return NULL;
     }
 
@@ -2848,36 +2867,32 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
     for ( ; list; list = list->next)
     {
         GtkTreeIter *iter = list->data;
-        GtkTreePath *path;
         GdkRectangle rect;
 
-        path = gtk_tree_model_get_path (model, iter);
         /* not "accessible" w/out expanding, we skip */
-        if (!even_collapsed && !gtk_tree_view_row_expanded (treev, path))
-            goto next;
+        if (!even_collapsed && !is_row_accesible (tree, iter))
+            continue;
 
         /* if in the current location's root branch, it's the one */
         if (iter_cur_root
                 && gtk_tree_store_is_ancestor (store, iter_cur_root, iter))
-        {
-            gtk_tree_path_free (path);
             return iter;
-        }
 
         /* if we haven't found a visible match yet... */
         if (!iter_vis)
         {
+            GtkTreePath *path;
+
             /* determine if it is visible or not */
+            path = gtk_tree_model_get_path (model, iter);
             gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+            gtk_tree_path_free (path);
             if (rect.y >= rect_visible.y
                     && rect.y + rect.height <= rect_visible.y + rect_visible.height)
                 iter_vis = iter;
             else if (!iter_non_vis)
                 iter_non_vis = iter;
         }
-
-next:
-        gtk_tree_path_free (path);
     }
 
     return (iter_vis) ? iter_vis : iter_non_vis;
@@ -2930,7 +2945,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     GtkTreeView *treev= GTK_TREE_VIEW (tree);
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model;
-    GtkTreePath *path;
     GtkTreeIter *last_iter = NULL;
     GtkTreeIter *iter;
     DonnaProvider *provider;
@@ -2962,14 +2976,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             g_object_unref (provider);
             g_object_unref (n);
             if (only_expanded)
-            {
-                gboolean is_expanded;
-
-                path = gtk_tree_model_get_path (model, iter);
-                is_expanded = gtk_tree_view_row_expanded (treev, path);
-                gtk_tree_path_free (path);
-                return (is_expanded) ? iter : last_iter;
-            }
+                return (is_row_accessible (tree, iter)) ? iter : last_iter;
             else
                 return iter;
         }
@@ -3002,11 +3009,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 
         if (only_expanded)
         {
-            path = gtk_tree_model_get_path (model, iter);
             /* we only remember this iter as last possible match if expanded */
-            if (gtk_tree_view_row_expanded (treev, path))
+            if (is_row_accessible (tree, iter))
                 last_iter = iter;
-            gtk_tree_path_free (path);
         }
         else
             last_iter = iter;
