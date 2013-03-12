@@ -15,6 +15,8 @@ enum
 {
     DONNA_TREE_VIEW_ERROR_NOMEM,
     DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+    DONNA_TREE_VIEW_ERROR_CANNOT_ADD_NODE,
+    DONNA_TREE_VIEW_ERROR_OTHER,
 } DonnaTreeViewError;
 
 struct _DonnaTreeView
@@ -41,7 +43,8 @@ gboolean        donna_tree_view_set_node_property (DonnaTreeView    *tree,
                                                  const GValue       *value,
                                                  GError            **error);
 gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
-                                                 DonnaNode          *node);
+                                                 DonnaNode          *node,
+                                                 GError            **error);
 DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
