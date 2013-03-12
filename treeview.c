@@ -2922,7 +2922,8 @@ is_node_ancestor (DonnaNode         *node,
     len = strlen (donna_shared_string (location));
     ret = strncmp (donna_shared_string (location),
             donna_shared_string (descendant_location), len) == 0
-        && donna_shared_string (descendant_location)[len] == '/';
+        /* FIXME root isn't always len==1 */
+        && (len == 1 || donna_shared_string (descendant_location)[len] == '/');
     donna_shared_string_unref (location);
     return ret;
 }
@@ -2988,7 +2989,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         g_object_unref (n);
         s = strchr (loc + len + 1, '/');
         if (s)
-            s = strndup (loc, s - loc - 1);
+            s = strndup (loc, s - loc);
         else
             s = (gchar *) loc;
 
@@ -3129,7 +3130,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     do
     {
         /* we've already excluded the current location's branch */
-        if (itereq (&iter, iter_cur_root))
+        if (iter_cur_root && itereq (&iter, iter_cur_root))
             continue;
 
         gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &n, -1);
@@ -3138,13 +3139,13 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
             GSList *list;
             GtkTreeIter *i;
 
-            /* get the iter from the hashtable for the row we added (we
-             * cannot end up return the pointer to a local iter) */
+            /* get the iter from the hashtable (we cannot end up return the
+             * pointer to a local iter) */
             list = g_hash_table_lookup (priv->hashtable, node);
             for ( ; list; list = list->next)
                 if (itereq (&iter, (GtkTreeIter *) list->data))
                 {
-                    i= list->data;
+                    i = list->data;
                     break;
                 }
 
