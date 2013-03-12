@@ -2971,6 +2971,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     for (;;)
     {
         GtkTreeIter *prev_iter;
+        GtkTreePath *path;
+        enum tree_expand es;
 
         if (n == node)
         {
@@ -3036,21 +3038,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                     return NULL;
                 }
 
-                gtk_tree_store_set (GTK_TREE_STORE (model), prev_iter,
-                        DONNA_TREE_COL_EXPAND_STATE,    (priv->is_minitree)
-                        ? DONNA_TREE_EXPAND_PARTIAL : DONNA_TREE_EXPAND_UNKNOWN,
-                        -1);
-                if (!priv->is_minitree)
-                {
-                    GtkTreePath *path;
-
-                    /* will import children or start a get_children task in a new
-                     * thread */
-                    path = gtk_tree_model_get_path (model, prev_iter);
-                    gtk_tree_view_expand_row (treev, path, FALSE);
-                    gtk_tree_path_free (path);
-                }
-
                 /* get the iter from the hashtable for the row we added (we
                  * cannot end up return the pointer to a local iter) */
                 list = g_hash_table_lookup (priv->hashtable, n);
@@ -3064,6 +3051,35 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             else
                 return last_iter;
         }
+
+        /* check if the parent (prev_iter) is expanded */
+        path = gtk_tree_model_get_path (model, prev_iter);
+        if (!gtk_tree_view_row_expanded (treev, path))
+        {
+            gtk_tree_model_get (model, prev_iter,
+                    DONNA_TREE_COL_EXPAND_STATE,    &es,
+                    -1);
+            if (es == DONNA_TREE_EXPAND_NEVER_FULL)
+                /* will switch to FULL and expand */
+                gtk_tree_view_expand_row (treev, path, FALSE);
+            else
+            {
+                gtk_tree_store_set (GTK_TREE_STORE (model), prev_iter,
+                        DONNA_TREE_COL_EXPAND_STATE,    (priv->is_minitree)
+                        ? DONNA_TREE_EXPAND_PARTIAL : DONNA_TREE_EXPAND_UNKNOWN,
+                        -1);
+
+                /* will expand in minitree (partial), or import/get children */
+                gtk_tree_view_expand_row (treev, path, FALSE);
+                if (!priv->is_minitree)
+                    /* now that the thread is started (or an idle source was
+                     * created to import children), we need to trigger it again, so
+                     * it actually gets expanded this time, which we require to be
+                     * able to continue adding children & expanding them */
+                    gtk_tree_view_expand_row (treev, path, FALSE);
+            }
+        }
+        gtk_tree_path_free (path);
     }
 }
 
