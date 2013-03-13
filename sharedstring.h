@@ -27,6 +27,8 @@ void                donna_shared_string_register        (void);
     donna_shared_string_update_take (NULL, string)
 #define donna_shared_string_new_dup(string)     \
     donna_shared_string_update_dup (NULL, string)
+#define donna_shared_string_new_printf(...)     \
+    donna_shared_string_update_printf (NULL, __VA_ARGS__)
 
 DonnaSharedString * donna_shared_string_ref             (DonnaSharedString  *sv);
 void                donna_shared_string_unref           (DonnaSharedString  *sv);
@@ -34,6 +36,9 @@ DonnaSharedString * donna_shared_string_update_take     (DonnaSharedString  *sv,
                                                          gchar              *string);
 DonnaSharedString * donna_shared_string_update_dup      (DonnaSharedString  *sv,
                                                          const gchar        *string);
+DonnaSharedString * donna_shared_string_update_printf   (DonnaSharedString    *ss,
+                                                         const gchar          *fmt,
+                                                         ...);
 
 #define donna_g_value_new_shared_string_take(value, string) \
     donna_g_value_take_shared_string (value,                \

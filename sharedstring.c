@@ -57,6 +57,20 @@ donna_shared_string_update_dup (DonnaSharedString  *ss,
     return update_or_new (ss, (gpointer) string, TRUE);
 }
 
+DonnaSharedString *
+donna_shared_string_update_printf (DonnaSharedString    *ss,
+                                   const gchar          *fmt,
+                                   ...)
+{
+    va_list va_args;
+    gchar *s;
+
+    va_start (va_args, fmt);
+    ss = update_or_new (ss, (gpointer) g_strdup_vprintf (fmt, va_args), FALSE);
+    va_end (va_args);
+    return ss;
+}
+
 /* Fundamental type */
 
 static void
