@@ -207,22 +207,6 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
     donna_shared_string_unref (location);
 }
 
-static DonnaTaskState
-return_node (DonnaTask *task, DonnaNode *node)
-{
-    GValue *value;
-
-    value = donna_task_grab_return_value (task);
-    g_value_init (value, G_TYPE_OBJECT);
-    /* take_object to not increment the ref count, as it was already done for
-     * this task when creating it (to ensure the node wouldn't go away e.g.
-     * during thread creation) */
-    g_value_take_object (value, node);
-    donna_task_release_return_value (task);
-
-    return DONNA_TASK_DONE;
-}
-
 struct get_node_data
 {
     DonnaProviderBase   *provider_base;
@@ -251,8 +235,17 @@ get_node (DonnaTask *task, struct get_node_data *data)
     node = provider_base_get_cached_node (data->provider_base, data->location);
     if (node)
     {
+        GValue *value;
+
         g_rec_mutex_unlock (&priv->nodes_mutex);
-        return return_node (task, node);
+
+        value = donna_task_grab_return_value (task);
+        g_value_init (value, G_TYPE_OBJECT);
+        /* a ref was added for us by provider_base_get_cached_node */
+        g_value_take_object (value, node);
+        donna_task_release_return_value (task);
+
+        return DONNA_TASK_DONE;
     }
 
     /* create the node. It is new_node's responsability to call
@@ -273,32 +266,17 @@ provider_base_get_node_task (DonnaProvider    *provider,
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
     DonnaProviderBasePrivate *priv;
-    DonnaNode *node;
-    DonnaTask *task;
+    struct get_node_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
 
     priv = p->priv;
-    g_rec_mutex_lock (&priv->nodes_mutex);
-    node = provider_base_get_cached_node (p, location);
-    if (node)
-    {
-        task = donna_task_new ((task_fn) return_node, g_object_ref (node),
-                g_object_unref);
-    }
-    else
-    {
-        struct get_node_data *data;
 
-        data = g_slice_new0 (struct get_node_data);
-        data->provider_base = g_object_ref (p);
-        data->location = g_strdup (location);
-        task = donna_task_new ((task_fn) get_node, data,
-                (GDestroyNotify) free_get_node_data);
-    }
-    g_rec_mutex_unlock (&priv->nodes_mutex);
-
-    return task;
+    data = g_slice_new0 (struct get_node_data);
+    data->provider_base = g_object_ref (p);
+    data->location = g_strdup (location);
+    return donna_task_new ((task_fn) get_node, data,
+            (GDestroyNotify) free_get_node_data);
 }
 
 struct node_children_data
