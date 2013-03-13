@@ -3225,15 +3225,26 @@ struct scroll_data
 static gboolean
 scroll_to_iter (struct scroll_data *data)
 {
+    GtkTreeView *treev = GTK_TREE_VIEW (data->tree);
     GtkTreeIter _iter = ITER_INIT;
     GtkTreePath *path;
+    GdkRectangle rect_visible, rect;
+
+    /* get visible area, so we can determine if it is already visible */
+    gtk_tree_view_get_visible_rect (treev, &rect_visible);
+    gtk_tree_view_convert_tree_to_bin_window_coords (treev,
+            0, rect_visible.y, &rect_visible.x, &rect_visible.y);
 
     gtk_tree_model_filter_convert_child_iter_to_iter (data->tree->priv->filter,
             &_iter, data->iter);
     path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->filter),
             &_iter);
-    gtk_tree_view_scroll_to_cell (GTK_TREE_VIEW (data->tree), path, NULL,
-            FALSE, 0.0, 0.0);
+    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+    if (!(rect.y >= rect_visible.y
+            && rect.y + rect.height <= rect_visible.y +
+            rect_visible.height))
+        /* only scroll if not visible */
+        gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
     gtk_tree_path_free (path);
     g_free (data);
     return FALSE;
