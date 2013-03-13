@@ -105,6 +105,8 @@ gboolean            donna_task_set_duplicator   (DonnaTask          *task,
 
 gboolean            donna_task_set_desc         (DonnaTask          *task,
                                                  DonnaSharedString  *desc);
+gboolean            donna_task_take_desc        (DonnaTask          *task,
+                                                 DonnaSharedString  *desc);
 gboolean            donna_task_prefix_desc      (DonnaTask          *task,
                                                  const gchar        *prefix);
 gboolean            donna_task_set_priority     (DonnaTask          *task,

@@ -310,6 +310,18 @@ donna_task_set_desc (DonnaTask *task, DonnaSharedString *desc)
 }
 
 gboolean
+donna_task_take_desc (DonnaTask *task, DonnaSharedString *desc)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (desc != NULL, FALSE);
+
+    if (task->priv->desc)
+        donna_shared_string_unref (task->priv->desc);
+    task->priv->desc = desc;
+    return TRUE;
+}
+
+gboolean
 donna_task_prefix_desc (DonnaTask *task, const gchar *prefix)
 {
     DonnaTaskPrivate *priv;
