@@ -509,6 +509,36 @@ donna_task_get_duplicate (DonnaTask *task)
     return priv->duplicate_fn (priv->duplicate_data);
 }
 
+static inline const gchar *
+state_name (DonnaTaskState state)
+{
+    switch (state)
+    {
+        case DONNA_TASK_STATE_UNKNOWN:
+            return "unknown";
+        case DONNA_TASK_STOPPED:
+            return "stopped";
+        case DONNA_TASK_WAITING:
+            return "waiting";
+        case DONNA_TASK_RUNNING:
+            return "running";
+        case DONNA_TASK_PAUSING:
+            return "pausing";
+        case DONNA_TASK_PAUSED:
+            return "paused";
+        case DONNA_TASK_CANCELLING:
+            return "cancelling";
+        case DONNA_TASK_DONE:
+            return "done";
+        case DONNA_TASK_CANCELLED:
+            return "cancelled";
+        case DONNA_TASK_FAILED:
+            return "failed";
+        default:
+            return "invalid";
+    }
+}
+
 static gboolean
 signal_new_state_cb (gpointer data)
 {
@@ -571,6 +601,8 @@ donna_task_run (DonnaTask *task)
     g_return_if_fail (DONNA_IS_TASK (task));
 
     priv = task->priv;
+    g_debug ("Starting task: %s",
+            (priv->desc) ? donna_shared_string (priv->desc) : "(no desc)");
 
     LOCK_TASK (task);
 
@@ -578,6 +610,9 @@ donna_task_run (DonnaTask *task)
     if (!(priv->state & DONNA_TASK_PRE_RUN))
     {
         UNLOCK_TASK (task);
+        g_debug ("Ending task, not in a pre-run state (%s): %s",
+                state_name (priv->state),
+                (priv->desc) ? donna_shared_string (priv->desc) : "(no desc)");
         return;
     }
 
@@ -627,6 +662,10 @@ donna_task_run (DonnaTask *task)
     else
         /* remove our reference on task */
         g_object_unref (task);
+
+    g_debug ("Ending task (%s): %s",
+            state_name (priv->state),
+            (priv->desc) ? donna_shared_string (priv->desc) : "(no desc)");
 }
 
 void
