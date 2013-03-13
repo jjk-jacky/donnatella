@@ -3070,8 +3070,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             gtk_tree_model_get (_model, &_prev_iter,
                     DONNA_TREE_COL_EXPAND_STATE,    &es,
                     -1);
-            if (es == DONNA_TREE_EXPAND_NEVER_FULL)
-                /* will switch to FULL and expand */
+            if (es == DONNA_TREE_EXPAND_FULL
+                    || es == DONNA_TREE_EXPAND_PARTIAL
+                    || es == DONNA_TREE_EXPAND_NEVER_FULL)
                 gtk_tree_view_expand_row (treev, path, FALSE);
             else
             {
