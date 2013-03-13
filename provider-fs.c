@@ -118,8 +118,11 @@ setter (DonnaTask       *task,
 }
 
 static DonnaNode *
-new_node (DonnaProviderBase *_provider, const gchar *location)
+new_node (DonnaProviderBase *_provider,
+          const gchar       *location,
+          gboolean           need_lock)
 {
+    DonnaProviderBaseClass *klass;
     DonnaNode       *node;
     DonnaNodeType    type;
     const gchar     *name;
@@ -148,9 +151,13 @@ new_node (DonnaProviderBase *_provider, const gchar *location)
             donna_shared_string_new_dup (name),
             flags);
 
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    if (need_lock)
+        klass->lock_nodes (_provider);
     /* this adds another reference (from our own) so we send it to the caller */
-    DONNA_PROVIDER_BASE_GET_CLASS (_provider)->add_node_to_cache (_provider,
-            node);
+    klass->add_node_to_cache (_provider, node);
+    if (need_lock)
+        klass->unlock_nodes (_provider);
 
     return node;
 }
@@ -163,7 +170,7 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
     DonnaNode *node;
     GValue    *value;
 
-    node = new_node (_provider, location);
+    node = new_node (_provider, location, TRUE);
     if (!node)
         /* FIXME: set task error */
         return DONNA_TASK_FAILED;
@@ -185,10 +192,12 @@ has_get_children (DonnaProviderBase  *_provider,
                   DonnaNodeType       node_types,
                   gboolean            get_children)
 {
+    DonnaProviderBaseClass *klass;
     GError            *err = NULL;
     DonnaSharedString *location;
     GDir              *dir;
     const gchar       *name;
+    gboolean           is_locked;
     gboolean           match;
     GValue            *value;
     GPtrArray         *arr;
@@ -208,7 +217,8 @@ has_get_children (DonnaProviderBase  *_provider,
     if (get_children)
         arr = g_ptr_array_new_full (16, g_object_unref);
 
-    match = FALSE;
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    is_locked = match = FALSE;
     while ((name = g_dir_read_name (dir)))
     {
         gchar  buf[1024];
@@ -256,10 +266,14 @@ has_get_children (DonnaProviderBase  *_provider,
             {
                 DonnaNode *node;
 
-                node = DONNA_PROVIDER_BASE_GET_CLASS (_provider)->
-                    get_cached_node (_provider, b);
+                if (!is_locked)
+                {
+                    klass->lock_nodes (_provider);
+                    is_locked = TRUE;
+                }
+                node = klass->get_cached_node (_provider, b);
                 if (!node)
-                    node = new_node (_provider, b);
+                    node = new_node (_provider, b, FALSE);
                 if (node)
                     g_ptr_array_add (arr, node);
                 else
@@ -271,6 +285,8 @@ has_get_children (DonnaProviderBase  *_provider,
         }
     }
     g_dir_close (dir);
+    if (is_locked)
+        klass->unlock_nodes (_provider);
 
     value = donna_task_grab_return_value (task);
     if (get_children)

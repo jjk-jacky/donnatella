@@ -17,6 +17,10 @@ struct _DonnaProviderBasePrivate
 static void             provider_base_finalize          (GObject*object);
 
 /* DonnaProviderBase */
+static void             provider_base_lock_nodes (
+                                            DonnaProviderBase   *provider);
+static void             provider_base_unlock_nodes (
+                                            DonnaProviderBase   *provider);
 static DonnaNode *      provider_base_get_cached_node (
                                             DonnaProviderBase   *provider,
                                             const gchar         *location);
@@ -58,6 +62,8 @@ donna_provider_base_class_init (DonnaProviderBaseClass *klass)
 {
     GObjectClass *o_class;
 
+    klass->lock_nodes        = provider_base_lock_nodes;
+    klass->unlock_nodes      = provider_base_unlock_nodes;
     klass->get_cached_node   = provider_base_get_cached_node;
     klass->add_node_to_cache = provider_base_add_node_to_cache;
 
@@ -97,6 +103,20 @@ provider_base_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_base_parent_class)->finalize (object);
+}
+
+static void
+provider_base_lock_nodes (DonnaProviderBase *provider)
+{
+    g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
+    g_rec_mutex_lock (&provider->priv->nodes_mutex);
+}
+
+static void
+provider_base_unlock_nodes (DonnaProviderBase *provider)
+{
+    g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
+    g_rec_mutex_unlock (&provider->priv->nodes_mutex);
 }
 
 /* must be called while mutex is locked */
@@ -230,14 +250,13 @@ get_node (DonnaTask *task, struct get_node_data *data)
 
     priv = data->provider_base->priv;
 
-    g_rec_mutex_lock (&priv->nodes_mutex);
     /* first make sure it wasn't created before the task started */
+    g_rec_mutex_lock (&priv->nodes_mutex);
     node = provider_base_get_cached_node (data->provider_base, data->location);
+    g_rec_mutex_unlock (&priv->nodes_mutex);
     if (node)
     {
         GValue *value;
-
-        g_rec_mutex_unlock (&priv->nodes_mutex);
 
         value = donna_task_grab_return_value (task);
         g_value_init (value, G_TYPE_OBJECT);
@@ -248,13 +267,12 @@ get_node (DonnaTask *task, struct get_node_data *data)
         return DONNA_TASK_DONE;
     }
 
-    /* create the node. It is new_node's responsability to call
-     * add_node_to_cache */
+    /* create the node. It is new_node's responsability to lock, call
+     * add_node_to_cache, unlock */
     ret = DONNA_PROVIDER_BASE_GET_CLASS (data->provider_base)->new_node (
             data->provider_base,
             task,
             data->location);
-    g_rec_mutex_unlock (&priv->nodes_mutex);
 
     free_get_node_data (data);
     return ret;
@@ -305,16 +323,11 @@ has_children (DonnaTask *task, struct node_children_data *data)
 {
     DonnaTaskState ret;
 
-    /* this is only to figure out whether node has children (of the given
-     * node_type(s)) or not, there shouldn't be a need to check for/create
-     * nodes, so there's no reason to have a lock */
-/*    g_rec_mutex_lock (&data->provider_base->priv->nodes_mutex);   */
     ret = DONNA_PROVIDER_BASE_GET_CLASS (data->provider_base)->has_children (
             data->provider_base,
             task,
             data->node,
             data->node_types);
-/*    g_rec_mutex_unlock (&data->provider_base->priv->nodes_mutex); */
     free_node_children_data (data);
     return ret;
 }
@@ -352,13 +365,11 @@ get_children (DonnaTask *task, struct node_children_data *data)
 {
     DonnaTaskState ret;
 
-    g_rec_mutex_lock (&data->provider_base->priv->nodes_mutex);
     ret = DONNA_PROVIDER_BASE_GET_CLASS (data->provider_base)->get_children (
             data->provider_base,
             task,
             data->node,
             data->node_types);
-    g_rec_mutex_unlock (&data->provider_base->priv->nodes_mutex);
 
     if (ret == DONNA_TASK_DONE)
         /* emit node-children */
@@ -409,12 +420,10 @@ remove_node (DonnaTask *task, DonnaNode *node)
     donna_node_get (node, FALSE, "provider", &provider, NULL);
     provider_base = (DonnaProviderBase *) provider;
 
-    g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
     ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->remove_node (
             provider_base,
             task,
             node);
-    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
     g_object_unref (node);
     g_object_unref (provider);
     return ret;
@@ -484,9 +493,10 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
     parent = provider_base_get_cached_node (provider_base,
             (root_loc) ? root_loc: "/");
+    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
     if (!parent)
-        /* create the node. It is new_node's responsability to call
-         * add_node_to_cache */
+        /* create the node. It is new_node's responsability to lock, call
+         * add_node_to_cache, unlock */
         ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->new_node (
                 provider_base,
                 task,
@@ -503,7 +513,6 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
         ret = DONNA_TASK_DONE;
     }
 
-    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
     free (root_loc);
     g_object_unref (provider);
     return ret;

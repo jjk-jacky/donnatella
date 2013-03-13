@@ -31,6 +31,8 @@ struct _DonnaProviderBaseClass
     GObjectClass parent;
 
     /* virtual table */
+    void            (*lock_nodes)           (DonnaProviderBase  *provider);
+    void            (*unlock_nodes)         (DonnaProviderBase  *provider);
     DonnaNode *     (*get_cached_node)      (DonnaProviderBase  *provider,
                                              const gchar        *location);
     void            (*add_node_to_cache)    (DonnaProviderBase  *provider,
