@@ -169,7 +169,8 @@ donna_task_finalize (GObject *object)
     DonnaTaskPrivate *priv;
 
     priv = DONNA_TASK (object)->priv;
-    g_free (priv->desc);
+    if (priv->desc)
+        donna_shared_string_unref (priv->desc);
     g_strfreev (priv->devices);
     g_free (priv->status);
     if (priv->fd >= 0)
