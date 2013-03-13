@@ -575,7 +575,7 @@ donna_task_run (DonnaTask *task)
     LOCK_TASK (task);
 
     /* can only run/start from waiting */
-    if (priv->state != DONNA_TASK_WAITING)
+    if (!(priv->state & DONNA_TASK_PRE_RUN))
     {
         UNLOCK_TASK (task);
         return;
