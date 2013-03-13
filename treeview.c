@@ -1412,7 +1412,15 @@ node_has_children_cb (DonnaTask                 *task,
 
                 /* remove fake node */
                 if (gtk_tree_model_iter_children (model, &iter, &data->iter))
-                    gtk_tree_store_remove (store, &iter);
+                {
+                    DonnaNode *node;
+
+                    gtk_tree_model_get (model, &iter,
+                            DONNA_TREE_VIEW_COL_NODE,   &node,
+                            -1);
+                    if (!node)
+                        gtk_tree_store_remove (store, &iter);
+                }
                 /* update expand state */
                 gtk_tree_store_set (store, &data->iter,
                         DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
