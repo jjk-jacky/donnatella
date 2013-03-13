@@ -208,6 +208,7 @@ has_get_children (DonnaProviderBase  *_provider,
     if (get_children)
         arr = g_ptr_array_new_full (16, g_object_unref);
 
+    match = FALSE;
     while ((name = g_dir_read_name (dir)))
     {
         gchar  buf[1024];
