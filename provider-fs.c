@@ -195,6 +195,7 @@ has_get_children (DonnaProviderBase  *_provider,
     DonnaProviderBaseClass *klass;
     GError            *err = NULL;
     DonnaSharedString *location;
+    const gchar       *loc;
     GDir              *dir;
     const gchar       *name;
     gboolean           is_locked;
@@ -214,6 +215,11 @@ has_get_children (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
+    loc = donna_shared_string (location);
+    /* root is "/" so it would get us "//bin" */
+    if (loc[0] == '/' && loc[1] == '\0')
+        ++loc;
+
     if (get_children)
         arr = g_ptr_array_new_full (16, g_object_unref);
 
@@ -223,7 +229,6 @@ has_get_children (DonnaProviderBase  *_provider,
     {
         gchar  buf[1024];
         gchar *b;
-        const gchar *loc;
 
         if (donna_task_is_cancelling (task))
         {
@@ -233,10 +238,6 @@ has_get_children (DonnaProviderBase  *_provider,
         }
 
         b = buf;
-        loc = donna_shared_string (location);
-        /* root is "/" so it would get us "//bin" */
-        if (loc[0] == '/' && loc[1] == '\0')
-            ++loc;
         if (g_snprintf (buf, 1024, "%s/%s", loc, name) >= 1024)
             b = g_strdup_printf ("%s/%s", loc, name);
 
