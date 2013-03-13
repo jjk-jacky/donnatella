@@ -3259,16 +3259,14 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         if (iter)
         {
             struct scroll_data *data;
+            GtkTreeSelection *sel;
             GtkTreeIter _iter = ITER_INIT;
-            GtkTreePath *path;
 
             /* we select the new row */
+            sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (tree));
             gtk_tree_model_filter_convert_child_iter_to_iter (priv->filter,
                     &_iter, iter);
-            path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->filter),
-                    &_iter);
-            gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
-            gtk_tree_path_free (path);
+            gtk_tree_selection_select_iter (sel, &_iter);
 
             /* we'll also want to scroll (back) to it, once other threads that
              * are getting children and adding them to the tree will be done.
