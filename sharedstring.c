@@ -120,6 +120,8 @@ shared_string_lcopy (const GValue    *value,
 
     if (!value->data[0].v_pointer)
         *ss = NULL;
+    else if (collect_flags & G_VALUE_NOCOPY_CONTENTS)
+        *ss = value->data[0].v_pointer;
     else
         *ss = donna_shared_string_ref (value->data[0].v_pointer);
     return NULL;
