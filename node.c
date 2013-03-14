@@ -9,6 +9,97 @@
 #include "sharedstring.h"
 #include "macros.h"                     /* streq() */
 
+/**
+ * SECTION:node
+ * @Short_description: An object holding dynamic properties
+ * @See_also: #DonnaProvider #DonnaTask
+ *
+ * A #DonnaNode represents an "item" from a domain/#DonnaProvider (e.g. a file
+ * in the filesystem).
+ * They should only be created by their #DonnaProvider and will be used
+ * throughout the application to show/act on the item they represent.
+ *
+ * Unlike usual #GObject they use a system of "dynamic" properties, because not
+ * every node has the same properties, plugins could add new properties to
+ * specific nodes, etc
+ *
+ * For each node there is a set of basic properties, amongst which are the
+ * required properties. In addition, there could be additional properties.
+ *
+ * - Required properties exists in all nodes, their values are always available
+ *   directly.
+ * - Basic properties might not always exist, and if they do their values might
+ *   not be available directly (i.e. needing a refresh). However, their types
+ *   are known.
+ * - Additional properties might not always exists, their values might need a
+ *   refresh, and their types aren't known (i.e. #GValue will be used).
+ *
+ * Required & basic properties are owned by the #DonnaProvider of the node,
+ * additional properties can come from elsewhere (e.g. plugins).
+ *
+ * Basic properties are:
+ *
+ * - provider: (required): the #DonnaProvider of the node
+ * - domain: (required): the domain of the provider (const gchar *)
+ * - location: (required): the location of the node, unique string to identify
+ *   it within its domain (e.g. full path/name for a file) (DonnaSharedString *)
+ * - node-type: (required): the #DonnaNodeType of the node
+ * - name: (required): the name of the item (DonnaSharedString *)
+ * - icon: pointer to a #GdkPixbuf of the item's icon
+ * - full-name: the name of the item (e.g. /full/path/to/file -- often times
+ *   will be the same as location) (DonnaSharedString *)
+ * - size: the size of the item (guint)
+ * - ctime: the ctime of the item (gint64)
+ * - mtime: the mtime of the item (gint64)
+ * - atime: the atime of the item (gin64)
+ * - perms: the permissions of the item (guint)
+ * - user: the owner of the item (DonnaSharedString *)
+ * - group: the group of the item (DonnaSharedString *)
+ * - type: the type of the item (DonnaSharedString *)
+ *
+ * provider, domain, location and node-type are all read-only. Every other
+ * property might be writable.
+ *
+ * Properties might not have a value "loaded", i.e. they need a refresh. This is
+ * so that if getting a property needs work, it can only be done if/when needed.
+ *
+ * You can see if a node has a property or not, and if so if it has a value (or
+ * needs a refresh) and/or is writable using donna_node_has_property()
+ *
+ * You use donna_node_get() to access the properties of a node. It is similar to
+ * g_object_get() for required properties; for basic ones an extra pointer to a
+ * #DonnaHasValue must be specified first, to know whether the value was set,
+ * needs a refresh or doesn't exist one the node. Additional properties work the
+ * same as basic ones, but #GValue are used since their type isn't known.
+ *
+ * As always, for possibly slow/blocking operations you use a function that
+ * returns a #DonnaTask to perform the operation (usually in another thread).
+ * This is the case to refresh properties, done using donna_node_refresh_task()
+ * or donna_node_refresh_arr_task() -- the former takes the properties names as
+ * arguments, the later expects them in a #GPtrArray of strings.
+ *
+ * To change the value of a property, use donna_node_set_property_task()
+ *
+ * Nodes do not have signals, any and all relevent signal for a node will occur
+ * on its #DonnaProvider instead. For this reason, anyone who needs to work on a
+ * node should first connect to the relevent signals on its provider first.
+ * This is done to need to only connect to one signal even for hundreds of
+ * nodes.
+ *
+ * For providers:
+ *
+ * You create a new node using donna_node_new() or donna_node_new_from_node();
+ * The later allows you to create a new node based an existing node (usually
+ * from a different provider.
+ *
+ * The refresher and setter functions will be used for all (existing) basic
+ * properties. Additional properties can be added using
+ * donna_node_add_property(). TODO: a signal for plugins to add props.
+ *
+ * Only the owner of a property should use donna_node_set_property_value() when
+ * such a change has effectively been observed on the item it represents.
+ */
+
 const gchar *node_basic_properties[] =
 {
     "provider",
@@ -173,6 +264,23 @@ free_node_prop (DonnaNodeProp *prop)
     g_slice_free (DonnaNodeProp, prop);
 }
 
+/**
+ * donna_node_new:
+ * @provider: provider of the node
+ * @location: location of the node
+ * @node_type: type of node
+ * @refresher: function called to refresh a basic property
+ * @setter: function to change value of a basic property
+ * @name: name of the node
+ * @flags: flags to define which basic properties exists/are writable
+ *
+ * Creates a new node, according to the specified parameters. This should only
+ * be called by the #DonnaProvider of the node.
+ *
+ * If you need a node to use it, see donna_provider_get_node_task()
+ *
+ * Returns: (transfer full): The new node
+ */
 DonnaNode *
 donna_node_new (DonnaProvider       *provider,
                 DonnaSharedString   *location,
@@ -230,6 +338,28 @@ donna_node_new (DonnaProvider       *provider,
     return node;
 }
 
+/**
+ * donna_node_new_from_node:
+ * @provider: provider of the node
+ * @location: location of the node
+ * @sce: source node upon which the node is based
+ * @error: (allow-none): return location for error, or %NULL
+ *
+ * Creates a new node based upon an existing one (from a different provider).
+ *
+ * The new node will have the specified provider and location, but keep its type
+ * as well as the definition of all (basic & additional) properties.
+ *
+ * This would be useful to e.g. create nodes based on filesystem items, but with
+ * a different location so as to show the same item more than once. For example,
+ * results of a `grep` could have the same item listed twice, for different
+ * lines matching.
+ *
+ * Like donna_node_new() this should only be called by the node's provider. If
+ * you need a node to use it, see donna_provider_get_node_task()
+ *
+ * Returns: (transfer full): The new node
+ */
 DonnaNode *
 donna_node_new_from_node (DonnaProvider     *provider,
                           DonnaSharedString *location,
@@ -300,6 +430,20 @@ donna_node_new_from_node (DonnaProvider     *provider,
     return node;
 }
 
+/**
+ * donna_node_add_property:
+ * @node: The node to add the property to
+ * @name: Name of the property
+ * @type: type of the property
+ * @value: (allow-none): Initial value of the property
+ * @refresher: function to be called to refresh the property's value
+ * @setter: (allow-none): Function to be called to change the property's value
+ * @error: (allow-none): Return location of error (or %NULL)
+ *
+ * Adds a new additional property of the given node.
+ *
+ * Returns: %TRUE if the property was added, else %FALSE
+ */
 gboolean
 donna_node_add_property (DonnaNode       *node,
                          const gchar     *name,
@@ -373,6 +517,74 @@ donna_node_add_property (DonnaNode       *node,
     g_rw_lock_writer_unlock (&priv->props_lock);
 
     return TRUE;
+}
+
+/**
+ * donna_node_has_property:
+ * @node: The node to check for the property
+ * @name: The name of the property to check
+ *
+ * Determines whether a property exists, has a value (or needs a refresh), and
+ * is writable on a node.
+ *
+ * Returns: Flags indicating the state of the property on the node
+ */
+DonnaNodeHasProp
+donna_node_has_property (DonnaNode   *node,
+                         const gchar *name)
+{
+    DonnaNodePrivate *priv;
+    const gchar **s;
+    guint i;
+    DonnaNodeProp *prop;
+    DonnaNodeHasProp ret;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), DONNA_NODE_PROP_UNKNOWN);
+    g_return_val_if_fail (name != NULL, DONNA_NODE_PROP_UNKNOWN);
+
+    priv = node->priv;
+
+    for (i = 0, s = node_basic_properties; *s; ++s, ++i)
+    {
+        if (streq (name, *s))
+        {
+            /* required; or basic w/ value */
+            if (i < FIRST_BASIC_PROP
+                    || priv->basic_props[i - FIRST_BASIC_PROP].has_value
+                    == DONNA_NODE_VALUE_SET)
+                ret = DONNA_NODE_PROP_EXISTS | DONNA_NODE_PROP_HAS_VALUE;
+            /* basic w/out value */
+            else if (priv->basic_props[i - FIRST_BASIC_PROP].has_value
+                    == DONNA_NODE_VALUE_NEED_REFRESH)
+                ret = DONNA_NODE_PROP_EXISTS;
+            /* basic that doesn't exist */
+            else
+                return DONNA_NODE_PROP_NONE;
+
+            /* internal props are not writable, for the rest we check the flags */
+            if (i >= FIRST_REQUIRED_PROP
+                    && priv->flags & prop_writable_flags[i - FIRST_REQUIRED_PROP])
+                    ret |= DONNA_NODE_PROP_WRITABLE;
+
+            return ret;
+        }
+    }
+
+    g_rw_lock_reader_lock (&priv->props_lock);
+    prop = g_hash_table_lookup (priv->props, name);
+    g_rw_lock_reader_unlock (&priv->props_lock);
+    if (prop)
+    {
+        ret = DONNA_NODE_PROP_EXISTS;
+        if (prop->has_value)
+            ret |= DONNA_NODE_PROP_HAS_VALUE;
+        if (prop->setter)
+            ret |= DONNA_NODE_PROP_WRITABLE;
+    }
+    else
+        ret = DONNA_NODE_PROP_NONE;
+
+    return ret;
 }
 
 static void
@@ -534,64 +746,24 @@ next:
     g_rw_lock_reader_unlock (&priv->props_lock);
 }
 
-DonnaNodeHasProp
-donna_node_has_property (DonnaNode   *node,
-                         const gchar *name)
-{
-    DonnaNodePrivate *priv;
-    const gchar **s;
-    guint i;
-    DonnaNodeProp *prop;
-    DonnaNodeHasProp ret;
-
-    g_return_val_if_fail (DONNA_IS_NODE (node), DONNA_NODE_PROP_UNKNOWN);
-    g_return_val_if_fail (name != NULL, DONNA_NODE_PROP_UNKNOWN);
-
-    priv = node->priv;
-
-    for (i = 0, s = node_basic_properties; *s; ++s, ++i)
-    {
-        if (streq (name, *s))
-        {
-            /* required; or basic w/ value */
-            if (i < FIRST_BASIC_PROP
-                    || priv->basic_props[i - FIRST_BASIC_PROP].has_value
-                    == DONNA_NODE_VALUE_SET)
-                ret = DONNA_NODE_PROP_EXISTS | DONNA_NODE_PROP_HAS_VALUE;
-            /* basic w/out value */
-            else if (priv->basic_props[i - FIRST_BASIC_PROP].has_value
-                    == DONNA_NODE_VALUE_NEED_REFRESH)
-                ret = DONNA_NODE_PROP_EXISTS;
-            /* basic that doesn't exist */
-            else
-                return DONNA_NODE_PROP_NONE;
-
-            /* internal props are not writable, for the rest we check the flags */
-            if (i >= FIRST_REQUIRED_PROP
-                    && priv->flags & prop_writable_flags[i - FIRST_REQUIRED_PROP])
-                    ret |= DONNA_NODE_PROP_WRITABLE;
-
-            return ret;
-        }
-    }
-
-    g_rw_lock_reader_lock (&priv->props_lock);
-    prop = g_hash_table_lookup (priv->props, name);
-    g_rw_lock_reader_unlock (&priv->props_lock);
-    if (prop)
-    {
-        ret = DONNA_NODE_PROP_EXISTS;
-        if (prop->has_value)
-            ret |= DONNA_NODE_PROP_HAS_VALUE;
-        if (prop->setter)
-            ret |= DONNA_NODE_PROP_WRITABLE;
-    }
-    else
-        ret = DONNA_NODE_PROP_NONE;
-
-    return ret;
-}
-
+/**
+ * donna_node_get:
+ * @node: Node to get property values from
+ * @is_blocking: Whether to refresh properties needing it or not
+ * @first_name: First name of the properties to get
+ *
+ * Set the value of specified properties, if possible. For required properties
+ * you should speicfy the return location of the value. For basic properties,
+ * you should first specify the return location for a #DonnaHasValue which will
+ * indicate if the value was set, needs a refresh, or doesn't exist on the node.
+ * For additional properties, the return value must be of a non-initialized
+ * #GValue.
+ *
+ * If @is_blocking is %FALSE the #DonnaHasValue might be
+ * %DONNA_NODE_VALUE_NEED_REFRESH while with %TRUE a refresh will be
+ * automatically called (within/blocking the thread). It can then also be set
+ * to %DONNA_NODE_VALUE_ERROR if the refresher failed.
+ */
 void
 donna_node_get (DonnaNode   *node,
                 gboolean     is_blocking,
@@ -614,6 +786,19 @@ struct refresh_data
     GPtrArray   *refreshed;
 };
 
+/**
+ * node_updated_cb:
+ * @provider: The node's provider
+ * @node: The node
+ * @name: Name of the property that was updated
+ * @data: Our data
+ *
+ * Keeps track of properties being updated while we're calling refreshers. This
+ * allows to call one refresher, notice it updated a group of properties and not
+ * call refresh on those.
+ *
+ * See node_refresh()
+ */
 static void
 node_updated_cb (DonnaProvider       *provider,
                  DonnaNode           *node,
@@ -658,6 +843,17 @@ node_updated_cb (DonnaProvider       *provider,
     }
 }
 
+/**
+ * node_refresh:
+ * @task: Our task
+ * @data: Our data
+ *
+ * Task's worker to refresh properties on a node
+ *
+ * See donna_node_refresh_task()
+ *
+ * Returns: The #DonnaTaskState for the task
+ */
 static DonnaTaskState
 node_refresh (DonnaTask *task, struct refresh_data *data)
 {
@@ -817,6 +1013,18 @@ free_refresh_data (struct refresh_data *data)
     g_slice_free (struct refresh_data, data);
 }
 
+/**
+ * donna_node_refresh_task:
+ * @node: Node to refresh properties of
+ * @first_name: Name of the first property to refresh
+ *
+ * A task to refresh the specified properties. @first_name can be
+ * %DONNA_NODE_REFRESH_SET_VALUES to refresh all set values, i.e. that already
+ * have a value; or %DONNA_NODE_REFRESH_ALL_VALUES to refresh all properties,
+ * including those who do not have a value yet.
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL on error
+ */
 DonnaTask *
 donna_node_refresh_task (DonnaNode   *node,
                          const gchar *first_name,
@@ -879,6 +1087,15 @@ donna_node_refresh_task (DonnaNode   *node,
             (GDestroyNotify) free_refresh_data);
 }
 
+/**
+ * donna_node_refresh_arr_task:
+ * @node: The node to refresh properties of
+ * @props: (element-type const gchar *): A #GPtrArray of properties names
+ *
+ * Same as donna_node_refresh_task() but using a #GPtrArray
+ *
+ * Returns: (transfer floating): The floating #DonnaTask or %NULL on error
+ */
 DonnaTask *
 donna_node_refresh_arr_task (DonnaNode *node,
                              GPtrArray *props)
@@ -924,6 +1141,17 @@ free_set_property (struct set_property *data)
     g_slice_free (struct set_property, data);
 }
 
+/**
+ * set_property:
+ * @task: Our task
+ * @data: Our data
+ *
+ * Task's worker to set a property's value
+ *
+ * See donna_node_set_property_task()
+ *
+ * Returns: The #DonnaTaskState for the task
+ */
 static DonnaTaskState
 set_property (DonnaTask *task, struct set_property *data)
 {
@@ -944,6 +1172,17 @@ set_property (DonnaTask *task, struct set_property *data)
     return ret;
 }
 
+/**
+ * donna_node_set_property_task:
+ * @node: Node on which to change a property
+ * @name: Name of the property to change
+ * @value: New value to set
+ * @error: (allow-none): Return location of error, or %NULL
+ *
+ * A task to change the value of the specified property on the given node.
+ *
+ * Returns: (transfer floating): A floating #DonnaTask or %NULL on error
+ */
 DonnaTask *
 donna_node_set_property_task (DonnaNode     *node,
                               const gchar   *name,
@@ -1066,6 +1305,19 @@ donna_node_set_property_task (DonnaNode     *node,
             (GDestroyNotify) free_set_property);
 }
 
+/**
+ * donna_node_set_property_value:
+ * @node: The node
+ * @name: Name of the property
+ * @value: New value of the property
+ *
+ * Updates the value of a property on a node. This should only be called by the
+ * owner of the property, when the value has actually changed on the item.
+ * It's usually called by the setter, or when some autorefresh is triggered.
+ *
+ * To (try to) change the value of a property, use
+ * donna_node_set_property_task()
+ */
 void
 donna_node_set_property_value (DonnaNode     *node,
                                const gchar   *name,
@@ -1125,6 +1377,16 @@ finish:
         donna_provider_node_updated (node->priv->provider, node, name);
 }
 
+/**
+ * donna_node_inc_toggle_count:
+ * @node: The node
+ *
+ * Increments the toggle count for that node. This should only be used by the
+ * node's provider, to handle its toggle reference in multi-threaded
+ * environment.
+ *
+ * Returns: The new toggle count
+ */
 int
 donna_node_inc_toggle_count (DonnaNode *node)
 {
@@ -1132,6 +1394,16 @@ donna_node_inc_toggle_count (DonnaNode *node)
     return ++node->priv->toggle_count;
 }
 
+/**
+ * donna_node_dec_toggle_count:
+ * @node: The node
+ *
+ * Decrements the toggle count for that node. This should only be used by the
+ * node's provider, to handle its toggle reference in multi-threaded
+ * environment.
+ *
+ * Returns: The new toggle count
+ */
 int
 donna_node_dec_toggle_count (DonnaNode *node)
 {
