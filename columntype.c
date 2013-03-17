@@ -23,7 +23,7 @@ donna_columntype_get_renderers (DonnaColumnType  *ct)
     return (*interface->get_renderers) (ct);
 }
 
-DonnaSharedString **
+GPtrArray *
 donna_columntype_get_props (DonnaColumnType    *ct,
                             const gchar        *tv_name,
                             const gchar        *col_name)

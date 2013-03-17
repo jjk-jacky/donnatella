@@ -4,7 +4,6 @@
 
 #include "common.h"
 #include "task.h"
-#include "sharedstring.h"
 
 G_BEGIN_DECLS
 
@@ -104,14 +103,14 @@ struct _DonnaNodeClass
 };
 
 DonnaNode *     donna_node_new              (DonnaProvider          *provider,
-                                             DonnaSharedString      *location,
+                                             const gchar            *location,
                                              DonnaNodeType           node_type,
                                              refresher_fn            refresher,
                                              setter_fn               setter,
-                                             DonnaSharedString      *name,
+                                             const gchar            *name,
                                              DonnaNodeFlags          flags);
 DonnaNode *     donna_node_new_from_node    (DonnaProvider          *provider,
-                                             DonnaSharedString      *location,
+                                             const gchar            *location,
                                              DonnaNode              *source_node,
                                              GError                **error);
 gboolean        donna_node_add_property     (DonnaNode              *node,

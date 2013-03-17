@@ -6,7 +6,6 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
-#include "sharedstring.h"
 
 struct _DonnaProviderBasePrivate
 {
@@ -180,7 +179,7 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
     g_rec_mutex_lock (&provider->priv->nodes_mutex);
     if (is_last)
     {
-        DonnaSharedString *location;
+        gchar *location;
         int c;
 
         c = donna_node_dec_toggle_count (node);
@@ -190,11 +189,10 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
             return;
         }
         donna_node_get (node, FALSE, "location", &location, NULL);
-        g_hash_table_remove (provider->priv->nodes,
-                donna_shared_string (location));
+        g_hash_table_remove (provider->priv->nodes, location);
         g_rec_mutex_unlock (&provider->priv->nodes_mutex);
         g_object_unref (node);
-        donna_shared_string_unref (location);
+        g_free (location);
     }
     else
     {
@@ -208,7 +206,7 @@ static void
 provider_base_add_node_to_cache (DonnaProviderBase *provider,
                                  DonnaNode         *node)
 {
-    DonnaSharedString *location;
+    gchar *location;
 
     g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
@@ -221,10 +219,8 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
                              (GToggleNotify) node_toggle_ref_cb,
                              provider);
 
-    /* add the node to our hash table */
-    g_hash_table_insert (provider->priv->nodes,
-            g_strdup (donna_shared_string (location)), node);
-    donna_shared_string_unref (location);
+    /* add the node to our hash table -- location is a strdup already */
+    g_hash_table_insert (provider->priv->nodes, location, node);
 }
 
 struct get_node_data
@@ -297,8 +293,7 @@ provider_base_get_node_task (DonnaProvider    *provider,
     task = donna_task_new ((task_fn) get_node, data,
             (GDestroyNotify) free_get_node_data);
 
-    donna_task_take_desc (task, donna_shared_string_new_printf (
-                "get_node() for '%s:%s'",
+    donna_task_take_desc (task, g_strdup_printf ("get_node() for '%s:%s'",
                 donna_provider_get_domain (provider),
                 location));
     return task;
@@ -338,7 +333,7 @@ provider_base_has_node_children_task (DonnaProvider *provider,
                                       DonnaNodeType  node_types)
 {
     DonnaTask *task;
-    DonnaSharedString *ss;
+    gchar *location;
     const gchar *domain;
     struct node_children_data *data;
 
@@ -351,12 +346,12 @@ provider_base_has_node_children_task (DonnaProvider *provider,
     task = donna_task_new ((task_fn) has_children, data,
             (GDestroyNotify) free_node_children_data);
 
-    donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
-    donna_task_take_desc (task, donna_shared_string_new_printf (
+    donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
+    donna_task_take_desc (task, g_strdup_printf (
                 "has_children() for node '%s:%s'",
                 domain,
-                donna_shared_string (ss)));
-    donna_shared_string_unref (ss);
+                location));
+    g_free (location);
     return task;
 }
 
@@ -388,7 +383,7 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
                                       DonnaNodeType   node_types)
 {
     DonnaTask *task;
-    DonnaSharedString *ss;
+    gchar *location;
     const gchar *domain;
     struct node_children_data *data;
 
@@ -401,12 +396,12 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
     task = donna_task_new ((task_fn) get_children, data,
             (GDestroyNotify) free_node_children_data);
 
-    donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
-    donna_task_take_desc (task, donna_shared_string_new_printf (
+    donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
+    donna_task_take_desc (task, g_strdup_printf (
                 "get_children() for node '%s:%s'",
                 domain,
-                donna_shared_string (ss)));
-    donna_shared_string_unref (ss);
+                location));
+    g_free (location);
     return task;
 }
 
@@ -435,19 +430,19 @@ provider_base_remove_node_task (DonnaProvider   *provider,
 {
     DonnaTask *task;
     const gchar *domain;
-    DonnaSharedString *ss;
+    gchar *location;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
     task = donna_task_new ((task_fn) remove_node, g_object_ref (node),
             g_object_unref);
 
-    donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
-    donna_task_take_desc (task, donna_shared_string_new_printf (
+    donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
+    donna_task_take_desc (task, g_strdup_printf (
                 "remove_node() for node '%s:%s'",
                 domain,
-                donna_shared_string (ss)));
-    donna_shared_string_unref (ss);
+                location));
+    g_free (location);
     return task;
 }
 
@@ -456,11 +451,9 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
 {
     DonnaProviderBase *provider_base;
     DonnaProvider *provider;
-    DonnaSharedString *location;
-    const gchar *l;
+    gchar *location;
     DonnaNode *parent;
     gchar *s;
-    gchar *root_loc;
     DonnaTaskState ret;
 
     donna_node_get (node, FALSE,
@@ -469,30 +462,26 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
             NULL);
     provider_base = (DonnaProviderBase *) provider;
 
-    l = donna_shared_string (location);
     /* is this a root? */
-    if (l[strlen (l) - 1] == '/')
+    if (location[strlen (location) - 1] == '/')
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
                 "Node '%s:%s' has no parent",
                 donna_provider_get_domain (provider),
-                l);
-        donna_shared_string_unref (location);
+                location);
+        g_free (location);
         g_object_unref (provider);
         return DONNA_TASK_FAILED;
     }
 
-    s = strrchr (donna_shared_string (location), '/');
-    if (s == donna_shared_string (location))
-        root_loc = NULL;
-    else
-        root_loc = strndup (l, s - l - 1);
-    donna_shared_string_unref (location);
+    s = strrchr (location, '/');
+    if (s != location)
+        *s = '\0';
 
     g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
     parent = provider_base_get_cached_node (provider_base,
-            (root_loc) ? root_loc: "/");
+            (s == location) ? "/" : location);
     g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
     if (!parent)
         /* create the node. It is new_node's responsability to lock, call
@@ -500,7 +489,7 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
         ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->new_node (
                 provider_base,
                 task,
-                (root_loc) ? root_loc : "/");
+                (s == location) ? "/" : location);
     else
     {
         GValue *value;
@@ -513,7 +502,7 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
         ret = DONNA_TASK_DONE;
     }
 
-    free (root_loc);
+    g_free (location);
     g_object_unref (provider);
     return ret;
 }
@@ -524,7 +513,7 @@ provider_base_get_node_parent_task (DonnaProvider   *provider,
 {
     DonnaTask *task;
     const gchar *domain;
-    DonnaSharedString *ss;
+    gchar *location;
     DonnaProviderFlags flags;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
@@ -537,11 +526,11 @@ provider_base_get_node_parent_task (DonnaProvider   *provider,
     task = donna_task_new ((task_fn) get_node_parent, g_object_ref (node),
             g_object_unref);
 
-    donna_node_get (node, FALSE, "domain", &domain, "location", &ss, NULL);
-    donna_task_take_desc (task, donna_shared_string_new_printf (
+    donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
+    donna_task_take_desc (task, g_strdup_printf (
                 "get_node_parent() for node '%s:%s'",
                 domain,
-                donna_shared_string (ss)));
-    donna_shared_string_unref (ss);
+                location));
+    g_free (location);
     return task;
 }

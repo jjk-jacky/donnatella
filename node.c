@@ -6,7 +6,6 @@
 #include "provider.h"                   /* donna_provider_node_updated() */
 #include "task.h"
 #include "util.h"
-#include "sharedstring.h"
 #include "macros.h"                     /* streq() */
 
 /**
@@ -42,20 +41,20 @@
  * - provider: (required): the #DonnaProvider of the node
  * - domain: (required): the domain of the provider (const gchar *)
  * - location: (required): the location of the node, unique string to identify
- *   it within its domain (e.g. full path/name for a file) (DonnaSharedString *)
+ *   it within its domain (e.g. full path/name for a file) (gchar *)
  * - node-type: (required): the #DonnaNodeType of the node
- * - name: (required): the name of the item (DonnaSharedString *)
+ * - name: (required): the name of the item (gchar *)
  * - icon: pointer to a #GdkPixbuf of the item's icon
  * - full-name: the name of the item (e.g. /full/path/to/file -- often times
- *   will be the same as location) (DonnaSharedString *)
+ *   will be the same as location) (gchar *)
  * - size: the size of the item (guint)
  * - ctime: the ctime of the item (gint64)
  * - mtime: the mtime of the item (gint64)
  * - atime: the atime of the item (gin64)
  * - perms: the permissions of the item (guint)
- * - user: the owner of the item (DonnaSharedString *)
- * - group: the group of the item (DonnaSharedString *)
- * - type: the type of the item (DonnaSharedString *)
+ * - user: the owner of the item (gchar *)
+ * - group: the group of the item (gchar *)
+ * - type: the type of the item (gchar *)
  *
  * provider, domain, location and node-type are all read-only. Every other
  * property might be writable.
@@ -162,10 +161,10 @@ struct _DonnaNodePrivate
 {
     /* internal properties */
     DonnaProvider     *provider;
-    DonnaSharedString *location;
+    gchar             *location;
     DonnaNodeType      node_type;
     /* required properties */
-    DonnaSharedString *name;
+    gchar             *name;
     /* basic properties */
     struct {
         DonnaNodeHasValue has_value;
@@ -218,15 +217,15 @@ donna_node_init (DonnaNode *node)
             g_free, (GDestroyNotify) free_node_prop);
     g_rw_lock_init (&priv->props_lock);
 
-    g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, DONNA_TYPE_SHARED_STRING);
-    g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,  G_TYPE_UINT);
-    g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value, G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_MTIME].value, G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_ATIME].value, G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_PERMS].value, G_TYPE_UINT);
-    g_value_init (&priv->basic_props[BASIC_PROP_USER].value,  DONNA_TYPE_SHARED_STRING);
-    g_value_init (&priv->basic_props[BASIC_PROP_GROUP].value, DONNA_TYPE_SHARED_STRING);
-    g_value_init (&priv->basic_props[BASIC_PROP_TYPE].value,  DONNA_TYPE_SHARED_STRING);
+    g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
+    g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_UINT);
+    g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value,     G_TYPE_INT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_MTIME].value,     G_TYPE_INT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_ATIME].value,     G_TYPE_INT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_PERMS].value,     G_TYPE_UINT);
+    g_value_init (&priv->basic_props[BASIC_PROP_USER].value,      G_TYPE_STRING);
+    g_value_init (&priv->basic_props[BASIC_PROP_GROUP].value,     G_TYPE_STRING);
+    g_value_init (&priv->basic_props[BASIC_PROP_TYPE].value,      G_TYPE_STRING);
 
     priv->toggle_count = 1;
 }
@@ -244,8 +243,8 @@ donna_node_finalize (GObject *object)
      * the object is supposed to be able to be "revived" from dispose, and we
      * need a ref to provider to survive... */
     g_object_unref (priv->provider);
-    donna_shared_string_unref (priv->location);
-    donna_shared_string_unref (priv->name);
+    g_free (priv->location);
+    g_free (priv->name);
     for (i = 0; i < NB_BASIC_PROPS; ++i)
         g_value_unset (&priv->basic_props[i].value);
     g_hash_table_destroy (priv->props);
@@ -283,11 +282,11 @@ free_node_prop (DonnaNodeProp *prop)
  */
 DonnaNode *
 donna_node_new (DonnaProvider       *provider,
-                DonnaSharedString   *location,
+                const gchar         *location,
                 DonnaNodeType        node_type,
                 refresher_fn         refresher,
                 setter_fn            setter,
-                DonnaSharedString   *name,
+                const gchar         *name,
                 DonnaNodeFlags       flags)
 {
     DonnaNode *node;
@@ -305,9 +304,9 @@ donna_node_new (DonnaProvider       *provider,
     node = g_object_new (DONNA_TYPE_NODE, NULL);
     priv = node->priv;
     priv->provider  = g_object_ref (provider);
-    priv->location  = donna_shared_string_ref (location);
+    priv->location  = g_strdup (location);
     priv->node_type = node_type;
-    priv->name      = donna_shared_string_ref (name);
+    priv->name      = g_strdup (name);
     priv->refresher = refresher;
     priv->setter    = setter;
     priv->flags     = flags;
@@ -362,7 +361,7 @@ donna_node_new (DonnaProvider       *provider,
  */
 DonnaNode *
 donna_node_new_from_node (DonnaProvider     *provider,
-                          DonnaSharedString *location,
+                          const gchar       *location,
                           DonnaNode         *sce,
                           GError           **error)
 {
@@ -386,9 +385,9 @@ donna_node_new_from_node (DonnaProvider     *provider,
         g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_OTHER,
                 "Failed to create a new node '%s:%s' when trying to make a new node from '%s:%s'",
                 donna_provider_get_domain (provider),
-                donna_shared_string (location),
+                location,
                 donna_provider_get_domain (sce->priv->provider),
-                donna_shared_string (sce->priv->location));
+                sce->priv->location);
         g_rw_lock_reader_unlock (&sce->priv->props_lock);
         return NULL;
     }
@@ -627,10 +626,10 @@ get_valist (DonnaNode   *node,
         }
         else if (streq (name, "location"))
         {
-            DonnaSharedString **ss;
+            gchar **ss;
 
-            ss = va_arg (va_args, DonnaSharedString **);
-            *ss = donna_shared_string_ref (priv->location);
+            ss = va_arg (va_args, gchar **);
+            *ss = g_strdup (priv->location);
             goto next;
         }
         else if (streq (name, "node-type"))
@@ -643,10 +642,10 @@ get_valist (DonnaNode   *node,
         }
         else if (streq (name, "name"))
         {
-            DonnaSharedString **ss;
+            gchar **ss;
 
-            ss = va_arg (va_args, DonnaSharedString **);
-            *ss = donna_shared_string_ref (priv->name);
+            ss = va_arg (va_args, gchar **);
+            *ss = g_strdup (priv->name);
             goto next;
         }
 
@@ -669,7 +668,7 @@ grab_basic_value:
                                 "Error while trying to copy value of basic property '%s' from node '%s:%s': %s",
                                 name,
                                 donna_provider_get_domain (priv->provider),
-                                donna_shared_string (priv->location),
+                                priv->location,
                                 err);
                         g_free (err);
                     }
@@ -1226,12 +1225,12 @@ donna_node_set_property_task (DonnaNode     *node,
             /* NAME */
             if (i == 0)
             {
-                if (!DONNA_G_VALUE_HOLDS_SHARED_STRING (value))
+                if (!G_VALUE_HOLDS_STRING (value))
                 {
                     g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
                             "Property %s on node is of type %s, value passed is %s",
                             name,
-                            g_type_name (DONNA_TYPE_SHARED_STRING),
+                            g_type_name (G_TYPE_STRING),
                             g_type_name (G_VALUE_TYPE (value)));
                     return NULL;
                 }
@@ -1336,8 +1335,8 @@ donna_node_set_property_value (DonnaNode     *node,
     /* name? */
     if (streq (name, "name"))
     {
-        donna_shared_string_unref (node->priv->name);
-        node->priv->name = donna_g_value_dup_shared_string (value);
+        g_free (node->priv->name);
+        node->priv->name = g_value_dup_string (value);
         emit = TRUE;
         goto finish;
     }

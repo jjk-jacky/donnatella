@@ -7,7 +7,6 @@
 #include "donna.h"
 #include "conf.h"
 #include "sort.h"
-#include "sharedstring.h"
 #include "macros.h"
 
 struct _DonnaColumnTypeNamePrivate
@@ -20,7 +19,7 @@ static void             ct_name_finalize            (GObject            *object)
 
 /* ColumnType */
 static const gchar *    ct_name_get_renderers       (DonnaColumnType    *ct);
-static DonnaSharedString ** ct_name_get_props       (DonnaColumnType    *ct,
+static GPtrArray *      ct_name_get_props           (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name);
 static GPtrArray *      ct_name_render              (DonnaColumnType    *ct,
@@ -108,19 +107,20 @@ ct_name_get_renderers (DonnaColumnType   *ct)
     return "pt";
 }
 
-static DonnaSharedString **
+static GPtrArray *
 ct_name_get_props (DonnaColumnType  *ct,
                    const gchar      *tv_name,
                    const gchar      *col_name)
 {
-    DonnaSharedString **ss;
+    GPtrArray *props;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_NAME (ct), NULL);
 
-    ss = g_new0 (DonnaSharedString *, 3);
-    ss[0] = donna_shared_string_new_dup ("name");
-    ss[1] = donna_shared_string_new_dup ("icon");
-    return ss;
+    props = g_ptr_array_new_full (2, g_free);
+    g_ptr_array_add (props, g_strdup ("name"));
+    g_ptr_array_add (props, g_strdup ("icon"));
+
+    return props;
 }
 
 static GPtrArray *
@@ -178,15 +178,15 @@ ct_name_render (DonnaColumnType    *ct,
     }
     else /* index == 2 */
     {
-        DonnaSharedString *name;
+        gchar *name;
 
         donna_node_get (node, FALSE, "name", &name, NULL);
         g_object_set (renderer,
                 "visible",      TRUE,
-                "text",         donna_shared_string (name),
+                "text",         name,
                 "ellipsize",    PANGO_ELLIPSIZE_END,
                 NULL);
-        donna_shared_string_unref (name);
+        g_free (name);
     }
 
     return NULL;
@@ -220,7 +220,7 @@ ct_name_set_tooltip (DonnaColumnType    *ct,
                      DonnaNode          *node,
                      GtkTooltip         *tooltip)
 {
-    DonnaSharedString *ss;
+    gchar *s;
     DonnaNodeHasValue has;
 
     /* FIXME:
@@ -230,18 +230,18 @@ ct_name_set_tooltip (DonnaColumnType    *ct,
 
     if (index == 1)
     {
-        donna_node_get (node, FALSE, "full-name", &has, &ss, NULL);
+        donna_node_get (node, FALSE, "full-name", &has, &s, NULL);
         if (has == DONNA_NODE_VALUE_NONE)
-            donna_node_get (node, FALSE, "location", &ss, NULL);
+            donna_node_get (node, FALSE, "location", &s, NULL);
         /* FIXME: if NEED_REFRESH do a task and whatnot? */
         else if (has != DONNA_NODE_VALUE_SET)
             return FALSE;
     }
     else
-        donna_node_get (node, FALSE, "name", &ss, NULL);
+        donna_node_get (node, FALSE, "name", &s, NULL);
 
-    gtk_tooltip_set_text (tooltip, donna_shared_string (ss));
-    donna_shared_string_unref (ss);
+    gtk_tooltip_set_text (tooltip, s);
+    g_free (s);
     return TRUE;
 }
 
@@ -306,7 +306,7 @@ get_node_key (DonnaColumnTypeName   *ctname,
     if (!key || *key != sort_get_options_char (dot_first, special_first,
                 natural_order))
     {
-        DonnaSharedString *name;
+        gchar *name;
 
         /* if we're installing the key (i.e. not updating an invalid one) we
          * need to make sure we're listening on the provider's
@@ -342,9 +342,9 @@ get_node_key (DonnaColumnTypeName   *ctname,
         }
 
         donna_node_get (node, FALSE, "name", &name, NULL);
-        key = sort_get_utf8_collate_key (donna_shared_string (name), -1,
+        key = sort_get_utf8_collate_key (name, -1,
                 dot_first, special_first, natural_order);
-        donna_shared_string_unref (name);
+        g_free (name);
         g_object_set_data_full (G_OBJECT (node), buf, key, g_free);
     }
 

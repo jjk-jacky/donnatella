@@ -3,7 +3,6 @@
 #define __DONNA_TASK_H__
 
 #include "common.h"
-#include "sharedstring.h"
 #include "taskui.h"
 
 G_BEGIN_DECLS
@@ -81,7 +80,7 @@ DonnaTask *         donna_task_new_full         (task_fn             func,
                                                  GPtrArray          *devices,
                                                  DonnaTaskPriority   priority,
                                                  gboolean            autostart,
-                                                 DonnaSharedString  *desc);
+                                                 const gchar        *desc);
 gboolean            donna_task_set_taskui       (DonnaTask          *task,
                                                  DonnaTaskUi        *taskui);
 gboolean            donna_task_set_devices      (DonnaTask          *task,
@@ -92,9 +91,9 @@ gboolean            donna_task_set_duplicator   (DonnaTask          *task,
                                                  GDestroyNotify      destroy);
 
 gboolean            donna_task_set_desc         (DonnaTask          *task,
-                                                 DonnaSharedString  *desc);
+                                                 const gchar        *desc);
 gboolean            donna_task_take_desc        (DonnaTask          *task,
-                                                 DonnaSharedString  *desc);
+                                                 gchar              *desc);
 gboolean            donna_task_prefix_desc      (DonnaTask          *task,
                                                  const gchar        *prefix);
 gboolean            donna_task_set_callback     (DonnaTask          *task,
@@ -109,6 +108,9 @@ gboolean            donna_task_set_timeout      (DonnaTask          *task,
 
 gboolean            donna_task_can_be_duplicated(DonnaTask          *task);
 DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task);
+DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
+const GError *      donna_task_get_error        (DonnaTask          *task);
+const GValue *      donna_task_get_return_value (DonnaTask          *task);
 void                donna_task_run              (DonnaTask          *task);
 void                donna_task_pause            (DonnaTask          *task);
 void                donna_task_resume           (DonnaTask          *task);

@@ -1,7 +1,6 @@
 
 #include <gtk/gtk.h>
 #include "donna.h"
-#include "sharedstring.h"
 #include "provider-config.h"
 #include "columntype.h"
 #include "columntype-name.h"
@@ -28,8 +27,8 @@ struct _DonnaDonnaPrivate
 
 struct argmt
 {
-    DonnaSharedString   *name;
-    GPatternSpec        *pspec;
+    gchar        *name;
+    GPatternSpec *pspec;
 };
 
 static GObject *    donna_donna_constructor     (GType                   type,
@@ -41,9 +40,6 @@ static void
 donna_donna_class_init (DonnaDonnaClass *klass)
 {
     GObjectClass *o_class;
-
-    /* register the new fundamental type SharedString */
-    donna_shared_string_register ();
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->constructor = donna_donna_constructor;
@@ -123,7 +119,7 @@ donna_donna_init (DonnaDonna *donna)
     for (i = 0; i < arr->len; ++i)
     {
         struct argmt *argmt;
-        DonnaSharedString *ss;
+        gchar *ss;
         const gchar *s;
 
         /* ignore "tree" and "list" arrangements */
@@ -131,7 +127,7 @@ donna_donna_init (DonnaDonna *donna)
         if (s[0] < '0' || s[0] > '9')
             continue;
 
-        if (!donna_config_get_shared_string (priv->config, &ss,
+        if (!donna_config_get_string (priv->config, &ss,
                     "arrangements/%s/mask",
                     s))
         {
@@ -139,10 +135,10 @@ donna_donna_init (DonnaDonna *donna)
             continue;
         }
         argmt = g_new0 (struct argmt, 1);
-        argmt->name  = donna_shared_string_new_dup (s);
-        argmt->pspec = g_pattern_spec_new (donna_shared_string (ss));
+        argmt->name  = g_strdup (s);
+        argmt->pspec = g_pattern_spec_new (ss);
         priv->arrangements = g_slist_append (priv->arrangements, argmt);
-        donna_shared_string_unref (ss);
+        g_free (ss);
     }
     g_ptr_array_free (arr, TRUE);
 
@@ -183,7 +179,7 @@ donna_donna_finalize (GObject *object)
     {
         struct argmt *argmt = l->data;
 
-        donna_shared_string_unref (argmt->name);
+        g_free (argmt->name);
         g_pattern_spec_free (argmt->pspec);
         g_free (argmt);
     }
@@ -229,15 +225,15 @@ donna_app_get_columntype (DonnaDonna     *donna,
     return (i < NB_COL_TYPES) ? g_object_ref (priv->column_types[i].ct) : NULL;
 }
 
-DonnaSharedString *
+gchar *
 donna_app_get_arrangement (DonnaDonna     *donna,
                            DonnaNode      *node)
 {
     DonnaDonnaPrivate *priv;
     GSList *l;
-    DonnaSharedString *location;
+    gchar *location;
     const gchar *domain;
-    DonnaSharedString *arr;
+    gchar *arr;
     gchar  buf[255];
     gchar *b = buf;
     gsize  len;
@@ -249,10 +245,10 @@ donna_app_get_arrangement (DonnaDonna     *donna,
 
     /* get full location of node */
     donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
-    len = snprintf (buf, 255, "%s:%s", domain, donna_shared_string (location));
+    len = snprintf (buf, 255, "%s:%s", domain, location);
     if (len >= 255)
-        b = g_strdup_printf ("%s:%s", domain, donna_shared_string (location));
-    donna_shared_string_unref (location);
+        b = g_strdup_printf ("%s:%s", domain, location);
+    g_free (location);
 
     arr = NULL;
     for (l = priv->arrangements; l; l = l->next)
@@ -261,7 +257,7 @@ donna_app_get_arrangement (DonnaDonna     *donna,
 
         if (g_pattern_match_string (argmt->pspec, b))
         {
-            arr = donna_shared_string_ref (argmt->name);
+            arr = g_strdup (argmt->name);
             break;
         }
     }
@@ -428,12 +424,9 @@ main (int argc, char *argv[])
     /* tree */
     DonnaConfig *config = donna_app_get_config (d);
     donna_config_set_uint (config, 1, "treeviews/tree/mode");
-    donna_config_set_string_dup (config, "name", "treeviews/tree/arrangement/sort");
+    donna_config_set_string (config, "name", "treeviews/tree/arrangement/sort");
     g_object_unref (config);
-    DonnaSharedString *name;
-    name = donna_shared_string_new_dup ("tree");
-    _tree = donna_tree_view_new (d, name);
-    donna_shared_string_unref (name);
+    _tree = donna_tree_view_new (d, "tree");
     tree = GTK_TREE_VIEW (_tree);
     /* scrolled window */
     _scrolled_window = gtk_scrolled_window_new (NULL, NULL);

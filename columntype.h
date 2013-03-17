@@ -5,7 +5,6 @@
 #include <gtk/gtk.h>
 #include "common.h"
 #include "conf.h"
-#include "sharedstring.h"
 
 G_BEGIN_DECLS
 
@@ -34,7 +33,7 @@ struct _DonnaColumnTypeInterface
 
     /* virtual table */
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
-    DonnaSharedString **(*get_props)        (DonnaColumnType    *ct,
+    GPtrArray *         (*get_props)        (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name);
     GPtrArray *         (*render)           (DonnaColumnType    *ct,
@@ -65,7 +64,7 @@ struct _DonnaColumnTypeInterface
 };
 
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
-DonnaSharedString ** donna_columntype_get_props (DonnaColumnType    *ct,
+GPtrArray *     donna_columntype_get_props      (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name);
 GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,

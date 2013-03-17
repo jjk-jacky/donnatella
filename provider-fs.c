@@ -5,7 +5,6 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
-#include "sharedstring.h"
 
 struct _DonnaProviderFsPrivate
 {
@@ -144,11 +143,11 @@ new_node (DonnaProviderBase *_provider,
     flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE;
 
     node = donna_node_new (DONNA_PROVIDER (_provider),
-            donna_shared_string_new_dup (location),
+            location,
             type,
             refresher,
             setter,
-            donna_shared_string_new_dup (name),
+            name,
             flags);
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
@@ -192,30 +191,30 @@ has_get_children (DonnaProviderBase  *_provider,
                   DonnaNodeType       node_types,
                   gboolean            get_children)
 {
-    DonnaProviderBaseClass *klass;
-    GError            *err = NULL;
-    DonnaSharedString *location;
-    const gchar       *loc;
-    GDir              *dir;
-    const gchar       *name;
-    gboolean           is_locked;
-    gboolean           match;
-    GValue            *value;
-    GPtrArray         *arr;
+    DonnaProviderBaseClass  *klass;
+    GError                  *err = NULL;
+    gchar                   *location;
+    gchar                   *loc;
+    GDir                    *dir;
+    const gchar             *name;
+    gboolean                 is_locked;
+    gboolean                 match;
+    GValue                  *value;
+    GPtrArray               *arr;
 
     if (!(node_types & DONNA_NODE_ITEM || node_types & DONNA_NODE_CONTAINER))
         return DONNA_TASK_FAILED;
 
     donna_node_get (node, FALSE, "location", &location, NULL);
-    dir = g_dir_open (donna_shared_string (location), 0, &err);
+    dir = g_dir_open (location, 0, &err);
     if (err)
     {
         donna_task_take_error (task, err);
-        donna_shared_string_unref (location);
+        g_free (location);
         return DONNA_TASK_FAILED;
     }
 
-    loc = donna_shared_string (location);
+    loc = location;
     /* root is "/" so it would get us "//bin" */
     if (loc[0] == '/' && loc[1] == '\0')
         ++loc;
@@ -233,7 +232,7 @@ has_get_children (DonnaProviderBase  *_provider,
         if (donna_task_is_cancelling (task))
         {
             g_dir_close (dir);
-            donna_shared_string_unref (location);
+            g_free (location);
             return DONNA_TASK_CANCELLED;
         }
 
@@ -303,7 +302,7 @@ has_get_children (DonnaProviderBase  *_provider,
     }
     donna_task_release_return_value (task);
 
-    donna_shared_string_unref (location);
+    g_free (location);
     return DONNA_TASK_DONE;
 }
 

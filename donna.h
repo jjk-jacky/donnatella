@@ -5,7 +5,6 @@
 #include "conf.h"
 #include "common.h"
 #include "columntype.h"
-#include "sharedstring.h"
 
 G_BEGIN_DECLS
 
@@ -46,7 +45,7 @@ DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
 DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
                                                      const gchar    *type);
-DonnaSharedString * donna_app_get_arrangement       (DonnaApp       *app,
+gchar *             donna_app_get_arrangement       (DonnaApp       *app,
                                                      DonnaNode      *node);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);

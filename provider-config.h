@@ -2,8 +2,6 @@
 #ifndef __DONNA_PROVIDER_CONFIG_H__
 #define __DONNA_PROVIDER_CONFIG_H__
 
-#include "sharedstring.h"
-
 G_BEGIN_DECLS
 
 #define DONNA_TYPE_PROVIDER_CONFIG              (donna_provider_config_get_type ())
@@ -68,7 +66,7 @@ gboolean    donna_config_has_uint               (DonnaConfig            *config,
 gboolean    donna_config_has_double             (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);
-gboolean    donna_config_has_shared_string      (DonnaConfig            *config,
+gboolean    donna_config_has_string             (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_has_category           (DonnaConfig            *config,
@@ -90,8 +88,8 @@ gboolean    donna_config_get_double             (DonnaConfig            *config,
                                                  gdouble                *value,
                                                  const gchar            *fmt,
                                                  ...);
-gboolean    donna_config_get_shared_string      (DonnaConfig            *config,
-                                                 DonnaSharedString     **value,
+gboolean    donna_config_get_string             (DonnaConfig            *config,
+                                                 gchar                 **value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_list_options           (DonnaConfig            *config,
@@ -115,20 +113,12 @@ gboolean    donna_config_set_double             (DonnaConfig            *config,
                                                  gdouble                 value,
                                                  const gchar            *fmt,
                                                  ...);
-gboolean    donna_config_set_shared_string      (DonnaConfig            *config,
-                                                 DonnaSharedString      *value,
-                                                 const gchar            *fmt,
-                                                 ...);
-gboolean    donna_config_take_shared_string     (DonnaConfig            *config,
-                                                 DonnaSharedString      *value,
-                                                 const gchar            *fmt,
-                                                 ...);
-gboolean    donna_config_set_string_take        (DonnaConfig            *config,
-                                                 gchar                  *value,
-                                                 const gchar            *fmt,
-                                                 ...);
-gboolean    donna_config_set_string_dup         (DonnaConfig            *config,
+gboolean    donna_config_set_string             (DonnaConfig            *config,
                                                  const gchar            *value,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_take_string            (DonnaConfig            *config,
+                                                 gchar                  *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_remove_option          (DonnaConfig            *config,
