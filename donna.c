@@ -17,6 +17,7 @@ struct _DonnaDonnaPrivate
 {
     DonnaConfig *config;
     GSList      *arrangements;
+    GThreadPool *pool;
     struct col_type
     {
         const gchar           *name;
@@ -104,6 +105,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].load = donna_column_type_name_new;
 
+    priv->pool = g_thread_pool_new ((GFunc) donna_task_run, NULL, 5, FALSE, NULL);
+
     /* load the config */
     /* TODO */
 
@@ -183,6 +186,8 @@ donna_donna_finalize (GObject *object)
         g_pattern_spec_free (argmt->pspec);
         g_free (argmt);
     }
+
+    g_thread_pool_free (priv->pool, TRUE, FALSE);
 
     G_OBJECT_CLASS (donna_donna_parent_class)->finalize (object);
 }
@@ -281,10 +286,7 @@ donna_app_run_task (DonnaDonna     *donna,
     g_return_if_fail (DONNA_IS_DONNA (donna));
     g_return_if_fail (DONNA_IS_TASK (task));
 
-    /* FIXME thread pool */
-    g_thread_unref (g_thread_new ("run-task",
-                (GThreadFunc) _run_task,
-                g_object_ref_sink (task)));
+    g_thread_pool_push (donna->priv->pool, task, NULL);
 }
 
 
