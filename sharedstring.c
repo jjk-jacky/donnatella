@@ -249,6 +249,26 @@ donna_shared_string_get_type (void)
     return type;
 }
 
+static void
+param_shared_string_set_default (GParamSpec *pspec,
+                                 GValue     *value)
+{
+  value->data[0].v_pointer = NULL;
+}
+
+static gint
+param_shared_string_values_cmp (GParamSpec   *pspec,
+                                const GValue *value1,
+                                const GValue *value2)
+{
+  guint8 *p1 = value1->data[0].v_pointer;
+  guint8 *p2 = value2->data[0].v_pointer;
+
+  /* not much to compare here, try to at least provide stable lesser/greater
+   * result */
+  return p1 < p2 ? -1 : p1 > p2;
+}
+
 /**
  * donna_shared_string_register:
  *
@@ -288,6 +308,43 @@ donna_shared_string_register (void)
     type = g_type_register_fundamental (DONNA_TYPE_SHARED_STRING,
             g_intern_static_string ("SharedString"), &info, &finfo, 0);
     g_assert (type == DONNA_TYPE_SHARED_STRING);
+
+
+    GParamSpecTypeInfo pspec_info =
+    {
+        sizeof (GParamSpec),                /* instance_size */
+        0,                                  /* n_preallocs */
+        NULL,                               /* instance_init */
+        DONNA_TYPE_SHARED_STRING,           /* value_type */
+        NULL,                               /* finalize */
+        param_shared_string_set_default,    /* value_set_default */
+        NULL,                               /* value_validate */
+        param_shared_string_values_cmp,     /* value_cmp */
+    };
+    param_type_shared_string = g_param_type_register_static (
+            g_intern_static_string ("ParamSharedString"), &pspec_info);
+}
+
+static inline void
+value_set_shared_string (GValue             *value,
+                         DonnaSharedString  *ss,
+                         gboolean            need_copy)
+{
+    if (!ss)
+    {
+        /* just resetting to NULL might not be desired, need to have value
+         * reinitialized also (for values defaulting to other default value
+         * states than a NULL data pointer), g_value_reset() will handle this */
+        g_value_reset (value);
+        return;
+    }
+
+    if (value->data[0].v_pointer
+            && !(value->data[1].v_uint & G_VALUE_NOCOPY_CONTENTS))
+        donna_shared_string_unref (value->data[0].v_pointer);
+
+    value->data[1].v_uint = 0;
+    value->data[0].v_pointer = (need_copy) ? donna_shared_string_ref (ss) : ss;
 }
 
 /**
@@ -303,7 +360,7 @@ donna_g_value_set_shared_string (GValue             *value,
                                  DonnaSharedString  *ss)
 {
     g_return_if_fail (DONNA_G_VALUE_HOLDS_SHARED_STRING (value));
-    value->data[0].v_pointer = donna_shared_string_ref (ss);
+    value_set_shared_string (value, ss, TRUE);
 }
 
 /**
@@ -319,7 +376,7 @@ donna_g_value_take_shared_string (GValue             *value,
                                   DonnaSharedString  *ss)
 {
     g_return_if_fail (DONNA_G_VALUE_HOLDS_SHARED_STRING (value));
-    value->data[0].v_pointer = ss;
+    value_set_shared_string (value, ss, FALSE);
 }
 
 /**
@@ -365,4 +422,14 @@ donna_g_value_get_shared_string_const_string (const GValue *value)
 {
     g_return_val_if_fail (DONNA_G_VALUE_HOLDS_SHARED_STRING (value), NULL);
     return (const gchar *) ((DonnaSharedString *) value->data[0].v_pointer)->string;
+}
+
+GParamSpec *
+donna_param_spec_shared_string (const gchar *name,
+                                const gchar *nick,
+                                const gchar *blurb,
+                                GParamFlags  flags)
+{
+    return g_param_spec_internal (DONNA_TYPE_PARAM_SHARED_STRING,
+            name, nick, blurb, flags);
 }

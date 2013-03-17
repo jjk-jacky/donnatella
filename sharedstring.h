@@ -15,6 +15,9 @@ G_BEGIN_DECLS
 #define DONNA_G_VALUE_HOLDS_SHARED_STRING(value)    \
     (G_TYPE_CHECK_VALUE_TYPE ((value), DONNA_TYPE_SHARED_STRING))
 
+GType param_type_shared_string;
+#define DONNA_TYPE_PARAM_SHARED_STRING  (param_type_shared_string)
+
 typedef struct _DonnaSharedString       DonnaSharedString;
 
 struct _DonnaSharedString
@@ -107,6 +110,11 @@ DonnaSharedString * donna_g_value_get_shared_string     (const GValue       *val
 DonnaSharedString * donna_g_value_dup_shared_string     (const GValue       *value);
 const gchar *       donna_g_value_get_shared_string_const_string (const GValue *value);
 
+
+GParamSpec *        donna_param_spec_shared_string (const gchar *name,
+                                                    const gchar *nick,
+                                                    const gchar *blurb,
+                                                    GParamFlags  flags);
 G_END_DECLS
 
 #endif /* __DONNA_SHARED_STRING__ */
