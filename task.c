@@ -143,7 +143,7 @@ donna_task_class_init (DonnaTaskClass *klass)
                 G_TYPE_PTR_ARRAY,
                 G_PARAM_READABLE);
     donna_task_props[PROP_TASKUI] =
-        g_param_spec_boxed ("taskui", "taskui",
+        g_param_spec_object ("taskui", "taskui",
                 "TaskUI object to provider user interaction for the task",
                 DONNA_TYPE_TASKUI,
                 G_PARAM_READABLE);
