@@ -571,10 +571,6 @@ donna_task_new (task_fn             func,
     priv->task_fn = func;
     priv->task_data = data;
     priv->task_destroy = destroy;
-    priv->task_ran = 0;
-    priv->timeout = 0;
-    priv->timeout_ran = 0;
-    priv->timeout_destroyed = 0;
 
     return task;
 }
@@ -618,10 +614,6 @@ donna_task_new_full (task_fn             func,
     priv->task_fn = func;
     priv->task_data = data;
     priv->task_destroy = destroy;
-    priv->task_ran = 0;
-    priv->timeout = 0;
-    priv->timeout_ran = 0;
-    priv->timeout_destroyed = 0;
 
     priv->taskui = taskui;
     priv->devices = g_ptr_array_ref (devices);
