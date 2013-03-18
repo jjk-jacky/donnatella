@@ -55,6 +55,11 @@
  * - donna_task_set_devices() to set the list of devices involved in the task.
  *   This is to be used by #DonnaTaskManager to determine if multiple tasks can
  *   be run at the same time.
+ * - donna_task_set_visibility() to set the ::visibility property of the task.
+ *   An internal task (%DONNA_TASK_VISIBILITY_INTERNAL) will be directly run
+ *   in a new thread by donna_app_run_task(), whereas a public task
+ *   (%DONNA_TASK_VISIBILITY_PULIC) will be added to #DonnaTaskManager (in
+ *   charge of starting the task as soon as possible)
  * - The #DonnaTask:priority is a writable property also to be used by the task
  *   manager, and that can be changed even while the task is running.
  *FIXME: function does not exists!
@@ -114,6 +119,8 @@ struct _DonnaTaskPrivate
 {
     /* task desc */
     gchar               *desc;
+    /* task visibility */
+    DonnaTaskVisibility  visibility;
     /* task priority */
     DonnaTaskPriority    priority;
     /* task status (current operation being done) */
@@ -172,6 +179,7 @@ enum
     PROP_0,
 
     PROP_DESC,
+    PROP_VISIBILITY,
     PROP_PRIORITY,
     PROP_STATUS,
     PROP_PROGRESS,
@@ -221,6 +229,21 @@ donna_task_class_init (DonnaTaskClass *klass)
                 "Description of the task",
                 NULL,     /* default */
                 G_PARAM_READWRITE);
+    /**
+     * DonnaTask:visibility:
+     *
+     * The task's visibility. Internal tasks (%DONNA_TASK_VISIBILITY_INTERNAL)
+     * will be ran into the internal thread pool managed by #DonnaApp while
+     * public tasks (%DONNA_TASK_VISIBILITY_PULIC) will be handled through the
+     * #DonnaTaskManager (which manages its own thread pool).
+     */
+    donna_task_props[PROP_VISIBILITY] =
+        g_param_spec_int ("visibility", "visibility",
+                "Visibility of the task",
+                DONNA_TASK_VISIBILITY_INTERNAL, /* minimum */
+                DONNA_TASK_VISIBILITY_PULIC,    /* maximum */
+                DONNA_TASK_VISIBILITY_INTERNAL, /* default */
+                G_PARAM_READABLE);
     /**
      * DonnaTask:priority:
      *
@@ -563,7 +586,8 @@ donna_task_new (task_fn             func,
  * @destroy: Function called if the task isn't run, to free @data
  * @taskui: #DonnaTaskUi to be provide user-interactions
  * @devices: List of devices involved in the task
- * @priority: Priority of the task
+ * @visibility: #DonnaTaskVisibility of the task
+ * @priority: #DonnaTaskPriority of the task
  * @autostart: Should #DonnaTaskManager start the task, or wait for manual start
  * @desc: Task's description
  *
@@ -578,6 +602,7 @@ donna_task_new_full (task_fn             func,
                      GDestroyNotify      destroy,
                      DonnaTaskUi        *taskui,
                      GPtrArray          *devices,
+                     DonnaTaskVisibility visibility,
                      DonnaTaskPriority   priority,
                      gboolean            autostart,
                      const gchar        *desc)
@@ -600,6 +625,7 @@ donna_task_new_full (task_fn             func,
 
     priv->taskui = taskui;
     priv->devices = g_ptr_array_ref (devices);
+    priv->visibility = visibility;
     priv->priority = priority;
     if (!autostart)
         priv->state = DONNA_TASK_STOPPED;
@@ -647,6 +673,27 @@ donna_task_set_devices (DonnaTask *task, GPtrArray *devices)
 
     task->priv->devices = g_ptr_array_ref (devices);
     notify_prop (task, PROP_DEVICES);
+    return TRUE;
+}
+
+/**
+ * donna_task_set_visibility:
+ * @task: The task to set visibility of
+ * @visibility: The new #DonnaTaskVisibility to set
+ *
+ * This should only be used by the task creator, after a donna_task_new()
+ *
+ * Returns: Whether or not @visibility was set to @task
+ */
+gboolean
+donna_task_set_visibility (DonnaTask          *task,
+                           DonnaTaskVisibility visibility)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (visibility != DONNA_TASK_VISIBILITY_INTERNAL
+            && visibility != DONNA_TASK_VISIBILITY_PULIC, FALSE);
+
+    task->priv->visibility = visibility;
     return TRUE;
 }
 

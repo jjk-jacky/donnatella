@@ -23,6 +23,12 @@ typedef enum
 
 typedef enum
 {
+    DONNA_TASK_VISIBILITY_INTERNAL,
+    DONNA_TASK_VISIBILITY_PULIC
+} DonnaTaskVisibility;
+
+typedef enum
+{
     /* dona_task_get_state (not_a_task) */
     DONNA_TASK_STATE_UNKNOWN    = (1 << 0),
     /* task not started, no auto-start (by task manager) */
@@ -78,6 +84,7 @@ DonnaTask *         donna_task_new_full         (task_fn             func,
                                                  GDestroyNotify      destroy,
                                                  DonnaTaskUi        *taskui,
                                                  GPtrArray          *devices,
+                                                 DonnaTaskVisibility visibility,
                                                  DonnaTaskPriority   priority,
                                                  gboolean            autostart,
                                                  const gchar        *desc);
@@ -85,6 +92,8 @@ gboolean            donna_task_set_taskui       (DonnaTask          *task,
                                                  DonnaTaskUi        *taskui);
 gboolean            donna_task_set_devices      (DonnaTask          *task,
                                                  GPtrArray          *devices);
+gboolean            donna_task_set_visibility   (DonnaTask          *task,
+                                                 DonnaTaskVisibility visibility);
 gboolean            donna_task_set_duplicator   (DonnaTask          *task,
                                                  task_duplicate_fn   duplicate,
                                                  gpointer            data,
