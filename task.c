@@ -1425,6 +1425,8 @@ donna_task_set_nodes_for_selection (DonnaTask *task, GPtrArray *nodes)
 
     g_return_if_fail (DONNA_IS_TASK (task));
 
+    priv = task->priv;
+
     if (priv->nodes_for_selection)
         g_ptr_array_unref (priv->nodes_for_selection);
     priv->nodes_for_selection = g_ptr_array_ref (nodes);
