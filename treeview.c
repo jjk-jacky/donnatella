@@ -1996,6 +1996,40 @@ natoi (const gchar *str, gsize len)
     return i;
 }
 
+/* we cannot use gtk_tree_view_column_set_sort_column_id() to handle the sorting
+ * automatically because our model (GtkTreeModelFilter) isn't sortable. So using
+ * this function would fail and throw warnings when trying to use the _model as
+ * GtkTreeSortable.  Instead, we need to implement the sorting bit ourself
+ * (because using yet another proxy (GtkTreeModelSort) sounds somewhat
+ * ludicrous, and/or too messy.  So we will store the sort_id on the column as
+ * data, and handle the clicked signal ourself to sort the actual (sortable)
+ * store.  Added bonus: we can now define a default order based on the
+ * columntype (so doing this would have been needed anyways) */
+static void
+column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeSortable *sortable;
+    gboolean is_sorted;
+    gint cur_sort_id;
+    GtkSortType cur_sort_order;
+    gint col_sort_id;
+
+    sortable= GTK_TREE_SORTABLE (priv->store);
+    is_sorted = gtk_tree_sortable_get_sort_column_id (sortable,
+            &cur_sort_id, &cur_sort_order);
+    col_sort_id = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (column),
+                "sort_id"));
+
+    gtk_tree_sortable_set_sort_column_id (sortable, col_sort_id,
+            (is_sorted && cur_sort_id == col_sort_id)
+            /* revert order */
+            ? ((cur_sort_order == GTK_SORT_ASCENDING)
+                ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
+            /* default */
+            : GTK_SORT_ASCENDING);
+}
+
 static void
 load_arrangement (DonnaTreeView *tree,
                   const gchar   *arrangement,
@@ -2236,6 +2270,10 @@ load_arrangement (DonnaTreeView *tree,
                         rend_func, GINT_TO_POINTER (index), NULL);
                 gtk_tree_view_column_pack_start (column, renderer, FALSE);
             }
+            /* clicking header (see column_clicked_cb() for more) */
+            g_signal_connect (column, "clicked",
+                    G_CALLBACK (column_clicked_cb), tree);
+            gtk_tree_view_column_set_clickable (column, TRUE);
             /* add it */
             gtk_tree_view_append_column (treev, column);
         }
@@ -2284,9 +2322,9 @@ load_arrangement (DonnaTreeView *tree,
             g_critical ("Treeview '%s': column '%s' reports no properties to watch for refresh",
                     priv->name, b);
 
-        /* sort */
-        gtk_tree_view_column_set_sort_column_id (column, sort_id++);
-        gtk_tree_sortable_set_sort_func (sortable, sort_id - 1,
+        /* sort -- (see column_clicked_cb() for more) */
+        g_object_set_data (G_OBJECT (column), "sort_id", GINT_TO_POINTER (sort_id));
+        gtk_tree_sortable_set_sort_func (sortable, sort_id,
                 (GtkTreeIterCompareFunc) sort_func, column, NULL);
         if (s_sort)
         {
@@ -2294,20 +2332,21 @@ load_arrangement (DonnaTreeView *tree,
             if (sort_order == SORT_UNKNOWN)
             {
                 if (streq (s_sort, b))
-                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id - 1,
+                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id,
                             GTK_SORT_ASCENDING);
             }
             else
             {
                 /* ss_sort contains "column:o" */
                 if (strlen (b) == sort_len && streqn (s_sort, b, sort_len))
-                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id - 1,
+                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id,
                             (sort_order == SORT_ASC) ? GTK_SORT_ASCENDING
                             : GTK_SORT_DESCENDING);
             }
             g_free (s_sort);
             s_sort = NULL;
         }
+        ++sort_id;
         /* TODO else default sort order? */
 
         last_column = column;
