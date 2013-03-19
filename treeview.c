@@ -125,9 +125,12 @@ struct _DonnaTreeViewPrivate
     guint                active_spinners_id;
     guint                active_spinners_pulse;
 
-    /* List: current/future location */
+    /* current location */
     DonnaNode           *location;
+    /* Tree: iter of current location */
     GtkTreeIter          location_iter;
+
+    /* List: future location (task get_children running) */
     DonnaNode           *future_location;
 
     /* hashtable of nodes & their iters on TV */
@@ -1620,10 +1623,12 @@ struct node_children_cb_data
     GPtrArray       *children;
 };
 
+/* mode tree only */
 static gboolean
 real_node_children_cb (struct node_children_cb_data *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
+    enum tree_expand es;
 
     if (priv->location != data->node)
         goto free;
@@ -1631,7 +1636,16 @@ real_node_children_cb (struct node_children_cb_data *data)
     if (!(data->node_types & priv->node_types))
         goto free;
 
-    set_children (data->tree, &priv->location_iter, data->children, FALSE);
+    gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &priv->location_iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            -1);
+    if (es == DONNA_TREE_EXPAND_UNKNOWN || es == DONNA_TREE_EXPAND_NEVER
+            || es == DONNA_TREE_EXPAND_NONE)
+    {
+        g_debug ("treeview '%s': pre-loading children for current location (NEVER_FULL)",
+                priv->name);
+        set_children (data->tree, &priv->location_iter, data->children, FALSE);
+    }
 
 free:
     g_object_unref (data->node);
@@ -3366,6 +3380,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     GSList *list;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
     priv = tree->priv;
 
