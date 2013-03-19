@@ -189,9 +189,9 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
             return;
         }
         donna_node_get (node, FALSE, "location", &location, NULL);
+        /* this also removes our last ref on node */
         g_hash_table_remove (provider->priv->nodes, location);
         g_rec_mutex_unlock (&provider->priv->nodes_mutex);
-        g_object_unref (node);
         g_free (location);
     }
     else
