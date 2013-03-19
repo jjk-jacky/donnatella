@@ -73,6 +73,13 @@ enum
     SORT_DESC
 };
 
+enum
+{
+    DRAW_NOTHING = 0,
+    DRAW_WAIT,
+    DRAW_EMPTY
+};
+
 struct col_prop
 {
     gchar             *prop;
@@ -160,6 +167,8 @@ struct _DonnaTreeViewPrivate
     /* mode Tree */
     guint                is_minitree : 1;
     guint                sync_mode   : 2;
+    /* mode List */
+    guint                draw_state  : 2;
 };
 
 /* our internal renderers */
@@ -424,8 +433,10 @@ free_node_children_data (struct node_children_data *data)
     g_slice_free (struct node_children_data, data);
 }
 
+/* mode tree only */
 static void
-node_get_children_timeout (DonnaTask *task, struct node_children_data *data)
+node_get_children_tree_timeout (DonnaTask                   *task,
+                                struct node_children_data   *data)
 {
     GtkTreeIter _iter = ITER_INIT;
     GtkTreePath *path;
@@ -695,10 +706,11 @@ set_children (DonnaTreeView *tree,
     }
 }
 
+/* mode tree only */
 static void
-node_get_children_callback (DonnaTask                   *task,
-                            gboolean                     timeout_called,
-                            struct node_children_data   *data)
+node_get_children_tree_cb (DonnaTask                   *task,
+                           gboolean                     timeout_called,
+                           struct node_children_data   *data)
 {
     if (!is_watched_iter_valid (data->tree, &data->iter, TRUE))
         return;
@@ -921,11 +933,11 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *_iter, gboolean scroll_to_current)
 
     /* FIXME: timeout_delay must be an option */
     donna_task_set_timeout (task, 800,
-            (task_timeout_fn) node_get_children_timeout,
+            (task_timeout_fn) node_get_children_tree_timeout,
             data,
             NULL);
     donna_task_set_callback (task,
-            (task_callback_fn) node_get_children_callback,
+            (task_callback_fn) node_get_children_tree_cb,
             data,
             (GDestroyNotify) free_node_children_data);
 
@@ -2102,7 +2114,7 @@ load_arrangement (DonnaTreeView *tree,
             }
             else
             {
-                /* TODO
+                /* FIXME
                  * if (arr/list)
                  *      col=name
                  *      break
@@ -2112,6 +2124,23 @@ load_arrangement (DonnaTreeView *tree,
                  *      else
                  *          arr=arr/list
                  */
+                if (streq (s, "arrangements/list"))
+                {
+                    g_warning ("Treeview '%s': No columns defined in 'arrangements/list'; using 'name'",
+                            priv->name);
+                    s_columns = NULL;
+                    col = "name";
+                    break;
+                }
+                else if (location)
+                {
+                    g_critical ("TODO");
+                }
+                else
+                {
+                    g_free (s);
+                    s = g_strdup ("arrangements/list");
+                }
             }
         }
     }
@@ -3371,6 +3400,27 @@ scroll_to_current (DonnaTreeView *tree)
     return FALSE;
 }
 
+/* mode list only */
+static void
+node_get_children_list_timeout (DonnaTask *task, DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+
+    /* clear the list */
+    gtk_tree_store_clear (priv->store);
+    /* and show the "please wait" message */
+    priv->draw_state = DRAW_WAIT;
+    gtk_widget_queue_draw (GTK_WIDGET (tree));
+}
+
+/* mode list only */
+static void
+node_get_children_list_cb (DonnaTask        *task,
+                           gboolean          timeout_called,
+                           DonnaTreeView    *tree)
+{
+}
+
 gboolean
 donna_tree_view_set_location (DonnaTreeView  *tree,
                               DonnaNode      *node,
@@ -3409,8 +3459,35 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     }
     else
     {
-        /* TODO */
-        return FALSE;
+        DonnaNodeType node_type;
+        DonnaProvider *provider;
+        DonnaTask *task;
+
+        donna_node_get (node, FALSE,
+                "node-type", &node_type,
+                "provider",  &provider,
+                NULL);
+        /* we can only show content of container */
+        if (node_type != DONNA_NODE_CONTAINER)
+        {
+            /* FIXME set error */
+            g_object_unref (provider);
+            return FALSE;
+        }
+
+        task = donna_provider_get_node_children_task (provider, node,
+                priv->node_types);
+        donna_task_set_timeout (task, 800, /* FIXME */
+                (task_timeout_fn) node_get_children_list_timeout,
+                tree,
+                NULL);
+        donna_task_set_callback (task,
+                (task_callback_fn) node_get_children_list_cb,
+                tree,
+                NULL);
+        donna_app_run_task (priv->app, task);
+
+        return TRUE;
     }
 }
 
@@ -3748,6 +3825,42 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     }
 }
 
+/* mode list only */
+static gboolean
+widget_draw_cb (GtkWidget *w, cairo_t *cr, DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeView *treev = GTK_TREE_VIEW (w);
+    gint x, y, width;
+    GtkStyleContext *context;
+    PangoLayout *layout;
+
+    if (is_tree (tree) || priv->draw_state == DRAW_NOTHING)
+        return FALSE;
+
+    gtk_tree_view_convert_tree_to_widget_coords (treev, 0, 0, &x, &y);
+    width = gtk_widget_get_allocated_width (w);
+
+    context = gtk_widget_get_style_context (w);
+    if (priv->draw_state == DRAW_EMPTY)
+    {
+        gtk_style_context_save (context);
+        gtk_style_context_set_state (context, GTK_STATE_FLAG_INSENSITIVE);
+    }
+
+    layout = gtk_widget_create_pango_layout (w,
+            (priv->draw_state == DRAW_WAIT)
+            ? "Please wait..." : "(Location is empty)");
+    pango_layout_set_width (layout, width * PANGO_SCALE);
+    pango_layout_set_alignment (layout, PANGO_ALIGN_CENTER);
+    gtk_render_layout (context, cr, x, y, layout);
+
+    if (priv->draw_state == DRAW_EMPTY)
+        gtk_style_context_restore (context);
+    g_object_unref (layout);
+    return FALSE;
+}
+
 GtkWidget *
 donna_tree_view_new (DonnaApp    *app,
                      const gchar *name)
@@ -3812,6 +3925,9 @@ donna_tree_view_new (DonnaApp    *app,
         /* some stylling */
         gtk_tree_view_set_rules_hint (treev, TRUE);
         gtk_tree_view_set_headers_visible (treev, TRUE);
+        /* connect to draw for "please wait"/"location empty" messages */
+        g_signal_connect (G_OBJECT (tree), "draw",
+                G_CALLBACK (widget_draw_cb), tree);
     }
 
     g_debug ("treeview '%s': setting up filter & selection", priv->name);

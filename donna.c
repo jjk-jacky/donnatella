@@ -448,8 +448,6 @@ main (int argc, char *argv[])
     GtkWidget       *_scrolled_window;
     GtkWidget       *_tree;
     GtkTreeView     *tree;
-    GtkTreeModel    *list_model;
-    GtkListStore    *list_store;
     GtkWidget       *_list;
     GtkTreeView     *list;
 
@@ -521,11 +519,14 @@ main (int argc, char *argv[])
     gtk_widget_show (_tree);
 
     /* list */
-    list_store = gtk_list_store_new (1, G_TYPE_STRING);
-    list_model = GTK_TREE_MODEL (list_store);
-    _list = gtk_tree_view_new_with_model (list_model);
+    _list = donna_tree_view_new (DONNA_APP (d), "list");
     list = GTK_TREE_VIEW (_list);
-    gtk_paned_pack2 (paned, _list, TRUE, TRUE);
+    /* scrolled window */
+    _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
+    gtk_paned_pack2 (paned, _scrolled_window, TRUE, TRUE);
+    gtk_widget_show (_scrolled_window);
+    /* size */
+    gtk_container_add (GTK_CONTAINER (_scrolled_window), _list);
     gtk_widget_show (_list);
 
     /* tb signals */
@@ -545,11 +546,14 @@ main (int argc, char *argv[])
     DonnaNode *node;
 
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/");
+    g_object_ref_sink (task);
     donna_task_run (task);
     value = donna_task_get_return_value (task);
-    node = g_value_get_object (value);
-    donna_tree_view_add_root (DONNA_TREE_VIEW (tree), node);
+    node = g_value_dup_object (value);
     g_object_unref (task);
+    donna_tree_view_set_location (DONNA_TREE_VIEW (tree), node, NULL);
+    donna_tree_view_set_location (DONNA_TREE_VIEW (list), node, NULL);
+    g_object_unref (node);
 
     /* show everything */
     gtk_window_set_default_size (window, 420, 230);
