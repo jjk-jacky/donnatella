@@ -3178,7 +3178,51 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
             0, rect_visible.y, &rect_visible.x, &rect_visible.y);
 
     /* try all existing tree roots */
-    gtk_tree_model_iter_children (model, &iter, NULL);
+    if (!gtk_tree_model_iter_children (model, &iter, NULL))
+    {
+        DonnaTask *task;
+        const GValue *value;
+        gchar *s;
+        GSList *list;
+        GtkTreeIter *i;
+
+        /* the tree is empty, we need to add the first root */
+        s = strchr (location, '/');
+        if (s)
+            *++s = '\0';
+
+        task = donna_provider_get_node_task (provider, location);
+        g_object_ref_sink (task);
+        donna_task_run (task);
+        if (donna_task_get_state (task) != DONNA_TASK_DONE)
+        {
+            g_object_unref (task);
+            g_free (location);
+            g_object_unref (provider);
+            /* FIXME set error */
+            return NULL;
+        }
+        value = donna_task_get_return_value (task);
+        n = g_value_dup_object (value);
+        g_object_unref (task);
+        g_free (location);
+        g_object_unref (provider);
+
+        add_node_to_tree (tree, NULL, n, &iter);
+        /* get the iter from the hashtable for the row we added (we
+         * cannot end up return the pointer to a local iter) */
+        list = g_hash_table_lookup (priv->hashtable, n);
+        for ( ; list; list = list->next)
+            if (itereq (&iter, (GtkTreeIter *) list->data))
+            {
+                i = list->data;
+                break;
+            }
+
+        g_object_unref (n);
+        return get_iter_expanding_if_needed (tree, i, node,
+                FALSE, TRUE);
+    }
     do
     {
         /* we've already excluded the current location's branch */
