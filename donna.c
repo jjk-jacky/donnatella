@@ -182,9 +182,9 @@ donna_donna_log_handler (const gchar    *domain,
         g_string_append_printf (str, "[thread %p] ", thread);
 
     if (log_level & G_LOG_LEVEL_ERROR)
-        g_string_append (str, "ERROR: ");
+        g_string_append (str, "** ERROR: ");
     if (log_level & G_LOG_LEVEL_CRITICAL)
-        g_string_append (str, "CRITICAL: ");
+        g_string_append (str, "** CRITICAL: ");
     if (log_level & G_LOG_LEVEL_WARNING)
         g_string_append (str, "WARNING: ");
     if (log_level & G_LOG_LEVEL_MESSAGE)
@@ -200,6 +200,9 @@ donna_donna_log_handler (const gchar    *domain,
         g_string_append (str, "DEBUG: ");
     if (log_level & DONNA_LOG_LEVEL_DEBUG4)
         g_string_append (str, "DEBUG: ");
+
+    if (domain)
+        g_string_append_printf (str, "[%s] ", domain);
 
     g_string_append (str,message);
     puts (str->str);
