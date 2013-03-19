@@ -217,6 +217,7 @@ donna_node_init (DonnaNode *node)
             g_free, (GDestroyNotify) free_node_prop);
     g_rw_lock_init (&priv->props_lock);
 
+    g_value_init (&priv->basic_props[BASIC_PROP_ICON].value,      G_TYPE_OBJECT);
     g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
     g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value,     G_TYPE_INT64);
