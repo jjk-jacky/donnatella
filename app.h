@@ -6,6 +6,7 @@
 #include "common.h"
 #include "conf.h"
 #include "treeview.h"
+#include "columntype.h"
 
 G_BEGIN_DECLS
 
