@@ -2,8 +2,7 @@
 #ifndef __DONNA_H__
 #define __DONNA_H__
 
-#include "conf.h"
-#include "common.h"
+#include "app.h"
 #include "columntype.h"
 
 G_BEGIN_DECLS
@@ -19,12 +18,7 @@ typedef struct _DonnaDonnaPrivate       DonnaDonnaPrivate;
 #define DONNA_IS_DONNA_CLASS(klass)     (G_TYPE_CHECK_CLASS_TYPE ((klass), DONNA_TYPE_DONNA))
 #define DONNA_DONNA_GET_CLASS(obj)      (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_DONNA, DonnaDonnaClass))
 
-typedef DonnaColumnType *   (*column_type_loader_fn)    (DonnaDonna *donna);
-
-typedef DonnaDonna                      DonnaApp;
-
-#define DONNA_APP(obj)                  ((DonnaApp *) (obj))
-#define DONNA_IS_APP(obj)               DONNA_IS_DONNA(obj)
+typedef DonnaColumnType *   (*column_type_loader_fn)    (DonnaApp *app);
 
 struct _DonnaDonna
 {
@@ -39,16 +33,6 @@ struct _DonnaDonnaClass
 };
 
 GType               donna_donna_get_type            (void) G_GNUC_CONST;
-
-DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
-DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
-                                                     const gchar    *domain);
-DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
-                                                     const gchar    *type);
-gchar *             donna_app_get_arrangement       (DonnaApp       *app,
-                                                     DonnaNode      *node);
-void                donna_app_run_task              (DonnaApp       *app,
-                                                     DonnaTask      *task);
 
 G_END_DECLS
 

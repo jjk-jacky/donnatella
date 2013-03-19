@@ -1,6 +1,7 @@
 
 #include <gtk/gtk.h>
 #include "donna.h"
+#include "app.h"
 #include "provider-config.h"
 #include "columntype.h"
 #include "columntype-name.h"
@@ -32,10 +33,34 @@ struct argmt
     GPatternSpec *pspec;
 };
 
-static GObject *    donna_donna_constructor     (GType                   type,
-                                                 guint                   n_params,
-                                                 GObjectConstructParam  *params);
-static void         donna_donna_finalize        (GObject                *object);
+static GThread *mt;
+
+static void             donna_donna_log_handler     (const gchar    *domain,
+                                                     GLogLevelFlags  log_level,
+                                                     const gchar    *message,
+                                                     gpointer        data);
+static void             donna_donna_finalize        (GObject        *object);
+
+/* DonnaApp */
+static DonnaConfig *    donna_donna_get_config      (DonnaApp       *app);
+static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
+                                                     const gchar    *domain);
+static DonnaColumnType *donna_donna_get_columntype  (DonnaApp       *app,
+                                                     const gchar    *type);
+static gchar *          donna_donna_get_arrangement (DonnaApp       *app,
+                                                     DonnaNode      *node);
+static void             donna_donna_run_task        (DonnaApp       *app,
+                                                     DonnaTask      *task);
+
+static void
+donna_donna_app_init (DonnaAppInterface *interface)
+{
+    interface->get_config       = donna_donna_get_config;
+    interface->get_provider     = donna_donna_get_provider;
+    interface->get_columntype   = donna_donna_get_columntype;
+    interface->get_arrangement  = donna_donna_get_arrangement;
+    interface->run_task         = donna_donna_run_task;
+}
 
 static void
 donna_donna_class_init (DonnaDonnaClass *klass)
@@ -43,49 +68,9 @@ donna_donna_class_init (DonnaDonnaClass *klass)
     GObjectClass *o_class;
 
     o_class = G_OBJECT_CLASS (klass);
-    o_class->constructor = donna_donna_constructor;
     o_class->finalize    = donna_donna_finalize;
 
     g_type_class_add_private (klass, sizeof (DonnaDonnaPrivate));
-}
-
-static GThread *mt;
-static void
-log_handler (const gchar    *domain,
-             GLogLevelFlags  log_level,
-             const gchar    *message,
-             gpointer        data)
-{
-    GThread *thread = g_thread_self ();
-    time_t now;
-    struct tm *tm;
-    gchar buf[12];
-    GString *str;
-
-    now = time (NULL);
-    tm = localtime (&now);
-    strftime (buf, 12, "[%H:%M:%S] ", tm);
-    str = g_string_new (buf);
-
-    if (thread != mt)
-        g_string_append_printf (str, "[thread %p] ", thread);
-
-    if (log_level & G_LOG_LEVEL_ERROR)
-        g_string_append (str, "ERROR: ");
-    if (log_level & G_LOG_LEVEL_CRITICAL)
-        g_string_append (str, "CRITICAL: ");
-    if (log_level & G_LOG_LEVEL_WARNING)
-        g_string_append (str, "WARNING: ");
-    if (log_level & G_LOG_LEVEL_MESSAGE)
-        g_string_append (str, "MESSAGE: ");
-    if (log_level & G_LOG_LEVEL_INFO)
-        g_string_append (str, "INFO: ");
-    if (log_level & G_LOG_LEVEL_DEBUG)
-        g_string_append (str, "DEBUG: ");
-
-    g_string_append (str,message);
-    puts (str->str);
-    g_string_free (str, TRUE);
 }
 
 static void
@@ -96,7 +81,7 @@ donna_donna_init (DonnaDonna *donna)
     guint i;
 
     mt = g_thread_self ();
-    g_log_set_default_handler (log_handler, NULL);
+    g_log_set_default_handler (donna_donna_log_handler, NULL);
 
     priv = donna->priv = G_TYPE_INSTANCE_GET_PRIVATE (donna,
             DONNA_TYPE_DONNA, DonnaDonnaPrivate);
@@ -149,24 +134,8 @@ skip_arrangements:
     return;
 }
 
-G_DEFINE_TYPE (DonnaDonna, donna_donna, G_TYPE_OBJECT)
-
-static GObject *
-donna_donna_constructor (GType                   type,
-                         guint                   n_params,
-                         GObjectConstructParam  *params)
-{
-    static GObject *donna = NULL;
-    GObject *obj;
-
-    if (!donna)
-        obj = donna = G_OBJECT_CLASS (donna_donna_parent_class)->constructor (
-                type, n_params, params);
-    else
-        obj = g_object_ref (donna);
-
-    return obj;
-}
+G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_APP, donna_donna_app_init))
 
 static void
 donna_donna_finalize (GObject *object)
@@ -192,38 +161,84 @@ donna_donna_finalize (GObject *object)
     G_OBJECT_CLASS (donna_donna_parent_class)->finalize (object);
 }
 
-DonnaConfig *
-donna_app_get_config (DonnaDonna *donna)
+static void
+donna_donna_log_handler (const gchar    *domain,
+                         GLogLevelFlags  log_level,
+                         const gchar    *message,
+                         gpointer        data)
 {
-    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
-    return g_object_ref (donna->priv->config);
+    GThread *thread = g_thread_self ();
+    time_t now;
+    struct tm *tm;
+    gchar buf[12];
+    GString *str;
+
+    now = time (NULL);
+    tm = localtime (&now);
+    strftime (buf, 12, "[%H:%M:%S] ", tm);
+    str = g_string_new (buf);
+
+    if (thread != mt)
+        g_string_append_printf (str, "[thread %p] ", thread);
+
+    if (log_level & G_LOG_LEVEL_ERROR)
+        g_string_append (str, "ERROR: ");
+    if (log_level & G_LOG_LEVEL_CRITICAL)
+        g_string_append (str, "CRITICAL: ");
+    if (log_level & G_LOG_LEVEL_WARNING)
+        g_string_append (str, "WARNING: ");
+    if (log_level & G_LOG_LEVEL_MESSAGE)
+        g_string_append (str, "MESSAGE: ");
+    if (log_level & G_LOG_LEVEL_INFO)
+        g_string_append (str, "INFO: ");
+    if (log_level & G_LOG_LEVEL_DEBUG)
+        g_string_append (str, "DEBUG: ");
+    /* custom/user log levels, for extra debug verbosity */
+    if (log_level & DONNA_LOG_LEVEL_DEBUG2)
+        g_string_append (str, "DEBUG: ");
+    if (log_level & DONNA_LOG_LEVEL_DEBUG3)
+        g_string_append (str, "DEBUG: ");
+    if (log_level & DONNA_LOG_LEVEL_DEBUG4)
+        g_string_append (str, "DEBUG: ");
+
+    g_string_append (str,message);
+    puts (str->str);
+    g_string_free (str, TRUE);
+}
+
+DonnaConfig *
+donna_donna_get_config (DonnaApp *app)
+{
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    return g_object_ref (DONNA_DONNA (app)->priv->config);
 }
 
 DonnaProvider *
-donna_app_get_provider (DonnaDonna     *donna,
-                        const gchar    *domain)
+donna_donna_get_provider (DonnaApp    *app,
+                          const gchar *domain)
 {
-    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    /* TODO */
 }
 
 DonnaColumnType *
-donna_app_get_columntype (DonnaDonna     *donna,
-                          const gchar    *type)
+donna_donna_get_columntype (DonnaApp       *app,
+                            const gchar    *type)
 {
     DonnaDonnaPrivate *priv;
     gint i;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
     g_return_val_if_fail (type != NULL, NULL);
 
-    priv = donna->priv;
+    priv = DONNA_DONNA (app)->priv;
 
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
         if (streq (type, priv->column_types[i].name))
         {
             if (!priv->column_types[i].ct)
-                priv->column_types[i].ct = priv->column_types[i].load (donna);
+                priv->column_types[i].ct = priv->column_types[i].load (app);
             break;
         }
     }
@@ -231,8 +246,8 @@ donna_app_get_columntype (DonnaDonna     *donna,
 }
 
 gchar *
-donna_app_get_arrangement (DonnaDonna     *donna,
-                           DonnaNode      *node)
+donna_donna_get_arrangement (DonnaApp   *app,
+                             DonnaNode  *node)
 {
     DonnaDonnaPrivate *priv;
     GSList *l;
@@ -243,10 +258,10 @@ donna_app_get_arrangement (DonnaDonna     *donna,
     gchar *b = buf;
     gsize  len;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (donna), NULL);
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
-    priv = donna->priv;
+    priv = DONNA_DONNA (app)->priv;
 
     /* get full location of node */
     donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
@@ -272,21 +287,15 @@ donna_app_get_arrangement (DonnaDonna     *donna,
     return arr;
 }
 
-static void
-_run_task (DonnaTask *task)
-{
-    donna_task_run (task);
-    g_object_unref (task);
-}
-
 void
-donna_app_run_task (DonnaDonna     *donna,
-                    DonnaTask      *task)
+donna_donna_run_task (DonnaApp    *app,
+                      DonnaTask   *task)
 {
-    g_return_if_fail (DONNA_IS_DONNA (donna));
+    g_return_if_fail (DONNA_IS_DONNA (app));
     g_return_if_fail (DONNA_IS_TASK (task));
 
-    g_thread_pool_push (donna->priv->pool, task, NULL);
+    /* FIXME if task is public, add to task manager */
+    g_thread_pool_push (DONNA_DONNA (app)->priv->pool, task, NULL);
 }
 
 
@@ -322,14 +331,33 @@ window_destroy_cb (GtkWidget *window, gpointer data)
 static void
 tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
 {
-    DonnaConfig *config = donna_app_get_config (d);
+    DonnaTask *task;
+    const GValue *value;
+    DonnaNode *node;
+
+    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
+            "/home/jjacky/donnatella");
+    g_object_ref_sink (task);
+    donna_task_run (task);
+    value = donna_task_get_return_value (task);
+    node = g_value_dup_object (value);
+    g_object_unref (task);
+    donna_tree_view_set_location (tree, node, NULL);
+
+    return;
+
+    /*******************************/
+
+    DonnaConfig *config = donna_app_get_config (DONNA_APP (d));
     gboolean v;
     if (donna_config_get_boolean (config, &v, "columns/name/sort_natural_order"))
         donna_config_set_boolean (config, !v, "columns/name/sort_natural_order");
     else
         donna_config_set_boolean (config, FALSE, "columns/name/sort_natural_order");
     g_object_unref (config);
+    return;
 
+    /* FIXME */
     GtkTreeSortable *sortable;
     sortable = GTK_TREE_SORTABLE (gtk_tree_model_filter_get_model (
                 GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (
@@ -359,7 +387,51 @@ tb_new_root_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
             "/tmp/test");
     donna_task_set_callback (task, new_root_cb, tree, NULL);
-    donna_app_run_task (d, task);
+    donna_app_run_task (DONNA_APP (d), task);
+}
+
+static void
+tb_del_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
+{
+    DonnaNode *node;
+    gchar *s;
+
+    node = donna_tree_view_get_location (tree);
+    if (!node)
+    {
+        g_info ("Tree has no current location");
+        return;
+    }
+
+    donna_node_get (node, FALSE, "location", &s, NULL);
+    g_info ("Tree's location: %s", s);
+    g_free (s);
+    g_object_unref (node);
+}
+
+static void
+tb_add_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
+{
+    DonnaTask *task;
+    DonnaNode *node;
+    const GValue *value;
+    GValue val = G_VALUE_INIT;
+    gchar *s;
+
+    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
+            "/tmp/test/foobar");
+    g_object_ref_sink (task);
+    donna_task_run (task);
+    value = donna_task_get_return_value (task);
+    node = g_value_dup_object (value);
+    g_object_unref (task);
+    s = g_strdup ("name");
+    g_value_init (&val, G_TYPE_STRING);
+    g_value_set_string (&val, "barfoo");
+    donna_tree_view_set_node_property (tree, node, s, &val, NULL);
+    g_value_unset (&val);
+    g_free (s);
+    g_object_unref (node);
 }
 
 int
@@ -417,6 +489,16 @@ main (int argc, char *argv[])
     gtk_toolbar_insert (tb, tb_btn2, -1);
     gtk_widget_show (GTK_WIDGET (tb_btn2));
 
+    GtkToolItem *tb_btn3;
+    tb_btn3 = gtk_tool_button_new_from_stock (GTK_STOCK_REMOVE);
+    gtk_toolbar_insert (tb, tb_btn3, -1);
+    gtk_widget_show (GTK_WIDGET (tb_btn3));
+
+    GtkToolItem *tb_btn4;
+    tb_btn4 = gtk_tool_button_new_from_stock (GTK_STOCK_ADD);
+    gtk_toolbar_insert (tb, tb_btn4, -1);
+    gtk_widget_show (GTK_WIDGET (tb_btn4));
+
     /* paned to host tree & list */
     _paned = gtk_paned_new (GTK_ORIENTATION_HORIZONTAL);
     paned = GTK_PANED (_paned);
@@ -424,11 +506,11 @@ main (int argc, char *argv[])
     gtk_widget_show (_paned);
 
     /* tree */
-    DonnaConfig *config = donna_app_get_config (d);
+    DonnaConfig *config = donna_app_get_config (DONNA_APP (d));
     donna_config_set_uint (config, 1, "treeviews/tree/mode");
     donna_config_set_string (config, "name", "treeviews/tree/arrangement/sort");
     g_object_unref (config);
-    _tree = donna_tree_view_new (d, "tree");
+    _tree = donna_tree_view_new (DONNA_APP (d), "tree");
     tree = GTK_TREE_VIEW (_tree);
     /* scrolled window */
     _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
@@ -453,6 +535,10 @@ main (int argc, char *argv[])
             G_CALLBACK (tb_fill_tree_clicked_cb), tree);
     g_signal_connect (G_OBJECT (tb_btn2), "clicked",
             G_CALLBACK (tb_new_root_clicked_cb), tree);
+    g_signal_connect (G_OBJECT (tb_btn3), "clicked",
+            G_CALLBACK (tb_del_node_clicked_cb), tree);
+    g_signal_connect (G_OBJECT (tb_btn4), "clicked",
+            G_CALLBACK (tb_add_node_clicked_cb), tree);
 
     DonnaTask *task;
     const GValue *value;
