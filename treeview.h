@@ -3,6 +3,7 @@
 #define __DONNA_TREE_VIEW_H__
 
 #include "common.h"
+#include "app.h"
 #include "columntype.h"
 #include "conf.h"
 #include "donna.h"
@@ -30,7 +31,7 @@ struct _DonnaTreeViewClass
     GtkTreeViewClass parent_class;
 };
 
-GtkWidget *     donna_tree_view_new             (DonnaDonna         *donna,
+GtkWidget *     donna_tree_view_new             (DonnaApp           *app,
                                                  const gchar        *name);
 void            donna_tree_view_build_arrangement (
                                                  DonnaTreeView      *tree,

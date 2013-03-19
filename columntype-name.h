@@ -32,7 +32,7 @@ struct _DonnaColumnTypeNameClass
 
 GType                   donna_column_type_name_get_type (void) G_GNUC_CONST;
 
-DonnaColumnType *       donna_column_type_name_new      (DonnaDonna *donna);
+DonnaColumnType *       donna_column_type_name_new      (DonnaApp *app);
 
 G_END_DECLS
 

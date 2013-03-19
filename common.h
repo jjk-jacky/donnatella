@@ -4,6 +4,17 @@
 
 G_BEGIN_DECLS
 
+typedef struct _DonnaApp                    DonnaApp; /* dummy typedef */
+typedef struct _DonnaAppInterface           DonnaAppInterface;
+
+#define DONNA_TYPE_APP                      (donna_app_get_type ())
+#define DONNA_APP(obj)                      (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_APP, DonnaApp))
+#define DONNA_IS_APP(obj)                   (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_APP))
+#define DONNA_APP_GET_INTERFACE(obj)        (G_TYPE_INSTANCE_GET_INTERFACE ((obj), DONNA_TYPE_APP, DonnaAppInterface))
+
+GType           donna_app_get_type          (void) G_GNUC_CONST;
+
+
 typedef struct _DonnaNode               DonnaNode;
 typedef struct _DonnaNodeClass          DonnaNodeClass;
 typedef struct _DonnaNodePrivate        DonnaNodePrivate;
