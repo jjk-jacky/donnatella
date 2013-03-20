@@ -74,6 +74,13 @@ donna_donna_class_init (DonnaDonnaClass *klass)
 }
 
 static void
+donna_donna_task_run (DonnaTask *task)
+{
+    donna_task_run (task);
+    g_object_unref (task);
+}
+
+static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
@@ -90,7 +97,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].load = donna_column_type_name_new;
 
-    priv->pool = g_thread_pool_new ((GFunc) donna_task_run, NULL, 5, FALSE, NULL);
+    priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
+            5, FALSE, NULL);
 
     /* load the config */
     /* TODO */
@@ -298,7 +306,8 @@ donna_donna_run_task (DonnaApp    *app,
     g_return_if_fail (DONNA_IS_TASK (task));
 
     /* FIXME if task is public, add to task manager */
-    g_thread_pool_push (DONNA_DONNA (app)->priv->pool, task, NULL);
+    g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
+            g_object_ref_sink (task), NULL);
 }
 
 

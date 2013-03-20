@@ -1100,7 +1100,7 @@ donna_task_run (DonnaTask *task)
     }
 
     /* we take a ref on the task, to ensure it won't die while running */
-    g_object_ref (task);
+    g_object_ref_sink (task);
 
     /* install the timeout (will be triggered on main thread) */
     if (priv->timeout_fn)
