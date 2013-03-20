@@ -631,14 +631,22 @@ set_children (DonnaTreeView *tree,
         for (i = 0; i < children->len; ++i)
         {
             GtkTreeIter row = ITER_INIT;
+            DonnaNode *node = children->pdata[i];
+            DonnaNodeType node_type;
+
+            /* in case we got children from a node_children signal, and there's
+             * more types that we care for */
+            donna_node_get (node, FALSE, "node-type", &node_type, NULL);
+            if (!(node_type & priv->node_types))
+                continue;
 
             /* shouldn't be able to fail/return FALSE */
-            if (!add_node_to_tree (tree, iter, children->pdata[i], &row))
+            if (!add_node_to_tree (tree, iter, node, &row))
             {
                 const gchar *domain;
                 gchar *location;
 
-                donna_node_get (children->pdata[i], FALSE,
+                donna_node_get (node, FALSE,
                         "domain",   &domain,
                         "location", &location,
                         NULL);
