@@ -34,6 +34,7 @@ struct argmt
 };
 
 static GThread *mt;
+static GLogLevelFlags show_log = G_LOG_LEVEL_DEBUG;
 
 static void             donna_donna_log_handler     (const gchar    *domain,
                                                      GLogLevelFlags  log_level,
@@ -180,6 +181,9 @@ donna_donna_log_handler (const gchar    *domain,
     struct tm *tm;
     gchar buf[12];
     GString *str;
+
+    if (log_level > show_log)
+        return;
 
     now = time (NULL);
     tm = localtime (&now);

@@ -8,6 +8,7 @@
 #include "task.h"
 #include "util.h"           /* duplicate_gvalue() */
 #include "closures.h"
+#include "macros.h"
 
 /**
  * SECTION:task
@@ -415,6 +416,8 @@ donna_task_finalize (GObject *object)
     DonnaTaskPrivate *priv;
 
     priv = DONNA_TASK (object)->priv;
+    g_debug4 ("Finalizing task: %s",
+            (priv->desc) ? priv->desc : "(no desc)");
     g_free (priv->desc);
     if (priv->devices)
         g_ptr_array_unref (priv->devices);
@@ -1042,6 +1045,8 @@ timeout_cb (gpointer data)
     /* call the timeout callback under lock (to ensure if task_fn ends
      * meanwhile (this is in main thread), it'll wait for the timeout callback
      * to end) */
+    g_debug2 ("Timeout for task: %s",
+            (priv->desc) ? priv->desc : "(no desc)");
     priv->timeout_fn (task, priv->timeout_data);
     priv->timeout_ran = 1;
 
@@ -1056,7 +1061,10 @@ callback_cb (gpointer data)
     DonnaTask *task = (DonnaTask *) data;
     DonnaTaskPrivate *priv = task->priv;
 
+    g_debug2 ("Callback for task: %s",
+            (priv->desc) ? priv->desc : "(no desc)");
     priv->callback_fn (task, priv->timeout_ran, priv->callback_data);
+
     /* remove the reference we had on the task */
     g_object_unref (task);
 
@@ -1138,6 +1146,10 @@ donna_task_run (DonnaTask *task)
     /* notify change of state (in main thread) */
     notify_prop (task, PROP_STATE);
 
+    g_debug ("Ending task (%s): %s",
+            state_name (priv->state),
+            (priv->desc) ? priv->desc : "(no desc)");
+
     if (priv->callback_fn)
         /* trigger the callback in main thread -- our reference on task will
          * be removed after the callback has been triggered */
@@ -1145,10 +1157,6 @@ donna_task_run (DonnaTask *task)
     else
         /* remove our reference on task */
         g_object_unref (task);
-
-    g_debug ("Ending task (%s): %s",
-            state_name (priv->state),
-            (priv->desc) ? priv->desc : "(no desc)");
 }
 
 /**
