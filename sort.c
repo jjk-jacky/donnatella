@@ -65,14 +65,14 @@ sort_get_utf8_collate_key (const gchar   *str,
         const gchar *s = str;
         gboolean prefix = FALSE;
 
-        while ((s = g_utf8_find_next_char (s, end)))
+        for ( ; s < end; s = g_utf8_next_char (s))
         {
             gunichar c;
 
             c = g_utf8_get_char (s);
             if (!g_unichar_isalnum (c))
             {
-                if (!prefix)
+                if (!prefix && *s != '.')
                     prefix = TRUE;
             }
             else
