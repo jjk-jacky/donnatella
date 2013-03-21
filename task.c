@@ -532,6 +532,7 @@ static gboolean
 _notify_prop (struct notify_prop_data *data)
 {
     g_object_notify_by_pspec (data->obj, donna_task_props[data->prop_id]);
+    g_object_unref (data->obj);
     g_free (data);
     return FALSE;
 }
@@ -542,7 +543,7 @@ notify_prop (DonnaTask *task, gint prop_id)
     struct notify_prop_data *data;
 
     data = g_new (struct notify_prop_data, 1);
-    data->obj = G_OBJECT (task);
+    data->obj = g_object_ref (G_OBJECT (task));
     data->prop_id = prop_id;
     g_main_context_invoke (NULL, (GSourceFunc) _notify_prop, data);
 }
