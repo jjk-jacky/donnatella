@@ -265,11 +265,12 @@ get_sort_option (DonnaColumnTypeName *ctname,
             if (!donna_config_get_boolean (config, &value,
                         "defaults/sort/%s", opt_name))
             {
-                value = TRUE;
+                value = (streq (opt_name, "natural_order")
+                        || streq (opt_name, "dot_first"));
                 if (donna_config_set_boolean (config, value,
                             "defaults/sort/%s", opt_name))
-                    g_info ("Option 'defaults/sort/%s' did not exists, initialized to TRUE",
-                            opt_name);
+                    g_info ("Option 'defaults/sort/%s' did not exists, initialized to %s",
+                            opt_name, (value) ? "TRUE" : "FALSE");
             }
         }
     }
@@ -359,22 +360,46 @@ ct_name_node_cmp (DonnaColumnType    *ct,
                   DonnaNode          *node2)
 {
     DonnaColumnTypeName *ctname = DONNA_COLUMNTYPE_NAME (ct);
-    gboolean dot_first;
-    gboolean special_first;
-    gboolean natural_order;
-    gchar *key1;
-    gchar *key2;
+    DonnaSortOptions options = 0;
+    gchar *name1;
+    gchar *name2;
+    gint ret;
 
-    dot_first     = get_sort_option (ctname, tv_name, col_name, "dot_first");
-    special_first = get_sort_option (ctname, tv_name, col_name, "special_first");
-    natural_order = get_sort_option (ctname, tv_name, col_name, "natural_order");
+    if (get_sort_option (ctname, tv_name, col_name, "locale_based"))
+    {
+        gboolean dot_first;
+        gboolean special_first;
+        gboolean natural_order;
 
-    key1 = get_node_key (ctname, tv_name, col_name, node1,
-            dot_first, special_first, natural_order);
-    key2 = get_node_key (ctname, tv_name, col_name, node2,
-            dot_first, special_first, natural_order);
+        natural_order = get_sort_option (ctname, tv_name, col_name, "natural_order");
+        dot_first     = get_sort_option (ctname, tv_name, col_name, "dot_first");
+        special_first = get_sort_option (ctname, tv_name, col_name, "special_first");
 
-    return strcmp (key1, key2);
+        name1 = get_node_key (ctname, tv_name, col_name, node1,
+                dot_first, special_first, natural_order);
+        name2 = get_node_key (ctname, tv_name, col_name, node2,
+                dot_first, special_first, natural_order);
+
+        return strcmp (name1, name2);
+    }
+
+    if (get_sort_option (ctname, tv_name, col_name, "natural_order"))
+        options |= DONNA_SORT_NATURAL_ORDER;
+    if (get_sort_option (ctname, tv_name, col_name, "dot_first"))
+        options |= DONNA_SORT_DOT_FIRST;
+    if (get_sort_option (ctname, tv_name, col_name, "dot_mixed"))
+        options |= DONNA_SORT_DOT_MIXED;
+    if (!get_sort_option (ctname, tv_name, col_name, "case_sensitive"))
+        options |= DONNA_SORT_CASE_INSENSITIVE;
+    if (get_sort_option (ctname, tv_name, col_name, "ignore_spunct"))
+        options |= DONNA_SORT_IGNORE_SPUNCT;
+
+    donna_node_get (node1, FALSE, "name", &name1, NULL);
+    donna_node_get (node2, FALSE, "name", &name2, NULL);
+    ret = strcmp_ext (name1, name2, options);
+    g_free (name1);
+    g_free (name2);
+    return ret;
 }
 
 DonnaColumnType *
