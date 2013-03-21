@@ -6,6 +6,18 @@
 
 G_BEGIN_DECLS
 
+typedef enum
+{
+    DONNA_SORT_NATURAL_ORDER    = (1 << 0),
+    DONNA_SORT_CASE_INSENSITIVE = (1 << 1),
+    DONNA_SORT_DOT_FIRST        = (1 << 2),
+    DONNA_SORT_DOT_MIXED        = (1 << 3),
+    DONNA_SORT_IGNORE_SPUNCT    = (1 << 4),
+} DonnaSortOptions;
+
+gint
+strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options);
+
 gchar
 sort_get_options_char (gboolean dot_first,
                        gboolean special_first,
