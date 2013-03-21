@@ -1,44 +1,11 @@
 
 #include <glib.h>
 #include <string.h>     /* strlen() */
-#include <stdlib.h>     /* mbstowcs() */
-#include <wctype.h>     /* iswdigit(), iswspace(), iswpunct() */
-#include <wchar.h>      /* wcstoul() */
-#include <errno.h>
 #include "sort.h"
-
-static wchar_t *
-_mbstowcs (wchar_t *dest, const gchar *src)
-{
-    size_t len;
-
-    len = mbstowcs (dest, src, 255);
-    if (len == (size_t) -1)
-        /* invalid mb sequence */
-        return NULL;
-    else if (len >= 255)
-    {
-        /* we need more than 255 wide chars */
-        len = mbstowcs (NULL, src, 0);
-        dest = g_new (wchar_t, len + 1);
-        len = mbstowcs (dest, src, len);
-        if (len == (size_t) -1)
-        {
-            /* invalid mb seq */
-            g_free (dest);
-            return NULL;
-        }
-    }
-
-    return dest;
-}
 
 gint
 strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
 {
-    wchar_t  wb1[256], *_ws1 = wb1;
-    wchar_t  wb2[256], *_ws2 = wb2;
-    wchar_t  *ws1, *ws2;
     gboolean is_string = TRUE;
     gint     res_fb = 0; /* fallback */
     gint     res_cs = 0; /* case-sensitive */
@@ -81,63 +48,56 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
             ++s2;
     }
 
-    /* to continue we'll need the wide-char strings */
-    _ws1 = _mbstowcs (wb1, s1);
-    if (!_ws1)
-        /* convertion failed, fallback to strcmp() */
-        return strcmp (s1, s2);
-    _ws2 = _mbstowcs (wb2, s2);
-    if (!_ws2)
-    {
-        /* convertion failed, fallback to strcmp() */
-        if (_ws1 != wb1)
-            g_free (_ws1);
-        return strcmp (s1, s2);
-    }
-
-    ws1 = _ws1;
-    ws2 = _ws2;
     for (;;)
     {
-        wint_t wc1, wc2;
+        gunichar c1, c2;
 
-        wc1 = *ws1;
-        wc2 = *ws2;
+        /* is at least one string over? */
+        if (!*s1)
+        {
+            if (!*s2)
+                /* looks like strings are the same. We fallback to case
+                 * sensitive result, so in case insensitive mode we still
+                 * have an order */
+                res = res_cs;
+            else
+                /* shorter first */
+                res = -1;
+            goto done;
+        }
+        else if (!*s2)
+        {
+            /* shorter first */
+            res = 1;
+            goto done;
+        }
+
+        c1 = g_utf8_get_char (s1);
+        c2 = g_utf8_get_char (s2);
 
         if (is_string)
         {
-            /* is at least one string over? */
-            if (wc1 == L'\0')
-            {
-                if (wc2 == L'\0')
-                    /* looks like strings are the same. We fallback to case
-                     * sensitive result, so in case insensitive mode we still
-                     * have an order */
-                    res = res_cs;
-                else
-                    /* shorter first */
-                    res = -1;
-                goto done;
-            }
-            else if (wc2 == L'\0')
-            {
-                /* shorter first */
-                res = 1;
-                goto done;
-            }
-
             if (options & DONNA_SORT_IGNORE_SPUNCT)
             {
-                while (iswspace (wc1) || iswpunct (wc1))
-                    wc1 = *++ws1;
-                while (iswspace (wc2) || iswpunct (wc2))
-                    wc2 = *++ws2;
+                while (g_unichar_isspace (c1) || g_unichar_ispunct (c1))
+                {
+                    s1 = g_utf8_next_char (s1);
+                    c1 = (*s1) ? g_utf8_get_char (s1) : 0;
+                }
+                while (g_unichar_isspace (c2) || g_unichar_ispunct (c2))
+                {
+                    s2 = g_utf8_next_char (s2);
+                    c2 = (*s2) ? g_utf8_get_char (s2) : 0;
+                }
+                /* did we reached the end of a string? */
+                if (!*s1 || !*s2)
+                    continue;
             }
 
             /* is at least one string a number? */
-            if (iswdigit (wc1))
+            if (g_unichar_isdigit (c1))
             {
-                if (iswdigit (wc2))
+                if (g_unichar_isdigit (c2))
                 {
                     if (options & DONNA_SORT_NATURAL_ORDER)
                     {
@@ -153,7 +113,7 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
                     goto done;
                 }
             }
-            else if (iswdigit (wc2))
+            else if (g_unichar_isdigit (c2))
             {
                 /* number first */
                 res = 1;
@@ -161,23 +121,23 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
             }
 
             /* compare chars */
-            if (wc1 > wc2)
+            if (c1 > c2)
                 res_cs = 1;
-            else if (wc1 < wc2)
+            else if (c1 < c2)
                 res_cs = -1;
 
             if (options & DONNA_SORT_CASE_INSENSITIVE)
             {
                 /* compare uppper chars */
-                wc1 = towupper (wc1);
-                wc2 = towupper (wc2);
+                c1 = g_unichar_toupper (c1);
+                c2 = g_unichar_toupper (c2);
 
-                if (wc1 > wc2)
+                if (c1 > c2)
                 {
                     res = 1;
                     goto done;
                 }
-                else if (wc1 < wc2)
+                else if (c1 < c2)
                 {
                     res = -1;
                     goto done;
@@ -191,8 +151,8 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
             }
 
             /* next chars */
-            ++ws1;
-            ++ws2;
+            s1 = g_utf8_next_char (s1);
+            s2 = g_utf8_next_char (s2);
         }
         /* mode number */
         else
@@ -202,31 +162,50 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
             if (res_fb == 0)
             {
                 /* count number of leading zeros */
-                for (n1 = 0; ws1[n1] == L'0'; ++n1)
+                for (n1 = 0; *s1 == '0'; ++n1, ++s1)
                     ;
-                for (n2 = 0; ws2[n2] == L'0'; ++n2)
+                for (n2 = 0; *s2 == '0'; ++n2, ++s2)
                     ;
                 /* try to set a fallback to put less leading zeros first */
                 if (n1 > n2)
                     res_fb = 1;
                 else if (n1 < n2)
                     res_fb = -1;
+
+                if (n1 > 0)
+                    c1 = g_utf8_get_char (s1);
+                if (n2 > 0)
+                    c2 = g_utf8_get_char (s2);
             }
 
-            errno = 0;
-            n1 = wcstoul (ws1, &ws1, 10);
-            if (errno != 0)
+            n1 = 0;
+            while (g_unichar_isdigit (c1))
             {
-                /* failed to get number -- fallback to strcmp() */
-                res = strcmp (s1, s2);
-                goto done;
+                int d;
+
+                d = g_unichar_digit_value (c1);
+                n1 *= 10;
+                n1 += d;
+                s1 = g_utf8_next_char (s1);
+                if (*s1)
+                    c1 = g_utf8_get_char (s1);
+                else
+                    break;
             }
-            n2 = wcstoul (ws2, &ws2, 10);
-            if (errno != 0)
+
+            n2 = 0;
+            while (g_unichar_isdigit (c2))
             {
-                /* failed to get number -- fallback to strcmp() */
-                res = strcmp (s1, s2);
-                goto done;
+                int d;
+
+                d = g_unichar_digit_value (c2);
+                n2 *= 10;
+                n2 += d;
+                s2 = g_utf8_next_char (s2);
+                if (*s2)
+                    c2 = g_utf8_get_char (s2);
+                else
+                    break;
             }
 
             if (n1 > n2)
@@ -246,10 +225,6 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
     }
 
 done:
-    if (_ws1 != wb1)
-        g_free (_ws1);
-    if (_ws2 != wb2)
-        g_free (_ws2);
     return (res != 0) ? res : res_fb;
 }
 
