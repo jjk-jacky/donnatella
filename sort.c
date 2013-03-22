@@ -56,10 +56,7 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
         if (!*s1)
         {
             if (!*s2)
-                /* looks like strings are the same. We fallback to case
-                 * sensitive result, so in case insensitive mode we still
-                 * have an order */
-                res = res_cs;
+                res = 0;
             else
                 /* shorter first */
                 res = -1;
@@ -142,6 +139,10 @@ strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options)
                     res = -1;
                     goto done;
                 }
+                else if (res_fb == 0)
+                    /* set the case-sensitive result in case strings end up
+                     * being the same otherwise */
+                    res_fb = res_cs;
             }
             /* do we have a res_cs yet? */
             else if (res_cs != 0)
