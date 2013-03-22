@@ -1,4 +1,5 @@
 
+#include <locale.h>
 #include <gtk/gtk.h>
 #include "donna.h"
 #include "app.h"
@@ -467,8 +468,9 @@ main (int argc, char *argv[])
     GtkWidget       *_list;
     GtkTreeView     *list;
 
+    setlocale (LC_ALL, "");
     gtk_init (&argc, &argv);
-    d= g_object_new (DONNA_TYPE_DONNA, NULL);
+    d = g_object_new (DONNA_TYPE_DONNA, NULL);
 
     provider_fs = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
 
