@@ -195,6 +195,19 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 
 #define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 
+/* A note about using g_idla_add() where it looks like a g_main_context_invoke()
+ * would be enough: we're only looking to be in the main thread (to use gtk_*
+ * functions), in theory if the thread can take ownership of the main context it
+ * should be safe to use GTK.
+ * Problem is, the main thread could be waiting for something/in the middle of
+ * processing something, and because we use GtkTreeModelFilter with iters that
+ * aren't persistent, we could be adding/removing nodes to the tree, thus
+ * invalidating all iters. When the main thread gets the main context back and
+ * continues its work, the iter it was using is now invalid, leading to warnings
+ * at best, segfault at worst.
+ * Using g_idle_add() instead will ensure than this doesn't happen.
+ */
+
 static gboolean add_node_to_tree (DonnaTreeView *tree,
                                   GtkTreeIter   *parent,
                                   DonnaNode     *node,
@@ -1632,7 +1645,7 @@ node_removed_cb (DonnaProvider  *provider,
     data = g_new (struct node_removed_data, 1);
     data->tree       = tree;
     data->node       = g_object_ref (node);
-    g_main_context_invoke (NULL, (GSourceFunc) real_node_removed_cb, data);
+    g_idle_add ((GSourceFunc) real_node_removed_cb, data);
 }
 
 struct node_children_cb_data
@@ -1694,7 +1707,7 @@ node_children_cb (DonnaProvider  *provider,
     data->node       = g_object_ref (node);
     data->node_types = node_types;
     data->children   = g_ptr_array_ref (children);
-    g_main_context_invoke (NULL, (GSourceFunc) real_node_children_cb, data);
+    g_idle_add ((GSourceFunc) real_node_children_cb, data);
 }
 
 struct new_child_data
@@ -1757,7 +1770,7 @@ node_new_child_cb (DonnaProvider *provider,
     data->tree  = tree;
     data->node  = g_object_ref (node);
     data->child = g_object_ref (child);
-    g_main_context_invoke (NULL, (GSourceFunc) real_new_child_cb, data);
+    g_idle_add ((GSourceFunc) real_new_child_cb, data);
 }
 
 /* mode tree only */
