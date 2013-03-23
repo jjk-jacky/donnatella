@@ -1,6 +1,6 @@
 SRC = closures.c columntype.c columntype-name.c donna.c node.c provider.c \
 	  provider-base.c provider-config.c provider-fs.c sort.c task.c \
-	  taskui.c treeview.c util.c app.c
+	  taskui.c treeview.c util.c app.c treestore.c
 OBJ = ${SRC:.c=.o}
 
 GTK_FLAGS := `pkg-config --cflags --libs gtk+-3.0`
