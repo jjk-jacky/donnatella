@@ -36,29 +36,59 @@ typedef gboolean    (*store_visible_fn)         (DonnaTreeStore     *store,
                                                  gpointer            data);
 
 /* API */
-gboolean    donna_tree_store_iter_next          (DonnaTreeStore     *store,
+
+/* same as GtkTreeStore */
+DonnaTreeStore *donna_tree_store_new            (gint n_columns,
+                                                 ...);
+void            donna_tree_store_set            (DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter,
+                                                 ...);
+gboolean        donna_tree_store_remove         (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter);
-gboolean    donna_tree_store_iter_previous      (DonnaTreeStore     *store,
+#define donna_tree_store_insert_with_values(store, iter, parent, position, ...) \
+        gtk_tree_store_insert_with_values (donna_tree_store_get_store (store), \
+                iter, parent, position, __VA_ARGS__)
+gboolean        donna_tree_store_is_ancestor    (DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter,
+                                                 GtkTreeIter        *descendant);
+gint            donna_tree_store_iter_depth     (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter);
-gboolean    donna_tree_store_iter_children      (DonnaTreeStore     *store,
+void            donna_tree_store_clear          (DonnaTreeStore     *store);
+
+/* our version of GtkTreeModel interface, on all (visible & invisible) iters */
+gboolean        donna_tree_store_iter_next      (DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter);
+gboolean        donna_tree_store_iter_previous  (DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter);
+gboolean        donna_tree_store_iter_children  (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter,
                                                  GtkTreeIter        *parent);
-gboolean    donna_tree_store_iter_has_child     (DonnaTreeStore     *store,
+gboolean        donna_tree_store_iter_has_child (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter);
-gint        donna_tree_store_iter_n_children    (DonnaTreeStore     *store,
+gint            donna_tree_store_iter_n_children(DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter);
-gboolean    donna_tree_store_iter_nth_child     (DonnaTreeStore     *store,
+gboolean        donna_tree_store_iter_nth_child (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter,
                                                  GtkTreeIter        *parent,
                                                  gint                n);
-gboolean    donna_tree_store_iter_parent        (DonnaTreeStore     *store,
+gboolean        donna_tree_store_iter_parent    (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter,
                                                  GtkTreeIter        *child);
 
-gboolean    donna_tree_store_set_visible_func   (DonnaTreeStore     *store,
+/* DonnaTreeStore specific */
+gboolean        donna_tree_store_set_visible_func (
+                                                 DonnaTreeStore     *store,
                                                  store_visible_fn    is_visible,
                                                  gpointer            data,
                                                  GDestroyNotify      destroy);
+gboolean        donna_tree_store_iter_is_visible(DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter);
+gboolean        donna_tree_store_refresh_visibility (
+                                                 DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter,
+                                                 gboolean           *was_visible);
+void            donna_tree_store_refilter       (DonnaTreeStore     *store);
+GtkTreeStore *  donna_tree_store_get_store      (DonnaTreeStore     *store);
 
 G_END_DECLS
 
