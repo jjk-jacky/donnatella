@@ -232,14 +232,13 @@ tree_store_get_path (GtkTreeModel   *model,
     it = *iter;
     for (;;)
     {
-        GtkTreeIter child;
+        GtkTreeIter child = it;
 
         i = 0;
         while (tree_store_iter_previous (model, &it))
             ++i;
         gtk_tree_path_prepend_index (path, i);
 
-        child = it;
         if (!gtk_tree_model_iter_parent (_model, &it, &child))
             break;
     }
@@ -305,7 +304,8 @@ tree_store_iter_children (GtkTreeModel   *model,
     DonnaTreeStorePrivate *priv = store->priv;
     GtkTreeModel *_model = GTK_TREE_MODEL (priv->store);
 
-    g_return_val_if_fail (iter && iter_is_visible (parent), FALSE);
+    if (parent)
+        g_return_val_if_fail (iter_is_visible (parent), FALSE);
 
     chain_up_if_possible (iter_children, model, iter, parent);
 
@@ -347,7 +347,8 @@ tree_store_iter_n_children (GtkTreeModel   *model,
     GtkTreeIter child;
     gint n = 0;
 
-    g_return_val_if_fail (iter && iter_is_visible (iter), 0);
+    if (iter)
+        g_return_val_if_fail (iter_is_visible (iter), 0);
 
     chain_up_if_possible (iter_n_children, model, iter);
 
@@ -369,11 +370,13 @@ tree_store_iter_nth_child (GtkTreeModel   *model,
     DonnaTreeStorePrivate *priv = store->priv;
     gint i;
 
-    g_return_val_if_fail (iter && iter_is_visible (parent), FALSE);
+    if (parent)
+        g_return_val_if_fail (iter_is_visible (parent), FALSE);
 
     chain_up_if_possible (iter_nth_child, model, iter, parent, n);
 
-    tree_store_iter_children (model, iter, parent);
+    if (!tree_store_iter_children (model, iter, parent))
+        return FALSE;
     for (i = n - 1; i >= 0; --i)
         if (!tree_store_iter_next (model, iter))
             return FALSE;
@@ -388,7 +391,7 @@ tree_store_iter_parent (GtkTreeModel   *model,
     DonnaTreeStore *store = (DonnaTreeStore *) model;
     DonnaTreeStorePrivate *priv = store->priv;
 
-    g_return_val_if_fail (iter && iter_is_visible (child), FALSE);
+    g_return_val_if_fail (child && iter_is_visible (child), FALSE);
 
     /* if child is visible, its parent should be too, so we just chain up */
     return gtk_tree_model_iter_parent (GTK_TREE_MODEL (priv->store), iter, child);
