@@ -193,7 +193,7 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
     ((i1)->stamp == (i2)->stamp && (i1)->user_data == (i2)->user_data)
 
 #define watch_iter(tree, iter)  \
-    tree->priv->watched_iters = g_slist_append (tree->priv->watched_iters, iter)
+    tree->priv->watched_iters = g_slist_prepend (tree->priv->watched_iters, iter)
 #define remove_watch_iter(tree, iter)   \
     tree->priv->watched_iters = g_slist_remove (tree->priv->watched_iters, iter)
 
@@ -646,8 +646,9 @@ set_children (DonnaTreeView *tree,
             donna_tree_store_iter_children (priv->store, &i, iter);
             do
             {
-                list = g_slist_append (list, gtk_tree_iter_copy (&i));
+                list = g_slist_prepend (list, gtk_tree_iter_copy (&i));
             } while (donna_tree_store_iter_next (priv->store, &i));
+            list = g_slist_reverse (list);
         }
         else
             es = DONNA_TREE_EXPAND_UNKNOWN;
@@ -1830,7 +1831,7 @@ add_node_to_tree (DonnaTreeView *tree,
             *iter_row = iter;
         /* add it to our hashtable */
         list = g_hash_table_lookup (priv->hashtable, node);
-        list = g_slist_append (list, gtk_tree_iter_copy (&iter));
+        list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
         g_hash_table_insert (priv->hashtable, node, list);
 
         return TRUE;
@@ -1868,7 +1869,7 @@ add_node_to_tree (DonnaTreeView *tree,
         *iter_row = iter;
     /* add it to our hashtable */
     list = g_hash_table_lookup (priv->hashtable, node);
-    list = g_slist_append (list, gtk_tree_iter_copy (&iter));
+    list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
     g_hash_table_insert (priv->hashtable, node, list);
     /* check the list in case we have another tree node for that node, in which
      * case we might get the has_children info from there */

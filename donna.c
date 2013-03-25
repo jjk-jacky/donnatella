@@ -135,9 +135,10 @@ donna_donna_init (DonnaDonna *donna)
         argmt = g_new0 (struct argmt, 1);
         argmt->name  = g_strdup (s);
         argmt->pspec = g_pattern_spec_new (ss);
-        priv->arrangements = g_slist_append (priv->arrangements, argmt);
+        priv->arrangements = g_slist_prepend (priv->arrangements, argmt);
         g_free (ss);
     }
+    priv->arrangements = g_slist_reverse (priv->arrangements);
     g_ptr_array_free (arr, TRUE);
 
 skip_arrangements:
