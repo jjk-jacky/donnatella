@@ -2318,23 +2318,38 @@ load_arrangement (DonnaTreeView *tree,
                 (GtkTreeIterCompareFunc) sort_func, column, NULL);
         if (s_sort)
         {
+            gboolean sorted = FALSE;
+            GtkSortType order = GTK_SORT_ASCENDING;
+
             /* SORT_UNKNOWN means we only had a column name (unlikely) */
             if (sort_order == SORT_UNKNOWN)
             {
                 if (streq (s_sort, b))
-                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id,
-                            GTK_SORT_ASCENDING);
+                    sorted = TRUE;
             }
             else
             {
                 /* ss_sort contains "column:o" */
                 if (strlen (b) == sort_len && streqn (s_sort, b, sort_len))
-                    gtk_tree_sortable_set_sort_column_id (sortable, sort_id,
-                            (sort_order == SORT_ASC) ? GTK_SORT_ASCENDING
-                            : GTK_SORT_DESCENDING);
+                {
+                    sorted = TRUE;
+                    order = (sort_order == SORT_ASC) ? GTK_SORT_ASCENDING
+                            : GTK_SORT_DESCENDING;
+                }
             }
-            g_free (s_sort);
-            s_sort = NULL;
+
+            if (sorted)
+            {
+                gtk_tree_sortable_set_sort_column_id (sortable, sort_id, order);
+                gtk_tree_view_column_set_sort_indicator (column, TRUE);
+                gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
+                        ? ((order == GTK_SORT_ASCENDING)
+                            ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
+                        : order);
+
+                g_free (s_sort);
+                s_sort = NULL;
+            }
         }
         ++sort_id;
         /* TODO else default sort order? */
@@ -2349,6 +2364,8 @@ next:
         col = e + 1;
     }
 
+    if (s_sort)
+        g_free (s_sort);
     if (s_columns)
         g_free (s_columns);
     /* remove all columns left unused */
