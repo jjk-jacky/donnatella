@@ -13,6 +13,15 @@
 
 enum
 {
+    PROP_0,
+
+    PROP_LOCATION,
+
+    NB_PROPS
+};
+
+enum
+{
     DONNA_TREE_COL_NODE = 0,
     DONNA_TREE_COL_EXPAND_STATE,
     DONNA_TREE_COL_NAME,
@@ -179,6 +188,8 @@ struct _DonnaTreeViewPrivate
     guint                draw_state  : 2;
 };
 
+static GParamSpec *donna_tree_view_props[NB_PROPS] = { NULL, };
+
 /* our internal renderers */
 enum
 {
@@ -221,6 +232,10 @@ static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
 static void     donna_tree_view_row_collapsed       (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
+static void     donna_tree_view_get_property        (GObject        *object,
+                                                     guint           prop_id,
+                                                     GValue         *value,
+                                                     GParamSpec     *pspec);
 static void     donna_tree_view_finalize            (GObject        *object);
 
 G_DEFINE_TYPE (DonnaTreeView, donna_tree_view, GTK_TYPE_TREE_VIEW);
@@ -236,7 +251,16 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     tv_class->test_expand_row = donna_tree_view_test_expand_row;
 
     o_class = G_OBJECT_CLASS (klass);
-    o_class->finalize = donna_tree_view_finalize;
+    o_class->get_property   = donna_tree_view_get_property;
+    o_class->finalize       = donna_tree_view_finalize;
+
+    donna_tree_view_props[PROP_LOCATION] =
+        g_param_spec_object ("location", "location",
+                "Current location of the treeview",
+                DONNA_TYPE_NODE,
+                G_PARAM_READABLE);
+
+    g_object_class_install_properties (o_class, NB_PROPS, donna_tree_view_props);
 
     g_type_class_add_private (klass, sizeof (DonnaTreeViewPrivate));
 
@@ -302,6 +326,18 @@ static void
 free_hashtable (gpointer key, GSList *list, gpointer data)
 {
     g_slist_free_full (list, (GDestroyNotify) gtk_tree_iter_free);
+}
+
+static void
+donna_tree_view_get_property (GObject        *object,
+                              guint           prop_id,
+                              GValue         *value,
+                              GParamSpec     *pspec)
+{
+    DonnaTreeViewPrivate *priv = DONNA_TREE_VIEW (object)->priv;
+
+    if (prop_id == PROP_LOCATION)
+        g_value_set_object (value, priv->location);
 }
 
 static void
@@ -3502,6 +3538,10 @@ node_get_children_list_cb (DonnaTask        *task,
     arr = g_value_get_boxed (value);
     for (i = 0; i < arr->len; ++i)
         add_node_to_tree (tree, NULL, arr->pdata[i], NULL);
+
+    /* emit signal */
+    g_object_notify_by_pspec (G_OBJECT (tree),
+            donna_tree_view_props[PROP_LOCATION]);
 }
 
 gboolean
