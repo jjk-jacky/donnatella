@@ -71,6 +71,8 @@ static gchar *          donna_donna_get_arrangement (DonnaApp       *app,
                                                      DonnaNode      *node);
 static void             donna_donna_run_task        (DonnaApp       *app,
                                                      DonnaTask      *task);
+static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
+                                                     const gchar    *name);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -80,6 +82,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_columntype   = donna_donna_get_columntype;
     interface->get_arrangement  = donna_donna_get_arrangement;
     interface->run_task         = donna_donna_run_task;
+    interface->get_treeview     = donna_donna_get_treeview;
 }
 
 static void
@@ -367,6 +370,15 @@ donna_donna_run_task (DonnaApp    *app,
 }
 
 
+static DonnaTreeView *
+donna_donna_get_treeview (DonnaApp       *app,
+                          const gchar    *name)
+{
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    /* FIXME */
+    return DONNA_DONNA (app)->priv->active_list;
+}
+
 
 
 
@@ -588,6 +600,7 @@ main (int argc, char *argv[])
     gtk_widget_show (_tree);
 
     /* list */
+    donna_config_set_string (config, "name", "treeviews/list/arrangement/sort");
     _list = donna_tree_view_new (DONNA_APP (d), "list");
     list = GTK_TREE_VIEW (_list);
     /* scrolled window */
@@ -614,6 +627,10 @@ main (int argc, char *argv[])
     const GValue *value;
     DonnaNode *node;
 
+    d->priv->active_list = DONNA_TREE_VIEW (list);
+    g_object_notify (G_OBJECT (d), "active-list");
+
+#if 0
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/");
     g_object_ref_sink (task);
     donna_task_run (task);
@@ -621,11 +638,20 @@ main (int argc, char *argv[])
     node = g_value_dup_object (value);
     g_object_unref (task);
     donna_tree_view_set_location (DONNA_TREE_VIEW (tree), node, NULL);
+    g_object_unref (node);
+#endif
+
+    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/tmp/test");
+    g_object_ref_sink (task);
+    donna_task_run (task);
+    value = donna_task_get_return_value (task);
+    node = g_value_dup_object (value);
+    g_object_unref (task);
     donna_tree_view_set_location (DONNA_TREE_VIEW (list), node, NULL);
     g_object_unref (node);
 
     /* show everything */
-    gtk_window_set_default_size (window, 420, 230);
+    gtk_window_set_default_size (window, 1080, 420);
     gtk_paned_set_position (paned, 230);
     gtk_widget_show (_window);
     gtk_main ();
