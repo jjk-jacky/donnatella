@@ -76,6 +76,13 @@ enum
 
 enum
 {
+    SORT_CONTAINER_FIRST = 0,
+    SORT_CONTAINER_FIRST_ALWAYS,
+    SORT_CONTAINER_MIXED
+};
+
+enum
+{
     DRAW_NOTHING = 0,
     DRAW_WAIT,
     DRAW_EMPTY
@@ -164,6 +171,7 @@ struct _DonnaTreeViewPrivate
     guint                node_types  : 3;
     guint                show_hidden : 1;
     guint                sane_arrow  : 1;
+    guint                sort_groups : 2;
     /* mode Tree */
     guint                is_minitree : 1;
     guint                sync_mode   : 2;
@@ -363,6 +371,18 @@ load_config (DonnaTreeView *tree)
         priv->node_types = val;
         donna_config_set_uint (config, val,
                 "treeviews/%s/node_types", priv->name);
+    }
+
+    if (donna_config_get_uint (config, &val,
+                "treeviews/%s/sort_groups", priv->name))
+        priv->sort_groups = val;
+    else
+    {
+        /* set default */
+        val = SORT_CONTAINER_FIRST;
+        priv->sort_groups = val;
+        donna_config_set_uint (config, val,
+                "treeviews/%s/sort_groups", priv->name);
     }
 
     if (is_tree (tree))
@@ -1331,10 +1351,52 @@ sort_func (GtkTreeModel      *model,
     }
 
     priv = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column))->priv;
+
+    if (priv->sort_groups != SORT_CONTAINER_MIXED)
+    {
+        DonnaNodeType type1, type2;
+
+        donna_node_get (node1, FALSE, "node-type", &type1, NULL);
+        donna_node_get (node2, FALSE, "node-type", &type2, NULL);
+
+        if (type1 == DONNA_NODE_CONTAINER)
+        {
+            if (type2 != DONNA_NODE_CONTAINER)
+            {
+                if (priv->sort_groups == SORT_CONTAINER_FIRST)
+                    ret = -1;
+                else /* SORT_CONTAINER_FIRST_ALWAYS */
+                {
+                    ret = (gtk_tree_view_column_get_sort_order (column)
+                            == GTK_SORT_ASCENDING) ? -1 : 1;
+                    /* with sane_arrow the sort order on column is reversed */
+                    if (priv->sane_arrow)
+                        ret *= -1;
+                }
+                goto done;
+            }
+        }
+        else if (type2 == DONNA_NODE_CONTAINER)
+        {
+            if (priv->sort_groups == SORT_CONTAINER_FIRST)
+                ret = 1;
+            else /* SORT_CONTAINER_FIRST_ALWAYS */
+            {
+                ret = (gtk_tree_view_column_get_sort_order (column)
+                        == GTK_SORT_ASCENDING) ? 1 : -1;
+                /* with sane_arrow the sort order on column is reversed */
+                if (priv->sane_arrow)
+                    ret *= -1;
+            }
+            goto done;
+        }
+    }
+
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
 
     ret = donna_columntype_node_cmp (ct, priv->name, col, node1, node2);
+done:
     g_object_unref (node1);
     g_object_unref (node2);
     return ret;
@@ -1992,13 +2054,14 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
                 ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
             /* default */
             : GTK_SORT_ASCENDING;
-    /* apply it */
-    gtk_tree_sortable_set_sort_column_id (sortable, col_sort_id, sort_order);
-    /* show it */
+    /* important to set the sort order on column before the sort_id on sortable,
+     * since sort_func might use the column's sort_order (when putting container
+     * always first) */
     gtk_tree_view_column_set_sort_indicator (column, TRUE);
     gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
             ? (sort_order == GTK_SORT_ASCENDING) ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING
             : sort_order);
+    gtk_tree_sortable_set_sort_column_id (sortable, col_sort_id, sort_order);
     /* force refresh */
     gtk_widget_queue_draw (GTK_WIDGET (tree));
 }
@@ -2340,12 +2403,15 @@ load_arrangement (DonnaTreeView *tree,
 
             if (sorted)
             {
-                gtk_tree_sortable_set_sort_column_id (sortable, sort_id, order);
+                /* important to set the sort order on column before the sort_id
+                 * on sortable, since sort_func might use the column's
+                 * sort_order (when putting container always first) */
                 gtk_tree_view_column_set_sort_indicator (column, TRUE);
                 gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
                         ? ((order == GTK_SORT_ASCENDING)
                             ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
                         : order);
+                gtk_tree_sortable_set_sort_column_id (sortable, sort_id, order);
 
                 g_free (s_sort);
                 s_sort = NULL;
