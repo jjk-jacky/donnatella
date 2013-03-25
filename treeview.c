@@ -776,69 +776,12 @@ node_get_children_tree_cb (DonnaTask                   *task,
     free_node_children_data (data);
 }
 
-struct import_children_data
-{
-    DonnaTreeView   *tree;
-    GtkTreeIter     *iter;
-    GtkTreeIter     *child;
-    gboolean         scroll_to_current;
-};
-
-static gboolean
-import_children (struct import_children_data *data)
-{
-    GtkTreeModel *model;
-    GtkTreePath *path;
-
-    if (!is_watched_iter_valid (data->tree, data->iter, TRUE))
-    {
-        remove_watch_iter (data->tree, data->child);
-        goto free;
-    }
-    if (!is_watched_iter_valid (data->tree, data->child, TRUE))
-        goto free;
-
-    model = GTK_TREE_MODEL (data->tree->priv->store);
-    do
-    {
-        DonnaNode *node;
-
-        gtk_tree_model_get (model, data->child,
-                DONNA_TREE_COL_NODE,    &node,
-                -1);
-        add_node_to_tree (data->tree, data->iter, node, NULL);
-        g_object_unref (node);
-    } while (donna_tree_store_iter_next (data->tree->priv->store, data->child));
-
-    /* update expand state */
-    donna_tree_store_set (data->tree->priv->store, data->iter,
-            DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
-            -1);
-
-    /* expand node */
-    path = gtk_tree_model_get_path (GTK_TREE_MODEL (data->tree->priv->store),
-            data->iter);
-    gtk_tree_view_expand_row (GTK_TREE_VIEW (data->tree), path, FALSE);
-    gtk_tree_path_free (path);
-
-    if (data->scroll_to_current)
-        scroll_to_current (data->tree);
-
-free:
-    gtk_tree_iter_free (data->iter);
-    gtk_tree_iter_free (data->child);
-    g_free (data);
-
-    /* don't repeat */
-    return FALSE;
-}
-
 /* mode tree only */
 /* this should only be used for rows that we want expanded and are either
  * NEVER or UNKNOWN -- everything else is either already being done, or can be
  * done already (needing at most just a switch of expand_state (NEVER_FULL)) */
 static void
-expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_to_current)
+expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
@@ -863,15 +806,13 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_to_current)
     list = g_hash_table_lookup (priv->hashtable, node);
     if (list)
     {
-        GtkTreeIter iter;
-
         for ( ; list; list = list->next)
         {
             GtkTreeIter *i = list->data;
             enum tree_expand es;
 
             /* skip ourself */
-            if (itereq (&iter, i))
+            if (itereq (iter, i))
                 continue;
 
             gtk_tree_model_get (model, i,
@@ -881,7 +822,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_to_current)
                     || es == DONNA_TREE_EXPAND_NEVER_FULL)
             {
                 GtkTreeIter child;
-                struct import_children_data *data;
+                GtkTreePath *path;
 
                 /* let's import the children */
 
@@ -893,26 +834,30 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_to_current)
                     continue;
                 }
 
-                /* because the tree's model is filter, and with
-                 * filter iters are not persistent, adding nodes
-                 * would invalidate the current _iter, thus
-                 * generating a warning in the post-signal of the
-                 * test-expand-row in GtkTreeView.
-                 * So we need to have that code run later */
-                data = g_new (struct import_children_data, 1);
-                data->tree  = tree;
-                data->iter  = gtk_tree_iter_copy (&iter);
-                data->child = gtk_tree_iter_copy (&child);
-                data->scroll_to_current = scroll_to_current;
-                watch_iter (tree, data->iter);
-                watch_iter (tree, data->child);
-                g_idle_add ((GSourceFunc) import_children, data);
+                do
+                {
+                    DonnaNode *node;
 
-                donna_tree_store_set (priv->store, &iter,
-                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_WIP,
+                    gtk_tree_model_get (model, &child,
+                            DONNA_TREE_COL_NODE,    &node,
+                            -1);
+                    add_node_to_tree (tree, iter, node, NULL);
+                    g_object_unref (node);
+                } while (donna_tree_store_iter_next (priv->store, &child));
+
+                /* update expand state */
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
                         -1);
 
-                /* no expansion (yet) */
+                /* expand node */
+                path = gtk_tree_model_get_path (model, iter);
+                gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
+                gtk_tree_path_free (path);
+
+                if (scroll_current)
+                    scroll_to_current (tree);
+
                 return;
             }
         }
@@ -923,7 +868,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_to_current)
 
     data = g_slice_new0 (struct node_children_data);
     data->tree  = tree;
-    data->scroll_to_current = scroll_to_current;
+    data->scroll_to_current = scroll_current;
     data->iter = *iter;
     watch_iter (tree, &data->iter);
 
