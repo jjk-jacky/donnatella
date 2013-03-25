@@ -11,15 +11,25 @@
 
 enum
 {
+    PROP_0,
+
+    PROP_ACTIVE_LIST,
+
+    NB_PROPS
+};
+
+enum
+{
     COL_TYPE_NAME = 0,
     NB_COL_TYPES
 };
 
 struct _DonnaDonnaPrivate
 {
-    DonnaConfig *config;
-    GSList      *arrangements;
-    GThreadPool *pool;
+    DonnaConfig     *config;
+    GSList          *arrangements;
+    GThreadPool     *pool;
+    DonnaTreeView   *active_list;
     struct col_type
     {
         const gchar           *name;
@@ -41,6 +51,14 @@ static void             donna_donna_log_handler     (const gchar    *domain,
                                                      GLogLevelFlags  log_level,
                                                      const gchar    *message,
                                                      gpointer        data);
+static void             donna_donna_set_property    (GObject        *object,
+                                                     guint           prop_id,
+                                                     const GValue   *value,
+                                                     GParamSpec     *pspec);
+static void             donna_donna_get_property    (GObject        *object,
+                                                     guint           prop_id,
+                                                     GValue         *value,
+                                                     GParamSpec     *pspec);
 static void             donna_donna_finalize        (GObject        *object);
 
 /* DonnaApp */
@@ -70,7 +88,11 @@ donna_donna_class_init (DonnaDonnaClass *klass)
     GObjectClass *o_class;
 
     o_class = G_OBJECT_CLASS (klass);
-    o_class->finalize    = donna_donna_finalize;
+    o_class->set_property   = donna_donna_set_property;
+    o_class->get_property   = donna_donna_get_property;
+    o_class->finalize       = donna_donna_finalize;
+
+    g_object_class_override_property (o_class, PROP_ACTIVE_LIST, "active-list");
 
     g_type_class_add_private (klass, sizeof (DonnaDonnaPrivate));
 }
@@ -147,6 +169,34 @@ skip_arrangements:
 
 G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
         G_IMPLEMENT_INTERFACE (DONNA_TYPE_APP, donna_donna_app_init))
+
+static void
+donna_donna_set_property (GObject       *object,
+                          guint          prop_id,
+                          const GValue  *value,
+                          GParamSpec    *pspec)
+{
+    DonnaDonnaPrivate *priv = DONNA_DONNA (object)->priv;
+
+    if (prop_id == PROP_ACTIVE_LIST)
+    {
+        if (priv->active_list)
+            g_object_unref (priv->active_list);
+        priv->active_list = g_value_dup_object (value);
+    }
+}
+
+static void
+donna_donna_get_property (GObject       *object,
+                          guint          prop_id,
+                          GValue        *value,
+                          GParamSpec    *pspec)
+{
+    DonnaDonnaPrivate *priv = DONNA_DONNA (object)->priv;
+
+    if (prop_id == PROP_ACTIVE_LIST)
+        g_value_set_object (value, priv->active_list);
+}
 
 static void
 donna_donna_finalize (GObject *object)
