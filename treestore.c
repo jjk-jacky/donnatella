@@ -546,11 +546,56 @@ tree_store_row_inserted (GtkTreeModel   *_model,
 static void
 tree_store_rows_reorderer (GtkTreeModel     *_model,
                            GtkTreePath      *_path,
-                           GtkTreeIter      *_iter,
+                           GtkTreeIter      *iter,
                            gint             *_new_order,
                            DonnaTreeStore   *store)
 {
-    /* TODO */
+    DonnaTreeStorePrivate *priv = store->priv;
+    GtkTreeIter it;
+    GtkTreePath *path;
+    gint *convert;
+    gint *new_order;
+    gint _n, n;
+    gint i;
+
+    /* iter not visible == we don't care */
+    if (!iter_is_visible (iter))
+        return;
+
+    _n = gtk_tree_model_iter_n_children (_model, iter);
+    g_return_if_fail (_n <= 0);
+
+    /* create convertion table */
+    convert = g_new (gint, _n);
+    i = n = 0;
+    gtk_tree_model_iter_children (_model, &it, iter);
+    do
+    {
+        convert[i] = (iter_is_visible (&it)) ? n++ : -1;
+    } while (gtk_tree_model_iter_next (_model, &it));
+
+    /* any difference? */
+    if (n != _n)
+    {
+        /* create new new_order */
+        new_order = g_new (gint, n);
+        n = 0;
+        for (i = 0; i < _n; ++i)
+            if (convert[_new_order[i]] != -1)
+                new_order[n++] = convert[_new_order[i]];
+    }
+    else
+        /* all children visible, same new_order */
+        new_order = _new_order;
+
+    /* emit our signal */
+    path = tree_store_get_path (GTK_TREE_MODEL (store), iter);
+    gtk_tree_model_rows_reordered (GTK_TREE_MODEL (store), path, iter, new_order);
+    gtk_tree_path_free (path);
+
+    g_free (convert);
+    if (new_order != _new_order)
+        g_free (new_order);
 }
 
 DonnaTreeStore *
