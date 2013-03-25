@@ -131,3 +131,20 @@ donna_app_run_task (DonnaApp       *app,
 
     return (*interface->run_task) (app, task);
 }
+
+DonnaTreeView *
+donna_app_get_treeview (DonnaApp    *app,
+                        const gchar *name)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (name != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_treeview != NULL, NULL);
+
+    return (*interface->get_treeview) (app, name);
+}

@@ -28,6 +28,8 @@ struct _DonnaAppInterface
                                                      DonnaNode      *node);
     void                (*run_task)                 (DonnaApp       *app,
                                                      DonnaTask      *task);
+    DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
+                                                     const gchar    *name);
 };
 
 /* signals */
@@ -44,6 +46,8 @@ gchar *             donna_app_get_arrangement       (DonnaApp       *app,
                                                      DonnaNode      *node);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
+DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
+                                                     const gchar    *name);
 
 G_END_DECLS
 
