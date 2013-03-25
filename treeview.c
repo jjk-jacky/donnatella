@@ -163,6 +163,7 @@ struct _DonnaTreeViewPrivate
     guint                mode        : 1;
     guint                node_types  : 3;
     guint                show_hidden : 1;
+    guint                sane_arrow  : 1;
     /* mode Tree */
     guint                is_minitree : 1;
     guint                sync_mode   : 2;
@@ -379,6 +380,15 @@ load_config (DonnaTreeView *tree)
     }
     else
     {
+        if (donna_config_get_boolean (config, (gboolean *) &val,
+                    "treeviews/%s/sane_arrow", priv->name))
+            priv->sane_arrow = val;
+        else
+        {
+            val = priv->sane_arrow = TRUE;
+            donna_config_set_boolean (config, (gboolean) val,
+                    "treeviews/%s/sane_arrow", priv->name);
+        }
     }
 
     g_object_unref (config);
@@ -1805,9 +1815,21 @@ add_node_to_tree (DonnaTreeView *tree,
 
     if (!is_tree (tree))
     {
-        /* TODO */
+        /* mode list only */
+        donna_tree_store_insert_with_values (priv->store, &iter, parent, 0,
+                DONNA_LIST_COL_NODE,    node,
+                -1);
+        if (iter_row)
+            *iter_row = iter;
+        /* add it to our hashtable */
+        list = g_hash_table_lookup (priv->hashtable, node);
+        list = g_slist_append (list, gtk_tree_iter_copy (&iter));
+        g_hash_table_insert (priv->hashtable, node, list);
+
         return TRUE;
     }
+
+    /* mode tree only */
 
     /* check if the parent has a "fake" node as child, in which case we'll
      * re-use it instead of adding a new node */
@@ -2010,6 +2032,7 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
     gint cur_sort_id;
     GtkSortType cur_sort_order;
     gint col_sort_id;
+    GtkSortType sort_order;
 
     sortable = GTK_TREE_SORTABLE (priv->store);
     is_sorted = gtk_tree_sortable_get_sort_column_id (sortable,
@@ -2017,13 +2040,22 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
     col_sort_id = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (column),
                 "sort_id"));
 
-    gtk_tree_sortable_set_sort_column_id (sortable, col_sort_id,
-            (is_sorted && cur_sort_id == col_sort_id)
+    /* new sort order */
+    sort_order = (is_sorted && cur_sort_id == col_sort_id)
             /* revert order */
             ? ((cur_sort_order == GTK_SORT_ASCENDING)
                 ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
             /* default */
-            : GTK_SORT_ASCENDING);
+            : GTK_SORT_ASCENDING;
+    /* apply it */
+    gtk_tree_sortable_set_sort_column_id (sortable, col_sort_id, sort_order);
+    /* show it */
+    gtk_tree_view_column_set_sort_indicator (column, TRUE);
+    gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
+            ? (sort_order == GTK_SORT_ASCENDING) ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING
+            : sort_order);
+    /* force refresh */
+    gtk_widget_queue_draw (GTK_WIDGET (tree));
 }
 
 static void
@@ -3377,6 +3409,47 @@ node_get_children_list_cb (DonnaTask        *task,
                            gboolean          timeout_called,
                            DonnaTreeView    *tree)
 {
+    const GValue *value;
+    GPtrArray *arr;
+    guint i;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        GtkTreeModel      *model;
+        GtkTreePath       *path;
+        DonnaNode         *node;
+        const gchar       *domain;
+        gchar             *location;
+        const GError      *error;
+
+        /* FIXME we don't have the parent node */
+#if 0
+        model = GTK_TREE_MODEL (tree->priv->store);
+        gtk_tree_model_get (model, &data->iter,
+                DONNA_TREE_COL_NODE,    &node,
+                -1);
+        donna_node_get (node, FALSE,
+                "domain",   &domain,
+                "location", &location,
+                NULL);
+        error = donna_task_get_error (task);
+        /* FIXME */
+        donna_error ("Treeview '%s': Failed to get children for node '%s:%s': %s",
+                data->tree->priv->name,
+                domain,
+                location,
+                (error) ? error->message : "No error message");
+        g_free (location);
+        g_object_unref (node);
+#endif
+
+        return;
+    }
+
+    value = donna_task_get_return_value (task);
+    arr = g_value_get_boxed (value);
+    for (i = 0; i < arr->len; ++i)
+        add_node_to_tree (tree, NULL, arr->pdata[i], NULL);
 }
 
 gboolean
