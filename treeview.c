@@ -2083,6 +2083,8 @@ load_arrangement (DonnaTreeView *tree,
     gint                  sort_order = SORT_UNKNOWN;
     const gchar          *col;
     GtkTreeViewColumn    *last_column = NULL;
+    GtkTreeViewColumn    *expander_column = NULL;
+    DonnaColumnType      *ctname;
     gint                  sort_id = 0;
 
     config = donna_app_get_config (priv->app);
@@ -2172,6 +2174,20 @@ load_arrangement (DonnaTreeView *tree,
     if (priv->col_props->len > 0)
         g_array_set_size (priv->col_props, 0);
 
+    if (!is_tree (tree))
+    {
+        /* because setting it to NULL means the first visible column will be
+         * used. If we don't want an expander to show (and just eat space), we
+         * need to add an invisible column and set it as expander column */
+        expander_column = gtk_tree_view_column_new ();
+        gtk_tree_view_column_set_sizing (expander_column,
+                GTK_TREE_VIEW_COLUMN_FIXED);
+        gtk_tree_view_append_column (treev, expander_column);
+    }
+    else
+        /* so we can make the first colmun to use it the expander column */
+        ctname = donna_app_get_columntype (priv->app, "name");
+
     for (;;)
     {
         gchar             *ss;
@@ -2181,6 +2197,7 @@ load_arrangement (DonnaTreeView *tree,
         gchar              buf[64];
         gchar             *b;
         DonnaColumnType   *ct;
+        DonnaColumnType   *col_ct;
         GList             *l;
         GtkTreeViewColumn *column;
         GtkCellRenderer   *renderer;
@@ -2228,8 +2245,6 @@ load_arrangement (DonnaTreeView *tree,
         column = NULL;
         for (l = list; l; l = l->next)
         {
-            DonnaColumnType *col_ct;
-
             col_ct = g_object_get_data (l->data, "column-type");
             if (col_ct == ct)
             {
@@ -2262,6 +2277,8 @@ load_arrangement (DonnaTreeView *tree,
             /* give our ref on the ct to the column */
             g_object_set_data_full (G_OBJECT (column), "column-type",
                     ct, g_object_unref);
+            /* to test for expander column */
+            col_ct = ct;
             /* sizing stuff */
             gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
             /* put our internal renderers */
@@ -2330,6 +2347,9 @@ load_arrangement (DonnaTreeView *tree,
             /* add it */
             gtk_tree_view_append_column (treev, column);
         }
+
+        if (!expander_column && col_ct == ctname)
+            expander_column = column;
 
         /* sizing stuff */
         if (s)
@@ -2429,6 +2449,9 @@ next:
             break;
         col = e + 1;
     }
+
+    /* set expander column */
+    gtk_tree_view_set_expander_column (treev, expander_column);
 
     if (s_sort)
         g_free (s_sort);
