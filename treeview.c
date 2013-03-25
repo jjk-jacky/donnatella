@@ -1610,7 +1610,7 @@ node_removed_cb (DonnaProvider  *provider,
     data = g_new (struct node_removed_data, 1);
     data->tree       = tree;
     data->node       = g_object_ref (node);
-    g_idle_add ((GSourceFunc) real_node_removed_cb, data);
+    g_main_context_invoke (NULL, (GSourceFunc) real_node_removed_cb, data);
 }
 
 struct node_children_cb_data
@@ -1672,7 +1672,7 @@ node_children_cb (DonnaProvider  *provider,
     data->node       = g_object_ref (node);
     data->node_types = node_types;
     data->children   = g_ptr_array_ref (children);
-    g_idle_add ((GSourceFunc) real_node_children_cb, data);
+    g_main_context_invoke (NULL, (GSourceFunc) real_node_children_cb, data);
 }
 
 struct new_child_data
@@ -1735,7 +1735,7 @@ node_new_child_cb (DonnaProvider *provider,
     data->tree  = tree;
     data->node  = g_object_ref (node);
     data->child = g_object_ref (child);
-    g_idle_add ((GSourceFunc) real_new_child_cb, data);
+    g_main_context_invoke (NULL, (GSourceFunc) real_new_child_cb, data);
 }
 
 /* mode tree only */
