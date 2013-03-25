@@ -175,6 +175,11 @@ struct _DonnaTreeViewPrivate
     GMutex               refresh_node_props_mutex;
     GSList              *refresh_node_props;
 
+    /* Tree: list we're synching with */
+    DonnaTreeView       *sync_with;
+    gulong               sid_sw_location_changed;
+    gulong               sid_active_list_changed;
+
     /* "cached" options */
     guint                mode        : 1;
     guint                node_types  : 3;
@@ -357,6 +362,46 @@ donna_tree_view_finalize (GObject *object)
 }
 
 static void
+sync_with_location_changed_cb (GObject       *object,
+                               GParamSpec    *pspec,
+                               DonnaTreeView *tree)
+{
+    DonnaNode *node;
+
+    g_object_get (object, "location", &node, NULL);
+    /* FIXME use a GError */
+    donna_tree_view_set_location (tree, node, NULL);
+    g_object_unref (node);
+}
+
+static void
+active_list_changed_cb (GObject         *object,
+                        GParamSpec      *pspec,
+                        DonnaTreeView   *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+
+    if (priv->sync_with)
+    {
+        g_signal_handler_disconnect (priv->sync_with, priv->sid_sw_location_changed);
+        g_object_unref (priv->sync_with);
+    }
+    g_object_get (object, "active-list", &priv->sync_with, NULL);
+    priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
+            "notify::location",
+            G_CALLBACK (sync_with_location_changed_cb), tree);
+
+    g_object_get (priv->sync_with, "location", &node, NULL);
+    if (!node)
+        return;
+
+    /* FIXME use a GError */
+    donna_tree_view_set_location (tree, node, NULL);
+    g_object_unref (node);
+}
+
+static void
 load_config (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv;
@@ -423,6 +468,8 @@ load_config (DonnaTreeView *tree)
 
     if (is_tree (tree))
     {
+        gchar *s;
+
         if (donna_config_get_boolean (config, (gboolean *) &val,
                     "treeviews/%s/is_minitree", priv->name))
             priv->is_minitree = val;
@@ -433,6 +480,23 @@ load_config (DonnaTreeView *tree)
             donna_config_set_boolean (config, (gboolean) val,
                     "treeview/%s/is_minitree", priv->name);
         }
+
+        if (donna_config_get_string (config, &s,
+                    "treeviews/%s/sync_with", priv->name))
+            priv->sync_with = donna_app_get_treeview (priv->app, s);
+        else
+        {
+            /* active list */
+            g_object_get (priv->app, "active-list", &priv->sync_with, NULL);
+            priv->sid_active_list_changed = g_signal_connect (priv->app,
+                    "notify::active-list",
+                    G_CALLBACK (active_list_changed_cb), tree);
+        }
+
+        if (priv->sync_with)
+            priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
+                    "notify::location",
+                    G_CALLBACK (sync_with_location_changed_cb), tree);
     }
     else
     {
@@ -3478,26 +3542,37 @@ scroll_to_current (DonnaTreeView *tree)
     return FALSE;
 }
 
+struct node_get_children_list_data
+{
+    DonnaTreeView *tree;
+    DonnaNode     *node;
+};
+
+static inline void
+free_node_get_children_list_data (struct node_get_children_list_data *data)
+{
+    g_object_unref (data->node);
+    g_slice_free (struct node_get_children_list_data, data);
+}
+
 /* mode list only */
 static void
 node_get_children_list_timeout (DonnaTask *task, DonnaTreeView *tree)
 {
-    DonnaTreeViewPrivate *priv = tree->priv;
-
     /* clear the list */
-    donna_tree_store_clear (priv->store);
+    donna_tree_store_clear (tree->priv->store);
     /* and show the "please wait" message */
-    priv->draw_state = DRAW_WAIT;
+    tree->priv->draw_state = DRAW_WAIT;
     gtk_widget_queue_draw (GTK_WIDGET (tree));
 }
 
 /* mode list only */
 static void
-node_get_children_list_cb (DonnaTask        *task,
-                           gboolean          timeout_called,
-                           DonnaTreeView    *tree)
+node_get_children_list_cb (DonnaTask                            *task,
+                           gboolean                              timeout_called,
+                           struct node_get_children_list_data   *data)
 {
-    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaTreeViewPrivate *priv = data->tree->priv;
     const GValue *value;
     GPtrArray *arr;
     guint i;
@@ -3511,13 +3586,7 @@ node_get_children_list_cb (DonnaTask        *task,
         gchar             *location;
         const GError      *error;
 
-        /* FIXME we don't have the parent node */
-#if 0
-        model = GTK_TREE_MODEL (tree->priv->store);
-        gtk_tree_model_get (model, &data->iter,
-                DONNA_TREE_COL_NODE,    &node,
-                -1);
-        donna_node_get (node, FALSE,
+        donna_node_get (data->node, FALSE,
                 "domain",   &domain,
                 "location", &location,
                 NULL);
@@ -3529,10 +3598,8 @@ node_get_children_list_cb (DonnaTask        *task,
                 location,
                 (error) ? error->message : "No error message");
         g_free (location);
-        g_object_unref (node);
-#endif
 
-        return;
+        goto free;
     }
 
     /* clear the list */
@@ -3542,17 +3609,25 @@ node_get_children_list_cb (DonnaTask        *task,
     arr = g_value_get_boxed (value);
     if (arr->len > 0)
         for (i = 0; i < arr->len; ++i)
-            add_node_to_tree (tree, NULL, arr->pdata[i], NULL);
+            add_node_to_tree (data->tree, NULL, arr->pdata[i], NULL);
     else
     {
         /* show the "location empty" message */
         priv->draw_state = DRAW_EMPTY;
-        gtk_widget_queue_draw (GTK_WIDGET (tree));
+        gtk_widget_queue_draw (GTK_WIDGET (data->tree));
     }
 
+    /* update current location */
+    if (priv->location)
+        g_object_unref (priv->location);
+    priv->location = g_object_ref (data->node);
+
     /* emit signal */
-    g_object_notify_by_pspec (G_OBJECT (tree),
+    g_object_notify_by_pspec (G_OBJECT (data->tree),
             donna_tree_view_props[PROP_LOCATION]);
+
+free:
+    free_node_get_children_list_data (data);
 }
 
 gboolean
@@ -3590,6 +3665,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     }
     else
     {
+        struct node_get_children_list_data *data;
         DonnaNodeType node_type;
         DonnaProvider *provider;
         DonnaTask *task;
@@ -3606,6 +3682,10 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             return FALSE;
         }
 
+        data = g_slice_new0 (struct node_get_children_list_data);
+        data->tree = tree;
+        data->node = g_object_ref (node);
+
         task = donna_provider_get_node_children_task (provider, node,
                 priv->node_types);
         donna_task_set_timeout (task, 800, /* FIXME */
@@ -3614,8 +3694,8 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
                 NULL);
         donna_task_set_callback (task,
                 (task_callback_fn) node_get_children_list_cb,
-                tree,
-                NULL);
+                data,
+                (GDestroyNotify) free_node_get_children_list_data);
         donna_app_run_task (priv->app, task);
 
         return TRUE;
