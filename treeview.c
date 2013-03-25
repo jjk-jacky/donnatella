@@ -3497,6 +3497,7 @@ node_get_children_list_cb (DonnaTask        *task,
                            gboolean          timeout_called,
                            DonnaTreeView    *tree)
 {
+    DonnaTreeViewPrivate *priv = tree->priv;
     const GValue *value;
     GPtrArray *arr;
     guint i;
@@ -3534,10 +3535,20 @@ node_get_children_list_cb (DonnaTask        *task,
         return;
     }
 
+    /* clear the list */
+    donna_tree_store_clear (priv->store);
+
     value = donna_task_get_return_value (task);
     arr = g_value_get_boxed (value);
-    for (i = 0; i < arr->len; ++i)
-        add_node_to_tree (tree, NULL, arr->pdata[i], NULL);
+    if (arr->len > 0)
+        for (i = 0; i < arr->len; ++i)
+            add_node_to_tree (tree, NULL, arr->pdata[i], NULL);
+    else
+    {
+        /* show the "location empty" message */
+        priv->draw_state = DRAW_EMPTY;
+        gtk_widget_queue_draw (GTK_WIDGET (tree));
+    }
 
     /* emit signal */
     g_object_notify_by_pspec (G_OBJECT (tree),
