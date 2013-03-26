@@ -983,6 +983,41 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
             }
         }
     }
+
+    /* can we get them from our sync_with list ? (typical case of expansion of
+     * the current location, when it was set from sync_with, i.e. we ignored the
+     * node_children signal then because it wasn't yet our current location) */
+    if (node == priv->location && priv->sync_with)
+    {
+        GPtrArray *arr;
+
+        arr = donna_tree_view_get_children (priv->sync_with, priv->node_types);
+        if (arr)
+        {
+            guint i;
+            GtkTreePath *path;
+
+            for (i = 0; i < arr->len; ++i)
+                add_node_to_tree (tree, iter, arr->pdata[i], NULL);
+            g_ptr_array_unref (arr);
+
+            /* update expand state */
+            donna_tree_store_set (priv->store, iter,
+                    DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
+                    -1);
+
+            /* expand node */
+            path = gtk_tree_model_get_path (model, iter);
+            gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
+            gtk_tree_path_free (path);
+
+            if (scroll_current)
+                scroll_to_current (tree);
+
+            return;
+        }
+    }
+
     donna_node_get (node, FALSE, "provider", &provider, NULL);
     task = donna_provider_get_node_children_task (provider, node,
             priv->node_types);
@@ -3711,6 +3746,41 @@ donna_tree_view_get_location (DonnaTreeView      *tree)
         return g_object_ref (tree->priv->location);
     else
         return NULL;
+}
+
+GPtrArray *
+donna_tree_view_get_children (DonnaTreeView      *tree,
+                              DonnaNodeType       node_types)
+{
+    DonnaTreeViewPrivate *priv;
+    GList *list;
+    GPtrArray *arr;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    g_return_val_if_fail (!is_tree (tree), NULL);
+
+    if (!(node_types & priv->node_types))
+        return NULL;
+
+    priv = tree->priv;
+
+    /* get list of nodes we have in tree */
+    list = g_hash_table_get_keys (priv->hashtable);
+    /* create an array that could hold them all */
+    arr = g_ptr_array_new_full (g_hash_table_size (priv->hashtable),
+            g_object_unref);
+    /* fill array based on requested node_types */
+    for ( ; list; list = list->next)
+    {
+        DonnaNodeType type;
+
+        donna_node_get (list->data, FALSE, "node-type", &type, NULL);
+        if (type & node_types)
+            g_ptr_array_add (arr, g_object_ref (list->data));
+    }
+    g_list_free (list);
+
+    return arr;
 }
 
 static gboolean
