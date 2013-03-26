@@ -382,6 +382,11 @@ sync_with_location_changed_cb (GObject       *object,
     DonnaNode *node;
 
     g_object_get (object, "location", &node, NULL);
+    if (node == priv->location)
+    {
+        g_object_unref (node);
+        return;
+    }
 
     switch (priv->sync_mode)
     {
