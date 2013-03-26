@@ -216,16 +216,26 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 #define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 
 
-static gboolean add_node_to_tree (DonnaTreeView *tree,
-                                  GtkTreeIter   *parent,
-                                  DonnaNode     *node,
-                                  GtkTreeIter   *row);
-
-static struct active_spinners * get_as_for_node (DonnaTreeView   *tree,
-                                                 DonnaNode       *node,
-                                                 guint           *index,
-                                                 gboolean         create);
-static gboolean scroll_to_current (DonnaTreeView *tree);
+static gboolean add_node_to_tree                        (DonnaTreeView *tree,
+                                                         GtkTreeIter   *parent,
+                                                         DonnaNode     *node,
+                                                         GtkTreeIter   *row);
+static GtkTreeIter *get_best_existing_iter_for_node     (DonnaTreeView  *tree,
+                                                         DonnaNode      *node,
+                                                         gboolean        even_collapsed);
+static GtkTreeIter *get_iter_expanding_if_needed        (DonnaTreeView *tree,
+                                                         GtkTreeIter   *iter_root,
+                                                         DonnaNode     *node,
+                                                         gboolean       only_expanded,
+                                                         gboolean       allow_creation);
+static GtkTreeIter *get_best_iter_for_node              (DonnaTreeView *tree,
+                                                         DonnaNode *node,
+                                                         GError **error);
+static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
+                                                         DonnaNode       *node,
+                                                         guint           *index,
+                                                         gboolean         create);
+static gboolean scroll_to_current                       (DonnaTreeView *tree);
 
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
@@ -366,11 +376,49 @@ sync_with_location_changed_cb (GObject       *object,
                                GParamSpec    *pspec,
                                DonnaTreeView *tree)
 {
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeSelection *sel;
+    GtkTreeIter *iter = NULL;
     DonnaNode *node;
 
     g_object_get (object, "location", &node, NULL);
-    /* FIXME use a GError */
-    donna_tree_view_set_location (tree, node, NULL);
+
+    switch (priv->sync_mode)
+    {
+        case DONNA_TREE_SYNC_NODES:
+            iter = get_best_existing_iter_for_node (tree, node, FALSE);
+            break;
+
+        case DONNA_TREE_SYNC_NODES_CHILDREN:
+            if (priv->location)
+                iter = get_iter_expanding_if_needed (tree,
+                        &priv->location_iter, node, FALSE, TRUE);
+            break;
+
+        case DONNA_TREE_SYNC_FULL:
+            iter = get_best_iter_for_node (tree, node, NULL);
+            break;
+    }
+
+    sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (tree));
+    if (iter)
+    {
+        gtk_tree_selection_set_mode (sel, GTK_SELECTION_BROWSE);
+        /* we select the new row */
+        gtk_tree_selection_select_iter (sel, iter);
+        /* we want to scroll to this current row, but we do it in an idle
+         * source to make sure any pending drawing has been processed;
+         * specifically any expanding that might have been requested */
+        g_idle_add ((GSourceFunc) scroll_to_current, tree);
+    }
+    else
+    {
+        /* unselect, but allow a new selection to be made (will then switch
+         * automatically back to SELECTION_BROWSE) */
+        gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+        gtk_tree_selection_unselect_all (sel);
+    }
+
     g_object_unref (node);
 }
 
@@ -479,6 +527,17 @@ load_config (DonnaTreeView *tree)
             val = priv->is_minitree = FALSE;
             donna_config_set_boolean (config, (gboolean) val,
                     "treeview/%s/is_minitree", priv->name);
+        }
+
+        if (donna_config_get_uint (config, &val,
+                    "treeviews/%s/sync_mode", priv->name))
+            priv->sync_mode = val;
+        else
+        {
+            /* set default */
+            val = priv->sync_mode = DONNA_TREE_SYNC_FULL;
+            donna_config_set_uint (config, val,
+                    "treeviews/%s/sync_mode", priv->name);
         }
 
         if (donna_config_get_string (config, &s,
@@ -3379,8 +3438,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 }
 
 /* mode tree only */
-/* this will get the best iter for new location in
- * DONNA_TREE_SYNC_NODES_CHILDREN */
+/* this will get the best iter for new location in DONNA_TREE_SYNC_FULL */
 static GtkTreeIter *
 get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
 {
@@ -4053,6 +4111,10 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         GtkTreeModel *model;
         DonnaNode *node;
         enum tree_expand es;
+
+        /* might have been to SELECTION_SINGLE if there was no selection, due to
+         * unsync with the list (or minitree mode) */
+        gtk_tree_selection_set_mode (selection, GTK_SELECTION_BROWSE);
 
         model = GTK_TREE_MODEL (priv->store);
 
