@@ -4006,16 +4006,20 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
             guint as_idx;
             guint i;
 
-#ifdef GTK_IS_JJK
-            if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
-                return FALSE;
-#endif
-
             gtk_tree_model_get (model, &iter,
                     DONNA_TREE_VIEW_COL_NODE,   &node,
                     -1);
             if (!node)
+                /* prevent clicking/selecting a fake node */
+                return TRUE;
+
+#ifdef GTK_IS_JJK
+            if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
+            {
+                g_object_unref (node);
                 return FALSE;
+            }
+#endif
 
             as = get_as_for_node (tree, node, &as_idx, FALSE);
             if (G_UNLIKELY (!as))
