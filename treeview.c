@@ -3791,6 +3791,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
                 (GDestroyNotify) free_node_get_children_list_data);
         donna_app_run_task (priv->app, task);
 
+        g_object_unref (provider);
         return TRUE;
     }
 }
