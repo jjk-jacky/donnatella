@@ -4102,6 +4102,13 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
     return FALSE;
 }
 
+static gboolean
+set_selection_browse (GtkTreeSelection *selection)
+{
+    gtk_tree_selection_set_mode (selection, GTK_SELECTION_BROWSE);
+    return FALSE;
+}
+
 static void
 selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 {
@@ -4120,7 +4127,9 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 
         /* might have been to SELECTION_SINGLE if there was no selection, due to
          * unsync with the list (or minitree mode) */
-        gtk_tree_selection_set_mode (selection, GTK_SELECTION_BROWSE);
+        if (gtk_tree_selection_get_mode (selection) != GTK_SELECTION_BROWSE)
+            /* trying to change it now causes a segfault in GTK */
+            g_idle_add ((GSourceFunc) set_selection_browse, selection);
 
         model = GTK_TREE_MODEL (priv->store);
 
