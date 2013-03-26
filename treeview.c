@@ -3995,11 +3995,25 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
                 &model, NULL, &iter))
     {
 #ifdef GTK_IS_JJK
-        if (!gtk_tree_view_is_blank_at_pos_full (treev, x, y, NULL, &column,
+        if (gtk_tree_view_is_blank_at_pos_full (treev, x, y, NULL, &column,
                     &renderer, NULL, NULL))
 #else
-        if (!gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
+        if (gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
 #endif
+        {
+            if (!is_tree (tree))
+            {
+                GtkTreeSelection *sel;
+
+                /* no full row select */
+                sel = gtk_tree_view_get_selection (treev);
+                gtk_tree_selection_unselect_all (sel);
+            }
+
+            /* handled */
+            return TRUE;
+        }
+        else
         {
             DonnaNode *node;
             struct active_spinners *as;
