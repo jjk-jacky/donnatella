@@ -4095,8 +4095,8 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
                     gtk_tree_path_free (path);
                 }
 
-                /* we've handled it */
                 g_object_unref (node);
+                /* we've handled the click */
                 return TRUE;
             }
             g_object_unref (node);
