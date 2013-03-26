@@ -4069,7 +4069,8 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
             {
                 GtkTreeIter child;
 
-                if (gtk_tree_model_iter_children (model, &child, &priv->location_iter))
+                if (donna_tree_store_iter_children (priv->store, &child,
+                            &priv->location_iter))
                     while (remove_row_from_tree (tree, &child))
                         ;
 
