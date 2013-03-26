@@ -3227,8 +3227,9 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
             continue;
 
         /* if in the current location's root branch, it's the one */
-        if (iter_cur_root
-                && donna_tree_store_is_ancestor (priv->store, iter_cur_root, iter))
+        if (iter_cur_root && (itereq (iter_cur_root, iter)
+                    || donna_tree_store_is_ancestor (priv->store,
+                        iter_cur_root, iter)))
             return iter;
 
         /* if we haven't found a visible match yet... */
@@ -3429,10 +3430,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                     /* this will take care of the import/get-children, TRUE to
                      * make sure to scroll to current once children are added */
                     expand_row (tree, prev_iter, TRUE);
-                    /* now that the thread is started (or an idle source was
-                     * created to import children), we need to trigger it again,
-                     * so the row actually gets expanded this time, which we
-                     * require to be able to continue adding children &
+                    /* now that the thread is started, we need to trigger it
+                     * again, so the row actually gets expanded this time, which
+                     * we require to be able to continue adding children &
                      * expanding them */
                     gtk_tree_view_expand_row (treev, path, FALSE);
                 }
@@ -3487,7 +3487,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     if (iter_cur_root)
     {
         gtk_tree_model_get (model, iter_cur_root, DONNA_TREE_COL_NODE, &n, -1);
-        if (is_node_ancestor (n, node, provider, location))
+        if (n == node || is_node_ancestor (n, node, provider, location))
         {
             g_free (location);
             g_object_unref (provider);
@@ -3555,7 +3555,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
             continue;
 
         gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &n, -1);
-        if (is_node_ancestor (n, node, provider, location))
+        if (n == node || is_node_ancestor (n, node, provider, location))
         {
             GSList *list;
             GtkTreeIter *i;
