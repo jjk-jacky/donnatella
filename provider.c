@@ -214,8 +214,7 @@ donna_provider_has_node_children_task (DonnaProvider  *provider,
             NULL);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
-    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER
-            || node_type & DONNA_NODE_EXTENDED, NULL);
+    g_return_val_if_fail (node_type == DONNA_NODE_CONTAINER, NULL);
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
@@ -244,8 +243,7 @@ donna_provider_get_node_children_task (DonnaProvider  *provider,
             NULL);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
-    g_return_val_if_fail (node_type & DONNA_NODE_CONTAINER
-            || node_type & DONNA_NODE_EXTENDED, NULL);
+    g_return_val_if_fail (node_type == DONNA_NODE_CONTAINER, NULL);
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 

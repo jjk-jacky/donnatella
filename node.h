@@ -22,7 +22,6 @@ typedef enum
 {
     DONNA_NODE_ITEM         = (1 << 0),
     DONNA_NODE_CONTAINER    = (1 << 1),
-    DONNA_NODE_EXTENDED     = (1 << 2)
 } DonnaNodeType;
 
 typedef enum

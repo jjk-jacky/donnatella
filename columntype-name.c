@@ -154,15 +154,10 @@ ct_name_render (DonnaColumnType    *ct,
                         "visible",  TRUE,
                         "stock-id", GTK_STOCK_FILE,
                         NULL);
-            else if (node_type == DONNA_NODE_CONTAINER)
+            else /* if (node_type == DONNA_NODE_CONTAINER) */
                 g_object_set (renderer,
                         "visible",  TRUE,
                         "stock-id", GTK_STOCK_DIRECTORY,
-                        NULL);
-            else /* DONNA_NODE_EXTENDED */
-                g_object_set (renderer,
-                        "visible",  TRUE,
-                        "stock-id", GTK_STOCK_EXECUTE,
                         NULL);
 
             return NULL; /* not done, so it never gets refreshed */
