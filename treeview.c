@@ -3879,6 +3879,7 @@ query_tooltip_cb (GtkTreeView   *treev,
     GtkTreeIter iter;
     gboolean ret = FALSE;
 
+    /* x & y are widget coords, converted to bin_window coords */
     if (gtk_tree_view_get_tooltip_context (treev, &x, &y, keyboard_mode,
                 &model, NULL, &iter))
     {
@@ -4006,6 +4007,11 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
     x = (gint) event->x;
     y = (gint) event->y;
 
+    /* event->window == bin_window, so ready for use with the is_blank()
+     * functions. For get_context() however we need widget coords */
+    gtk_tree_view_convert_bin_window_to_widget_coords (treev, x, y, &x, &y);
+
+    /* it will also convert x & y (back) to bin_window coords */
     if (gtk_tree_view_get_tooltip_context (treev, &x, &y, 0,
                 &model, NULL, &iter))
     {
