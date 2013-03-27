@@ -3620,6 +3620,33 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         return NULL;
 }
 
+static inline void
+scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter, gboolean select_row)
+{
+    GtkTreeView *treev = GTK_TREE_VIEW (tree);
+    GdkRectangle rect_visible, rect;
+    GtkTreePath *path;
+
+    /* get visible area, so we can determine if it is already visible */
+    gtk_tree_view_get_visible_rect (treev, &rect_visible);
+    gtk_tree_view_convert_tree_to_bin_window_coords (treev,
+            0, rect_visible.y, &rect_visible.x, &rect_visible.y);
+
+    path = gtk_tree_model_get_path (GTK_TREE_MODEL (tree->priv->store), iter);
+    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+    if (!(rect.y >= rect_visible.y
+            && rect.y + rect.height <= rect_visible.y +
+            rect_visible.height))
+        /* only scroll if not visible */
+        gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
+
+    if (select_row)
+        gtk_tree_selection_select_path (gtk_tree_view_get_selection (treev),
+                path);
+
+    gtk_tree_path_free (path);
+}
+
 /* mode tree only */
 static gboolean
 scroll_to_current (DonnaTreeView *tree)
@@ -3635,20 +3662,7 @@ scroll_to_current (DonnaTreeView *tree)
     if (!gtk_tree_selection_get_selected (sel, &model, &iter))
         return FALSE;
 
-    /* get visible area, so we can determine if it is already visible */
-    gtk_tree_view_get_visible_rect (treev, &rect_visible);
-    gtk_tree_view_convert_tree_to_bin_window_coords (treev,
-            0, rect_visible.y, &rect_visible.x, &rect_visible.y);
-
-    path = gtk_tree_model_get_path (model, &iter);
-    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-    if (!(rect.y >= rect_visible.y
-            && rect.y + rect.height <= rect_visible.y +
-            rect_visible.height))
-        /* only scroll if not visible */
-        gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
-    gtk_tree_path_free (path);
-
+    scroll_to_iter (tree, &iter, FALSE);
     return FALSE;
 }
 
@@ -3656,12 +3670,15 @@ struct node_get_children_list_data
 {
     DonnaTreeView *tree;
     DonnaNode     *node;
+    DonnaNode     *child; /* item to scroll to & select */
 };
 
 static inline void
 free_node_get_children_list_data (struct node_get_children_list_data *data)
 {
     g_object_unref (data->node);
+    if (data->child)
+        g_object_unref (data->child);
     g_slice_free (struct node_get_children_list_data, data);
 }
 
@@ -3683,6 +3700,7 @@ node_get_children_list_cb (DonnaTask                            *task,
                            struct node_get_children_list_data   *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
+    GtkTreeIter iter, *it = &iter;
     const GValue *value;
     GPtrArray *arr;
     guint i;
@@ -3720,8 +3738,19 @@ node_get_children_list_cb (DonnaTask                            *task,
     if (arr->len > 0)
     {
         priv->draw_state = DRAW_NOTHING;
+        iter.stamp = 0;
         for (i = 0; i < arr->len; ++i)
-            add_node_to_tree (data->tree, NULL, arr->pdata[i], NULL);
+        {
+            add_node_to_tree (data->tree, NULL, arr->pdata[i], it);
+            if (data->child == arr->pdata[i])
+                /* don't change iter no more */
+                it = NULL;
+        }
+        /* do we have a child to select/scroll to? */
+        if (!it && iter.stamp != 0)
+            /* FIXME? should it be in a idle source, to make sure all drawing
+             * event have been handled before we determine what is visible */
+            scroll_to_iter (data->tree, &iter, /* select it */ TRUE);
     }
     else
     {
@@ -3743,22 +3772,90 @@ free:
     free_node_get_children_list_data (data);
 }
 
+/* mode list only */
+static void
+node_get_parent_list_cb (DonnaTask                            *task,
+                         gboolean                              timeout_called,
+                         struct node_get_children_list_data   *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    DonnaProvider *provider;
+    const GValue *value;
+    GPtrArray *arr;
+    guint i;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        GtkTreeModel      *model;
+        GtkTreePath       *path;
+        DonnaNode         *node;
+        const gchar       *domain;
+        gchar             *location;
+        const GError      *error;
+
+        donna_node_get (data->node, FALSE,
+                "domain",   &domain,
+                "location", &location,
+                NULL);
+        error = donna_task_get_error (task);
+        /* FIXME */
+        donna_error ("Treeview '%s': Failed to get parent for node '%s:%s': %s",
+                data->tree->priv->name,
+                domain,
+                location,
+                (error) ? error->message : "No error message");
+        g_free (location);
+
+        free_node_get_children_list_data (data);
+        return;
+    }
+
+    value = donna_task_get_return_value (task);
+    /* simply update data, as we'll re-use it for the new task */
+    data->node = g_value_dup_object (value);
+
+    donna_node_get (data->node, FALSE, "provider", &provider, NULL);
+
+    task = donna_provider_get_node_children_task (provider, data->node,
+            priv->node_types);
+    if (!timeout_called)
+        donna_task_set_timeout (task, 800, /* FIXME */
+                (task_timeout_fn) node_get_children_list_timeout,
+                data->tree,
+                NULL);
+    donna_task_set_callback (task,
+            (task_callback_fn) node_get_children_list_cb,
+            data,
+            (GDestroyNotify) free_node_get_children_list_data);
+    donna_app_run_task (priv->app, task);
+    g_object_unref (provider);
+}
+
 gboolean
 donna_tree_view_set_location (DonnaTreeView  *tree,
                               DonnaNode      *node,
                               GError        **error)
 {
     DonnaTreeViewPrivate *priv;
-    GSList *list;
+    DonnaNodeType node_type;
+    DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
     priv = tree->priv;
+    donna_node_get (node, FALSE, "node-type", &node_type, NULL);
 
     if (is_tree (tree))
     {
         GtkTreeIter *iter;
+
+        if (node_type != DONNA_NODE_CONTAINER)
+        {
+            /* FIXME */
+            g_debug("error: tree cannot go to an ITEM");
+            return FALSE;
+        }
 
         iter = get_best_iter_for_node (tree, node, error);
         if (iter)
@@ -3778,39 +3875,57 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     }
     else
     {
-        struct node_get_children_list_data *data;
-        DonnaNodeType node_type;
         DonnaProvider *provider;
-        DonnaTask *task;
+        struct node_get_children_list_data *data;
 
-        donna_node_get (node, FALSE,
-                "node-type", &node_type,
-                "provider",  &provider,
-                NULL);
-        /* we can only show content of container */
-        if (node_type != DONNA_NODE_CONTAINER)
+        donna_node_get (node, FALSE, "provider",  &provider, NULL);
+
+        if (node_type == DONNA_NODE_CONTAINER)
         {
-            /* FIXME set error */
-            g_object_unref (provider);
-            return FALSE;
+            data = g_slice_new0 (struct node_get_children_list_data);
+            data->tree = tree;
+            data->node = g_object_ref (node);
+
+            task = donna_provider_get_node_children_task (provider, node,
+                    priv->node_types);
+            donna_task_set_timeout (task, 800, /* FIXME */
+                    (task_timeout_fn) node_get_children_list_timeout,
+                    tree,
+                    NULL);
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_get_children_list_cb,
+                    data,
+                    (GDestroyNotify) free_node_get_children_list_data);
+        }
+        else /* DONNA_NODE_ITEM */
+        {
+            if (donna_provider_get_flags (provider) == DONNA_PROVIDER_FLAG_FLAT)
+            {
+                /* flat means no parent, so we can only do one thing: trigger
+                 * the item */
+
+                /* TODO */
+
+                g_object_unref (provider);
+                return TRUE;
+            }
+
+            data = g_slice_new0 (struct node_get_children_list_data);
+            data->tree = tree;
+            data->child = g_object_ref (node);
+
+            task = donna_provider_get_node_parent_task (provider, node);
+            donna_task_set_timeout (task, 800, /* FIXME */
+                    (task_timeout_fn) node_get_children_list_timeout,
+                    tree,
+                    NULL);
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_get_parent_list_cb,
+                    data,
+                    (GDestroyNotify) free_node_get_children_list_data);
         }
 
-        data = g_slice_new0 (struct node_get_children_list_data);
-        data->tree = tree;
-        data->node = g_object_ref (node);
-
-        task = donna_provider_get_node_children_task (provider, node,
-                priv->node_types);
-        donna_task_set_timeout (task, 800, /* FIXME */
-                (task_timeout_fn) node_get_children_list_timeout,
-                tree,
-                NULL);
-        donna_task_set_callback (task,
-                (task_callback_fn) node_get_children_list_cb,
-                data,
-                (GDestroyNotify) free_node_get_children_list_data);
         donna_app_run_task (priv->app, task);
-
         g_object_unref (provider);
         return TRUE;
     }
