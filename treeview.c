@@ -182,7 +182,7 @@ struct _DonnaTreeViewPrivate
 
     /* "cached" options */
     guint                mode        : 1;
-    guint                node_types  : 3;
+    guint                node_types  : 2;
     guint                show_hidden : 1;
     guint                sane_arrow  : 1;
     guint                sort_groups : 2;
@@ -3358,12 +3358,14 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         g_object_unref (n);
         s = strchr (location + len + 1, '/');
         if (s)
-            s = strndup (location, s - location);
+            s = g_strndup (location, s - location);
         else
             s = (gchar *) location;
 
         /* get the corresponding node */
         task = donna_provider_get_node_task (provider, (const gchar *) s);
+        if (s != location)
+            g_free (s);
         g_object_ref_sink (task);
         /* FIXME? should this be in a separate thread, and continue in a
          * callback and all that? might not be worth the trouble... */
@@ -3371,6 +3373,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         if (donna_task_get_state (task) != DONNA_TASK_DONE)
         {
             /* TODO */
+            g_object_unref (task);
             return NULL;
         }
         value = donna_task_get_return_value (task);
@@ -3400,6 +3403,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 if (!add_node_to_tree (tree, prev_iter, n, &i))
                 {
                     /* TODO */
+                    g_object_unref (n);
                     return NULL;
                 }
 
@@ -3414,7 +3418,10 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                     }
             }
             else
+            {
+                g_object_unref (n);
                 return last_iter;
+            }
         }
 
         /* check if the parent (prev_iter) is expanded */
