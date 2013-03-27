@@ -798,6 +798,7 @@ set_children (DonnaTreeView *tree,
         GSList *list = NULL;
         enum tree_expand es;
         guint i;
+        gboolean has_children = FALSE;
 
         gtk_tree_model_get (model, iter,
                 DONNA_TREE_COL_EXPAND_STATE,    &es,
@@ -829,6 +830,7 @@ set_children (DonnaTreeView *tree,
             if (!(node_type & priv->node_types))
                 continue;
 
+            has_children = TRUE;
             /* shouldn't be able to fail/return FALSE */
             if (!add_node_to_tree (tree, iter, node, &row))
             {
@@ -884,7 +886,11 @@ set_children (DonnaTreeView *tree,
         /* set new expand state */
         donna_tree_store_set (priv->store, iter,
                 DONNA_TREE_COL_EXPAND_STATE,
-                (expand) ? DONNA_TREE_EXPAND_FULL : DONNA_TREE_EXPAND_NEVER_FULL,
+                /* has_children could be false when we got children from a
+                 * node_children signal, but none match our node_types */
+                (has_children) ? ((expand) ? DONNA_TREE_EXPAND_FULL
+                    : DONNA_TREE_EXPAND_NEVER_FULL)
+                : DONNA_TREE_EXPAND_NONE,
                 -1);
         if (expand)
         {
