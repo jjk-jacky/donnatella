@@ -3960,16 +3960,16 @@ donna_tree_view_get_children (DonnaTreeView      *tree,
                               DonnaNodeType       node_types)
 {
     DonnaTreeViewPrivate *priv;
-    GList *list;
+    GList *list, *l;
     GPtrArray *arr;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     g_return_val_if_fail (!is_tree (tree), NULL);
 
+    priv = tree->priv;
+
     if (!(node_types & priv->node_types))
         return NULL;
-
-    priv = tree->priv;
 
     /* get list of nodes we have in tree */
     list = g_hash_table_get_keys (priv->hashtable);
@@ -3977,13 +3977,13 @@ donna_tree_view_get_children (DonnaTreeView      *tree,
     arr = g_ptr_array_new_full (g_hash_table_size (priv->hashtable),
             g_object_unref);
     /* fill array based on requested node_types */
-    for ( ; list; list = list->next)
+    for (l = list ; l; l = l->next)
     {
         DonnaNodeType type;
 
-        donna_node_get (list->data, FALSE, "node-type", &type, NULL);
+        donna_node_get (l->data, FALSE, "node-type", &type, NULL);
         if (type & node_types)
-            g_ptr_array_add (arr, g_object_ref (list->data));
+            g_ptr_array_add (arr, g_object_ref (l->data));
     }
     g_list_free (list);
 
