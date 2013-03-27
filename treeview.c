@@ -3695,6 +3695,9 @@ node_get_children_list_timeout (DonnaTask *task, DonnaTreeView *tree)
 {
     /* clear the list */
     donna_tree_store_clear (tree->priv->store);
+    /* also the hashtable (we don't need to unref nodes (keys), as our ref was
+     * handled by the store) */
+    g_hash_table_remove_all (tree->priv->hashtable);
     /* and show the "please wait" message */
     tree->priv->draw_state = DRAW_WAIT;
     gtk_widget_queue_draw (GTK_WIDGET (tree));
@@ -3739,6 +3742,9 @@ node_get_children_list_cb (DonnaTask                            *task,
 
     /* clear the list */
     donna_tree_store_clear (priv->store);
+    /* also the hashtable (we don't need to unref nodes (keys), as our ref was
+     * handled by the store) */
+    g_hash_table_remove_all (priv->hashtable);
 
     value = donna_task_get_return_value (task);
     arr = g_value_get_boxed (value);
