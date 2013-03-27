@@ -251,6 +251,8 @@ static void     donna_tree_view_get_property        (GObject        *object,
                                                      guint           prop_id,
                                                      GValue         *value,
                                                      GParamSpec     *pspec);
+static gboolean donna_tree_view_draw                (GtkWidget      *widget,
+                                                     cairo_t        *cr);
 static void     donna_tree_view_finalize            (GObject        *object);
 
 G_DEFINE_TYPE (DonnaTreeView, donna_tree_view, GTK_TYPE_TREE_VIEW);
@@ -259,11 +261,15 @@ static void
 donna_tree_view_class_init (DonnaTreeViewClass *klass)
 {
     GtkTreeViewClass *tv_class;
+    GtkWidgetClass *w_class;
     GObjectClass *o_class;
 
     tv_class = GTK_TREE_VIEW_CLASS (klass);
     tv_class->row_collapsed = donna_tree_view_row_collapsed;
     tv_class->test_expand_row = donna_tree_view_test_expand_row;
+
+    w_class = GTK_WIDGET_CLASS (klass);
+    w_class->draw = donna_tree_view_draw;
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->get_property   = donna_tree_view_get_property;
@@ -3712,8 +3718,11 @@ node_get_children_list_cb (DonnaTask                            *task,
     value = donna_task_get_return_value (task);
     arr = g_value_get_boxed (value);
     if (arr->len > 0)
+    {
+        priv->draw_state = DRAW_NOTHING;
         for (i = 0; i < arr->len; ++i)
             add_node_to_tree (data->tree, NULL, arr->pdata[i], NULL);
+    }
     else
     {
         /* show the "location empty" message */
@@ -4212,15 +4221,18 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     }
 }
 
-/* mode list only */
 static gboolean
-widget_draw_cb (GtkWidget *w, cairo_t *cr, DonnaTreeView *tree)
+donna_tree_view_draw (GtkWidget *w, cairo_t *cr)
 {
+    DonnaTreeView *tree = DONNA_TREE_VIEW (w);
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeView *treev = GTK_TREE_VIEW (w);
     gint x, y, width;
     GtkStyleContext *context;
     PangoLayout *layout;
+
+    /* chain up, so the drawing actually gets done */
+    GTK_WIDGET_CLASS (donna_tree_view_parent_class)->draw (w, cr);
 
     if (is_tree (tree) || priv->draw_state == DRAW_NOTHING)
         return FALSE;
@@ -4311,9 +4323,6 @@ donna_tree_view_new (DonnaApp    *app,
         /* some stylling */
         gtk_tree_view_set_rules_hint (treev, TRUE);
         gtk_tree_view_set_headers_visible (treev, TRUE);
-        /* connect to draw for "please wait"/"location empty" messages */
-        g_signal_connect (G_OBJECT (tree), "draw",
-                G_CALLBACK (widget_draw_cb), tree);
     }
 
     g_debug ("treeview '%s': setting up filter & selection", priv->name);
