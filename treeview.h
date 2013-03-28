@@ -54,6 +54,7 @@ gboolean        donna_tree_view_add_root        (DonnaTreeView      *tree,
                                                  DonnaNode          *node);
 /* Mode List */
 GPtrArray *     donna_tree_view_get_children    (DonnaTreeView      *tree,
+                                                 DonnaNode          *node,
                                                  DonnaNodeType       node_types);
 
 G_END_DECLS

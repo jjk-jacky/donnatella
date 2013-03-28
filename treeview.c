@@ -1067,7 +1067,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
     {
         GPtrArray *arr;
 
-        arr = donna_tree_view_get_children (priv->sync_with, priv->node_types);
+        arr = donna_tree_view_get_children (priv->sync_with, node, priv->node_types);
         if (arr)
         {
             guint i;
@@ -3957,6 +3957,7 @@ donna_tree_view_get_location (DonnaTreeView      *tree)
 
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
+                              DonnaNode          *node,
                               DonnaNodeType       node_types)
 {
     DonnaTreeViewPrivate *priv;
@@ -3967,6 +3968,9 @@ donna_tree_view_get_children (DonnaTreeView      *tree,
     g_return_val_if_fail (!is_tree (tree), NULL);
 
     priv = tree->priv;
+
+    if (node != priv->location)
+        return NULL;
 
     if (!(node_types & priv->node_types))
         return NULL;
