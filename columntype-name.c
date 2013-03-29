@@ -427,8 +427,8 @@ ct_name_node_cmp (DonnaColumnType    *ct,
         return strcmp (name1, name2);
     }
 
-    donna_node_get (node1, FALSE, "name", &name1, NULL);
-    donna_node_get (node2, FALSE, "name", &name2, NULL);
+    name1 = donna_node_get_name (node1);
+    name2 = donna_node_get_name (node2);
     ret = strcmp_ext (name1, name2, data->options);
     g_free (name1);
     g_free (name2);

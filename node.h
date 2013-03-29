@@ -125,6 +125,11 @@ void            donna_node_get              (DonnaNode              *node,
                                              gboolean                is_blocking,
                                              const gchar            *first_name,
                                              ...);
+DonnaProvider * donna_node_get_provider     (DonnaNode              *node);
+const gchar *   donna_node_get_domain       (DonnaNode              *node);
+gchar *         donna_node_get_location     (DonnaNode              *node);
+DonnaNodeType   donna_node_get_node_type    (DonnaNode              *node);
+gchar *         donna_node_get_name         (DonnaNode              *node);
 DonnaTask *     donna_node_refresh_task     (DonnaNode              *node,
                                              const gchar            *first_name,
                                              ...);

@@ -77,6 +77,10 @@
  * or donna_node_refresh_arr_task() -- the former takes the properties names as
  * arguments, the later expects them in a #GPtrArray of strings.
  *
+ * Helpers (such as donna_node_get_name()) allow you to quickly get the required
+ * properties. Those are faster than using donna_node_get() and can be useful in
+ * frequent operations (e.g. when redering/sorting)
+ *
  * To change the value of a property, use donna_node_set_property_task()
  *
  * Nodes do not have signals, any and all relevent signal for a node will occur
@@ -776,6 +780,98 @@ donna_node_get (DonnaNode   *node,
     va_start (va_args, first_name);
     get_valist (node, is_blocking, first_name, va_args);
     va_end (va_args);
+}
+
+/**
+ * donna_node_get_provider:
+ * @node: Node to get the provider of
+ *
+ * Helper to quickly get the provider of @node
+ * Free it with g_object_unref() when done.
+ *
+ * Returns: (transfer full): #DonnaProvider of @node
+ */
+DonnaProvider *
+donna_node_get_provider (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return g_object_ref (node->priv->provider);
+}
+
+/**
+ * donna_node_get_domain:
+ * @node: Node to get the provider's domain of
+ *
+ * Helper to quickly get the domain of the provider of @node
+ *
+ * Returns: (transfer none): Domain of the node's provider
+ */
+const gchar *
+donna_node_get_domain (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_get_domain (node->priv->provider);
+}
+
+/**
+ * donna_node_get_location:
+ * @node: Node to get the location of
+ *
+ * Helper to quickly get the location of @node
+ * Free it with g_free() when done.
+ *
+ * Returns: (transfer full): Location of @node
+ */
+gchar *
+donna_node_get_location (DonnaNode *node)
+{
+    DonnaNodePrivate *priv;
+    gchar *location;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    priv = node->priv;
+    g_rw_lock_reader_lock (&priv->props_lock);
+    location = g_strdup (node->priv->location);
+    g_rw_lock_reader_unlock (&priv->props_lock);
+    return location;
+}
+
+/**
+ * donna_node_get_node_type:
+ * @node: Node to get the node-type of
+ *
+ * Helper to quickly get the type of @node
+ *
+ * Returns: #DonnanodeType of @node
+ */
+DonnaNodeType
+donna_node_get_node_type (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), 0);
+    return node->priv->node_type;
+}
+
+/**
+ * donna_node_get_name:
+ * @node: Node to get the property name of
+ *
+ * Helper to quickly get the property name of @node
+ * Free it with g_free() when done.
+ *
+ * Returns: (transfer full): Name of @node
+ */
+gchar *
+donna_node_get_name (DonnaNode *node)
+{
+    DonnaNodePrivate *priv;
+    gchar *name;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    priv = node->priv;
+    g_rw_lock_reader_lock (&priv->props_lock);
+    name = g_strdup (node->priv->name);
+    g_rw_lock_reader_unlock (&priv->props_lock);
+    return name;
 }
 
 struct refresh_data

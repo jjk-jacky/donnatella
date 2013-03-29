@@ -1570,8 +1570,8 @@ sort_func (GtkTreeModel      *model,
     {
         DonnaNodeType type1, type2;
 
-        donna_node_get (node1, FALSE, "node-type", &type1, NULL);
-        donna_node_get (node2, FALSE, "node-type", &type2, NULL);
+        type1 = donna_node_get_node_type (node1);
+        type2 = donna_node_get_node_type (node2);
 
         if (type1 == DONNA_NODE_CONTAINER)
         {
