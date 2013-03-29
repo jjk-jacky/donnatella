@@ -544,7 +544,7 @@ tree_store_row_inserted (GtkTreeModel   *_model,
 }
 
 static void
-tree_store_rows_reorderer (GtkTreeModel     *_model,
+tree_store_rows_reordered (GtkTreeModel     *_model,
                            GtkTreePath      *_path,
                            GtkTreeIter      *iter,
                            gint             *_new_order,
@@ -634,7 +634,7 @@ donna_tree_store_new (gint n_columns,
     g_signal_connect (priv->store, "row-inserted",
             G_CALLBACK (tree_store_row_inserted), store);
     g_signal_connect (priv->store, "rows-reordered",
-            G_CALLBACK (tree_store_rows_reorderer), store);
+            G_CALLBACK (tree_store_rows_reordered), store);
 
     return store;
 }
