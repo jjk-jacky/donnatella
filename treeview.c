@@ -3777,11 +3777,19 @@ node_get_children_list_cb (DonnaTask                            *task,
     arr = g_value_get_boxed (value);
     if (arr->len > 0)
     {
+        GtkTreeSortable *sortable = GTK_TREE_SORTABLE (data->tree->priv->store);
+        gint sort_col_id;
+        GtkSortType order;
+
+        priv->draw_state = DRAW_NOTHING;
         iter.stamp = 0;
-        /* starting at 1000 it gets noticable/the UI gets blocked a bit, so
-         * we'll prepare and draw the tree w/ "Please wait" msg */
-        if (arr->len >= 1000)
-            priv->draw_state = DRAW_WAIT;
+
+        /* adding items to a sorted store is quite slow; we get much better
+         * performance by adding all items to an unsorted store, and then
+         * sorting it */
+        gtk_tree_sortable_get_sort_column_id (sortable, &sort_col_id, &order);
+        gtk_tree_sortable_set_sort_column_id (sortable,
+                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, order);
 
         for (i = 0; i < arr->len; ++i)
         {
@@ -3789,15 +3797,9 @@ node_get_children_list_cb (DonnaTask                            *task,
             if (data->child == arr->pdata[i])
                 /* don't change iter no more */
                 it = NULL;
-            if (i && !(i % 1000))
-            {
-                /* so the drawing of "please wait" can be done, and we can try
-                 * to keep the UI somewhat responsive */
-                while (gtk_events_pending ())
-                    gtk_main_iteration ();
-            }
         }
-        priv->draw_state = DRAW_NOTHING;
+
+        gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
 
         /* do we have a child to select/scroll to? */
         if (!it && iter.stamp != 0)
@@ -3807,10 +3809,6 @@ node_get_children_list_cb (DonnaTask                            *task,
         else
             /* scroll to top-left */
             gtk_tree_view_scroll_to_point (GTK_TREE_VIEW (data->tree), 0, 0);
-
-        if (i > 1000)
-            /* make sure to draw the tree */
-            gtk_widget_queue_draw (GTK_WIDGET (data->tree));
     }
     else
     {
@@ -4416,22 +4414,13 @@ donna_tree_view_draw (GtkWidget *w, cairo_t *cr)
     GtkStyleContext *context;
     PangoLayout *layout;
 
-    /* chain up, so the drawing actually gets done (unless DRAW_WAIT) */
-    if (is_tree (tree) || priv->draw_state != DRAW_WAIT)
-        GTK_WIDGET_CLASS (donna_tree_view_parent_class)->draw (w, cr);
+    /* chain up, so the drawing actually gets done */
+    GTK_WIDGET_CLASS (donna_tree_view_parent_class)->draw (w, cr);
 
     if (is_tree (tree) || priv->draw_state == DRAW_NOTHING)
         return FALSE;
 
-    if (priv->draw_state == DRAW_WAIT)
-    {
-        /* because we didn't draw the treeview */
-        x = 0;
-        y = 23;
-    }
-    else
-        gtk_tree_view_convert_tree_to_widget_coords (treev, 0, 0, &x, &y);
-
+    gtk_tree_view_convert_tree_to_widget_coords (treev, 0, 0, &x, &y);
     width = gtk_widget_get_allocated_width (w);
     context = gtk_widget_get_style_context (w);
 
