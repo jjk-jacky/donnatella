@@ -42,10 +42,72 @@ donna_columntype_get_props (DonnaColumnType    *ct,
     return (*interface->get_props) (ct, tv_name, col_name);
 }
 
+gpointer
+donna_columntype_get_data (DonnaColumnType    *ct,
+                           const gchar        *tv_name,
+                           const gchar        *col_name)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (tv_name != NULL, NULL);
+    g_return_val_if_fail (col_name != NULL, NULL);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_data != NULL, NULL);
+
+    return (*interface->get_data) (ct, tv_name, col_name);
+}
+
+DonnaColumnTypeNeed
+donna_columntype_refresh_data (DonnaColumnType  *ct,
+                               const gchar        *tv_name,
+                               const gchar        *col_name,
+                               gpointer            data)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (tv_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (col_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (interface->refresh_data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+
+    return (*interface->refresh_data) (ct, tv_name, col_name, data);
+}
+
+void
+donna_columntype_free_data (DonnaColumnType    *ct,
+                            const gchar        *tv_name,
+                            const gchar        *col_name,
+                            gpointer            data)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_if_fail (DONNA_IS_COLUMNTYPE (ct));
+    g_return_if_fail (tv_name != NULL);
+    g_return_if_fail (col_name != NULL);
+    g_return_if_fail (data != NULL);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_if_fail (interface != NULL);
+    g_return_if_fail (interface->free_data != NULL);
+
+    return (*interface->free_data) (ct, tv_name, col_name, data);
+}
+
 GPtrArray *
 donna_columntype_render (DonnaColumnType    *ct,
                          const gchar        *tv_name,
                          const gchar        *col_name,
+                         gpointer            data,
                          guint               index,
                          DonnaNode          *node,
                          GtkCellRenderer    *renderer)
@@ -64,7 +126,32 @@ donna_columntype_render (DonnaColumnType    *ct,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->render != NULL, NULL);
 
-    return (*interface->render) (ct, tv_name, col_name, index, node, renderer);
+    return (*interface->render) (ct, tv_name, col_name, data,
+            index, node, renderer);
+}
+
+gint
+donna_columntype_node_cmp (DonnaColumnType    *ct,
+                           const gchar        *tv_name,
+                           const gchar        *col_name,
+                           gpointer            data,
+                           DonnaNode          *node1,
+                           DonnaNode          *node2)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+    g_return_val_if_fail (tv_name != NULL, 0);
+    g_return_val_if_fail (col_name != NULL, 0);
+    g_return_val_if_fail (DONNA_IS_NODE (node1), 0);
+    g_return_val_if_fail (DONNA_IS_NODE (node2), 0);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, 0);
+    g_return_val_if_fail (interface->node_cmp != NULL, 0);
+
+    return (*interface->node_cmp) (ct, tv_name, col_name, data, node1, node2);
 }
 
 GtkMenu *
@@ -131,27 +218,4 @@ donna_columntype_set_tooltip (DonnaColumnType    *ct,
     g_return_val_if_fail (interface->set_tooltip != NULL, FALSE);
 
     return (*interface->set_tooltip) (ct, tv_name, col_name, index, node, tooltip);
-}
-
-gint
-donna_columntype_node_cmp (DonnaColumnType    *ct,
-                           const gchar        *tv_name,
-                           const gchar        *col_name,
-                           DonnaNode          *node1,
-                           DonnaNode          *node2)
-{
-    DonnaColumnTypeInterface *interface;
-
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
-    g_return_val_if_fail (tv_name != NULL, 0);
-    g_return_val_if_fail (col_name != NULL, 0);
-    g_return_val_if_fail (DONNA_IS_NODE (node1), 0);
-    g_return_val_if_fail (DONNA_IS_NODE (node2), 0);
-
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
-
-    g_return_val_if_fail (interface != NULL, 0);
-    g_return_val_if_fail (interface->node_cmp != NULL, 0);
-
-    return (*interface->node_cmp) (ct, tv_name, col_name, node1, node2);
 }

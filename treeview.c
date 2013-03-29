@@ -1511,7 +1511,9 @@ rend_func (GtkTreeViewColumn  *column,
     else if (!node)
         return;
 
-    arr = donna_columntype_render (ct, priv->name, col, index, node, renderer);
+    arr = donna_columntype_render (ct, priv->name, col,
+            g_object_get_data (G_OBJECT (column), "columntype-data"),
+            index, node, renderer);
     if (arr)
     {
         DonnaTask *task;
@@ -1607,7 +1609,9 @@ sort_func (GtkTreeModel      *model,
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
 
-    ret = donna_columntype_node_cmp (ct, priv->name, col, node1, node2);
+    ret = donna_columntype_node_cmp (ct, priv->name, col,
+            g_object_get_data (G_OBJECT (column), "columntype-data"),
+            node1, node2);
 done:
     g_object_unref (node1);
     g_object_unref (node2);
@@ -2409,6 +2413,7 @@ load_arrangement (DonnaTreeView *tree,
         gchar              buf[64];
         gchar             *b;
         DonnaColumnType   *ct;
+        gpointer           ct_data;
         DonnaColumnType   *col_ct;
         GList             *l;
         GtkTreeViewColumn *column;
@@ -2470,8 +2475,16 @@ load_arrangement (DonnaTreeView *tree,
                 /* update the name if needed */
                 name = g_object_get_data (G_OBJECT (column), "column-name");
                 if (!streq (name, b))
+                {
+                    ct_data = g_object_get_data (G_OBJECT (column),
+                            "columntype-data");
+                    donna_columntype_free_data (ct, priv->name, name, ct_data);
+                    name = g_strdup (b);
                     g_object_set_data_full (G_OBJECT (column), "column-name",
-                            g_strdup (b), g_free);
+                            name, g_free);
+                    ct_data = donna_columntype_get_data (ct, priv->name, name);
+                    g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
+                }
                 /* move column */
                 gtk_tree_view_move_column_after (treev, column, last_column);
 
@@ -2481,11 +2494,17 @@ load_arrangement (DonnaTreeView *tree,
 
         if (!column)
         {
+            gchar *name;
+
             /* create renderer(s) & column */
             column = gtk_tree_view_column_new ();
             /* store the name on it, so we can get it back from e.g. rend_func */
+            name = g_strdup (b);
             g_object_set_data_full (G_OBJECT (column), "column-name",
-                    g_strdup (b), g_free);
+                    name, g_free);
+            /* data for use in render & node_cmp */
+            ct_data = donna_columntype_get_data (ct, priv->name, name);
+            g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
             /* give our ref on the ct to the column */
             g_object_set_data_full (G_OBJECT (column), "column-type",
                     ct, g_object_unref);
@@ -2672,10 +2691,18 @@ next:
     /* remove all columns left unused */
     while (list)
     {
+        gpointer ct_data;
+
         /* though we should never try to sort by a sort_id not used by a column,
          * let's make sure it that happens, we just get a warning (instead of
          * dereferencing a pointer pointing nowhere) */
         gtk_tree_sortable_set_sort_func (sortable, sort_id++, NULL, NULL, NULL);
+        /* free the columntype-data */
+        donna_columntype_free_data (
+                g_object_get_data (list->data, "column-type"),
+                priv->name,
+                g_object_get_data (list->data, "column-name"),
+                g_object_get_data (list->data, "columntype-data"));
         /* remove column */
         gtk_tree_view_remove_column (treev, list->data);
         list = g_list_delete_link (list, list);

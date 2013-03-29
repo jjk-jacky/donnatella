@@ -27,6 +27,13 @@ typedef DonnaColumnType *   (*new_ct)       (DonnaConfig        *config);
 #define DONNA_COLUMNTYPE_RENDERER_TOGGLE    'T'
 #define DONNA_COLUMNTYPE_RENDERER_SPINNER   'S'
 
+typedef enum
+{
+    DONNA_COLUMNTYPE_NEED_NOTHING   = 0,
+    DONNA_COLUMNTYPE_NEED_REDRAW    = (1 << 0),
+    DONNA_COLUMNTYPE_NEED_RESORT    = (1 << 1)
+} DonnaColumnTypeNeed;
+
 struct _DonnaColumnTypeInterface
 {
     GTypeInterface parent;
@@ -36,12 +43,30 @@ struct _DonnaColumnTypeInterface
     GPtrArray *         (*get_props)        (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name);
+    gpointer            (*get_data)         (DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name);
+    DonnaColumnTypeNeed (*refresh_data)     (DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             gpointer            data);
+    void                (*free_data)        (DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             gpointer            data);
     GPtrArray *         (*render)           (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
+                                             gpointer            data,
                                              guint               index,
                                              DonnaNode          *node,
                                              GtkCellRenderer    *renderer);
+    gint                (*node_cmp)         (DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             gpointer            data,
+                                             DonnaNode          *node1,
+                                             DonnaNode          *node2);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name);
@@ -56,23 +81,36 @@ struct _DonnaColumnTypeInterface
                                              guint               index,
                                              DonnaNode          *node,
                                              GtkTooltip         *tooltip);
-    gint                (*node_cmp)         (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
-                                             DonnaNode          *node1,
-                                             DonnaNode          *node2);
 };
 
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
 GPtrArray *     donna_columntype_get_props      (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name);
+gpointer        donna_columntype_get_data       (DonnaColumnType    *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name);
+DonnaColumnTypeNeed donna_columntype_refresh_data (DonnaColumnType  *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name,
+                                                 gpointer            data);
+void            donna_columntype_free_data      (DonnaColumnType    *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name,
+                                                 gpointer            data);
 GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
+                                                 gpointer            data,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkCellRenderer    *renderer);
+gint            donna_columntype_node_cmp       (DonnaColumnType    *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name,
+                                                 gpointer            data,
+                                                 DonnaNode          *node1,
+                                                 DonnaNode          *node2);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name);
@@ -87,11 +125,6 @@ gboolean        donna_columntype_set_tooltip    (DonnaColumnType    *ct,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkTooltip         *tooltip);
-gint            donna_columntype_node_cmp       (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
-                                                 DonnaNode          *node1,
-                                                 DonnaNode          *node2);
 
 G_END_DECLS
 
