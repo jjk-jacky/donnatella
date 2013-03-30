@@ -130,7 +130,7 @@ donna_provider_config_class_init (DonnaProviderConfigClass *klass)
     donna_config_signals[OPTION_SET] =
         g_signal_new ("option-set",
                 DONNA_TYPE_PROVIDER_CONFIG,
-                G_SIGNAL_RUN_LAST,
+                G_SIGNAL_DETAILED | G_SIGNAL_RUN_LAST,
                 G_STRUCT_OFFSET (DonnaProviderConfigClass, option_set),
                 NULL,
                 NULL,
@@ -141,7 +141,7 @@ donna_provider_config_class_init (DonnaProviderConfigClass *klass)
     donna_config_signals[OPTION_REMOVED] =
         g_signal_new ("option-removed",
                 DONNA_TYPE_PROVIDER_CONFIG,
-                G_SIGNAL_RUN_LAST,
+                G_SIGNAL_DETAILED | G_SIGNAL_RUN_LAST,
                 G_STRUCT_OFFSET (DonnaProviderConfigClass, option_removed),
                 NULL,
                 NULL,
@@ -185,24 +185,24 @@ G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
         G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_config_provider_init)
         )
 
-static void
+static inline void
 config_option_set (DonnaConfig *config, const gchar *name)
 {
     g_return_if_fail (DONNA_IS_CONFIG (config));
     g_return_if_fail (name != NULL);
 
     g_signal_emit (config, donna_config_signals[OPTION_SET],
-            0, name);
+            g_quark_from_string (name), name);
 }
 
-static void
+static inline void
 config_option_removed (DonnaConfig *config, const gchar *name)
 {
     g_return_if_fail (DONNA_IS_CONFIG (config));
     g_return_if_fail (name != NULL);
 
     g_signal_emit (config, donna_config_signals[OPTION_REMOVED],
-            0, name);
+            g_quark_from_string (name), name);
 }
 
 static void
