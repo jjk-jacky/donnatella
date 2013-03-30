@@ -273,7 +273,7 @@ ct_name_render (DonnaColumnType    *ct,
         DonnaNodeHasValue has_value;
         GdkPixbuf *pixbuf;
 
-        donna_node_get (node, FALSE, "icon", &has_value, &pixbuf, NULL);
+        has_value = donna_node_get_icon (node, FALSE, &pixbuf);
         if (has_value == DONNA_NODE_VALUE_SET)
         {
             g_object_set (renderer, "visible", TRUE, "pixbuf", pixbuf, NULL);
@@ -283,13 +283,12 @@ ct_name_render (DonnaColumnType    *ct,
         {
             DonnaNodeType node_type;
 
-            donna_node_get (node, FALSE, "node-type", &node_type, NULL);
-            if (node_type == DONNA_NODE_ITEM)
+            if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
                 g_object_set (renderer,
                         "visible",  TRUE,
                         "stock-id", GTK_STOCK_FILE,
                         NULL);
-            else /* if (node_type == DONNA_NODE_CONTAINER) */
+            else /* DONNA_NODE_CONTAINER */
                 g_object_set (renderer,
                         "visible",  TRUE,
                         "stock-id", GTK_STOCK_DIRECTORY,
@@ -310,7 +309,7 @@ ct_name_render (DonnaColumnType    *ct,
     {
         gchar *name;
 
-        donna_node_get (node, FALSE, "name", &name, NULL);
+        name = donna_node_get_name (node);
         g_object_set (renderer,
                 "visible",      TRUE,
                 "text",         name,
