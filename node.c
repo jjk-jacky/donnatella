@@ -1738,6 +1738,7 @@ donna_node_set_property_value (DonnaNode     *node,
             /* we assume it worked, w/out checking types, etc because this should
              * only be used by providers and such, on properties they are handling,
              * so if they get it wrong, they're seriously bugged */
+            node->priv->basic_props[i].has_value = DONNA_NODE_VALUE_SET;
             emit = TRUE;
             goto finish;
         }
