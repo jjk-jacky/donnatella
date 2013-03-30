@@ -874,6 +874,297 @@ donna_node_get_name (DonnaNode *node)
     return name;
 }
 
+typedef gpointer (*value_dup_fn) (const GValue *value);
+
+static DonnaNodeHasValue
+get_basic_prop (DonnaNode   *node,
+                gboolean     is_blocking,
+                gint         basic_id,
+                gpointer    *dest,
+                value_dup_fn dup_value)
+{
+    DonnaNodePrivate *priv = node->priv;
+    DonnaNodeHasValue has_value;
+
+    g_rw_lock_reader_lock (&priv->props_lock);
+    has_value = priv->basic_props[basic_id].has_value;
+    if (has_value == DONNA_NODE_VALUE_SET)
+    {
+grab_basic_value:
+        *dest = dup_value (&priv->basic_props[basic_id].value);
+    }
+    else if (has_value == DONNA_NODE_VALUE_NEED_REFRESH && is_blocking)
+    {
+        /* we need to release the lock, since the refresher
+         * should call set_property_value, hence need a writer
+         * lock */
+        g_rw_lock_reader_unlock (&priv->props_lock);
+        if (priv->refresher (NULL /* no task */, node,
+                    node_basic_properties[FIRST_BASIC_PROP + basic_id]))
+        {
+            g_rw_lock_reader_lock (&priv->props_lock);
+            /* check if the value has actually been set */
+            has_value = priv->basic_props[basic_id].has_value;
+            if (has_value == DONNA_NODE_VALUE_SET)
+                goto grab_basic_value;
+        }
+        else
+            g_rw_lock_reader_lock (&priv->props_lock);
+        has_value = DONNA_NODE_VALUE_ERROR;
+    }
+    g_rw_lock_reader_unlock (&priv->props_lock);
+
+    return has_value;
+}
+
+/**
+ * donna_node_get_icon:
+ * @node: Node to get the icon from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's icon
+ *
+ * Helper to quickly get the property icon of @node
+ * Free it with g_object_unref() when done.
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_icon (DonnaNode  *node,
+                     gboolean    is_blocking,
+                     GdkPixbuf **icon)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_ICON,
+            (gpointer *) icon, (value_dup_fn) g_value_dup_object);
+}
+
+/**
+ * donna_node_get_full_name:
+ * @node: Node to get the full name from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's full name
+ *
+ * Helper to quickly get the property full-name of @node
+ * Free it with g_free() when done.
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_full_name (DonnaNode  *node,
+                          gboolean    is_blocking,
+                          gchar     **full_name)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_FULL_NAME,
+            (gpointer *) full_name, (value_dup_fn) g_value_dup_string);
+}
+
+/**
+ * donna_node_get_size:
+ * @node: Node to get the size from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's size
+ *
+ * Helper to quickly get the property size of @node
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_size (DonnaNode  *node,
+                     gboolean    is_blocking,
+                     guint      *size)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_SIZE,
+            (gpointer *) size, (value_dup_fn) g_value_get_uint);
+}
+
+/**
+ * donna_node_get_ctime:
+ * @node: Node to get the ctime from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's ctime
+ *
+ * Helper to quickly get the property ctime of @node
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_ctime (DonnaNode *node,
+                      gboolean   is_blocking,
+                      gint64    *ctime)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_CTIME,
+            (gpointer *) ctime, (value_dup_fn) g_value_get_int64);
+}
+
+/**
+ * donna_node_get_mtime:
+ * @node: Node to get the mtime from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's mtime
+ *
+ * Helper to quickly get the property mtime of @node
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_mtime (DonnaNode *node,
+                      gboolean   is_blocking,
+                      gint64    *mtime)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_MTIME,
+            (gpointer *) mtime, (value_dup_fn) g_value_get_int64);
+}
+
+/**
+ * donna_node_get_atime:
+ * @node: Node to get the atime from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's atime
+ *
+ * Helper to quickly get the property atime of @node
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_atime (DonnaNode *node,
+                      gboolean   is_blocking,
+                      gint64    *atime)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_ATIME,
+            (gpointer *) atime, (value_dup_fn) g_value_get_int64);
+}
+
+/**
+ * donna_node_get_perms:
+ * @node: Node to get the perms from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's perms
+ *
+ * Helper to quickly get the property perms of @node
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_perms (DonnaNode *node,
+                      gboolean   is_blocking,
+                      guint     *perms)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_PERMS,
+            (gpointer *) perms, (value_dup_fn) g_value_get_uint);
+}
+
+/**
+ * donna_node_get_user:
+ * @node: Node to get the user from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's user
+ *
+ * Helper to quickly get the property user of @node
+ * Free it with g_free() when done.
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_user (DonnaNode  *node,
+                     gboolean    is_blocking,
+                     gchar     **user)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_USER,
+            (gpointer *) user, (value_dup_fn) g_value_dup_string);
+}
+
+/**
+ * donna_node_get_group:
+ * @node: Node to get the group from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's group
+ *
+ * Helper to quickly get the property group of @node
+ * Free it with g_free() when done.
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_group (DonnaNode *node,
+                      gboolean   is_blocking,
+                      gchar    **group)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_GROUP,
+            (gpointer *) group, (value_dup_fn) g_value_dup_string);
+}
+
+/**
+ * donna_node_get_Type:
+ * @node: Node to get the type from
+ * @is_blocking: Whether to block and refresh if needed
+ * @icon: Return location for @node's type
+ *
+ * Helper to quickly get the property type of @node
+ * Free it with g_free() when done.
+ *
+ * Note: make sure not to use dona_node_get_type() (w/ lowercase t) as this is
+ * an internal function, to get the GType for %DonnaNode
+ *
+ * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
+ * while with %TRUE a refresh will automatically be called (within/blocking the
+ * thread). It can then also be set to %DONNA_NODE_VALUE_ERROR if the refresher
+ * failed.
+ *
+ * Returns: Whether the value was set, needs a refresh or doesn't exists
+ */
+DonnaNodeHasValue
+donna_node_get_Type (DonnaNode  *node,
+                     gboolean    is_blocking,
+                     gchar     **type)
+{
+    return get_basic_prop (node, is_blocking, BASIC_PROP_TYPE,
+            (gpointer *) type, (value_dup_fn) g_value_dup_string);
+}
+
 struct refresh_data
 {
     DonnaNode   *node;

@@ -2,6 +2,7 @@
 #ifndef __DONNA_NODE_H__
 #define __DONNA_NODE_H__
 
+#include <gdk/gdk.h>
 #include "common.h"
 #include "task.h"
 
@@ -130,6 +131,36 @@ const gchar *   donna_node_get_domain       (DonnaNode              *node);
 gchar *         donna_node_get_location     (DonnaNode              *node);
 DonnaNodeType   donna_node_get_node_type    (DonnaNode              *node);
 gchar *         donna_node_get_name         (DonnaNode              *node);
+DonnaNodeHasValue donna_node_get_icon       (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             GdkPixbuf             **icon);
+DonnaNodeHasValue donna_node_get_full_name  (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gchar                 **full_name);
+DonnaNodeHasValue donna_node_get_size       (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             guint                  *size);
+DonnaNodeHasValue donna_node_get_ctime      (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gint64                 *ctime);
+DonnaNodeHasValue donna_node_get_mtime      (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gint64                 *mtime);
+DonnaNodeHasValue donna_node_get_atime      (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gint64                 *atime);
+DonnaNodeHasValue donna_node_get_perms      (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             guint                  *perms);
+DonnaNodeHasValue donna_node_get_user       (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gchar                 **user);
+DonnaNodeHasValue donna_node_get_group      (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gchar                 **user);
+DonnaNodeHasValue donna_node_get_Type       (DonnaNode              *node,
+                                             gboolean                is_blocking,
+                                             gchar                 **user);
 DonnaTask *     donna_node_refresh_task     (DonnaNode              *node,
                                              const gchar            *first_name,
                                              ...);
