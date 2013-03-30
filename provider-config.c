@@ -298,9 +298,9 @@ str_chunk_len (DonnaProviderConfigPrivate   *priv,
     if (!string)
         snprintf (buf, 255, "%d", (int) len);
     else if (len < 255)
-        snprintf (buf, 255, "%s", string);
+        snprintf (buf, 255, "%.*s", (int) len, string);
     else
-        b = g_strdup_printf ("%s", string);
+        b = g_strdup_printf ("%.*s", (int) len, string);
 
     s = g_string_chunk_insert_const (priv->str_chunk, b);
     if (b != buf)
@@ -433,7 +433,7 @@ parse_data (gchar *data)
 
             /* trim now, so we can check if it's a comment */
             trim_line (&data);
-            if (*data == '#')
+            if (*data == '#' || *data == '\0')
                 continue;
 
             s = strchr (data, '=');
@@ -995,6 +995,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
 
         if (do_options)
         {
+            /* skip categories */
             if (option->extra == priv->root)
                 continue;
 
@@ -1112,7 +1113,7 @@ donna_config_export_config (DonnaConfig *config)
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), NULL);
     priv = config->priv;
     str = g_string_sized_new (2048);
-    str_loc = g_string_sized_new (23); /* random size, to hold section's name */
+    str_loc = g_string_sized_new (42); /* random size, to hold section's name */
 
     g_rw_lock_reader_lock (&priv->lock);
     export_config (priv, priv->root, str_loc, str, TRUE);
@@ -1431,7 +1432,7 @@ donna_config_list_options (DonnaConfig               *config,
                     || (type & DONNA_CONFIG_OPTION_TYPE_OPTION
                         && !option_is_category (node->data, priv->root)))
             {
-                if (!options)
+                if (!*options)
                     *options = g_ptr_array_new ();
                 /* we can add option->name because it is in the GStringChunk,
                  * and therefore isn't going anywhere (even if the option is
