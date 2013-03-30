@@ -3801,10 +3801,13 @@ node_get_children_list_cb (DonnaTask                            *task,
 
         gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
 
+        /* in order to scroll properly, we need to have the tree sorted &
+         * everything done; i.e. we need to have all pending events processes */
+        while (gtk_events_pending ())
+            gtk_main_iteration ();
+
         /* do we have a child to select/scroll to? */
         if (!it && iter.stamp != 0)
-            /* FIXME? should it be in a idle source, to make sure all drawing
-             * event have been handled before we determine what is visible */
             scroll_to_iter (data->tree, &iter, /* select it */ TRUE);
         else
             /* scroll to top-left */
