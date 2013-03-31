@@ -558,8 +558,14 @@ tree_store_rows_reordered (GtkTreeModel     *_model,
     gint _n, n;
     gint i;
 
+    /* we can have a valid iter that actually points to the hidden/never exposed
+     * root of the store, i.e. one that's not in the treeview, or in our
+     * hashtable of visibility. Fix this by using NULL to refer to it. */
+    if (iter && gtk_tree_path_get_indices (_path) == NULL)
+        iter = NULL;
+
     /* iter not visible == we don't care */
-    if (!iter_is_visible (iter))
+    if (iter && !iter_is_visible (iter))
         return;
 
     _n = gtk_tree_model_iter_n_children (_model, iter);
@@ -589,9 +595,13 @@ tree_store_rows_reordered (GtkTreeModel     *_model,
         new_order = _new_order;
 
     /* emit our signal */
-    path = tree_store_get_path (GTK_TREE_MODEL (store), iter);
+    if (iter)
+        path = tree_store_get_path (GTK_TREE_MODEL (store), iter);
+    else
+        path = _path;
     gtk_tree_model_rows_reordered (GTK_TREE_MODEL (store), path, iter, new_order);
-    gtk_tree_path_free (path);
+    if (iter)
+        gtk_tree_path_free (path);
 
     g_free (convert);
     if (new_order != _new_order)
