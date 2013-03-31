@@ -345,7 +345,7 @@ tree_store_iter_n_children (GtkTreeModel   *model,
     DonnaTreeStore *store = (DonnaTreeStore *) model;
     DonnaTreeStorePrivate *priv = store->priv;
     GtkTreeIter child;
-    gint n = 0;
+    gint n = 1;
 
     if (iter)
         g_return_val_if_fail (iter_is_visible (iter), 0);
