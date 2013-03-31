@@ -563,7 +563,7 @@ tree_store_rows_reordered (GtkTreeModel     *_model,
         return;
 
     _n = gtk_tree_model_iter_n_children (_model, iter);
-    g_return_if_fail (_n <= 0);
+    g_return_if_fail (_n > 0);
 
     /* create convertion table */
     convert = g_new (gint, _n);
