@@ -241,6 +241,11 @@ static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
 static void free_active_spinners (struct active_spinners *as);
 
+static gboolean donna_tree_view_button_press_event  (GtkWidget      *widget,
+                                                     GdkEventButton *event);
+static void     donna_tree_view_row_activated       (GtkTreeView    *treev,
+                                                     GtkTreePath    *path,
+                                                     GtkTreeViewColumn *column);
 static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
@@ -265,11 +270,13 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     GObjectClass *o_class;
 
     tv_class = GTK_TREE_VIEW_CLASS (klass);
+    tv_class->row_activated = donna_tree_view_row_activated;
     tv_class->row_collapsed = donna_tree_view_row_collapsed;
     tv_class->test_expand_row = donna_tree_view_test_expand_row;
 
     w_class = GTK_WIDGET_CLASS (klass);
     w_class->draw = donna_tree_view_draw;
+    w_class->button_press_event = donna_tree_view_button_press_event;
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->get_property   = donna_tree_view_get_property;
@@ -4177,9 +4184,61 @@ query_tooltip_cb (GtkTreeView   *treev,
     return ret;
 }
 
-static gboolean
-button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
+static void
+donna_tree_view_row_activated (GtkTreeView    *treev,
+                               GtkTreePath    *path,
+                               GtkTreeViewColumn *column)
 {
+    DonnaTreeView *tree = DONNA_TREE_VIEW (treev);
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
+    GtkTreeIter iter;
+    DonnaNode *node;
+
+    if (!gtk_tree_model_get_iter (model, &iter, path))
+        return;
+
+    if (is_tree (tree))
+    {
+        enum tree_expand es;
+
+        gtk_tree_model_get (model, &iter,
+                DONNA_TREE_COL_EXPAND_STATE,    &es,
+                -1);
+        if (es == DONNA_TREE_EXPAND_NONE)
+            return;
+
+        if (gtk_tree_view_row_expanded (treev, path))
+            gtk_tree_view_collapse_row (treev, path);
+        else
+            gtk_tree_view_expand_row (treev, path, FALSE);
+
+        return;
+    }
+
+    gtk_tree_model_get (model, &iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
+    if (!node)
+        return;
+
+    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+        donna_tree_view_set_location (tree, node, NULL);
+    else
+    {
+        gchar *s;
+
+        s = donna_node_get_location (node);
+        g_debug ("db-click on %s", s);
+        g_free (s);
+    }
+
+    g_object_unref (node);
+}
+
+static gboolean
+donna_tree_view_button_press_event (GtkWidget      *widget,
+                                    GdkEventButton *event)
+{
+    DonnaTreeView *tree = DONNA_TREE_VIEW (widget);
     GtkTreeView *treev = GTK_TREE_VIEW (tree);
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeViewColumn *column;
@@ -4190,8 +4249,9 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
     GtkTreeIter iter;
     gint x, y;
 
-    if (event->button != 1 || event->type != GDK_BUTTON_PRESS)
-        return FALSE;
+    if (event->window != gtk_tree_view_get_bin_window (treev)
+            || event->button != 1 || event->type != GDK_BUTTON_PRESS)
+        goto chainup;
 
     x = (gint) event->x;
     y = (gint) event->y;
@@ -4241,7 +4301,7 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
             if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
             {
                 g_object_unref (node);
-                return FALSE;
+                goto chainup;
             }
 #endif
 
@@ -4249,7 +4309,7 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
             if (G_UNLIKELY (!as))
             {
                 g_object_unref (node);
-                return FALSE;
+                goto chainup;
             }
 
             for (i = 0; i < as->as_cols->len; ++i)
@@ -4327,7 +4387,9 @@ button_press_cb (DonnaTreeView *tree, GdkEventButton *event, gpointer data)
         }
     }
 
-    return FALSE;
+chainup:
+    return GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_press_event (
+            widget, event);
 }
 
 static gboolean
@@ -4477,11 +4539,6 @@ donna_tree_view_new (DonnaApp    *app,
     g_signal_connect (G_OBJECT (w), "query-tooltip",
             G_CALLBACK (query_tooltip_cb), NULL);
     gtk_widget_set_has_tooltip (w, TRUE);
-
-    /* click */
-    gtk_widget_add_events (w, GDK_BUTTON_RELEASE_MASK);
-    g_signal_connect (G_OBJECT (w), "button-press-event",
-            G_CALLBACK (button_press_cb), NULL);
 
     tree        = DONNA_TREE_VIEW (w);
     priv        = tree->priv;
