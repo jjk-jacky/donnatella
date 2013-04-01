@@ -414,9 +414,15 @@ sync_with_location_changed_cb (GObject       *object,
     sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (tree));
     if (iter)
     {
+        GtkTreePath *path;
+
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_BROWSE);
-        /* we select the new row */
-        gtk_tree_selection_select_iter (sel, iter);
+        /* we select the new row and put the cursor on it (required to get
+         * things working when collapsing the parent) */
+        path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
+        gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
+        gtk_tree_path_free (path);
+
         /* we want to scroll to this current row, but we do it in an idle
          * source to make sure any pending drawing has been processed;
          * specifically any expanding that might have been requested */
@@ -3921,11 +3927,14 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         iter = get_best_iter_for_node (tree, node, error);
         if (iter)
         {
-            GtkTreeSelection *sel;
+            GtkTreePath *path;
 
-            /* we select the new row */
-            sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (tree));
-            gtk_tree_selection_select_iter (sel, iter);
+            /* we select the new row and put the cursor on it (required to get
+             * things working when collapsing the parent) */
+            path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
+            gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
+            gtk_tree_path_free (path);
+
             /* we want to scroll to this current row, but we do it in an idle
              * source to make sure any pending drawing has been processed;
              * specifically any expanding that might have been requested */
