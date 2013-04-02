@@ -60,6 +60,7 @@ enum tree_sync
 {
     DONNA_TREE_SYNC_NONE = 0,
     DONNA_TREE_SYNC_NODES,
+    DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN,
     DONNA_TREE_SYNC_NODES_CHILDREN,
     DONNA_TREE_SYNC_FULL
 };
@@ -187,7 +188,7 @@ struct _DonnaTreeViewPrivate
     guint                sort_groups : 2;
     /* mode Tree */
     guint                is_minitree : 1;
-    guint                sync_mode   : 2;
+    guint                sync_mode   : 3;
     /* mode List */
     guint                draw_state  : 2;
 };
@@ -389,6 +390,7 @@ sync_with_location_changed_cb (GObject       *object,
                                DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeView *treev;
     GtkTreeSelection *sel;
     GtkTreeIter *iter = NULL;
     DonnaNode *node;
@@ -406,6 +408,10 @@ sync_with_location_changed_cb (GObject       *object,
             iter = get_best_existing_iter_for_node (tree, node, FALSE);
             break;
 
+        case DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN:
+            iter = get_best_existing_iter_for_node (tree, node, TRUE);
+            break;
+
         case DONNA_TREE_SYNC_NODES_CHILDREN:
             if (priv->location)
                 iter = get_iter_expanding_if_needed (tree,
@@ -417,7 +423,8 @@ sync_with_location_changed_cb (GObject       *object,
             break;
     }
 
-    sel = gtk_tree_view_get_selection (GTK_TREE_VIEW (tree));
+    treev = GTK_TREE_VIEW (tree);
+    sel = gtk_tree_view_get_selection (treev);
     if (iter)
     {
         GtkTreePath *path;
@@ -426,7 +433,25 @@ sync_with_location_changed_cb (GObject       *object,
         /* we select the new row and put the cursor on it (required to get
          * things working when collapsing the parent) */
         path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
-        gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
+        if (priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
+        {
+            GtkTreePath *p;
+            gint i, depth, *indices;
+
+            /* we're doing here the same as gtk_tree_view_expand_to_path() only
+             * without expanding the row at path itself (only parents to it) */
+
+            indices = gtk_tree_path_get_indices_with_depth (path, &depth);
+            --depth;
+            p = gtk_tree_path_new ();
+            for (i = 0; i < depth; ++i)
+            {
+                gtk_tree_path_append_index (p, indices[i]);
+                gtk_tree_view_expand_row (treev, p, FALSE);
+            }
+            gtk_tree_path_free (p);
+        }
+        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
         gtk_tree_path_free (path);
 
         /* we want to scroll to this current row, but we do it in an idle
@@ -3240,7 +3265,8 @@ is_row_accessible (DonnaTreeView *tree, GtkTreeIter *iter)
 /* mode tree only */
 /* return the best iter for the given node. Iter must exists on tree, and must
  * be expanded unless even_collapsed is TRUE.
- * This is how we get the new current location in DONNA_TREE_SYNC_NODES */
+ * This is how we get the new current location in DONNA_TREE_SYNC_NODES and
+ * DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN */
 static GtkTreeIter *
 get_best_existing_iter_for_node (DonnaTreeView  *tree,
                                  DonnaNode      *node,
