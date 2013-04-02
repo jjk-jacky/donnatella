@@ -637,11 +637,14 @@ is_watched_iter_valid (DonnaTreeView *tree, GtkTreeIter *iter, gboolean remove)
     return FALSE;
 }
 
+typedef void (*node_children_extra_cb) (DonnaTreeView *tree, GtkTreeIter *iter);
+
 struct node_children_data
 {
-    DonnaTreeView   *tree;
-    GtkTreeIter      iter;
-    gboolean         scroll_to_current;
+    DonnaTreeView           *tree;
+    GtkTreeIter              iter;
+    gboolean                 scroll_to_current;
+    node_children_extra_cb   extra_callback;
 };
 
 static void
@@ -995,6 +998,10 @@ node_get_children_tree_cb (DonnaTask                   *task,
     if (data->scroll_to_current)
         scroll_to_current (data->tree);
 
+    /* for check_children_post_expand() */
+    if (data->extra_callback)
+        data->extra_callback (data->tree, &data->iter);
+
     free_node_children_data (data);
 }
 
@@ -1002,8 +1009,11 @@ node_get_children_tree_cb (DonnaTask                   *task,
 /* this should only be used for rows that we want expanded and are either
  * NEVER or UNKNOWN -- everything else is either already being done, or can be
  * done already (needing at most just a switch of expand_state (NEVER_FULL)) */
-static void
-expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
+static gboolean
+expand_row (DonnaTreeView           *tree,
+            GtkTreeIter             *iter,
+            gboolean                 scroll_current,
+            node_children_extra_cb   extra_callback)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
@@ -1021,7 +1031,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
         /* FIXME */
         donna_error ("Treeview '%s': could not get node from model",
                 priv->name);
-        return;
+        return FALSE;
     }
 
     /* is there another tree node for this node? */
@@ -1080,7 +1090,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
                 if (scroll_current)
                     scroll_to_current (tree);
 
-                return;
+                return TRUE;
             }
         }
     }
@@ -1115,7 +1125,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
             if (scroll_current)
                 scroll_to_current (tree);
 
-            return;
+            return TRUE;
         }
     }
 
@@ -1128,6 +1138,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
     data->scroll_to_current = scroll_current;
     data->iter = *iter;
     watch_iter (tree, &data->iter);
+    data->extra_callback = extra_callback;
 
     /* FIXME: timeout_delay must be an option */
     donna_task_set_timeout (task, 800,
@@ -1146,6 +1157,7 @@ expand_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean scroll_current)
     donna_app_run_task (priv->app, task);
     g_object_unref (node);
     g_object_unref (provider);
+    return FALSE;
 }
 
 static gboolean
@@ -1184,7 +1196,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         case DONNA_TREE_EXPAND_NEVER:
             /* this will add an idle source import_children, or start a new task
              * get_children */
-            expand_row (tree, iter, FALSE);
+            expand_row (tree, iter, FALSE, NULL);
             return TRUE;
 
         /* refuse expansion. This case should never happen */
@@ -3500,7 +3512,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 {
                     /* this will take care of the import/get-children, TRUE to
                      * make sure to scroll to current once children are added */
-                    expand_row (tree, prev_iter, TRUE);
+                    expand_row (tree, prev_iter, TRUE, NULL);
                     /* now that the thread is started, we need to trigger it
                      * again, so the row actually gets expanded this time, which
                      * we require to be able to continue adding children &
@@ -4246,6 +4258,71 @@ donna_tree_view_row_activated (GtkTreeView    *treev,
     g_object_unref (node);
 }
 
+static void
+check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
+    DonnaNode *loc_node;
+    DonnaProvider *loc_provider;
+    gchar *loc_location;
+    GtkTreeIter child;
+
+    loc_node = donna_tree_view_get_location (priv->sync_with);
+    if (G_UNLIKELY (!gtk_tree_model_iter_children (model, &child, iter)))
+    {
+        g_object_unref (loc_node);
+        return;
+    }
+
+    loc_provider = donna_node_get_provider (loc_node);
+    loc_location = donna_node_get_location (loc_node);
+    do
+    {
+        DonnaNode *n;
+
+        gtk_tree_model_get (model, &child,
+                DONNA_TREE_COL_NODE,    &n,
+                -1);
+        /* did we just revealed the node or one of its parent? */
+        if (n == loc_node || is_node_ancestor (n, loc_node,
+                    loc_provider, loc_location))
+        {
+            GtkTreeView *treev = GTK_TREE_VIEW (tree);
+            GtkTreeSelection *sel;
+            GtkTreePath *loc_path;
+
+            if (n != loc_node)
+            {
+                /* ancestor, so we just want to put the
+                 * cursor on the node, no selection */
+                sel = gtk_tree_view_get_selection (treev);
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+            }
+            /* this is our location, let's make it so */
+            loc_path = gtk_tree_model_get_path (model, &child);
+            gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
+            gtk_tree_path_free (loc_path);
+            if (n != loc_node)
+            {
+                /* restore selection mode; also grab the
+                 * focus to indicate the node has received
+                 * the cursor, i.e. collapsing will result
+                 * in a change of current location */
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+                gtk_widget_grab_focus (GTK_WIDGET (treev));
+            }
+            g_object_unref (n);
+            break;
+        }
+        g_object_unref (n);
+    } while (gtk_tree_model_iter_next (model, &child));
+
+    g_object_unref (loc_provider);
+    g_free (loc_location);
+    g_object_unref (loc_node);
+}
+
 static gboolean
 donna_tree_view_button_press_event (GtkWidget      *widget,
                                     GdkEventButton *event)
@@ -4310,8 +4387,65 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 return TRUE;
 
 #ifdef GTK_IS_JJK
-            if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
+            if (!renderer)
             {
+                GtkTreePath *path;
+
+                /* i.e. clicked on an expander */
+
+                path = gtk_tree_model_get_path (model, &iter);
+                if (gtk_tree_view_row_expanded (treev, path))
+                    gtk_tree_view_collapse_row (treev, path);
+                else
+                {
+                    /* are we not "in sync" with our list's location, i.e.
+                     * there's no row for it on tree */
+                    if (!priv->location && priv->sync_with)
+                    {
+                        gboolean expanded = FALSE;
+                        enum tree_expand es;
+
+                        gtk_tree_model_get (model, &iter,
+                                DONNA_TREE_COL_EXPAND_STATE,    &es,
+                                -1);
+                        switch (es)
+                        {
+                            case DONNA_TREE_EXPAND_UNKNOWN:
+                            case DONNA_TREE_EXPAND_NEVER:
+                                /* if it could expand (e.g. import children),
+                                 * returns TRUE; else (task get_children)
+                                 * returns FALSE, but has installed the extra_cb
+                                 * to be triggered after the task's cb */
+                                expanded = expand_row (tree, &iter, FALSE,
+                                        (node_children_extra_cb) check_children_post_expand);
+                                break;
+
+                            case DONNA_TREE_EXPAND_NEVER_FULL:
+                            case DONNA_TREE_EXPAND_PARTIAL:
+                            case DONNA_TREE_EXPAND_FULL:
+                                /* expansion will be done instantly */
+                                gtk_tree_view_expand_row (treev, path, FALSE);
+                                expanded = TRUE;
+                                break;
+
+                            /* NONE & WIP are ignored, and really they shouldn't
+                             * happen */
+                        }
+
+                        if (expanded)
+                            check_children_post_expand (tree, &iter);
+                    }
+                    else
+                        gtk_tree_view_expand_row (treev, path, FALSE);
+                }
+                gtk_tree_path_free (path);
+
+                /* handled */
+                return TRUE;
+            }
+            else if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
+            {
+                /* not on the error icon, let treev handle it */
                 g_object_unref (node);
                 goto chainup;
             }
