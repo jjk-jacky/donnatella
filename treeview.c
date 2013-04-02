@@ -4459,19 +4459,22 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
                 -1);
         if (priv->location != node)
         {
-            DonnaNode *n;
-
             if (priv->location)
                 g_object_unref (priv->location);
             priv->location = node;
 
-            /* should we ask the list to change its location? */
-            n = donna_tree_view_get_location (priv->sync_with);
-            g_object_unref (n);
-            if (n == node)
-                return;
+            if (priv->sync_with)
+            {
+                DonnaNode *n;
 
-            donna_tree_view_set_location (priv->sync_with, node, NULL);
+                /* should we ask the list to change its location? */
+                n = donna_tree_view_get_location (priv->sync_with);
+                g_object_unref (n);
+                if (n == node)
+                    return;
+
+                donna_tree_view_set_location (priv->sync_with, node, NULL);
+            }
         }
         else if (node)
             g_object_unref (node);
