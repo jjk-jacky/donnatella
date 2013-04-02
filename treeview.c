@@ -940,7 +940,10 @@ node_get_children_tree_cb (DonnaTask                   *task,
                            struct node_children_data   *data)
 {
     if (!is_watched_iter_valid (data->tree, &data->iter, TRUE))
+    {
+        free_node_children_data (data);
         return;
+    }
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
