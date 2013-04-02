@@ -441,6 +441,15 @@ sync_with_location_changed_cb (GObject       *object,
          * automatically back to SELECTION_BROWSE) */
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
         gtk_tree_selection_unselect_all (sel);
+
+        /* we need to update current location (since there's no call to
+         * selection_changed_cb to do it)  */
+        if (priv->location)
+        {
+            g_object_unref (priv->location);
+            priv->location = NULL;
+            priv->location_iter.stamp = 0;
+        }
     }
 
     g_object_unref (node);
