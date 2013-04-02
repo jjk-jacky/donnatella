@@ -4556,7 +4556,6 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 
     if (gtk_tree_selection_get_selected (selection, NULL, &iter))
     {
-        GtkTreeModelFilter *filter;
         GtkTreeModel *model;
         DonnaNode *node;
         enum tree_expand es;
