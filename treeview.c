@@ -2042,7 +2042,6 @@ add_node_to_tree (DonnaTreeView *tree,
     const gchar             *domain;
     gchar                   *s;
     DonnaTreeViewPrivate    *priv;
-    GtkTreeView             *treev;
     GtkTreeModel            *model;
     GtkTreeIter              iter;
     GSList                  *list;
@@ -2056,7 +2055,6 @@ add_node_to_tree (DonnaTreeView *tree,
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
-    treev = GTK_TREE_VIEW (tree);
     priv  = tree->priv;
     model = GTK_TREE_MODEL (priv->store);
 
@@ -2737,8 +2735,6 @@ next:
     /* remove all columns left unused */
     while (list)
     {
-        gpointer ct_data;
-
         /* though we should never try to sort by a sort_id not used by a column,
          * let's make sure it that happens, we just get a warning (instead of
          * dereferencing a pointer pointing nowhere) */
@@ -3731,15 +3727,12 @@ scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter, gboolean select_row)
 static gboolean
 scroll_to_current (DonnaTreeView *tree)
 {
-    GtkTreeView *treev = GTK_TREE_VIEW (tree);
-    GtkTreeSelection *sel;
-    GtkTreeModel *model;
     GtkTreeIter iter;
-    GtkTreePath *path;
-    GdkRectangle rect_visible, rect;
 
-    sel = gtk_tree_view_get_selection (treev);
-    if (!gtk_tree_selection_get_selected (sel, &model, &iter))
+    if (!gtk_tree_selection_get_selected (
+                gtk_tree_view_get_selection (GTK_TREE_VIEW (tree)),
+                NULL,
+                &iter))
         return FALSE;
 
     scroll_to_iter (tree, &iter, FALSE);
@@ -3790,22 +3783,15 @@ node_get_children_list_cb (DonnaTask                            *task,
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        GtkTreeModel      *model;
-        GtkTreePath       *path;
-        DonnaNode         *node;
-        const gchar       *domain;
         gchar             *location;
         const GError      *error;
 
-        donna_node_get (data->node, FALSE,
-                "domain",   &domain,
-                "location", &location,
-                NULL);
+        location = donna_node_get_location (data->node);
         error = donna_task_get_error (task);
         /* FIXME */
         donna_error ("Treeview '%s': Failed to get children for node '%s:%s': %s",
                 data->tree->priv->name,
-                domain,
+                donna_node_get_domain (data->node),
                 location,
                 (error) ? error->message : "No error message");
         g_free (location);
@@ -3888,27 +3874,18 @@ node_get_parent_list_cb (DonnaTask                            *task,
     DonnaTreeViewPrivate *priv = data->tree->priv;
     DonnaProvider *provider;
     const GValue *value;
-    GPtrArray *arr;
-    guint i;
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        GtkTreeModel      *model;
-        GtkTreePath       *path;
-        DonnaNode         *node;
-        const gchar       *domain;
         gchar             *location;
         const GError      *error;
 
-        donna_node_get (data->node, FALSE,
-                "domain",   &domain,
-                "location", &location,
-                NULL);
+        location = donna_node_get_location (data->node);
         error = donna_task_get_error (task);
         /* FIXME */
         donna_error ("Treeview '%s': Failed to get parent for node '%s:%s': %s",
                 data->tree->priv->name,
-                domain,
+                donna_node_get_domain (data->node),
                 location,
                 (error) ? error->message : "No error message");
         g_free (location);
@@ -4436,8 +4413,10 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                                 expanded = TRUE;
                                 break;
 
-                            /* NONE & WIP are ignored, and really they shouldn't
-                             * happen */
+                            case DONNA_TREE_EXPAND_NONE:
+                            case DONNA_TREE_EXPAND_WIP:
+                                /* shouldn't happen - this is to avoid warning */
+                                break;
                         }
 
                         if (expanded)
@@ -4565,7 +4544,6 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     if (gtk_tree_selection_get_selected (selection, NULL, &iter))
     {
         DonnaNode *node;
-        enum tree_expand es;
 
         /* might have been to SELECTION_SINGLE if there was no selection, due to
          * unsync with the list (or minitree mode) */
