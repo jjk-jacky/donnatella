@@ -2,12 +2,15 @@
 #include <locale.h>
 #include <gtk/gtk.h>
 #include "donna.h"
+#include "debug.h"
 #include "app.h"
 #include "provider-config.h"
 #include "columntype.h"
 #include "columntype-name.h"
 #include "node.h"
 #include "macros.h"
+
+guint donna_debug_flags = 0;
 
 enum
 {

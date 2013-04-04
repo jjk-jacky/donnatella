@@ -3,6 +3,7 @@
 #include <gobject/gvaluecollector.h>    /* G_VALUE_LCOPY */
 #include <string.h>                     /* memset() */
 #include "node.h"
+#include "debug.h"
 #include "provider.h"                   /* donna_provider_node_updated() */
 #include "task.h"
 #include "util.h"
@@ -244,6 +245,10 @@ donna_node_finalize (GObject *object)
     gint i;
 
     priv = DONNA_NODE (object)->priv;
+    DONNA_DEBUG (NODE,
+        g_debug4 ("Finalizing node '%s:%s'",
+            donna_provider_get_domain (priv->provider),
+            priv->location));
     /* it is said that dispose should do the unref-ing, but at the same time
      * the object is supposed to be able to be "revived" from dispose, and we
      * need a ref to provider to survive... */
@@ -517,6 +522,11 @@ donna_node_add_property (DonnaNode       *node,
     }
     /* add prop to the hash table */
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
+    DONNA_DEBUG (NODE,
+            g_debug2 ("Node '%s:%s': added property '%s'",
+                donna_provider_get_domain (priv->provider),
+                priv->location,
+                name));
     g_rw_lock_writer_unlock (&priv->props_lock);
 
     return TRUE;
@@ -682,6 +692,11 @@ grab_basic_value:
                 {
                     if (*has_value == DONNA_NODE_VALUE_NEED_REFRESH && is_blocking)
                     {
+                        DONNA_DEBUG (NODE,
+                                g_debug2 ("node_get() for '%s:%s': refreshing %s",
+                                    donna_provider_get_domain (priv->provider),
+                                    priv->location,
+                                    name));
                         /* we need to release the lock, since the refresher
                          * should call set_property_value, hence need a writer
                          * lock */
@@ -714,6 +729,11 @@ grab_basic_value:
         {
             if (is_blocking)
             {
+                DONNA_DEBUG (NODE,
+                        g_debug2 ("node_get() for '%s:%s': refreshing %s",
+                            donna_provider_get_domain (priv->provider),
+                            priv->location,
+                            name));
                 /* release the lock for refresher */
                 g_rw_lock_reader_unlock (&priv->props_lock);
                 if (prop->refresher (NULL /* no task */, node, name))
@@ -895,6 +915,11 @@ grab_basic_value:
     }
     else if (has_value == DONNA_NODE_VALUE_NEED_REFRESH && is_blocking)
     {
+        DONNA_DEBUG (NODE,
+                g_debug2 ("node_get_*() for '%s:%s': refreshing %s",
+                    donna_provider_get_domain (priv->provider),
+                    priv->location,
+                    node_basic_properties[FIRST_BASIC_PROP + basic_id]));
         /* we need to release the lock, since the refresher
          * should call set_property_value, hence need a writer
          * lock */
@@ -1319,6 +1344,11 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
         if (done)
             continue;
 
+        DONNA_DEBUG (NODE,
+                g_debug2 ("node_refresh() for '%s:%s': refreshing %s",
+                    donna_provider_get_domain (priv->provider),
+                    priv->location,
+                    (gchar *) names->pdata[i]));
         if (!refresher (task, data->node, names->pdata[i]))
             ret = DONNA_TASK_FAILED;
     }
@@ -1544,6 +1574,11 @@ set_property (DonnaTask *task, struct set_property *data)
     GValue value = G_VALUE_INIT;
     DonnaTaskState ret;
 
+    DONNA_DEBUG (TASK,
+            g_debug3 ("set_property(%s) for '%s:%s'",
+                data->prop->name,
+                donna_provider_get_domain (data->node->priv->provider),
+                data->node->priv->location));
     ret = data->prop->setter (task, data->node, data->prop->name,
             (const GValue *) data->value);
 
@@ -1718,6 +1753,11 @@ donna_node_set_property_value (DonnaNode     *node,
     g_return_if_fail (name != NULL);
 
     g_rw_lock_writer_lock (&node->priv->props_lock);
+    DONNA_DEBUG (NODE,
+            g_debug3 ("set_property_value(%s) on '%s:%s'",
+                name,
+                donna_provider_get_domain (node->priv->provider),
+                node->priv->location));
 
     /* name? */
     if (streq (name, "name"))
