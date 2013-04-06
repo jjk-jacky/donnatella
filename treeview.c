@@ -1150,7 +1150,7 @@ expand_row (DonnaTreeView           *tree,
 
     donna_node_get (node, FALSE, "provider", &provider, NULL);
     task = donna_provider_get_node_children_task (provider, node,
-            priv->node_types);
+            priv->node_types, NULL);
 
     data = g_slice_new0 (struct node_children_data);
     data->tree  = tree;
@@ -1578,7 +1578,7 @@ rend_func (GtkTreeViewColumn  *column,
         priv->refresh_node_props = g_slist_append (priv->refresh_node_props, data);
         g_mutex_unlock (&priv->refresh_node_props_mutex);
 
-        task = donna_node_refresh_arr_task (node, arr);
+        task = donna_node_refresh_arr_task (node, arr, NULL);
         donna_task_set_callback (task,
                 (task_callback_fn) refresh_node_prop_cb,
                 data,
@@ -2051,6 +2051,7 @@ add_node_to_tree (DonnaTreeView *tree,
     DonnaTask               *task;
     gboolean                 added;
     guint                    i;
+    GError                  *err = NULL;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -2224,7 +2225,8 @@ add_node_to_tree (DonnaTreeView *tree,
         return TRUE;
     }
 
-    task = donna_provider_has_node_children_task (provider, node, priv->node_types);
+    task = donna_provider_has_node_children_task (provider, node,
+            priv->node_types, &err);
     if (task)
     {
         struct node_children_data *data;
@@ -2256,10 +2258,11 @@ add_node_to_tree (DonnaTreeView *tree,
             DONNA_TREE_COL_NODE,    NULL,
             -1);
 
-        donna_node_get (node, FALSE, "location", &location, NULL);
-        g_warning ("Treeview '%s': Unable to create a task to determine if the node '%s:%s' has children",
-                priv->name, domain, location);
+        location = donna_node_get_location (node);
+        g_warning ("Treeview '%s': Unable to create a task to determine if the node '%s:%s' has children: %s",
+                priv->name, domain, location, err->message);
         g_free (location);
+        g_clear_error (&err);
     }
 
     g_object_unref (provider);
@@ -3433,7 +3436,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             s = (gchar *) location;
 
         /* get the corresponding node */
-        task = donna_provider_get_node_task (provider, (const gchar *) s);
+        task = donna_provider_get_node_task (provider, (const gchar *) s, NULL);
         if (s != location)
             g_free (s);
         g_object_ref_sink (task);
@@ -3604,7 +3607,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         if (s)
             *++s = '\0';
 
-        task = donna_provider_get_node_task (provider, location);
+        task = donna_provider_get_node_task (provider, location, NULL);
         g_object_ref_sink (task);
         donna_task_run (task);
         if (donna_task_get_state (task) != DONNA_TASK_DONE)
@@ -3901,7 +3904,7 @@ node_get_parent_list_cb (DonnaTask                            *task,
     donna_node_get (data->node, FALSE, "provider", &provider, NULL);
 
     task = donna_provider_get_node_children_task (provider, data->node,
-            priv->node_types);
+            priv->node_types, NULL);
     if (!timeout_called)
         donna_task_set_timeout (task, 800, /* FIXME */
                 (task_timeout_fn) node_get_children_list_timeout,
@@ -3974,7 +3977,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             data->node = g_object_ref (node);
 
             task = donna_provider_get_node_children_task (provider, node,
-                    priv->node_types);
+                    priv->node_types, NULL);
             donna_task_set_timeout (task, 800, /* FIXME */
                     (task_timeout_fn) node_get_children_list_timeout,
                     tree,
@@ -4001,7 +4004,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             data->tree = tree;
             data->child = g_object_ref (node);
 
-            task = donna_provider_get_node_parent_task (provider, node);
+            task = donna_provider_get_node_parent_task (provider, node, NULL);
             donna_task_set_timeout (task, 800, /* FIXME */
                     (task_timeout_fn) node_get_children_list_timeout,
                     tree,

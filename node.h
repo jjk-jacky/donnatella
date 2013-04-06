@@ -162,10 +162,12 @@ DonnaNodeHasValue donna_node_get_Type       (DonnaNode              *node,
                                              gboolean                is_blocking,
                                              gchar                 **user);
 DonnaTask *     donna_node_refresh_task     (DonnaNode              *node,
+                                             GError                **error,
                                              const gchar            *first_name,
                                              ...);
 DonnaTask *     donna_node_refresh_arr_task (DonnaNode              *node,
-                                             GPtrArray              *props);
+                                             GPtrArray              *props,
+                                             GError                **error);
 DonnaTask *     donna_node_set_property_task    (DonnaNode          *node,
                                                  const gchar        *name,
                                                  const GValue       *value,

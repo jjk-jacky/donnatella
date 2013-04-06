@@ -30,21 +30,26 @@ static void             provider_base_add_node_to_cache (
 /* DonnaProvider */
 static DonnaTask *      provider_base_get_node_task (
                                             DonnaProvider       *provider,
-                                            const gchar         *location);
+                                            const gchar         *location,
+                                            GError             **error);
 static DonnaTask *      provider_base_has_node_children_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
-                                            DonnaNodeType        node_types);
+                                            DonnaNodeType        node_types,
+                                            GError             **error);
 static DonnaTask *      provider_base_get_node_children_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
-                                            DonnaNodeType        node_types);
+                                            DonnaNodeType        node_types,
+                                            GError             **error);
 static DonnaTask *      provider_base_remove_node_task (
                                             DonnaProvider       *provider,
-                                            DonnaNode           *node);
+                                            DonnaNode           *node,
+                                            GError             **error);
 static DonnaTask *      provider_base_get_node_parent_task (
                                             DonnaProvider       *provider,
-                                            DonnaNode           *node);
+                                            DonnaNode           *node,
+                                            GError             **error);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -276,16 +281,14 @@ get_node (DonnaTask *task, struct get_node_data *data)
 
 static DonnaTask *
 provider_base_get_node_task (DonnaProvider    *provider,
-                             const gchar      *location)
+                             const gchar      *location,
+                             GError          **error)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
-    DonnaProviderBasePrivate *priv;
     DonnaTask *task;
     struct get_node_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
-
-    priv = p->priv;
 
     data = g_slice_new0 (struct get_node_data);
     data->provider_base = g_object_ref (p);
@@ -330,7 +333,8 @@ has_children (DonnaTask *task, struct node_children_data *data)
 static DonnaTask *
 provider_base_has_node_children_task (DonnaProvider *provider,
                                       DonnaNode     *node,
-                                      DonnaNodeType  node_types)
+                                      DonnaNodeType  node_types,
+                                      GError       **error)
 {
     DonnaTask *task;
     gchar *location;
@@ -380,7 +384,8 @@ get_children (DonnaTask *task, struct node_children_data *data)
 static DonnaTask *
 provider_base_get_node_children_task (DonnaProvider  *provider,
                                       DonnaNode      *node,
-                                      DonnaNodeType   node_types)
+                                      DonnaNodeType   node_types,
+                                      GError        **error)
 {
     DonnaTask *task;
     gchar *location;
@@ -426,7 +431,8 @@ remove_node (DonnaTask *task, DonnaNode *node)
 
 static DonnaTask *
 provider_base_remove_node_task (DonnaProvider   *provider,
-                                DonnaNode       *node)
+                                DonnaNode       *node,
+                                GError         **error)
 {
     DonnaTask *task;
     const gchar *domain;
@@ -509,7 +515,8 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
 
 static DonnaTask *
 provider_base_get_node_parent_task (DonnaProvider   *provider,
-                                    DonnaNode       *node)
+                                    DonnaNode       *node,
+                                    GError         **error)
 {
     DonnaTask *task;
     const gchar *domain;

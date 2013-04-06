@@ -448,7 +448,7 @@ tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
     DonnaNode *node;
 
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
-            "/home/jjacky/donnatella");
+            "/home/jjacky/donnatella/donna.c", NULL);
     g_object_ref_sink (task);
     donna_task_run (task);
     value = donna_task_get_return_value (task);
@@ -497,7 +497,7 @@ tb_new_root_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
     DonnaTask *task;
 
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
-            "/tmp/test");
+            "/", NULL);
     donna_task_set_callback (task, new_root_cb, tree, NULL);
     donna_app_run_task (DONNA_APP (d), task);
 }
@@ -531,7 +531,7 @@ tb_add_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
     gchar *s;
 
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
-            "/tmp/test/foobar");
+            "/tmp/test/foobar", NULL);
     g_object_ref_sink (task);
     donna_task_run (task);
     value = donna_task_get_return_value (task);
@@ -648,7 +648,7 @@ main (int argc, char *argv[])
     GtkTreeModel *model;
     model = gtk_tree_view_get_model (tree);
     g_signal_connect (G_OBJECT (tb_btn), "clicked",
-            G_CALLBACK (tb_fill_tree_clicked_cb), tree);
+            G_CALLBACK (tb_fill_tree_clicked_cb), list);
     g_signal_connect (G_OBJECT (tb_btn2), "clicked",
             G_CALLBACK (tb_new_root_clicked_cb), tree);
     g_signal_connect (G_OBJECT (tb_btn3), "clicked",
@@ -664,7 +664,7 @@ main (int argc, char *argv[])
     g_object_notify (G_OBJECT (d), "active-list");
 
 #if 0
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/");
+    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/", NULL);
     g_object_ref_sink (task);
     donna_task_run (task);
     value = donna_task_get_return_value (task);
@@ -674,7 +674,8 @@ main (int argc, char *argv[])
     g_object_unref (node);
 #endif
 
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/tmp/test");
+    //task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/tmp/test", NULL);
+    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/home/jjacky/issue", NULL);
     g_object_ref_sink (task);
     donna_task_run (task);
     value = donna_task_get_return_value (task);

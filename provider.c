@@ -180,7 +180,8 @@ donna_provider_get_flags (DonnaProvider *provider)
 
 DonnaTask *
 donna_provider_get_node_task (DonnaProvider    *provider,
-                              const gchar      *location)
+                              const gchar      *location,
+                              GError          **error)
 {
     DonnaProviderInterface *interface;
 
@@ -192,13 +193,14 @@ donna_provider_get_node_task (DonnaProvider    *provider,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_node_task != NULL, NULL);
 
-    return (*interface->get_node_task) (provider, location);
+    return (*interface->get_node_task) (provider, location, error);
 }
 
 DonnaTask *
 donna_provider_has_node_children_task (DonnaProvider  *provider,
                                        DonnaNode      *node,
-                                       DonnaNodeType   node_types)
+                                       DonnaNodeType   node_types,
+                                       GError        **error)
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
@@ -221,13 +223,14 @@ donna_provider_has_node_children_task (DonnaProvider  *provider,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->has_node_children_task != NULL, NULL);
 
-    return (*interface->has_node_children_task) (provider, node, node_types);
+    return (*interface->has_node_children_task) (provider, node, node_types, error);
 }
 
 DonnaTask *
 donna_provider_get_node_children_task (DonnaProvider  *provider,
                                        DonnaNode      *node,
-                                       DonnaNodeType   node_types)
+                                       DonnaNodeType   node_types,
+                                       GError        **error)
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
@@ -250,12 +253,13 @@ donna_provider_get_node_children_task (DonnaProvider  *provider,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_node_children_task != NULL, NULL);
 
-    return (*interface->get_node_children_task) (provider, node, node_types);
+    return (*interface->get_node_children_task) (provider, node, node_types, error);
 }
 
 DonnaTask *
 donna_provider_remove_node_task (DonnaProvider  *provider,
-                                 DonnaNode      *node)
+                                 DonnaNode      *node,
+                                 GError        **error)
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
@@ -273,15 +277,17 @@ donna_provider_remove_node_task (DonnaProvider  *provider,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->remove_node_task != NULL, NULL);
 
-    return (*interface->remove_node_task) (provider, node);
+    return (*interface->remove_node_task) (provider, node, error);
 }
 
 DonnaTask *
 donna_provider_get_node_parent_task (DonnaProvider  *provider,
-                                     DonnaNode      *node)
+                                     DonnaNode      *node,
+                                     GError        **error)
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
+    DonnaProviderFlags flags;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
@@ -291,10 +297,19 @@ donna_provider_get_node_parent_task (DonnaProvider  *provider,
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 
+    flags = donna_provider_get_flags (provider);
+    if (flags & DONNA_PROVIDER_FLAG_INVALID || flags & DONNA_PROVIDER_FLAG_FLAT)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
+                "Provider '%s' is flat: impossible to get a node's parent",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
+
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_node_parent_task != NULL, NULL);
 
-    return (*interface->get_node_parent_task) (provider, node);
+    return (*interface->get_node_parent_task) (provider, node, error);
 }

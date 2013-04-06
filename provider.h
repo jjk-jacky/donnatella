@@ -46,17 +46,22 @@ struct _DonnaProviderInterface
     const gchar *       (*get_domain)               (DonnaProvider  *provider);
     DonnaProviderFlags  (*get_flags)                (DonnaProvider  *provider);
     DonnaTask *         (*get_node_task)            (DonnaProvider  *provider,
-                                                     const gchar    *location);
+                                                     const gchar    *location,
+                                                     GError        **error);
     DonnaTask *         (*has_node_children_task)   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
-                                                     DonnaNodeType   node_types);
+                                                     DonnaNodeType   node_types,
+                                                     GError        **error);
     DonnaTask *         (*get_node_children_task)   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
-                                                     DonnaNodeType   node_types);
+                                                     DonnaNodeType   node_types,
+                                                     GError        **error);
     DonnaTask *         (*remove_node_task)         (DonnaProvider  *provider,
-                                                     DonnaNode      *node);
+                                                     DonnaNode      *node,
+                                                     GError        **error);
     DonnaTask *         (*get_node_parent_task)     (DonnaProvider  *provider,
-                                                     DonnaNode      *node);
+                                                     DonnaNode      *node,
+                                                     GError        **error);
 };
 
 /* signals */
@@ -79,17 +84,22 @@ void    donna_provider_node_new_child               (DonnaProvider  *provider,
 const gchar * donna_provider_get_domain             (DonnaProvider  *provider);
 DonnaProviderFlags donna_provider_get_flags         (DonnaProvider  *provider);
 DonnaTask * donna_provider_get_node_task            (DonnaProvider  *provider,
-                                                     const gchar    *location);
+                                                     const gchar    *location,
+                                                     GError        **error);
 DonnaTask * donna_provider_has_node_children_task   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
-                                                     DonnaNodeType   node_types);
+                                                     DonnaNodeType   node_types,
+                                                     GError        **error);
 DonnaTask * donna_provider_get_node_children_task   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
-                                                     DonnaNodeType   node_types);
+                                                     DonnaNodeType   node_types,
+                                                     GError        **error);
 DonnaTask * donna_provider_remove_node_task         (DonnaProvider  *provider,
-                                                     DonnaNode      *node);
+                                                     DonnaNode      *node,
+                                                     GError        **error);
 DonnaTask * donna_provider_get_node_parent_task     (DonnaProvider  *provider,
-                                                     DonnaNode      *node);
+                                                     DonnaNode      *node,
+                                                     GError        **error);
 
 G_END_DECLS
 

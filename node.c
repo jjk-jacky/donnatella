@@ -1432,6 +1432,7 @@ free_refresh_data (struct refresh_data *data)
 /**
  * donna_node_refresh_task:
  * @node: Node to refresh properties of
+ * @error: (allow none): Return location of a #GError, or %NULL
  * @first_name: Name of the first property to refresh
  *
  * A task to refresh the specified properties. @first_name can be
@@ -1443,6 +1444,7 @@ free_refresh_data (struct refresh_data *data)
  */
 DonnaTask *
 donna_node_refresh_task (DonnaNode   *node,
+                         GError     **error,
                          const gchar *first_name,
                          ...)
 {
@@ -1507,6 +1509,7 @@ donna_node_refresh_task (DonnaNode   *node,
  * donna_node_refresh_arr_task:
  * @node: The node to refresh properties of
  * @props: (element-type const gchar *): A #GPtrArray of properties names
+ * @error: (allow none): Return location of a #GError, or %NULL
  *
  * Same as donna_node_refresh_task() but using a #GPtrArray
  *
@@ -1514,7 +1517,8 @@ donna_node_refresh_task (DonnaNode   *node,
  */
 DonnaTask *
 donna_node_refresh_arr_task (DonnaNode *node,
-                             GPtrArray *props)
+                             GPtrArray *props,
+                             GError   **error)
 {
     GPtrArray *names;
     guint i;

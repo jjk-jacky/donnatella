@@ -90,21 +90,26 @@ static DonnaProviderFlags provider_config_get_flags (
                                             DonnaProvider       *provider);
 static DonnaTask *      provider_config_get_node_task (
                                             DonnaProvider       *provider,
-                                            const gchar         *location);
+                                            const gchar         *location,
+                                            GError             **error);
 static DonnaTask *      provider_config_has_node_children_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
-                                            DonnaNodeType        node_types);
+                                            DonnaNodeType        node_types,
+                                            GError             **error);
 static DonnaTask *      provider_config_get_node_children_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
-                                            DonnaNodeType        node_types);
+                                            DonnaNodeType        node_types,
+                                            GError             **error);
 static DonnaTask *      provider_config_remove_node_task (
                                             DonnaProvider       *provider,
-                                            DonnaNode           *node);
+                                            DonnaNode           *node,
+                                            GError             **error);
 static DonnaTask *      provider_config_get_node_parent_task (
                                             DonnaProvider       *provider,
-                                            DonnaNode           *node);
+                                            DonnaNode           *node,
+                                            GError             **error);
 
 
 static void free_extra  (struct extra  *extra);
@@ -1988,7 +1993,8 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
 
 static DonnaTask *
 provider_config_get_node_task (DonnaProvider       *provider,
-                               const gchar         *location)
+                               const gchar         *location,
+                               GError             **error)
 {
     struct get_node_data *data;
 
@@ -2148,7 +2154,8 @@ node_children (DonnaTask *task, struct node_children_data *data)
 static DonnaTask *
 provider_config_has_node_children_task (DonnaProvider       *provider,
                                         DonnaNode           *node,
-                                        DonnaNodeType        node_types)
+                                        DonnaNodeType        node_types,
+                                        GError             **error)
 {
     struct node_children_data *data;
 
@@ -2166,7 +2173,8 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
 static DonnaTask *
 provider_config_get_node_children_task (DonnaProvider       *provider,
                                         DonnaNode           *node,
-                                        DonnaNodeType        node_types)
+                                        DonnaNodeType        node_types,
+                                        GError             **error)
 {
     struct node_children_data *data;
 
@@ -2210,7 +2218,8 @@ node_remove_option (DonnaTask *task, DonnaNode *node)
 
 static DonnaTask *
 provider_config_remove_node_task (DonnaProvider       *provider,
-                                  DonnaNode           *node)
+                                  DonnaNode           *node,
+                                  GError             **error)
 {
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
 
@@ -2301,7 +2310,8 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
 
 static DonnaTask *
 provider_config_get_node_parent_task (DonnaProvider *provider,
-                                      DonnaNode     *node)
+                                      DonnaNode     *node,
+                                      GError       **error)
 {
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
 
