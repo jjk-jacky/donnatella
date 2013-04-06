@@ -10,6 +10,7 @@
 #include "node.h"
 #include "task.h"
 #include "macros.h"
+#include "debug.h"
 
 enum
 {
@@ -1996,6 +1997,7 @@ provider_config_get_node_task (DonnaProvider       *provider,
                                const gchar         *location,
                                GError             **error)
 {
+    DonnaTask *task;
     struct get_node_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
@@ -2004,8 +2006,15 @@ provider_config_get_node_task (DonnaProvider       *provider,
     data->config = g_object_ref (provider);
     data->location = g_strdup (location);
 
-    return donna_task_new ((task_fn) return_option_node, data,
+    task = donna_task_new ((task_fn) return_option_node, data,
             (GDestroyNotify) free_get_node_data);
+
+    DONNA_DEBUG (TASK,
+            donna_task_take_desc (task, g_strdup_printf ("get_node() for '%s:%s'",
+                    donna_provider_get_domain (provider),
+                    location)));
+
+    return task;
 }
 
 struct node_children_data
@@ -2157,6 +2166,7 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
                                         DonnaNodeType        node_types,
                                         GError             **error)
 {
+    DonnaTask *task;
     struct node_children_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
@@ -2166,8 +2176,18 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
     data->node       = g_object_ref (node);
     data->node_types = node_types;
 
-    return donna_task_new ((task_fn) node_children, data,
+    task = donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "has_children() for node '%s:%s'",
+                    donna_node_get_domain (node),
+                    location));
+            g_free (location));
+
+    return task;
 }
 
 static DonnaTask *
@@ -2176,6 +2196,7 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
                                         DonnaNodeType        node_types,
                                         GError             **error)
 {
+    DonnaTask *task;
     struct node_children_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
@@ -2186,8 +2207,18 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
     data->node_types = node_types;
     data->children   = g_ptr_array_new ();
 
-    return donna_task_new ((task_fn) node_children, data,
+    task = donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "get_children() for node '%s:%s'",
+                    donna_node_get_domain (node),
+                    location));
+            g_free (location));
+
+    return task;
 }
 
 static DonnaTaskState
@@ -2221,11 +2252,23 @@ provider_config_remove_node_task (DonnaProvider       *provider,
                                   DonnaNode           *node,
                                   GError             **error)
 {
+    DonnaTask *task;
+
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
 
-    return donna_task_new ((task_fn) node_remove_option,
+    task = donna_task_new ((task_fn) node_remove_option,
             g_object_ref (node),
             g_object_unref);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "remove_node() for node '%s:%s'",
+                    donna_node_get_domain (node),
+                    location));
+            g_free (location));
+
+    return task;
 }
 
 static DonnaTaskState
@@ -2313,9 +2356,21 @@ provider_config_get_node_parent_task (DonnaProvider *provider,
                                       DonnaNode     *node,
                                       GError       **error)
 {
+    DonnaTask *task;
+
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
 
-    return donna_task_new ((task_fn) get_node_parent,
+    task = donna_task_new ((task_fn) get_node_parent,
             g_object_ref (node),
             g_object_unref);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "get_node_parent() for node '%s:%s'",
+                    donna_node_get_domain (node),
+                    location));
+            g_free (location));
+
+    return task;
 }

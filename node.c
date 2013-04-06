@@ -1448,6 +1448,7 @@ donna_node_refresh_task (DonnaNode   *node,
                          const gchar *first_name,
                          ...)
 {
+    DonnaTask           *task;
     GPtrArray           *names;
     struct refresh_data *data;
 
@@ -1501,8 +1502,18 @@ donna_node_refresh_task (DonnaNode   *node,
     data->node = g_object_ref (node);
     data->names = names;
 
-    return donna_task_new ((task_fn) node_refresh, data,
+    task = donna_task_new ((task_fn) node_refresh, data,
             (GDestroyNotify) free_refresh_data);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf ("refresh() for %d properties on node '%s:%s'",
+                    names->len,
+                    donna_node_get_domain (node),
+                    location));
+            g_free (location));
+
+    return task;
 }
 
 /**
@@ -1520,6 +1531,7 @@ donna_node_refresh_arr_task (DonnaNode *node,
                              GPtrArray *props,
                              GError   **error)
 {
+    DonnaTask *task;
     GPtrArray *names;
     guint i;
     struct refresh_data *data;
@@ -1538,8 +1550,18 @@ donna_node_refresh_arr_task (DonnaNode *node,
     data->node  = g_object_ref (node);
     data->names = names;
 
-    return donna_task_new ((task_fn) node_refresh, data,
+    task = donna_task_new ((task_fn) node_refresh, data,
             (GDestroyNotify) free_refresh_data);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf ("refresh_arr() for %d properties on node '%s:%s'",
+                names->len,
+                donna_node_get_domain (node),
+                location));
+            g_free (location));
+
+    return task;
 }
 
 struct set_property
@@ -1614,6 +1636,7 @@ donna_node_set_property_task (DonnaNode     *node,
                               const GValue  *value,
                               GError       **error)
 {
+    DonnaTask *task;
     DonnaNodePrivate *priv;
     DonnaNodeProp *prop;
     struct set_property *data;
@@ -1726,8 +1749,19 @@ donna_node_set_property_task (DonnaNode     *node,
     data->node = g_object_ref (node);
     data->prop = prop;
     data->value = duplicate_gvalue (value);
-    return donna_task_new ((task_fn) set_property, data,
+
+    task = donna_task_new ((task_fn) set_property, data,
             (GDestroyNotify) free_set_property);
+
+    DONNA_DEBUG (TASK,
+            gchar *location = donna_node_get_location (node);
+            donna_task_take_desc (task, g_strdup_printf ("set_property(%s) on node '%s:%s'",
+                    name,
+                    donna_node_get_domain (node),
+                    location));
+            g_free (location));
+
+    return task;
 }
 
 /**
