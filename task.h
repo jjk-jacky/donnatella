@@ -62,7 +62,8 @@ typedef void            (*task_timeout_fn)      (DonnaTask  *task,
 typedef void            (*task_callback_fn)     (DonnaTask  *task,
                                                  gboolean    timeout_called,
                                                  gpointer    data);
-typedef DonnaTask *     (*task_duplicate_fn)    (gpointer    data);
+typedef DonnaTask *     (*task_duplicate_fn)    (gpointer    data,
+                                                 GError    **error);
 
 struct _DonnaTask
 {
@@ -116,7 +117,8 @@ gboolean            donna_task_set_timeout      (DonnaTask          *task,
                                                  GDestroyNotify      destroy);
 
 gboolean            donna_task_can_be_duplicated(DonnaTask          *task);
-DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task);
+DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task,
+                                                 GError            **error);
 DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
 const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);

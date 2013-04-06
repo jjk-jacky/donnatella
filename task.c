@@ -948,6 +948,7 @@ donna_task_can_be_duplicated (DonnaTask *task)
 /**
  * donna_task_get_duplicate:
  * @task: Task to duplicate
+ * @error: (allow none): Return location for a GError, or %NULL
  *
  * A task can only be run once, and there is no possibility or re-starting it
  * after it ran (regardless or why it stopped, e.g. failure, cancellation, etc)
@@ -960,7 +961,7 @@ donna_task_can_be_duplicated (DonnaTask *task)
  * Returns: (transfer floating): A new floating #DonnaTask, or %NULL
  */
 DonnaTask *
-donna_task_get_duplicate (DonnaTask *task)
+donna_task_get_duplicate (DonnaTask *task, GError **error)
 {
     DonnaTaskPrivate *priv;
 
@@ -970,8 +971,7 @@ donna_task_get_duplicate (DonnaTask *task)
     if (!priv->duplicate_fn)
         return NULL;
 
-    /* FIXME should have a GError */
-    return priv->duplicate_fn (priv->duplicate_data);
+    return priv->duplicate_fn (priv->duplicate_data, error);
 }
 
 /**
