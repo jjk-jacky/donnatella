@@ -1653,8 +1653,12 @@ donna_node_set_property_task (DonnaNode     *node,
     if (streq (name, "provider") || streq (name, "domain")
             || streq (name, "location") || streq (name, "node-type"))
     {
-        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
-                "Internal property %s on node cannot be set", name);
+        gchar *location = donna_node_get_location (node);
+        g_warning ("Internal property %s (on node '%s:%s') cannot be set",
+                name,
+                donna_node_get_domain (node),
+                location);
+        g_free (location);
         return NULL;
     }
 
@@ -1663,11 +1667,26 @@ donna_node_set_property_task (DonnaNode     *node,
     {
         if (streq (name, *s))
         {
-            if (!(priv->flags & prop_writable_flags[i]))
+            if (priv->basic_props[i].has_value == DONNA_NODE_VALUE_NONE)
             {
-                /* TODO: check if the property exists on the node? */
+                gchar *location = donna_node_get_location (node);
+                g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_NOT_FOUND,
+                        "Property %s doesn't exist on node '%s:%s'",
+                        name,
+                        donna_node_get_domain (node),
+                        location);
+                g_free (location);
+                return NULL;
+            }
+            else if (!(priv->flags & prop_writable_flags[i]))
+            {
+                gchar *location = donna_node_get_location (node);
                 g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
-                        "Property %s on node cannot be set", name);
+                        "Property %s on node '%s:%s' cannot be set",
+                        name,
+                        donna_node_get_domain (node),
+                        location);
+                g_free (location);
                 return NULL;
             }
 
@@ -1676,8 +1695,7 @@ donna_node_set_property_task (DonnaNode     *node,
             {
                 if (!G_VALUE_HOLDS_STRING (value))
                 {
-                    g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
-                            "Property %s on node is of type %s, value passed is %s",
+                    g_warning ("Basic property %s is of type %s, value passed is %s",
                             name,
                             g_type_name (G_TYPE_STRING),
                             g_type_name (G_VALUE_TYPE (value)));
@@ -1690,8 +1708,7 @@ donna_node_set_property_task (DonnaNode     *node,
                 --i;
                 if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&(priv->basic_props[i].value))))
                 {
-                    g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
-                            "Property %s on node is of type %s, value passed is %s",
+                    g_warning ("Basic property %s is of type %s, value passed is %s",
                             name,
                             g_type_name (G_VALUE_TYPE (&priv->basic_props[i].value)),
                             g_type_name (G_VALUE_TYPE (value)));
@@ -1721,25 +1738,39 @@ donna_node_set_property_task (DonnaNode     *node,
         g_rw_lock_reader_unlock (&priv->props_lock);
         if (!prop)
         {
+            gchar *location = donna_node_get_location (node);
             g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_NOT_FOUND,
-                    "Node does not have a property %s", name);
+                    "Node '%s:%s' doesn't have a property %s",
+                    donna_node_get_domain (node),
+                    location,
+                    name);
+            g_free (location);
             return NULL;
         }
 
         if (!prop->setter)
         {
+            gchar *location = donna_node_get_location (node);
             g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_READ_ONLY,
-                    "Property %s on node cannot be set", name);
+                    "Property %s on node '%s:%s' can't be set",
+                    name,
+                    donna_node_get_domain (node),
+                    location);
+            g_free (location);
             return NULL;
         }
 
         if (!G_VALUE_HOLDS (value, G_VALUE_TYPE (&prop->value)))
         {
+            gchar *location = donna_node_get_location (node);
             g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_INVALID_TYPE,
-                    "Property %s on node is of type %s, value passed is %s",
+                    "Property %s on node '%s:%s' is of type %s, value passed is %s",
                     name,
+                    donna_node_get_domain (node),
+                    location,
                     g_type_name (G_VALUE_TYPE (&prop->value)),
                     g_type_name (G_VALUE_TYPE (value)));
+            g_free (location);
             return NULL;
         }
     }
