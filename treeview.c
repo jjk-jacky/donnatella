@@ -2739,7 +2739,7 @@ next:
     while (list)
     {
         /* though we should never try to sort by a sort_id not used by a column,
-         * let's make sure it that happens, we just get a warning (instead of
+         * let's make sure if that happens, we just get a warning (instead of
          * dereferencing a pointer pointing nowhere) */
         gtk_tree_sortable_set_sort_func (sortable, sort_id++, NULL, NULL, NULL);
         /* free the columntype-data */

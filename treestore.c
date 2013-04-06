@@ -127,8 +127,6 @@ static void
 donna_tree_store_init (DonnaTreeStore *store)
 {
     DonnaTreeStorePrivate *priv;
-    GtkTreeModelIface *interface;
-    guint sid;
 
     priv = store->priv = G_TYPE_INSTANCE_GET_PRIVATE (store,
             DONNA_TYPE_TREE_STORE, DonnaTreeStorePrivate);
@@ -223,7 +221,7 @@ tree_store_get_path (GtkTreeModel   *model,
     GtkTreeIter it;
     gint i;
 
-    g_return_val_if_fail (iter && iter_is_visible (iter), FALSE);
+    g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
     chain_up_if_possible (get_path, model, iter);
 
@@ -265,7 +263,7 @@ tree_store_iter_next (GtkTreeModel   *model,
     DonnaTreeStorePrivate *priv = store->priv;
     GtkTreeModel *_model = GTK_TREE_MODEL (priv->store);
 
-    g_return_val_if_fail (iter && iter_is_visible (iter), FALSE);
+    g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
     chain_up_if_possible (iter_next, model, iter);
 
@@ -284,7 +282,7 @@ tree_store_iter_previous (GtkTreeModel   *model,
     DonnaTreeStorePrivate *priv = store->priv;
     GtkTreeModel *_model = GTK_TREE_MODEL (priv->store);
 
-    g_return_val_if_fail (iter && iter_is_visible (iter), FALSE);
+    g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
     chain_up_if_possible (iter_previous, model, iter);
 
@@ -330,7 +328,7 @@ tree_store_iter_has_child (GtkTreeModel   *model,
     DonnaTreeStorePrivate *priv = store->priv;
     GtkTreeIter child;
 
-    g_return_val_if_fail (iter && iter_is_visible (iter), FALSE);
+    g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
     chain_up_if_possible (iter_has_child, model, iter);
 
@@ -391,7 +389,7 @@ tree_store_iter_parent (GtkTreeModel   *model,
     DonnaTreeStore *store = (DonnaTreeStore *) model;
     DonnaTreeStorePrivate *priv = store->priv;
 
-    g_return_val_if_fail (child && iter_is_visible (child), FALSE);
+    g_return_val_if_fail (iter_is_visible (child), FALSE);
 
     /* if child is visible, its parent should be too, so we just chain up */
     return gtk_tree_model_iter_parent (GTK_TREE_MODEL (priv->store), iter, child);
