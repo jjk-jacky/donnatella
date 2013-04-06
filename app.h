@@ -30,6 +30,8 @@ struct _DonnaAppInterface
                                                      DonnaTask      *task);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
                                                      const gchar    *name);
+    void                (*show_error)               (DonnaApp       *app,
+                                                     GError         *error);
 };
 
 /* signals */
@@ -48,6 +50,10 @@ void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);
+void                donna_app_show_error            (DonnaApp       *app,
+                                                     GError         *error);
+#define donna_app_show_new_error(app, domain, code, ...)    \
+    donna_app_show_error (app, g_error_new (domain, code, __VA_ARGS__))
 
 G_END_DECLS
 

@@ -29,6 +29,7 @@ enum
 
 struct _DonnaDonnaPrivate
 {
+    GtkWindow       *window;
     DonnaConfig     *config;
     GSList          *arrangements;
     GThreadPool     *pool;
@@ -76,6 +77,8 @@ static void             donna_donna_run_task        (DonnaApp       *app,
                                                      DonnaTask      *task);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
+static void             donna_donna_show_error      (DonnaApp       *app,
+                                                     GError         *error);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -86,6 +89,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_arrangement  = donna_donna_get_arrangement;
     interface->run_task         = donna_donna_run_task;
     interface->get_treeview     = donna_donna_get_treeview;
+    interface->show_error       = donna_donna_show_error;
 }
 
 static void
@@ -382,7 +386,32 @@ donna_donna_get_treeview (DonnaApp       *app,
     return DONNA_DONNA (app)->priv->active_list;
 }
 
+static void
+donna_donna_show_error (DonnaApp       *app,
+                        GError         *error)
+{
+    DonnaDonnaPrivate *priv;
+    GtkWidget *w;
 
+    g_return_if_fail (DONNA_IS_DONNA (app));
+    priv = DONNA_DONNA (app)->priv;
+
+    w = gtk_message_dialog_new (priv->window,
+            GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_MESSAGE_ERROR,
+            GTK_BUTTONS_CLOSE,
+            error->message);
+    g_signal_connect_swapped (w, "response", G_CALLBACK (gtk_widget_destroy), w);
+    g_error_free (error);
+    gtk_widget_show_all (w);
+}
+
+void
+donna_donna_set_window (DonnaDonna *donna, GtkWindow *win)
+{
+    g_return_if_fail (DONNA_IS_DONNA (donna));
+    donna->priv->window = g_object_ref (win);
+}
 
 
 
@@ -543,6 +572,7 @@ main (int argc, char *argv[])
     /* main window */
     _window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
     window = GTK_WINDOW (_window);
+    donna_donna_set_window (d, window);
 
     g_signal_connect (G_OBJECT (window), "destroy",
             G_CALLBACK (window_destroy_cb), NULL);

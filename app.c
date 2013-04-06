@@ -148,3 +148,20 @@ donna_app_get_treeview (DonnaApp    *app,
 
     return (*interface->get_treeview) (app, name);
 }
+
+void
+donna_app_show_error (DonnaApp       *app,
+                      GError         *error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (error != NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_if_fail (interface != NULL);
+    g_return_if_fail (interface->show_error != NULL);
+
+    return (*interface->show_error) (app, error);
+}
