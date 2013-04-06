@@ -151,17 +151,26 @@ donna_app_get_treeview (DonnaApp    *app,
 
 void
 donna_app_show_error (DonnaApp       *app,
-                      GError         *error)
+                      const GError   *error,
+                      const gchar    *fmt,
+                      ...)
 {
     DonnaAppInterface *interface;
+    gchar *title;
+    va_list va_arg;
 
     g_return_if_fail (DONNA_IS_APP (app));
-    g_return_if_fail (error != NULL);
+    g_return_if_fail (fmt != NULL);
 
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_if_fail (interface != NULL);
     g_return_if_fail (interface->show_error != NULL);
 
-    return (*interface->show_error) (app, error);
+    va_start (va_arg, fmt);
+    title = g_strdup_vprintf (fmt, va_arg);
+    va_end (va_arg);
+
+    (*interface->show_error) (app, title, error);
+    g_free (title);
 }

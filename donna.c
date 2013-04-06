@@ -78,7 +78,8 @@ static void             donna_donna_run_task        (DonnaApp       *app,
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
 static void             donna_donna_show_error      (DonnaApp       *app,
-                                                     GError         *error);
+                                                     const gchar    *title,
+                                                     const GError   *error);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -388,7 +389,8 @@ donna_donna_get_treeview (DonnaApp       *app,
 
 static void
 donna_donna_show_error (DonnaApp       *app,
-                        GError         *error)
+                        const gchar    *title,
+                        const GError   *error)
 {
     DonnaDonnaPrivate *priv;
     GtkWidget *w;
@@ -400,9 +402,11 @@ donna_donna_show_error (DonnaApp       *app,
             GTK_DIALOG_DESTROY_WITH_PARENT,
             GTK_MESSAGE_ERROR,
             GTK_BUTTONS_CLOSE,
-            error->message);
+            title);
+    if (error)
+        gtk_message_dialog_format_secondary_text (GTK_MESSAGE_DIALOG (w), "%s",
+                error->message);
     g_signal_connect_swapped (w, "response", G_CALLBACK (gtk_widget_destroy), w);
-    g_error_free (error);
     gtk_widget_show_all (w);
 }
 
