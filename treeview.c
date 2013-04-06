@@ -486,6 +486,7 @@ active_list_changed_cb (GObject         *object,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaNode *node;
+    GError *err = NULL;
 
     if (priv->sync_with)
     {
@@ -501,8 +502,15 @@ active_list_changed_cb (GObject         *object,
     if (!node)
         return;
 
-    /* FIXME use a GError */
-    donna_tree_view_set_location (tree, node, NULL);
+    if (!donna_tree_view_set_location (tree, node, &err))
+    {
+        gchar *location = donna_node_get_location (node);
+        donna_app_show_error (priv->app, err, "Treeview '%s': Unable to change location to '%s:%s'",
+                priv->name,
+                donna_node_get_domain (node),
+                location);
+        g_free (location);
+    }
     g_object_unref (node);
 }
 
@@ -974,7 +982,6 @@ node_get_children_tree_cb (DonnaTask                   *task,
         GtkTreeModel      *model;
         GtkTreePath       *path;
         DonnaNode         *node;
-        const gchar       *domain;
         gchar             *location;
         const GError      *error;
 
@@ -994,17 +1001,13 @@ node_get_children_tree_cb (DonnaTask                   *task,
         gtk_tree_model_get (model, &data->iter,
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
-        donna_node_get (node, FALSE,
-                "domain",   &domain,
-                "location", &location,
-                NULL);
         error = donna_task_get_error (task);
-        /* FIXME */
-        donna_error ("Treeview '%s': Failed to get children for node '%s:%s': %s",
+        location = donna_node_get_location (node);
+        donna_app_show_error (data->tree->priv->app, error,
+                "Treeview '%s': Failed to get children for node '%s:%s'",
                 data->tree->priv->name,
-                domain,
-                location,
-                (error) ? error->message : "No error message");
+                donna_node_get_domain (node),
+                location);
         g_free (location);
         g_object_unref (node);
 
@@ -1048,8 +1051,7 @@ expand_row (DonnaTreeView           *tree,
             -1);
     if (!node)
     {
-        /* FIXME */
-        donna_error ("Treeview '%s': could not get node from model",
+        g_warning ("Treeview '%s': expand_row() failed to get node from model",
                 priv->name);
         return FALSE;
     }
@@ -2898,9 +2900,23 @@ set_node_prop_callbak (DonnaTask                 *task,
     /* on the off chance there's no columns linked to that prop */
     if (arr->len == 0)
     {
+        if (task_failed)
+        {
+            const GError *error;
+            gchar *location;
+
+            error = donna_task_get_error (task);
+            location = donna_node_get_location (data->node);
+            donna_app_show_error (priv->app, error,
+                    "Setting property %s on '%s:%s' failed",
+                    data->prop,
+                    donna_node_get_domain (data->node),
+                    location);
+            g_free (location);
+        }
+
         g_ptr_array_free (arr, TRUE);
         free_set_node_prop_data (data);
-        /* FIXME error message if FAILED */
         return;
     }
 
@@ -3789,14 +3805,13 @@ node_get_children_list_cb (DonnaTask                            *task,
         gchar             *location;
         const GError      *error;
 
-        location = donna_node_get_location (data->node);
         error = donna_task_get_error (task);
-        /* FIXME */
-        donna_error ("Treeview '%s': Failed to get children for node '%s:%s': %s",
-                data->tree->priv->name,
+        location = donna_node_get_location (data->node);
+        donna_app_show_error (priv->app, error,
+                "Treeview '%s': Failed to get children for node '%s:%s'",
+                priv->name,
                 donna_node_get_domain (data->node),
-                location,
-                (error) ? error->message : "No error message");
+                location);
         g_free (location);
 
         goto free;
@@ -3883,14 +3898,13 @@ node_get_parent_list_cb (DonnaTask                            *task,
         gchar             *location;
         const GError      *error;
 
-        location = donna_node_get_location (data->node);
         error = donna_task_get_error (task);
-        /* FIXME */
-        donna_error ("Treeview '%s': Failed to get parent for node '%s:%s': %s",
-                data->tree->priv->name,
+        location = donna_node_get_location (data->node);
+        donna_app_show_error (priv->app, error,
+                "Treeview '%s': Failed to get parent for node '%s:%s'",
+                priv->name,
                 donna_node_get_domain (data->node),
-                location,
-                (error) ? error->message : "No error message");
+                location);
         g_free (location);
 
         free_node_get_children_list_data (data);
@@ -3937,10 +3951,12 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     {
         GtkTreeIter *iter;
 
+        /* FIXME: depends on priv->node_types */
         if (node_type != DONNA_NODE_CONTAINER)
         {
-            /* FIXME */
-            g_debug("error: tree cannot go to an ITEM");
+            g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Cannot go to an item",
+                    priv->name);
             return FALSE;
         }
 
@@ -4498,8 +4514,21 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 }
 
                 if (str->len > 0)
-                    /* FIXME show error */
-                    g_info ("Error: %s", str->str);
+                {
+                    GError *err = NULL;
+                    gchar *location;
+
+                    g_set_error (&err, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                            "%s", str->str);
+                    location = donna_node_get_location (node);
+                    donna_app_show_error (priv->app, err,
+                            "Error occured on '%s:%s'",
+                            priv->name,
+                            donna_node_get_domain (node),
+                            location);
+                    g_free (location);
+                    g_error_free (err);
+                }
                 g_string_free (str, TRUE);
 
                 /* we can safely assume we found/removed a task, so a refresh
