@@ -1889,6 +1889,7 @@ ensure_option_has_node (DonnaProviderConfig *config,
         option->node = donna_node_new (DONNA_PROVIDER (config),
                 location,
                 (option->extra == priv->root) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+                NULL, /* filename */
                 node_prop_refresher,
                 node_prop_setter,
                 option->name,

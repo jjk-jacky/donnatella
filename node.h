@@ -40,7 +40,7 @@ extern const gchar *node_basic_properties[];
 
 typedef enum
 {
-    /* PROVIDER, DOMAIN, LOCATION, NODE_TYPE are internal/always exist */
+    /* PROVIDER, DOMAIN, LOCATION, NODE_TYPE, FILENAME are internal/always exist */
     /* NAME is required/always exists */
     DONNA_NODE_ICON_EXISTS          = (1 << 0),
     DONNA_NODE_FULL_NAME_EXISTS     = (1 << 1),
@@ -105,6 +105,7 @@ struct _DonnaNodeClass
 DonnaNode *         donna_node_new                  (DonnaProvider      *provider,
                                                      const gchar        *location,
                                                      DonnaNodeType       node_type,
+                                                     const gchar        *filename,
                                                      refresher_fn        refresher,
                                                      setter_fn           setter,
                                                      const gchar        *name,
@@ -130,6 +131,7 @@ DonnaProvider *     donna_node_get_provider         (DonnaNode          *node);
 const gchar *       donna_node_get_domain           (DonnaNode          *node);
 gchar *             donna_node_get_location         (DonnaNode          *node);
 DonnaNodeType       donna_node_get_node_type        (DonnaNode          *node);
+gchar *             donna_node_get_filename         (DonnaNode          *node);
 gchar *             donna_node_get_name             (DonnaNode          *node);
 DonnaNodeHasValue   donna_node_get_icon             (DonnaNode          *node,
                                                      gboolean            is_blocking,

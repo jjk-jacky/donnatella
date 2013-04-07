@@ -44,6 +44,7 @@
  * - location: (required): the location of the node, unique string to identify
  *   it within its domain (e.g. full path/name for a file) (gchar *)
  * - node-type: (required): the #DonnaNodeType of the node
+ * - filename (required): filename, in the filename encoding (gchar *)
  * - name: (required): the name of the item (gchar *)
  * - icon: pointer to a #GdkPixbuf of the item's icon
  * - full-name: the name of the item (e.g. /full/path/to/file -- often times
@@ -57,8 +58,8 @@
  * - group: the group of the item (gchar *)
  * - type: the type of the item (gchar *)
  *
- * provider, domain, location and node-type are all read-only. Every other
- * property might be writable.
+ * provider, domain, location, node-type and filename are all read-only. Every
+ * other property might be writable.
  *
  * Properties might not have a value "loaded", i.e. they need a refresh. This is
  * so that if getting a property needs work, it can only be done if/when needed.
@@ -81,6 +82,13 @@
  * Helpers (such as donna_node_get_name()) allow you to quickly get the required
  * properties. Those are faster than using donna_node_get() and can be useful in
  * frequent operations (e.g. when redering/sorting)
+ *
+ * Property filename is an internal property returning the filename in the GLib
+ * filename encoding. You're likely never to have to use it, as the node's
+ * provider should handle all actual file operations. (E.g. to rename a file,
+ * simply change its property name, encoded in UTF8 of course.)
+ * If filename is set to %NULL then location will be used instead; Thus allowing
+ * to only store the filename once if filename encoding is UTF8.
  *
  * To change the value of a property, use donna_node_set_property_task()
  *
@@ -110,6 +118,7 @@ const gchar *node_basic_properties[] =
     "domain",
     "location",
     "node-type",
+    "filename",
     "name",
     "icon",
     "full-name",
@@ -126,7 +135,7 @@ const gchar *node_basic_properties[] =
 
 /* index of the first basic prop in node_basic_properties; i.e. after the
  * internal (e.g. provider) and required (e.g. name) ones */
-#define FIRST_BASIC_PROP    5
+#define FIRST_BASIC_PROP    6
 /* we "re-list" basic properties here, to save their values */
 enum
 {
@@ -145,7 +154,7 @@ enum
 
 /* index of the first required prop in node_basic_properties; i.e. after the
  * internal (e.g. provider) ones */
-#define FIRST_REQUIRED_PROP 4
+#define FIRST_REQUIRED_PROP 5
 /* list the writable flags so we can use them easily */
 static DonnaNodeFlags prop_writable_flags[] =
 {
@@ -168,6 +177,7 @@ struct _DonnaNodePrivate
     DonnaProvider     *provider;
     gchar             *location;
     DonnaNodeType      node_type;
+    gchar             *filename;
     /* required properties */
     gchar             *name;
     /* basic properties */
@@ -278,6 +288,8 @@ free_node_prop (DonnaNodeProp *prop)
  * @provider: provider of the node
  * @location: location of the node
  * @node_type: type of node
+ * @filename: (allow none): filename of the node (in GLib filename encoding),
+ * or %NULL if we can use @name)
  * @refresher: function called to refresh a basic property
  * @setter: function to change value of a basic property
  * @name: name of the node
@@ -294,6 +306,7 @@ DonnaNode *
 donna_node_new (DonnaProvider       *provider,
                 const gchar         *location,
                 DonnaNodeType        node_type,
+                const gchar         *filename,
                 refresher_fn         refresher,
                 setter_fn            setter,
                 const gchar         *name,
@@ -315,6 +328,8 @@ donna_node_new (DonnaProvider       *provider,
     priv->provider  = g_object_ref (provider);
     priv->location  = g_strdup (location);
     priv->node_type = node_type;
+    if (filename)
+        priv->filename = g_strdup (filename);
     priv->name      = g_strdup (name);
     priv->refresher = refresher;
     priv->setter    = setter;
@@ -386,8 +401,9 @@ donna_node_new_from_node (DonnaProvider     *provider,
 
     /* create a new node, duplicate of sce but w/ different provider & location */
     g_rw_lock_reader_lock (&sce->priv->props_lock);
-    node = donna_node_new (provider, location,
-            sce->priv->node_type, sce->priv->refresher, sce->priv->setter,
+    node = donna_node_new (provider, location, sce->priv->node_type,
+            sce->priv->filename,
+            sce->priv->refresher, sce->priv->setter,
             sce->priv->name, sce->priv->flags);
     if (!node)
     {
@@ -654,6 +670,14 @@ get_valist (DonnaNode   *node,
             *t = priv->node_type;
             goto next;
         }
+        else if (streq (name, "filename"))
+        {
+            gchar **ss;
+
+            ss = va_arg (va_args, gchar **);
+            *ss = g_strdup ((priv->filename) ? priv->filename : priv->location);
+            goto next;
+        }
         else if (streq (name, "name"))
         {
             gchar **ss;
@@ -869,6 +893,29 @@ donna_node_get_node_type (DonnaNode *node)
 {
     g_return_val_if_fail (DONNA_IS_NODE (node), 0);
     return node->priv->node_type;
+}
+
+/**
+ * donna_node_get_filename:
+ * @node: Node to get the property filename of
+ *
+ * Helper to quickly get the property filename of @node
+ * Free it with g_free() when done.
+ *
+ * Returns: (transfer full): Filename of @node (in GLib filename encoding)
+ */
+gchar *
+donna_node_get_filename (DonnaNode *node)
+{
+    DonnaNodePrivate *priv;
+    gchar *filename;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    priv = node->priv;
+    g_rw_lock_reader_lock (&priv->props_lock);
+    filename = g_strdup ((priv->filename) ? priv->filename : priv->location);
+    g_rw_lock_reader_unlock (&priv->props_lock);
+    return filename;
 }
 
 /**
@@ -1920,6 +1967,13 @@ donna_node_set_property_value (DonnaNode     *node,
     {
         g_free (node->priv->name);
         node->priv->name = g_value_dup_string (value);
+        emit = TRUE;
+        goto finish;
+    }
+    else if (streq (name, "filename"))
+    {
+        g_free (node->priv->filename);
+        node->priv->filename = g_value_dup_string (value);
         emit = TRUE;
         goto finish;
     }

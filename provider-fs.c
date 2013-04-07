@@ -119,36 +119,55 @@ setter (DonnaTask       *task,
 static DonnaNode *
 new_node (DonnaProviderBase *_provider,
           const gchar       *location,
+          const gchar       *filename,
           gboolean           need_lock)
 {
     DonnaProviderBaseClass *klass;
     DonnaNode       *node;
     DonnaNodeType    type;
     const gchar     *name;
-    DonnaNodeFlags   flags;
+    gboolean         free_filename = FALSE;
 
-    if (!g_file_test (location, G_FILE_TEST_EXISTS))
+    if (!filename)
+    {
+        /* if filename encoding if UTF8, just use location */
+        if (g_get_filename_charsets (NULL))
+            filename = location;
+        else
+        {
+            filename = g_filename_from_utf8 (location, -1, NULL, NULL, NULL);
+            free_filename = TRUE;
+        }
+    }
+
+    if (!g_file_test (filename, G_FILE_TEST_EXISTS))
+    {
+        if (free_filename)
+            g_free ((gchar *) filename);
         return NULL;
+    }
 
-    type = (g_file_test (location, G_FILE_TEST_IS_DIR))
+    type = (g_file_test (filename, G_FILE_TEST_IS_DIR))
         ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM;
 
-    /* FIXME: g_display_name or something... */
+    /* from location, since we want an UTF8 string */
     if (location[0] == '/' && location[1] == '\0')
         name = location;
     else
         /* we go past the last / */
         name = strrchr (location, '/') + 1;
 
-    flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE;
-
     node = donna_node_new (DONNA_PROVIDER (_provider),
             location,
             type,
+            (filename == location) ? NULL : filename,
             refresher,
             setter,
             name,
-            flags);
+            DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE);
+
+    if (free_filename)
+        g_free ((gchar *) filename);
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
     if (need_lock)
@@ -169,7 +188,7 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
     DonnaNode *node;
     GValue    *value;
 
-    node = new_node (_provider, location, TRUE);
+    node = new_node (_provider, location, NULL, TRUE);
     if (!node)
         /* FIXME: set task error */
         return DONNA_TASK_FAILED;
@@ -193,8 +212,9 @@ has_get_children (DonnaProviderBase  *_provider,
 {
     DonnaProviderBaseClass  *klass;
     GError                  *err = NULL;
-    gchar                   *location;
-    gchar                   *loc;
+    gchar                   *filename;
+    gchar                   *fn;
+    gboolean                 is_utf8;
     GDir                    *dir;
     const gchar             *name;
     gboolean                 is_locked;
@@ -205,22 +225,25 @@ has_get_children (DonnaProviderBase  *_provider,
     if (!(node_types & DONNA_NODE_ITEM || node_types & DONNA_NODE_CONTAINER))
         return DONNA_TASK_FAILED;
 
-    location = donna_node_get_location (node);
-    dir = g_dir_open (location, 0, &err);
+    filename = donna_node_get_filename (node);
+    dir = g_dir_open (filename, 0, &err);
     if (err)
     {
         donna_task_take_error (task, err);
-        g_free (location);
+        g_free (filename);
         return DONNA_TASK_FAILED;
     }
 
-    loc = location;
+    fn = filename;
     /* root is "/" so it would get us "//bin" */
-    if (loc[0] == '/' && loc[1] == '\0')
-        ++loc;
+    if (fn[0] == '/' && fn[1] == '\0')
+        ++fn;
 
     if (get_children)
+    {
         arr = g_ptr_array_new_full (16, g_object_unref);
+        is_utf8 = g_get_filename_charsets (NULL);
+    }
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
     is_locked = match = FALSE;
@@ -231,14 +254,16 @@ has_get_children (DonnaProviderBase  *_provider,
 
         if (donna_task_is_cancelling (task))
         {
+            if (get_children)
+                g_ptr_array_unref (arr);
             g_dir_close (dir);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_CANCELLED;
         }
 
         b = buf;
-        if (g_snprintf (buf, 1024, "%s/%s", loc, name) >= 1024)
-            b = g_strdup_printf ("%s/%s", loc, name);
+        if (g_snprintf (buf, 1024, "%s/%s", fn, name) >= 1024)
+            b = g_strdup_printf ("%s/%s", fn, name);
 
         match = FALSE;
         if (node_types & DONNA_NODE_CONTAINER && node_types & DONNA_NODE_ITEM)
@@ -257,32 +282,44 @@ has_get_children (DonnaProviderBase  *_provider,
             }
         }
 
-        if (b != buf)
-            g_free (b);
-
         if (match)
         {
             if (get_children)
             {
                 DonnaNode *node;
+                gchar *location;
+
+                if (is_utf8)
+                    location = b;
+                else
+                    location = g_filename_to_utf8 (b, -1, NULL, NULL, NULL);
 
                 if (!is_locked)
                 {
                     klass->lock_nodes (_provider);
                     is_locked = TRUE;
                 }
-                node = klass->get_cached_node (_provider, b);
+                node = klass->get_cached_node (_provider, location);
                 if (!node)
-                    node = new_node (_provider, b, FALSE);
+                    node = new_node (_provider, location, b, FALSE);
                 if (node)
                     g_ptr_array_add (arr, node);
                 else
                     g_warning ("Provider 'fs': Unable to create a node for '%s'",
-                            b);
+                            location);
+                if (location != b)
+                    g_free (location);
             }
             else
+            {
+                if (b != buf)
+                    g_free (b);
                 break;
+            }
         }
+
+        if (b != buf)
+            g_free (b);
     }
     g_dir_close (dir);
     if (is_locked)
@@ -302,7 +339,7 @@ has_get_children (DonnaProviderBase  *_provider,
     }
     donna_task_release_return_value (task);
 
-    g_free (location);
+    g_free (filename);
     return DONNA_TASK_DONE;
 }
 
