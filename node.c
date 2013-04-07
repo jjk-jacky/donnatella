@@ -1916,11 +1916,17 @@ donna_node_set_property_value (DonnaNode     *node,
                 donna_provider_get_domain (node->priv->provider),
                 node->priv->location));
 
-    /* name? */
     if (streq (name, "name"))
     {
         g_free (node->priv->name);
         node->priv->name = g_value_dup_string (value);
+        emit = TRUE;
+        goto finish;
+    }
+    else if (streq (name, "location"))
+    {
+        g_free (node->priv->location);
+        node->priv->location = g_value_dup_string (value);
         emit = TRUE;
         goto finish;
     }
