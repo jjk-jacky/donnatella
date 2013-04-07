@@ -1624,9 +1624,10 @@ set_property (DonnaTask *task, struct set_property *data)
  * @node: Node on which to change a property
  * @name: Name of the property to change
  * @value: New value to set
- * @error: (allow-none): Return location of error, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
- * A task to change the value of the specified property on the given node.
+ * Returns a task to change the value of the specified property on the given
+ * node.
  *
  * Returns: (transfer floating): A floating #DonnaTask or %NULL on error
  */
@@ -1793,6 +1794,93 @@ donna_node_set_property_task (DonnaNode     *node,
             g_free (location));
 
     return task;
+}
+
+/**
+ * donna_node_has_children_task:
+ * @node: Node to check whether it has children
+ * @node_types: %DonnaNodeType of children to check for
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to determine whether @node has children of the specified
+ * type(s) or not
+ *
+ * Note: this is an helper function, that calls
+ * donna_provider_has_node_children_task() on @node's provider
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL
+ */
+DonnaTask *
+donna_node_has_children_task (DonnaNode          *node,
+                              DonnaNodeType       node_types,
+                              GError            **error)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_has_node_children_task (node->priv->provider, node,
+            node_types, error);
+}
+
+/**
+ * donna_node_get_children_task:
+ * @node: Node to check whether it has children
+ * @node_types: %DonnaNodeType of children to get
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to get children of the specified type(s) from @node
+ *
+ * Note: this is an helper function, that calls
+ * donna_provider_get_node_children_task() on @node's provider
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL
+ */
+DonnaTask *
+donna_node_get_children_task (DonnaNode          *node,
+                              DonnaNodeType       node_types,
+                              GError            **error)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_get_node_children_task (node->priv->provider, node,
+            node_types, error);
+}
+
+/**
+ * donna_node_remove_task:
+ * @node: Node to remove
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to delete the item represented by @node
+ *
+ * Note: this is an helper function, that calls
+ * donna_provider_remove_node_task() on @node's provider
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL
+ */
+DonnaTask *
+donna_node_remove_task (DonnaNode          *node,
+                        GError            **error)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_remove_node_task (node->priv->provider, node, error);
+}
+
+/**
+ * donna_node_get_parent_task:
+ * @node: Node to get parent node of
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to get the parent #DonnaNode of @node
+ *
+ * Note: this is an helper function, that calls
+ * donna_provider_get_node_parent_task() on @node's provider
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL
+ */
+DonnaTask *
+donna_node_get_parent_task (DonnaNode          *node,
+                            GError            **error)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_get_node_parent_task (node->priv->provider, node, error);
 }
 
 /**
