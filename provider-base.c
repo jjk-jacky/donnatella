@@ -194,7 +194,7 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
             g_rec_mutex_unlock (&provider->priv->nodes_mutex);
             return;
         }
-        donna_node_get (node, FALSE, "location", &location, NULL);
+        location = donna_node_get_location (node);
         /* this also removes our last ref on node */
         g_hash_table_remove (provider->priv->nodes, location);
         g_rec_mutex_unlock (&provider->priv->nodes_mutex);
@@ -217,7 +217,7 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
     g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
 
-    donna_node_get (node, FALSE, "location", &location, NULL);
+    location = donna_node_get_location (node);
 
     /* add a toggleref, so when we have the last reference on the node, we
      * can let it go (Note: this adds a (strong) reference to node) */
@@ -420,7 +420,7 @@ remove_node (DonnaTask *task, DonnaNode *node)
     DonnaProvider *provider;
     DonnaTaskState ret;
 
-    donna_node_get (node, FALSE, "provider", &provider, NULL);
+    provider = donna_node_get_provider (node);
     provider_base = (DonnaProviderBase *) provider;
 
     ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->remove_node (
@@ -465,11 +465,9 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     gchar *s;
     DonnaTaskState ret;
 
-    donna_node_get (node, FALSE,
-            "provider", &provider,
-            "location", &location,
-            NULL);
+    provider = donna_node_get_provider (node);
     provider_base = (DonnaProviderBase *) provider;
+    location = donna_node_get_location (node);
 
     /* is this a root? */
     if (location[strlen (location) - 1] == '/')

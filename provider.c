@@ -204,19 +204,15 @@ donna_provider_has_node_children_task (DonnaProvider  *provider,
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
-    DonnaNodeType  node_type;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider, and can have children */
-    donna_node_get (node, FALSE,
-            "provider",  &p,
-            "node-type", &node_type,
-            NULL);
+    p = donna_node_get_provider (node);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
-    g_return_val_if_fail (node_type == DONNA_NODE_CONTAINER, NULL);
+    g_return_val_if_fail (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER, NULL);
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
@@ -234,19 +230,15 @@ donna_provider_get_node_children_task (DonnaProvider  *provider,
 {
     DonnaProviderInterface *interface;
     DonnaProvider *p;
-    DonnaNodeType  node_type;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider, and can have children */
-    donna_node_get (node, FALSE,
-            "provider",  &p,
-            "node-type", &node_type,
-            NULL);
+    p = donna_node_get_provider (node);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
-    g_return_val_if_fail (node_type == DONNA_NODE_CONTAINER, NULL);
+    g_return_val_if_fail (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER, NULL);
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
@@ -268,7 +260,7 @@ donna_provider_remove_node_task (DonnaProvider  *provider,
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider */
-    donna_node_get (node, FALSE, "provider", &p, NULL);
+    p = donna_node_get_provider (node);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 
@@ -293,7 +285,7 @@ donna_provider_get_node_parent_task (DonnaProvider  *provider,
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
 
     /* make sure the provider is the node's provider */
-    donna_node_get (node, FALSE, "provider", &p, NULL);
+    p = donna_node_get_provider (node);
     g_object_unref (p);
     g_return_val_if_fail (p == provider, NULL);
 

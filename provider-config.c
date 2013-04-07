@@ -1750,19 +1750,12 @@ node_prop_setter (DonnaTask     *task,
     is_set_value = streq (name, "option-value");
     if (is_set_value || streq (name, "name"))
     {
-        donna_node_get (node, FALSE,
-                "provider", &provider,
-                "location", &location,
-                NULL);
+        provider = donna_node_get_provider (node);
+        location = donna_node_get_location (node);
         if (G_UNLIKELY (!DONNA_IS_PROVIDER_CONFIG (provider)))
         {
-            const gchar *domain;
-
-            donna_node_get (node, FALSE, "domain", &domain, NULL);
-            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                    DONNA_PROVIDER_ERROR_WRONG_PROVIDER,
-                    "Property setter of 'config' was called on a wrong node: '%s:%s'",
-                    domain, location);
+            g_warning ("Property setter of 'config' was called on a wrong node: '%s:%s'",
+                    donna_node_get_domain (node), location);
             g_object_unref (provider);
             g_free (location);
             return DONNA_TASK_FAILED;
@@ -1865,9 +1858,8 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
             g_rw_lock_reader_unlock (&config->priv->lock);
             return;
         }
-        donna_node_get (node, FALSE, "location", &location, NULL);
-        gnode = get_option_node (config->priv->root,
-                location);
+        location = donna_node_get_location (node);
+        gnode = get_option_node (config->priv->root, location);
         if (G_UNLIKELY (!gnode))
             g_critical ("Unable to find option '%s' while processing toggle_ref for the associated node",
                     location);
@@ -2064,7 +2056,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
     GValue *value;
     gboolean match;
 
-    donna_node_get (data->node, FALSE, "location", &location, NULL);
+    location = donna_node_get_location (data->node);
     priv = data->config->priv;
 
     g_rw_lock_reader_lock (&priv->lock);
@@ -2226,23 +2218,19 @@ node_remove_option (DonnaTask *task, DonnaNode *node)
 {
     DonnaProvider *provider;
     gchar *location;
-    DonnaNodeType node_type;
     gboolean ret;
 
-    donna_node_get (node, FALSE,
-            "provider",  &provider,
-            "location",  &location,
-            "node-type", &node_type,
-            NULL);
-    if (node_type != DONNA_NODE_CONTAINER)
+    provider = donna_node_get_provider (node);
+    location = donna_node_get_location (node);
+    if (donna_node_get_node_type (node) != DONNA_NODE_CONTAINER)
         ret = donna_config_remove_option (DONNA_PROVIDER_CONFIG (provider),
                 location);
     else
         ret = donna_config_remove_category (DONNA_PROVIDER_CONFIG (provider),
                 location);
     g_free (location);
-    g_object_unref (node);
     g_object_unref (provider);
+    g_object_unref (node); /* remove task's ref */
 
     return (ret) ? DONNA_TASK_DONE : DONNA_TASK_FAILED;
 }
@@ -2284,10 +2272,8 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     gboolean node_created;
     GValue *value;
 
-    donna_node_get (node, FALSE,
-            "provider", &provider,
-            "location", &location,
-            NULL);
+    provider = donna_node_get_provider (node);
+    location = donna_node_get_location (node);
 
     config = DONNA_PROVIDER_CONFIG (provider);
     priv = config->priv;

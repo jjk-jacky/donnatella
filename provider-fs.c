@@ -205,7 +205,7 @@ has_get_children (DonnaProviderBase  *_provider,
     if (!(node_types & DONNA_NODE_ITEM || node_types & DONNA_NODE_CONTAINER))
         return DONNA_TASK_FAILED;
 
-    donna_node_get (node, FALSE, "location", &location, NULL);
+    location = donna_node_get_location (node);
     dir = g_dir_open (location, 0, &err);
     if (err)
     {

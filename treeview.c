@@ -728,7 +728,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         GSList *list;
 
         /* get its provider */
-        donna_node_get (node, FALSE, "provider", &provider, NULL);
+        provider = donna_node_get_provider (node);
         /* and update the nb of nodes we have for this provider */
         for (i = 0; i < priv->providers->len; ++i)
         {
@@ -884,28 +884,20 @@ set_children (DonnaTreeView *tree,
         {
             GtkTreeIter row;
             DonnaNode *node = children->pdata[i];
-            DonnaNodeType node_type;
 
             /* in case we got children from a node_children signal, and there's
              * more types that we care for */
-            donna_node_get (node, FALSE, "node-type", &node_type, NULL);
-            if (!(node_type & priv->node_types))
+            if (!(donna_node_get_node_type (node) & priv->node_types))
                 continue;
 
             has_children = TRUE;
             /* shouldn't be able to fail/return FALSE */
             if (!add_node_to_tree (tree, iter, node, &row))
             {
-                const gchar *domain;
-                gchar *location;
-
-                donna_node_get (node, FALSE,
-                        "domain",   &domain,
-                        "location", &location,
-                        NULL);
+                gchar *location = donna_node_get_location (node);
                 g_critical ("Treeview '%s': failed to add node for '%s:%s'",
                         tree->priv->name,
-                        domain,
+                        donna_node_get_domain (node),
                         location);
                 g_free (location);
             }
@@ -1041,7 +1033,6 @@ expand_row (DonnaTreeView           *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
     DonnaNode *node;
-    DonnaProvider *provider;
     DonnaTask *task;
     struct node_children_data *data;
     GSList *list;
@@ -1150,9 +1141,7 @@ expand_row (DonnaTreeView           *tree,
         }
     }
 
-    donna_node_get (node, FALSE, "provider", &provider, NULL);
-    task = donna_provider_get_node_children_task (provider, node,
-            priv->node_types, NULL);
+    task = donna_node_get_children_task (node, priv->node_types, NULL);
 
     data = g_slice_new0 (struct node_children_data);
     data->tree  = tree;
@@ -1177,7 +1166,6 @@ expand_row (DonnaTreeView           *tree,
 
     donna_app_run_task (priv->app, task);
     g_object_unref (node);
-    g_object_unref (provider);
     return FALSE;
 }
 
@@ -1256,7 +1244,7 @@ visible_func (GtkTreeModel  *model,
     if (!node)
         return FALSE;
 
-    donna_node_get (node, FALSE, "name", &name, NULL);
+    name = donna_node_get_name (node);
     ret = name[0] != '.';
     g_free (name);
     g_object_unref (node);
@@ -1989,7 +1977,6 @@ node_new_child_cb (DonnaProvider *provider,
                    DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaNodeType type;
     struct new_child_data *data;
 
     /* list: unless we're in node, we don't care */
@@ -1997,8 +1984,7 @@ node_new_child_cb (DonnaProvider *provider,
         return;
 
     /* if we don't care for this type of nodes, nothing to do */
-    donna_node_get (child, FALSE, "node-type", &type, NULL);
-    if (!(type & priv->node_types))
+    if (!(donna_node_get_node_type (node) & priv->node_types))
         return;
 
     /* we can't check if node is in the tree though, because there's no lock,
@@ -2042,7 +2028,6 @@ add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *iter_row)
 {
     const gchar             *domain;
-    gchar                   *s;
     DonnaTreeViewPrivate    *priv;
     GtkTreeModel            *model;
     GtkTreeIter              iter;
@@ -2076,13 +2061,13 @@ add_node_to_tree (DonnaTreeView *tree,
         }
     }
 
-    donna_node_get (node, FALSE, "domain", &domain, "location", &s, NULL);
+    gchar *location = donna_node_get_location (node);
     g_debug ("treeview '%s': adding new node %p for '%s:%s'",
             priv->name,
             node,
-            domain,
-            s);
-    g_free (s);
+            donna_node_get_domain (node),
+            location);
+    g_free (location);
 
     if (!is_tree (tree))
     {
@@ -2181,10 +2166,8 @@ add_node_to_tree (DonnaTreeView *tree,
         }
     }
     /* get provider to get task to know if it has children */
-    donna_node_get (node, FALSE,
-            "provider",  &provider,
-            "node-type", &node_type,
-            NULL);
+    provider = donna_node_get_provider (node);
+    node_type = donna_node_get_node_type (node);
     for (i = 0; i < priv->providers->len; ++i)
     {
         struct provider_signals *ps = priv->providers->pdata[i];
@@ -3153,19 +3136,13 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     list = g_hash_table_lookup (priv->hashtable, node);
     if (!list)
     {
-        const gchar *domain;
-        gchar *location;
-
-        donna_node_get (node, FALSE,
-                "domain",   &domain,
-                "location", &location,
-                NULL);
+        gchar *location = donna_node_get_location (node);
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_NOT_FOUND,
                 "Treeview '%s': Cannot set property '%s' on node '%s:%s', "
                 "the node is not represented in the treeview",
                 priv->name,
                 prop,
-                domain,
+                donna_node_get_domain (node),
                 location);
         g_free (location);
         return FALSE;
@@ -3174,18 +3151,12 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     task = donna_node_set_property_task (node, prop, value, &err);
     if (!task)
     {
-        const gchar *domain;
-        gchar *location;
-
-        donna_node_get (node, FALSE,
-                "domain",   &domain,
-                "location", &location,
-                NULL);
+        gchar *location = donna_node_get_location (node);
         g_propagate_prefixed_error (error, err,
                 "Treeview '%s': Cannot set property '%s' on node '%s:%s': ",
                 priv->name,
                 prop,
-                domain,
+                donna_node_get_domain (node),
                 location);
         g_free (location);
         g_clear_error (&err);
@@ -3365,7 +3336,7 @@ is_node_ancestor (DonnaNode         *node,
     size_t len;
     gboolean ret;
 
-    donna_node_get (node, FALSE, "provider", &provider, NULL);
+    provider = donna_node_get_provider (node);
     g_object_unref (provider);
     if (descendant_provider != provider)
         return FALSE;
@@ -3373,7 +3344,7 @@ is_node_ancestor (DonnaNode         *node,
     /* descandant is in the same domain as node, and we know node's domain isn't
      * flat, so we can assume that if descendant is a child, its location starts
      * with its parent's location and a slash */
-    donna_node_get (node, FALSE, "location", &location, NULL);
+    location = donna_node_get_location (node);
     len = strlen (location);
     ret = strncmp (location, descendant_location, len) == 0
         /* FIXME root isn't always len==1 */
@@ -3413,10 +3384,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 
     model = GTK_TREE_MODEL (priv->store);
     iter = iter_root;
-    donna_node_get (node, FALSE,
-            "provider", &provider,
-            "location", &location,
-            NULL);
+    provider = donna_node_get_provider (node);
+    location = donna_node_get_location (node);
 
     /* get the node for the given iter_root, our starting point */
     gtk_tree_model_get (model, iter,
@@ -3441,7 +3410,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         }
 
         /* get the node's location, and obtain the location of the next child */
-        donna_node_get (n, FALSE, "location", &ss, NULL);
+        ss = donna_node_get_location (n);
         len = strlen (ss);
         g_free (ss);
         g_object_unref (n);
@@ -3463,6 +3432,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         {
             /* TODO */
             g_object_unref (task);
+            g_free (location);
+            g_object_unref (provider);
             return NULL;
         }
         value = donna_task_get_return_value (task);
@@ -3493,6 +3464,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 {
                     /* TODO */
                     g_object_unref (n);
+                    g_free (location);
+                    g_object_unref (provider);
                     return NULL;
                 }
 
@@ -3509,6 +3482,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             else
             {
                 g_object_unref (n);
+                g_free (location);
+                g_object_unref (provider);
                 return last_iter;
             }
         }
@@ -3567,7 +3542,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     GdkRectangle rect;
     GtkTreeIter *iter_non_vis = NULL;
 
-    donna_node_get (node, FALSE, "provider", &provider, NULL);
+    provider = donna_node_get_provider (node);
     flags = donna_provider_get_flags (provider);
     if (G_UNLIKELY (flags & DONNA_PROVIDER_FLAG_INVALID))
     {
@@ -3587,7 +3562,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     }
 
     model  = GTK_TREE_MODEL (priv->store);
-    donna_node_get (node, FALSE, "location", &location, NULL);
+    location = donna_node_get_location (node);
 
     /* try inside the current branch first */
     iter_cur_root = get_current_root_iter (tree);
@@ -3890,7 +3865,6 @@ node_get_parent_list_cb (DonnaTask                            *task,
                          struct node_get_children_list_data   *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
-    DonnaProvider *provider;
     const GValue *value;
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
@@ -3915,10 +3889,7 @@ node_get_parent_list_cb (DonnaTask                            *task,
     /* simply update data, as we'll re-use it for the new task */
     data->node = g_value_dup_object (value);
 
-    donna_node_get (data->node, FALSE, "provider", &provider, NULL);
-
-    task = donna_provider_get_node_children_task (provider, data->node,
-            priv->node_types, NULL);
+    task = donna_node_get_children_task (data->node, priv->node_types, NULL);
     if (!timeout_called)
         donna_task_set_timeout (task, 800, /* FIXME */
                 (task_timeout_fn) node_get_children_list_timeout,
@@ -3929,7 +3900,6 @@ node_get_parent_list_cb (DonnaTask                            *task,
             data,
             (GDestroyNotify) free_node_get_children_list_data);
     donna_app_run_task (priv->app, task);
-    g_object_unref (provider);
 }
 
 gboolean
@@ -3945,7 +3915,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
     priv = tree->priv;
-    donna_node_get (node, FALSE, "node-type", &node_type, NULL);
+    node_type = donna_node_get_node_type (node);
 
     if (is_tree (tree))
     {
@@ -3984,7 +3954,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         DonnaProvider *provider;
         struct node_get_children_list_data *data;
 
-        donna_node_get (node, FALSE, "provider",  &provider, NULL);
+        provider = donna_node_get_provider (node);
 
         if (node_type == DONNA_NODE_CONTAINER)
         {
@@ -4076,10 +4046,7 @@ donna_tree_view_get_children (DonnaTreeView      *tree,
     /* fill array based on requested node_types */
     for (l = list ; l; l = l->next)
     {
-        DonnaNodeType type;
-
-        donna_node_get (l->data, FALSE, "node-type", &type, NULL);
-        if (type & node_types)
+        if (donna_node_get_node_type (l->data) & node_types)
             g_ptr_array_add (arr, g_object_ref (l->data));
     }
     g_list_free (list);

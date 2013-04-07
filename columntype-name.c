@@ -360,7 +360,7 @@ get_node_key (DonnaColumnTypeName   *ctname,
             const gchar *domain;
             guint i;
 
-            donna_node_get (node, FALSE, "domain", &domain, NULL);
+            domain = donna_node_get_domain (node);
             for (i = 0; i < priv->domains->len; ++i)
                 if (streq (domain, priv->domains->pdata[i]))
                     break;
@@ -371,7 +371,7 @@ get_node_key (DonnaColumnTypeName   *ctname,
             {
                 DonnaProvider *provider;
 
-                donna_node_get (node, FALSE, "provider", &provider, NULL);
+                provider = donna_node_get_provider (node);
                 /* FIXME? (not actually needed since our cb is "self-contained")
                  * - also connect to a new signal "destroy" when provider is
                  *   being finalized. in handler, we remove it from the ptrarr
@@ -387,7 +387,7 @@ get_node_key (DonnaColumnTypeName   *ctname,
             }
         }
 
-        donna_node_get (node, FALSE, "name", &name, NULL);
+        name = donna_node_get_name (node);
         key = sort_get_utf8_collate_key (name, -1,
                 dot_first, special_first, natural_order);
         g_free (name);
@@ -472,15 +472,15 @@ ct_name_set_tooltip (DonnaColumnType    *ct,
 
     if (index <= 1)
     {
-        donna_node_get (node, FALSE, "full-name", &has, &s, NULL);
+        has = donna_node_get_full_name (node, FALSE, &s);
         if (has == DONNA_NODE_VALUE_NONE /*FIXME*/||has==DONNA_NODE_VALUE_NEED_REFRESH)
-            donna_node_get (node, FALSE, "location", &s, NULL);
+            s = donna_node_get_location (node);
         /* FIXME: if NEED_REFRESH do a task and whatnot? */
         else if (has != DONNA_NODE_VALUE_SET)
             return FALSE;
     }
     else
-        donna_node_get (node, FALSE, "name", &s, NULL);
+        s = donna_node_get_name (node);
 
     gtk_tooltip_set_text (tooltip, s);
     g_free (s);
