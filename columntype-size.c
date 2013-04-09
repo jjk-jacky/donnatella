@@ -269,6 +269,12 @@ ct_size_render (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
 
+    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+    {
+        g_object_set (renderer, "visible", FALSE, NULL);
+        return NULL;
+    }
+
     has = donna_node_get_size (node, FALSE, &size);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
         return NULL;
@@ -311,7 +317,7 @@ ct_size_render (DonnaColumnType    *ct,
             break;
     }
 
-    g_object_set (renderer, "text", b, "xalign", 1.0, NULL);
+    g_object_set (renderer, "visible", TRUE, "text", b, "xalign", 1.0, NULL);
     if (b != buf)
         g_free (b);
     return NULL;
