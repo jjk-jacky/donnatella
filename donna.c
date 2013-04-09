@@ -7,6 +7,7 @@
 #include "provider-config.h"
 #include "columntype.h"
 #include "columntype-name.h"
+#include "columntype-size.h"
 #include "node.h"
 #include "macros.h"
 
@@ -24,6 +25,7 @@ enum
 enum
 {
     COL_TYPE_NAME = 0,
+    COL_TYPE_SIZE,
     NB_COL_TYPES
 };
 
@@ -131,6 +133,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].load = donna_column_type_name_new;
+    priv->column_types[COL_TYPE_SIZE].name = "size";
+    priv->column_types[COL_TYPE_SIZE].load = donna_column_type_size_new;
 
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
