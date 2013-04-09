@@ -31,20 +31,36 @@ static void             ct_size_finalize            (GObject            *object)
 
 /* ColumnType */
 static const gchar *    ct_size_get_renderers       (DonnaColumnType    *ct);
-static GPtrArray *      ct_size_get_props           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name);
 static gpointer         ct_size_get_data            (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name);
 static DonnaColumnTypeNeed ct_size_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
-                                                     gpointer            data);
+                                                     gpointer           *data);
 static void             ct_size_free_data           (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer            data);
+static GPtrArray *      ct_size_get_props           (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     gpointer            data);
+static GtkSortType      ct_size_get_default_sort_order
+                                                    (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     gpointer            data);
+static GtkMenu *        ct_size_get_options_menu    (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     gpointer            data);
+static gboolean         ct_size_handle_context      (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     DonnaTreeView      *treeview);
 static GPtrArray *      ct_size_render              (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
@@ -58,14 +74,6 @@ static gint             ct_size_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
-static GtkMenu *        ct_size_get_options_menu    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name);
-static gboolean         ct_size_handle_context      (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     DonnaNode          *node,
-                                                     DonnaTreeView      *treeview);
 static gboolean         ct_size_set_tooltip         (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
@@ -77,16 +85,17 @@ static gboolean         ct_size_set_tooltip         (DonnaColumnType    *ct,
 static void
 ct_size_columntype_init (DonnaColumnTypeInterface *interface)
 {
-    interface->get_renderers    = ct_size_get_renderers;
-    interface->get_props        = ct_size_get_props;
-    interface->get_data         = ct_size_get_data;
-    interface->refresh_data     = ct_size_refresh_data;
-    interface->free_data        = ct_size_free_data;
-    interface->render           = ct_size_render;
-    interface->get_options_menu = ct_size_get_options_menu;
-    interface->handle_context   = ct_size_handle_context;
-    interface->set_tooltip      = ct_size_set_tooltip;
-    interface->node_cmp         = ct_size_node_cmp;
+    interface->get_renderers            = ct_size_get_renderers;
+    interface->get_data                 = ct_size_get_data;
+    interface->refresh_data             = ct_size_refresh_data;
+    interface->free_data                = ct_size_free_data;
+    interface->get_props                = ct_size_get_props;
+    interface->get_default_sort_order   = ct_size_get_default_sort_order;
+    interface->get_options_menu         = ct_size_get_options_menu;
+    interface->handle_context           = ct_size_handle_context;
+    interface->render                   = ct_size_render;
+    interface->set_tooltip              = ct_size_set_tooltip;
+    interface->node_cmp                 = ct_size_node_cmp;
 }
 
 static void
@@ -134,21 +143,6 @@ ct_size_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
-static GPtrArray *
-ct_size_get_props (DonnaColumnType  *ct,
-                   const gchar      *tv_name,
-                   const gchar      *col_name)
-{
-    GPtrArray *props;
-
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
-
-    props = g_ptr_array_new_full (1, g_free);
-    g_ptr_array_add (props, g_strdup ("size"));
-
-    return props;
-}
-
 static guint
 get_size_option (DonnaColumnTypeSize *ctsize,
                  const gchar         *tv_name,
@@ -189,7 +183,7 @@ ct_size_get_data (DonnaColumnType    *ct,
     struct tv_col_data *data;
 
     data = g_new0 (struct tv_col_data, 1);
-    ct_size_refresh_data (ct, tv_name, col_name, data);
+    ct_size_refresh_data (ct, tv_name, col_name, (gpointer *) &data);
     return data;
 }
 
@@ -197,10 +191,10 @@ static DonnaColumnTypeNeed
 ct_size_refresh_data (DonnaColumnType    *ct,
                       const gchar        *tv_name,
                       const gchar        *col_name,
-                      gpointer            _data)
+                      gpointer           *_data)
 {
     DonnaColumnTypeSize *ctsize = DONNA_COLUMNTYPE_SIZE (ct);
-    struct tv_col_data *data = _data;
+    struct tv_col_data *data = *_data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gint val;
 
@@ -232,6 +226,61 @@ ct_size_free_data (DonnaColumnType    *ct,
 {
     g_free (data);
 }
+
+static GPtrArray *
+ct_size_get_props (DonnaColumnType  *ct,
+                   const gchar      *tv_name,
+                   const gchar      *col_name,
+                   gpointer          data)
+{
+    GPtrArray *props;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
+
+    props = g_ptr_array_new_full (1, g_free);
+    g_ptr_array_add (props, g_strdup ("size"));
+
+    return props;
+}
+
+static GtkSortType
+ct_size_get_default_sort_order (DonnaColumnType *ct,
+                                const gchar     *tv_name,
+                                const gchar     *col_name,
+                                gpointer        data)
+{
+    DonnaConfig *config;
+    GtkSortType sort_order;
+
+    config = donna_app_get_config (DONNA_COLUMNTYPE_SIZE (ct)->priv->app);
+    sort_order = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->_get_default_sort_order (
+            config, tv_name, col_name, "size", GTK_SORT_DESCENDING);
+    g_object_unref (config);
+    return sort_order;
+}
+
+static GtkMenu *
+ct_size_get_options_menu (DonnaColumnType    *ct,
+                          const gchar        *tv_name,
+                          const gchar        *col_name,
+                          gpointer            data)
+{
+    /* FIXME */
+    return NULL;
+}
+
+static gboolean
+ct_size_handle_context (DonnaColumnType    *ct,
+                        const gchar        *tv_name,
+                        const gchar        *col_name,
+                        gpointer            data,
+                        DonnaNode          *node,
+                        DonnaTreeView      *treeview)
+{
+    /* FIXME */
+    return FALSE;
+}
+
 
 static inline void
 print_rounded (off_t size, gint digits, gchar **b)
@@ -323,6 +372,35 @@ ct_size_render (DonnaColumnType    *ct,
     return NULL;
 }
 
+static gboolean
+ct_size_set_tooltip (DonnaColumnType    *ct,
+                     const gchar        *tv_name,
+                     const gchar        *col_name,
+                     gpointer            _data,
+                     guint               index,
+                     DonnaNode          *node,
+                     GtkTooltip         *tooltip)
+{
+    struct tv_col_data *data = _data;
+    gchar buf[20], *b = buf;
+    off_t size;
+    DonnaNodeHasValue has;
+
+    if (donna_node_get_size (node, FALSE, &size) != DONNA_NODE_VALUE_SET)
+        return FALSE;
+
+    if (data->format == SIZE_FORMAT_RAW || data->format == SIZE_FORMAT_B)
+        print_rounded (size, data->digits, &b);
+    else
+        if (snprintf (b, 20, "%'li B", size) >= 20)
+            b = g_strdup_printf ("%'li B", size);
+
+    gtk_tooltip_set_text (tooltip, b);
+    if (b != buf)
+        g_free (b);
+    return TRUE;
+}
+
 static gint
 ct_size_node_cmp (DonnaColumnType    *ct,
                   const gchar        *tv_name,
@@ -353,55 +431,6 @@ ct_size_node_cmp (DonnaColumnType    *ct,
         return 1;
 
     return (size1 > size2) ? 1 : (size1 < size2) ? -1 : 0;
-}
-
-static GtkMenu *
-ct_size_get_options_menu (DonnaColumnType    *ct,
-                          const gchar        *tv_name,
-                          const gchar        *col_name)
-{
-    /* FIXME */
-    return NULL;
-}
-
-static gboolean
-ct_size_handle_context (DonnaColumnType    *ct,
-                        const gchar        *tv_name,
-                        const gchar        *col_name,
-                        DonnaNode          *node,
-                        DonnaTreeView      *treeview)
-{
-    /* FIXME */
-    return FALSE;
-}
-
-static gboolean
-ct_size_set_tooltip (DonnaColumnType    *ct,
-                     const gchar        *tv_name,
-                     const gchar        *col_name,
-                     gpointer            _data,
-                     guint               index,
-                     DonnaNode          *node,
-                     GtkTooltip         *tooltip)
-{
-    struct tv_col_data *data = _data;
-    gchar buf[20], *b = buf;
-    off_t size;
-    DonnaNodeHasValue has;
-
-    if (donna_node_get_size (node, FALSE, &size) != DONNA_NODE_VALUE_SET)
-        return FALSE;
-
-    if (data->format == SIZE_FORMAT_RAW || data->format == SIZE_FORMAT_B)
-        print_rounded (size, data->digits, &b);
-    else
-        if (snprintf (b, 20, "%'li B", size) >= 20)
-            b = g_strdup_printf ("%'li B", size);
-
-    gtk_tooltip_set_text (tooltip, b);
-    if (b != buf)
-        g_free (b);
-    return TRUE;
 }
 
 DonnaColumnType *

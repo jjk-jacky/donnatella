@@ -2304,15 +2304,17 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
     {
         gtk_tree_view_column_set_sort_indicator (priv->sort_column, FALSE);
         priv->sort_column = column;
+        sort_order = donna_columntype_get_default_sort_order (
+                g_object_get_data (G_OBJECT (column), "column-type"),
+                priv->name,
+                g_object_get_data (G_OBJECT (column), "column-name"),
+                g_object_get_data (G_OBJECT (column), "columntype-data"));
     }
+    else
+        /* revert order */
+        sort_order = (cur_sort_order == GTK_SORT_ASCENDING)
+            ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
-    /* new sort order */
-    sort_order = (same_column)
-            /* revert order */
-            ? ((cur_sort_order == GTK_SORT_ASCENDING)
-                ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
-            /* default */
-            : GTK_SORT_ASCENDING;
     /* important to set the sort order on column before the sort_id on sortable,
      * since sort_func might use the column's sort_order (when putting container
      * always first) */
@@ -2672,7 +2674,8 @@ load_arrangement (DonnaTreeView *tree,
         }
 
         /* props to watch for refresh */
-        props = donna_columntype_get_props (ct, priv->name, b);
+        props = donna_columntype_get_props (ct, priv->name, b,
+                g_object_get_data (G_OBJECT (column), "columntype-data"));
         if (props)
         {
             guint i;
