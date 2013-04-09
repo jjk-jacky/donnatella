@@ -160,11 +160,11 @@ get_sort_option (DonnaColumnTypeName *ctname,
 
     config = donna_app_get_config (ctname->priv->app);
     if (!donna_config_get_boolean (config, &value,
-                "treeviews/%s/columns/%s/sort_%s",
+                "treeviews/%s/columns/%s/%s",
                 tv_name, col_name, opt_name))
     {
         if (!donna_config_get_boolean (config, &value,
-                    "columns/%s/sort_%s", col_name, opt_name))
+                    "columns/%s/%s", col_name, opt_name))
         {
             if (!donna_config_get_boolean (config, &value,
                         "defaults/sort/%s", opt_name))
