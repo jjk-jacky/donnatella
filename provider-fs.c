@@ -1,6 +1,7 @@
 
 #include <glib-object.h>
 #include <string.h>                 /* strrchr() */
+#include <sys/stat.h>
 #include "provider-fs.h"
 #include "provider.h"
 #include "node.h"
@@ -97,13 +98,57 @@ provider_fs_get_domain (DonnaProvider *provider)
     return "fs";
 }
 
+static inline gboolean
+stat_node (DonnaNode *node, gchar *filename)
+{
+    struct stat st;
+    GValue value = G_VALUE_INIT;
+
+    if (stat (filename, &st) == -1)
+        return FALSE;
+
+    g_value_init (&value, G_TYPE_INT);
+
+    g_value_set_int (&value, (gint) st.st_mode);
+    donna_node_set_property_value (node, "mode", &value);
+    g_value_set_int (&value, (gint) st.st_uid);
+    donna_node_set_property_value (node, "uid", &value);
+    g_value_set_int (&value, (gint) st.st_gid);
+    donna_node_set_property_value (node, "gid", &value);
+
+    g_value_unset (&value);
+    g_value_init (&value, G_TYPE_INT64);
+
+    g_value_set_int64 (&value, (gint64) st.st_size);
+    donna_node_set_property_value (node, "size", &value);
+    g_value_set_int64 (&value, (gint64) st.st_ctime);
+    donna_node_set_property_value (node, "ctime", &value);
+    g_value_set_int64 (&value, (gint64) st.st_mtime);
+    donna_node_set_property_value (node, "mtime", &value);
+    g_value_set_int64 (&value, (gint64) st.st_atime);
+    donna_node_set_property_value (node, "atime", &value);
+
+    g_value_unset (&value);
+    return TRUE;
+}
+
 static gboolean
 refresher (DonnaTask    *task,
            DonnaNode    *node,
            const gchar  *name)
 {
-    /* TODO */
-    return FALSE;
+    gboolean ret;
+    gchar *filename;
+
+    filename = donna_node_get_filename (node);
+
+    /* FIXME if called for the mime-type property, do that. else it's one of the
+     * "main" ones (from stat) */
+
+    ret = stat_node (node, filename);
+
+    g_free (filename);
+    return ret;
 }
 
 static DonnaTaskState
@@ -165,6 +210,9 @@ new_node (DonnaProviderBase *_provider,
             setter,
             name,
             DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE);
+
+    /* this will load up all properties from a stat() call */
+    stat_node (node, filename);
 
     if (free_filename)
         g_free ((gchar *) filename);

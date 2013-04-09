@@ -48,9 +48,9 @@ typedef enum
     DONNA_NODE_CTIME_EXISTS         = (1 << 3),
     DONNA_NODE_MTIME_EXISTS         = (1 << 4),
     DONNA_NODE_ATIME_EXISTS         = (1 << 5),
-    DONNA_NODE_PERMS_EXISTS         = (1 << 6),
-    DONNA_NODE_USER_EXISTS          = (1 << 7),
-    DONNA_NODE_GROUP_EXISTS         = (1 << 8),
+    DONNA_NODE_MODE_EXISTS          = (1 << 6),
+    DONNA_NODE_UID_EXISTS           = (1 << 7),
+    DONNA_NODE_GID_EXISTS           = (1 << 8),
     DONNA_NODE_TYPE_EXISTS          = (1 << 9),
 
     DONNA_NODE_NAME_WRITABLE        = (1 << 10),
@@ -60,16 +60,16 @@ typedef enum
     DONNA_NODE_CTIME_WRITABLE       = (1 << 14),
     DONNA_NODE_MTIME_WRITABLE       = (1 << 15),
     DONNA_NODE_ATIME_WRITABLE       = (1 << 16),
-    DONNA_NODE_PERMS_WRITABLE       = (1 << 17),
-    DONNA_NODE_USER_WRITABLE        = (1 << 18),
-    DONNA_NODE_GROUP_WRITABLE       = (1 << 19),
+    DONNA_NODE_MODE_WRITABLE        = (1 << 17),
+    DONNA_NODE_UID_WRITABLE         = (1 << 18),
+    DONNA_NODE_GID_WRITABLE         = (1 << 19),
     DONNA_NODE_TYPE_WRITABLE        = (1 << 20),
 
     DONNA_NODE_ALL_EXISTS           = (DONNA_NODE_ICON_EXISTS
         | DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_SIZE_EXISTS
         | DONNA_NODE_CTIME_EXISTS | DONNA_NODE_MTIME_EXISTS
-        | DONNA_NODE_ATIME_EXISTS | DONNA_NODE_PERMS_EXISTS
-        | DONNA_NODE_USER_EXISTS  | DONNA_NODE_GROUP_EXISTS
+        | DONNA_NODE_ATIME_EXISTS | DONNA_NODE_MODE_EXISTS
+        | DONNA_NODE_UID_EXISTS  | DONNA_NODE_GID_EXISTS
         | DONNA_NODE_TYPE_EXISTS)
 } DonnaNodeFlags;
 
@@ -141,25 +141,25 @@ DonnaNodeHasValue   donna_node_get_full_name        (DonnaNode          *node,
                                                      gchar             **full_name);
 DonnaNodeHasValue   donna_node_get_size             (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     guint              *size);
+                                                     off_t              *size);
 DonnaNodeHasValue   donna_node_get_ctime            (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gint64             *ctime);
+                                                     time_t             *ctime);
 DonnaNodeHasValue   donna_node_get_mtime            (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gint64             *mtime);
+                                                     time_t             *mtime);
 DonnaNodeHasValue   donna_node_get_atime            (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gint64             *atime);
-DonnaNodeHasValue   donna_node_get_perms            (DonnaNode          *node,
+                                                     time_t             *atime);
+DonnaNodeHasValue   donna_node_get_mode             (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     guint              *perms);
-DonnaNodeHasValue   donna_node_get_user             (DonnaNode          *node,
+                                                     mode_t             *mode);
+DonnaNodeHasValue   donna_node_get_uid              (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gchar             **user);
-DonnaNodeHasValue   donna_node_get_group            (DonnaNode          *node,
+                                                     uid_t              *uid);
+DonnaNodeHasValue   donna_node_get_gid              (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gchar             **user);
+                                                     gid_t              *gid);
 DonnaNodeHasValue   donna_node_get_Type             (DonnaNode          *node,
                                                      gboolean            is_blocking,
                                                      gchar             **user);

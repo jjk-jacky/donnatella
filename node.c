@@ -49,13 +49,13 @@
  * - icon: pointer to a #GdkPixbuf of the item's icon
  * - full-name: the name of the item (e.g. /full/path/to/file -- often times
  *   will be the same as location) (gchar *)
- * - size: the size of the item (guint)
- * - ctime: the ctime of the item (gint64)
- * - mtime: the mtime of the item (gint64)
- * - atime: the atime of the item (gin64)
- * - perms: the permissions of the item (guint)
- * - user: the owner of the item (gchar *)
- * - group: the group of the item (gchar *)
+ * - size: the size of the item (off_t)
+ * - ctime: the ctime of the item (time_t)
+ * - mtime: the mtime of the item (time_t)
+ * - atime: the atime of the item (time_t)
+ * - mode: the mode (type&perms) of the item (mode_t)
+ * - uid: the user id of the item (uid_t)
+ * - gid: the group id of the item (gid_t)
  * - type: the type of the item (gchar *)
  *
  * provider, domain, location, node-type and filename are all read-only. Every
@@ -126,9 +126,9 @@ const gchar *node_basic_properties[] =
     "ctime",
     "mtime",
     "atime",
-    "perms",
-    "user",
-    "group",
+    "mode",
+    "uid",
+    "gid",
     "type",
     NULL
 };
@@ -145,9 +145,9 @@ enum
     BASIC_PROP_CTIME,
     BASIC_PROP_MTIME,
     BASIC_PROP_ATIME,
-    BASIC_PROP_PERMS,
-    BASIC_PROP_USER,
-    BASIC_PROP_GROUP,
+    BASIC_PROP_MODE,
+    BASIC_PROP_UID,
+    BASIC_PROP_GID,
     BASIC_PROP_TYPE,
     NB_BASIC_PROPS
 };
@@ -165,9 +165,9 @@ static DonnaNodeFlags prop_writable_flags[] =
     DONNA_NODE_CTIME_WRITABLE,
     DONNA_NODE_MTIME_WRITABLE,
     DONNA_NODE_ATIME_WRITABLE,
-    DONNA_NODE_PERMS_WRITABLE,
-    DONNA_NODE_USER_WRITABLE,
-    DONNA_NODE_GROUP_WRITABLE,
+    DONNA_NODE_MODE_WRITABLE,
+    DONNA_NODE_UID_WRITABLE,
+    DONNA_NODE_GID_WRITABLE,
     DONNA_NODE_TYPE_WRITABLE
 };
 
@@ -234,13 +234,13 @@ donna_node_init (DonnaNode *node)
 
     g_value_init (&priv->basic_props[BASIC_PROP_ICON].value,      G_TYPE_OBJECT);
     g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
-    g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_UINT);
+    g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_INT64);
     g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value,     G_TYPE_INT64);
     g_value_init (&priv->basic_props[BASIC_PROP_MTIME].value,     G_TYPE_INT64);
     g_value_init (&priv->basic_props[BASIC_PROP_ATIME].value,     G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_PERMS].value,     G_TYPE_UINT);
-    g_value_init (&priv->basic_props[BASIC_PROP_USER].value,      G_TYPE_STRING);
-    g_value_init (&priv->basic_props[BASIC_PROP_GROUP].value,     G_TYPE_STRING);
+    g_value_init (&priv->basic_props[BASIC_PROP_MODE].value,      G_TYPE_INT);
+    g_value_init (&priv->basic_props[BASIC_PROP_UID].value,       G_TYPE_INT);
+    g_value_init (&priv->basic_props[BASIC_PROP_GID].value,       G_TYPE_INT);
     g_value_init (&priv->basic_props[BASIC_PROP_TYPE].value,      G_TYPE_STRING);
 
     priv->toggle_count = 1;
@@ -349,12 +349,12 @@ donna_node_new (DonnaProvider       *provider,
         priv->basic_props[BASIC_PROP_MTIME].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
     if (flags & DONNA_NODE_ATIME_EXISTS)
         priv->basic_props[BASIC_PROP_ATIME].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
-    if (flags & DONNA_NODE_PERMS_EXISTS)
-        priv->basic_props[BASIC_PROP_PERMS].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
-    if (flags & DONNA_NODE_USER_EXISTS)
-        priv->basic_props[BASIC_PROP_USER].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
-    if (flags & DONNA_NODE_GROUP_EXISTS)
-        priv->basic_props[BASIC_PROP_GROUP].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
+    if (flags & DONNA_NODE_MODE_EXISTS)
+        priv->basic_props[BASIC_PROP_MODE].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
+    if (flags & DONNA_NODE_UID_EXISTS)
+        priv->basic_props[BASIC_PROP_UID].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
+    if (flags & DONNA_NODE_GID_EXISTS)
+        priv->basic_props[BASIC_PROP_GID].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
     if (flags & DONNA_NODE_TYPE_EXISTS)
         priv->basic_props[BASIC_PROP_TYPE].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
 
@@ -941,13 +941,13 @@ donna_node_get_name (DonnaNode *node)
     return name;
 }
 
-typedef gpointer (*value_dup_fn) (const GValue *value);
+typedef gint64 (*value_dup_fn) (const GValue *value);
 
 static DonnaNodeHasValue
 get_basic_prop (DonnaNode   *node,
                 gboolean     is_blocking,
                 gint         basic_id,
-                gpointer    *dest,
+                gint64      *dest,
                 value_dup_fn dup_value)
 {
     DonnaNodePrivate *priv = node->priv;
@@ -1011,14 +1011,14 @@ donna_node_get_icon (DonnaNode  *node,
                      GdkPixbuf **icon)
 {
     return get_basic_prop (node, is_blocking, BASIC_PROP_ICON,
-            (gpointer *) icon, (value_dup_fn) g_value_dup_object);
+            (gint64 *) icon, (value_dup_fn) g_value_dup_object);
 }
 
 /**
  * donna_node_get_full_name:
  * @node: Node to get the full name from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's full name
+ * @full_name: Return location for @node's full name
  *
  * Helper to quickly get the property full-name of @node
  * Free it with g_free() when done.
@@ -1036,14 +1036,14 @@ donna_node_get_full_name (DonnaNode  *node,
                           gchar     **full_name)
 {
     return get_basic_prop (node, is_blocking, BASIC_PROP_FULL_NAME,
-            (gpointer *) full_name, (value_dup_fn) g_value_dup_string);
+            (gint64 *) full_name, (value_dup_fn) g_value_dup_string);
 }
 
 /**
  * donna_node_get_size:
  * @node: Node to get the size from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's size
+ * @size: Return location for @node's size
  *
  * Helper to quickly get the property size of @node
  *
@@ -1057,17 +1057,17 @@ donna_node_get_full_name (DonnaNode  *node,
 DonnaNodeHasValue
 donna_node_get_size (DonnaNode  *node,
                      gboolean    is_blocking,
-                     guint      *size)
+                     off_t      *size)
 {
     return get_basic_prop (node, is_blocking, BASIC_PROP_SIZE,
-            (gpointer *) size, (value_dup_fn) g_value_get_uint);
+            (gint64 *) size, (value_dup_fn) g_value_get_int64);
 }
 
 /**
  * donna_node_get_ctime:
  * @node: Node to get the ctime from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's ctime
+ * @ctime: Return location for @node's ctime
  *
  * Helper to quickly get the property ctime of @node
  *
@@ -1081,17 +1081,17 @@ donna_node_get_size (DonnaNode  *node,
 DonnaNodeHasValue
 donna_node_get_ctime (DonnaNode *node,
                       gboolean   is_blocking,
-                      gint64    *ctime)
+                      time_t    *ctime)
 {
     return get_basic_prop (node, is_blocking, BASIC_PROP_CTIME,
-            (gpointer *) ctime, (value_dup_fn) g_value_get_int64);
+            (gint64 *) ctime, (value_dup_fn) g_value_get_int64);
 }
 
 /**
  * donna_node_get_mtime:
  * @node: Node to get the mtime from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's mtime
+ * @mtime: Return location for @node's mtime
  *
  * Helper to quickly get the property mtime of @node
  *
@@ -1105,17 +1105,17 @@ donna_node_get_ctime (DonnaNode *node,
 DonnaNodeHasValue
 donna_node_get_mtime (DonnaNode *node,
                       gboolean   is_blocking,
-                      gint64    *mtime)
+                      time_t    *mtime)
 {
     return get_basic_prop (node, is_blocking, BASIC_PROP_MTIME,
-            (gpointer *) mtime, (value_dup_fn) g_value_get_int64);
+            (gint64 *) mtime, (value_dup_fn) g_value_get_int64);
 }
 
 /**
  * donna_node_get_atime:
  * @node: Node to get the atime from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's atime
+ * @atime: Return location for @node's atime
  *
  * Helper to quickly get the property atime of @node
  *
@@ -1129,19 +1129,19 @@ donna_node_get_mtime (DonnaNode *node,
 DonnaNodeHasValue
 donna_node_get_atime (DonnaNode *node,
                       gboolean   is_blocking,
-                      gint64    *atime)
+                      time_t    *atime)
 {
     return get_basic_prop (node, is_blocking, BASIC_PROP_ATIME,
-            (gpointer *) atime, (value_dup_fn) g_value_get_int64);
+            (gint64 *) atime, (value_dup_fn) g_value_get_int64);
 }
 
 /**
- * donna_node_get_perms:
+ * donna_node_get_mode:
  * @node: Node to get the perms from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's perms
+ * @mode: Return location for @node's mode (type&perms)
  *
- * Helper to quickly get the property perms of @node
+ * Helper to quickly get the property mode of @node
  *
  * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
  * while with %TRUE a refresh will automatically be called (within/blocking the
@@ -1151,22 +1151,21 @@ donna_node_get_atime (DonnaNode *node,
  * Returns: Whether the value was set, needs a refresh or doesn't exists
  */
 DonnaNodeHasValue
-donna_node_get_perms (DonnaNode *node,
-                      gboolean   is_blocking,
-                      guint     *perms)
+donna_node_get_mode (DonnaNode *node,
+                     gboolean   is_blocking,
+                     mode_t    *mode)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_PERMS,
-            (gpointer *) perms, (value_dup_fn) g_value_get_uint);
+    return get_basic_prop (node, is_blocking, BASIC_PROP_MODE,
+            (gint64 *) mode, (value_dup_fn) g_value_get_int);
 }
 
 /**
- * donna_node_get_user:
+ * donna_node_get_uid:
  * @node: Node to get the user from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's user
+ * @uid: Return location for @node's user id
  *
- * Helper to quickly get the property user of @node
- * Free it with g_free() when done.
+ * Helper to quickly get the property uid of @node
  *
  * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
  * while with %TRUE a refresh will automatically be called (within/blocking the
@@ -1176,22 +1175,21 @@ donna_node_get_perms (DonnaNode *node,
  * Returns: Whether the value was set, needs a refresh or doesn't exists
  */
 DonnaNodeHasValue
-donna_node_get_user (DonnaNode  *node,
-                     gboolean    is_blocking,
-                     gchar     **user)
+donna_node_get_uid (DonnaNode  *node,
+                    gboolean    is_blocking,
+                    uid_t      *uid)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_USER,
-            (gpointer *) user, (value_dup_fn) g_value_dup_string);
+    return get_basic_prop (node, is_blocking, BASIC_PROP_UID,
+            (gint64 *) uid, (value_dup_fn) g_value_get_int);
 }
 
 /**
- * donna_node_get_group:
+ * donna_node_get_gid:
  * @node: Node to get the group from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's group
+ * @gid: Return location for @node's group id
  *
- * Helper to quickly get the property group of @node
- * Free it with g_free() when done.
+ * Helper to quickly get the property gid of @node
  *
  * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
  * while with %TRUE a refresh will automatically be called (within/blocking the
@@ -1201,12 +1199,12 @@ donna_node_get_user (DonnaNode  *node,
  * Returns: Whether the value was set, needs a refresh or doesn't exists
  */
 DonnaNodeHasValue
-donna_node_get_group (DonnaNode *node,
-                      gboolean   is_blocking,
-                      gchar    **group)
+donna_node_get_gid (DonnaNode *node,
+                    gboolean   is_blocking,
+                    gid_t     *gid)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_GROUP,
-            (gpointer *) group, (value_dup_fn) g_value_dup_string);
+    return get_basic_prop (node, is_blocking, BASIC_PROP_GID,
+            (gint64 *) gid, (value_dup_fn) g_value_get_int);
 }
 
 /**
