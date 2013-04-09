@@ -5,21 +5,13 @@
 #include "node.h"
 #include "donna.h"
 #include "conf.h"
+#include "size.h"
 #include "macros.h"
-
-enum size_format
-{
-    SIZE_FORMAT_RAW = 0,
-    SIZE_FORMAT_B,
-    SIZE_FORMAT_KB,
-    SIZE_FORMAT_MB,
-    SIZE_FORMAT_ROUND,
-};
 
 struct tv_col_data
 {
-    enum size_format    format : 3;
-    guint               digits : 2;
+    DonnaSizeFormat format : 3;
+    guint           digits : 2;
 };
 
 struct _DonnaColumnTypeSizePrivate
@@ -198,7 +190,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gint val;
 
-    val = get_size_option (ctsize, tv_name, col_name, "format", SIZE_FORMAT_ROUND);
+    val = get_size_option (ctsize, tv_name, col_name, "format", DONNA_SIZE_FORMAT_ROUNDED);
     if (data->format != val)
     {
         data->format = val;
@@ -281,26 +273,6 @@ ct_size_handle_context (DonnaColumnType    *ct,
     return FALSE;
 }
 
-
-static inline void
-print_rounded (off_t size, gint digits, gchar **b)
-{
-    const gchar unit[] = { 'B', 'K', 'M', 'G', 'T' };
-    gint u = 0;
-    gint max = sizeof (unit) / sizeof (unit[0]);
-    gdouble dbl;
-
-    dbl = (gdouble) size;
-    while (dbl > 1024.0)
-    {
-        if (++u >= max)
-            break;
-        dbl /= 1024.0;
-    }
-    if (snprintf (*b, 20, "%'.*lf %c", (u > 0) ? digits : 0, dbl, unit[u]) >= 20)
-        *b = g_strdup_printf ("%'.*lf %c", (u > 0) ? digits : 0, dbl, unit[u]);
-}
-
 static GPtrArray *
 ct_size_render (DonnaColumnType    *ct,
                 const gchar        *tv_name,
@@ -336,36 +308,7 @@ ct_size_render (DonnaColumnType    *ct,
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
-
-    switch (data->format)
-    {
-        case SIZE_FORMAT_RAW:
-            if (snprintf (b, 20, "%li", size) >= 20)
-                b = g_strdup_printf ("%li", size);
-            break;
-
-        case SIZE_FORMAT_B:
-            if (snprintf (b, 20, "%'li", size) >= 20)
-                b = g_strdup_printf ("%'li", size);
-            break;
-
-        case SIZE_FORMAT_KB:
-            dbl = (gdouble) size / 1024.0;
-            if (snprintf (b, 20, "%'.*lf K", data->digits, dbl) >= 20)
-                b = g_strdup_printf ("%'.*lf K", data->digits, dbl);
-            break;
-
-        case SIZE_FORMAT_MB:
-            dbl = (gdouble) size / (1024.0 * 1024.0);
-            if (snprintf (b, 20, "%'.*lf M", data->digits, dbl) >= 20)
-                b = g_strdup_printf ("%'.*lf M", data->digits, dbl);
-            break;
-
-        case SIZE_FORMAT_ROUND:
-            print_rounded (size, data->digits, &b);
-            break;
-    }
-
+    donna_print_size (&b, 20, size, data->format, data->digits);
     g_object_set (renderer, "visible", TRUE, "text", b, "xalign", 1.0, NULL);
     if (b != buf)
         g_free (b);
@@ -384,17 +327,19 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     gchar buf[20], *b = buf;
     off_t size;
-    DonnaNodeHasValue has;
+    DonnaSizeFormat format;
 
     if (donna_node_get_size (node, FALSE, &size) != DONNA_NODE_VALUE_SET)
         return FALSE;
 
-    if (data->format == SIZE_FORMAT_RAW || data->format == SIZE_FORMAT_B)
-        print_rounded (size, data->digits, &b);
+    if (data->format == DONNA_SIZE_FORMAT_RAW
+            || data->format == DONNA_SIZE_FORMAT_B_NO_UNIT
+            || data->format == DONNA_SIZE_FORMAT_B)
+        format = DONNA_SIZE_FORMAT_ROUNDED;
     else
-        if (snprintf (b, 20, "%'li B", size) >= 20)
-            b = g_strdup_printf ("%'li B", size);
+        format = DONNA_SIZE_FORMAT_B;
 
+    donna_print_size (&b, 20, size, format, data->digits);
     gtk_tooltip_set_text (tooltip, b);
     if (b != buf)
         g_free (b);
