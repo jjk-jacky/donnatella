@@ -380,6 +380,40 @@ node_updated_cb (DonnaProvider  *provider,
     g_object_set_data (G_OBJECT (node), key, NULL);
 }
 
+static gboolean
+ct_name_set_tooltip (DonnaColumnType    *ct,
+                     const gchar        *tv_name,
+                     const gchar        *col_name,
+                     gpointer            data,
+                     guint               index,
+                     DonnaNode          *node,
+                     GtkTooltip         *tooltip)
+{
+    gchar *s;
+    DonnaNodeHasValue has;
+
+    /* FIXME:
+     * 1 (icon) : show full-name (using location as fallback only)
+     * 2 (name) : show name if ellipsed, else no tooltip. Not sure how to find
+     * out if the text was ellipsed or not... */
+
+    if (index <= 1)
+    {
+        has = donna_node_get_full_name (node, FALSE, &s);
+        if (has == DONNA_NODE_VALUE_NONE /*FIXME*/||has==DONNA_NODE_VALUE_NEED_REFRESH)
+            s = donna_node_get_location (node);
+        /* FIXME: if NEED_REFRESH do a task and whatnot? */
+        else if (has != DONNA_NODE_VALUE_SET)
+            return FALSE;
+    }
+    else
+        s = donna_node_get_name (node);
+
+    gtk_tooltip_set_text (tooltip, s);
+    g_free (s);
+    return TRUE;
+}
+
 static inline gchar *
 get_node_key (DonnaColumnTypeName   *ctname,
               const gchar           *tv_name,
@@ -396,7 +430,7 @@ get_node_key (DonnaColumnTypeName   *ctname,
     snprintf (buf, 128, "%s/%s/utf8-collate-key", tv_name, col_name);
     key = g_object_get_data (G_OBJECT (node), buf);
     /* no key, or invalid (options changed) */
-    if (!key || *key != sort_get_options_char (dot_first, special_first,
+    if (!key || *key != donna_sort_get_options_char (dot_first, special_first,
                 natural_order))
     {
         gchar *name;
@@ -437,47 +471,13 @@ get_node_key (DonnaColumnTypeName   *ctname,
         }
 
         name = donna_node_get_name (node);
-        key = sort_get_utf8_collate_key (name, -1,
+        key = donna_sort_get_utf8_collate_key (name, -1,
                 dot_first, special_first, natural_order);
         g_free (name);
         g_object_set_data_full (G_OBJECT (node), buf, key, g_free);
     }
 
     return key + 1; /* skip options_char */
-}
-
-static gboolean
-ct_name_set_tooltip (DonnaColumnType    *ct,
-                     const gchar        *tv_name,
-                     const gchar        *col_name,
-                     gpointer            data,
-                     guint               index,
-                     DonnaNode          *node,
-                     GtkTooltip         *tooltip)
-{
-    gchar *s;
-    DonnaNodeHasValue has;
-
-    /* FIXME:
-     * 1 (icon) : show full-name (using location as fallback only)
-     * 2 (name) : show name if ellipsed, else no tooltip. Not sure how to find
-     * out if the text was ellipsed or not... */
-
-    if (index <= 1)
-    {
-        has = donna_node_get_full_name (node, FALSE, &s);
-        if (has == DONNA_NODE_VALUE_NONE /*FIXME*/||has==DONNA_NODE_VALUE_NEED_REFRESH)
-            s = donna_node_get_location (node);
-        /* FIXME: if NEED_REFRESH do a task and whatnot? */
-        else if (has != DONNA_NODE_VALUE_SET)
-            return FALSE;
-    }
-    else
-        s = donna_node_get_name (node);
-
-    gtk_tooltip_set_text (tooltip, s);
-    g_free (s);
-    return TRUE;
 }
 
 static gint
@@ -511,7 +511,7 @@ ct_name_node_cmp (DonnaColumnType    *ct,
 
     name1 = donna_node_get_name (node1);
     name2 = donna_node_get_name (node2);
-    ret = strcmp_ext (name1, name2, data->options);
+    ret = donna_strcmp (name1, name2, data->options);
     g_free (name1);
     g_free (name2);
     return ret;

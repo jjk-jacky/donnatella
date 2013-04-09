@@ -16,19 +16,19 @@ typedef enum
 } DonnaSortOptions;
 
 gint
-strcmp_ext (const gchar *s1, const gchar *s2, DonnaSortOptions options);
+donna_strcmp (const gchar *s1, const gchar *s2, DonnaSortOptions options);
 
 gchar
-sort_get_options_char (gboolean dot_first,
-                       gboolean special_first,
-                       gboolean natural_order);
+donna_sort_get_options_char (gboolean dot_first,
+                             gboolean special_first,
+                             gboolean natural_order);
 
 gchar *
-sort_get_utf8_collate_key (const gchar   *str,
-                           gssize         len,
-                           gboolean       dot_first,
-                           gboolean       special_first,
-                           gboolean       natural_order);
+donna_sort_get_utf8_collate_key (const gchar   *str,
+                                 gssize         len,
+                                 gboolean       dot_first,
+                                 gboolean       special_first,
+                                 gboolean       natural_order);
 
 G_END_DECLS
 
