@@ -156,6 +156,7 @@ get_size_option (DonnaColumnTypeSize *ctsize,
             if (!donna_config_get_int (config, &value,
                         "defaults/size/%s", opt_name))
             {
+                value = def;
                 if (donna_config_set_int (config, value,
                             "defaults/size/%s", opt_name))
                     g_info ("Option 'defaults/size/%s' did not exists, initialized to %d",
