@@ -66,6 +66,7 @@ static gboolean         ct_name_handle_context      (DonnaColumnType    *ct,
 static gboolean         ct_name_set_tooltip         (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     gpointer            data,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkTooltip         *tooltip);
@@ -458,6 +459,7 @@ static gboolean
 ct_name_set_tooltip (DonnaColumnType    *ct,
                      const gchar        *tv_name,
                      const gchar        *col_name,
+                     gpointer            data,
                      guint               index,
                      DonnaNode          *node,
                      GtkTooltip         *tooltip)

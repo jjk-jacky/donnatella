@@ -4171,8 +4171,9 @@ query_tooltip_cb (GtkTreeView   *treev,
                 }
             }
 #endif
-            ret = donna_columntype_set_tooltip (ct, priv->name, col, index,
-                    node, tooltip);
+            ret = donna_columntype_set_tooltip (ct, priv->name, col,
+                    g_object_get_data (G_OBJECT (column), "columntype-data"),
+                    index, node, tooltip);
 
             g_object_unref (node);
         }

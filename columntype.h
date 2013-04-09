@@ -78,6 +78,7 @@ struct _DonnaColumnTypeInterface
     gboolean            (*set_tooltip)      (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
+                                             gpointer            data,
                                              guint               index,
                                              DonnaNode          *node,
                                              GtkTooltip         *tooltip);
@@ -122,6 +123,7 @@ gboolean        donna_columntype_handle_context (DonnaColumnType    *ct,
 gboolean        donna_columntype_set_tooltip    (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
+                                                 gpointer            data,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkTooltip         *tooltip);

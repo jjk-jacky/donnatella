@@ -200,6 +200,7 @@ gboolean
 donna_columntype_set_tooltip (DonnaColumnType    *ct,
                               const gchar        *tv_name,
                               const gchar        *col_name,
+                              gpointer            data,
                               guint               index,
                               DonnaNode          *node,
                               GtkTooltip         *tooltip)
@@ -217,5 +218,6 @@ donna_columntype_set_tooltip (DonnaColumnType    *ct,
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->set_tooltip != NULL, FALSE);
 
-    return (*interface->set_tooltip) (ct, tv_name, col_name, index, node, tooltip);
+    return (*interface->set_tooltip) (ct, tv_name, col_name, data,
+            index, node, tooltip);
 }
