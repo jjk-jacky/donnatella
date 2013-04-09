@@ -139,6 +139,9 @@ struct _DonnaTreeViewPrivate
     /* current arrangement */
     gchar               *arrangement;
 
+    /* sorted colmun */
+    GtkTreeViewColumn   *sort_column;
+
     /* properties used by our columns */
     GArray              *col_props;
 
@@ -2284,6 +2287,7 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeSortable *sortable;
     gboolean is_sorted;
+    gboolean same_column;
     gint cur_sort_id;
     GtkSortType cur_sort_order;
     gint col_sort_id;
@@ -2295,8 +2299,15 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
     col_sort_id = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (column),
                 "sort_id"));
 
+    same_column = is_sorted && cur_sort_id == col_sort_id;
+    if (!same_column)
+    {
+        gtk_tree_view_column_set_sort_indicator (priv->sort_column, FALSE);
+        priv->sort_column = column;
+    }
+
     /* new sort order */
-    sort_order = (is_sorted && cur_sort_id == col_sort_id)
+    sort_order = (same_column)
             /* revert order */
             ? ((cur_sort_order == GTK_SORT_ASCENDING)
                 ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
@@ -2711,6 +2722,7 @@ load_arrangement (DonnaTreeView *tree,
                 /* important to set the sort order on column before the sort_id
                  * on sortable, since sort_func might use the column's
                  * sort_order (when putting container always first) */
+                priv->sort_column = column;
                 gtk_tree_view_column_set_sort_indicator (column, TRUE);
                 gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
                         ? ((order == GTK_SORT_ASCENDING)
