@@ -2314,6 +2314,21 @@ column_clicked_cb (GtkTreeViewColumn *column, DonnaTreeView *tree)
     gtk_widget_queue_draw (GTK_WIDGET (tree));
 }
 
+/* mode list only -- this is used to disallow dropping a column to the right of
+ * the empty column (to make blank space there) */
+static gboolean
+col_drag_func (GtkTreeView          *treev,
+               GtkTreeViewColumn    *co,
+               GtkTreeViewColumn    *prev_col,
+               GtkTreeViewColumn    *next_col,
+               gpointer              data)
+{
+    if (!next_col && !g_object_get_data (G_OBJECT (prev_col), "column-type"))
+        return FALSE;
+    else
+        return TRUE;
+}
+
 static void
 load_arrangement (DonnaTreeView *tree,
                   const gchar   *arrangement,
@@ -2544,6 +2559,11 @@ load_arrangement (DonnaTreeView *tree,
             col_ct = ct;
             /* sizing stuff */
             gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
+            if (!is_tree (tree))
+            {
+                gtk_tree_view_column_set_resizable (column, TRUE);
+                gtk_tree_view_column_set_reorderable (column, TRUE);
+            }
             /* put our internal renderers */
             for (index = 0; index < NB_INTERNAL_RENDERERS; ++index)
             {
@@ -2620,6 +2640,8 @@ load_arrangement (DonnaTreeView *tree,
             ++s;
             gtk_tree_view_column_set_fixed_width (column, natoi (s, e - s));
         }
+        else
+            gtk_tree_view_column_set_fixed_width (column, 230);
 
         /* set title */
         ss = NULL;
@@ -2709,7 +2731,18 @@ next:
         if (b != buf)
             g_free (b);
         if (*e == '\0')
+        {
+            if (!is_tree (tree))
+            {
+                /* we add an extra (empty) column, so we can have some
+                 * free/blank space on the right, instead of having the last
+                 * column to be used to fill the space and whatnot */
+                column = gtk_tree_view_column_new ();
+                gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
+                gtk_tree_view_append_column (treev, column);
+            }
             break;
+        }
         col = e + 1;
     }
 
@@ -4677,6 +4710,8 @@ donna_tree_view_new (DonnaApp    *app,
         /* some stylling */
         gtk_tree_view_set_rules_hint (treev, TRUE);
         gtk_tree_view_set_headers_visible (treev, TRUE);
+        /* to refuse reordering column past the blank column on the right */
+        gtk_tree_view_set_column_drag_function (treev, col_drag_func, NULL, NULL);
     }
 
     g_debug ("treeview '%s': setting up filter & selection", priv->name);
