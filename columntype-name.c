@@ -250,8 +250,9 @@ ct_name_get_default_sort_order (DonnaColumnType *ct,
     GtkSortType sort_order;
 
     config = donna_app_get_config (DONNA_COLUMNTYPE_NAME (ct)->priv->app);
-    sort_order = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->_get_default_sort_order (
-            config, tv_name, col_name, "name", GTK_SORT_ASCENDING);
+    sort_order = (donna_config_get_boolean_column (config,
+                tv_name, col_name, "desc_first", "columntypes/name", FALSE))
+        ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
     g_object_unref (config);
     return sort_order;
 }

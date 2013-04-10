@@ -90,13 +90,6 @@ struct _DonnaColumnTypeInterface
                                              gpointer            data,
                                              DonnaNode          *node1,
                                              DonnaNode          *node2);
-    /* helper function */
-    GtkSortType         (*_get_default_sort_order)
-                                            (DonnaConfig     *config,
-                                             const gchar     *tv_name,
-                                             const gchar     *col_name,
-                                             const gchar     *ct_name,
-                                             GtkSortType      default_sort_order);
 };
 
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);

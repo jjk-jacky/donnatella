@@ -3,45 +3,9 @@
 #include "conf.h"
 #include "macros.h"
 
-static GtkSortType
-_get_default_sort_order (DonnaConfig     *config,
-                         const gchar     *tv_name,
-                         const gchar     *col_name,
-                         const gchar     *ct_name,
-                         GtkSortType      default_sort_order)
-{
-    gboolean desc_first;
-
-    if (!donna_config_get_boolean (config, &desc_first,
-                "treeviews/%s/columns/%s/desc_first",
-                tv_name, col_name))
-    {
-        if (!donna_config_get_boolean (config, &desc_first,
-                    "columns/%s/desc_first",
-                    col_name))
-        {
-            if (!donna_config_get_boolean (config, &desc_first,
-                        "defaults/columntype/%s/desc_first",
-                        ct_name))
-            {
-                desc_first = default_sort_order == GTK_SORT_DESCENDING;
-                if (donna_config_set_boolean (config, desc_first,
-                            "defaults/columntype/%s/desc_first",
-                            ct_name))
-                    g_info ("Option 'defaults/columntype/%s/desc_first' did not exists, set to %s",
-                            ct_name,
-                            (desc_first) ? "TRUE" : "FALSE");
-            }
-        }
-    }
-
-    return (desc_first) ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-}
-
 static void
 donna_columntype_default_init (DonnaColumnTypeInterface *klass)
 {
-    klass->_get_default_sort_order = _get_default_sort_order;
 }
 
 G_DEFINE_INTERFACE (DonnaColumnType, donna_columntype, G_TYPE_OBJECT)
