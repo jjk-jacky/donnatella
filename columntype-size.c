@@ -357,7 +357,6 @@ ct_size_node_cmp (DonnaColumnType    *ct,
                   DonnaNode          *node1,
                   DonnaNode          *node2)
 {
-    struct tv_col_data *data = _data;
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
     off_t size1;
