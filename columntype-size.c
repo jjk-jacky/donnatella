@@ -178,7 +178,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, tv_name, col_name, "size",
             "format", "%R");
-    if (data->format != s)
+    if (!streq (data->format, s))
     {
         g_free (data->format);
         data->format = s;
@@ -189,7 +189,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, tv_name, col_name, NULL,
             "format_tooltip", "%B");
-    if (data->format_tooltip != s)
+    if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
         data->format_tooltip = s;

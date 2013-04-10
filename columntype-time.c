@@ -174,7 +174,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, tv_name, col_name, "time",
             "format", "%F %T");
-    if (data->format != s)
+    if (!streq (data->format, s))
     {
         g_free (data->format);
         data->format = s;
