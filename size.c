@@ -3,64 +3,98 @@
 #include <stdio.h>
 #include "size.h"
 
-void
-donna_print_size (gchar         **str,
-                  gssize          max,
-                  off_t           size,
-                  DonnaSizeFormat format,
-                  gint            digits)
+gssize
+donna_print_size (gchar       *str,
+                  gssize       max,
+                  const gchar *fmt,
+                  off_t        size,
+                  gint         digits,
+                  gboolean     long_unit)
 {
-    gdouble dbl;
+    const gchar *s_unit[] = { "B", "K",   "M",   "G",   "T"   };
+    const gchar *l_unit[] = { "B", "KiB", "MiB", "GiB", "TiB" };
+    const gchar **unit = (long_unit) ? l_unit : s_unit;
+    gint nb_unit = sizeof (s_unit) / sizeof (s_unit[0]);
+    gint u = 0;
+    gssize need;
+    gssize total = 0;
 
-    g_return_if_fail (str != NULL);
-
-    switch (format)
+    while (*fmt != '\0')
     {
-        case DONNA_SIZE_FORMAT_RAW:
-            if (snprintf (*str, max, "%li", size) >= max)
-                *str = g_strdup_printf ("%li", size);
-            break;
+        if (*fmt == '%')
+        {
+            gdouble dbl;
 
-        case DONNA_SIZE_FORMAT_B_NO_UNIT:
-            if (snprintf (*str, max, "%'li", size) >= max)
-                *str = g_strdup_printf ("%'li", size);
-            break;
-
-        case DONNA_SIZE_FORMAT_B:
-            if (snprintf (*str, max, "%'li B", size) >= max)
-                *str = g_strdup_printf ("%'li B", size);
-            break;
-
-        case DONNA_SIZE_FORMAT_KB:
-            dbl = (gdouble) size / 1024.0;
-            if (snprintf (*str, max, "%'.*lf K", digits, dbl) >= max)
-                *str = g_strdup_printf ("%'.*lf K", digits, dbl);
-            break;
-
-        case DONNA_SIZE_FORMAT_MB:
-            dbl = (gdouble) size / (1024.0 * 1024.0);
-            if (snprintf (*str, max, "%'.*lf M", digits, dbl) >= max)
-                *str = g_strdup_printf ("%'.*lf M", digits, dbl);
-            break;
-
-        case DONNA_SIZE_FORMAT_ROUNDED:
+            switch (fmt[1])
             {
-                const gchar unit[] = { 'B', 'K', 'M', 'G', 'T' };
-                gint u = 0;
-                gint max = sizeof (unit) / sizeof (unit[0]);
-
-                dbl = (gdouble) size;
-                while (dbl > 1024.0)
-                {
-                    if (++u >= max)
-                        break;
-                    dbl /= 1024.0;
-                }
-                if (snprintf (*str, max, "%'.*lf %c",
-                            (u > 0) ? digits : 0, dbl, unit[u]) >= max)
-                    *str = g_strdup_printf ("%'.*lf %c",
+                case 'r':
+                    need = snprintf (str, max, "%li", size);
+                    break;
+                case 'b':
+                    need = snprintf (str, max, "%'li", size);
+                    break;
+                case 'B':
+                    need = snprintf (str, max, "%'li %s", size, unit[0]);
+                    break;
+                case 'k':
+                    dbl = (gdouble) size / 1024.0;
+                    need = snprintf (str, max, "%'.*lf", digits, dbl);
+                    break;
+                case 'K':
+                    dbl = (gdouble) size / 1024.0;
+                    need = snprintf (str, max, "%'.*lf %s", digits, dbl, unit[1]);
+                    break;
+                case 'm':
+                    dbl = (gdouble) size / (1024.0 * 1024.0);
+                    need = snprintf (str, max, "%'.*lf", digits, dbl);
+                    break;
+                case 'M':
+                    dbl = (gdouble) size / (1024.0 * 1024.0);
+                    need = snprintf (str, max, "%'.*lf %s", digits, dbl, unit[2]);
+                    break;
+                case 'R':
+                    dbl = (gdouble) size;
+                    u = 0;
+                    while (dbl > 1024.0)
+                    {
+                        if (++u >= nb_unit)
+                            break;
+                        dbl /= 1024.0;
+                    }
+                    need = snprintf (str, max, "%'.*lf %s",
                             (u > 0) ? digits : 0, dbl, unit[u]);
-                break;
+                    break;
+                default:
+                    need = 0;
+                    break;
             }
+            /* it was a known modifier */
+            if (need > 0)
+            {
+                if (need < max)
+                {
+                    max -= need;
+                    str += need;
+                }
+                else
+                    max = 0;
+                fmt += 2;
+                total += need;
+                continue;
+            }
+        }
+
+        /* we keep one more for NUL */
+        if (max >= 2)
+        {
+            *str++ = *fmt++;
+            --max;
+        }
+        else
+            ++fmt;
+        total += 1;
     }
+    if (max > 0)
+        *str = '\0';
+    return total;
 }

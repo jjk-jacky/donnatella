@@ -7,22 +7,13 @@
 
 G_BEGIN_DECLS
 
-typedef enum
-{
-    DONNA_SIZE_FORMAT_RAW = 0,
-    DONNA_SIZE_FORMAT_B_NO_UNIT,
-    DONNA_SIZE_FORMAT_B,
-    DONNA_SIZE_FORMAT_KB,
-    DONNA_SIZE_FORMAT_MB,
-    DONNA_SIZE_FORMAT_ROUNDED,
-} DonnaSizeFormat;
-
-void
-donna_print_size (gchar         **str,
-                  gssize          max,
-                  off_t           size,
-                  DonnaSizeFormat format,
-                  gint            digits);
+gssize
+donna_print_size (gchar         *str,
+                  gssize         max,
+                  const gchar   *fmt,
+                  off_t          size,
+                  gint           digits,
+                  gboolean       long_unit);
 
 G_END_DECLS
 

@@ -10,8 +10,10 @@
 
 struct tv_col_data
 {
-    DonnaSizeFormat format : 3;
-    guint           digits : 2;
+    gchar   *format;
+    gchar   *format_tooltip;
+    guint    digits     : 2;
+    guint    long_unit  : 1;
 };
 
 struct _DonnaColumnTypeSizePrivate
@@ -135,12 +137,45 @@ ct_size_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
-static guint
-get_size_option (DonnaColumnTypeSize *ctsize,
-                 const gchar         *tv_name,
-                 const gchar         *col_name,
-                 const gchar         *opt_name,
-                 gint                 def)
+static gchar *
+get_size_option_string (DonnaColumnTypeSize *ctsize,
+                        const gchar         *tv_name,
+                        const gchar         *col_name,
+                        const gchar         *opt_name,
+                        gchar               *def)
+{
+    DonnaConfig *config;
+    gchar        *value;
+
+    config = donna_app_get_config (ctsize->priv->app);
+    if (!donna_config_get_string (config, &value,
+                "treeviews/%s/columns/%s/%s",
+                tv_name, col_name, opt_name))
+    {
+        if (!donna_config_get_string (config, &value,
+                    "columns/%s/%s", col_name, opt_name))
+        {
+            if (!donna_config_get_string (config, &value,
+                        "defaults/size/%s", opt_name))
+            {
+                value = def;
+                if (donna_config_set_string (config, value,
+                            "defaults/size/%s", opt_name))
+                    g_info ("Option 'defaults/size/%s' did not exists, initialized to %s",
+                            opt_name, value);
+            }
+        }
+    }
+    g_object_unref (config);
+    return value;
+}
+
+static gint
+get_size_option_int (DonnaColumnTypeSize *ctsize,
+                     const gchar         *tv_name,
+                     const gchar         *col_name,
+                     const gchar         *opt_name,
+                     gint                 def)
 {
     DonnaConfig *config;
     gint          value;
@@ -161,6 +196,39 @@ get_size_option (DonnaColumnTypeSize *ctsize,
                             "defaults/size/%s", opt_name))
                     g_info ("Option 'defaults/size/%s' did not exists, initialized to %d",
                             opt_name, value);
+            }
+        }
+    }
+    g_object_unref (config);
+    return value;
+}
+
+static gboolean
+get_size_option_boolean (DonnaColumnTypeSize *ctsize,
+                         const gchar         *tv_name,
+                         const gchar         *col_name,
+                         const gchar         *opt_name,
+                         gboolean             def)
+{
+    DonnaConfig *config;
+    gboolean      value;
+
+    config = donna_app_get_config (ctsize->priv->app);
+    if (!donna_config_get_boolean (config, &value,
+                "treeviews/%s/columns/%s/%s",
+                tv_name, col_name, opt_name))
+    {
+        if (!donna_config_get_boolean (config, &value,
+                    "columns/%s/%s", col_name, opt_name))
+        {
+            if (!donna_config_get_boolean (config, &value,
+                        "defaults/size/%s", opt_name))
+            {
+                value = def;
+                if (donna_config_set_boolean (config, value,
+                            "defaults/size/%s", opt_name))
+                    g_info ("Option 'defaults/size/%s' did not exists, initialized to %s",
+                            opt_name, (value) ? "TRUE" : "FALSE");
             }
         }
     }
@@ -189,22 +257,38 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     DonnaColumnTypeSize *ctsize = DONNA_COLUMNTYPE_SIZE (ct);
     struct tv_col_data *data = *_data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
-    gint val;
+    gchar *s;
+    guint i;
 
-    val = get_size_option (ctsize, tv_name, col_name, "format", DONNA_SIZE_FORMAT_ROUNDED);
-    if (data->format != val)
+    s = get_size_option_string (ctsize, tv_name, col_name, "format", "%R");
+    if (data->format != s)
     {
-        data->format = val;
+        data->format = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    val = get_size_option (ctsize, tv_name, col_name, "digits", 1);
+    /* FIXME format_tooltip has no place in defaults/size */
+    s = get_size_option_string (ctsize, tv_name, col_name, "format_tooltip", "%B");
+    if (data->format_tooltip != s)
+    {
+        data->format_tooltip = s;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    i = get_size_option_int (ctsize, tv_name, col_name, "digits", 1);
     /* we enforce this, because that's all we support (we can't stote more in
      * data) and that's what makes sense */
-    val = MIN (MAX (0, val), 2);
-    if (data->digits != val)
+    i = MIN (MAX (0, i), 2);
+    if (data->digits != i)
     {
-        data->digits = val;
+        data->digits = i;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    i = get_size_option_boolean (ctsize, tv_name, col_name, "long_unit", FALSE);
+    if (data->long_unit != i)
+    {
+        data->long_unit = i;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
@@ -215,8 +299,12 @@ static void
 ct_size_free_data (DonnaColumnType    *ct,
                    const gchar        *tv_name,
                    const gchar        *col_name,
-                   gpointer            data)
+                   gpointer            _data)
 {
+    struct tv_col_data *data = _data;
+
+    g_free (data->format);
+    g_free (data->format_tooltip);
     g_free (data);
 }
 
@@ -286,8 +374,8 @@ ct_size_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     off_t size;
-    gdouble dbl;
     gchar buf[20], *b = buf;
+    gssize len;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
 
@@ -309,7 +397,12 @@ ct_size_render (DonnaColumnType    *ct,
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
-    donna_print_size (&b, 20, size, data->format, data->digits);
+    len = donna_print_size (b, 20, data->format, size, data->digits, data->long_unit);
+    if (len >= 20)
+    {
+        b = g_new (gchar, ++len);
+        donna_print_size (b, len, data->format, size, data->digits, data->long_unit);
+    }
     g_object_set (renderer, "visible", TRUE, "text", b, "xalign", 1.0, NULL);
     if (b != buf)
         g_free (b);
@@ -326,21 +419,21 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
                      GtkTooltip         *tooltip)
 {
     struct tv_col_data *data = _data;
-    gchar buf[20], *b = buf;
     off_t size;
-    DonnaSizeFormat format;
+    gchar buf[20], *b = buf;
+    gssize len;
 
     if (donna_node_get_size (node, FALSE, &size) != DONNA_NODE_VALUE_SET)
         return FALSE;
 
-    if (data->format == DONNA_SIZE_FORMAT_RAW
-            || data->format == DONNA_SIZE_FORMAT_B_NO_UNIT
-            || data->format == DONNA_SIZE_FORMAT_B)
-        format = DONNA_SIZE_FORMAT_ROUNDED;
-    else
-        format = DONNA_SIZE_FORMAT_B;
-
-    donna_print_size (&b, 20, size, format, data->digits);
+    len = donna_print_size (b, 20, data->format_tooltip, size,
+            data->digits, data->long_unit);
+    if (len >= 20)
+    {
+        b = g_new (gchar, ++len);
+        donna_print_size (b, len, data->format_tooltip, size,
+                data->digits, data->long_unit);
+    }
     gtk_tooltip_set_text (tooltip, b);
     if (b != buf)
         g_free (b);
