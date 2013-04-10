@@ -137,105 +137,6 @@ ct_size_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
-static gchar *
-get_size_option_string (DonnaColumnTypeSize *ctsize,
-                        const gchar         *tv_name,
-                        const gchar         *col_name,
-                        const gchar         *opt_name,
-                        gchar               *def)
-{
-    DonnaConfig *config;
-    gchar        *value;
-
-    config = donna_app_get_config (ctsize->priv->app);
-    if (!donna_config_get_string (config, &value,
-                "treeviews/%s/columns/%s/%s",
-                tv_name, col_name, opt_name))
-    {
-        if (!donna_config_get_string (config, &value,
-                    "columns/%s/%s", col_name, opt_name))
-        {
-            if (!donna_config_get_string (config, &value,
-                        "defaults/size/%s", opt_name))
-            {
-                value = def;
-                if (donna_config_set_string (config, value,
-                            "defaults/size/%s", opt_name))
-                    g_info ("Option 'defaults/size/%s' did not exists, initialized to %s",
-                            opt_name, value);
-            }
-        }
-    }
-    g_object_unref (config);
-    return value;
-}
-
-static gint
-get_size_option_int (DonnaColumnTypeSize *ctsize,
-                     const gchar         *tv_name,
-                     const gchar         *col_name,
-                     const gchar         *opt_name,
-                     gint                 def)
-{
-    DonnaConfig *config;
-    gint          value;
-
-    config = donna_app_get_config (ctsize->priv->app);
-    if (!donna_config_get_int (config, &value,
-                "treeviews/%s/columns/%s/%s",
-                tv_name, col_name, opt_name))
-    {
-        if (!donna_config_get_int (config, &value,
-                    "columns/%s/%s", col_name, opt_name))
-        {
-            if (!donna_config_get_int (config, &value,
-                        "defaults/size/%s", opt_name))
-            {
-                value = def;
-                if (donna_config_set_int (config, value,
-                            "defaults/size/%s", opt_name))
-                    g_info ("Option 'defaults/size/%s' did not exists, initialized to %d",
-                            opt_name, value);
-            }
-        }
-    }
-    g_object_unref (config);
-    return value;
-}
-
-static gboolean
-get_size_option_boolean (DonnaColumnTypeSize *ctsize,
-                         const gchar         *tv_name,
-                         const gchar         *col_name,
-                         const gchar         *opt_name,
-                         gboolean             def)
-{
-    DonnaConfig *config;
-    gboolean      value;
-
-    config = donna_app_get_config (ctsize->priv->app);
-    if (!donna_config_get_boolean (config, &value,
-                "treeviews/%s/columns/%s/%s",
-                tv_name, col_name, opt_name))
-    {
-        if (!donna_config_get_boolean (config, &value,
-                    "columns/%s/%s", col_name, opt_name))
-        {
-            if (!donna_config_get_boolean (config, &value,
-                        "defaults/size/%s", opt_name))
-            {
-                value = def;
-                if (donna_config_set_boolean (config, value,
-                            "defaults/size/%s", opt_name))
-                    g_info ("Option 'defaults/size/%s' did not exists, initialized to %s",
-                            opt_name, (value) ? "TRUE" : "FALSE");
-            }
-        }
-    }
-    g_object_unref (config);
-    return value;
-}
-
 static gpointer
 ct_size_get_data (DonnaColumnType    *ct,
                   const gchar        *tv_name,
@@ -255,27 +156,32 @@ ct_size_refresh_data (DonnaColumnType    *ct,
                       gpointer           *_data)
 {
     DonnaColumnTypeSize *ctsize = DONNA_COLUMNTYPE_SIZE (ct);
+    DonnaConfig *config;
     struct tv_col_data *data = *_data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
-    guint i;
+    gint i;
 
-    s = get_size_option_string (ctsize, tv_name, col_name, "format", "%R");
+    config = donna_app_get_config (ctsize->priv->app);
+
+    s = donna_config_get_string_column (config, tv_name, col_name, "size",
+            "format", "%R");
     if (data->format != s)
     {
         data->format = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    /* FIXME format_tooltip has no place in defaults/size */
-    s = get_size_option_string (ctsize, tv_name, col_name, "format_tooltip", "%B");
+    s = donna_config_get_string_column (config, tv_name, col_name, NULL,
+            "format_tooltip", "%B");
     if (data->format_tooltip != s)
     {
         data->format_tooltip = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    i = get_size_option_int (ctsize, tv_name, col_name, "digits", 1);
+    i = donna_config_get_int_column (config, tv_name, col_name, "size",
+            "digits", 1);
     /* we enforce this, because that's all we support (we can't stote more in
      * data) and that's what makes sense */
     i = MIN (MAX (0, i), 2);
@@ -285,12 +191,15 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    i = get_size_option_boolean (ctsize, tv_name, col_name, "long_unit", FALSE);
+    i = donna_config_get_boolean_column (config, tv_name, col_name, "size",
+            "long_unit", FALSE);
     if (data->long_unit != i)
     {
         data->long_unit = i;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
+
+    g_object_unref (config);
 
     return need;
 }
