@@ -8,6 +8,7 @@
 #include "columntype.h"
 #include "columntype-name.h"
 #include "columntype-size.h"
+#include "columntype-time.h"
 #include "node.h"
 #include "macros.h"
 
@@ -26,6 +27,7 @@ enum
 {
     COL_TYPE_NAME = 0,
     COL_TYPE_SIZE,
+    COL_TYPE_TIME,
     NB_COL_TYPES
 };
 
@@ -135,6 +137,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_NAME].load = donna_column_type_name_new;
     priv->column_types[COL_TYPE_SIZE].name = "size";
     priv->column_types[COL_TYPE_SIZE].load = donna_column_type_size_new;
+    priv->column_types[COL_TYPE_TIME].name = "time";
+    priv->column_types[COL_TYPE_TIME].load = donna_column_type_time_new;
 
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
