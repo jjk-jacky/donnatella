@@ -163,9 +163,12 @@ ct_time_refresh_data (DonnaColumnType    *ct,
             "format", "%F %T");
     if (data->format != s)
     {
+        g_free (data->format);
         data->format = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
+    else
+        g_free (s);
 
     g_object_unref (config);
 

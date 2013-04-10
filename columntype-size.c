@@ -168,17 +168,23 @@ ct_size_refresh_data (DonnaColumnType    *ct,
             "format", "%R");
     if (data->format != s)
     {
+        g_free (data->format);
         data->format = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
+    else
+        g_free (s);
 
     s = donna_config_get_string_column (config, tv_name, col_name, NULL,
             "format_tooltip", "%B");
     if (data->format_tooltip != s)
     {
+        g_free (data->format_tooltip);
         data->format_tooltip = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
+    else
+        g_free (s);
 
     i = donna_config_get_int_column (config, tv_name, col_name, "size",
             "digits", 1);
