@@ -6,9 +6,11 @@
 #include "donna.h"
 #include "conf.h"
 #include "util.h"
+#include "macros.h"
 
 struct tv_col_data
 {
+    gchar   *property;
     gchar   *format;
 };
 
@@ -159,6 +161,17 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     config = donna_app_get_config (cttime->priv->app);
 
+    s = donna_config_get_string_column (config, tv_name, col_name,
+            "columntypes/time", "property", "mtime");
+    if (!streq (data->property, s))
+    {
+        g_free (data->property);
+        data->property = s;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else
+        g_free (s);
+
     s = donna_config_get_string_column (config, tv_name, col_name, "time",
             "format", "%F %T");
     if (data->format != s)
@@ -183,6 +196,7 @@ ct_time_free_data (DonnaColumnType    *ct,
 {
     struct tv_col_data *data = _data;
 
+    g_free (data->property);
     g_free (data->format);
     g_free (data);
 }
@@ -198,7 +212,7 @@ ct_time_get_props (DonnaColumnType  *ct,
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
 
     props = g_ptr_array_new_full (1, g_free);
-    g_ptr_array_add (props, g_strdup ("mtime"));
+    g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
 
     return props;
 }
@@ -258,15 +272,23 @@ ct_time_render (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
 
-    has = donna_node_get_mtime (node, FALSE, &time);
+    if (streq (data->property, "mtime"))
+        has = donna_node_get_mtime (node, FALSE, &time);
+    else if (streq (data->property, "atime"))
+        has = donna_node_get_atime (node, FALSE, &time);
+    else if (streq (data->property, "ctime"))
+        has = donna_node_get_ctime (node, FALSE, &time);
+    else
+        donna_node_get (node, FALSE, data->property, &has, &time, NULL);
+
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
         return NULL;
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
     {
         GPtrArray *arr;
 
-        arr = g_ptr_array_new ();
-        g_ptr_array_add (arr, "mtime");
+        arr = g_ptr_array_new_full (1, g_free);
+        g_ptr_array_add (arr, g_strdup (data->property));
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
@@ -296,13 +318,32 @@ ct_time_node_cmp (DonnaColumnType    *ct,
                   DonnaNode          *node1,
                   DonnaNode          *node2)
 {
+    struct tv_col_data *data = _data;
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
     time_t time1;
     time_t time2;
 
-    has1 = donna_node_get_mtime (node1, TRUE, &time1);
-    has2 = donna_node_get_mtime (node2, TRUE, &time2);
+    if (streq (data->property, "mtime"))
+    {
+        has1 = donna_node_get_mtime (node1, TRUE, &time1);
+        has2 = donna_node_get_mtime (node2, TRUE, &time2);
+    }
+    else if (streq (data->property, "atime"))
+    {
+        has1 = donna_node_get_atime (node1, TRUE, &time1);
+        has2 = donna_node_get_atime (node2, TRUE, &time2);
+    }
+    else if (streq (data->property, "ctime"))
+    {
+        has1 = donna_node_get_ctime (node1, TRUE, &time1);
+        has2 = donna_node_get_ctime (node2, TRUE, &time2);
+    }
+    else
+    {
+        donna_node_get (node1, FALSE, data->property, &has1, &time1, NULL);
+        donna_node_get (node2, FALSE, data->property, &has2, &time2, NULL);
+    }
 
     /* since we're blocking, has can only be SET, ERROR or NONE */
 
