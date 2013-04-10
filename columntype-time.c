@@ -8,8 +8,17 @@
 #include "util.h"
 #include "macros.h"
 
+enum
+{
+    PROP_UNKNOWN = 0,
+    PROP_MTIME,
+    PROP_ATIME,
+    PROP_CTIME,
+};
+
 struct tv_col_data
 {
+    gint8    which;
     gchar   *property;
     gchar   *format;
 };
@@ -168,6 +177,15 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         g_free (data->property);
         data->property = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
+
+        if (streq (s, "mtime"))
+            data->which = PROP_MTIME;
+        else if (streq (s, "atime"))
+            data->which = PROP_ATIME;
+        else if (streq (s, "ctime"))
+            data->which = PROP_CTIME;
+        else
+            data->which = PROP_UNKNOWN;
     }
     else
         g_free (s);
@@ -272,11 +290,11 @@ ct_time_render (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
 
-    if (streq (data->property, "mtime"))
+    if (data->which == PROP_MTIME)
         has = donna_node_get_mtime (node, FALSE, &time);
-    else if (streq (data->property, "atime"))
+    else if (data->which == PROP_ATIME)
         has = donna_node_get_atime (node, FALSE, &time);
-    else if (streq (data->property, "ctime"))
+    else if (data->which == PROP_CTIME)
         has = donna_node_get_ctime (node, FALSE, &time);
     else
         donna_node_get (node, FALSE, data->property, &has, &time, NULL);
@@ -324,17 +342,17 @@ ct_time_node_cmp (DonnaColumnType    *ct,
     time_t time1;
     time_t time2;
 
-    if (streq (data->property, "mtime"))
+    if (data->which == PROP_MTIME)
     {
         has1 = donna_node_get_mtime (node1, TRUE, &time1);
         has2 = donna_node_get_mtime (node2, TRUE, &time2);
     }
-    else if (streq (data->property, "atime"))
+    else if (data->which == PROP_ATIME)
     {
         has1 = donna_node_get_atime (node1, TRUE, &time1);
         has2 = donna_node_get_atime (node2, TRUE, &time2);
     }
-    else if (streq (data->property, "ctime"))
+    else if (data->which == PROP_CTIME)
     {
         has1 = donna_node_get_ctime (node1, TRUE, &time1);
         has2 = donna_node_get_ctime (node2, TRUE, &time2);

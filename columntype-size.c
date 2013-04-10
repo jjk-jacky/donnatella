@@ -13,8 +13,9 @@ struct tv_col_data
     gchar   *property;
     gchar   *format;
     gchar   *format_tooltip;
-    guint    digits     : 2;
-    guint    long_unit  : 1;
+    guint8   digits     : 2;
+    guint8   long_unit  : 1;
+    guint8   is_size    : 1;
 };
 
 struct _DonnaColumnTypeSizePrivate
@@ -172,6 +173,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (data->property);
         data->property = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
+
+        data->is_size = streq (s, "size");
     }
     else
         g_free (s);
@@ -314,7 +317,7 @@ ct_size_render (DonnaColumnType    *ct,
         return NULL;
     }
 
-    if (streq (data->property, "size"))
+    if (data->is_size)
         has = donna_node_get_size (node, FALSE, &size);
     else
         donna_node_get (node, FALSE, data->property, &has, &size, NULL);
@@ -357,7 +360,7 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
     gssize len;
     DonnaNodeHasValue has;
 
-    if (streq (data->property, "size"))
+    if (data->is_size)
         has = donna_node_get_size (node, FALSE, &size);
     else
         donna_node_get (node, FALSE, data->property, &has, &size, NULL);
@@ -393,7 +396,7 @@ ct_size_node_cmp (DonnaColumnType    *ct,
     off_t size1;
     off_t size2;
 
-    if (streq (data->property, "size"))
+    if (data->is_size)
     {
         has1 = donna_node_get_size (node1, TRUE, &size1);
         has2 = donna_node_get_size (node2, TRUE, &size2);
