@@ -1302,50 +1302,71 @@ donna_config_has_category (DonnaConfig *config,
     _has_option (G_TYPE_INVALID /* not used */, TRUE);
 }
 
-#define _get_option(type, get_value)    do  {                           \
-    DonnaProviderConfigPrivate *priv;                                   \
-    struct option *option;                                              \
-    gchar  buf[255];                                                    \
-    gchar *b = buf;                                                     \
-    gint len;                                                           \
-    va_list va_arg;                                                     \
-    gboolean ret;                                                       \
-                                                                        \
-    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);    \
-    g_return_val_if_fail (fmt != NULL, FALSE);                          \
-    g_return_val_if_fail (value != NULL, FALSE);                        \
-                                                                        \
-    va_start (va_arg, fmt);                                             \
-    len = vsnprintf (buf, 255, fmt, va_arg);                            \
-    if (len >= 255)                                                     \
-    {                                                                   \
-        b = g_new (gchar, ++len); /* +1 for NUL */                      \
-        va_end (va_arg);                                                \
-        va_start (va_arg, fmt);                                         \
-        vsnprintf (b, len, fmt, va_arg);                                \
-    }                                                                   \
-    va_end (va_arg);                                                    \
-                                                                        \
-    priv = config->priv;                                                \
-    g_rw_lock_reader_lock (&priv->lock);                                \
-    option = get_option (priv->root, b);                                \
-    if (option)                                                         \
-    {                                                                   \
-        if (!option_is_category (option, priv->root))                   \
-            ret = G_VALUE_HOLDS (&option->value, type);                 \
-        else                                                            \
-            ret = FALSE;                                                \
-    }                                                                   \
-    else                                                                \
-        ret = FALSE;                                                    \
-    if (ret)                                                            \
-        *value = get_value (&option->value);                            \
-    g_rw_lock_reader_unlock (&priv->lock);                              \
-                                                                        \
-    if (b != buf)                                                       \
-        g_free (b);                                                     \
-                                                                        \
-    return ret;                                                         \
+typedef gintptr (*get_value_fn) (const GValue *value);
+
+static gboolean
+_get_option (DonnaConfig    *config,
+             gintptr        *value,
+             GType           type,
+             get_value_fn    get_value,
+             const gchar    *fmt,
+             va_list         va_arg)
+{
+    DonnaProviderConfigPrivate *priv;
+    struct option *option;
+    va_list va_arg2;
+    gchar  buf[255];
+    gchar *b = buf;
+    gint len;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+    g_return_val_if_fail (value != NULL, FALSE);
+
+    va_copy (va_arg2, va_arg);
+    len = vsnprintf (buf, 255, fmt, va_arg);
+    if (len >= 255)
+    {
+        b = g_new (gchar, ++len); /* +1 for NUL */
+        vsnprintf (b, len, fmt, va_arg2);
+    }
+    va_end (va_arg2);
+
+    priv = config->priv;
+    g_rw_lock_reader_lock (&priv->lock);
+    option = get_option (priv->root, b);
+    if (option)
+    {
+        if (!option_is_category (option, priv->root))
+            ret = G_VALUE_HOLDS (&option->value, type);
+        else
+            ret = FALSE;
+    }
+    else
+        ret = FALSE;
+    if (ret)
+        *value = get_value (&option->value);
+    g_rw_lock_reader_unlock (&priv->lock);
+
+    if (b != buf)
+        g_free (b);
+
+    return ret;
+}
+
+#define _get_opt(type, gtype, get_fn)  do {     \
+    va_list va_arg;                             \
+    gintptr v;                                  \
+    gboolean ret;                               \
+                                                \
+    va_start (va_arg, fmt);                     \
+    ret = _get_option (config, &v, gtype,       \
+            (get_value_fn) get_fn, fmt, va_arg);\
+    va_end (va_arg);                            \
+    if (ret)                                    \
+        *value = (type) v;                      \
+    return ret;                                 \
 } while (0)
 
 gboolean
@@ -1354,7 +1375,7 @@ donna_config_get_boolean (DonnaConfig    *config,
                           const gchar    *fmt,
                           ...)
 {
-    _get_option (G_TYPE_BOOLEAN, g_value_get_boolean);
+    _get_opt (gboolean, G_TYPE_BOOLEAN, g_value_get_boolean);
 }
 
 gboolean
@@ -1363,7 +1384,7 @@ donna_config_get_int (DonnaConfig    *config,
                       const gchar    *fmt,
                       ...)
 {
-    _get_option (G_TYPE_INT, g_value_get_int);
+    _get_opt (gint, G_TYPE_INT, g_value_get_int);
 }
 
 gboolean
@@ -1372,7 +1393,7 @@ donna_config_get_uint (DonnaConfig    *config,
                        const gchar    *fmt,
                        ...)
 {
-    _get_option (G_TYPE_UINT, g_value_get_uint);
+    _get_opt (guint, G_TYPE_UINT, g_value_get_uint);
 }
 
 gboolean
@@ -1381,7 +1402,7 @@ donna_config_get_double (DonnaConfig    *config,
                          const gchar    *fmt,
                          ...)
 {
-    _get_option (G_TYPE_DOUBLE, g_value_get_double);
+    _get_opt (gdouble, G_TYPE_DOUBLE, g_value_get_double);
 }
 
 gboolean
@@ -1390,7 +1411,7 @@ donna_config_get_string (DonnaConfig          *config,
                          const gchar          *fmt,
                          ...)
 {
-    _get_option (G_TYPE_STRING, g_value_dup_string);
+    _get_opt (gchar *, G_TYPE_STRING, g_value_dup_string);
 }
 
 gboolean
