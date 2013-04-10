@@ -142,39 +142,6 @@ ct_name_get_renderers (DonnaColumnType   *ct)
     return "pt";
 }
 
-static gboolean
-get_sort_option (DonnaColumnTypeName *ctname,
-                 const gchar         *tv_name,
-                 const gchar         *col_name,
-                 const gchar         *opt_name)
-{
-    DonnaConfig *config;
-    gboolean      value;
-
-    config = donna_app_get_config (ctname->priv->app);
-    if (!donna_config_get_boolean (config, &value,
-                "treeviews/%s/columns/%s/%s",
-                tv_name, col_name, opt_name))
-    {
-        if (!donna_config_get_boolean (config, &value,
-                    "columns/%s/%s", col_name, opt_name))
-        {
-            if (!donna_config_get_boolean (config, &value,
-                        "defaults/sort/%s", opt_name))
-            {
-                value = (streq (opt_name, "natural_order")
-                        || streq (opt_name, "dot_first"));
-                if (donna_config_set_boolean (config, value,
-                            "defaults/sort/%s", opt_name))
-                    g_info ("Option 'defaults/sort/%s' did not exists, initialized to %s",
-                            opt_name, (value) ? "TRUE" : "FALSE");
-            }
-        }
-    }
-    g_object_unref (config);
-    return value;
-}
-
 static gpointer
 ct_name_get_data (DonnaColumnType    *ct,
                   const gchar        *tv_name,
@@ -188,8 +155,9 @@ ct_name_get_data (DonnaColumnType    *ct,
     return data;
 }
 
-#define check_option(opt_name_lower, opt_name_upper, value)                   \
-    if (get_sort_option (ctname, tv_name, col_name, opt_name_lower) == value) \
+#define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
+    if (donna_config_get_boolean_column (config, tv_name, col_name, "sort",   \
+                opt_name_lower, def_val) == value)                            \
     {                                                                         \
         if (!(data->options & opt_name_upper))                                \
         {                                                                     \
@@ -210,23 +178,26 @@ ct_name_refresh_data (DonnaColumnType    *ct,
                       gpointer           *_data)
 {
     DonnaColumnTypeName *ctname = DONNA_COLUMNTYPE_NAME (ct);
+    DonnaConfig *config;
     struct tv_col_data *data = *_data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
 
-    if (data->is_locale_based != get_sort_option (ctname, tv_name, col_name,
-            "locale_based"))
+    config = donna_app_get_config (ctname->priv->app);
+
+    if (data->is_locale_based != donna_config_get_boolean_column (config,
+                tv_name, col_name, "sort", "locale_based", FALSE))
     {
         need |= DONNA_COLUMNTYPE_NEED_RESORT;
         data->is_locale_based = !data->is_locale_based;
     }
 
-    check_option ("natural_order",  DONNA_SORT_NATURAL_ORDER,   TRUE);
-    check_option ("dot_first",      DONNA_SORT_DOT_FIRST,       TRUE);
+    check_option ("natural_order",  DONNA_SORT_NATURAL_ORDER,   TRUE, TRUE);
+    check_option ("dot_first",      DONNA_SORT_DOT_FIRST,       TRUE, TRUE);
 
     if (data->is_locale_based)
     {
-        if (data->sort_special_first != get_sort_option (ctname,
-                    tv_name, col_name, "special_first"))
+        if (data->sort_special_first != donna_config_get_boolean_column (config,
+                    tv_name, col_name, "sort", "special_first", TRUE))
         {
             need |= DONNA_COLUMNTYPE_NEED_RESORT;
             data->sort_special_first = !data->sort_special_first;
@@ -234,11 +205,12 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     }
     else
     {
-        check_option ("dot_mixed",      DONNA_SORT_DOT_MIXED,        TRUE);
-        check_option ("case_sensitive", DONNA_SORT_CASE_INSENSITIVE, FALSE);
-        check_option ("ignore_spunct",  DONNA_SORT_IGNORE_SPUNCT,    TRUE);
+        check_option ("dot_mixed",      DONNA_SORT_DOT_MIXED,        TRUE,  FALSE);
+        check_option ("case_sensitive", DONNA_SORT_CASE_INSENSITIVE, FALSE, FALSE);
+        check_option ("ignore_spunct",  DONNA_SORT_IGNORE_SPUNCT,    TRUE,  FALSE);
     }
 
+    g_object_unref (config);
     return need;
 }
 
