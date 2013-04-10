@@ -665,7 +665,8 @@ get_child_node (GNode *parent, const gchar *name, gsize len)
     for (node = parent->children; node; node = node->next)
         if (streqn (((struct option *) node->data)->name,
                     name,
-                    len))
+                    len)
+                && ((struct option *) node->data)->name[len] == '\0')
             return node;
 
     return NULL;
