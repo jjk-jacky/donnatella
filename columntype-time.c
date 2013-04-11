@@ -274,6 +274,16 @@ ct_time_handle_context (DonnaColumnType    *ct,
     return FALSE;
 }
 
+#define warn_not_int64(node)    do {                    \
+    gchar *location = donna_node_get_location (node);   \
+    g_warning ("Treeview '%s', Column '%s': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
+            tv_name, col_name, data->property,          \
+            donna_node_get_domain (node), location,     \
+            G_VALUE_TYPE_NAME (&value),                 \
+            g_type_name (G_TYPE_INT64));                \
+    g_free (location);                                  \
+} while (0)
+
 static GPtrArray *
 ct_time_render (DonnaColumnType    *ct,
                 const gchar        *tv_name,
@@ -285,6 +295,7 @@ ct_time_render (DonnaColumnType    *ct,
 {
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
+    GValue value = G_VALUE_INIT;
     time_t time;
     gchar *s;
 
@@ -297,19 +308,36 @@ ct_time_render (DonnaColumnType    *ct,
     else if (data->which == PROP_CTIME)
         has = donna_node_get_ctime (node, FALSE, &time);
     else
-        donna_node_get (node, FALSE, data->property, &has, &time, NULL);
+        donna_node_get (node, FALSE, data->property, &has, &value, NULL);
 
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
+    {
+        g_object_set (renderer, "visible", FALSE, NULL);
         return NULL;
+    }
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
     {
         GPtrArray *arr;
 
         arr = g_ptr_array_new_full (1, g_free);
         g_ptr_array_add (arr, g_strdup (data->property));
+        g_object_set (renderer, "visible", FALSE, NULL);
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
+    else if (data->which == PROP_UNKNOWN)
+    {
+        if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+        {
+            warn_not_int64 (node);
+            g_value_unset (&value);
+            g_object_set (renderer, "visible", FALSE, NULL);
+            return NULL;
+        }
+        time = g_value_get_int64 (&value);
+        g_value_unset (&value);
+    }
+
     s = donna_print_time (time, data->format);
     g_object_set (renderer, "visible", TRUE, "text", s, NULL);
     g_free (s);
@@ -359,8 +387,32 @@ ct_time_node_cmp (DonnaColumnType    *ct,
     }
     else
     {
-        donna_node_get (node1, FALSE, data->property, &has1, &time1, NULL);
-        donna_node_get (node2, FALSE, data->property, &has2, &time2, NULL);
+        GValue value = G_VALUE_INIT;
+
+        donna_node_get (node1, FALSE, data->property, &has1, &value, NULL);
+        if (has1 == DONNA_NODE_VALUE_SET)
+        {
+            if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+            {
+                warn_not_int64 (node1);
+                has1 = DONNA_NODE_VALUE_ERROR;
+            }
+            else
+                time1 = g_value_get_int64 (&value);
+            g_value_unset (&value);
+        }
+        donna_node_get (node2, FALSE, data->property, &has2, &value, NULL);
+        if (has2 == DONNA_NODE_VALUE_SET)
+        {
+            if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+            {
+                warn_not_int64 (node2);
+                has2 = DONNA_NODE_VALUE_ERROR;
+            }
+            else
+                time2 = g_value_get_int64 (&value);
+            g_value_unset (&value);
+        }
     }
 
     /* since we're blocking, has can only be SET, ERROR or NONE */

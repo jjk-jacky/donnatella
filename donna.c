@@ -350,7 +350,8 @@ donna_donna_get_arrangement (DonnaApp   *app,
     priv = DONNA_DONNA (app)->priv;
 
     /* get full location of node */
-    donna_node_get (node, FALSE, "domain", &domain, "location", &location, NULL);
+    domain = donna_node_get_domain (node);
+    location = donna_node_get_location (node);
     len = snprintf (buf, 255, "%s:%s", domain, location);
     if (len >= 255)
         b = g_strdup_printf ("%s:%s", domain, location);
@@ -527,7 +528,7 @@ tb_del_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
         return;
     }
 
-    donna_node_get (node, FALSE, "location", &s, NULL);
+    s = donna_node_get_location (node);
     g_info ("Tree's location: %s", s);
     g_free (s);
     g_object_unref (node);

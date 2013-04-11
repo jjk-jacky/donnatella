@@ -67,11 +67,13 @@
  * You can see if a node has a property or not, and if so if it has a value (or
  * needs a refresh) and/or is writable using donna_node_has_property()
  *
- * You use donna_node_get() to access the properties of a node. It is similar to
- * g_object_get() for required properties; for basic ones an extra pointer to a
- * #DonnaHasValue must be specified first, to know whether the value was set,
- * needs a refresh or doesn't exist one the node. Additional properties work the
- * same as basic ones, but #GValue are used since their type isn't known.
+ * You use donna_node_get() to access the properties of a node. For each
+ * property name you specify the location of a #DonnaNodeHasValue, to known
+ * whether the property exists and has a value on the node, and that of a
+ * #GValue.
+ * It is possible to ask that properties without a value
+ * (%DONNA_NODE_VALUE_NEED_REFRESH) are automatically refreshed (in/blocking the
+ * current thread).
  *
  * As always, for possibly slow/blocking operations you use a function that
  * returns a #DonnaTask to perform the operation (usually in another thread).
@@ -79,9 +81,10 @@
  * or donna_node_refresh_arr_task() -- the former takes the properties names as
  * arguments, the later expects them in a #GPtrArray of strings.
  *
- * Helpers (such as donna_node_get_name()) allow you to quickly get the required
- * properties. Those are faster than using donna_node_get() and can be useful in
- * frequent operations (e.g. when redering/sorting)
+ * Helpers (such as donna_node_get_name()) allow you to quickly get
+ * required/basic properties. Those are faster than using donna_node_get() and
+ * can be especially useful in frequent operations (e.g. in columntypes, when
+ * rendering/sorting)
  *
  * Property filename is an internal property returning the filename in the GLib
  * filename encoding. You're likely never to have to use it, as the node's
@@ -637,57 +640,55 @@ get_valist (DonnaNode   *node,
         GValue *value;
         gchar **s;
         gint i;
-        gchar *err = NULL;
 
-        /* internal/required properties: there's a value, just set it */
+        has_value = va_arg (va_args, DonnaNodeHasValue *);
+        value = va_arg (va_args, GValue *);
+
+        /* internal/required properties (there's always a value) */
         if (streq (name, "provider"))
         {
-            DonnaProvider **p;
-
-            p = va_arg (va_args, DonnaProvider **);
-            *p = g_object_ref (priv->provider);
+            *has_value = DONNA_NODE_VALUE_SET;
+            g_value_init (value, G_TYPE_OBJECT);
+            g_value_set_object (value, priv->provider);
             goto next;
         }
         else if (streq (name, "domain"))
         {
-            s = va_arg (va_args, gchar **);
-            *s = (gchar *) donna_provider_get_domain (priv->provider);
+            *has_value = DONNA_NODE_VALUE_SET;
+            g_value_init (value, G_TYPE_STRING);
+            g_value_set_static_string (value,
+                    donna_provider_get_domain (priv->provider));
             goto next;
         }
         else if (streq (name, "location"))
         {
-            gchar **ss;
-
-            ss = va_arg (va_args, gchar **);
-            *ss = g_strdup (priv->location);
+            *has_value = DONNA_NODE_VALUE_SET;
+            g_value_init (value, G_TYPE_STRING);
+            g_value_set_string (value, priv->location);
             goto next;
         }
         else if (streq (name, "node-type"))
         {
-            DonnaNodeType *t;
-
-            t = va_arg (va_args, DonnaNodeType *);
-            *t = priv->node_type;
+            *has_value = DONNA_NODE_VALUE_SET;
+            g_value_init (value, G_TYPE_INT);
+            g_value_set_int (value, priv->node_type);
             goto next;
         }
         else if (streq (name, "filename"))
         {
-            gchar **ss;
-
-            ss = va_arg (va_args, gchar **);
-            *ss = g_strdup ((priv->filename) ? priv->filename : priv->location);
+            *has_value = DONNA_NODE_VALUE_SET;
+            g_value_init (value, G_TYPE_STRING);
+            g_value_set_string (value,
+                    (priv->filename) ? priv->filename : priv->location);
             goto next;
         }
         else if (streq (name, "name"))
         {
-            gchar **ss;
-
-            ss = va_arg (va_args, gchar **);
-            *ss = g_strdup (priv->name);
+            *has_value = DONNA_NODE_VALUE_SET;
+            g_value_init (value, G_TYPE_STRING);
+            g_value_set_string (value, priv->name);
             goto next;
         }
-
-        has_value = va_arg (va_args, DonnaNodeHasValue *);
 
         /* basic properties: might not have a value, so there's a has_value */
         i = 0;
@@ -699,17 +700,8 @@ get_valist (DonnaNode   *node,
                 if (*has_value == DONNA_NODE_VALUE_SET)
                 {
 grab_basic_value:
-                    G_VALUE_LCOPY (&priv->basic_props[i].value, va_args, 0, &err);
-                    if (err)
-                    {
-                        g_critical (
-                                "Error while trying to copy value of basic property '%s' from node '%s:%s': %s",
-                                name,
-                                donna_provider_get_domain (priv->provider),
-                                priv->location,
-                                err);
-                        g_free (err);
-                    }
+                    g_value_init (value, G_VALUE_TYPE (&priv->basic_props[i].value));
+                    g_value_copy (&priv->basic_props[i].value, value);
                     goto next;
                 }
                 else
@@ -737,16 +729,13 @@ grab_basic_value:
                             g_rw_lock_reader_lock (&priv->props_lock);
                         *has_value = DONNA_NODE_VALUE_ERROR;
                     }
-                    va_arg (va_args, gpointer);
                 }
                 goto next;
             }
         }
 
         /* other properties */
-        value = va_arg (va_args, GValue *);
         prop = g_hash_table_lookup (props, (gpointer) name);
-
         if (!prop)
             *has_value = DONNA_NODE_VALUE_NONE;
         else if (!prop->has_value)
@@ -799,17 +788,23 @@ next:
  * @is_blocking: Whether to refresh properties needing it or not
  * @first_name: First name of the properties to get
  *
- * Set the value of specified properties, if possible. For required properties
- * you should speicfy the return location of the value. For basic properties,
- * you should first specify the return location for a #DonnaHasValue which will
- * indicate if the value was set, needs a refresh, or doesn't exist on the node.
- * For additional properties, the return value must be of a non-initialized
- * #GValue.
+ * Get the value of specified properties, if possible. Each property name should
+ * be followed by two parameters: the location of a #DonnaNodeHasValue variable,
+ * to know whether the property exists/has a value, and that of a #GValue, to
+ * hold the value. E.g:
+ * <programlisting>
+ * DonnaNodeHasValue has;
+ * GValue value = G_VALUE_INIT;
+ * donna_node_get (node, FALSE, "some_property", &has, &value, NULL);
+ * </programlisting>
  *
  * If @is_blocking is %FALSE the #DonnaHasValue might be
  * %DONNA_NODE_VALUE_NEED_REFRESH while with %TRUE a refresh will be
  * automatically called (within/blocking the thread). It can then also be set
  * to %DONNA_NODE_VALUE_ERROR if the refresher failed.
+ *
+ * Note that for required & basic properties, it is faster (and might be
+ * simpler) to use the available helpers, e.g. donna_node_get_name()
  */
 void
 donna_node_get (DonnaNode   *node,
