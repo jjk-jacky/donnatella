@@ -530,7 +530,7 @@ load_config (DonnaTreeView *tree)
      * Might as well save a few function calls... */
 
     priv = tree->priv;
-    config = donna_app_get_config (priv->app);
+    config = donna_app_peek_config (priv->app);
 
     if (donna_config_get_uint (config, (guint *) &val,
                 "treeviews/%s/mode", priv->name))
@@ -637,8 +637,6 @@ load_config (DonnaTreeView *tree)
                     "treeviews/%s/sane_arrow", priv->name);
         }
     }
-
-    g_object_unref (config);
 }
 
 static gboolean
@@ -2360,7 +2358,7 @@ load_arrangement (DonnaTreeView *tree,
     DonnaColumnType      *ctname;
     gint                  sort_id = 0;
 
-    config = donna_app_get_config (priv->app);
+    config = donna_app_peek_config (priv->app);
     sortable = GTK_TREE_SORTABLE (priv->store);
     list = gtk_tree_view_get_columns (treev);
 
@@ -2786,7 +2784,6 @@ next:
     if (priv->arrangement)
         g_free (priv->arrangement);
     priv->arrangement = g_strdup (arrangement);
-    g_object_unref (config);
 }
 
 static gchar *
@@ -2797,7 +2794,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     gchar                *s;
 
     priv = tree->priv;
-    config = donna_app_get_config (priv->app);
+    config = donna_app_peek_config (priv->app);
     g_debug ("treeview '%s': select arrangement", priv->name);
 
     if (is_tree (tree))
@@ -2829,7 +2826,6 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     g_debug ("treeview '%s': selected arrangement: %s",
             priv->name,
             (s) ? s : "(none)");
-    g_object_unref (config);
     return s;
 }
 

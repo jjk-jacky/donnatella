@@ -71,6 +71,7 @@ static void             donna_donna_finalize        (GObject        *object);
 
 /* DonnaApp */
 static DonnaConfig *    donna_donna_get_config      (DonnaApp       *app);
+static DonnaConfig *    donna_donna_peek_config     (DonnaApp       *app);
 static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
                                                      const gchar    *domain);
 static DonnaColumnType *donna_donna_get_columntype  (DonnaApp       *app,
@@ -89,6 +90,7 @@ static void
 donna_donna_app_init (DonnaAppInterface *interface)
 {
     interface->get_config       = donna_donna_get_config;
+    interface->peek_config      = donna_donna_peek_config;
     interface->get_provider     = donna_donna_get_provider;
     interface->get_columntype   = donna_donna_get_columntype;
     interface->get_arrangement  = donna_donna_get_arrangement;
@@ -299,6 +301,13 @@ donna_donna_get_config (DonnaApp *app)
     return g_object_ref (DONNA_DONNA (app)->priv->config);
 }
 
+DonnaConfig *
+donna_donna_peek_config (DonnaApp *app)
+{
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    return DONNA_DONNA (app)->priv->config;
+}
+
 DonnaProvider *
 donna_donna_get_provider (DonnaApp    *app,
                           const gchar *domain)
@@ -473,13 +482,12 @@ tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
 
     /*******************************/
 
-    DonnaConfig *config = donna_app_get_config (DONNA_APP (d));
+    DonnaConfig *config = donna_app_peek_config (DONNA_APP (d));
     gboolean v;
     if (donna_config_get_boolean (config, &v, "columns/name/sort_natural_order"))
         donna_config_set_boolean (config, !v, "columns/name/sort_natural_order");
     else
         donna_config_set_boolean (config, FALSE, "columns/name/sort_natural_order");
-    g_object_unref (config);
     return;
 
     /* FIXME */
@@ -631,10 +639,9 @@ main (int argc, char *argv[])
     gtk_widget_show (_paned);
 
     /* tree */
-    DonnaConfig *config = donna_app_get_config (DONNA_APP (d));
+    DonnaConfig *config = donna_app_peek_config (DONNA_APP (d));
     donna_config_set_uint (config, 1, "treeviews/tree/mode");
     donna_config_set_string (config, "name", "treeviews/tree/arrangement/sort");
-    g_object_unref (config);
     _tree = donna_tree_view_new (DONNA_APP (d), "tree");
     tree = GTK_TREE_VIEW (_tree);
     /* scrolled window */

@@ -164,7 +164,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     gchar *s;
     gint i;
 
-    config = donna_app_get_config (ctsize->priv->app);
+    config = donna_app_peek_config (ctsize->priv->app);
 
     s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/size",
             "property", "size");
@@ -220,8 +220,6 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    g_object_unref (config);
-
     return need;
 }
 
@@ -261,14 +259,12 @@ ct_size_get_default_sort_order (DonnaColumnType *ct,
                                 const gchar     *col_name,
                                 gpointer        data)
 {
-    DonnaConfig *config;
     GtkSortType sort_order;
 
-    config = donna_app_get_config (DONNA_COLUMNTYPE_SIZE (ct)->priv->app);
-    sort_order = (donna_config_get_boolean_column (config,
+    sort_order = (donna_config_get_boolean_column (donna_app_peek_config (
+                    DONNA_COLUMNTYPE_SIZE (ct)->priv->app),
                 tv_name, col_name, "desc_first", "columntypes/size", TRUE))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-    g_object_unref (config);
     return sort_order;
 }
 

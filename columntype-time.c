@@ -168,7 +168,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
 
-    config = donna_app_get_config (cttime->priv->app);
+    config = donna_app_peek_config (cttime->priv->app);
 
     s = donna_config_get_string_column (config, tv_name, col_name,
             "columntypes/time", "property", "mtime");
@@ -200,8 +200,6 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     }
     else
         g_free (s);
-
-    g_object_unref (config);
 
     return need;
 }
@@ -241,14 +239,12 @@ ct_time_get_default_sort_order (DonnaColumnType *ct,
                                 const gchar     *col_name,
                                 gpointer        data)
 {
-    DonnaConfig *config;
     GtkSortType sort_order;
 
-    config = donna_app_get_config (DONNA_COLUMNTYPE_TIME (ct)->priv->app);
-    sort_order = (donna_config_get_boolean_column (config,
+    sort_order = (donna_config_get_boolean_column (donna_app_peek_config (
+                    DONNA_COLUMNTYPE_TIME (ct)->priv->app),
                 tv_name, col_name, "desc_first", "columntypes/time", TRUE))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-    g_object_unref (config);
     return sort_order;
 }
 

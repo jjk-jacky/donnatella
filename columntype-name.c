@@ -182,7 +182,7 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data = *_data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
 
-    config = donna_app_get_config (ctname->priv->app);
+    config = donna_app_peek_config (ctname->priv->app);
 
     if (data->is_locale_based != donna_config_get_boolean_column (config,
                 tv_name, col_name, "sort", "locale_based", FALSE))
@@ -210,7 +210,6 @@ ct_name_refresh_data (DonnaColumnType    *ct,
         check_option ("ignore_spunct",  DONNA_SORT_IGNORE_SPUNCT,    TRUE,  FALSE);
     }
 
-    g_object_unref (config);
     return need;
 }
 
@@ -246,14 +245,12 @@ ct_name_get_default_sort_order (DonnaColumnType *ct,
                                 const gchar     *col_name,
                                 gpointer        data)
 {
-    DonnaConfig *config;
     GtkSortType sort_order;
 
-    config = donna_app_get_config (DONNA_COLUMNTYPE_NAME (ct)->priv->app);
-    sort_order = (donna_config_get_boolean_column (config,
+    sort_order = (donna_config_get_boolean_column (donna_app_peek_config (
+                    DONNA_COLUMNTYPE_NAME (ct)->priv->app),
                 tv_name, col_name, "desc_first", "columntypes/name", FALSE))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-    g_object_unref (config);
     return sort_order;
 }
 

@@ -20,6 +20,7 @@ struct _DonnaAppInterface
 
     /* virtual table */
     DonnaConfig *       (*get_config)               (DonnaApp       *app);
+    DonnaConfig *       (*peek_config)              (DonnaApp       *app);
     DonnaProvider *     (*get_provider)             (DonnaApp       *app,
                                                      const gchar    *domain);
     DonnaColumnType *   (*get_columntype)           (DonnaApp       *app,
@@ -41,6 +42,7 @@ void                donna_app_active_list_changed   (DonnaApp       *app,
 
 /* API */
 DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
+DonnaConfig *       donna_app_peek_config           (DonnaApp       *app);
 DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
 DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,

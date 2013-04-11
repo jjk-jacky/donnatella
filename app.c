@@ -64,6 +64,21 @@ donna_app_get_config (DonnaApp       *app)
     return (*interface->get_config) (app);
 }
 
+DonnaConfig *
+donna_app_peek_config (DonnaApp *app)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->peek_config != NULL, NULL);
+
+    return (*interface->peek_config) (app);
+}
+
 DonnaProvider *
 donna_app_get_provider (DonnaApp       *app,
                         const gchar    *domain)
