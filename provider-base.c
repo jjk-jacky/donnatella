@@ -417,18 +417,14 @@ static DonnaTaskState
 remove_node (DonnaTask *task, DonnaNode *node)
 {
     DonnaProviderBase *provider_base;
-    DonnaProvider *provider;
     DonnaTaskState ret;
 
-    provider = donna_node_get_provider (node);
-    provider_base = (DonnaProviderBase *) provider;
-
+    provider_base = (DonnaProviderBase *) donna_node_peek_provider (node);
     ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->remove_node (
             provider_base,
             task,
             node);
     g_object_unref (node);
-    g_object_unref (provider);
     return ret;
 }
 
@@ -459,14 +455,12 @@ static DonnaTaskState
 get_node_parent (DonnaTask *task, DonnaNode *node)
 {
     DonnaProviderBase *provider_base;
-    DonnaProvider *provider;
     gchar *location;
     DonnaNode *parent;
     gchar *s;
     DonnaTaskState ret;
 
-    provider = donna_node_get_provider (node);
-    provider_base = (DonnaProviderBase *) provider;
+    provider_base = (DonnaProviderBase *) donna_node_peek_provider (node);
     location = donna_node_get_location (node);
 
     /* is this a root? */
@@ -475,10 +469,9 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
                 "Node '%s:%s' has no parent",
-                donna_provider_get_domain (provider),
+                donna_provider_get_domain ((DonnaProvider *) provider_base),
                 location);
         g_free (location);
-        g_object_unref (provider);
         return DONNA_TASK_FAILED;
     }
 
@@ -510,7 +503,6 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     }
 
     g_free (location);
-    g_object_unref (provider);
     return ret;
 }
 

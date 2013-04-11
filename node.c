@@ -828,6 +828,9 @@ donna_node_get (DonnaNode   *node,
  * Helper to quickly get the provider of @node
  * Free it with g_object_unref() when done.
  *
+ * If you don't need to take a reference on the provider, see
+ * donna_node_peek_provider()
+ *
  * Returns: (transfer full): #DonnaProvider of @node
  */
 DonnaProvider *
@@ -835,6 +838,27 @@ donna_node_get_provider (DonnaNode *node)
 {
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
     return g_object_ref (node->priv->provider);
+}
+
+/**
+ * donna_node_peek_provider:
+ * @node: Node to get the provider of
+ *
+ * Helper to quickly get the provider of @node
+ * No reference will be added on the provider, so you shouldn't call
+ * g_object_unref() on it. If you need to take a reference on the provider, see
+ * donna_node_get_provider()
+ *
+ * Using this saves the need to ref/unref the provider, and is safe as long as
+ * you have a reference on the node (since it has a reference on its provider).
+ *
+ * Returns: (transfer none): #DonnaProvider of @node
+ */
+DonnaProvider *
+donna_node_peek_provider (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return node->priv->provider;
 }
 
 /**

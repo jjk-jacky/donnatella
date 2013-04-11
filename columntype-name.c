@@ -425,19 +425,16 @@ get_node_key (DonnaColumnTypeName   *ctname,
                 priv->domains = g_ptr_array_new ();
             if (i >= priv->domains->len)
             {
-                DonnaProvider *provider;
-
-                provider = donna_node_get_provider (node);
                 /* FIXME? (not actually needed since our cb is "self-contained")
                  * - also connect to a new signal "destroy" when provider is
                  *   being finalized. in handler, we remove it from the ptrarr
                  * - when we're finalized, disconnect all hanlers */
-                g_signal_connect_data (provider, "node-updated::name",
+                g_signal_connect_data (donna_node_peek_provider (node),
+                        "node-updated::name",
                         G_CALLBACK (node_updated_cb),
                         g_strdup (buf),
                         (GClosureNotify) g_free,
                         0);
-                g_object_unref (provider);
 
                 g_ptr_array_add (priv->domains, (gpointer) domain);
             }

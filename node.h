@@ -128,6 +128,7 @@ void                donna_node_get                  (DonnaNode          *node,
                                                      const gchar        *first_name,
                                                      ...);
 DonnaProvider *     donna_node_get_provider         (DonnaNode          *node);
+DonnaProvider *     donna_node_peek_provider        (DonnaNode          *node);
 const gchar *       donna_node_get_domain           (DonnaNode          *node);
 gchar *             donna_node_get_location         (DonnaNode          *node);
 DonnaNodeType       donna_node_get_node_type        (DonnaNode          *node);

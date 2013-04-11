@@ -731,7 +731,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         GSList *list;
 
         /* get its provider */
-        provider = donna_node_get_provider (node);
+        provider = donna_node_peek_provider (node);
         /* and update the nb of nodes we have for this provider */
         for (i = 0; i < priv->providers->len; ++i)
         {
@@ -747,7 +747,6 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
                 }
             }
         }
-        g_object_unref (provider);
 
         /* remove iter for that row in hashtable */
         l = list = g_hash_table_lookup (priv->hashtable, node);
@@ -2169,7 +2168,7 @@ add_node_to_tree (DonnaTreeView *tree,
         }
     }
     /* get provider to get task to know if it has children */
-    provider = donna_node_get_provider (node);
+    provider = donna_node_peek_provider (node);
     node_type = donna_node_get_node_type (node);
     for (i = 0; i < priv->providers->len; ++i)
     {
@@ -2209,7 +2208,6 @@ add_node_to_tree (DonnaTreeView *tree,
             donna_tree_store_set (priv->store, &iter,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
                     -1);
-        g_object_unref (provider);
         return TRUE;
     }
 
@@ -2253,7 +2251,6 @@ add_node_to_tree (DonnaTreeView *tree,
         g_clear_error (&err);
     }
 
-    g_object_unref (provider);
     return TRUE;
 }
 
@@ -3379,14 +3376,11 @@ is_node_ancestor (DonnaNode         *node,
                   DonnaProvider     *descendant_provider,
                   const gchar       *descendant_location)
 {
-    DonnaProvider *provider;
     gchar *location;
     size_t len;
     gboolean ret;
 
-    provider = donna_node_get_provider (node);
-    g_object_unref (provider);
-    if (descendant_provider != provider)
+    if (descendant_provider != donna_node_peek_provider (node))
         return FALSE;
 
     /* descandant is in the same domain as node, and we know node's domain isn't
@@ -3432,7 +3426,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 
     model = GTK_TREE_MODEL (priv->store);
     iter = iter_root;
-    provider = donna_node_get_provider (node);
+    provider = donna_node_peek_provider (node);
     location = donna_node_get_location (node);
 
     /* get the node for the given iter_root, our starting point */
@@ -3449,7 +3443,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         {
             /* this _is_ the iter we're looking for */
             g_free (location);
-            g_object_unref (provider);
             g_object_unref (n);
             if (only_expanded)
                 return (is_row_accessible (tree, iter)) ? iter : last_iter;
@@ -3481,7 +3474,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             /* TODO */
             g_object_unref (task);
             g_free (location);
-            g_object_unref (provider);
             return NULL;
         }
         value = donna_task_get_return_value (task);
@@ -3513,7 +3505,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                     /* TODO */
                     g_object_unref (n);
                     g_free (location);
-                    g_object_unref (provider);
                     return NULL;
                 }
 
@@ -3531,7 +3522,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             {
                 g_object_unref (n);
                 g_free (location);
-                g_object_unref (provider);
                 return last_iter;
             }
         }
@@ -3590,7 +3580,7 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     GdkRectangle rect;
     GtkTreeIter *iter_non_vis = NULL;
 
-    provider = donna_node_get_provider (node);
+    provider = donna_node_peek_provider (node);
     flags = donna_provider_get_flags (provider);
     if (G_UNLIKELY (flags & DONNA_PROVIDER_FLAG_INVALID))
     {
@@ -3598,16 +3588,12 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
                 "Treeview '%s': Unable to get flags for provider '%s'",
                 priv->name,
                 donna_provider_get_domain (provider));
-        g_object_unref (provider);
         return NULL;
     }
     /* w/ flat provider we can't do anything else but rely on existing rows */
     else if (flags & DONNA_PROVIDER_FLAG_FLAT)
-    {
-        g_object_unref (provider);
         /* TRUE not to ignore non-"accesible" (collapsed) ones */
         return get_best_existing_iter_for_node (tree, node, TRUE);
-    }
 
     model  = GTK_TREE_MODEL (priv->store);
     location = donna_node_get_location (node);
@@ -3620,7 +3606,6 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         if (n == node || is_node_ancestor (n, node, provider, location))
         {
             g_free (location);
-            g_object_unref (provider);
             g_object_unref (n);
             return get_iter_expanding_if_needed (tree, iter_cur_root, node,
                     FALSE, TRUE);
@@ -3653,7 +3638,6 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         {
             g_object_unref (task);
             g_free (location);
-            g_object_unref (provider);
             /* FIXME set error */
             return NULL;
         }
@@ -3661,7 +3645,6 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
         n = g_value_dup_object (value);
         g_object_unref (task);
         g_free (location);
-        g_object_unref (provider);
 
         add_node_to_tree (tree, NULL, n, &iter);
         /* get the iter from the hashtable for the row we added (we
@@ -3729,7 +3712,6 @@ get_best_iter_for_node (DonnaTreeView *tree, DonnaNode *node, GError **error)
     while (gtk_tree_model_iter_next (model, &iter));
 
     g_free (location);
-    g_object_unref (provider);
 
     if (iter_non_vis)
         return get_iter_expanding_if_needed (tree, iter_non_vis, node,
@@ -4002,7 +3984,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         DonnaProvider *provider;
         struct node_get_children_list_data *data;
 
-        provider = donna_node_get_provider (node);
+        provider = donna_node_peek_provider (node);
 
         if (node_type == DONNA_NODE_CONTAINER)
         {
@@ -4030,7 +4012,6 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
 
                 /* TODO */
 
-                g_object_unref (provider);
                 return TRUE;
             }
 
@@ -4050,7 +4031,6 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         }
 
         donna_app_run_task (priv->app, task);
-        g_object_unref (provider);
         return TRUE;
     }
 }
@@ -4296,7 +4276,7 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
         return;
     }
 
-    loc_provider = donna_node_get_provider (loc_node);
+    loc_provider = donna_node_peek_provider (loc_node);
     loc_location = donna_node_get_location (loc_node);
     do
     {
@@ -4339,7 +4319,6 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
         g_object_unref (n);
     } while (gtk_tree_model_iter_next (model, &child));
 
-    g_object_unref (loc_provider);
     g_free (loc_location);
     g_object_unref (loc_node);
 }
