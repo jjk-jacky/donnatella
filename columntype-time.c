@@ -239,13 +239,10 @@ ct_time_get_default_sort_order (DonnaColumnType *ct,
                                 const gchar     *col_name,
                                 gpointer        data)
 {
-    GtkSortType sort_order;
-
-    sort_order = (donna_config_get_boolean_column (donna_app_peek_config (
+    return (donna_config_get_boolean_column (donna_app_peek_config (
                     DONNA_COLUMNTYPE_TIME (ct)->priv->app),
-                tv_name, col_name, "desc_first", "columntypes/time", TRUE))
+                tv_name, col_name, "columntypes/time", "desc_first", TRUE))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-    return sort_order;
 }
 
 static GtkMenu *
