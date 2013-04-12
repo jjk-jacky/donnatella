@@ -429,6 +429,16 @@ ct_size_node_cmp (DonnaColumnType    *ct,
     off_t size1;
     off_t size2;
 
+    if (donna_node_get_node_type (node1) == DONNA_NODE_CONTAINER)
+    {
+        if (donna_node_get_node_type (node2) == DONNA_NODE_CONTAINER)
+            return 0;
+        else
+            return -1;
+    }
+    else if (donna_node_get_node_type (node2) == DONNA_NODE_CONTAINER)
+        return 1;
+
     if (data->is_size)
     {
         has1 = donna_node_get_size (node1, TRUE, &size1);
