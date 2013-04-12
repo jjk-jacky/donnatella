@@ -1007,6 +1007,14 @@ grab_basic_value:
 
     return has_value;
 }
+#define _get_basic_prop(BASIC_PROP, get_fn, type, var) do { \
+    DonnaNodeHasValue has;                                  \
+    gint64 value;                                           \
+    has = get_basic_prop (node, is_blocking, BASIC_PROP,    \
+            &value, (value_dup_fn) get_fn);                 \
+    *var = (type) value;                                    \
+    return has;                                             \
+} while (0)
 
 /**
  * donna_node_get_icon:
@@ -1029,8 +1037,7 @@ donna_node_get_icon (DonnaNode  *node,
                      gboolean    is_blocking,
                      GdkPixbuf **icon)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_ICON,
-            (gint64 *) icon, (value_dup_fn) g_value_dup_object);
+    _get_basic_prop (BASIC_PROP_ICON, g_value_dup_object, GdkPixbuf *, icon);
 }
 
 /**
@@ -1054,8 +1061,7 @@ donna_node_get_full_name (DonnaNode  *node,
                           gboolean    is_blocking,
                           gchar     **full_name)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_FULL_NAME,
-            (gint64 *) full_name, (value_dup_fn) g_value_dup_string);
+    _get_basic_prop (BASIC_PROP_FULL_NAME, g_value_dup_string, gchar *, full_name);
 }
 
 /**
@@ -1078,8 +1084,7 @@ donna_node_get_size (DonnaNode  *node,
                      gboolean    is_blocking,
                      off_t      *size)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_SIZE,
-            (gint64 *) size, (value_dup_fn) g_value_get_int64);
+    _get_basic_prop (BASIC_PROP_SIZE, g_value_get_int64, off_t, size);
 }
 
 /**
@@ -1102,8 +1107,7 @@ donna_node_get_ctime (DonnaNode *node,
                       gboolean   is_blocking,
                       time_t    *ctime)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_CTIME,
-            (gint64 *) ctime, (value_dup_fn) g_value_get_int64);
+    _get_basic_prop (BASIC_PROP_CTIME, g_value_get_int64, time_t, ctime);
 }
 
 /**
@@ -1126,8 +1130,7 @@ donna_node_get_mtime (DonnaNode *node,
                       gboolean   is_blocking,
                       time_t    *mtime)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_MTIME,
-            (gint64 *) mtime, (value_dup_fn) g_value_get_int64);
+    _get_basic_prop (BASIC_PROP_MTIME, g_value_get_int64, time_t, mtime);
 }
 
 /**
@@ -1150,8 +1153,7 @@ donna_node_get_atime (DonnaNode *node,
                       gboolean   is_blocking,
                       time_t    *atime)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_ATIME,
-            (gint64 *) atime, (value_dup_fn) g_value_get_int64);
+    _get_basic_prop (BASIC_PROP_ATIME, g_value_get_int64, time_t, atime);
 }
 
 /**
@@ -1174,8 +1176,7 @@ donna_node_get_mode (DonnaNode *node,
                      gboolean   is_blocking,
                      mode_t    *mode)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_MODE,
-            (gint64 *) mode, (value_dup_fn) g_value_get_int);
+    _get_basic_prop (BASIC_PROP_MODE, g_value_get_int, mode_t, mode);
 }
 
 /**
@@ -1198,8 +1199,7 @@ donna_node_get_uid (DonnaNode  *node,
                     gboolean    is_blocking,
                     uid_t      *uid)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_UID,
-            (gint64 *) uid, (value_dup_fn) g_value_get_int);
+    _get_basic_prop (BASIC_PROP_UID, g_value_get_int, uid_t, uid);
 }
 
 /**
@@ -1222,8 +1222,7 @@ donna_node_get_gid (DonnaNode *node,
                     gboolean   is_blocking,
                     gid_t     *gid)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_GID,
-            (gint64 *) gid, (value_dup_fn) g_value_get_int);
+    _get_basic_prop (BASIC_PROP_GID, g_value_get_int, gid_t, gid);
 }
 
 /**
