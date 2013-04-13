@@ -2900,13 +2900,20 @@ load_arrangement (DonnaTreeView *tree,
         if (s_sort)
         {
             gboolean sorted = FALSE;
-            GtkSortType order = GTK_SORT_ASCENDING;
+            GtkSortType order;
 
             /* SORT_UNKNOWN means we only had a column name (unlikely) */
             if (sort_order == SORT_UNKNOWN)
             {
                 if (streq (s_sort, b))
+                {
                     sorted = TRUE;
+                    order = donna_columntype_get_default_sort_order (
+                            g_object_get_data (G_OBJECT (column), "column-type"),
+                            priv->name,
+                            g_object_get_data (G_OBJECT (column), "column-name"),
+                            g_object_get_data (G_OBJECT (column), "columntype-data"));
+                }
             }
             else
             {
@@ -2947,6 +2954,14 @@ load_arrangement (DonnaTreeView *tree,
             priv->secondary_sort_column = column;
             g_free (sec_sort);
             sec_sort = NULL;
+            /* no order was specified, use default */
+            if (sec_sort_len == 0)
+                priv->secondary_sort_order =
+                    donna_columntype_get_default_sort_order (
+                            g_object_get_data (G_OBJECT (column), "column-type"),
+                            priv->name,
+                            g_object_get_data (G_OBJECT (column), "column-name"),
+                            g_object_get_data (G_OBJECT (column), "columntype-data"));
         }
 
         last_column = column;
