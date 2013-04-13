@@ -190,7 +190,6 @@ struct _DonnaTreeViewPrivate
     guint                mode               : 1;
     guint                node_types         : 2;
     guint                show_hidden        : 1;
-    guint                sane_arrow         : 1;
     guint                sort_groups        : 2; /* containers (always) first/mixed */
     /* mode Tree */
     guint                is_minitree        : 1;
@@ -632,15 +631,6 @@ load_config (DonnaTreeView *tree)
     }
     else
     {
-        if (donna_config_get_boolean (config, (gboolean *) &val,
-                    "treeviews/%s/sane_arrow", priv->name))
-            priv->sane_arrow = val;
-        else
-        {
-            val = priv->sane_arrow = TRUE;
-            donna_config_set_boolean (config, (gboolean) val,
-                    "treeviews/%s/sane_arrow", priv->name);
-        }
     }
 }
 
@@ -1626,12 +1616,7 @@ sort_func (GtkTreeModel      *model,
                 if (priv->sort_groups == SORT_CONTAINER_FIRST)
                     ret = -1;
                 else /* SORT_CONTAINER_FIRST_ALWAYS */
-                {
                     ret = (sort_order == GTK_SORT_ASCENDING) ? -1 : 1;
-                    /* with sane_arrow the sort order on column is reversed */
-                    if (priv->sane_arrow)
-                        ret *= -1;
-                }
                 goto done;
             }
         }
@@ -1640,12 +1625,7 @@ sort_func (GtkTreeModel      *model,
             if (priv->sort_groups == SORT_CONTAINER_FIRST)
                 ret = 1;
             else /* SORT_CONTAINER_FIRST_ALWAYS */
-            {
                 ret = (sort_order == GTK_SORT_ASCENDING) ? 1 : -1;
-                /* with sane_arrow the sort order on column is reversed */
-                if (priv->sane_arrow)
-                    ret *= -1;
-            }
             goto done;
         }
     }
@@ -1678,9 +1658,6 @@ sort_func (GtkTreeModel      *model,
             if (priv->secondary_sort_order == GTK_SORT_DESCENDING)
                 ret *= -1;
             if (sort_order == GTK_SORT_DESCENDING)
-                ret *= -1;
-            /* with sane_arrow the sort order on column is reversed */
-            if (priv->sane_arrow)
                 ret *= -1;
         }
     }
@@ -2343,6 +2320,31 @@ column_button_press_event_cb (GtkWidget             *btn,
     return FALSE;
 }
 
+static inline void
+set_secondary_arrow (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    gboolean alt;
+    GtkWidget *arrow;
+    GtkArrowType arrow_type;
+
+    /* GTK settings whether to use sane/alternative arrows or not */
+    g_object_get (gtk_widget_get_settings (GTK_WIDGET (tree)),
+            "gtk-alternative-sort-arrows", &alt, NULL);
+
+    if (priv->secondary_sort_order == GTK_SORT_ASCENDING)
+        arrow_type = (alt) ? GTK_ARROW_UP : GTK_ARROW_DOWN;
+    else
+        arrow_type = (alt) ? GTK_ARROW_DOWN : GTK_ARROW_UP;
+
+    /* show/update the secondary arrow */
+    arrow = g_object_get_data (G_OBJECT (priv->secondary_sort_column),
+            "header-secondary-arrow");
+    gtk_arrow_set (GTK_ARROW (arrow), arrow_type, GTK_SHADOW_IN);
+    /* visible unless main & secondary sort are the same */
+    gtk_widget_set_visible (arrow, priv->secondary_sort_column != priv->sort_column);
+}
+
 /* we have a "special" handling of clicks on column headers. First off, we
  * don't use gtk_tree_view_column_set_sort_column_id() to handle the sorting
  * because we want control to do things like have a default order (ASC/DESC)
@@ -2414,13 +2416,7 @@ column_button_release_event_cb (GtkWidget             *btn,
                 ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
         /* show/update the secondary arrow */
-        arrow = g_object_get_data (G_OBJECT (priv->secondary_sort_column),
-                    "header-secondary-arrow");
-        gtk_arrow_set (GTK_ARROW (arrow),
-                (priv->secondary_sort_order == GTK_SORT_ASCENDING)
-                ? GTK_ARROW_UP : GTK_ARROW_DOWN,
-                GTK_SHADOW_IN);
-        gtk_widget_set_visible (arrow, TRUE);
+        set_secondary_arrow (data->tree);
 
         /* trigger a resort */
         gtk_tree_sortable_set_sort_column_id (sortable,
@@ -2473,9 +2469,7 @@ column_button_release_event_cb (GtkWidget             *btn,
      * since sort_func might use the column's sort_order (when putting container
      * always first) */
     gtk_tree_view_column_set_sort_indicator (column, TRUE);
-    gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
-            ? (sort_order == GTK_SORT_ASCENDING) ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING
-            : sort_order);
+    gtk_tree_view_column_set_sort_order (column, sort_order);
     gtk_tree_sortable_set_sort_column_id (sortable, col_sort_id, sort_order);
 
     return FALSE;
@@ -2825,7 +2819,7 @@ load_arrangement (DonnaTreeView *tree,
              * secondary sort) */
             hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
             label = gtk_label_new (NULL);
-            arrow = gtk_arrow_new (GTK_ARROW_DOWN, GTK_SHADOW_IN);
+            arrow = gtk_arrow_new (GTK_ARROW_NONE, GTK_SHADOW_IN);
             gtk_style_context_add_class (gtk_widget_get_style_context (arrow),
                     "secondary-arrow");
             gtk_box_pack_start (GTK_BOX (hbox), label, TRUE, TRUE, 0);
@@ -2933,10 +2927,7 @@ load_arrangement (DonnaTreeView *tree,
                  * sort_order (when putting container always first) */
                 priv->sort_column = column;
                 gtk_tree_view_column_set_sort_indicator (column, TRUE);
-                gtk_tree_view_column_set_sort_order (column, (priv->sane_arrow)
-                        ? ((order == GTK_SORT_ASCENDING)
-                            ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING)
-                        : order);
+                gtk_tree_view_column_set_sort_order (column, order);
                 gtk_tree_sortable_set_sort_column_id (sortable, sort_id, order);
 
                 g_free (s_sort);
@@ -2991,17 +2982,7 @@ next:
     /* secondary sort arrow */
     if (priv->secondary_sort_column)
     {
-        GtkWidget *arrow;
-
-        arrow = g_object_get_data (G_OBJECT (priv->secondary_sort_column),
-                "header-secondary-arrow");
-        gtk_arrow_set (GTK_ARROW (arrow),
-                (priv->secondary_sort_order == GTK_SORT_ASCENDING)
-                ? GTK_ARROW_UP : GTK_ARROW_DOWN,
-                GTK_SHADOW_IN);
-        /* visible unless main & secondary sort are the same */
-        gtk_widget_set_visible (arrow,
-                priv->secondary_sort_column != priv->sort_column);
+        set_secondary_arrow (tree);
         /* we can't actually have a secondary that's the same as the main sort
          * order without sticky_sec_sort */
         if (!priv->sticky_sec_sort && priv->sort_column == priv->secondary_sort_column)
