@@ -187,16 +187,18 @@ struct _DonnaTreeViewPrivate
     gulong               sid_active_list_changed;
 
     /* "cached" options */
-    guint                mode        : 1;
-    guint                node_types  : 2;
-    guint                show_hidden : 1;
-    guint                sane_arrow  : 1;
-    guint                sort_groups : 2;
+    guint                mode               : 1;
+    guint                node_types         : 2;
+    guint                show_hidden        : 1;
+    guint                sane_arrow         : 1;
+    guint                sort_groups        : 2; /* containers (always) first/mixed */
     /* mode Tree */
-    guint                is_minitree : 1;
-    guint                sync_mode   : 3;
+    guint                is_minitree        : 1;
+    guint                sync_mode          : 3;
     /* mode List */
-    guint                draw_state  : 2;
+    guint                draw_state         : 2;
+    /* from current arrangement */
+    guint                sticky_sec_sort    : 1;
 };
 
 static GParamSpec *donna_tree_view_props[NB_PROPS] = { NULL, };
@@ -1656,7 +1658,9 @@ sort_func (GtkTreeModel      *model,
             node1, node2);
 
     /* secondary sort order */
-    if (ret == 0 && priv->secondary_sort_column)
+    if (ret == 0 && priv->secondary_sort_column
+            /* could be the same column with sticky_sec_sort */
+            && priv->secondary_sort_column != column)
     {
         column = priv->secondary_sort_column;
 
@@ -2429,6 +2433,29 @@ column_button_release_event_cb (GtkWidget             *btn,
     same_column = is_sorted && cur_sort_id == col_sort_id;
     if (!same_column)
     {
+        /* new main sort on secondary sort column, remove the arrow */
+        if (priv->secondary_sort_column == column)
+            gtk_widget_set_visible (g_object_get_data (
+                        G_OBJECT (priv->secondary_sort_column),
+                        "header-secondary-arrow"), FALSE);
+        /* if not sticky, also remove the secondary sort */
+        if (!priv->sticky_sec_sort)
+        {
+            if (priv->secondary_sort_column)
+                gtk_widget_set_visible (g_object_get_data (
+                            G_OBJECT (priv->secondary_sort_column),
+                            "header-secondary-arrow"), FALSE);
+            priv->secondary_sort_column = NULL;
+        }
+        /* if sticky, and the old main sort is the secondary sort, bring back
+         * the arrow (secondary sort is automatic, i.e. done when the secondary
+         * sort column is set and isn't the main sort column, of course) */
+        else if (priv->secondary_sort_column == priv->sort_column)
+            gtk_widget_set_visible (g_object_get_data (
+                        G_OBJECT (priv->secondary_sort_column),
+                        "header-secondary-arrow"), TRUE);
+
+        /* handle the change of main sort column */
         gtk_tree_view_column_set_sort_indicator (priv->sort_column, FALSE);
         priv->sort_column = column;
         sort_order = donna_columntype_get_default_sort_order (
@@ -2436,14 +2463,6 @@ column_button_release_event_cb (GtkWidget             *btn,
                 priv->name,
                 g_object_get_data (G_OBJECT (column), "column-name"),
                 g_object_get_data (G_OBJECT (column), "columntype-data"));
-
-        if (column == priv->secondary_sort_column)
-        {
-            gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->secondary_sort_column),
-                        "header-secondary-arrow"), FALSE);
-            priv->secondary_sort_column = NULL;
-        }
     }
     else
         /* revert order */
@@ -2477,6 +2496,8 @@ load_arrangement (DonnaTreeView *tree,
     gchar                *s_sort = NULL;
     gsize                 sort_len;
     gint                  sort_order = SORT_UNKNOWN;
+    gchar                *sec_sort = NULL;
+    gsize                 sec_sort_len;
     const gchar          *col;
     GtkTreeViewColumn    *last_column = NULL;
     GtkTreeViewColumn    *expander_column = NULL;
@@ -2565,6 +2586,28 @@ load_arrangement (DonnaTreeView *tree,
                 sort_order = (s_sort[sort_len + 1] == 'd') ? SORT_DESC : SORT_ASC;
         }
     }
+    /* secondary sort order */
+    priv->secondary_sort_column = NULL;
+    if (donna_config_get_string (config, &sec_sort, "%s/second_sort", arrangement))
+    {
+        sec_sort_len = strlen (sec_sort);
+        if (sec_sort_len > 2)
+        {
+            sec_sort_len -= 2;
+            if (sec_sort[sec_sort_len] == ':')
+                priv->secondary_sort_order = (s_sort[sec_sort_len + 1] == 'd')
+                    ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
+            else
+                sec_sort_len = 0;
+        }
+    }
+    /* sticky secondary sort order? */
+    {
+        gboolean sticky = TRUE;
+        donna_config_get_boolean (config, &sticky, "%s/sticky_second_sort",
+                arrangement);
+        priv->sticky_sec_sort = sticky;
+    }
 
     /* clear list of props we're watching to refresh tree */
     if (priv->col_props->len > 0)
@@ -2592,6 +2635,7 @@ load_arrangement (DonnaTreeView *tree,
         gsize              len;
         gchar              buf[64];
         gchar             *b;
+        gsize              len_b;
         DonnaColumnType   *ct;
         gpointer           ct_data;
         DonnaColumnType   *col_ct;
@@ -2615,6 +2659,7 @@ load_arrangement (DonnaTreeView *tree,
         }
         else
             b = g_strdup_printf ("%.*s", (int) len, col);
+        len_b = strlen (b);
 
         if (!donna_config_get_string (config, &ss,
                     "treeviews/%s/columns/%s/type", priv->name, b))
@@ -2866,7 +2911,7 @@ load_arrangement (DonnaTreeView *tree,
             else
             {
                 /* ss_sort contains "column:o" */
-                if (strlen (b) == sort_len && streqn (s_sort, b, sort_len))
+                if (len_b == sort_len && streqn (s_sort, b, sort_len))
                 {
                     sorted = TRUE;
                     order = (sort_order == SORT_ASC) ? GTK_SORT_ASCENDING
@@ -2894,6 +2939,16 @@ load_arrangement (DonnaTreeView *tree,
         ++sort_id;
         /* TODO else default sort order? */
 
+        /* secondary sort order (order & sticky already done) */
+        if (sec_sort && ((sec_sort_len == 0 && streq (b, sec_sort))
+                    || (sec_sort_len > 0 && len_b == sec_sort_len
+                        && streqn (b, sec_sort, sec_sort_len))))
+        {
+            priv->secondary_sort_column = column;
+            g_free (sec_sort);
+            sec_sort = NULL;
+        }
+
         last_column = column;
 
 next:
@@ -2918,8 +2973,30 @@ next:
     /* set expander column */
     gtk_tree_view_set_expander_column (treev, expander_column);
 
+    /* secondary sort arrow */
+    if (priv->secondary_sort_column)
+    {
+        GtkWidget *arrow;
+
+        arrow = g_object_get_data (G_OBJECT (priv->secondary_sort_column),
+                "header-secondary-arrow");
+        gtk_arrow_set (GTK_ARROW (arrow),
+                (priv->secondary_sort_order == GTK_SORT_ASCENDING)
+                ? GTK_ARROW_UP : GTK_ARROW_DOWN,
+                GTK_SHADOW_IN);
+        /* visible unless main & secondary sort are the same */
+        gtk_widget_set_visible (arrow,
+                priv->secondary_sort_column != priv->sort_column);
+        /* we can't actually have a secondary that's the same as the main sort
+         * order without sticky_sec_sort */
+        if (!priv->sticky_sec_sort && priv->sort_column == priv->secondary_sort_column)
+            priv->secondary_sort_column = NULL;
+    }
+
     if (s_sort)
         g_free (s_sort);
+    if (sec_sort)
+        g_free (sec_sort);
     if (s_columns)
         g_free (s_columns);
     /* remove all columns left unused */
