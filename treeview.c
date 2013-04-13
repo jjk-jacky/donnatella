@@ -1115,6 +1115,26 @@ expand_row (DonnaTreeView           *tree,
             guint i;
             GtkTreePath *path;
 
+            /* quite unlikely, but still */
+            if (arr->len == 0)
+            {
+                GtkTreeIter child;
+
+                if (donna_tree_store_iter_children (priv->store, &child, iter))
+                    while (remove_row_from_tree (tree, &child))
+                        ;
+
+                /* update expand state */
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
+                        -1);
+
+                if (scroll_current)
+                    scroll_to_current (tree);
+
+                return TRUE;
+            }
+
             for (i = 0; i < arr->len; ++i)
                 add_node_to_tree (tree, iter, arr->pdata[i], NULL);
             g_ptr_array_unref (arr);
