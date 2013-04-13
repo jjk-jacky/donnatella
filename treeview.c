@@ -4029,16 +4029,28 @@ free_node_get_children_list_data (struct node_get_children_list_data *data)
 
 /* mode list only */
 static void
-node_get_children_list_timeout (DonnaTask *task, DonnaTreeView *tree)
+node_get_children_list_timeout (DonnaTask                           *task,
+                                struct node_get_children_list_data  *data)
 {
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+
+    /* is this still valid (or did the user click away already) ? */
+    if (data->node)
+    {
+        if (priv->future_location != data->node)
+            return;
+    }
+    else if (priv->future_location != data->child)
+        return;
+
     /* clear the list */
-    donna_tree_store_clear (tree->priv->store);
+    donna_tree_store_clear (priv->store);
     /* also the hashtable (we don't need to unref nodes (keys), as our ref was
      * handled by the store) */
-    g_hash_table_remove_all (tree->priv->hashtable);
+    g_hash_table_remove_all (priv->hashtable);
     /* and show the "please wait" message */
-    tree->priv->draw_state = DRAW_WAIT;
-    gtk_widget_queue_draw (GTK_WIDGET (tree));
+    priv->draw_state = DRAW_WAIT;
+    gtk_widget_queue_draw (GTK_WIDGET (data->tree));
 }
 
 /* mode list only */
@@ -4067,8 +4079,15 @@ node_get_children_list_cb (DonnaTask                            *task,
                 location);
         g_free (location);
 
+        if (priv->future_location == data->node)
+            priv->future_location = NULL;
+
         goto free;
     }
+
+    /* is this still valid (or did the user click away already) ? */
+    if (priv->future_location != data->node)
+        goto free;
 
     /* clear the list */
     donna_tree_store_clear (priv->store);
@@ -4105,7 +4124,7 @@ node_get_children_list_cb (DonnaTask                            *task,
         gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
 
         /* in order to scroll properly, we need to have the tree sorted &
-         * everything done; i.e. we need to have all pending events processes */
+         * everything done; i.e. we need to have all pending events processed */
         while (gtk_events_pending ())
             gtk_main_iteration ();
 
@@ -4127,6 +4146,8 @@ node_get_children_list_cb (DonnaTask                            *task,
     if (priv->location)
         g_object_unref (priv->location);
     priv->location = g_object_ref (data->node);
+    /* we're there */
+    priv->future_location = NULL;
 
     /* emit signal */
     g_object_notify_by_pspec (G_OBJECT (data->tree),
@@ -4151,14 +4172,24 @@ node_get_parent_list_cb (DonnaTask                            *task,
         const GError      *error;
 
         error = donna_task_get_error (task);
-        location = donna_node_get_location (data->node);
+        location = donna_node_get_location (data->child);
         donna_app_show_error (priv->app, error,
                 "Treeview '%s': Failed to get parent for node '%s:%s'",
                 priv->name,
-                donna_node_get_domain (data->node),
+                donna_node_get_domain (data->child),
                 location);
         g_free (location);
 
+        if (priv->future_location == data->child)
+            priv->future_location = NULL;
+
+        free_node_get_children_list_data (data);
+        return;
+    }
+
+    /* is this still valid (or did the user click away already) ? */
+    if (priv->future_location != data->child)
+    {
         free_node_get_children_list_data (data);
         return;
     }
@@ -4166,12 +4197,14 @@ node_get_parent_list_cb (DonnaTask                            *task,
     value = donna_task_get_return_value (task);
     /* simply update data, as we'll re-use it for the new task */
     data->node = g_value_dup_object (value);
+    /* update future location (no ref needed) */
+    priv->future_location = data->node;
 
     task = donna_node_get_children_task (data->node, priv->node_types, NULL);
     if (!timeout_called)
         donna_task_set_timeout (task, 800, /* FIXME */
                 (task_timeout_fn) node_get_children_list_timeout,
-                data->tree,
+                data,
                 NULL);
     donna_task_set_callback (task,
             (task_callback_fn) node_get_children_list_cb,
@@ -4244,7 +4277,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
                     priv->node_types, NULL);
             donna_task_set_timeout (task, 800, /* FIXME */
                     (task_timeout_fn) node_get_children_list_timeout,
-                    tree,
+                    data,
                     NULL);
             donna_task_set_callback (task,
                     (task_callback_fn) node_get_children_list_cb,
@@ -4270,13 +4303,18 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             task = donna_provider_get_node_parent_task (provider, node, NULL);
             donna_task_set_timeout (task, 800, /* FIXME */
                     (task_timeout_fn) node_get_children_list_timeout,
-                    tree,
+                    data,
                     NULL);
             donna_task_set_callback (task,
                     (task_callback_fn) node_get_parent_list_cb,
                     data,
                     (GDestroyNotify) free_node_get_children_list_data);
         }
+
+        /* we don't ref this node, since we should only have it for a short
+         * period of time, and will onyl use it to compare (the pointer) in the
+         * task's timeout/cb, to make sure the new location is still valid */
+        priv->future_location = node;
 
         donna_app_run_task (priv->app, task);
         return TRUE;
