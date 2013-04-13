@@ -4314,6 +4314,10 @@ donna_tree_view_get_children (DonnaTreeView      *tree,
     if (!(node_types & priv->node_types))
         return NULL;
 
+    /* list changing location, already cleared the children */
+    if (!is_tree (tree) && tree->priv->draw_state == DRAW_WAIT)
+        return NULL;
+
     /* get list of nodes we have in tree */
     list = g_hash_table_get_keys (priv->hashtable);
     /* create an array that could hold them all */
