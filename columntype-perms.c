@@ -646,6 +646,7 @@ ct_perms_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GPtrArray *arr = NULL;
+    guint val;
     mode_t mode;
     uid_t uid;
     gid_t gid;
@@ -654,7 +655,7 @@ ct_perms_render (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
 
-    has = donna_node_get_mode (node, FALSE, &mode);
+    has = donna_node_get_mode (node, FALSE, &val);
     if (has == DONNA_NODE_VALUE_NONE)
     {
         g_object_set (renderer, "visible", FALSE, NULL);
@@ -665,8 +666,10 @@ ct_perms_render (DonnaColumnType    *ct,
         arr = g_ptr_array_new_full (3, g_free);
         g_ptr_array_add (arr, g_strdup ("mode"));
     }
+    else
+        mode = (mode_t) val;
 
-    has = donna_node_get_uid (node, FALSE, &uid);
+    has = donna_node_get_uid (node, FALSE, &val);
     if (has == DONNA_NODE_VALUE_NONE)
     {
         g_object_set (renderer, "visible", FALSE, NULL);
@@ -680,8 +683,10 @@ ct_perms_render (DonnaColumnType    *ct,
             arr = g_ptr_array_new_full (2, g_free);
         g_ptr_array_add (arr, g_strdup ("uid"));
     }
+    else
+        uid = (uid_t) val;
 
-    has = donna_node_get_gid (node, FALSE, &gid);
+    has = donna_node_get_gid (node, FALSE, &val);
     if (has == DONNA_NODE_VALUE_NONE)
     {
         g_object_set (renderer, "visible", FALSE, NULL);
@@ -695,6 +700,8 @@ ct_perms_render (DonnaColumnType    *ct,
             arr = g_ptr_array_new_full (1, g_free);
         g_ptr_array_add (arr, g_strdup ("gid"));
     }
+    else
+        gid = (gid_t) val;
 
     if (arr)
     {
@@ -726,6 +733,7 @@ ct_perms_set_tooltip (DonnaColumnType    *ct,
                       GtkTooltip         *tooltip)
 {
     struct tv_col_data *data = _data;
+    guint val;
     mode_t mode;
     uid_t uid;
     gid_t gid;
@@ -736,17 +744,23 @@ ct_perms_set_tooltip (DonnaColumnType    *ct,
     if (!data->format_tooltip)
         return FALSE;
 
-    has = donna_node_get_mode (node, FALSE, &mode);
+    has = donna_node_get_mode (node, FALSE, &val);
     if (has != DONNA_NODE_VALUE_SET)
         return FALSE;
+    else
+        mode = (mode_t) val;
 
-    has = donna_node_get_uid (node, FALSE, &uid);
+    has = donna_node_get_uid (node, FALSE, &val);
     if (has != DONNA_NODE_VALUE_SET)
         return FALSE;
+    else
+        uid = (uid_t) val;
 
-    has = donna_node_get_gid (node, FALSE, &gid);
+    has = donna_node_get_gid (node, FALSE, &val);
     if (has != DONNA_NODE_VALUE_SET)
         return FALSE;
+    else
+        gid = (gid_t) val;
 
     len = print_perms ((DonnaColumnTypePerms *) ct, data, b, 20,
             data->format_tooltip, mode, uid, gid);
@@ -786,8 +800,8 @@ ct_perms_node_cmp (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
-    gint val1;
-    gint val2;
+    guint val1;
+    guint val2;
     gchar *s1 = NULL;
     gchar *s2 = NULL;
 

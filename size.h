@@ -3,7 +3,6 @@
 #define __DONNA_SIZE_H__
 
 #include <glib.h>
-#include <sys/types.h>  /* off_t */
 
 G_BEGIN_DECLS
 
@@ -11,7 +10,7 @@ gssize
 donna_print_size (gchar         *str,
                   gssize         max,
                   const gchar   *fmt,
-                  off_t          size,
+                  guint64        size,
                   gint           digits,
                   gboolean       long_unit);
 

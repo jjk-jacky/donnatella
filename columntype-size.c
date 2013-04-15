@@ -287,13 +287,13 @@ ct_size_handle_context (DonnaColumnType    *ct,
     return FALSE;
 }
 
-#define warn_not_int64(node)    do {                    \
+#define warn_not_uint64(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
     g_warning ("Treeview '%s', Column '%s': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
             tv_name, col_name, data->property,          \
             donna_node_get_domain (node), location,     \
             G_VALUE_TYPE_NAME (&value),                 \
-            g_type_name (G_TYPE_INT64));                \
+            g_type_name (G_TYPE_UINT64));               \
     g_free (location);                                  \
 } while (0)
 
@@ -309,7 +309,7 @@ ct_size_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
-    off_t size;
+    guint64 size;
     gchar buf[20], *b = buf;
     gssize len;
 
@@ -343,14 +343,14 @@ ct_size_render (DonnaColumnType    *ct,
     /* DONNA_NODE_VALUE_SET */
     else if (!data->is_size)
     {
-        if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+        if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
         {
-            warn_not_int64 (node);
+            warn_not_uint64 (node);
             g_value_unset (&value);
             g_object_set (renderer, "visible", FALSE, NULL);
             return NULL;
         }
-        size = g_value_get_int64 (&value);
+        size = g_value_get_uint64 (&value);
         g_value_unset (&value);
     }
 
@@ -376,7 +376,7 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
                      GtkTooltip         *tooltip)
 {
     struct tv_col_data *data = _data;
-    off_t size;
+    guint64 size;
     gchar buf[20], *b = buf;
     gssize len;
     DonnaNodeHasValue has;
@@ -391,13 +391,13 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
         return FALSE;
     else if (!data->is_size)
     {
-        if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+        if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
         {
-            warn_not_int64 (node);
+            warn_not_uint64 (node);
             g_value_unset (&value);
             return FALSE;
         }
-        size = g_value_get_int64 (&value);
+        size = g_value_get_uint64 (&value);
         g_value_unset (&value);
     }
 
@@ -426,8 +426,8 @@ ct_size_node_cmp (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
-    off_t size1;
-    off_t size2;
+    guint64 size1;
+    guint64 size2;
 
     if (donna_node_get_node_type (node1) == DONNA_NODE_CONTAINER)
     {
@@ -451,25 +451,25 @@ ct_size_node_cmp (DonnaColumnType    *ct,
         donna_node_get (node1, TRUE, data->property, &has1, &value, NULL);
         if (has1 == DONNA_NODE_VALUE_SET)
         {
-            if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+            if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
             {
-                warn_not_int64 (node1);
+                warn_not_uint64 (node1);
                 has1 = DONNA_NODE_VALUE_ERROR;
             }
             else
-                size1 = g_value_get_int64 (&value);
+                size1 = g_value_get_uint64 (&value);
             g_value_unset (&value);
         }
         donna_node_get (node2, TRUE, data->property, &has2, &value, NULL);
         if (has2 == DONNA_NODE_VALUE_SET)
         {
-            if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+            if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
             {
-                warn_not_int64 (node2);
+                warn_not_uint64 (node2);
                 has2 = DONNA_NODE_VALUE_ERROR;
             }
             else
-                size2 = g_value_get_int64 (&value);
+                size2 = g_value_get_uint64 (&value);
             g_value_unset (&value);
         }
     }

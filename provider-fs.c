@@ -107,25 +107,25 @@ stat_node (DonnaNode *node, gchar *filename)
     if (stat (filename, &st) == -1)
         return FALSE;
 
-    g_value_init (&value, G_TYPE_INT);
+    g_value_init (&value, G_TYPE_UINT);
 
-    g_value_set_int (&value, (gint) st.st_mode);
+    g_value_set_uint (&value, (guint) st.st_mode);
     donna_node_set_property_value (node, "mode", &value);
-    g_value_set_int (&value, (gint) st.st_uid);
+    g_value_set_uint (&value, (guint) st.st_uid);
     donna_node_set_property_value (node, "uid", &value);
-    g_value_set_int (&value, (gint) st.st_gid);
+    g_value_set_uint (&value, (guint) st.st_gid);
     donna_node_set_property_value (node, "gid", &value);
 
     g_value_unset (&value);
-    g_value_init (&value, G_TYPE_INT64);
+    g_value_init (&value, G_TYPE_UINT64);
 
-    g_value_set_int64 (&value, (gint64) st.st_size);
+    g_value_set_uint64 (&value, (guint64) st.st_size);
     donna_node_set_property_value (node, "size", &value);
-    g_value_set_int64 (&value, (gint64) st.st_ctime);
+    g_value_set_uint64 (&value, (guint64) st.st_ctime);
     donna_node_set_property_value (node, "ctime", &value);
-    g_value_set_int64 (&value, (gint64) st.st_mtime);
+    g_value_set_uint64 (&value, (guint64) st.st_mtime);
     donna_node_set_property_value (node, "mtime", &value);
-    g_value_set_int64 (&value, (gint64) st.st_atime);
+    g_value_set_uint64 (&value, (guint64) st.st_atime);
     donna_node_set_property_value (node, "atime", &value);
 
     g_value_unset (&value);

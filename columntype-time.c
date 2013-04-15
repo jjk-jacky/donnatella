@@ -267,13 +267,13 @@ ct_time_handle_context (DonnaColumnType    *ct,
     return FALSE;
 }
 
-#define warn_not_int64(node)    do {                    \
+#define warn_not_uint64(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
     g_warning ("Treeview '%s', Column '%s': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
             tv_name, col_name, data->property,          \
             donna_node_get_domain (node), location,     \
             G_VALUE_TYPE_NAME (&value),                 \
-            g_type_name (G_TYPE_INT64));                \
+            g_type_name (G_TYPE_UINT64));               \
     g_free (location);                                  \
 } while (0)
 
@@ -289,7 +289,7 @@ ct_time_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
-    time_t time;
+    guint64 time;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
@@ -320,14 +320,14 @@ ct_time_render (DonnaColumnType    *ct,
     /* DONNA_NODE_VALUE_SET */
     else if (data->which == PROP_UNKNOWN)
     {
-        if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+        if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
         {
-            warn_not_int64 (node);
+            warn_not_uint64 (node);
             g_value_unset (&value);
             g_object_set (renderer, "visible", FALSE, NULL);
             return NULL;
         }
-        time = g_value_get_int64 (&value);
+        time = g_value_get_uint64 (&value);
         g_value_unset (&value);
     }
 
@@ -360,8 +360,8 @@ ct_time_node_cmp (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
-    time_t time1;
-    time_t time2;
+    guint64 time1;
+    guint64 time2;
 
     if (data->which == PROP_MTIME)
     {
@@ -385,25 +385,25 @@ ct_time_node_cmp (DonnaColumnType    *ct,
         donna_node_get (node1, FALSE, data->property, &has1, &value, NULL);
         if (has1 == DONNA_NODE_VALUE_SET)
         {
-            if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+            if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
             {
-                warn_not_int64 (node1);
+                warn_not_uint64 (node1);
                 has1 = DONNA_NODE_VALUE_ERROR;
             }
             else
-                time1 = g_value_get_int64 (&value);
+                time1 = g_value_get_uint64 (&value);
             g_value_unset (&value);
         }
         donna_node_get (node2, FALSE, data->property, &has2, &value, NULL);
         if (has2 == DONNA_NODE_VALUE_SET)
         {
-            if (G_VALUE_TYPE (&value) != G_TYPE_INT64)
+            if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
             {
-                warn_not_int64 (node2);
+                warn_not_uint64 (node2);
                 has2 = DONNA_NODE_VALUE_ERROR;
             }
             else
-                time2 = g_value_get_int64 (&value);
+                time2 = g_value_get_uint64 (&value);
             g_value_unset (&value);
         }
     }

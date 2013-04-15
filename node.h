@@ -142,25 +142,25 @@ DonnaNodeHasValue   donna_node_get_full_name        (DonnaNode          *node,
                                                      gchar             **full_name);
 DonnaNodeHasValue   donna_node_get_size             (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     off_t              *size);
+                                                     guint64            *size);
 DonnaNodeHasValue   donna_node_get_ctime            (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     time_t             *ctime);
+                                                     guint64            *ctime);
 DonnaNodeHasValue   donna_node_get_mtime            (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     time_t             *mtime);
+                                                     guint64            *mtime);
 DonnaNodeHasValue   donna_node_get_atime            (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     time_t             *atime);
+                                                     guint64            *atime);
 DonnaNodeHasValue   donna_node_get_mode             (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     mode_t             *mode);
+                                                     guint              *mode);
 DonnaNodeHasValue   donna_node_get_uid              (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     uid_t              *uid);
+                                                     guint              *uid);
 DonnaNodeHasValue   donna_node_get_gid              (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gid_t              *gid);
+                                                     guint              *gid);
 DonnaNodeHasValue   donna_node_get_Type             (DonnaNode          *node,
                                                      gboolean            is_blocking,
                                                      gchar             **user);

@@ -49,13 +49,13 @@
  * - icon: pointer to a #GdkPixbuf of the item's icon
  * - full-name: the name of the item (e.g. /full/path/to/file -- often times
  *   will be the same as location) (gchar *)
- * - size: the size of the item (off_t)
- * - ctime: the ctime of the item (time_t)
- * - mtime: the mtime of the item (time_t)
- * - atime: the atime of the item (time_t)
- * - mode: the mode (type&perms) of the item (mode_t)
- * - uid: the user id of the item (uid_t)
- * - gid: the group id of the item (gid_t)
+ * - size: the size of the item (guint64)
+ * - ctime: the ctime of the item (guint64)
+ * - mtime: the mtime of the item (guint64)
+ * - atime: the atime of the item (guint64)
+ * - mode: the mode (type&perms) of the item (guint)
+ * - uid: the user id of the item (guint)
+ * - gid: the group id of the item (guint)
  * - type: the type of the item (gchar *)
  *
  * provider, domain, location, node-type and filename are all read-only. Every
@@ -237,13 +237,13 @@ donna_node_init (DonnaNode *node)
 
     g_value_init (&priv->basic_props[BASIC_PROP_ICON].value,      G_TYPE_OBJECT);
     g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
-    g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value,     G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_MTIME].value,     G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_ATIME].value,     G_TYPE_INT64);
-    g_value_init (&priv->basic_props[BASIC_PROP_MODE].value,      G_TYPE_INT);
-    g_value_init (&priv->basic_props[BASIC_PROP_UID].value,       G_TYPE_INT);
-    g_value_init (&priv->basic_props[BASIC_PROP_GID].value,       G_TYPE_INT);
+    g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_UINT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value,     G_TYPE_UINT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_MTIME].value,     G_TYPE_UINT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_ATIME].value,     G_TYPE_UINT64);
+    g_value_init (&priv->basic_props[BASIC_PROP_MODE].value,      G_TYPE_UINT);
+    g_value_init (&priv->basic_props[BASIC_PROP_UID].value,       G_TYPE_UINT);
+    g_value_init (&priv->basic_props[BASIC_PROP_GID].value,       G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_TYPE].value,      G_TYPE_STRING);
 
     priv->toggle_count = 1;
@@ -960,13 +960,13 @@ donna_node_get_name (DonnaNode *node)
     return name;
 }
 
-typedef gint64 (*value_dup_fn) (const GValue *value);
+typedef guint64 (*value_dup_fn) (const GValue *value);
 
 static DonnaNodeHasValue
 get_basic_prop (DonnaNode   *node,
                 gboolean     is_blocking,
                 gint         basic_id,
-                gint64      *dest,
+                guint64     *dest,
                 value_dup_fn dup_value)
 {
     DonnaNodePrivate *priv = node->priv;
@@ -1009,7 +1009,7 @@ grab_basic_value:
 }
 #define _get_basic_prop(BASIC_PROP, get_fn, type, var) do { \
     DonnaNodeHasValue has;                                  \
-    gint64 value;                                           \
+    guint64 value;                                          \
     has = get_basic_prop (node, is_blocking, BASIC_PROP,    \
             &value, (value_dup_fn) get_fn);                 \
     *var = (type) value;                                    \
@@ -1082,9 +1082,9 @@ donna_node_get_full_name (DonnaNode  *node,
 DonnaNodeHasValue
 donna_node_get_size (DonnaNode  *node,
                      gboolean    is_blocking,
-                     off_t      *size)
+                     guint64    *size)
 {
-    _get_basic_prop (BASIC_PROP_SIZE, g_value_get_int64, off_t, size);
+    _get_basic_prop (BASIC_PROP_SIZE, g_value_get_uint64, guint64, size);
 }
 
 /**
@@ -1105,9 +1105,9 @@ donna_node_get_size (DonnaNode  *node,
 DonnaNodeHasValue
 donna_node_get_ctime (DonnaNode *node,
                       gboolean   is_blocking,
-                      time_t    *ctime)
+                      guint64   *ctime)
 {
-    _get_basic_prop (BASIC_PROP_CTIME, g_value_get_int64, time_t, ctime);
+    _get_basic_prop (BASIC_PROP_CTIME, g_value_get_uint64, guint64, ctime);
 }
 
 /**
@@ -1128,9 +1128,9 @@ donna_node_get_ctime (DonnaNode *node,
 DonnaNodeHasValue
 donna_node_get_mtime (DonnaNode *node,
                       gboolean   is_blocking,
-                      time_t    *mtime)
+                      guint64   *mtime)
 {
-    _get_basic_prop (BASIC_PROP_MTIME, g_value_get_int64, time_t, mtime);
+    _get_basic_prop (BASIC_PROP_MTIME, g_value_get_uint64, guint64, mtime);
 }
 
 /**
@@ -1151,9 +1151,9 @@ donna_node_get_mtime (DonnaNode *node,
 DonnaNodeHasValue
 donna_node_get_atime (DonnaNode *node,
                       gboolean   is_blocking,
-                      time_t    *atime)
+                      guint64   *atime)
 {
-    _get_basic_prop (BASIC_PROP_ATIME, g_value_get_int64, time_t, atime);
+    _get_basic_prop (BASIC_PROP_ATIME, g_value_get_uint64, guint64, atime);
 }
 
 /**
@@ -1174,9 +1174,9 @@ donna_node_get_atime (DonnaNode *node,
 DonnaNodeHasValue
 donna_node_get_mode (DonnaNode *node,
                      gboolean   is_blocking,
-                     mode_t    *mode)
+                     guint     *mode)
 {
-    _get_basic_prop (BASIC_PROP_MODE, g_value_get_int, mode_t, mode);
+    _get_basic_prop (BASIC_PROP_MODE, g_value_get_uint, guint, mode);
 }
 
 /**
@@ -1197,9 +1197,9 @@ donna_node_get_mode (DonnaNode *node,
 DonnaNodeHasValue
 donna_node_get_uid (DonnaNode  *node,
                     gboolean    is_blocking,
-                    uid_t      *uid)
+                    guint      *uid)
 {
-    _get_basic_prop (BASIC_PROP_UID, g_value_get_int, uid_t, uid);
+    _get_basic_prop (BASIC_PROP_UID, g_value_get_uint, guint, uid);
 }
 
 /**
@@ -1220,9 +1220,9 @@ donna_node_get_uid (DonnaNode  *node,
 DonnaNodeHasValue
 donna_node_get_gid (DonnaNode *node,
                     gboolean   is_blocking,
-                    gid_t     *gid)
+                    guint     *gid)
 {
-    _get_basic_prop (BASIC_PROP_GID, g_value_get_int, gid_t, gid);
+    _get_basic_prop (BASIC_PROP_GID, g_value_get_uint, guint, gid);
 }
 
 /**

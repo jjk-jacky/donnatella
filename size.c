@@ -7,7 +7,7 @@ gssize
 donna_print_size (gchar       *str,
                   gssize       max,
                   const gchar *fmt,
-                  off_t        size,
+                  guint64      size,
                   gint         digits,
                   gboolean     long_unit)
 {
