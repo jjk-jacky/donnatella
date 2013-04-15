@@ -172,7 +172,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property);
         data->property = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
 
         data->is_size = streq (s, "size");
     }

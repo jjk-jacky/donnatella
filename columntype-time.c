@@ -176,7 +176,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property);
         data->property = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
 
         if (streq (s, "mtime"))
             data->which = PROP_MTIME;
