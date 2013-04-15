@@ -51,7 +51,7 @@ typedef enum
     DONNA_NODE_MODE_EXISTS          = (1 << 6),
     DONNA_NODE_UID_EXISTS           = (1 << 7),
     DONNA_NODE_GID_EXISTS           = (1 << 8),
-    DONNA_NODE_TYPE_EXISTS          = (1 << 9),
+    DONNA_NODE_DESC_EXISTS          = (1 << 9),
 
     DONNA_NODE_NAME_WRITABLE        = (1 << 10),
     DONNA_NODE_ICON_WRITABLE        = (1 << 11),
@@ -63,14 +63,14 @@ typedef enum
     DONNA_NODE_MODE_WRITABLE        = (1 << 17),
     DONNA_NODE_UID_WRITABLE         = (1 << 18),
     DONNA_NODE_GID_WRITABLE         = (1 << 19),
-    DONNA_NODE_TYPE_WRITABLE        = (1 << 20),
+    DONNA_NODE_DESC_WRITABLE        = (1 << 20),
 
     DONNA_NODE_ALL_EXISTS           = (DONNA_NODE_ICON_EXISTS
         | DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_SIZE_EXISTS
         | DONNA_NODE_CTIME_EXISTS | DONNA_NODE_MTIME_EXISTS
         | DONNA_NODE_ATIME_EXISTS | DONNA_NODE_MODE_EXISTS
         | DONNA_NODE_UID_EXISTS  | DONNA_NODE_GID_EXISTS
-        | DONNA_NODE_TYPE_EXISTS)
+        | DONNA_NODE_DESC_EXISTS)
 } DonnaNodeFlags;
 
 typedef enum
@@ -161,9 +161,9 @@ DonnaNodeHasValue   donna_node_get_uid              (DonnaNode          *node,
 DonnaNodeHasValue   donna_node_get_gid              (DonnaNode          *node,
                                                      gboolean            is_blocking,
                                                      guint              *gid);
-DonnaNodeHasValue   donna_node_get_Type             (DonnaNode          *node,
+DonnaNodeHasValue   donna_node_get_desc             (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     gchar             **user);
+                                                     gchar             **desc);
 DonnaTask *         donna_node_refresh_task         (DonnaNode          *node,
                                                      GError            **error,
                                                      const gchar        *first_name,

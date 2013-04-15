@@ -56,7 +56,7 @@
  * - mode: the mode (type&perms) of the item (guint)
  * - uid: the user id of the item (guint)
  * - gid: the group id of the item (guint)
- * - type: the type of the item (gchar *)
+ * - desc: the desc of the item (gchar *)
  *
  * provider, domain, location, node-type and filename are all read-only. Every
  * other property might be writable.
@@ -132,7 +132,7 @@ const gchar *node_basic_properties[] =
     "mode",
     "uid",
     "gid",
-    "type",
+    "desc",
     NULL
 };
 
@@ -151,7 +151,7 @@ enum
     BASIC_PROP_MODE,
     BASIC_PROP_UID,
     BASIC_PROP_GID,
-    BASIC_PROP_TYPE,
+    BASIC_PROP_DESC,
     NB_BASIC_PROPS
 };
 
@@ -171,7 +171,7 @@ static DonnaNodeFlags prop_writable_flags[] =
     DONNA_NODE_MODE_WRITABLE,
     DONNA_NODE_UID_WRITABLE,
     DONNA_NODE_GID_WRITABLE,
-    DONNA_NODE_TYPE_WRITABLE
+    DONNA_NODE_DESC_WRITABLE
 };
 
 struct _DonnaNodePrivate
@@ -244,7 +244,7 @@ donna_node_init (DonnaNode *node)
     g_value_init (&priv->basic_props[BASIC_PROP_MODE].value,      G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_UID].value,       G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_GID].value,       G_TYPE_UINT);
-    g_value_init (&priv->basic_props[BASIC_PROP_TYPE].value,      G_TYPE_STRING);
+    g_value_init (&priv->basic_props[BASIC_PROP_DESC].value,      G_TYPE_STRING);
 
     priv->toggle_count = 1;
 }
@@ -358,8 +358,8 @@ donna_node_new (DonnaProvider       *provider,
         priv->basic_props[BASIC_PROP_UID].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
     if (flags & DONNA_NODE_GID_EXISTS)
         priv->basic_props[BASIC_PROP_GID].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
-    if (flags & DONNA_NODE_TYPE_EXISTS)
-        priv->basic_props[BASIC_PROP_TYPE].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
+    if (flags & DONNA_NODE_DESC_EXISTS)
+        priv->basic_props[BASIC_PROP_DESC].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
 
     return node;
 }
@@ -1226,16 +1226,13 @@ donna_node_get_gid (DonnaNode *node,
 }
 
 /**
- * donna_node_get_Type:
- * @node: Node to get the type from
+ * donna_node_get_desc:
+ * @node: Node to get the desc from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's type
+ * @icon: Return location for @node's desc
  *
- * Helper to quickly get the property type of @node
+ * Helper to quickly get the property desc of @node
  * Free it with g_free() when done.
- *
- * Note: make sure not to use dona_node_get_type() (w/ lowercase t) as this is
- * an internal function, to get the GType for %DonnaNode
  *
  * If @is_blocking is %FALSE it might return %DONNA_NODE_VALUE_NEED_REFRESH
  * while with %TRUE a refresh will automatically be called (within/blocking the
@@ -1245,12 +1242,11 @@ donna_node_get_gid (DonnaNode *node,
  * Returns: Whether the value was set, needs a refresh or doesn't exists
  */
 DonnaNodeHasValue
-donna_node_get_Type (DonnaNode  *node,
+donna_node_get_desc (DonnaNode  *node,
                      gboolean    is_blocking,
-                     gchar     **type)
+                     gchar     **desc)
 {
-    return get_basic_prop (node, is_blocking, BASIC_PROP_TYPE,
-            (gpointer *) type, (value_dup_fn) g_value_dup_string);
+    _get_basic_prop (BASIC_PROP_DESC, g_value_dup_string, gchar *, desc);
 }
 
 struct refresh_data
