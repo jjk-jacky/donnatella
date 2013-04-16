@@ -10,6 +10,7 @@
 #include "columntype-size.h"
 #include "columntype-time.h"
 #include "columntype-perms.h"
+#include "columntype-text.h"
 #include "node.h"
 #include "macros.h"
 
@@ -30,6 +31,7 @@ enum
     COL_TYPE_SIZE,
     COL_TYPE_TIME,
     COL_TYPE_PERMS,
+    COL_TYPE_TEXT,
     NB_COL_TYPES
 };
 
@@ -145,6 +147,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_TIME].load = donna_column_type_time_new;
     priv->column_types[COL_TYPE_PERMS].name = "perms";
     priv->column_types[COL_TYPE_PERMS].load = donna_column_type_perms_new;
+    priv->column_types[COL_TYPE_TEXT].name = "text";
+    priv->column_types[COL_TYPE_TEXT].load = donna_column_type_text_new;
 
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
