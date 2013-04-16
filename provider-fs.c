@@ -1,11 +1,12 @@
 
-#include <glib-object.h>
+#include <gtk/gtk.h>
 #include <string.h>                 /* strrchr() */
 #include <sys/stat.h>
 #include "provider-fs.h"
 #include "provider.h"
 #include "node.h"
 #include "task.h"
+#include "macros.h"
 
 struct _DonnaProviderFsPrivate
 {
@@ -99,12 +100,12 @@ provider_fs_get_domain (DonnaProvider *provider)
 }
 
 static inline gboolean
-stat_node (DonnaNode *node, gchar *filename)
+stat_node (DonnaNode *node, const gchar *filename)
 {
     struct stat st;
     GValue value = G_VALUE_INIT;
 
-    if (stat (filename, &st) == -1)
+    if (lstat (filename, &st) == -1)
         return FALSE;
 
     g_value_init (&value, G_TYPE_UINT);
@@ -132,21 +133,81 @@ stat_node (DonnaNode *node, gchar *filename)
     return TRUE;
 }
 
+static inline gboolean
+set_icon (DonnaNode *node, const gchar *filename)
+{
+    gchar *mt;
+    gboolean uncertain;
+    GIcon *icon;
+    GtkIconInfo *ii;
+    GValue value = G_VALUE_INIT;
+
+    mt = g_content_type_guess (filename, NULL, 0, &uncertain);
+    if (!mt)
+        return FALSE;
+
+    icon = g_content_type_get_icon (mt);
+    if (!icon)
+    {
+        g_free (mt);
+        return FALSE;
+    }
+    ii = gtk_icon_theme_lookup_by_gicon (gtk_icon_theme_get_default (),
+            icon,/* FIXME: get it from somewhere? */ 16, 0);
+    if (!ii)
+    {
+        g_object_unref (icon);
+        g_free (mt);
+        return FALSE;
+    }
+
+    g_value_init (&value, G_TYPE_OBJECT);
+    g_value_take_object (&value, gtk_icon_info_load_icon (ii, NULL));
+    donna_node_set_property_value (node, "icon", &value);
+    g_value_unset (&value);
+
+    g_object_unref (ii);
+    g_object_unref (icon);
+    g_free (mt);
+    return TRUE;
+}
+
 static gboolean
 refresher (DonnaTask    *task,
            DonnaNode    *node,
            const gchar  *name)
 {
-    gboolean ret;
+    gboolean ret = FALSE;
     gchar *filename;
 
     filename = donna_node_get_filename (node);
 
-    /* FIXME if called for the mime-type property, do that. else it's one of the
-     * "main" ones (from stat) */
+    if (streq (name, "icon"))
+        ret = set_icon (node, filename);
+    else if (streq (name, "desc"))
+    {
+        gchar *mt;
+        gchar *desc;
+        GValue value = G_VALUE_INIT;
 
-    ret = stat_node (node, filename);
+        mt = g_content_type_guess (filename, NULL, 0, NULL);
+        if (!mt)
+            goto done;
+        desc = g_content_type_get_description (mt);
+        g_free (mt);
+        if (!desc)
+            goto done;
+        g_value_init (&value, G_TYPE_STRING);
+        g_value_take_string (&value, desc);
 
+        donna_node_set_property_value (node, "desc", &value);
+        g_value_unset (&value);
+        ret = TRUE;
+    }
+    else
+        ret = stat_node (node, filename);
+
+done:
     g_free (filename);
     return ret;
 }
@@ -170,6 +231,7 @@ new_node (DonnaProviderBase *_provider,
     DonnaProviderBaseClass *klass;
     DonnaNode       *node;
     DonnaNodeType    type;
+    DonnaNodeFlags   flags;
     const gchar     *name;
     gboolean         free_filename = FALSE;
 
@@ -202,6 +264,10 @@ new_node (DonnaProviderBase *_provider,
         /* we go past the last / */
         name = strrchr (location, '/') + 1;
 
+    flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE;
+    if (type == DONNA_NODE_CONTAINER)
+        flags &= ~(DONNA_NODE_ICON_EXISTS | DONNA_NODE_DESC_EXISTS);
+
     node = donna_node_new (DONNA_PROVIDER (_provider),
             location,
             type,
@@ -209,10 +275,13 @@ new_node (DonnaProviderBase *_provider,
             refresher,
             setter,
             name,
-            DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE);
+            flags);
 
     /* this will load up all properties from a stat() call */
     stat_node (node, filename);
+    /* files only: icon is very likely to be used, so let's load it up */
+    if (type == DONNA_NODE_ITEM)
+        set_icon (node, filename);
 
     if (free_filename)
         g_free ((gchar *) filename);
