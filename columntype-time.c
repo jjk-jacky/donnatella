@@ -27,12 +27,14 @@ enum
 
 struct tv_col_data
 {
-    gint8    which;
-    gchar   *property;
-    gchar   *format;
-    gint8    which_tooltip;
-    gchar   *property_tooltip;
-    gchar   *format_tooltip;
+    gint8             which;
+    gchar            *property;
+    gchar            *format;
+    DonnaTimeOptions  options;
+    gint8             which_tooltip;
+    gchar            *property_tooltip;
+    gchar            *format_tooltip;
+    DonnaTimeOptions  options_tooltip;
 };
 
 struct _DonnaColumnTypeTimePrivate
@@ -219,6 +221,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data = *_data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
+    guint sec;
 
     config = donna_app_peek_config (cttime->priv->app);
 
@@ -243,11 +246,30 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, tv_name, col_name, "time",
-            "format", "%F %T");
+            "format", "%O");
     if (!streq (data->format, s))
     {
         g_free (data->format);
         data->format = s;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else
+        g_free (s);
+
+    sec = donna_config_get_uint_column (config, tv_name, col_name, "time",
+            "age_span_seconds", 7*24*3600);
+    if (data->options.age_span_seconds != sec)
+    {
+        data->options.age_span_seconds = sec;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    s = donna_config_get_string_column (config, tv_name, col_name, "time",
+            "age_fallback_fmt", "%F %T");
+    if (!streq (data->options.age_fallback_fmt, s))
+    {
+        g_free ((gchar *) data->options.age_fallback_fmt);
+        data->options.age_fallback_fmt = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
     else
@@ -282,6 +304,23 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
+    sec = donna_config_get_uint_column (config, tv_name, col_name, NULL,
+            "age_span_seconds_tooltip", 7*24*3600);
+    if (data->options_tooltip.age_span_seconds != sec)
+    {
+        data->options_tooltip.age_span_seconds = sec;
+    }
+
+    s = donna_config_get_string_column (config, tv_name, col_name, NULL,
+            "age_fallback_fmt_tooltip", "%F %T");
+    if (!streq (data->options_tooltip.age_fallback_fmt, s))
+    {
+        g_free ((gchar *) data->options_tooltip.age_fallback_fmt);
+        data->options_tooltip.age_fallback_fmt = s;
+    }
+    else
+        g_free (s);
+
     return need;
 }
 
@@ -295,8 +334,10 @@ ct_time_free_data (DonnaColumnType    *ct,
 
     g_free (data->property);
     g_free (data->format);
+    g_free ((gchar *) data->options.age_fallback_fmt);
     g_free (data->property_tooltip);
     g_free (data->format_tooltip);
+    g_free ((gchar *) data->options_tooltip.age_fallback_fmt);
     g_free (data);
 }
 
@@ -402,7 +443,7 @@ ct_time_render (DonnaColumnType    *ct,
         g_value_unset (&value);
     }
 
-    s = donna_print_time (time, data->format);
+    s = donna_print_time (time, data->format, &data->options);
     g_object_set (renderer, "visible", TRUE, "text", s, NULL);
     g_free (s);
     return NULL;
@@ -451,7 +492,7 @@ ct_time_set_tooltip (DonnaColumnType    *ct,
         g_value_unset (&value);
     }
 
-    s = donna_print_time (time, data->format_tooltip);
+    s = donna_print_time (time, data->format_tooltip, &data->options_tooltip);
     gtk_tooltip_set_text (tooltip, s);
     g_free (s);
     return TRUE;

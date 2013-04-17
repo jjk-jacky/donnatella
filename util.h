@@ -7,7 +7,15 @@
 
 G_BEGIN_DECLS
 
-gchar *         donna_print_time            (guint64 ts, const gchar *fmt);
+typedef struct
+{
+    guint        age_span_seconds;
+    const gchar *age_fallback_fmt;
+} DonnaTimeOptions;
+
+gchar *         donna_print_time            (guint64             ts,
+                                             const gchar        *fmt,
+                                             DonnaTimeOptions   *options);
 GValue *        duplicate_gvalue            (const GValue *src);
 
 G_END_DECLS
