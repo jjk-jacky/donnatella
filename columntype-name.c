@@ -9,6 +9,15 @@
 #include "sort.h"
 #include "macros.h"
 
+enum
+{
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
 struct tv_col_data
 {
     guint                is_locale_based    : 1;
@@ -24,9 +33,18 @@ struct _DonnaColumnTypeNamePrivate
     GPtrArray                   *domains;
 };
 
+static void             ct_name_set_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     const GValue       *value,
+                                                     GParamSpec         *pspec);
+static void             ct_name_get_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     GValue             *value,
+                                                     GParamSpec         *pspec);
 static void             ct_name_finalize            (GObject            *object);
 
 /* ColumnType */
+static const gchar *    ct_name_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_name_get_renderers       (DonnaColumnType    *ct);
 static gpointer         ct_name_get_data            (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
@@ -40,11 +58,6 @@ static void             ct_name_free_data           (DonnaColumnType    *ct,
                                                      const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_name_get_props           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data);
-static GtkSortType      ct_name_get_default_sort_order
-                                                    (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer            data);
@@ -82,12 +95,12 @@ static gint             ct_name_node_cmp            (DonnaColumnType    *ct,
 static void
 ct_name_columntype_init (DonnaColumnTypeInterface *interface)
 {
+    interface->get_name                 = ct_name_get_name;
     interface->get_renderers            = ct_name_get_renderers;
     interface->get_data                 = ct_name_get_data;
     interface->refresh_data             = ct_name_refresh_data;
     interface->free_data                = ct_name_free_data;
     interface->get_props                = ct_name_get_props;
-    interface->get_default_sort_order   = ct_name_get_default_sort_order;
     interface->get_options_menu         = ct_name_get_options_menu;
     interface->handle_context           = ct_name_handle_context;
     interface->render                   = ct_name_render;
@@ -101,7 +114,11 @@ donna_column_type_name_class_init (DonnaColumnTypeNameClass *klass)
     GObjectClass *o_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = ct_name_finalize;
+    o_class->set_property   = ct_name_set_property;
+    o_class->get_property   = ct_name_get_property;
+    o_class->finalize       = ct_name_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaColumnTypeNamePrivate));
 }
@@ -133,6 +150,37 @@ ct_name_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_name_parent_class)->finalize (object);
+}
+
+static void
+ct_name_set_property (GObject            *object,
+                      guint               prop_id,
+                      const GValue       *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        DONNA_COLUMNTYPE_NAME (object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+ct_name_get_property (GObject            *object,
+                      guint               prop_id,
+                      GValue             *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, DONNA_COLUMNTYPE_NAME (object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static const gchar *
+ct_name_get_name (DonnaColumnType *ct)
+{
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_NAME (ct), NULL);
+    return "name";
 }
 
 static const gchar *
@@ -237,18 +285,6 @@ ct_name_get_props (DonnaColumnType  *ct,
     g_ptr_array_add (props, g_strdup ("icon"));
 
     return props;
-}
-
-static GtkSortType
-ct_name_get_default_sort_order (DonnaColumnType *ct,
-                                const gchar     *tv_name,
-                                const gchar     *col_name,
-                                gpointer        data)
-{
-    return (donna_config_get_boolean_column (donna_app_peek_config (
-                    DONNA_COLUMNTYPE_NAME (ct)->priv->app),
-                tv_name, col_name, "columntypes/name", "desc_first", FALSE))
-        ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 }
 
 static GtkMenu *
@@ -479,17 +515,4 @@ ct_name_node_cmp (DonnaColumnType    *ct,
     g_free (name1);
     g_free (name2);
     return ret;
-}
-
-DonnaColumnType *
-donna_column_type_name_new (DonnaApp *app)
-{
-    DonnaColumnType *ct;
-
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-
-    ct = g_object_new (DONNA_TYPE_COLUMNTYPE_NAME, NULL);
-    DONNA_COLUMNTYPE_NAME (ct)->priv->app = g_object_ref (app);
-
-    return ct;
 }

@@ -39,6 +39,7 @@ struct _DonnaColumnTypeInterface
     GTypeInterface parent;
 
     /* virtual table */
+    const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
     gpointer            (*get_data)         (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
@@ -92,6 +93,7 @@ struct _DonnaColumnTypeInterface
                                              DonnaNode          *node2);
 };
 
+const gchar *   donna_columntype_get_name       (DonnaColumnType    *ct);
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
 gpointer        donna_columntype_get_data       (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,

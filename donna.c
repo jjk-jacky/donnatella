@@ -44,9 +44,9 @@ struct _DonnaDonnaPrivate
     DonnaTreeView   *active_list;
     struct col_type
     {
-        const gchar           *name;
-        column_type_loader_fn  load;
-        DonnaColumnType       *ct;
+        const gchar     *name;
+        GType            type;
+        DonnaColumnType *ct;
     } column_types[NB_COL_TYPES];
 };
 
@@ -140,15 +140,15 @@ donna_donna_init (DonnaDonna *donna)
 
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
-    priv->column_types[COL_TYPE_NAME].load = donna_column_type_name_new;
+    priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMNTYPE_NAME;
     priv->column_types[COL_TYPE_SIZE].name = "size";
-    priv->column_types[COL_TYPE_SIZE].load = donna_column_type_size_new;
+    priv->column_types[COL_TYPE_SIZE].type = DONNA_TYPE_COLUMNTYPE_SIZE;
     priv->column_types[COL_TYPE_TIME].name = "time";
-    priv->column_types[COL_TYPE_TIME].load = donna_column_type_time_new;
+    priv->column_types[COL_TYPE_TIME].type = DONNA_TYPE_COLUMNTYPE_TIME;
     priv->column_types[COL_TYPE_PERMS].name = "perms";
-    priv->column_types[COL_TYPE_PERMS].load = donna_column_type_perms_new;
+    priv->column_types[COL_TYPE_PERMS].type = DONNA_TYPE_COLUMNTYPE_PERMS;
     priv->column_types[COL_TYPE_TEXT].name = "text";
-    priv->column_types[COL_TYPE_TEXT].load = donna_column_type_text_new;
+    priv->column_types[COL_TYPE_TEXT].type = DONNA_TYPE_COLUMNTYPE_TEXT;
 
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
@@ -341,7 +341,8 @@ donna_donna_get_columntype (DonnaApp       *app,
         if (streq (type, priv->column_types[i].name))
         {
             if (!priv->column_types[i].ct)
-                priv->column_types[i].ct = priv->column_types[i].load (app);
+                priv->column_types[i].ct = g_object_new (
+                        priv->column_types[i].type, "app", app, NULL);
             break;
         }
     }

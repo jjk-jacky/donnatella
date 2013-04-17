@@ -8,6 +8,15 @@
 #include "sort.h"
 #include "macros.h"
 
+enum
+{
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
 struct tv_col_data
 {
     gchar            *property;
@@ -19,9 +28,18 @@ struct _DonnaColumnTypeTextPrivate
     DonnaApp                    *app;
 };
 
+static void             ct_text_set_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     const GValue       *value,
+                                                     GParamSpec         *pspec);
+static void             ct_text_get_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     GValue             *value,
+                                                     GParamSpec         *pspec);
 static void             ct_text_finalize            (GObject            *object);
 
 /* ColumnType */
+static const gchar *    ct_text_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_text_get_renderers       (DonnaColumnType    *ct);
 static gpointer         ct_text_get_data            (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
@@ -38,21 +56,6 @@ static GPtrArray *      ct_text_get_props           (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer            data);
-static GtkSortType      ct_text_get_default_sort_order
-                                                    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data);
-static GtkMenu *        ct_text_get_options_menu    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data);
-static gboolean         ct_text_handle_context      (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
-                                                     DonnaTreeView      *treeview);
 static GPtrArray *      ct_text_render              (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
@@ -66,27 +69,17 @@ static gint             ct_text_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
-static gboolean         ct_text_set_tooltip         (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data,
-                                                     guint               index,
-                                                     DonnaNode          *node,
-                                                     GtkTooltip         *tooltip);
 
 static void
 ct_text_columntype_init (DonnaColumnTypeInterface *interface)
 {
+    interface->get_name                 = ct_text_get_name;
     interface->get_renderers            = ct_text_get_renderers;
     interface->get_data                 = ct_text_get_data;
     interface->refresh_data             = ct_text_refresh_data;
     interface->free_data                = ct_text_free_data;
     interface->get_props                = ct_text_get_props;
-    interface->get_default_sort_order   = ct_text_get_default_sort_order;
-    interface->get_options_menu         = ct_text_get_options_menu;
-    interface->handle_context           = ct_text_handle_context;
     interface->render                   = ct_text_render;
-    interface->set_tooltip              = ct_text_set_tooltip;
     interface->node_cmp                 = ct_text_node_cmp;
 }
 
@@ -96,7 +89,11 @@ donna_column_type_text_class_init (DonnaColumnTypeTextClass *klass)
     GObjectClass *o_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = ct_text_finalize;
+    o_class->set_property   = ct_text_set_property;
+    o_class->get_property   = ct_text_get_property;
+    o_class->finalize       = ct_text_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaColumnTypeTextPrivate));
 }
@@ -126,6 +123,37 @@ ct_text_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_text_parent_class)->finalize (object);
+}
+
+static void
+ct_text_set_property (GObject            *object,
+                      guint               prop_id,
+                      const GValue       *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        DONNA_COLUMNTYPE_TEXT (object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+ct_text_get_property (GObject            *object,
+                      guint               prop_id,
+                      GValue             *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, DONNA_COLUMNTYPE_TEXT (object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static const gchar *
+ct_text_get_name (DonnaColumnType *ct)
+{
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TEXT (ct), NULL);
+    return "text";
 }
 
 static const gchar *
@@ -226,40 +254,6 @@ ct_text_get_props (DonnaColumnType  *ct,
     return props;
 }
 
-static GtkSortType
-ct_text_get_default_sort_order (DonnaColumnType *ct,
-                                const gchar     *tv_name,
-                                const gchar     *col_name,
-                                gpointer        data)
-{
-    return (donna_config_get_boolean_column (donna_app_peek_config (
-                    DONNA_COLUMNTYPE_TEXT (ct)->priv->app),
-                tv_name, col_name, "columntypes/text", "desc_first", FALSE))
-        ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-}
-
-static GtkMenu *
-ct_text_get_options_menu (DonnaColumnType    *ct,
-                          const gchar        *tv_name,
-                          const gchar        *col_name,
-                          gpointer            data)
-{
-    /* FIXME */
-    return NULL;
-}
-
-static gboolean
-ct_text_handle_context (DonnaColumnType    *ct,
-                        const gchar        *tv_name,
-                        const gchar        *col_name,
-                        gpointer            data,
-                        DonnaNode          *node,
-                        DonnaTreeView      *treeview)
-{
-    /* FIXME */
-    return FALSE;
-}
-
 #define warn_not_string(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
     g_warning ("Treeview '%s', Column '%s': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
@@ -315,18 +309,6 @@ ct_text_render (DonnaColumnType    *ct,
             NULL);
     g_value_unset (&value);
     return NULL;
-}
-
-static gboolean
-ct_text_set_tooltip (DonnaColumnType    *ct,
-                     const gchar        *tv_name,
-                     const gchar        *col_name,
-                     gpointer            _data,
-                     guint               index,
-                     DonnaNode          *node,
-                     GtkTooltip         *tooltip)
-{
-    return FALSE;
 }
 
 static gint
@@ -386,17 +368,4 @@ done:
     g_free (s1);
     g_free (s2);
     return ret;
-}
-
-DonnaColumnType *
-donna_column_type_text_new (DonnaApp *app)
-{
-    DonnaColumnType *ct;
-
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-
-    ct = g_object_new (DONNA_TYPE_COLUMNTYPE_TEXT, NULL);
-    DONNA_COLUMNTYPE_TEXT (ct)->priv->app = g_object_ref (app);
-
-    return ct;
 }

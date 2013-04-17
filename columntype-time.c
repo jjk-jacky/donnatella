@@ -10,10 +10,19 @@
 
 enum
 {
-    PROP_UNKNOWN = 0,
-    PROP_MTIME,
-    PROP_ATIME,
-    PROP_CTIME,
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
+enum
+{
+    WHICH_OTHER = 0,
+    WHICH_MTIME,
+    WHICH_ATIME,
+    WHICH_CTIME,
 };
 
 struct tv_col_data
@@ -28,9 +37,18 @@ struct _DonnaColumnTypeTimePrivate
     DonnaApp                    *app;
 };
 
+static void             ct_time_set_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     const GValue       *value,
+                                                     GParamSpec         *pspec);
+static void             ct_time_get_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     GValue             *value,
+                                                     GParamSpec         *pspec);
 static void             ct_time_finalize            (GObject            *object);
 
 /* ColumnType */
+static const gchar *    ct_time_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_time_get_renderers       (DonnaColumnType    *ct);
 static gpointer         ct_time_get_data            (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
@@ -44,11 +62,6 @@ static void             ct_time_free_data           (DonnaColumnType    *ct,
                                                      const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_time_get_props           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data);
-static GtkSortType      ct_time_get_default_sort_order
-                                                    (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer            data);
@@ -86,12 +99,12 @@ static gboolean         ct_time_set_tooltip         (DonnaColumnType    *ct,
 static void
 ct_time_columntype_init (DonnaColumnTypeInterface *interface)
 {
+    interface->get_name                 = ct_time_get_name;
     interface->get_renderers            = ct_time_get_renderers;
     interface->get_data                 = ct_time_get_data;
     interface->refresh_data             = ct_time_refresh_data;
     interface->free_data                = ct_time_free_data;
     interface->get_props                = ct_time_get_props;
-    interface->get_default_sort_order   = ct_time_get_default_sort_order;
     interface->get_options_menu         = ct_time_get_options_menu;
     interface->handle_context           = ct_time_handle_context;
     interface->render                   = ct_time_render;
@@ -105,7 +118,11 @@ donna_column_type_time_class_init (DonnaColumnTypeTimeClass *klass)
     GObjectClass *o_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = ct_time_finalize;
+    o_class->set_property   = ct_time_set_property;
+    o_class->get_property   = ct_time_get_property;
+    o_class->finalize       = ct_time_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaColumnTypeTimePrivate));
 }
@@ -136,6 +153,38 @@ ct_time_finalize (GObject *object)
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_time_parent_class)->finalize (object);
 }
+
+static void
+ct_time_set_property (GObject            *object,
+                      guint               prop_id,
+                      const GValue       *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        DONNA_COLUMNTYPE_TIME (object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+ct_time_get_property (GObject            *object,
+                      guint               prop_id,
+                      GValue             *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, DONNA_COLUMNTYPE_TIME (object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static const gchar *
+ct_time_get_name (DonnaColumnType *ct)
+{
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
+    return "time";
+}
+
 
 static const gchar *
 ct_time_get_renderers (DonnaColumnType   *ct)
@@ -179,13 +228,13 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         need = DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
 
         if (streq (s, "mtime"))
-            data->which = PROP_MTIME;
+            data->which = WHICH_MTIME;
         else if (streq (s, "atime"))
-            data->which = PROP_ATIME;
+            data->which = WHICH_ATIME;
         else if (streq (s, "ctime"))
-            data->which = PROP_CTIME;
+            data->which = WHICH_CTIME;
         else
-            data->which = PROP_UNKNOWN;
+            data->which = WHICH_OTHER;
     }
     else
         g_free (s);
@@ -231,18 +280,6 @@ ct_time_get_props (DonnaColumnType  *ct,
     g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
 
     return props;
-}
-
-static GtkSortType
-ct_time_get_default_sort_order (DonnaColumnType *ct,
-                                const gchar     *tv_name,
-                                const gchar     *col_name,
-                                gpointer        data)
-{
-    return (donna_config_get_boolean_column (donna_app_peek_config (
-                    DONNA_COLUMNTYPE_TIME (ct)->priv->app),
-                tv_name, col_name, "columntypes/time", "desc_first", TRUE))
-        ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 }
 
 static GtkMenu *
@@ -294,11 +331,11 @@ ct_time_render (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
 
-    if (data->which == PROP_MTIME)
+    if (data->which == WHICH_MTIME)
         has = donna_node_get_mtime (node, FALSE, &time);
-    else if (data->which == PROP_ATIME)
+    else if (data->which == WHICH_ATIME)
         has = donna_node_get_atime (node, FALSE, &time);
-    else if (data->which == PROP_CTIME)
+    else if (data->which == WHICH_CTIME)
         has = donna_node_get_ctime (node, FALSE, &time);
     else
         donna_node_get (node, FALSE, data->property, &has, &value, NULL);
@@ -318,7 +355,7 @@ ct_time_render (DonnaColumnType    *ct,
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
-    else if (data->which == PROP_UNKNOWN)
+    else if (data->which == WHICH_OTHER)
     {
         if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
         {
@@ -363,17 +400,17 @@ ct_time_node_cmp (DonnaColumnType    *ct,
     guint64 time1;
     guint64 time2;
 
-    if (data->which == PROP_MTIME)
+    if (data->which == WHICH_MTIME)
     {
         has1 = donna_node_get_mtime (node1, TRUE, &time1);
         has2 = donna_node_get_mtime (node2, TRUE, &time2);
     }
-    else if (data->which == PROP_ATIME)
+    else if (data->which == WHICH_ATIME)
     {
         has1 = donna_node_get_atime (node1, TRUE, &time1);
         has2 = donna_node_get_atime (node2, TRUE, &time2);
     }
-    else if (data->which == PROP_CTIME)
+    else if (data->which == WHICH_CTIME)
     {
         has1 = donna_node_get_ctime (node1, TRUE, &time1);
         has2 = donna_node_get_ctime (node2, TRUE, &time2);
@@ -421,17 +458,4 @@ ct_time_node_cmp (DonnaColumnType    *ct,
         return 1;
 
     return (time1 > time2) ? 1 : (time1 < time2) ? -1 : 0;
-}
-
-DonnaColumnType *
-donna_column_type_time_new (DonnaApp *app)
-{
-    DonnaColumnType *ct;
-
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-
-    ct = g_object_new (DONNA_TYPE_COLUMNTYPE_TIME, NULL);
-    DONNA_COLUMNTYPE_TIME (ct)->priv->app = g_object_ref (app);
-
-    return ct;
 }

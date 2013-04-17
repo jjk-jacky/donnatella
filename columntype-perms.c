@@ -14,6 +14,15 @@
 
 enum
 {
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
+enum
+{
     SORT_PERMS = 0,
     SORT_MY_PERMS,
     SORT_USER_ID,
@@ -56,9 +65,18 @@ struct _DonnaColumnTypePermsPrivate
     GSList   *groups;
 };
 
+static void             ct_perms_set_property       (GObject            *object,
+                                                     guint               prop_id,
+                                                     const GValue       *value,
+                                                     GParamSpec         *pspec);
+static void             ct_perms_get_property       (GObject            *object,
+                                                     guint               prop_id,
+                                                     GValue             *value,
+                                                     GParamSpec         *pspec);
 static void             ct_perms_finalize           (GObject            *object);
 
 /* ColumnType */
+static const gchar *    ct_perms_get_name           (DonnaColumnType    *ct);
 static const gchar *    ct_perms_get_renderers      (DonnaColumnType    *ct);
 static gpointer         ct_perms_get_data           (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
@@ -114,6 +132,7 @@ static gboolean         ct_perms_set_tooltip        (DonnaColumnType    *ct,
 static void
 ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
 {
+    interface->get_name                 = ct_perms_get_name;
     interface->get_renderers            = ct_perms_get_renderers;
     interface->get_data                 = ct_perms_get_data;
     interface->refresh_data             = ct_perms_refresh_data;
@@ -133,7 +152,11 @@ donna_column_type_perms_class_init (DonnaColumnTypePermsClass *klass)
     GObjectClass *o_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = ct_perms_finalize;
+    o_class->set_property   = ct_perms_set_property;
+    o_class->get_property   = ct_perms_get_property;
+    o_class->finalize       = ct_perms_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaColumnTypePermsPrivate));
 }
@@ -184,6 +207,37 @@ ct_perms_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_perms_parent_class)->finalize (object);
+}
+
+static void
+ct_perms_set_property (GObject            *object,
+                       guint               prop_id,
+                       const GValue       *value,
+                       GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        DONNA_COLUMNTYPE_PERMS (object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+ct_perms_get_property (GObject            *object,
+                       guint               prop_id,
+                       GValue             *value,
+                       GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, DONNA_COLUMNTYPE_PERMS (object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static const gchar *
+ct_perms_get_name (DonnaColumnType *ct)
+{
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
+    return "perms";
 }
 
 static const gchar *
@@ -938,17 +992,4 @@ ct_perms_node_cmp (DonnaColumnType    *ct,
         check_has ();
 
     return strcmp (s1, s2);
-}
-
-DonnaColumnType *
-donna_column_type_perms_new (DonnaApp *app)
-{
-    DonnaColumnType *ct;
-
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-
-    ct = g_object_new (DONNA_TYPE_COLUMNTYPE_PERMS, NULL);
-    DONNA_COLUMNTYPE_PERMS (ct)->priv->app = g_object_ref (app);
-
-    return ct;
 }

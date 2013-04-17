@@ -18,8 +18,6 @@ typedef struct _DonnaDonnaPrivate       DonnaDonnaPrivate;
 #define DONNA_IS_DONNA_CLASS(klass)     (G_TYPE_CHECK_CLASS_TYPE ((klass), DONNA_TYPE_DONNA))
 #define DONNA_DONNA_GET_CLASS(obj)      (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_DONNA, DonnaDonnaClass))
 
-typedef DonnaColumnType *   (*column_type_loader_fn)    (DonnaApp *app);
-
 struct _DonnaDonna
 {
     GObject parent;

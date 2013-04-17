@@ -32,8 +32,6 @@ struct _DonnaColumnTypeTextClass
 
 GType                   donna_column_type_text_get_type (void) G_GNUC_CONST;
 
-DonnaColumnType *       donna_column_type_text_new      (DonnaApp *app);
-
 G_END_DECLS
 
 #endif /* __DONNA_COLUMNTYPE_TEXT_H__ */

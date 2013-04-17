@@ -32,8 +32,6 @@ struct _DonnaColumnTypeSizeClass
 
 GType                   donna_column_type_size_get_type (void) G_GNUC_CONST;
 
-DonnaColumnType *       donna_column_type_size_new      (DonnaApp *app);
-
 G_END_DECLS
 
 #endif /* __DONNA_COLUMNTYPE_SIZE_H__ */

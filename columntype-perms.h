@@ -32,8 +32,6 @@ struct _DonnaColumnTypePermsClass
 
 GType                   donna_column_type_perms_get_type (void) G_GNUC_CONST;
 
-DonnaColumnType *       donna_column_type_perms_new      (DonnaApp *app);
-
 G_END_DECLS
 
 #endif /* __DONNA_COLUMNTYPE_PERMS_H__ */

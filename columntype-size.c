@@ -8,6 +8,15 @@
 #include "size.h"
 #include "macros.h"
 
+enum
+{
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
 struct tv_col_data
 {
     gchar   *property;
@@ -23,9 +32,18 @@ struct _DonnaColumnTypeSizePrivate
     DonnaApp                    *app;
 };
 
+static void             ct_size_set_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     const GValue       *value,
+                                                     GParamSpec         *pspec);
+static void             ct_size_get_property        (GObject            *object,
+                                                     guint               prop_id,
+                                                     GValue             *value,
+                                                     GParamSpec         *pspec);
 static void             ct_size_finalize            (GObject            *object);
 
 /* ColumnType */
+static const gchar *    ct_size_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_size_get_renderers       (DonnaColumnType    *ct);
 static gpointer         ct_size_get_data            (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
@@ -39,11 +57,6 @@ static void             ct_size_free_data           (DonnaColumnType    *ct,
                                                      const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_size_get_props           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
-                                                     gpointer            data);
-static GtkSortType      ct_size_get_default_sort_order
-                                                    (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer            data);
@@ -81,12 +94,12 @@ static gboolean         ct_size_set_tooltip         (DonnaColumnType    *ct,
 static void
 ct_size_columntype_init (DonnaColumnTypeInterface *interface)
 {
+    interface->get_name                 = ct_size_get_name;
     interface->get_renderers            = ct_size_get_renderers;
     interface->get_data                 = ct_size_get_data;
     interface->refresh_data             = ct_size_refresh_data;
     interface->free_data                = ct_size_free_data;
     interface->get_props                = ct_size_get_props;
-    interface->get_default_sort_order   = ct_size_get_default_sort_order;
     interface->get_options_menu         = ct_size_get_options_menu;
     interface->handle_context           = ct_size_handle_context;
     interface->render                   = ct_size_render;
@@ -100,7 +113,11 @@ donna_column_type_size_class_init (DonnaColumnTypeSizeClass *klass)
     GObjectClass *o_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = ct_size_finalize;
+    o_class->set_property   = ct_size_set_property;
+    o_class->get_property   = ct_size_get_property;
+    o_class->finalize       = ct_size_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaColumnTypeSizePrivate));
 }
@@ -130,6 +147,37 @@ ct_size_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_column_type_size_parent_class)->finalize (object);
+}
+
+static void
+ct_size_set_property (GObject            *object,
+                      guint               prop_id,
+                      const GValue       *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        DONNA_COLUMNTYPE_SIZE (object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+ct_size_get_property (GObject            *object,
+                      guint               prop_id,
+                      GValue             *value,
+                      GParamSpec         *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, DONNA_COLUMNTYPE_SIZE (object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static const gchar *
+ct_size_get_name (DonnaColumnType *ct)
+{
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
+    return "size";
 }
 
 static const gchar *
@@ -251,18 +299,6 @@ ct_size_get_props (DonnaColumnType  *ct,
     g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
 
     return props;
-}
-
-static GtkSortType
-ct_size_get_default_sort_order (DonnaColumnType *ct,
-                                const gchar     *tv_name,
-                                const gchar     *col_name,
-                                gpointer        data)
-{
-    return (donna_config_get_boolean_column (donna_app_peek_config (
-                    DONNA_COLUMNTYPE_SIZE (ct)->priv->app),
-                tv_name, col_name, "columntypes/size", "desc_first", TRUE))
-        ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 }
 
 static GtkMenu *
@@ -487,17 +523,4 @@ ct_size_node_cmp (DonnaColumnType    *ct,
         return 1;
 
     return (size1 > size2) ? 1 : (size1 < size2) ? -1 : 0;
-}
-
-DonnaColumnType *
-donna_column_type_size_new (DonnaApp *app)
-{
-    DonnaColumnType *ct;
-
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-
-    ct = g_object_new (DONNA_TYPE_COLUMNTYPE_SIZE, NULL);
-    DONNA_COLUMNTYPE_SIZE (ct)->priv->app = g_object_ref (app);
-
-    return ct;
 }

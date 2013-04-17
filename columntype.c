@@ -1,14 +1,102 @@
 
+#include <string.h>
 #include "columntype.h"
+#include "app.h"
 #include "conf.h"
 #include "macros.h"
 
-static void
-donna_columntype_default_init (DonnaColumnTypeInterface *klass)
+static GtkSortType
+default_get_default_sort_order (DonnaColumnType    *ct,
+                                const gchar        *tv_name,
+                                const gchar        *col_name,
+                                gpointer            data)
 {
+    DonnaColumnTypeInterface *interface;
+    DonnaApp *app;
+    const gchar *type;
+    gchar buf[55], *b = buf;
+    GtkSortType order;
+
+    g_object_get (ct, "app", &app, NULL);
+    type = donna_columntype_get_name (ct);
+    /* 42 == 55 - strlen ("columntypes/") - 1 */
+    if (G_UNLIKELY (strnlen (type, 42) >= 42))
+        b = g_strconcat ("columntypes/", type, NULL);
+    else
+        strcpy (stpcpy (buf, "columntypes/"), type);
+
+    order = (donna_config_get_boolean_column (donna_app_peek_config (app),
+                tv_name, col_name, b, "desc_first", FALSE))
+        ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
+
+    if (G_UNLIKELY (b != buf))
+        g_free (b);
+    g_object_unref (app);
+    return order;
+}
+
+static GtkMenu *
+default_get_options_menu (DonnaColumnType    *ct,
+                          const gchar        *tv_name,
+                          const gchar        *col_name,
+                          gpointer            data)
+{
+    return NULL;
+}
+
+static gboolean
+default_handle_context (DonnaColumnType    *ct,
+                        const gchar        *tv_name,
+                        const gchar        *col_name,
+                        gpointer            data,
+                        DonnaNode          *node,
+                        DonnaTreeView      *treeview)
+{
+    return FALSE;
+}
+
+static gboolean
+default_set_tooltip (DonnaColumnType    *ct,
+                     const gchar        *tv_name,
+                     const gchar        *col_name,
+                     gpointer            data,
+                     guint               index,
+                     DonnaNode          *node,
+                     GtkTooltip         *tooltip)
+{
+    return FALSE;
+}
+
+static void
+donna_columntype_default_init (DonnaColumnTypeInterface *interface)
+{
+    interface->get_default_sort_order   = default_get_default_sort_order;
+    interface->get_options_menu         = default_get_options_menu;
+    interface->handle_context           = default_handle_context;
+    interface->set_tooltip              = default_set_tooltip;
+
+    g_object_interface_install_property (interface,
+            g_param_spec_object ("app", "app", "Application",
+                DONNA_TYPE_APP,
+                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
 
 G_DEFINE_INTERFACE (DonnaColumnType, donna_columntype, G_TYPE_OBJECT)
+
+const gchar *
+donna_columntype_get_name (DonnaColumnType *ct)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_name != NULL, NULL);
+
+    return (*interface->get_name) (ct);
+}
 
 const gchar *
 donna_columntype_get_renderers (DonnaColumnType  *ct)
