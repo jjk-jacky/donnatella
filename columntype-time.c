@@ -30,11 +30,14 @@ struct tv_col_data
     gint8    which;
     gchar   *property;
     gchar   *format;
+    gint8    which_tooltip;
+    gchar   *property_tooltip;
+    gchar   *format_tooltip;
 };
 
 struct _DonnaColumnTypeTimePrivate
 {
-    DonnaApp                    *app;
+    DonnaApp *app;
 };
 
 static void             ct_time_set_property        (GObject            *object,
@@ -250,6 +253,35 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
+    s = donna_config_get_string_column (config, tv_name, col_name,
+            "columntypes/time", "property_tooltip", "mtime");
+    if (!streq (data->property_tooltip, s))
+    {
+        g_free (data->property_tooltip);
+        data->property_tooltip = s;
+
+        if (streq (s, "mtime"))
+            data->which_tooltip = WHICH_MTIME;
+        else if (streq (s, "atime"))
+            data->which_tooltip = WHICH_ATIME;
+        else if (streq (s, "ctime"))
+            data->which_tooltip = WHICH_CTIME;
+        else
+            data->which_tooltip = WHICH_OTHER;
+    }
+    else
+        g_free (s);
+
+    s = donna_config_get_string_column (config, tv_name, col_name,
+            "columntypes/time", "format_tooltip", "%c");
+    if (!streq (data->format_tooltip, s))
+    {
+        g_free (data->format_tooltip);
+        data->format_tooltip = s;
+    }
+    else
+        g_free (s);
+
     return need;
 }
 
@@ -263,6 +295,8 @@ ct_time_free_data (DonnaColumnType    *ct,
 
     g_free (data->property);
     g_free (data->format);
+    g_free (data->property_tooltip);
+    g_free (data->format_tooltip);
     g_free (data);
 }
 
@@ -383,7 +417,44 @@ ct_time_set_tooltip (DonnaColumnType    *ct,
                      DonnaNode          *node,
                      GtkTooltip         *tooltip)
 {
-    return FALSE;
+    struct tv_col_data *data = _data;
+    DonnaNodeHasValue has;
+    GValue value = G_VALUE_INIT;
+    guint64 time;
+    gchar *s;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_TIME (ct), NULL);
+
+    if (data->format_tooltip[0] == '\0')
+        return FALSE;
+
+    if (data->which_tooltip == WHICH_MTIME)
+        has = donna_node_get_mtime (node, FALSE, &time);
+    else if (data->which_tooltip == WHICH_ATIME)
+        has = donna_node_get_atime (node, FALSE, &time);
+    else if (data->which_tooltip == WHICH_CTIME)
+        has = donna_node_get_ctime (node, FALSE, &time);
+    else
+        donna_node_get (node, FALSE, data->property_tooltip, &has, &value, NULL);
+
+    if (has != DONNA_NODE_VALUE_SET)
+        return FALSE;
+    if (data->which == WHICH_OTHER)
+    {
+        if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
+        {
+            warn_not_uint64 (node);
+            g_value_unset (&value);
+            return FALSE;
+        }
+        time = g_value_get_uint64 (&value);
+        g_value_unset (&value);
+    }
+
+    s = donna_print_time (time, data->format_tooltip);
+    gtk_tooltip_set_text (tooltip, s);
+    g_free (s);
+    return TRUE;
 }
 
 static gint
@@ -419,7 +490,7 @@ ct_time_node_cmp (DonnaColumnType    *ct,
     {
         GValue value = G_VALUE_INIT;
 
-        donna_node_get (node1, FALSE, data->property, &has1, &value, NULL);
+        donna_node_get (node1, TRUE, data->property, &has1, &value, NULL);
         if (has1 == DONNA_NODE_VALUE_SET)
         {
             if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
@@ -431,7 +502,7 @@ ct_time_node_cmp (DonnaColumnType    *ct,
                 time1 = g_value_get_uint64 (&value);
             g_value_unset (&value);
         }
-        donna_node_get (node2, FALSE, data->property, &has2, &value, NULL);
+        donna_node_get (node2, TRUE, data->property, &has2, &value, NULL);
         if (has2 == DONNA_NODE_VALUE_SET)
         {
             if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
