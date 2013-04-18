@@ -4836,6 +4836,18 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
             g_object_unref (node);
         }
     }
+    /* no context means not on a row, so below the last row (if any) */
+    else if (!is_tree (tree))
+    {
+        GtkTreeSelection *sel;
+
+        /* no full row select */
+        sel = gtk_tree_view_get_selection (treev);
+        gtk_tree_selection_unselect_all (sel);
+
+        /* handled */
+        return TRUE;
+    }
 
 chainup:
     return GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_press_event (
