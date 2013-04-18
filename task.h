@@ -122,6 +122,7 @@ DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task,
 DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
 const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);
+void                donna_task_prepare          (DonnaTask          *task);
 void                donna_task_run              (DonnaTask          *task);
 void                donna_task_pause            (DonnaTask          *task);
 void                donna_task_resume           (DonnaTask          *task);

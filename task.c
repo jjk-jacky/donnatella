@@ -1103,6 +1103,52 @@ callback_cb (gpointer data)
 }
 
 /**
+ * donna_task_prepare:
+ * @task: Task to prepare
+ *
+ * This function will "prepare" @task, installing the timeout (if any). This is
+ * useful for cases where a task is created, but might not ran instantly, e.g.
+ * because the thread pool might be full.
+ *
+ * This ensures the timeout works as expected by installing it ASAP. This should
+ * be called by app/task manager when they get a new task.
+ * Note that donna_task_run() will still install the timeout if there was no
+ * call to donna_task_prepare()
+ */
+void
+donna_task_prepare (DonnaTask *task)
+{
+    DonnaTaskPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    priv = task->priv;
+    DONNA_DEBUG (TASK,
+            g_debug ("Preparing task: %s",
+                (priv->desc) ? priv->desc : "(no desc)"));
+
+    LOCK_TASK (task);
+
+    /* can only prepare from waiting */
+    if (!(priv->state & DONNA_TASK_PRE_RUN))
+    {
+        UNLOCK_TASK (task);
+        DONNA_DEBUG (TASK,
+                g_debug ("Cannot prepare task, not in a pre-run state (%s): %s",
+                    state_name (priv->state),
+                    (priv->desc) ? priv->desc : "(no desc)"));
+        return;
+    }
+
+    /* install the timeout (will be triggered on main thread) */
+    if (priv->timeout_fn)
+        priv->timeout = g_timeout_add (priv->timeout_delay, timeout_cb, task);
+
+    /* that's all for us */
+    UNLOCK_TASK (task);
+}
+
+/**
  * donna_task_run:
  * @task: Task to run
  *
@@ -1143,8 +1189,11 @@ donna_task_run (DonnaTask *task)
     /* we take a ref on the task, to ensure it won't die while running */
     g_object_ref_sink (task);
 
-    /* install the timeout (will be triggered on main thread) */
-    if (priv->timeout_fn)
+    /* install the timeout (will be triggered on main thread). Note that this
+     * can have been done by a call to donna_task_prepare() e.g. when the task
+     * was added to the thread pool or soemthing, hence why we need to check no
+     * timeout exists or has already ran. */
+    if (priv->timeout_fn && priv->timeout == 0 && priv->timeout_ran == 0)
         priv->timeout = g_timeout_add (priv->timeout_delay, timeout_cb, task);
 
     /* let's switch and release the lock */

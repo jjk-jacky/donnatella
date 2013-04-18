@@ -400,6 +400,7 @@ donna_donna_run_task (DonnaApp    *app,
     g_return_if_fail (DONNA_IS_TASK (task));
 
     /* FIXME if task is public, add to task manager */
+    donna_task_prepare (task);
     g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
             g_object_ref_sink (task), NULL);
 }
