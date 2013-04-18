@@ -4080,7 +4080,15 @@ node_get_children_list_cb (DonnaTask                            *task,
         g_free (location);
 
         if (priv->future_location == data->node)
+        {
             priv->future_location = NULL;
+
+            /* since we couldn't go there, make sure our real current location
+             * is known (e.g. when user clicked on tree, it should go back to
+             * where we are, since we failed to change location) */
+            g_object_notify_by_pspec (G_OBJECT (data->tree),
+                    donna_tree_view_props[PROP_LOCATION]);
+        }
 
         goto free;
     }
@@ -4181,7 +4189,15 @@ node_get_parent_list_cb (DonnaTask                            *task,
         g_free (location);
 
         if (priv->future_location == data->child)
+        {
             priv->future_location = NULL;
+
+            /* since we couldn't go there, make sure our real current location
+             * is known (e.g. when user clicked on tree, it should go back to
+             * where we are, since we failed to change location) */
+            g_object_notify_by_pspec (G_OBJECT (data->tree),
+                    donna_tree_view_props[PROP_LOCATION]);
+        }
 
         free_node_get_children_list_data (data);
         return;
