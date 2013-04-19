@@ -38,6 +38,14 @@ extern void g_cclosure_user_marshal_VOID__BOOLEAN_INT_BOOLEAN_STRING (GClosure  
                                                                       gpointer      invocation_hint,
                                                                       gpointer      marshal_data);
 
+/* POINTER:STRING,OBJECT (closures.def:5) */
+extern void g_cclosure_user_marshal_POINTER__STRING_OBJECT (GClosure     *closure,
+                                                            GValue       *return_value,
+                                                            guint         n_param_values,
+                                                            const GValue *param_values,
+                                                            gpointer      invocation_hint,
+                                                            gpointer      marshal_data);
+
 G_END_DECLS
 
 #endif /* __g_cclosure_user_marshal_MARSHAL_H__ */

@@ -10,6 +10,7 @@
 #include "task.h"
 #include "macros.h"
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
+#include "closures.h"
 
 enum
 {
@@ -18,6 +19,12 @@ enum
     PROP_LOCATION,
 
     NB_PROPS
+};
+
+enum
+{
+    SIGNAL_SELECT_ARRANGEMENT,
+    NB_SIGNALS
 };
 
 enum
@@ -78,13 +85,6 @@ enum
 
 enum
 {
-    SORT_UNKNOWN = 0,
-    SORT_ASC,
-    SORT_DESC
-};
-
-enum
-{
     SORT_CONTAINER_FIRST = 0,
     SORT_CONTAINER_FIRST_ALWAYS,
     SORT_CONTAINER_MIXED
@@ -136,14 +136,11 @@ struct _DonnaTreeViewPrivate
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
 
-    /* current arrangement */
-    gchar               *arrangement;
-
-    /* main/secondary sort columns */
+    /* main/second sort columns */
     GtkTreeViewColumn   *sort_column;
-    GtkTreeViewColumn   *secondary_sort_column;
+    GtkTreeViewColumn   *second_sort_column;
     /* since it's not part of GtkTreeSortable */
-    GtkSortType          secondary_sort_order;
+    GtkSortType          second_sort_order;
 
     /* properties used by our columns */
     GArray              *col_props;
@@ -197,10 +194,11 @@ struct _DonnaTreeViewPrivate
     /* mode List */
     guint                draw_state         : 2;
     /* from current arrangement */
-    guint                sticky_sec_sort    : 1;
+    guint                second_sort_sticky : 1;
 };
 
-static GParamSpec *donna_tree_view_props[NB_PROPS] = { NULL, };
+static GParamSpec * donna_tree_view_props[NB_PROPS] = { NULL, };
+static guint        donna_tree_view_signals[NB_SIGNALS] = { 0, };
 
 /* our internal renderers */
 enum
@@ -243,6 +241,10 @@ static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          guint           *index,
                                                          gboolean         create);
 static gboolean scroll_to_current                       (DonnaTreeView *tree);
+static gboolean select_arrangement_accumulator      (GSignalInvocationHint  *hint,
+                                                     GValue                 *return_accu,
+                                                     const GValue           *return_handler,
+                                                     gpointer                data);
 
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
@@ -296,6 +298,19 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
                 G_PARAM_READABLE);
 
     g_object_class_install_properties (o_class, NB_PROPS, donna_tree_view_props);
+
+    donna_tree_view_signals[SIGNAL_SELECT_ARRANGEMENT] =
+        g_signal_new ("select-arrangement",
+                DONNA_TYPE_TREE_VIEW,
+                G_SIGNAL_RUN_LAST,
+                G_STRUCT_OFFSET (DonnaTreeViewClass, select_arrangement),
+                select_arrangement_accumulator,
+                NULL,
+                g_cclosure_user_marshal_POINTER__STRING_OBJECT,
+                G_TYPE_POINTER,
+                2,
+                G_TYPE_STRING,
+                DONNA_TYPE_NODE);
 
     g_type_class_add_private (klass, sizeof (DonnaTreeViewPrivate));
 
@@ -1657,12 +1672,12 @@ sort_func (GtkTreeModel      *model,
             g_object_get_data (G_OBJECT (column), "columntype-data"),
             node1, node2);
 
-    /* secondary sort order */
-    if (ret == 0 && priv->secondary_sort_column
-            /* could be the same column with sticky_sec_sort */
-            && priv->secondary_sort_column != column)
+    /* second sort order */
+    if (ret == 0 && priv->second_sort_column
+            /* could be the same column with second_sort_sticky */
+            && priv->second_sort_column != column)
     {
-        column = priv->secondary_sort_column;
+        column = priv->second_sort_column;
 
         ct   = g_object_get_data (G_OBJECT (column), "column-type");
         col  = g_object_get_data (G_OBJECT (column), "column-name");
@@ -1672,10 +1687,10 @@ sort_func (GtkTreeModel      *model,
                 node1, node2);
         if (ret != 0)
         {
-            /* if secondary order is DESC, we should invert ret. But, if the
+            /* if second order is DESC, we should invert ret. But, if the
              * main order is DESC, the store will already invert the return
              * value of this function. */
-            if (priv->secondary_sort_order == GTK_SORT_DESCENDING)
+            if (priv->second_sort_order == GTK_SORT_DESCENDING)
                 ret *= -1;
             if (sort_order == GTK_SORT_DESCENDING)
                 ret *= -1;
@@ -2341,7 +2356,7 @@ column_button_press_event_cb (GtkWidget             *btn,
 }
 
 static inline void
-set_secondary_arrow (DonnaTreeView *tree)
+set_second_arrow (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     gboolean alt;
@@ -2352,17 +2367,17 @@ set_secondary_arrow (DonnaTreeView *tree)
     g_object_get (gtk_widget_get_settings (GTK_WIDGET (tree)),
             "gtk-alternative-sort-arrows", &alt, NULL);
 
-    if (priv->secondary_sort_order == GTK_SORT_ASCENDING)
+    if (priv->second_sort_order == GTK_SORT_ASCENDING)
         arrow_type = (alt) ? GTK_ARROW_UP : GTK_ARROW_DOWN;
     else
         arrow_type = (alt) ? GTK_ARROW_DOWN : GTK_ARROW_UP;
 
-    /* show/update the secondary arrow */
-    arrow = g_object_get_data (G_OBJECT (priv->secondary_sort_column),
-            "header-secondary-arrow");
+    /* show/update the second arrow */
+    arrow = g_object_get_data (G_OBJECT (priv->second_sort_column),
+            "header-second-arrow");
     gtk_arrow_set (GTK_ARROW (arrow), arrow_type, GTK_SHADOW_IN);
-    /* visible unless main & secondary sort are the same */
-    gtk_widget_set_visible (arrow, priv->secondary_sort_column != priv->sort_column);
+    /* visible unless main & second sort are the same */
+    gtk_widget_set_visible (arrow, priv->second_sort_column != priv->sort_column);
 }
 
 /* we have a "special" handling of clicks on column headers. First off, we
@@ -2370,7 +2385,7 @@ set_secondary_arrow (DonnaTreeView *tree)
  * because we want control to do things like have a default order (ASC/DESC)
  * based on the type, etc
  * Then, we also don't use the signal clicked because we want to provider
- * support for a secondary sort order, which is why instead we're connecting to
+ * support for a second sort order, which is why instead we're connecting to
  * signals of the button making the column header:
  * - in button-press-event (above) we set a flag stating that a click was done.
  *   We also set whether Ctrl was held or not
@@ -2379,7 +2394,7 @@ set_secondary_arrow (DonnaTreeView *tree)
  *   a dragging of the column (header) is taking place, in which case we shall
  *   ignore the click). If good, we can then process the click.
  * This should allow us to deal with a regular click as well as a Ctrl+click for
- * secondary order, while preserving normal drawing as well as dragging. */
+ * second order, while preserving normal drawing as well as dragging. */
 static gboolean
 column_button_release_event_cb (GtkWidget             *btn,
                                 GdkEventButton        *event,
@@ -2411,19 +2426,17 @@ column_button_release_event_cb (GtkWidget             *btn,
     col_sort_id = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (column),
                 "sort_id"));
 
-    /* ctrl+click on column other than sort_column == secondary sort order */
+    /* ctrl+click on column other than sort_column == second sort order */
     if (data->ctrl_held && priv->sort_column != column)
     {
-        GtkWidget *arrow;
-
-        if (priv->secondary_sort_column != column)
+        if (priv->second_sort_column != column)
         {
-            if (priv->secondary_sort_column)
+            if (priv->second_sort_column)
                 gtk_widget_set_visible (g_object_get_data (
-                            G_OBJECT (priv->secondary_sort_column),
-                            "header-secondary-arrow"), FALSE);
-            priv->secondary_sort_column = column;
-            priv->secondary_sort_order = donna_columntype_get_default_sort_order (
+                            G_OBJECT (priv->second_sort_column),
+                            "header-second-arrow"), FALSE);
+            priv->second_sort_column = column;
+            priv->second_sort_order = donna_columntype_get_default_sort_order (
                     g_object_get_data (G_OBJECT (column), "column-type"),
                     priv->name,
                     g_object_get_data (G_OBJECT (column), "column-name"),
@@ -2431,12 +2444,12 @@ column_button_release_event_cb (GtkWidget             *btn,
         }
         else
             /* revert order */
-            priv->secondary_sort_order =
-                (priv->secondary_sort_order == GTK_SORT_ASCENDING)
+            priv->second_sort_order =
+                (priv->second_sort_order == GTK_SORT_ASCENDING)
                 ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
-        /* show/update the secondary arrow */
-        set_secondary_arrow (data->tree);
+        /* show/update the second arrow */
+        set_second_arrow (data->tree);
 
         /* trigger a resort */
         gtk_tree_sortable_set_sort_column_id (sortable,
@@ -2449,27 +2462,27 @@ column_button_release_event_cb (GtkWidget             *btn,
     same_column = is_sorted && cur_sort_id == col_sort_id;
     if (!same_column)
     {
-        /* new main sort on secondary sort column, remove the arrow */
-        if (priv->secondary_sort_column == column)
+        /* new main sort on second sort column, remove the arrow */
+        if (priv->second_sort_column == column)
             gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->secondary_sort_column),
-                        "header-secondary-arrow"), FALSE);
-        /* if not sticky, also remove the secondary sort */
-        if (!priv->sticky_sec_sort)
+                        G_OBJECT (priv->second_sort_column),
+                        "header-second-arrow"), FALSE);
+        /* if not sticky, also remove the second sort */
+        if (!priv->second_sort_sticky)
         {
-            if (priv->secondary_sort_column)
+            if (priv->second_sort_column)
                 gtk_widget_set_visible (g_object_get_data (
-                            G_OBJECT (priv->secondary_sort_column),
-                            "header-secondary-arrow"), FALSE);
-            priv->secondary_sort_column = NULL;
+                            G_OBJECT (priv->second_sort_column),
+                            "header-second-arrow"), FALSE);
+            priv->second_sort_column = NULL;
         }
-        /* if sticky, and the old main sort is the secondary sort, bring back
-         * the arrow (secondary sort is automatic, i.e. done when the secondary
+        /* if sticky, and the old main sort is the second sort, bring back
+         * the arrow (second sort is automatic, i.e. done when the second
          * sort column is set and isn't the main sort column, of course) */
-        else if (priv->secondary_sort_column == priv->sort_column)
+        else if (priv->second_sort_column == priv->sort_column)
             gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->secondary_sort_column),
-                        "header-secondary-arrow"), TRUE);
+                        G_OBJECT (priv->second_sort_column),
+                        "header-second-arrow"), TRUE);
 
         /* handle the change of main sort column */
         gtk_tree_view_column_set_sort_indicator (priv->sort_column, FALSE);
@@ -2495,24 +2508,32 @@ column_button_release_event_cb (GtkWidget             *btn,
     return FALSE;
 }
 
+static inline void
+free_arrangement (DonnaArrangement *arr)
+{
+    if (!arr)
+        return;
+    g_free (arr->columns);
+    g_free (arr->sort_column);
+    g_free (arr->second_sort_column);
+    g_free (arr);
+}
+
 static void
-load_arrangement (DonnaTreeView *tree,
-                  const gchar   *arrangement,
-                  DonnaNode     *location)
+load_arrangement (DonnaTreeView     *tree,
+                  DonnaArrangement  *arrangement)
 {
     DonnaTreeViewPrivate *priv  = tree->priv;
     DonnaConfig          *config;
     GtkTreeView          *treev = GTK_TREE_VIEW (tree);
     GtkTreeSortable      *sortable;
     GList                *list;
-    gchar                *s;
-    gchar                *s_columns;
-    gchar                *s_sort = NULL;
+    gchar                *sort_column = NULL;
     gsize                 sort_len;
-    gint                  sort_order = SORT_UNKNOWN;
-    gchar                *sec_sort = NULL;
-    gsize                 sec_sort_len;
+    gchar                *second_sort_column = NULL;
+    gsize                 second_sort_len;
     const gchar          *col;
+    GtkTreeViewColumn    *first_column = NULL;
     GtkTreeViewColumn    *last_column = NULL;
     GtkTreeViewColumn    *expander_column = NULL;
     DonnaColumnType      *ctname;
@@ -2521,107 +2542,6 @@ load_arrangement (DonnaTreeView *tree,
     config = donna_app_peek_config (priv->app);
     sortable = GTK_TREE_SORTABLE (priv->store);
     list = gtk_tree_view_get_columns (treev);
-
-    /* get new set of columns to load. They might not come from the current
-     * arrangement, because e.g. it might always set the sort order. In that
-     * case, we try to get the arrangement:
-     * - for tree: we try the tree default, if that doesn't work we use "name"
-     * - for list: if we have an arrangement selector, we try the arrangement
-     *   for the parent. If we don't have a selector, or there's no parent, we
-     *   try the list default, if that doesn't work we use "name" */
-    s = g_strdup (arrangement);
-    for (;;)
-    {
-        if (donna_config_get_string (config, &s_columns, "%s/columns", s))
-        {
-            col = s_columns;
-            break;
-        }
-        else
-        {
-            if (is_tree (tree))
-            {
-                if (streq (s, "arrangements/tree"))
-                {
-                    g_warning ("Treeview '%s': No columns defined in 'arrangements/tree'; using 'name'",
-                            priv->name);
-                    s_columns = NULL;
-                    col = "name";
-                    break;
-                }
-                else
-                {
-                    g_free (s);
-                    s = g_strdup ("arrangements/tree");
-                }
-            }
-            else
-            {
-                /* FIXME
-                 * if (arr/list)
-                 *      col=name
-                 *      break
-                 * else
-                 *      if (arr_selector && location=get_parent(location)
-                 *          get_arr_for(location)
-                 *      else
-                 *          arr=arr/list
-                 */
-                if (streq (s, "arrangements/list"))
-                {
-                    g_warning ("Treeview '%s': No columns defined in 'arrangements/list'; using 'name'",
-                            priv->name);
-                    s_columns = NULL;
-                    col = "name";
-                    break;
-                }
-                else if (location)
-                {
-                    g_critical ("TODO");
-                }
-                else
-                {
-                    g_free (s);
-                    s = g_strdup ("arrangements/list");
-                }
-            }
-        }
-    }
-    g_free (s);
-
-    /* get sort order (has to come from the current arrangement) */
-    if (donna_config_get_string (config, &s_sort, "%s/sort", arrangement))
-    {
-        sort_len = strlen (s_sort);
-        if (sort_len > 2)
-        {
-            sort_len -= 2;
-            if (s_sort[sort_len] == ':')
-                sort_order = (s_sort[sort_len + 1] == 'd') ? SORT_DESC : SORT_ASC;
-        }
-    }
-    /* secondary sort order */
-    priv->secondary_sort_column = NULL;
-    if (donna_config_get_string (config, &sec_sort, "%s/second_sort", arrangement))
-    {
-        sec_sort_len = strlen (sec_sort);
-        if (sec_sort_len > 2)
-        {
-            sec_sort_len -= 2;
-            if (sec_sort[sec_sort_len] == ':')
-                priv->secondary_sort_order = (s_sort[sec_sort_len + 1] == 'd')
-                    ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-            else
-                sec_sort_len = 0;
-        }
-    }
-    /* sticky secondary sort order? */
-    {
-        gboolean sticky = TRUE;
-        donna_config_get_boolean (config, &sticky, "%s/sticky_second_sort",
-                arrangement);
-        priv->sticky_sec_sort = sticky;
-    }
 
     /* clear list of props we're watching to refresh tree */
     if (priv->col_props->len > 0)
@@ -2638,8 +2558,34 @@ load_arrangement (DonnaTreeView *tree,
         gtk_tree_view_append_column (treev, expander_column);
     }
     else
-        /* so we can make the first colmun to use it the expander column */
+        /* so we can make the first column to use it the expander column */
         ctname = donna_app_get_columntype (priv->app, "name");
+
+    col = arrangement->columns;
+    /* just to be safe, but this function should only be called with arrangement
+     * having (at least) columns */
+    if (G_UNLIKELY (!col))
+    {
+        g_critical ("Treeview '%s': load_arrangement() called on an arrangement without columns",
+                priv->name);
+        col = "name";
+    }
+
+    if (arrangement->flags & DONNA_ARRANGEMENT_HAS_SORT)
+        sort_column = arrangement->sort_column;
+    else if (priv->sort_column)
+        sort_column = g_strdup (g_object_get_data (G_OBJECT (priv->sort_column),
+                    "column-name"));
+    if (sort_column)
+        sort_len = strlen (sort_column);
+
+    if (arrangement->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT)
+        second_sort_column = arrangement->second_sort_column;
+    else if (priv->second_sort_column)
+        second_sort_column = g_strdup (g_object_get_data (
+                    G_OBJECT (priv->second_sort_column), "column-name"));
+    if (second_sort_column)
+        second_sort_len = strlen (arrangement->second_sort_column);
 
     for (;;)
     {
@@ -2690,7 +2636,7 @@ load_arrangement (DonnaTreeView *tree,
         ct = donna_app_get_columntype (priv->app, (ss) ? ss : b);
         if (!ct)
         {
-            g_warning ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
+            g_critical ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
                     priv->name, (ss) ? ss : b, b);
             g_free (ss);
             goto next;
@@ -2836,12 +2782,12 @@ load_arrangement (DonnaTreeView *tree,
             g_object_set_data_full (G_OBJECT (column), "col_btn_data",
                     data, g_free);
             /* we handle the header stuff so we can add our own arrow (for
-             * secondary sort) */
+             * second sort) */
             hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
             label = gtk_label_new (NULL);
             arrow = gtk_arrow_new (GTK_ARROW_NONE, GTK_SHADOW_IN);
             gtk_style_context_add_class (gtk_widget_get_style_context (arrow),
-                    "secondary-arrow");
+                    "second-arrow");
             gtk_box_pack_start (GTK_BOX (hbox), label, TRUE, TRUE, 0);
             gtk_box_pack_end (GTK_BOX (hbox), arrow, FALSE, FALSE, 0);
             gtk_tree_view_column_set_widget (column, hbox);
@@ -2849,10 +2795,13 @@ load_arrangement (DonnaTreeView *tree,
             gtk_widget_show (label);
             /* so we can access/update things */
             g_object_set_data (G_OBJECT (column), "header-label", label);
-            g_object_set_data (G_OBJECT (column), "header-secondary-arrow", arrow);
+            g_object_set_data (G_OBJECT (column), "header-second-arrow", arrow);
             /* lastly */
             gtk_tree_view_column_set_clickable (column, TRUE);
         }
+
+        if (!first_column)
+            first_column = column;
 
         if (!expander_column && col_ct == ctname)
             expander_column = column;
@@ -2911,36 +2860,27 @@ load_arrangement (DonnaTreeView *tree,
         g_object_set_data (G_OBJECT (column), "sort_id", GINT_TO_POINTER (sort_id));
         gtk_tree_sortable_set_sort_func (sortable, sort_id,
                 (GtkTreeIterCompareFunc) sort_func, column, NULL);
-        if (s_sort)
+        if (sort_column)
         {
-            gboolean sorted = FALSE;
             GtkSortType order;
 
-            /* SORT_UNKNOWN means we only had a column name (unlikely) */
-            if (sort_order == SORT_UNKNOWN)
+            if (len_b == sort_len && streqn (sort_column, b, len_b))
             {
-                if (streq (s_sort, b))
-                {
-                    sorted = TRUE;
+                if (!(arrangement->flags & DONNA_ARRANGEMENT_HAS_SORT))
+                    g_free (sort_column);
+                sort_column = NULL;
+                if (arrangement->sort_order == DONNA_SORT_UNKNOWN)
                     order = donna_columntype_get_default_sort_order (
                             g_object_get_data (G_OBJECT (column), "column-type"),
                             priv->name,
                             g_object_get_data (G_OBJECT (column), "column-name"),
                             g_object_get_data (G_OBJECT (column), "columntype-data"));
-                }
-            }
-            else
-            {
-                /* ss_sort contains "column:o" */
-                if (len_b == sort_len && streqn (s_sort, b, sort_len))
-                {
-                    sorted = TRUE;
-                    order = (sort_order == SORT_ASC) ? GTK_SORT_ASCENDING
-                            : GTK_SORT_DESCENDING;
-                }
+                else
+                    order = (arrangement->sort_order == DONNA_SORT_ASC)
+                        ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
             }
 
-            if (sorted)
+            if (!sort_column)
             {
                 /* important to set the sort order on column before the sort_id
                  * on sortable, since sort_func might use the column's
@@ -2949,30 +2889,33 @@ load_arrangement (DonnaTreeView *tree,
                 gtk_tree_view_column_set_sort_indicator (column, TRUE);
                 gtk_tree_view_column_set_sort_order (column, order);
                 gtk_tree_sortable_set_sort_column_id (sortable, sort_id, order);
-
-                g_free (s_sort);
-                s_sort = NULL;
             }
         }
         ++sort_id;
-        /* TODO else default sort order? */
 
-        /* secondary sort order (order & sticky already done) */
-        if (sec_sort && ((sec_sort_len == 0 && streq (b, sec_sort))
-                    || (sec_sort_len > 0 && len_b == sec_sort_len
-                        && streqn (b, sec_sort, sec_sort_len))))
+        /* second sort order */
+        if (second_sort_column && len_b == second_sort_len
+                && streqn (second_sort_column, b, len_b))
         {
-            priv->secondary_sort_column = column;
-            g_free (sec_sort);
-            sec_sort = NULL;
-            /* no order was specified, use default */
-            if (sec_sort_len == 0)
-                priv->secondary_sort_order =
+            if (!(arrangement->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
+                g_free (second_sort_column);
+            second_sort_column = NULL;
+            priv->second_sort_column = column;
+            if (arrangement->second_sort_order == DONNA_SORT_UNKNOWN)
+                priv->second_sort_order =
                     donna_columntype_get_default_sort_order (
                             g_object_get_data (G_OBJECT (column), "column-type"),
                             priv->name,
                             g_object_get_data (G_OBJECT (column), "column-name"),
                             g_object_get_data (G_OBJECT (column), "columntype-data"));
+            else
+                priv->second_sort_order =
+                    (arrangement->second_sort_order == DONNA_SORT_ASC)
+                    ? GTK_SORT_ASCENDING : GTK_SORT_ASCENDING;
+
+            if (arrangement->second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
+                priv->second_sort_sticky =
+                    arrangement->second_sort_sticky == DONNA_SECOND_SORT_STICKY_ENABLED;
         }
 
         last_column = column;
@@ -2999,22 +2942,56 @@ next:
     /* set expander column */
     gtk_tree_view_set_expander_column (treev, expander_column);
 
-    /* secondary sort arrow */
-    if (priv->secondary_sort_column)
+    /* failed to set sort order */
+    if (sort_column && !(arrangement->flags & DONNA_ARRANGEMENT_HAS_SORT))
+        g_free (sort_column);
+    if (sort_column || !priv->sort_column)
     {
-        set_secondary_arrow (tree);
-        /* we can't actually have a secondary that's the same as the main sort
-         * order without sticky_sec_sort */
-        if (!priv->sticky_sec_sort && priv->sort_column == priv->secondary_sort_column)
-            priv->secondary_sort_column = NULL;
+        GtkSortType order;
+
+        priv->sort_column = first_column;
+        order = donna_columntype_get_default_sort_order (
+                g_object_get_data (G_OBJECT (priv->sort_column), "column-type"),
+                priv->name,
+                g_object_get_data (G_OBJECT (priv->sort_column), "column-name"),
+                g_object_get_data (G_OBJECT (priv->sort_column), "columntype-data"));
+        gtk_tree_view_column_set_sort_indicator (priv->sort_column, TRUE);
+        gtk_tree_view_column_set_sort_order (priv->sort_column, order);
+        gtk_tree_sortable_set_sort_column_id (sortable,
+                GPOINTER_TO_INT (g_object_get_data (G_OBJECT (priv->sort_column),
+                        "sort_id")),
+                order);
     }
 
-    if (s_sort)
-        g_free (s_sort);
-    if (sec_sort)
-        g_free (sec_sort);
-    if (s_columns)
-        g_free (s_columns);
+    /* failed to set second sort order */
+    if (second_sort_column)
+    {
+        if (!(arrangement->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
+            g_free (second_sort_column);
+        priv->second_sort_column = first_column;
+    }
+
+    /* second sort arrow */
+    if (priv->second_sort_column)
+    {
+        /* we can't actually have a second that's the same as the main sort
+         * order without second_sort_sticky */
+        if (!priv->second_sort_sticky && priv->sort_column == priv->second_sort_column)
+            priv->second_sort_column = NULL;
+        else
+        {
+            gint cur_sort_id;
+            GtkSortType cur_sort_order;
+
+            set_second_arrow (tree);
+            /* trigger a resort */
+            gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
+            gtk_tree_sortable_set_sort_column_id (sortable,
+                    GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
+            gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
+        }
+    }
+
     /* remove all columns left unused */
     while (list)
     {
@@ -3032,60 +3009,151 @@ next:
         gtk_tree_view_remove_column (treev, list->data);
         list = g_list_delete_link (list, list);
     }
-
-    if (priv->arrangement)
-        g_free (priv->arrangement);
-    priv->arrangement = g_strdup (arrangement);
 }
 
-static gchar *
+static gboolean
+select_arrangement_accumulator (GSignalInvocationHint  *hint,
+                                GValue                 *return_accu,
+                                const GValue           *return_handler,
+                                gpointer                data)
+{
+    DonnaArrangement *arr_accu;
+    DonnaArrangement *arr_handler;
+    gboolean keep_emission = TRUE;
+
+    arr_accu    = g_value_get_pointer (return_accu);
+    arr_handler = g_value_get_pointer (return_handler);
+
+    /* nothing in accu but something in handler, probably the first handler */
+    if (!arr_accu && arr_handler)
+    {
+        g_value_set_pointer (return_accu, arr_handler);
+        if (arr_handler->priority == DONNA_ARRANGEMENT_PRIORITY_OVERRIDE)
+            keep_emission = FALSE;
+    }
+    /* something in accu & in handler */
+    else if (arr_handler)
+    {
+        if (arr_handler->priority > arr_accu->priority)
+        {
+            free_arrangement (arr_accu);
+            g_value_set_pointer (return_accu, arr_handler);
+            if (arr_handler->priority == DONNA_ARRANGEMENT_PRIORITY_OVERRIDE)
+                keep_emission = FALSE;
+        }
+        else
+            free_arrangement (arr_handler);
+    }
+
+    return keep_emission;
+}
+
+static inline DonnaArrangement *
 select_arrangement (DonnaTreeView *tree, DonnaNode *location)
 {
-    DonnaTreeViewPrivate *priv;
-    DonnaConfig          *config;
-    gchar                *s;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaArrangement *arr;
+    GValue value = G_VALUE_INIT;
 
-    priv = tree->priv;
-    config = donna_app_peek_config (priv->app);
     g_debug ("treeview '%s': select arrangement", priv->name);
 
-    if (is_tree (tree))
+    g_signal_emit (tree, donna_tree_view_signals[SIGNAL_SELECT_ARRANGEMENT], 0,
+            priv->name, location, &value);
+    if (G_IS_VALUE (&value))
     {
-        if (donna_config_has_category (config,
-                    "treeviews/%s/arrangement", priv->name))
-            s = g_strdup_printf ("treeviews/%s/arrangement", priv->name);
-        else
-            s = g_strdup ("arrangements/tree");
+        arr = g_value_get_pointer (&value);
+        g_value_unset (&value);
     }
-    else
+    return arr;
+}
+
+static inline DonnaArrangement *
+load_default_arrangement (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaConfig *config;
+    DonnaArrangement *arr;
+    gchar *s;
+    gboolean sticky;
+
+    config = donna_app_peek_config (priv->app);
+    arr = g_new0 (DonnaArrangement, 1);
+    /* try loading our from our own arrangement */
+    if (!donna_config_get_string (config, &arr->columns,
+                "treeviews/%s/arrangement/columns", priv->name))
+        /* fallback on default for our mode */
+        if (!donna_config_get_string (config, &arr->columns,
+                    "defaults/arrangements/%s/columns",
+                    (is_tree (tree)) ? "tree" : "list"))
+            /* if all else fails, use a column "name" */
+            arr->columns = g_strdup ("name");
+    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+
+    s = NULL;
+    if (!donna_config_get_string (config, &s,
+                "treeviews/%s/arrangement/sort", priv->name))
+            donna_config_get_string (config, &s,
+                    "defaults/arrangements/%s/sort",
+                    (is_tree (tree)) ? "tree" : "list");
+    if (s)
     {
-        /* do we have an arrangement selector? */
-        if (location)
-            s = donna_app_get_arrangement (priv->app, location);
-        else
-            s = NULL;
+        gchar *ss;
 
-        if (!s)
-        {
-            if (donna_config_has_category (config,
-                        "treeviews/%s/arrangement", priv->name))
-                s = g_strdup_printf ("treeviews/%s/arrangement", priv->name);
-            else
-                s = g_strdup ("arrangements/list");
-        }
+        ss = strchr (s, ':');
+        if (ss)
+            *ss = '\0';
+
+        arr->sort_column = s;
+        if (ss)
+            arr->sort_order = (ss[1] == 'd')
+                ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+
+        arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
     }
 
-    g_debug ("treeview '%s': selected arrangement: %s",
-            priv->name,
-            (s) ? s : "(none)");
-    return s;
+    s = NULL;
+    if (donna_config_get_string (config, &s,
+                "treeviews/%s/arrangement/second_sort", priv->name))
+    {
+        if (donna_config_get_boolean (config, &sticky,
+                    "treeviews/%s/arrangement/second_sort_sticky", priv->name))
+            arr->second_sort_sticky = (sticky) ? DONNA_SECOND_SORT_STICKY_ENABLED
+                : DONNA_SECOND_SORT_STICKY_DISABLED;
+    }
+    else if (donna_config_get_string (config, &s,
+                    "defaults/arrangements/%s/second_sort",
+                    (is_tree (tree)) ? "tree" : "list"))
+    {
+        if (donna_config_get_boolean (config, &sticky,
+                    "defaults/arrangements/%s/second_sort_sticky",
+                    (is_tree (tree)) ? "tree" : "list"))
+            arr->second_sort_sticky = (sticky) ? DONNA_SECOND_SORT_STICKY_ENABLED
+                : DONNA_SECOND_SORT_STICKY_DISABLED;
+    }
+    if (s)
+    {
+        gchar *ss;
+
+        ss = strchr (s, ':');
+        if (ss)
+            *ss = '\0';
+
+        arr->second_sort_column = s;
+        if (ss)
+            arr->second_sort_order = (ss[1] == 'd')
+                ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+
+        arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
+    }
+
+    return arr;
 }
 
 void
 donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
 {
     DonnaTreeViewPrivate *priv;
-    gchar *s;
+    DonnaArrangement *arr;
 
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
 
@@ -3093,10 +3161,84 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     g_debug ("treeview '%s': build arrangement (force=%d)",
             priv->name, force);
 
-    s = select_arrangement (tree, priv->location);
-    if (force || !priv->arrangement || !streq (s, priv->arrangement))
-        load_arrangement (tree, s, priv->location);
-    g_free (s);
+    arr = select_arrangement (tree, priv->location);
+    if (!arr && force)
+        arr = load_default_arrangement (tree);
+
+    if (arr)
+    {
+        if (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS)
+            load_arrangement (tree, arr);
+        else
+        {
+            GList *list, *l;
+            const gchar *name;
+            gint sort_id;
+            GtkSortType order;
+
+            list = gtk_tree_view_get_columns (GTK_TREE_VIEW (tree));
+            if (arr->flags & DONNA_ARRANGEMENT_HAS_SORT)
+            {
+                for (l = list; l; l = l->next)
+                {
+                    name = g_object_get_data (l->data, "column-name");
+                    if (streq (name, arr->sort_column))
+                    {
+                        priv->sort_column = l->data;
+                        sort_id = GPOINTER_TO_INT (g_object_get_data (l->data,
+                                    "sort_id"));
+                        if (arr->sort_order != DONNA_SORT_UNKNOWN)
+                            order = (arr->sort_order == DONNA_SORT_ASC)
+                                ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
+                        else
+                            order = gtk_tree_view_column_get_sort_order (l->data);
+
+                        gtk_tree_view_column_set_sort_order (l->data, order);
+                        gtk_tree_sortable_set_sort_column_id (
+                                GTK_TREE_SORTABLE (priv->store), sort_id, order);
+
+                        break;
+                    }
+                }
+            }
+            if (arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT)
+            {
+                for (l = list; l; l = l->next)
+                {
+                    name = g_object_get_data (l->data, "column-name");
+                    if (streq (name, arr->sort_column))
+                    {
+                        GtkTreeSortable *sortable;
+                        gint cur_sort_id;
+                        GtkSortType cur_sort_order;
+
+                        priv->second_sort_column = l->data;
+                        if (arr->sort_order != DONNA_SORT_UNKNOWN)
+                            priv->second_sort_order =
+                                (arr->sort_order == DONNA_SORT_ASC)
+                                ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
+
+                        if (arr->second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
+                            priv->second_sort_sticky =
+                                arr->second_sort_sticky == DONNA_SECOND_SORT_STICKY_ENABLED;
+
+                        /* trigger a resort */
+                        sortable = (GtkTreeSortable *) priv->store;
+                        gtk_tree_sortable_get_sort_column_id (sortable,
+                                &cur_sort_id, &cur_sort_order);
+                        gtk_tree_sortable_set_sort_column_id (sortable,
+                                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID,
+                                cur_sort_order);
+                        gtk_tree_sortable_set_sort_column_id (sortable,
+                                cur_sort_id, cur_sort_order);
+                        break;
+                    }
+                }
+            }
+            g_list_free (list);
+        }
+        free_arrangement (arr);
+    }
 }
 
 struct set_node_prop_data
@@ -5043,7 +5185,7 @@ donna_tree_view_new (DonnaApp    *app,
             G_CALLBACK (selection_changed_cb), tree);
 
     /* columns */
-    donna_tree_view_build_arrangement (tree, FALSE);
+    donna_tree_view_build_arrangement (tree, TRUE);
 
     return w;
 }
