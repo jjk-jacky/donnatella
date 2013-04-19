@@ -2589,6 +2589,14 @@ free_arrangement (DonnaArrangement *arr)
     g_free (arr);
 }
 
+static gint
+no_sort (GtkTreeModel *model, GtkTreeIter *i1, GtkTreeIter *i2, gpointer data)
+{
+    g_critical ("Treeview '%s': Invalid sorting function called",
+            ((DonnaTreeView *) data)->priv->name);
+    return 0;
+}
+
 static void
 load_arrangement (DonnaTreeView     *tree,
                   DonnaArrangement  *arrangement)
@@ -2626,6 +2634,7 @@ load_arrangement (DonnaTreeView     *tree,
         gtk_tree_view_column_set_sizing (expander_column,
                 GTK_TREE_VIEW_COLUMN_FIXED);
         gtk_tree_view_append_column (treev, expander_column);
+        last_column = expander_column;
     }
     else
         /* so we can make the first column to use it the expander column */
@@ -2655,7 +2664,7 @@ load_arrangement (DonnaTreeView     *tree,
         second_sort_column = g_strdup (g_object_get_data (
                     G_OBJECT (priv->second_sort_column), "column-name"));
     if (second_sort_column)
-        second_sort_len = strlen (arrangement->second_sort_column);
+        second_sort_len = strlen (second_sort_column);
 
     for (;;)
     {
@@ -2996,16 +3005,22 @@ next:
     /* remove all columns left unused */
     while (list)
     {
-        /* though we should never try to sort by a sort_id not used by a column,
-         * let's make sure if that happens, we just get a warning (instead of
-         * dereferencing a pointer pointing nowhere) */
-        gtk_tree_sortable_set_sort_func (sortable, sort_id++, NULL, NULL, NULL);
-        /* free the columntype-data */
-        donna_columntype_free_data (
-                g_object_get_data (list->data, "column-type"),
-                priv->name,
-                g_object_get_data (list->data, "column-name"),
-                g_object_get_data (list->data, "columntype-data"));
+        gpointer ct;
+
+        ct = g_object_get_data (list->data, "column-type");
+        if (ct)
+        {
+            /* though we should never try to sort by a sort_id not used by a column,
+             * let's make sure if that happens, we just get a warning (instead of
+             * dereferencing a pointer pointing nowhere) */
+            gtk_tree_sortable_set_sort_func (sortable, sort_id++, no_sort, tree, NULL);
+            /* free the columntype-data */
+            donna_columntype_free_data (
+                    ct,
+                    priv->name,
+                    g_object_get_data (list->data, "column-name"),
+                    g_object_get_data (list->data, "columntype-data"));
+        }
         /* remove column */
         gtk_tree_view_remove_column (treev, list->data);
         list = g_list_delete_link (list, list);
