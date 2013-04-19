@@ -113,23 +113,6 @@ donna_app_get_columntype (DonnaApp       *app,
     return (*interface->get_columntype) (app, type);
 }
 
-gchar *
-donna_app_get_arrangement (DonnaApp       *app,
-                           DonnaNode      *node)
-{
-    DonnaAppInterface *interface;
-
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    interface = DONNA_APP_GET_INTERFACE (app);
-
-    g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_arrangement != NULL, NULL);
-
-    return (*interface->get_arrangement) (app, node);
-}
-
 void
 donna_app_run_task (DonnaApp       *app,
                     DonnaTask      *task)

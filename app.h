@@ -25,8 +25,6 @@ struct _DonnaAppInterface
                                                      const gchar    *domain);
     DonnaColumnType *   (*get_columntype)           (DonnaApp       *app,
                                                      const gchar    *type);
-    gchar *             (*get_arrangement)          (DonnaApp       *app,
-                                                     DonnaNode      *node);
     void                (*run_task)                 (DonnaApp       *app,
                                                      DonnaTask      *task);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
@@ -47,8 +45,6 @@ DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
 DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
                                                      const gchar    *type);
-gchar *             donna_app_get_arrangement       (DonnaApp       *app,
-                                                     DonnaNode      *node);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,

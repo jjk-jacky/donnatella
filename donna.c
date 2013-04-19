@@ -39,6 +39,7 @@ struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
     DonnaConfig     *config;
+    GSList          *treeviews;
     GSList          *arrangements;
     GThreadPool     *pool;
     DonnaTreeView   *active_list;
@@ -80,8 +81,6 @@ static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
                                                      const gchar    *domain);
 static DonnaColumnType *donna_donna_get_columntype  (DonnaApp       *app,
                                                      const gchar    *type);
-static gchar *          donna_donna_get_arrangement (DonnaApp       *app,
-                                                     DonnaNode      *node);
 static void             donna_donna_run_task        (DonnaApp       *app,
                                                      DonnaTask      *task);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
@@ -97,7 +96,6 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->peek_config      = donna_donna_peek_config;
     interface->get_provider     = donna_donna_get_provider;
     interface->get_columntype   = donna_donna_get_columntype;
-    interface->get_arrangement  = donna_donna_get_arrangement;
     interface->run_task         = donna_donna_run_task;
     interface->get_treeview     = donna_donna_get_treeview;
     interface->show_error       = donna_donna_show_error;
@@ -349,6 +347,19 @@ donna_donna_get_columntype (DonnaApp       *app,
     return (i < NB_COL_TYPES) ? g_object_ref (priv->column_types[i].ct) : NULL;
 }
 
+void
+donna_donna_run_task (DonnaApp    *app,
+                      DonnaTask   *task)
+{
+    g_return_if_fail (DONNA_IS_DONNA (app));
+    g_return_if_fail (DONNA_IS_TASK (task));
+
+    /* FIXME if task is public, add to task manager */
+    donna_task_prepare (task);
+    g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
+            g_object_ref_sink (task), NULL);
+}
+
 gchar *
 donna_donna_get_arrangement (DonnaApp   *app,
                              DonnaNode  *node)
@@ -392,27 +403,106 @@ donna_donna_get_arrangement (DonnaApp   *app,
     return arr;
 }
 
-void
-donna_donna_run_task (DonnaApp    *app,
-                      DonnaTask   *task)
+static DonnaArrangement *
+tree_select_arrangement (DonnaTreeView  *tree,
+                         const gchar    *tv_name,
+                         DonnaNode      *node,
+                         DonnaDonna     *donna)
 {
-    g_return_if_fail (DONNA_IS_DONNA (app));
-    g_return_if_fail (DONNA_IS_TASK (task));
+    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaArrangement *arr = NULL;
+    GSList *l;
+    gchar buf[255], *b = buf;
+    gchar *location;
+    gsize len;
 
-    /* FIXME if task is public, add to task manager */
-    donna_task_prepare (task);
-    g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
-            g_object_ref_sink (task), NULL);
+    /* get full location of node, with an added / at the end so mask can easily
+     * be made for a folder & its subfodlers */
+    location = donna_node_get_location (node);
+    len = snprintf (buf, 255, "%s:%s/", donna_node_get_domain (node), location);
+    if (len >= 255)
+        b = g_strdup_printf ("%s:%s/", donna_node_get_domain (node), location);
+    g_free (location);
+
+    for (l = priv->arrangements; l; l = l->next)
+    {
+        struct argmt *argmt = l->data;
+
+        g_debug("test arr %s", argmt->name);
+        if (g_pattern_match_string (argmt->pspec, b))
+        {
+            arr = g_new0 (DonnaArrangement, 1);
+
+            if (donna_config_get_string (priv->config, &arr->columns,
+                        "arrangements/%s/columns", argmt->name))
+                arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+
+            if (donna_config_get_string (priv->config, &arr->sort_column,
+                        "arrangements/%s/sort", argmt->name))
+            {
+                gchar *s;
+
+                s = strchr (arr->sort_column, ':');
+                if (s)
+                {
+                    *s = '\0';
+                    arr->sort_order = (s[1] == 'd') ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+                }
+
+                arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
+            }
+
+            g_debug("yes, flags=%d", arr->flags);
+            break;
+        }
+    }
+    if (b != buf)
+        g_free (b);
+
+    return arr;
 }
 
+DonnaTreeView *
+donna_load_treeview (DonnaDonna *donna, const gchar *name)
+{
+    DonnaTreeView *tree;
+
+    tree = donna_donna_get_treeview ((DonnaApp *) donna, name);
+    if (!tree)
+    {
+        /* shall we load it indeed */
+        tree = (DonnaTreeView *) donna_tree_view_new ((DonnaApp *) donna, name);
+        if (tree)
+        {
+            g_signal_connect (tree, "select-arrangement",
+                    G_CALLBACK (tree_select_arrangement), donna);
+            donna->priv->treeviews = g_slist_prepend (donna->priv->treeviews,
+                    g_object_ref (tree));
+        }
+    }
+    return tree;
+}
 
 static DonnaTreeView *
 donna_donna_get_treeview (DonnaApp       *app,
                           const gchar    *name)
 {
+    DonnaDonnaPrivate *priv;
+    DonnaTreeView *tree = NULL;
+    GSList *l;
+
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    /* FIXME */
-    return DONNA_DONNA (app)->priv->active_list;
+
+    priv = ((DonnaDonna *) app)->priv;
+    for (l = priv->treeviews; l; l = l->next)
+    {
+        if (streq (name, donna_tree_view_get_name (l->data)))
+        {
+            tree = g_object_ref (l->data);
+            break;
+        }
+    }
+    return tree;
 }
 
 static void
@@ -652,7 +742,7 @@ main (int argc, char *argv[])
     DonnaConfig *config = donna_app_peek_config (DONNA_APP (d));
     donna_config_set_uint (config, 1, "treeviews/tree/mode");
     donna_config_set_string (config, "name", "treeviews/tree/arrangement/sort");
-    _tree = donna_tree_view_new (DONNA_APP (d), "tree");
+    _tree = (GtkWidget *) donna_load_treeview (d, "tree");
     tree = GTK_TREE_VIEW (_tree);
     /* scrolled window */
     _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
@@ -664,7 +754,7 @@ main (int argc, char *argv[])
 
     /* list */
     donna_config_set_string (config, "name", "treeviews/list/arrangement/sort");
-    _list = donna_tree_view_new (DONNA_APP (d), "list");
+    _list = (GtkWidget *) donna_load_treeview (d, "list");
     list = GTK_TREE_VIEW (_list);
     /* scrolled window */
     _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
