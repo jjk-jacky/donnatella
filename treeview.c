@@ -252,6 +252,8 @@ static void free_active_spinners (struct active_spinners *as);
 
 static gboolean donna_tree_view_button_press_event  (GtkWidget      *widget,
                                                      GdkEventButton *event);
+static gboolean donna_tree_view_button_release_event(GtkWidget      *widget,
+                                                     GdkEventButton *event);
 static void     donna_tree_view_row_activated       (GtkTreeView    *treev,
                                                      GtkTreePath    *path,
                                                      GtkTreeViewColumn *column);
@@ -286,6 +288,7 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     w_class = GTK_WIDGET_CLASS (klass);
     w_class->draw = donna_tree_view_draw;
     w_class->button_press_event = donna_tree_view_button_press_event;
+    w_class->button_release_event = donna_tree_view_button_release_event;
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->get_property   = donna_tree_view_get_property;
@@ -2848,6 +2851,7 @@ load_arrangement (DonnaTreeView     *tree,
             /* add it (we add now because we can't get the button (to connect)
              * until it's been added to the treev) */
             gtk_tree_view_append_column (treev, column);
+            gtk_tree_view_move_column_after (treev, column, last_column);
             /* click on column header stuff -- see
              * column_button_release_event_cb() for more about this */
             data = g_new0 (struct col_btn_data, 1);
@@ -2970,19 +2974,22 @@ next:
         if (b != buf)
             g_free (b);
         if (*e == '\0')
-        {
-            if (!is_tree (tree))
-            {
-                /* we add an extra (empty) column, so we can have some
-                 * free/blank space on the right, instead of having the last
-                 * column to be used to fill the space and whatnot */
-                column = gtk_tree_view_column_new ();
-                gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
-                gtk_tree_view_append_column (treev, column);
-            }
             break;
-        }
         col = e + 1;
+    }
+
+    if (!is_tree (tree))
+    {
+        GtkTreeViewColumn *column;
+
+        /* we add an extra (empty) column, so we can have some
+         * free/blank space on the right, instead of having the last
+         * column to be used to fill the space and whatnot */
+        column = gtk_tree_view_column_new ();
+        gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
+        g_object_set (column, "expand", TRUE, NULL);
+        gtk_tree_view_append_column (treev, column);
+        gtk_tree_view_move_column_after (treev, column, last_column);
     }
 
     /* set expander column */
@@ -4989,6 +4996,46 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
 chainup:
     return GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_press_event (
             widget, event);
+}
+
+static gboolean
+donna_tree_view_button_release_event (GtkWidget      *widget,
+                                      GdkEventButton *event)
+{
+    gboolean ret;
+    GList *list, *l;
+
+    ret = GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_release_event (
+            widget, event);
+
+    /* because after a user resize of a column, GTK might have set the expand
+     * property to TRUE which will then cause it to auto-expand on following
+     * resize (of other columns or entire window), something we don't want.
+     * So, to ensure our columns stay the size they are, and because there's no
+     * event "release-post-column-resize" or something, we do the following:
+     * After a button release on tree (which handles the column resize) we check
+     * all columns with a name (i.e. skip our non-visible expander or blank
+     * space on the right) and, if the property expand is TRUE, we set it back
+     * to FALSE. We also set the fixed-width to the current width otherwise the
+     * column shrinks unexpectedly. */
+    list = gtk_tree_view_get_columns (GTK_TREE_VIEW (widget));
+    for (l = list; l; l = l->next)
+    {
+        if (g_object_get_data (l->data,"column-name"))
+        {
+            gboolean expand;
+
+            g_object_get (l->data, "expand", &expand, NULL);
+            if (expand)
+                g_object_set (l->data,
+                        "expand",       FALSE,
+                        "fixed-width",  gtk_tree_view_column_get_width (l->data),
+                        NULL);
+        }
+    }
+    g_list_free (list);
+
+    return ret;
 }
 
 static gboolean
