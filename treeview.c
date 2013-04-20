@@ -3223,6 +3223,16 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     {
         gboolean all;
 
+        /* just in case this is our first arrangement, and it doesn't specify
+         * any columns, we load them from default */
+        if (!priv->arrangement && !(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
+        {
+            DonnaArrangement *a;
+            a = load_default_arrangement (tree);
+            load_arrangement (tree, a);
+            free_arrangement (a);
+        }
+
         /* always apply the arrangement if force, we didn't have one yet, or
          * it's a different one. Else, we'll only apply things with the ALWAYS
          * flag on (e.g. so we can preserve a changed sort order) */
