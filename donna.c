@@ -360,49 +360,6 @@ donna_donna_run_task (DonnaApp    *app,
             g_object_ref_sink (task), NULL);
 }
 
-gchar *
-donna_donna_get_arrangement (DonnaApp   *app,
-                             DonnaNode  *node)
-{
-    DonnaDonnaPrivate *priv;
-    GSList *l;
-    gchar *location;
-    const gchar *domain;
-    gchar *arr;
-    gchar  buf[255];
-    gchar *b = buf;
-    gsize  len;
-
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    priv = DONNA_DONNA (app)->priv;
-
-    /* get full location of node */
-    domain = donna_node_get_domain (node);
-    location = donna_node_get_location (node);
-    len = snprintf (buf, 255, "%s:%s", domain, location);
-    if (len >= 255)
-        b = g_strdup_printf ("%s:%s", domain, location);
-    g_free (location);
-
-    arr = NULL;
-    for (l = priv->arrangements; l; l = l->next)
-    {
-        struct argmt *argmt = l->data;
-
-        if (g_pattern_match_string (argmt->pspec, b))
-        {
-            arr = g_strdup (argmt->name);
-            break;
-        }
-    }
-    if (b != buf)
-        g_free (b);
-
-    return arr;
-}
-
 static DonnaArrangement *
 tree_select_arrangement (DonnaTreeView  *tree,
                          const gchar    *tv_name,
@@ -416,6 +373,9 @@ tree_select_arrangement (DonnaTreeView  *tree,
     gchar *location;
     gsize len;
 
+    if (!node)
+        return NULL;
+
     /* get full location of node, with an added / at the end so mask can easily
      * be made for a folder & its subfodlers */
     location = donna_node_get_location (node);
@@ -428,14 +388,22 @@ tree_select_arrangement (DonnaTreeView  *tree,
     {
         struct argmt *argmt = l->data;
 
-        g_debug("test arr %s", argmt->name);
         if (g_pattern_match_string (argmt->pspec, b))
         {
+            gboolean always;
+
             arr = g_new0 (DonnaArrangement, 1);
+            arr->priority = DONNA_ARRANGEMENT_PRIORITY_NORMAL;
 
             if (donna_config_get_string (priv->config, &arr->columns,
                         "arrangements/%s/columns", argmt->name))
+            {
                 arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+                if (donna_config_get_boolean (priv->config, &always,
+                            "arrangements/%s/columns_always", argmt->name)
+                        && always)
+                    arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;
+            }
 
             if (donna_config_get_string (priv->config, &arr->sort_column,
                         "arrangements/%s/sort", argmt->name))
@@ -450,9 +418,39 @@ tree_select_arrangement (DonnaTreeView  *tree,
                 }
 
                 arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
+                if (donna_config_get_boolean (priv->config, &always,
+                            "arrangements/%s/sort_always", argmt->name)
+                        && always)
+                    arr->flags |= DONNA_ARRANGEMENT_SORT_ALWAYS;
             }
 
-            g_debug("yes, flags=%d", arr->flags);
+            if (donna_config_get_string (priv->config, &arr->second_sort_column,
+                        "arrangements/%s/second_sort", argmt->name))
+            {
+                gchar *s;
+                gboolean sticky;
+
+                s = strchr (arr->second_sort_column, ':');
+                if (s)
+                {
+                    *s = '\0';
+                    arr->second_sort_order = (s[1] == 'd')
+                        ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+                }
+
+                if (donna_config_get_boolean (priv->config, &sticky,
+                            "arrangements/%s/second_sort_sicky", argmt->name))
+                    arr->second_sort_sticky = (sticky)
+                        ? DONNA_SECOND_SORT_STICKY_ENABLED
+                        : DONNA_SECOND_SORT_STICKY_DISABLED;
+
+                arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
+                if (donna_config_get_boolean (priv->config, &always,
+                            "arrangements/%s/second_sort_always", argmt->name)
+                        && always)
+                    arr->flags |= DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS;
+            }
+
             break;
         }
     }
