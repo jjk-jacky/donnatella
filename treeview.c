@@ -2124,7 +2124,7 @@ add_node_to_tree (DonnaTreeView *tree,
     if (!is_tree (tree))
     {
         /* mode list only */
-        donna_tree_store_insert_with_values (priv->store, &iter, parent, 0,
+        donna_tree_store_insert_with_values (priv->store, &iter, parent, -1,
                 DONNA_LIST_COL_NODE,    node,
                 -1);
         if (iter_row)
@@ -2161,7 +2161,7 @@ add_node_to_tree (DonnaTreeView *tree,
             g_object_unref (n);
     }
     if (!added)
-        donna_tree_store_insert_with_values (priv->store, &iter, parent, 0,
+        donna_tree_store_insert_with_values (priv->store, &iter, parent, -1,
                 DONNA_TREE_COL_NODE,            node,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                 -1);
