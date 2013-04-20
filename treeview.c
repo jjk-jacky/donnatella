@@ -3181,26 +3181,6 @@ load_default_arrangement (DonnaTreeView *tree)
     return arr;
 }
 
-static inline gboolean
-arrangement_equals (DonnaArrangement *arr1, DonnaArrangement *arr2)
-{
-    if (arr1->flags != arr2->flags)
-        return FALSE;
-    if (arr1->flags & DONNA_ARRANGEMENT_HAS_COLUMNS
-            && !streq (arr1->columns, arr2->columns))
-        return FALSE;
-    if (arr1->flags & DONNA_ARRANGEMENT_HAS_SORT
-            && (arr1->sort_order != arr2->sort_order
-                || !streq (arr1->sort_column, arr2->sort_column)))
-        return FALSE;
-    if (arr1->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT
-            && (arr1->second_sort_order != arr2->second_sort_order
-                || arr1->second_sort_sticky != arr2->second_sort_sticky
-                || !streq (arr1->second_sort_column, arr2->second_sort_column)))
-        return FALSE;
-    return TRUE;
-}
-
 void
 donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
 {
@@ -3221,11 +3201,12 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
 
     if (arr)
     {
+        DonnaArrangement *cur_arr = priv->arrangement;
         gboolean all;
 
         /* just in case this is our first arrangement, and it doesn't specify
          * any columns, we load them from default */
-        if (!priv->arrangement && !(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
+        if (!cur_arr && !(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
         {
             DonnaArrangement *a;
             a = load_default_arrangement (tree);
@@ -3233,14 +3214,11 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
             free_arrangement (a);
         }
 
-        /* always apply the arrangement if force, we didn't have one yet, or
-         * it's a different one. Else, we'll only apply things with the ALWAYS
-         * flag on (e.g. so we can preserve a changed sort order) */
-        all = force || !priv->arrangement
-            || !arrangement_equals (priv->arrangement, arr);
+        all = force || !cur_arr;
 
         if (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS
-                && (all || arr->flags & DONNA_ARRANGEMENT_COLUMNS_ALWAYS))
+                && (all || arr->flags & DONNA_ARRANGEMENT_COLUMNS_ALWAYS
+                    || !streq (cur_arr->columns, arr->columns)))
             load_arrangement (tree, arr);
         else
         {
@@ -3250,7 +3228,9 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
 
             list = gtk_tree_view_get_columns (GTK_TREE_VIEW (tree));
             if (arr->flags & DONNA_ARRANGEMENT_HAS_SORT
-                    && (all || arr->flags & DONNA_ARRANGEMENT_SORT_ALWAYS))
+                    && (all || arr->flags & DONNA_ARRANGEMENT_SORT_ALWAYS
+                        || !(cur_arr->sort_order == arr->sort_order
+                            && streq (cur_arr->sort_column, arr->sort_column))))
             {
                 for (l = list; l; l = l->next)
                 {
@@ -3263,7 +3243,11 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 }
             }
             if (arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT
-                    && (all || arr->flags & DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS))
+                    && (all || arr->flags & DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS
+                        || !(cur_arr->second_sort_order == arr->second_sort_order
+                            && cur_arr->second_sort_sticky == arr->second_sort_sticky
+                            && streq (cur_arr->second_sort_column,
+                                arr->second_sort_column))))
             {
                 for (l = list; l; l = l->next)
                 {
