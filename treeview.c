@@ -2258,6 +2258,9 @@ add_node_to_tree (DonnaTreeView *tree,
             donna_tree_store_set (priv->store, &iter,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
                     -1);
+        /* fix some weird glitch sometimes, when adding row/root on top and
+         * scrollbar is updated */
+        gtk_widget_queue_draw (GTK_WIDGET (tree));
         return TRUE;
     }
 
@@ -2301,6 +2304,9 @@ add_node_to_tree (DonnaTreeView *tree,
         g_clear_error (&err);
     }
 
+    /* fix some weird glitch sometimes, when adding row/root on top and
+     * scrollbar is updated */
+    gtk_widget_queue_draw (GTK_WIDGET (tree));
     return TRUE;
 }
 
