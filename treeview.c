@@ -142,6 +142,9 @@ struct _DonnaTreeViewPrivate
     /* since it's not part of GtkTreeSortable */
     GtkSortType          second_sort_order;
 
+    /* current arrangement */
+    DonnaArrangement    *arrangement;
+
     /* properties used by our columns */
     GArray              *col_props;
 
@@ -2304,9 +2307,15 @@ add_node_to_tree (DonnaTreeView *tree,
 gboolean
 donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node)
 {
+    gboolean ret;
+
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (is_tree (tree), FALSE);
-    return add_node_to_tree (tree, NULL, node, NULL);
+
+    ret = add_node_to_tree (tree, NULL, node, NULL);
+    if (!tree->priv->arrangement)
+        donna_tree_view_build_arrangement (tree, FALSE);
+    return ret;
 }
 
 static inline gint
@@ -3166,11 +3175,31 @@ load_default_arrangement (DonnaTreeView *tree)
     return arr;
 }
 
+static inline gboolean
+arrangement_equals (DonnaArrangement *arr1, DonnaArrangement *arr2)
+{
+    if (arr1->flags != arr2->flags)
+        return FALSE;
+    if (arr1->flags & DONNA_ARRANGEMENT_HAS_COLUMNS
+            && !streq (arr1->columns, arr2->columns))
+        return FALSE;
+    if (arr1->flags & DONNA_ARRANGEMENT_HAS_SORT
+            && (arr1->sort_order != arr2->sort_order
+                || !streq (arr1->sort_column, arr2->sort_column)))
+        return FALSE;
+    if (arr1->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT
+            && (arr1->second_sort_order != arr2->second_sort_order
+                || arr1->second_sort_sticky != arr2->second_sort_sticky
+                || !streq (arr1->second_sort_column, arr2->second_sort_column)))
+        return FALSE;
+    return TRUE;
+}
+
 void
 donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaArrangement *arr;
+    DonnaArrangement *arr = NULL;
 
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
 
@@ -3178,13 +3207,24 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     g_debug ("treeview '%s': build arrangement (force=%d)",
             priv->name, force);
 
-    arr = select_arrangement (tree, priv->location);
-    if (!arr && force)
+    /* list only: emit select-arrangement */
+    if (!is_tree (tree))
+        arr = select_arrangement (tree, priv->location);
+    if (!arr && !priv->arrangement)
         arr = load_default_arrangement (tree);
 
     if (arr)
     {
-        if (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS)
+        gboolean all;
+
+        /* always apply the arrangement if force, we didn't have one yet, or
+         * it's a different one. Else, we'll only apply things with the ALWAYS
+         * flag on (e.g. so we can preserve a changed sort order) */
+        all = force || !priv->arrangement
+            || !arrangement_equals (priv->arrangement, arr);
+
+        if (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS
+                && (all || arr->flags & DONNA_ARRANGEMENT_COLUMNS_ALWAYS))
             load_arrangement (tree, arr);
         else
         {
@@ -3193,7 +3233,8 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
             GtkSortType order;
 
             list = gtk_tree_view_get_columns (GTK_TREE_VIEW (tree));
-            if (arr->flags & DONNA_ARRANGEMENT_HAS_SORT)
+            if (arr->flags & DONNA_ARRANGEMENT_HAS_SORT
+                    && (all || arr->flags & DONNA_ARRANGEMENT_SORT_ALWAYS))
             {
                 for (l = list; l; l = l->next)
                 {
@@ -3205,7 +3246,8 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                     }
                 }
             }
-            if (arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT)
+            if (arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT
+                    && (all || arr->flags & DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS))
             {
                 for (l = list; l; l = l->next)
                 {
@@ -3220,7 +3262,9 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
             }
             g_list_free (list);
         }
-        free_arrangement (arr);
+
+        free_arrangement (priv->arrangement);
+        priv->arrangement = arr;
     }
 }
 
@@ -5216,9 +5260,6 @@ donna_tree_view_new (DonnaApp    *app,
 
     g_signal_connect (G_OBJECT (sel), "changed",
             G_CALLBACK (selection_changed_cb), tree);
-
-    /* columns */
-    donna_tree_view_build_arrangement (tree, TRUE);
 
     return w;
 }
