@@ -392,66 +392,79 @@ tree_select_arrangement (DonnaTreeView  *tree,
         {
             gboolean always;
 
-            arr = g_new0 (DonnaArrangement, 1);
-            arr->priority = DONNA_ARRANGEMENT_PRIORITY_NORMAL;
-
-            if (donna_config_get_string (priv->config, &arr->columns,
-                        "arrangements/%s/columns", argmt->name))
+            if (!arr)
             {
-                arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
-                if (donna_config_get_boolean (priv->config, &always,
-                            "arrangements/%s/columns_always", argmt->name)
-                        && always)
-                    arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;
+                arr = g_new0 (DonnaArrangement, 1);
+                arr->priority = DONNA_ARRANGEMENT_PRIORITY_NORMAL;
             }
 
-            if (donna_config_get_string (priv->config, &arr->sort_column,
-                        "arrangements/%s/sort", argmt->name))
+            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
             {
-                gchar *s;
-
-                s = strchr (arr->sort_column, ':');
-                if (s)
+                if (donna_config_get_string (priv->config, &arr->columns,
+                            "arrangements/%s/columns", argmt->name))
                 {
-                    *s = '\0';
-                    arr->sort_order = (s[1] == 'd') ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+                    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+                    if (donna_config_get_boolean (priv->config, &always,
+                                "arrangements/%s/columns_always", argmt->name)
+                            && always)
+                        arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;
                 }
-
-                arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
-                if (donna_config_get_boolean (priv->config, &always,
-                            "arrangements/%s/sort_always", argmt->name)
-                        && always)
-                    arr->flags |= DONNA_ARRANGEMENT_SORT_ALWAYS;
             }
 
-            if (donna_config_get_string (priv->config, &arr->second_sort_column,
-                        "arrangements/%s/second_sort", argmt->name))
+            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
             {
-                gchar *s;
-                gboolean sticky;
-
-                s = strchr (arr->second_sort_column, ':');
-                if (s)
+                if (donna_config_get_string (priv->config, &arr->sort_column,
+                            "arrangements/%s/sort", argmt->name))
                 {
-                    *s = '\0';
-                    arr->second_sort_order = (s[1] == 'd')
-                        ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+                    gchar *s;
+
+                    s = strchr (arr->sort_column, ':');
+                    if (s)
+                    {
+                        *s = '\0';
+                        arr->sort_order = (s[1] == 'd') ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+                    }
+
+                    arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
+                    if (donna_config_get_boolean (priv->config, &always,
+                                "arrangements/%s/sort_always", argmt->name)
+                            && always)
+                        arr->flags |= DONNA_ARRANGEMENT_SORT_ALWAYS;
                 }
-
-                if (donna_config_get_boolean (priv->config, &sticky,
-                            "arrangements/%s/second_sort_sicky", argmt->name))
-                    arr->second_sort_sticky = (sticky)
-                        ? DONNA_SECOND_SORT_STICKY_ENABLED
-                        : DONNA_SECOND_SORT_STICKY_DISABLED;
-
-                arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
-                if (donna_config_get_boolean (priv->config, &always,
-                            "arrangements/%s/second_sort_always", argmt->name)
-                        && always)
-                    arr->flags |= DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS;
             }
 
-            break;
+            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
+            {
+                if (donna_config_get_string (priv->config, &arr->second_sort_column,
+                            "arrangements/%s/second_sort", argmt->name))
+                {
+                    gchar *s;
+                    gboolean sticky;
+
+                    s = strchr (arr->second_sort_column, ':');
+                    if (s)
+                    {
+                        *s = '\0';
+                        arr->second_sort_order = (s[1] == 'd')
+                            ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+                    }
+
+                    if (donna_config_get_boolean (priv->config, &sticky,
+                                "arrangements/%s/second_sort_sticky", argmt->name))
+                        arr->second_sort_sticky = (sticky)
+                            ? DONNA_SECOND_SORT_STICKY_ENABLED
+                            : DONNA_SECOND_SORT_STICKY_DISABLED;
+
+                    arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
+                    if (donna_config_get_boolean (priv->config, &always,
+                                "arrangements/%s/second_sort_always", argmt->name)
+                            && always)
+                        arr->flags |= DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS;
+                }
+            }
+
+            if ((arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL)
+                break;
         }
     }
     if (b != buf)
