@@ -44,6 +44,7 @@ struct _DonnaColumnTypeInterface
     DonnaColumnTypeNeed (*refresh_data)     (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
+                                             const gchar        *arr_name,
                                              gpointer           *data);
     void                (*free_data)        (DonnaColumnType    *ct,
                                              gpointer            data);
@@ -53,6 +54,7 @@ struct _DonnaColumnTypeInterface
                                             (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
+                                             const gchar        *arr_name,
                                              gpointer            data);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
                                              gpointer            data);
@@ -81,6 +83,7 @@ const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
 DonnaColumnTypeNeed donna_columntype_refresh_data (DonnaColumnType  *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
+                                                 const gchar        *arr_name,
                                                  gpointer           *data);
 void            donna_columntype_free_data      (DonnaColumnType    *ct,
                                                  gpointer            data);
@@ -90,6 +93,7 @@ GtkSortType     donna_columntype_get_default_sort_order
                                                 (DonnaColumnType    *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
+                                                 const gchar        *arr_name,
                                                  gpointer            data);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  gpointer            data);

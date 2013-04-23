@@ -1505,6 +1505,7 @@ static gintptr
 _get_option_column (DonnaConfig *config,
                     const gchar *tv_name,
                     const gchar *col_name,
+                    const gchar *arr_name,
                     const gchar *def_cat,
                     const gchar *opt_name,
                     gintptr      def_val,
@@ -1513,20 +1514,24 @@ _get_option_column (DonnaConfig *config,
 {
     gintptr value;
 
-    if (!tv_name || !cfg_get (config, &value, "treeviews/%s/columns/%s/%s",
-                tv_name, col_name, opt_name))
+    if (!(arr_name && cfg_get (config, &value, "%s/columns_options/%s/%s",
+                    arr_name, col_name, opt_name)))
     {
-        if (!cfg_get (config, &value, "columns/%s/%s", col_name, opt_name))
+        if (!tv_name || !cfg_get (config, &value, "treeviews/%s/columns/%s/%s",
+                    tv_name, col_name, opt_name))
         {
-            if (!def_cat)
+            if (!cfg_get (config, &value, "columns/%s/%s", col_name, opt_name))
             {
-                value = def_val;
-                cfg_set (config, value, "columns/%s/%s", col_name, opt_name);
-            }
-            else if (!cfg_get (config, &value, "defaults/%s/%s", def_cat, opt_name))
-            {
-                value = def_val;
-                cfg_set (config, value, "defaults/%s/%s", def_cat, opt_name);
+                if (!def_cat)
+                {
+                    value = def_val;
+                    cfg_set (config, value, "columns/%s/%s", col_name, opt_name);
+                }
+                else if (!cfg_get (config, &value, "defaults/%s/%s", def_cat, opt_name))
+                {
+                    value = def_val;
+                    cfg_set (config, value, "defaults/%s/%s", def_cat, opt_name);
+                }
             }
         }
     }
@@ -1537,12 +1542,13 @@ gboolean
 donna_config_get_boolean_column (DonnaConfig *config,
                                  const gchar *tv_name,
                                  const gchar *col_name,
+                                 const gchar *arr_name,
                                  const gchar *def_cat,
                                  const gchar *opt_name,
                                  gboolean     def_val)
 {
-    return (gboolean) _get_option_column (config, tv_name, col_name, def_cat,
-            opt_name, def_val,
+    return (gboolean) _get_option_column (config, tv_name, col_name, arr_name,
+            def_cat, opt_name, def_val,
             (cfg_get_fn) donna_config_get_boolean,
             (cfg_set_fn) donna_config_set_boolean);
 }
@@ -1551,12 +1557,13 @@ gint
 donna_config_get_int_column (DonnaConfig *config,
                              const gchar *tv_name,
                              const gchar *col_name,
+                             const gchar *arr_name,
                              const gchar *def_cat,
                              const gchar *opt_name,
                              gint         def_val)
 {
-    return (gint) _get_option_column (config, tv_name, col_name, def_cat,
-            opt_name, def_val,
+    return (gint) _get_option_column (config, tv_name, col_name, arr_name,
+            def_cat, opt_name, def_val,
             (cfg_get_fn) donna_config_get_int,
             (cfg_set_fn) donna_config_set_int);
 }
@@ -1565,12 +1572,13 @@ guint
 donna_config_get_uint_column (DonnaConfig *config,
                               const gchar *tv_name,
                               const gchar *col_name,
+                              const gchar *arr_name,
                               const gchar *def_cat,
                               const gchar *opt_name,
                               guint        def_val)
 {
-    return (guint) _get_option_column (config, tv_name, col_name, def_cat,
-            opt_name, def_val,
+    return (guint) _get_option_column (config, tv_name, col_name, arr_name,
+            def_cat, opt_name, def_val,
             (cfg_get_fn) donna_config_get_uint,
             (cfg_set_fn) donna_config_set_uint);
 }
@@ -1579,12 +1587,13 @@ gdouble
 donna_config_get_double_column (DonnaConfig *config,
                                 const gchar *tv_name,
                                 const gchar *col_name,
+                                const gchar *arr_name,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
                                 gdouble      def_val)
 {
-    return (gdouble) _get_option_column (config, tv_name, col_name, def_cat,
-            opt_name, def_val,
+    return (gdouble) _get_option_column (config, tv_name, col_name, arr_name,
+            def_cat, opt_name, def_val,
             (cfg_get_fn) donna_config_get_double,
             (cfg_set_fn) donna_config_set_double);
 }
@@ -1593,14 +1602,15 @@ gchar *
 donna_config_get_string_column (DonnaConfig *config,
                                 const gchar *tv_name,
                                 const gchar *col_name,
+                                const gchar *arr_name,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
                                 gchar       *def_val)
 {
     gchar *ret;
 
-    ret = (gchar *) _get_option_column (config, tv_name, col_name, def_cat,
-            opt_name, (gintptr) def_val,
+    ret = (gchar *) _get_option_column (config, tv_name, col_name, arr_name,
+            def_cat, opt_name, (gintptr) def_val,
             (cfg_get_fn) donna_config_get_string,
             (cfg_set_fn) donna_config_set_string);
     return (ret == def_val) ? g_strdup (ret) : ret;

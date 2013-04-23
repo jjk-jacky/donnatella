@@ -9,6 +9,7 @@ static GtkSortType
 default_get_default_sort_order (DonnaColumnType    *ct,
                                 const gchar        *tv_name,
                                 const gchar        *col_name,
+                                const gchar        *arr_name,
                                 gpointer            data)
 {
     DonnaColumnTypeInterface *interface;
@@ -26,7 +27,7 @@ default_get_default_sort_order (DonnaColumnType    *ct,
         strcpy (stpcpy (buf, "columntypes/"), type);
 
     order = (donna_config_get_boolean_column (donna_app_peek_config (app),
-                tv_name, col_name, b, "desc_first", FALSE))
+                tv_name, col_name, arr_name, b, "desc_first", FALSE))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
     if (G_UNLIKELY (b != buf))
@@ -111,6 +112,7 @@ DonnaColumnTypeNeed
 donna_columntype_refresh_data (DonnaColumnType  *ct,
                                const gchar        *tv_name,
                                const gchar        *col_name,
+                               const gchar        *arr_name,
                                gpointer           *data)
 {
     DonnaColumnTypeInterface *interface;
@@ -125,7 +127,7 @@ donna_columntype_refresh_data (DonnaColumnType  *ct,
     g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
     g_return_val_if_fail (interface->refresh_data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
 
-    return (*interface->refresh_data) (ct, tv_name, col_name, data);
+    return (*interface->refresh_data) (ct, tv_name, col_name, arr_name, data);
 }
 
 void
@@ -165,6 +167,7 @@ GtkSortType
 donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
                                          const gchar        *tv_name,
                                          const gchar        *col_name,
+                                         const gchar        *arr_name,
                                          gpointer            data)
 {
     DonnaColumnTypeInterface *interface;
@@ -178,7 +181,7 @@ donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
     g_return_val_if_fail (interface != NULL, GTK_SORT_ASCENDING);
     g_return_val_if_fail (interface->get_default_sort_order != NULL, GTK_SORT_ASCENDING);
 
-    return (*interface->get_default_sort_order) (ct, tv_name, col_name, data);
+    return (*interface->get_default_sort_order) (ct, tv_name, col_name, arr_name, data);
 }
 
 GtkMenu *

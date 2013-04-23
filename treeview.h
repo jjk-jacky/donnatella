@@ -45,16 +45,19 @@ typedef enum
 
 typedef enum
 {
-    DONNA_ARRANGEMENT_HAS_COLUMNS           = (1 << 0),
-    DONNA_ARRANGEMENT_HAS_SORT              = (1 << 1),
-    DONNA_ARRANGEMENT_HAS_SECOND_SORT       = (1 << 2),
+    DONNA_ARRANGEMENT_HAS_COLUMNS               = (1 << 0),
+    DONNA_ARRANGEMENT_HAS_SORT                  = (1 << 1),
+    DONNA_ARRANGEMENT_HAS_SECOND_SORT           = (1 << 2),
+    DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS       = (1 << 3),
 
-    DONNA_ARRANGEMENT_COLUMNS_ALWAYS        = (1 << 10),
-    DONNA_ARRANGEMENT_SORT_ALWAYS           = (1 << 11),
-    DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS    = (1 << 12),
+    DONNA_ARRANGEMENT_COLUMNS_ALWAYS            = (1 << 10),
+    DONNA_ARRANGEMENT_SORT_ALWAYS               = (1 << 11),
+    DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS        = (1 << 12),
+    DONNA_ARRANGEMENT_COLUMNS_OPTIONS_ALWAYS    = (1 << 13),
 
     DONNA_ARRANGEMENT_HAS_ALL           = DONNA_ARRANGEMENT_HAS_COLUMNS
         | DONNA_ARRANGEMENT_HAS_SORT | DONNA_ARRANGEMENT_HAS_SECOND_SORT
+        | DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS
 } DonnaArrangementFlags;
 
 struct _DonnaArrangement
@@ -67,6 +70,7 @@ struct _DonnaArrangement
     gchar                       *second_sort_column;
     DonnaSortOrder               second_sort_order;
     DonnaSecondSortSticky        second_sort_sticky;
+    gchar                       *columns_options;
 };
 
 struct _DonnaTreeView

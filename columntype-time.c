@@ -58,6 +58,7 @@ static const gchar *    ct_time_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_time_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     const gchar        *arr_name,
                                                      gpointer           *data);
 static void             ct_time_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -184,6 +185,7 @@ static DonnaColumnTypeNeed
 ct_time_refresh_data (DonnaColumnType    *ct,
                       const gchar        *tv_name,
                       const gchar        *col_name,
+                      const gchar        *arr_name,
                       gpointer           *_data)
 {
     DonnaColumnTypeTime *cttime = DONNA_COLUMNTYPE_TIME (ct);
@@ -199,7 +201,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name,
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
             "columntypes/time", "property", "mtime");
     if (!streq (data->property, s))
     {
@@ -219,8 +221,8 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "time",
-            "format", "%O");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "time", "format", "%O");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -230,16 +232,16 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    sec = donna_config_get_uint_column (config, tv_name, col_name, "time",
-            "age_span_seconds", 7*24*3600);
+    sec = donna_config_get_uint_column (config, tv_name, col_name, arr_name,
+            "time", "age_span_seconds", 7*24*3600);
     if (data->options.age_span_seconds != sec)
     {
         data->options.age_span_seconds = sec;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "time",
-            "age_fallback_fmt", "%F %T");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "time", "age_fallback_fmt", "%F %T");
     if (!streq (data->options.age_fallback_fmt, s))
     {
         g_free ((gchar *) data->options.age_fallback_fmt);
@@ -249,7 +251,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name,
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
             "columntypes/time", "property_tooltip", "mtime");
     if (!streq (data->property_tooltip, s))
     {
@@ -268,7 +270,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name,
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
             "columntypes/time", "format_tooltip", "%c");
     if (!streq (data->format_tooltip, s))
     {
@@ -278,15 +280,15 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    sec = donna_config_get_uint_column (config, tv_name, col_name, NULL,
-            "age_span_seconds_tooltip", 7*24*3600);
+    sec = donna_config_get_uint_column (config, tv_name, col_name, arr_name,
+            NULL, "age_span_seconds_tooltip", 7*24*3600);
     if (data->options_tooltip.age_span_seconds != sec)
     {
         data->options_tooltip.age_span_seconds = sec;
     }
 
-    s = donna_config_get_string_column (config, tv_name, col_name, NULL,
-            "age_fallback_fmt_tooltip", "%F %T");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            NULL, "age_fallback_fmt_tooltip", "%F %T");
     if (!streq (data->options_tooltip.age_fallback_fmt, s))
     {
         g_free ((gchar *) data->options_tooltip.age_fallback_fmt);

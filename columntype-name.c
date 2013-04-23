@@ -50,6 +50,7 @@ static const gchar *    ct_name_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_name_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     const gchar        *arr_name,
                                                      gpointer           *data);
 static void             ct_name_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -174,8 +175,8 @@ ct_name_get_renderers (DonnaColumnType   *ct)
 }
 
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
-    if (donna_config_get_boolean_column (config, tv_name, col_name, "sort",   \
-                opt_name_lower, def_val) == value)                            \
+    if (donna_config_get_boolean_column (config, tv_name, col_name, arr_name, \
+                "sort", opt_name_lower, def_val) == value)                    \
     {                                                                         \
         if (!(data->options & opt_name_upper))                                \
         {                                                                     \
@@ -193,6 +194,7 @@ static DonnaColumnTypeNeed
 ct_name_refresh_data (DonnaColumnType    *ct,
                       const gchar        *tv_name,
                       const gchar        *col_name,
+                      const gchar        *arr_name,
                       gpointer           *_data)
 {
     DonnaColumnTypeName *ctname = DONNA_COLUMNTYPE_NAME (ct);
@@ -207,7 +209,7 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     if (data->is_locale_based != donna_config_get_boolean_column (config,
-                tv_name, col_name, "sort", "locale_based", FALSE))
+                tv_name, col_name, arr_name, "sort", "locale_based", FALSE))
     {
         need |= DONNA_COLUMNTYPE_NEED_RESORT;
         data->is_locale_based = !data->is_locale_based;
@@ -215,8 +217,8 @@ ct_name_refresh_data (DonnaColumnType    *ct,
         if (data->is_locale_based)
         {
             g_free (data->collate_key);
-            data->collate_key = g_strdup_printf ("%s/%s/utf8-collate-key",
-                        tv_name, col_name);
+            data->collate_key = g_strdup_printf ("%s/%s/%s/utf8-collate-key",
+                        tv_name, col_name, arr_name);
         }
         else
             g_free (data->collate_key);
@@ -228,7 +230,7 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     if (data->is_locale_based)
     {
         if (data->sort_special_first != donna_config_get_boolean_column (config,
-                    tv_name, col_name, "sort", "special_first", TRUE))
+                    tv_name, col_name, arr_name, "sort", "special_first", TRUE))
         {
             need |= DONNA_COLUMNTYPE_NEED_RESORT;
             data->sort_special_first = !data->sort_special_first;

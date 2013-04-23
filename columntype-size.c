@@ -48,6 +48,7 @@ static const gchar *    ct_size_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_size_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     const gchar        *arr_name,
                                                      gpointer           *data);
 static void             ct_size_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -173,6 +174,7 @@ static DonnaColumnTypeNeed
 ct_size_refresh_data (DonnaColumnType    *ct,
                       const gchar        *tv_name,
                       const gchar        *col_name,
+                      const gchar        *arr_name,
                       gpointer           *_data)
 {
     DonnaColumnTypeSize *ctsize = DONNA_COLUMNTYPE_SIZE (ct);
@@ -188,8 +190,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/size",
-            "property", "size");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "columntypes/size", "property", "size");
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -201,8 +203,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "size",
-            "format", "%R");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "size", "format", "%R");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -212,8 +214,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, NULL,
-            "format_tooltip", "%B");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            NULL, "format_tooltip", "%B");
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -223,8 +225,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    i = donna_config_get_int_column (config, tv_name, col_name, "size",
-            "digits", 1);
+    i = donna_config_get_int_column (config, tv_name, col_name, arr_name,
+            "size", "digits", 1);
     /* we enforce this, because that's all we support (we can't stote more in
      * data) and that's what makes sense */
     i = MIN (MAX (0, i), 2);
@@ -234,8 +236,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    i = donna_config_get_boolean_column (config, tv_name, col_name, "size",
-            "long_unit", FALSE);
+    i = donna_config_get_boolean_column (config, tv_name, col_name, arr_name,
+            "size", "long_unit", FALSE);
     if (data->long_unit != i)
     {
         data->long_unit = i;

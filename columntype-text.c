@@ -44,6 +44,7 @@ static const gchar *    ct_text_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_text_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     const gchar        *arr_name,
                                                      gpointer           *data);
 static void             ct_text_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -152,8 +153,8 @@ ct_text_get_renderers (DonnaColumnType   *ct)
 }
 
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
-    if (donna_config_get_boolean_column (config, tv_name, col_name, "sort",   \
-                opt_name_lower, def_val) == value)                            \
+    if (donna_config_get_boolean_column (config, tv_name, col_name, arr_name, \
+                "sort", opt_name_lower, def_val) == value)                    \
     {                                                                         \
         if (!(data->options & opt_name_upper))                                \
         {                                                                     \
@@ -171,6 +172,7 @@ static DonnaColumnTypeNeed
 ct_text_refresh_data (DonnaColumnType    *ct,
                       const gchar        *tv_name,
                       const gchar        *col_name,
+                      const gchar        *arr_name,
                       gpointer           *_data)
 {
     DonnaColumnTypeText *cttext = DONNA_COLUMNTYPE_TEXT (ct);
@@ -186,8 +188,8 @@ ct_text_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, NULL,
-            "property", "name");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            NULL, "property", "name");
     if (!streq (data->property, s))
     {
         g_free (data->property);

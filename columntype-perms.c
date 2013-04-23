@@ -81,6 +81,7 @@ static const gchar *    ct_perms_get_renderers      (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_perms_refresh_data    (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     const gchar        *arr_name,
                                                      gpointer           *data);
 static void             ct_perms_free_data          (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -90,6 +91,7 @@ static GtkSortType      ct_perms_get_default_sort_order
                                                     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
+                                                     const gchar        *arr_name,
                                                      gpointer            data);
 static GtkMenu *        ct_perms_get_options_menu   (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -233,6 +235,7 @@ static DonnaColumnTypeNeed
 ct_perms_refresh_data (DonnaColumnType    *ct,
                        const gchar        *tv_name,
                        const gchar        *col_name,
+                       const gchar        *arr_name,
                        gpointer           *_data)
 {
     DonnaColumnTypePerms *ctperms = DONNA_COLUMNTYPE_PERMS (ct);
@@ -248,8 +251,8 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/perms",
-            "format", "%P");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "columntypes/perms", "format", "%P");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -259,8 +262,8 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/perms",
-            "format_tooltip", "%p %U:%G");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "columntypes/perms", "format_tooltip", "%p %U:%G");
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -271,8 +274,8 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/perms",
-            "color_user", "green");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "columntypes/perms", "color_user", "green");
     if (!streq (data->color_user, s))
     {
         g_free (data->color_user);
@@ -282,8 +285,8 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/perms",
-            "color_group", "blue");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "columntypes/perms", "color_group", "blue");
     if (!streq (data->color_group, s))
     {
         g_free (data->color_group);
@@ -293,8 +296,8 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/perms",
-            "color_mixed", "#00aaaa");
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            "columntypes/perms", "color_mixed", "#00aaaa");
     if (!streq (data->color_mixed, s))
     {
         g_free (data->color_mixed);
@@ -304,8 +307,8 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    i = donna_config_get_int_column (config, tv_name, col_name, "columntypes/perms",
-            "sort", SORT_MY_PERMS);
+    i = donna_config_get_int_column (config, tv_name, col_name, arr_name,
+            "columntypes/perms", "sort", SORT_MY_PERMS);
     if (i != data->sort)
     {
         data->sort = (gint8) i;
@@ -346,6 +349,7 @@ static GtkSortType
 ct_perms_get_default_sort_order (DonnaColumnType *ct,
                                  const gchar     *tv_name,
                                  const gchar     *col_name,
+                                 const gchar     *arr_name,
                                  gpointer         _data)
 {
     struct tv_col_data *data = _data;
@@ -353,7 +357,7 @@ ct_perms_get_default_sort_order (DonnaColumnType *ct,
     return (donna_config_get_boolean_column (donna_app_peek_config (
                     DONNA_COLUMNTYPE_PERMS (ct)->priv->app),
                 /* no default since it's based on option sort */
-                tv_name, col_name, NULL, "desc_first",
+                tv_name, col_name, arr_name, NULL, "desc_first",
                 data->sort == SORT_PERMS || data->sort == SORT_MY_PERMS))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 }

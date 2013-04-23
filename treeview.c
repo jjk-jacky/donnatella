@@ -2444,6 +2444,7 @@ set_sort_column (DonnaTreeView      *tree,
                     g_object_get_data (G_OBJECT (column), "column-type"),
                     priv->name,
                     g_object_get_data (G_OBJECT (column), "column-name"),
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
                     g_object_get_data (G_OBJECT (column), "columntype-data"));
         if (refresh_second_arrow)
             set_second_arrow (tree);
@@ -2509,6 +2510,7 @@ set_second_sort_column (DonnaTreeView       *tree,
                     g_object_get_data (G_OBJECT (column), "column-type"),
                     priv->name,
                     g_object_get_data (G_OBJECT (column), "column-name"),
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
                     g_object_get_data (G_OBJECT (column), "columntype-data"));
     }
     else if (order != DONNA_SORT_UNKNOWN)
@@ -2591,6 +2593,7 @@ free_arrangement (DonnaArrangement *arr)
     g_free (arr->columns);
     g_free (arr->sort_column);
     g_free (arr->second_sort_column);
+    g_free (arr->columns_options);
     g_free (arr);
 }
 
@@ -2619,6 +2622,11 @@ no_sort (GtkTreeModel *model, GtkTreeIter *i1, GtkTreeIter *i2, gpointer data)
              && cur_arr->second_sort_sticky == arr->second_sort_sticky      \
              && streq (cur_arr->second_sort_column,                         \
                  arr->second_sort_column))))
+#define must_load_columns_options(arr, cur_arr, force)                      \
+    (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS                     \
+     && (force || !cur_arr                                                  \
+         || arr->flags & DONNA_ARRANGEMENT_COLUMNS_OPTIONS_ALWAYS           \
+         || !streq (cur_arr->columns_options, arr->columns_options)))
 
 static void
 load_arrangement (DonnaTreeView     *tree,
@@ -2730,6 +2738,8 @@ load_arrangement (DonnaTreeView     *tree,
         const gchar       *rend;
         gint               index;
         GPtrArray         *props;
+        gchar              buf[64];
+        gchar             *b = buf;
 
         e = strchrnul (col, ',');
         is_last_col = (*e == '\0');
@@ -2776,8 +2786,22 @@ load_arrangement (DonnaTreeView     *tree,
                     name = g_strdup (col);
                     g_object_set_data_full (G_OBJECT (column), "column-name",
                             name, g_free);
-                    donna_columntype_refresh_data (ct, priv->name, name, &ct_data);
+                    donna_columntype_refresh_data (ct, priv->name, name,
+                            arrangement->columns_options, &ct_data);
                     g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
+                }
+                else if (must_load_columns_options (arrangement, priv->arrangement, force))
+                {
+                    gpointer old;
+
+                    /* refresh data to load new options */
+                    old = ct_data = g_object_get_data (G_OBJECT (column),
+                            "columntype-data");
+                    donna_columntype_refresh_data (ct, priv->name, name,
+                            arrangement->columns_options, &ct_data);
+                    if (ct_data != old)
+                        g_object_set_data (G_OBJECT (column), "columntype-data",
+                                ct_data);
                 }
                 /* move column */
                 gtk_tree_view_move_column_after (treev, column, last_column);
@@ -2803,7 +2827,8 @@ load_arrangement (DonnaTreeView     *tree,
                     name, g_free);
             /* data for use in render & node_cmp */
             ct_data = NULL;
-            donna_columntype_refresh_data (ct, priv->name, name, &ct_data);
+            donna_columntype_refresh_data (ct, priv->name, name,
+                    arrangement->columns_options, &ct_data);
             g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
             /* give our ref on the ct to the column */
             g_object_set_data_full (G_OBJECT (column), "column-type",
@@ -2918,40 +2943,24 @@ load_arrangement (DonnaTreeView     *tree,
             expander_column = column;
 
         /* size */
-        if (!donna_config_get_uint (config, &width, "treeviews/%s/columns/%s/width",
-                    priv->name, col))
-            if (!donna_config_get_uint (config, &width, "columns/%s/width",
-                        col))
-                if (!donna_config_get_uint (config, &width,
-                            "defaults/columntypes/%s/width",
-                            (col_type) ? col_type : col))
-                {
-                    g_critical ("Treeview '%s': No width for column '%s' specified, "
-                            "no default found for columntype '%s' (use 230)",
-                            priv->name, col, (col_type) ? col_type : col);
-                    width = 230;
-                }
+        if (snprintf (buf, 64, "columntypes/%s", col_type) >= 64)
+            b = g_strdup_printf ("columntypes/%s", col_type);
+        width = donna_config_get_uint_column (config, priv->name, col,
+                arrangement->columns_options, b, "width", 230);
         gtk_tree_view_column_set_fixed_width (column, width);
-
-        /* set title */
-        title = NULL;
-        if (!donna_config_get_string (config, &title,
-                    "treeviews/%s/columns/%s/title", priv->name, col))
-            if (!donna_config_get_string (config, &title,
-                        "columns/%s/title", col))
-            {
-                g_warning ("Treeview '%s': No title set for column '%s', using its name",
-                        priv->name, col);
-                gtk_tree_view_column_set_title (column, col);
-            }
-        if (title)
+        if (b != buf)
         {
-            gtk_tree_view_column_set_title (column, title);
-            g_free (title);
+            g_free (b);
+            b = buf;
         }
+
+        /* title */
+        title = donna_config_get_string_column (config, priv->name, col,
+                arrangement->columns_options, NULL, "title", col);
+        gtk_tree_view_column_set_title (column, title);
         gtk_label_set_text (GTK_LABEL (g_object_get_data (G_OBJECT (column),
-                        "header-label")),
-                gtk_tree_view_column_get_title (column));
+                        "header-label")), title);
+        g_free (title);
 
         /* props to watch for refresh */
         props = donna_columntype_get_props (ct,
@@ -3199,6 +3208,23 @@ load_default_arrangement (DonnaTreeView *tree)
         arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
     }
 
+    if (donna_config_has_category (config,
+                "treeviews/%s/arrangement/columns_options",
+                priv->name))
+    {
+        arr->columns_options = g_strdup_printf ("treeviews/%s/arrangement",
+                priv->name);
+        arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+    }
+    else if (donna_config_has_category (config,
+                "defaults/arrangements/%s/columns_options",
+                (is_tree (tree)) ? "tree" : "list"))
+    {
+        arr->columns_options = g_strdup_printf ("defaults/arrangements/%s",
+                (is_tree (tree)) ? "tree" : "list");
+        arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+    }
+
     return arr;
 }
 
@@ -3236,37 +3262,82 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
             load_arrangement (tree, arr, force);
         else
         {
+            DonnaConfig *config;
             GList *list, *l;
-            const gchar *name;
+            gboolean need_sort;
+            gboolean need_second_sort;
+            gboolean need_columns_options;
             GtkSortType order;
 
+            config = donna_app_peek_config (priv->app);
+            need_sort = must_load_sort (arr, priv->arrangement, force);
+            need_second_sort = must_load_second_sort (arr, priv->arrangement, force);
+            need_columns_options = must_load_columns_options (arr, priv->arrangement, force);
+
             list = gtk_tree_view_get_columns (GTK_TREE_VIEW (tree));
-            if (must_load_sort (arr, priv->arrangement, force))
+            for (l = list; l; l = l->next)
             {
-                for (l = list; l; l = l->next)
+                const gchar *col;
+
+                col = g_object_get_data (l->data, "column-name");
+                if (!col)
+                    /* skip blank column */
+                    continue;
+
+                if (need_sort && streq (col, arr->sort_column))
                 {
-                    name = g_object_get_data (l->data, "column-name");
-                    if (streq (name, arr->sort_column))
-                    {
-                        set_sort_column (tree, l->data, arr->sort_order, TRUE);
-                        break;
-                    }
+                    set_sort_column (tree, l->data, arr->sort_order, TRUE);
+                    need_sort = FALSE;
                 }
-            }
-            if (must_load_second_sort (arr, priv->arrangement, force))
-            {
-                for (l = list; l; l = l->next)
+                if (need_second_sort && streq (col, arr->second_sort_column))
                 {
-                    name = g_object_get_data (l->data, "column-name");
-                    if (streq (name, arr->second_sort_column))
+                    set_second_sort_column (tree, l->data,
+                            arr->second_sort_order, TRUE);
+                    if (arr->second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
+                        priv->second_sort_sticky =
+                            arr->second_sort_sticky == DONNA_SECOND_SORT_STICKY_ENABLED;
+                    need_second_sort = FALSE;
+                }
+                if (!need_sort && !need_second_sort && !need_columns_options)
+                    break;
+
+                if (need_columns_options)
+                {
+                    DonnaColumnType *ct;
+                    gpointer ctdata, old;
+                    gchar buf[64], *b = buf;
+                    guint width;
+                    gchar *title;
+
+                    /* ctdata */
+                    ct = g_object_get_data (l->data, "column-type");
+                    old = ctdata = g_object_get_data (l->data, "columntype-data");
+                    donna_columntype_refresh_data (ct, priv->name, col,
+                            arr->columns_options, &ctdata);
+                    if (ctdata != old)
+                        g_object_set_data (l->data, "columntype-data", ctdata);
+
+                    /* size */
+                    if (snprintf (buf, 64, "columntypes/%s",
+                                donna_columntype_get_name (ct)) >= 64)
+                        b = g_strdup_printf ("columntypes/%s",
+                                donna_columntype_get_renderers (ct));
+                    width = donna_config_get_uint_column (config, priv->name, col,
+                            arr->columns_options, b, "width", 230);
+                    gtk_tree_view_column_set_fixed_width (l->data, width);
+                    if (b != buf)
                     {
-                        set_second_sort_column (tree, l->data,
-                                arr->second_sort_order, TRUE);
-                        if (arr->second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
-                            priv->second_sort_sticky =
-                                arr->second_sort_sticky == DONNA_SECOND_SORT_STICKY_ENABLED;
-                        break;
+                        g_free (b);
+                        b = buf;
                     }
+
+                    /* title */
+                    title = donna_config_get_string_column (config, priv->name, col,
+                            arr->columns_options, NULL, "title", (gchar *) col);
+                    gtk_tree_view_column_set_title (l->data, title);
+                    gtk_label_set_text (GTK_LABEL (g_object_get_data (l->data,
+                                    "header-label")), title);
+                    g_free (title);
                 }
             }
             g_list_free (list);
