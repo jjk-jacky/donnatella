@@ -463,6 +463,20 @@ tree_select_arrangement (DonnaTreeView  *tree,
                 }
             }
 
+            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS))
+                if (donna_config_has_category (priv->config,
+                            "arrangements/%s/columns_options", argmt->name))
+                {
+                    arr->columns_options = g_strdup_printf ("arrangements/%s",
+                            argmt->name);
+                    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+                    if (donna_config_get_boolean (priv->config, &always,
+                                "arrangements/%s/columns_options_always",
+                                argmt->name)
+                            && always)
+                        arr->flags |= DONNA_ARRANGEMENT_COLUMNS_OPTIONS_ALWAYS;
+                }
+
             if ((arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL)
                 break;
         }
