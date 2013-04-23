@@ -2324,19 +2324,6 @@ donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node)
     return ret;
 }
 
-static inline gint
-natoi (const gchar *str, gsize len)
-{
-    gint i = 0;
-    for ( ; *str != '\0' && len > 0; ++str, --len)
-    {
-        if (*str < '0' || *str > '9')
-            break;
-        i = (i * 10) + (*str - '0');
-    }
-    return i;
-}
-
 /* mode list only -- this is used to disallow dropping a column to the right of
  * the empty column (to make blank space there) */
 static gboolean
@@ -2652,7 +2639,7 @@ load_arrangement (DonnaTreeView     *tree,
     gsize                 second_sort_len;
     DonnaSortOrder        second_sort_order = DONNA_SORT_UNKNOWN;
     DonnaSecondSortSticky second_sort_sticky = DONNA_SECOND_SORT_STICKY_UNKNOWN;
-    const gchar          *col;
+    gchar                *col;
     GtkTreeViewColumn    *first_column = NULL;
     GtkTreeViewColumn    *last_column = NULL;
     GtkTreeViewColumn    *expander_column = NULL;
@@ -2689,7 +2676,7 @@ load_arrangement (DonnaTreeView     *tree,
     {
         g_critical ("Treeview '%s': load_arrangement() called on an arrangement without columns",
                 priv->name);
-        col = "name";
+        col = (gchar *) "name";
     }
 
     if (must_load_sort (arrangement, priv->arrangement, force))
@@ -2729,16 +2716,14 @@ load_arrangement (DonnaTreeView     *tree,
 
     for (;;)
     {
-        gchar             *ss;
-        const gchar       *s;
-        const gchar       *e;
-        gsize              len;
-        gchar              buf[64];
-        gchar             *b;
-        gsize              len_b;
+        gchar             *col_type;
+        gchar             *e;
+        gboolean           is_last_col;
         DonnaColumnType   *ct;
         gpointer           ct_data;
         DonnaColumnType   *col_ct;
+        guint              width;
+        gchar             *title;
         GList             *l;
         GtkTreeViewColumn *column;
         GtkCellRenderer   *renderer;
@@ -2747,36 +2732,24 @@ load_arrangement (DonnaTreeView     *tree,
         GPtrArray         *props;
 
         e = strchrnul (col, ',');
-        s = strchr (col, ':');
-        if (s && s > e)
-            s = NULL;
+        is_last_col = (*e == '\0');
+        if (!is_last_col)
+            *e = '\0';
 
-        len = ((s) ? s : e) - col;
-        if (len < 64)
-        {
-            sprintf (buf, "%.*s", (int) len, col);
-            b = buf;
-        }
-        else
-            b = g_strdup_printf ("%.*s", (int) len, col);
-        len_b = strlen (b);
-
-        if (!donna_config_get_string (config, &ss, "columns/%s/type", b))
+        if (!donna_config_get_string (config, &col_type, "columns/%s/type", col))
         {
             g_warning ("Treeview '%s': No type defined for column '%s', fallback to its name",
-                    priv->name, b);
-            ss = NULL;
+                    priv->name, col);
+            col_type = NULL;
         }
 
-        ct = donna_app_get_columntype (priv->app, (ss) ? ss : b);
+        ct = donna_app_get_columntype (priv->app, (col_type) ? col_type : col);
         if (!ct)
         {
             g_critical ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
-                    priv->name, (ss) ? ss : b, b);
-            g_free (ss);
+                    priv->name, (col_type) ? col_type : col, col);
             goto next;
         }
-        g_free (ss);
 
         /* look for an existing column of that type */
         column = NULL;
@@ -2794,12 +2767,12 @@ load_arrangement (DonnaTreeView     *tree,
                 g_object_unref (ct);
                 /* update the name if needed */
                 name = g_object_get_data (G_OBJECT (column), "column-name");
-                if (!streq (name, b))
+                if (!streq (name, col))
                 {
                     ct_data = g_object_get_data (G_OBJECT (column),
                             "columntype-data");
                     donna_columntype_free_data (ct, priv->name, name, ct_data);
-                    name = g_strdup (b);
+                    name = g_strdup (col);
                     g_object_set_data_full (G_OBJECT (column), "column-name",
                             name, g_free);
                     ct_data = donna_columntype_get_data (ct, priv->name, name);
@@ -2824,7 +2797,7 @@ load_arrangement (DonnaTreeView     *tree,
             /* create renderer(s) & column */
             column = gtk_tree_view_column_new ();
             /* store the name on it, so we can get it back from e.g. rend_func */
-            name = g_strdup (b);
+            name = g_strdup (col);
             g_object_set_data_full (G_OBJECT (column), "column-name",
                     name, g_free);
             /* data for use in render & node_cmp */
@@ -2888,7 +2861,7 @@ load_arrangement (DonnaTreeView     *tree,
                         break;
                     default:
                         g_critical ("Treeview '%s': Unknown renderer type '%c' for column '%s'",
-                                priv->name, *rend, b);
+                                priv->name, *rend, col);
                         continue;
                 }
                 if (!renderer)
@@ -2942,37 +2915,44 @@ load_arrangement (DonnaTreeView     *tree,
         if (!expander_column && col_ct == ctname)
             expander_column = column;
 
-        /* sizing stuff */
-        if (s)
-        {
-            ++s;
-            gtk_tree_view_column_set_fixed_width (column, natoi (s, e - s));
-        }
-        else
-            gtk_tree_view_column_set_fixed_width (column, 230);
+        /* size */
+        if (!donna_config_get_uint (config, &width, "treeviews/%s/columns/%s/width",
+                    priv->name, col))
+            if (!donna_config_get_uint (config, &width, "columns/%s/width",
+                        col))
+                if (!donna_config_get_uint (config, &width,
+                            "defaults/columntypes/%s/width",
+                            (col_type) ? col_type : col))
+                {
+                    g_critical ("Treeview '%s': No width for column '%s' specified, "
+                            "no default found for columntype '%s' (use 230)",
+                            priv->name, col, (col_type) ? col_type : col);
+                    width = 230;
+                }
+        gtk_tree_view_column_set_fixed_width (column, width);
 
         /* set title */
-        ss = NULL;
-        if (!donna_config_get_string (config, &ss,
-                    "treeviews/%s/columns/%s/title", priv->name, b))
-            if (!donna_config_get_string (config, &ss,
-                        "columns/%s/title", b))
+        title = NULL;
+        if (!donna_config_get_string (config, &title,
+                    "treeviews/%s/columns/%s/title", priv->name, col))
+            if (!donna_config_get_string (config, &title,
+                        "columns/%s/title", col))
             {
                 g_warning ("Treeview '%s': No title set for column '%s', using its name",
-                        priv->name, b);
-                gtk_tree_view_column_set_title (column, b);
+                        priv->name, col);
+                gtk_tree_view_column_set_title (column, col);
             }
-        if (ss)
+        if (title)
         {
-            gtk_tree_view_column_set_title (column, ss);
-            g_free (ss);
+            gtk_tree_view_column_set_title (column, title);
+            g_free (title);
         }
         gtk_label_set_text (GTK_LABEL (g_object_get_data (G_OBJECT (column),
                         "header-label")),
                 gtk_tree_view_column_get_title (column));
 
         /* props to watch for refresh */
-        props = donna_columntype_get_props (ct, priv->name, b,
+        props = donna_columntype_get_props (ct, priv->name, col,
                 g_object_get_data (G_OBJECT (column), "columntype-data"));
         if (props)
         {
@@ -2990,13 +2970,13 @@ load_arrangement (DonnaTreeView     *tree,
         }
         else
             g_critical ("Treeview '%s': column '%s' reports no properties to watch for refresh",
-                    priv->name, b);
+                    priv->name, col);
 
         /* sort -- (see column_button_release_event_cb() for more) */
         g_object_set_data (G_OBJECT (column), "sort_id", GINT_TO_POINTER (sort_id));
         gtk_tree_sortable_set_sort_func (sortable, sort_id,
                 (GtkTreeIterCompareFunc) sort_func, column, NULL);
-        if (sort_column && len_b == sort_len && streqn (sort_column, b, len_b))
+        if (sort_column && streq (sort_column, col))
         {
             if (free_sort_column)
             {
@@ -3009,8 +2989,7 @@ load_arrangement (DonnaTreeView     *tree,
         ++sort_id;
 
         /* second sort order */
-        if (second_sort_column && len_b == second_sort_len
-                && streqn (second_sort_column, b, len_b))
+        if (second_sort_column && streq (second_sort_column, col))
         {
             if (free_second_sort_column)
             {
@@ -3029,10 +3008,10 @@ load_arrangement (DonnaTreeView     *tree,
         last_column = column;
 
 next:
-        if (b != buf)
-            g_free (b);
-        if (*e == '\0')
+        g_free (col_type);
+        if (is_last_col)
             break;
+        *e = ',';
         col = e + 1;
     }
 
