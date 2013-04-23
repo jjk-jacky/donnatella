@@ -2761,16 +2761,11 @@ load_arrangement (DonnaTreeView     *tree,
             b = g_strdup_printf ("%.*s", (int) len, col);
         len_b = strlen (b);
 
-        if (!donna_config_get_string (config, &ss,
-                    "treeviews/%s/columns/%s/type", priv->name, b))
+        if (!donna_config_get_string (config, &ss, "columns/%s/type", b))
         {
-            if (!donna_config_get_string (config, &ss,
-                        "columns/%s/type", b))
-            {
-                g_warning ("Treeview '%s': No type defined for column '%s', fallback to its name",
-                        priv->name, b);
-                ss = NULL;
-            }
+            g_warning ("Treeview '%s': No type defined for column '%s', fallback to its name",
+                    priv->name, b);
+            ss = NULL;
         }
 
         ct = donna_app_get_columntype (priv->app, (ss) ? ss : b);
