@@ -1597,10 +1597,13 @@ donna_config_get_string_column (DonnaConfig *config,
                                 const gchar *opt_name,
                                 gchar       *def_val)
 {
-    return (gchar *) _get_option_column (config, tv_name, col_name, def_cat,
+    gchar *ret;
+
+    ret = (gchar *) _get_option_column (config, tv_name, col_name, def_cat,
             opt_name, (gintptr) def_val,
             (cfg_get_fn) donna_config_get_string,
             (cfg_set_fn) donna_config_set_string);
+    return (ret == def_val) ? g_strdup (ret) : ret;
 }
 
 typedef void (*set_value_fn) (GValue *value, gintptr new_value);
