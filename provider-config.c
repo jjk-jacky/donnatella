@@ -715,6 +715,31 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
         else
         {
             s = strchrnul (name, '/');
+            if (s == name)
+            {
+                struct option *option;
+                gint i;
+
+                /* sanity check: must be "//new_cat" (category must start with a
+                 * lowercase letter) */
+                if (!(s[1] >= 'a' && s[1] <= 'z'))
+                    return NULL;
+
+                /* this was a "//" i.e. create a category in the last
+                 * auto-created category (within parent) */
+                option = parent->data;
+                i = g_value_get_int (&option->value) - 1;
+
+                /* find the node that will be parent to our new category, i.e.
+                 * the last auto-created category (within parent) */
+                for (node = parent->children; node; node = node->next)
+                    if (atoi (((struct option *) node->data)->name) == i)
+                        break;
+                if (G_UNLIKELY (!node))
+                    return NULL;
+                goto next;
+            }
+
             node = get_child_node (parent, name, s - name);
             if (node)
             {
@@ -737,6 +762,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             }
         }
 
+next:
         if (*s == '\0' || len == (gsize) (s - name))
             break;
         else
