@@ -55,47 +55,30 @@ static void             ct_time_finalize            (GObject            *object)
 /* ColumnType */
 static const gchar *    ct_time_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_time_get_renderers       (DonnaColumnType    *ct);
-static gpointer         ct_time_get_data            (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name);
 static DonnaColumnTypeNeed ct_time_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer           *data);
 static void             ct_time_free_data           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_time_get_props           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static GtkMenu *        ct_time_get_options_menu    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static gboolean         ct_time_handle_context      (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      DonnaNode          *node,
                                                      DonnaTreeView      *treeview);
 static GPtrArray *      ct_time_render              (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkCellRenderer    *renderer);
 static gint             ct_time_node_cmp            (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
 static gboolean         ct_time_set_tooltip         (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      guint               index,
                                                      DonnaNode          *node,
@@ -106,7 +89,6 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_time_get_name;
     interface->get_renderers            = ct_time_get_renderers;
-    interface->get_data                 = ct_time_get_data;
     interface->refresh_data             = ct_time_refresh_data;
     interface->free_data                = ct_time_free_data;
     interface->get_props                = ct_time_get_props;
@@ -198,18 +180,6 @@ ct_time_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
-static gpointer
-ct_time_get_data (DonnaColumnType    *ct,
-                  const gchar        *tv_name,
-                  const gchar        *col_name)
-{
-    struct tv_col_data *data;
-
-    data = g_new0 (struct tv_col_data, 1);
-    ct_time_refresh_data (ct, tv_name, col_name, (gpointer *) &data);
-    return data;
-}
-
 static DonnaColumnTypeNeed
 ct_time_refresh_data (DonnaColumnType    *ct,
                       const gchar        *tv_name,
@@ -218,12 +188,16 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 {
     DonnaColumnTypeTime *cttime = DONNA_COLUMNTYPE_TIME (ct);
     DonnaConfig *config;
-    struct tv_col_data *data = *_data;
+    struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
     guint sec;
 
     config = donna_app_peek_config (cttime->priv->app);
+
+    if (!*_data)
+        *_data = g_new0 (struct tv_col_data, 1);
+    data = *_data;
 
     s = donna_config_get_string_column (config, tv_name, col_name,
             "columntypes/time", "property", "mtime");
@@ -326,8 +300,6 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
 static void
 ct_time_free_data (DonnaColumnType    *ct,
-                   const gchar        *tv_name,
-                   const gchar        *col_name,
                    gpointer            _data)
 {
     struct tv_col_data *data = _data;
@@ -343,8 +315,6 @@ ct_time_free_data (DonnaColumnType    *ct,
 
 static GPtrArray *
 ct_time_get_props (DonnaColumnType  *ct,
-                   const gchar      *tv_name,
-                   const gchar      *col_name,
                    gpointer          data)
 {
     GPtrArray *props;
@@ -359,8 +329,6 @@ ct_time_get_props (DonnaColumnType  *ct,
 
 static GtkMenu *
 ct_time_get_options_menu (DonnaColumnType    *ct,
-                          const gchar        *tv_name,
-                          const gchar        *col_name,
                           gpointer            data)
 {
     /* FIXME */
@@ -369,8 +337,6 @@ ct_time_get_options_menu (DonnaColumnType    *ct,
 
 static gboolean
 ct_time_handle_context (DonnaColumnType    *ct,
-                        const gchar        *tv_name,
-                        const gchar        *col_name,
                         gpointer            data,
                         DonnaNode          *node,
                         DonnaTreeView      *treeview)
@@ -381,8 +347,8 @@ ct_time_handle_context (DonnaColumnType    *ct,
 
 #define warn_not_uint64(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
-    g_warning ("Treeview '%s', Column '%s': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
-            tv_name, col_name, data->property,          \
+    g_warning ("ColumnType 'time': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
+            data->property,                             \
             donna_node_get_domain (node), location,     \
             G_VALUE_TYPE_NAME (&value),                 \
             g_type_name (G_TYPE_UINT64));               \
@@ -391,8 +357,6 @@ ct_time_handle_context (DonnaColumnType    *ct,
 
 static GPtrArray *
 ct_time_render (DonnaColumnType    *ct,
-                const gchar        *tv_name,
-                const gchar        *col_name,
                 gpointer            _data,
                 guint               index,
                 DonnaNode          *node,
@@ -451,8 +415,6 @@ ct_time_render (DonnaColumnType    *ct,
 
 static gboolean
 ct_time_set_tooltip (DonnaColumnType    *ct,
-                     const gchar        *tv_name,
-                     const gchar        *col_name,
                      gpointer            _data,
                      guint               index,
                      DonnaNode          *node,
@@ -500,8 +462,6 @@ ct_time_set_tooltip (DonnaColumnType    *ct,
 
 static gint
 ct_time_node_cmp (DonnaColumnType    *ct,
-                  const gchar        *tv_name,
-                  const gchar        *col_name,
                   gpointer            _data,
                   DonnaNode          *node1,
                   DonnaNode          *node2)

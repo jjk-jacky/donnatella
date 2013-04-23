@@ -41,20 +41,13 @@ struct _DonnaColumnTypeInterface
     /* virtual table */
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
-    gpointer            (*get_data)         (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name);
     DonnaColumnTypeNeed (*refresh_data)     (DonnaColumnType    *ct,
                                              const gchar        *tv_name,
                                              const gchar        *col_name,
                                              gpointer           *data);
     void                (*free_data)        (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data);
     GPtrArray *         (*get_props)        (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data);
     GtkSortType         (*get_default_sort_order)
                                             (DonnaColumnType    *ct,
@@ -62,32 +55,22 @@ struct _DonnaColumnTypeInterface
                                              const gchar        *col_name,
                                              gpointer            data);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data);
     gboolean            (*handle_context)   (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data,
                                              DonnaNode          *node,
                                              DonnaTreeView      *treeview);
     GPtrArray *         (*render)           (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data,
                                              guint               index,
                                              DonnaNode          *node,
                                              GtkCellRenderer    *renderer);
     gboolean            (*set_tooltip)      (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data,
                                              guint               index,
                                              DonnaNode          *node,
                                              GtkTooltip         *tooltip);
     gint                (*node_cmp)         (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
                                              gpointer            data,
                                              DonnaNode          *node1,
                                              DonnaNode          *node2);
@@ -95,20 +78,13 @@ struct _DonnaColumnTypeInterface
 
 const gchar *   donna_columntype_get_name       (DonnaColumnType    *ct);
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
-gpointer        donna_columntype_get_data       (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name);
 DonnaColumnTypeNeed donna_columntype_refresh_data (DonnaColumnType  *ct,
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
                                                  gpointer           *data);
 void            donna_columntype_free_data      (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data);
 GPtrArray *     donna_columntype_get_props      (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data);
 GtkSortType     donna_columntype_get_default_sort_order
                                                 (DonnaColumnType    *ct,
@@ -116,32 +92,22 @@ GtkSortType     donna_columntype_get_default_sort_order
                                                  const gchar        *col_name,
                                                  gpointer            data);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data);
 gboolean        donna_columntype_handle_context (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data,
                                                  DonnaNode          *node,
                                                  DonnaTreeView      *treeview);
 GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkCellRenderer    *renderer);
 gboolean        donna_columntype_set_tooltip    (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkTooltip         *tooltip);
 gint            donna_columntype_node_cmp       (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
                                                  gpointer            data,
                                                  DonnaNode          *node1,
                                                  DonnaNode          *node2);

@@ -78,20 +78,13 @@ static void             ct_perms_finalize           (GObject            *object)
 /* ColumnType */
 static const gchar *    ct_perms_get_name           (DonnaColumnType    *ct);
 static const gchar *    ct_perms_get_renderers      (DonnaColumnType    *ct);
-static gpointer         ct_perms_get_data           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name);
 static DonnaColumnTypeNeed ct_perms_refresh_data    (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer           *data);
 static void             ct_perms_free_data          (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_perms_get_props          (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static GtkSortType      ct_perms_get_default_sort_order
                                                     (DonnaColumnType    *ct,
@@ -99,31 +92,21 @@ static GtkSortType      ct_perms_get_default_sort_order
                                                      const gchar        *col_name,
                                                      gpointer            data);
 static GtkMenu *        ct_perms_get_options_menu   (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static gboolean         ct_perms_handle_context     (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      DonnaNode          *node,
                                                      DonnaTreeView      *treeview);
 static GPtrArray *      ct_perms_render             (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkCellRenderer    *renderer);
 static gint             ct_perms_node_cmp           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
 static gboolean         ct_perms_set_tooltip        (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      guint               index,
                                                      DonnaNode          *node,
@@ -134,7 +117,6 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_perms_get_name;
     interface->get_renderers            = ct_perms_get_renderers;
-    interface->get_data                 = ct_perms_get_data;
     interface->refresh_data             = ct_perms_refresh_data;
     interface->free_data                = ct_perms_free_data;
     interface->get_props                = ct_perms_get_props;
@@ -247,18 +229,6 @@ ct_perms_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
-static gpointer
-ct_perms_get_data (DonnaColumnType    *ct,
-                   const gchar        *tv_name,
-                   const gchar        *col_name)
-{
-    struct tv_col_data *data;
-
-    data = g_new0 (struct tv_col_data, 1);
-    ct_perms_refresh_data (ct, tv_name, col_name, (gpointer *) &data);
-    return data;
-}
-
 static DonnaColumnTypeNeed
 ct_perms_refresh_data (DonnaColumnType    *ct,
                        const gchar        *tv_name,
@@ -267,12 +237,16 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 {
     DonnaColumnTypePerms *ctperms = DONNA_COLUMNTYPE_PERMS (ct);
     DonnaConfig *config;
-    struct tv_col_data *data = *_data;
+    struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
     gint i;
 
     config = donna_app_peek_config (ctperms->priv->app);
+
+    if (!*_data)
+        *_data = g_new0 (struct tv_col_data, 1);
+    data = *_data;
 
     s = donna_config_get_string_column (config, tv_name, col_name, "columntypes/perms",
             "format", "%P");
@@ -343,8 +317,6 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
 static void
 ct_perms_free_data (DonnaColumnType    *ct,
-                    const gchar        *tv_name,
-                    const gchar        *col_name,
                     gpointer            _data)
 {
     struct tv_col_data *data = _data;
@@ -356,8 +328,6 @@ ct_perms_free_data (DonnaColumnType    *ct,
 
 static GPtrArray *
 ct_perms_get_props (DonnaColumnType  *ct,
-                    const gchar      *tv_name,
-                    const gchar      *col_name,
                     gpointer          data)
 {
     GPtrArray *props;
@@ -390,8 +360,6 @@ ct_perms_get_default_sort_order (DonnaColumnType *ct,
 
 static GtkMenu *
 ct_perms_get_options_menu (DonnaColumnType    *ct,
-                           const gchar        *tv_name,
-                           const gchar        *col_name,
                            gpointer            data)
 {
     /* FIXME */
@@ -400,8 +368,6 @@ ct_perms_get_options_menu (DonnaColumnType    *ct,
 
 static gboolean
 ct_perms_handle_context (DonnaColumnType    *ct,
-                         const gchar        *tv_name,
-                         const gchar        *col_name,
                          gpointer            data,
                          DonnaNode          *node,
                          DonnaTreeView      *treeview)
@@ -690,8 +656,6 @@ print_perms (DonnaColumnTypePerms   *ctperms,
 
 static GPtrArray *
 ct_perms_render (DonnaColumnType    *ct,
-                 const gchar        *tv_name,
-                 const gchar        *col_name,
                  gpointer            _data,
                  guint               index,
                  DonnaNode          *node,
@@ -779,8 +743,6 @@ ct_perms_render (DonnaColumnType    *ct,
 
 static gboolean
 ct_perms_set_tooltip (DonnaColumnType    *ct,
-                      const gchar        *tv_name,
-                      const gchar        *col_name,
                       gpointer            _data,
                       guint               index,
                       DonnaNode          *node,
@@ -844,8 +806,6 @@ ct_perms_set_tooltip (DonnaColumnType    *ct,
 } while (0)
 static gint
 ct_perms_node_cmp (DonnaColumnType    *ct,
-                   const gchar        *tv_name,
-                   const gchar        *col_name,
                    gpointer            _data,
                    DonnaNode          *node1,
                    DonnaNode          *node2)

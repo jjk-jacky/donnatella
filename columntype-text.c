@@ -41,31 +41,20 @@ static void             ct_text_finalize            (GObject            *object)
 /* ColumnType */
 static const gchar *    ct_text_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_text_get_renderers       (DonnaColumnType    *ct);
-static gpointer         ct_text_get_data            (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name);
 static DonnaColumnTypeNeed ct_text_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      gpointer           *data);
 static void             ct_text_free_data           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_text_get_props           (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data);
 static GPtrArray *      ct_text_render              (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkCellRenderer    *renderer);
 static gint             ct_text_node_cmp            (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
-                                                     const gchar        *col_name,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
@@ -75,7 +64,6 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_text_get_name;
     interface->get_renderers            = ct_text_get_renderers;
-    interface->get_data                 = ct_text_get_data;
     interface->refresh_data             = ct_text_refresh_data;
     interface->free_data                = ct_text_free_data;
     interface->get_props                = ct_text_get_props;
@@ -163,18 +151,6 @@ ct_text_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
-static gpointer
-ct_text_get_data (DonnaColumnType    *ct,
-                  const gchar        *tv_name,
-                  const gchar        *col_name)
-{
-    struct tv_col_data *data;
-
-    data = g_new0 (struct tv_col_data, 1);
-    ct_text_refresh_data (ct, tv_name, col_name, (gpointer *) &data);
-    return data;
-}
-
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
     if (donna_config_get_boolean_column (config, tv_name, col_name, "sort",   \
                 opt_name_lower, def_val) == value)                            \
@@ -199,12 +175,16 @@ ct_text_refresh_data (DonnaColumnType    *ct,
 {
     DonnaColumnTypeText *cttext = DONNA_COLUMNTYPE_TEXT (ct);
     DonnaConfig *config;
-    struct tv_col_data *data = *_data;
+    struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
     gint i;
 
     config = donna_app_peek_config (cttext->priv->app);
+
+    if (!*_data)
+        *_data = g_new0 (struct tv_col_data, 1);
+    data = *_data;
 
     s = donna_config_get_string_column (config, tv_name, col_name, NULL,
             "property", "name");
@@ -228,8 +208,6 @@ ct_text_refresh_data (DonnaColumnType    *ct,
 
 static void
 ct_text_free_data (DonnaColumnType    *ct,
-                   const gchar        *tv_name,
-                   const gchar        *col_name,
                    gpointer            _data)
 {
     struct tv_col_data *data = _data;
@@ -240,8 +218,6 @@ ct_text_free_data (DonnaColumnType    *ct,
 
 static GPtrArray *
 ct_text_get_props (DonnaColumnType  *ct,
-                   const gchar      *tv_name,
-                   const gchar      *col_name,
                    gpointer          data)
 {
     GPtrArray *props;
@@ -256,8 +232,8 @@ ct_text_get_props (DonnaColumnType  *ct,
 
 #define warn_not_string(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
-    g_warning ("Treeview '%s', Column '%s': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
-            tv_name, col_name, data->property,          \
+    g_warning ("ColumnType 'text': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
+            data->property,                             \
             donna_node_get_domain (node), location,     \
             G_VALUE_TYPE_NAME (&value),                 \
             g_type_name (G_TYPE_STRING));               \
@@ -266,8 +242,6 @@ ct_text_get_props (DonnaColumnType  *ct,
 
 static GPtrArray *
 ct_text_render (DonnaColumnType    *ct,
-                const gchar        *tv_name,
-                const gchar        *col_name,
                 gpointer            _data,
                 guint               index,
                 DonnaNode          *node,
@@ -313,8 +287,6 @@ ct_text_render (DonnaColumnType    *ct,
 
 static gint
 ct_text_node_cmp (DonnaColumnType    *ct,
-                  const gchar        *tv_name,
-                  const gchar        *col_name,
                   gpointer            _data,
                   DonnaNode          *node1,
                   DonnaNode          *node2)

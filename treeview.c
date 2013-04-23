@@ -1586,7 +1586,7 @@ rend_func (GtkTreeViewColumn  *column,
     else if (!node)
         return;
 
-    arr = donna_columntype_render (ct, priv->name, col,
+    arr = donna_columntype_render (ct,
             g_object_get_data (G_OBJECT (column), "columntype-data"),
             index, node, renderer);
     if (arr)
@@ -1674,7 +1674,7 @@ sort_func (GtkTreeModel      *model,
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
     col  = g_object_get_data (G_OBJECT (column), "column-name");
 
-    ret = donna_columntype_node_cmp (ct, priv->name, col,
+    ret = donna_columntype_node_cmp (ct,
             g_object_get_data (G_OBJECT (column), "columntype-data"),
             node1, node2);
 
@@ -1688,7 +1688,7 @@ sort_func (GtkTreeModel      *model,
         ct   = g_object_get_data (G_OBJECT (column), "column-type");
         col  = g_object_get_data (G_OBJECT (column), "column-name");
 
-        ret = donna_columntype_node_cmp (ct, priv->name, col,
+        ret = donna_columntype_node_cmp (ct,
                 g_object_get_data (G_OBJECT (column), "columntype-data"),
                 node1, node2);
         if (ret != 0)
@@ -2771,11 +2771,12 @@ load_arrangement (DonnaTreeView     *tree,
                 {
                     ct_data = g_object_get_data (G_OBJECT (column),
                             "columntype-data");
-                    donna_columntype_free_data (ct, priv->name, name, ct_data);
+                    donna_columntype_free_data (ct, ct_data);
+                    ct_data = NULL;
                     name = g_strdup (col);
                     g_object_set_data_full (G_OBJECT (column), "column-name",
                             name, g_free);
-                    ct_data = donna_columntype_get_data (ct, priv->name, name);
+                    donna_columntype_refresh_data (ct, priv->name, name, &ct_data);
                     g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
                 }
                 /* move column */
@@ -2801,7 +2802,8 @@ load_arrangement (DonnaTreeView     *tree,
             g_object_set_data_full (G_OBJECT (column), "column-name",
                     name, g_free);
             /* data for use in render & node_cmp */
-            ct_data = donna_columntype_get_data (ct, priv->name, name);
+            ct_data = NULL;
+            donna_columntype_refresh_data (ct, priv->name, name, &ct_data);
             g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
             /* give our ref on the ct to the column */
             g_object_set_data_full (G_OBJECT (column), "column-type",
@@ -2952,7 +2954,7 @@ load_arrangement (DonnaTreeView     *tree,
                 gtk_tree_view_column_get_title (column));
 
         /* props to watch for refresh */
-        props = donna_columntype_get_props (ct, priv->name, col,
+        props = donna_columntype_get_props (ct,
                 g_object_get_data (G_OBJECT (column), "columntype-data"));
         if (props)
         {
@@ -3059,10 +3061,7 @@ next:
              * dereferencing a pointer pointing nowhere) */
             gtk_tree_sortable_set_sort_func (sortable, sort_id++, no_sort, tree, NULL);
             /* free the columntype-data */
-            donna_columntype_free_data (
-                    ct,
-                    priv->name,
-                    g_object_get_data (list->data, "column-name"),
+            donna_columntype_free_data (ct,
                     g_object_get_data (list->data, "columntype-data"));
         }
         /* remove column */
@@ -4578,7 +4577,6 @@ query_tooltip_cb (GtkTreeView   *treev,
                   GtkTooltip    *tooltip)
 {
     DonnaTreeView *tree = DONNA_TREE_VIEW (treev);
-    DonnaTreeViewPrivate *priv;
     GtkTreeViewColumn *column;
 #ifdef GTK_IS_JJK
     GtkCellRenderer *renderer;
@@ -4600,10 +4598,7 @@ query_tooltip_cb (GtkTreeView   *treev,
         {
             DonnaNode *node;
             DonnaColumnType *ct;
-            const gchar *col;
             guint index = 0;
-
-            priv = tree->priv;
 
             gtk_tree_model_get (model, &iter,
                     DONNA_TREE_VIEW_COL_NODE,   &node,
@@ -4665,7 +4660,6 @@ query_tooltip_cb (GtkTreeView   *treev,
             }
 #endif
             ct  = g_object_get_data (G_OBJECT (column), "column-type");
-            col = g_object_get_data (G_OBJECT (column), "column-name");
 
 #ifdef GTK_IS_JJK
             if (renderer)
@@ -4687,7 +4681,7 @@ query_tooltip_cb (GtkTreeView   *treev,
                 }
             }
 #endif
-            ret = donna_columntype_set_tooltip (ct, priv->name, col,
+            ret = donna_columntype_set_tooltip (ct,
                     g_object_get_data (G_OBJECT (column), "columntype-data"),
                     index, node, tooltip);
 
