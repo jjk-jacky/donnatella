@@ -1021,6 +1021,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
                gboolean                      do_options)
 {
     GNode *child;
+    gboolean first = TRUE;
 
     for (child = node->children; child; child = child->next)
     {
@@ -1031,6 +1032,13 @@ export_config (DonnaProviderConfigPrivate   *priv,
             /* skip categories */
             if (option->extra == priv->root)
                 continue;
+
+            if (first)
+            {
+                if (G_LIKELY (str_loc->len))
+                    g_string_append_printf (str, "[%s]\n", str_loc->str);
+                first = FALSE;
+            }
 
             if (option->extra)
             {
@@ -1127,7 +1135,6 @@ export_config (DonnaProviderConfigPrivate   *priv,
              * auto-indexed category. In that case, we don't export the name */
             if (option->name[0] < '0' || option->name[0] > '9')
                 g_string_append (str_loc, option->name);
-            g_string_append_printf (str, "[%s]\n", str_loc->str);
             export_config (priv, child, str_loc, str, TRUE);
             g_string_erase (str_loc, len, -1);
         }
