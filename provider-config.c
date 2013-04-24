@@ -1536,7 +1536,7 @@ donna_config_list_options (DonnaConfig               *config,
     {
         for (node = node->children; node; node = node->next)
         {
-            if ((type & DONNA_CONFIG_OPTION_TYPE_BOTH)
+            if ((type & DONNA_CONFIG_OPTION_TYPE_BOTH) == DONNA_CONFIG_OPTION_TYPE_BOTH
                     || (type & DONNA_CONFIG_OPTION_TYPE_CATEGORY
                         && option_is_category (node->data, priv->root))
                     || (type & DONNA_CONFIG_OPTION_TYPE_OPTION
