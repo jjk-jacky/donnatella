@@ -406,6 +406,7 @@ parse_data (gchar *data)
         {
             struct parsed_data *new_section;
 
+            skip = 0;
             e = strchr (++data, ']');
             if (!e)
             {
