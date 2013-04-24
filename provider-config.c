@@ -25,6 +25,7 @@ struct parsed_data
 {
     gchar               *name;
     gpointer             value;
+    gchar               *comments;
     struct parsed_data  *next;
 };
 
@@ -50,6 +51,8 @@ struct option
 {
     /* name of the option */
     gchar       *name;
+    /* comments from config file (to be exported) */
+    gchar       *comments;
     /* priv->root if a category; NULL for standard (bool, int, etc) types, else
      * the key to search for in priv->extras */
     gpointer     extra;
@@ -244,6 +247,7 @@ free_option (DonnaProviderConfig *config,
 {
     if (!option)
         return;
+    g_free (option->comments);
     g_value_unset (&option->value);
     if (option->node)
     {
@@ -259,14 +263,22 @@ free_option (DonnaProviderConfig *config,
 static gboolean
 free_node_data (GNode *node, DonnaProviderConfig *config)
 {
-    free_option (config, node->data, NULL);
+    if (node == config->priv->root)
+        /* end-of-file comments */
+        g_free (node->data);
+    else
+        free_option (config, node->data, NULL);
     return FALSE;
 }
 
 static gboolean
 free_node_data_removing (GNode *node, struct removing_data *data)
 {
-    free_option (data->config, node->data, data->nodes);
+    if (node == data->config->priv->root)
+        /* end-of-file comments */
+        g_free (node->data);
+    else
+        free_option (data->config, node->data, data->nodes);
     return FALSE;
 }
 
@@ -374,8 +386,9 @@ is_valid_name (gchar *name, gboolean is_section)
 }
 
 static struct parsed_data *
-parse_data (gchar *data)
+parse_data (gchar **_data)
 {
+    gchar *data = *_data;
     struct parsed_data *first_section   = NULL;
     struct parsed_data *section         = NULL;
     struct parsed_data *option          = NULL;
@@ -385,6 +398,7 @@ parse_data (gchar *data)
     gchar *s;
     gchar *e;
     gchar *eol;
+    gchar *cmt = NULL;
 
     if (!data)
         return NULL;
@@ -398,6 +412,12 @@ parse_data (gchar *data)
         {
             eof = 1;
             eol = data + strlen (data);
+        }
+        else if (eol == data)
+        {
+            if (!cmt)
+                cmt = data;
+            continue;
         }
         else
             *eol = '\0';
@@ -427,6 +447,13 @@ parse_data (gchar *data)
             }
             new_section = g_slice_new0 (struct parsed_data);
             new_section->name = data;
+            if (cmt)
+            {
+                new_section->comments = cmt;
+                if (line > 1)
+                    *(data - 2) = '\0';
+                cmt = NULL;
+            }
             if (section)
                 section->next = new_section;
             else if (!first_section)
@@ -437,11 +464,24 @@ parse_data (gchar *data)
         else if (!skip)
         {
             struct parsed_data *new_option;
+            gchar *c;
 
-            /* trim now, so we can check if it's a comment */
-            trim_line (&data);
-            if (*data == '#' || *data == '\0')
+            /* check for comments */
+            for (c = data; isblank (*c); ++c)
+                ;
+            if (*c == '#')
+            {
+                *eol = '\n';
+                if (!cmt)
+                    cmt = data;
                 continue;
+            }
+
+            trim_line (&data);
+            if (*data == '\0')
+                continue;
+            else if (cmt == data)
+                cmt = NULL;
 
             s = strchr (data, '=');
             if (!s)
@@ -460,6 +500,13 @@ parse_data (gchar *data)
             }
             new_option = g_slice_new0 (struct parsed_data);
             new_option->name = data;
+            if (cmt)
+            {
+                new_option->comments = cmt;
+                if (line > 1)
+                    *(data - 1) = '\0';
+                cmt = NULL;
+            }
             ++s;
             trim_line (&s);
             new_option->value = s;
@@ -476,6 +523,9 @@ parse_data (gchar *data)
             option = new_option;
         }
     }
+    /* return any comments at the end of the file (so couldn't be assigned to
+     * any section or option) */
+    *_data = cmt;
     return first_section;
 }
 
@@ -531,11 +581,12 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
     DonnaProviderConfigPrivate *priv;
     struct parsed_data *first_section;
     struct parsed_data *section;
+    gchar *d = data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     priv = config->priv;
 
-    first_section = parse_data (data);
+    first_section = parse_data (&d);
     if (!first_section)
     {
         g_free (data);
@@ -805,6 +856,7 @@ gboolean
 donna_config_load_config (DonnaConfig *config, gchar *data)
 {
     DonnaProviderConfigPrivate *priv;
+    gchar *d = data;
     GNode *parent;
     struct parsed_data *first_section;
     struct parsed_data *section;
@@ -814,12 +866,14 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     priv = config->priv;
 
-    first_section = parse_data (data);
+    first_section = parse_data (&d);
     if (!first_section)
     {
         g_free (data);
         return TRUE;
     }
+    /* store end-of-file comments */
+    priv->root->data = g_strdup (d);
 
     re_int      = g_regex_new ("^[+-]{0,1}[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
     re_double   = g_regex_new ("^[0-9]+\\.[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
@@ -840,6 +894,8 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                         section->name);
                 continue;
             }
+            if (section->comments)
+                ((struct option *) parent->data)->comments = g_strdup (section->comments);
         }
         else
             parent = priv->root;
@@ -904,6 +960,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
 
                 }
                 option->name = str_chunk (priv, parsed->name);
+                option->comments = g_strdup (parsed->comments);
                 option->extra = str_chunk (priv, s);
                 g_node_append_data (parent, option);
                 *--s = ':';
@@ -916,6 +973,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 {
                     option = g_slice_new0 (struct option);
                     option->name = str_chunk (priv, parsed->name);
+                    option->comments = g_strdup (parsed->comments);
                     g_value_init (&option->value, G_TYPE_BOOLEAN);
                     g_value_set_boolean (&option->value,
                             streq (parsed->value, "true"));
@@ -934,6 +992,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     }
                     option = g_slice_new0 (struct option);
                     option->name = str_chunk (priv, parsed->name);
+                    option->comments = g_strdup (parsed->comments);
                     g_value_init (&option->value, G_TYPE_INT);
                     g_value_set_int (&option->value, v);
                     g_node_append_data (parent, option);
@@ -951,6 +1010,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     }
                     option = g_slice_new0 (struct option);
                     option->name = str_chunk (priv, parsed->name);
+                    option->comments = g_strdup (parsed->comments);
                     g_value_init (&option->value, G_TYPE_DOUBLE);
                     g_value_set_double (&option->value, v);
                     g_node_append_data (parent, option);
@@ -971,6 +1031,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
 
                     option = g_slice_new0 (struct option);
                     option->name = str_chunk (priv, parsed->name);
+                    option->comments = g_strdup (parsed->comments);
                     g_value_init (&option->value, G_TYPE_STRING);
                     g_value_set_string (&option->value, v);
                     g_node_append_data (parent, option);
@@ -1019,6 +1080,12 @@ export_config (DonnaProviderConfigPrivate   *priv,
                 if (G_LIKELY (str_loc->len))
                     g_string_append_printf (str, "[%s]\n", str_loc->str);
                 first = FALSE;
+            }
+
+            if (option->comments)
+            {
+                g_string_append (str, option->comments);
+                g_string_append_c (str, '\n');
             }
 
             if (option->extra)
@@ -1111,6 +1178,11 @@ export_config (DonnaProviderConfigPrivate   *priv,
              * auto-indexed category. In that case, we don't export the name */
             if (option->name[0] < '0' || option->name[0] > '9')
                 g_string_append (str_loc, option->name);
+            if (option->comments)
+            {
+                g_string_append (str, option->comments);
+                g_string_append_c (str, '\n');
+            }
             export_config (priv, child, str_loc, str, TRUE);
             g_string_erase (str_loc, len, -1);
         }
@@ -1133,6 +1205,9 @@ donna_config_export_config (DonnaConfig *config)
 
     g_rw_lock_reader_lock (&priv->lock);
     export_config (priv, priv->root, str_loc, str, TRUE);
+    /* end-of-file comments */
+    if (priv->root->data)
+        g_string_append (str, priv->root->data);
     g_rw_lock_reader_unlock (&priv->lock);
 
     g_string_free (str_loc, TRUE);
