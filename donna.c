@@ -35,6 +35,15 @@ enum
     NB_COL_TYPES
 };
 
+enum types
+{
+    TYPE_UNKNOWN = 0,
+    TYPE_ENABLED,
+    TYPE_DISABLED,
+    TYPE_COMBINE,
+    TYPE_IGNORE
+};
+
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
@@ -123,12 +132,45 @@ donna_donna_task_run (DonnaTask *task)
     g_object_unref (task);
 }
 
+static GSList *
+load_arrangements (DonnaConfig *config, const gchar *sce)
+{
+    GSList      *list   = NULL;
+    GPtrArray   *arr    = NULL;
+    guint        i;
+
+    if (!donna_config_list_options (config, &arr,
+                DONNA_CONFIG_OPTION_TYPE_CATEGORY, sce))
+        return NULL;
+
+    for (i = 0; i < arr->len; ++i)
+    {
+        struct argmt *argmt;
+        gchar *mask;
+
+        if (!donna_config_get_string (config, &mask,
+                    "%s/%s/mask", sce, arr->pdata[i]))
+        {
+            g_warning ("Arrangement '%s/%s' has no mask set, skipping",
+                    sce, (gchar *) arr->pdata[i]);
+            continue;
+        }
+        argmt = g_new0 (struct argmt, 1);
+        argmt->name  = g_strdup (arr->pdata[i]);
+        argmt->pspec = g_pattern_spec_new (mask);
+        list = g_slist_prepend (list, argmt);
+        g_free (mask);
+    }
+    list = g_slist_reverse (list);
+    g_ptr_array_free (arr, TRUE);
+
+    return list;
+}
+
 static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
-    GPtrArray *arr = NULL;
-    guint i;
 
     mt = g_thread_self ();
     g_log_set_default_handler (donna_donna_log_handler, NULL);
@@ -155,43 +197,7 @@ donna_donna_init (DonnaDonna *donna)
     /* TODO */
 
     /* compile patterns of arrangements' masks */
-    if (!donna_config_list_options (priv->config, &arr,
-                DONNA_CONFIG_OPTION_TYPE_CATEGORY,
-                "arrangements"))
-    {
-        g_warning ("Unable to load arrangements");
-        goto skip_arrangements;
-    }
-
-    for (i = 0; i < arr->len; ++i)
-    {
-        struct argmt *argmt;
-        gchar *ss;
-        const gchar *s;
-
-        /* ignore "tree" and "list" arrangements */
-        s = arr->pdata[i];
-        if (s[0] < '0' || s[0] > '9')
-            continue;
-
-        if (!donna_config_get_string (priv->config, &ss,
-                    "arrangements/%s/mask",
-                    s))
-        {
-            g_warning ("Arrangement '%s' has no mask set, skipping", s);
-            continue;
-        }
-        argmt = g_new0 (struct argmt, 1);
-        argmt->name  = g_strdup (s);
-        argmt->pspec = g_pattern_spec_new (ss);
-        priv->arrangements = g_slist_prepend (priv->arrangements, argmt);
-        g_free (ss);
-    }
-    priv->arrangements = g_slist_reverse (priv->arrangements);
-    g_ptr_array_free (arr, TRUE);
-
-skip_arrangements:
-    return;
+    priv->arrangements = load_arrangements (priv->config, "arrangements");
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
@@ -226,16 +232,11 @@ donna_donna_get_property (GObject       *object,
 }
 
 static void
-donna_donna_finalize (GObject *object)
+free_arrangements (GSList *list)
 {
-    DonnaDonnaPrivate *priv;
     GSList *l;
 
-    priv = DONNA_DONNA (object)->priv;
-
-    g_object_unref (priv->config);
-
-    for (l = priv->arrangements; l; l = l->next)
+    for (l = list; l; l = l->next)
     {
         struct argmt *argmt = l->data;
 
@@ -243,7 +244,18 @@ donna_donna_finalize (GObject *object)
         g_pattern_spec_free (argmt->pspec);
         g_free (argmt);
     }
+    g_slist_free (list);
+}
 
+static void
+donna_donna_finalize (GObject *object)
+{
+    DonnaDonnaPrivate *priv;
+
+    priv = DONNA_DONNA (object)->priv;
+
+    g_object_unref (priv->config);
+    free_arrangements (priv->arrangements);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
 
     G_OBJECT_CLASS (donna_donna_parent_class)->finalize (object);
@@ -368,111 +380,186 @@ tree_select_arrangement (DonnaTreeView  *tree,
 {
     DonnaDonnaPrivate *priv = donna->priv;
     DonnaArrangement *arr = NULL;
-    GSList *l;
+    GSList *list, *l;
+    gchar _source[255];
+    gchar *source[] = { _source, "arrangements" };
+    guint i, max = sizeof (source) / sizeof (source[0]);
+    enum types type;
+    gboolean is_first = TRUE;
     gchar buf[255], *b = buf;
     gchar *location;
-    gsize len;
 
     if (!node)
         return NULL;
 
-    /* get full location of node, with an added / at the end so mask can easily
-     * be made for a folder & its subfodlers */
-    location = donna_node_get_location (node);
-    len = snprintf (buf, 255, "%s:%s/", donna_node_get_domain (node), location);
-    if (len >= 255)
-        b = g_strdup_printf ("%s:%s/", donna_node_get_domain (node), location);
-    g_free (location);
+    if (snprintf (source[0], 255, "treeviews/%s/arrangements", tv_name) >= 255)
+        source[0] = g_strdup_printf ("treeviews/%s/arrangements", tv_name);
 
-    for (l = priv->arrangements; l; l = l->next)
+    for (i = 0; i < max; ++i)
     {
-        struct argmt *argmt = l->data;
+        gchar *sce;
 
-        if (g_pattern_match_string (argmt->pspec, b))
+        sce = source[i];
+        if (donna_config_has_category (priv->config, sce))
         {
-            gboolean always;
-
-            if (!arr)
+            if (!donna_config_get_int (priv->config, (gint *) &type, "%s/type",
+                        sce))
+                type = TYPE_ENABLED;
+            switch (type)
             {
-                arr = g_new0 (DonnaArrangement, 1);
-                arr->priority = DONNA_ARRANGEMENT_PRIORITY_NORMAL;
+                case TYPE_ENABLED:
+                case TYPE_COMBINE:
+                    /* process */
+                    break;
+
+                case TYPE_DISABLED:
+                    /* flag to stop */
+                    i = max;
+                    break;
+
+                case TYPE_IGNORE:
+                    /* next source */
+                    continue;
+
+                case TYPE_UNKNOWN:
+                default:
+                    g_warning ("Unable to load arrangements: Invalid option '%s/type'",
+                            sce);
+                    /* flag to stop */
+                    i = max;
+                    break;
             }
-
-            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
-            {
-                if (donna_config_get_string (priv->config, &arr->columns,
-                            "arrangements/%s/columns", argmt->name))
-                {
-                    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
-                    if (donna_config_get_boolean (priv->config, &always,
-                                "arrangements/%s/columns_always", argmt->name)
-                            && always)
-                        arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;
-                }
-            }
-
-            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
-            {
-                if (donna_config_get_string (priv->config, &arr->sort_column,
-                            "arrangements/%s/sort_column", argmt->name))
-                {
-                    donna_config_get_int (priv->config,
-                            (gint *) &arr->sort_order,
-                            "arrangements/%s/sort_order", argmt->name);
-                    arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
-                    if (donna_config_get_boolean (priv->config, &always,
-                                "arrangements/%s/sort_always", argmt->name)
-                            && always)
-                        arr->flags |= DONNA_ARRANGEMENT_SORT_ALWAYS;
-                }
-            }
-
-            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
-            {
-                if (donna_config_get_string (priv->config, &arr->second_sort_column,
-                            "arrangements/%s/second_sort_column", argmt->name))
-                {
-                    gboolean sticky;
-
-                    donna_config_get_int (priv->config,
-                            (gint *) &arr->second_sort_order,
-                            "arrangements/%s/second_sort_order", argmt->name);
-
-                    if (donna_config_get_boolean (priv->config, &sticky,
-                                "arrangements/%s/second_sort_sticky", argmt->name))
-                        arr->second_sort_sticky = (sticky)
-                            ? DONNA_SECOND_SORT_STICKY_ENABLED
-                            : DONNA_SECOND_SORT_STICKY_DISABLED;
-
-                    arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
-                    if (donna_config_get_boolean (priv->config, &always,
-                                "arrangements/%s/second_sort_always", argmt->name)
-                            && always)
-                        arr->flags |= DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS;
-                }
-            }
-
-            if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS))
-                if (donna_config_has_category (priv->config,
-                            "arrangements/%s/columns_options", argmt->name))
-                {
-                    arr->columns_options = g_strdup_printf ("arrangements/%s",
-                            argmt->name);
-                    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
-                    if (donna_config_get_boolean (priv->config, &always,
-                                "arrangements/%s/columns_options_always",
-                                argmt->name)
-                            && always)
-                        arr->flags |= DONNA_ARRANGEMENT_COLUMNS_OPTIONS_ALWAYS;
-                }
-
-            if ((arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL)
-                break;
         }
+        else
+            /* next source */
+            continue;
+
+        if (i == max)
+            break;
+
+        if (i == 0)
+        {
+            list = g_object_get_data ((GObject *) tree, "arrangements-masks");
+            if (!list)
+            {
+                list = load_arrangements (priv->config, sce);
+                g_object_set_data_full ((GObject *) tree, "arrangements-masks",
+                        list, (GDestroyNotify) free_arrangements);
+            }
+        }
+        else
+            list = priv->arrangements;
+
+        if (is_first)
+        {
+            /* get full location of node, with an added / at the end so mask can
+             * easily be made for a folder & its subfodlers */
+            location = donna_node_get_location (node);
+            if (snprintf (buf, 255, "%s:%s/",
+                        donna_node_get_domain (node), location) >= 255)
+                b = g_strdup_printf ("%s:%s/",
+                        donna_node_get_domain (node), location);
+            g_free (location);
+            is_first = FALSE;
+        }
+
+        for (l = list; l; l = l->next)
+        {
+            struct argmt *argmt = l->data;
+
+            if (g_pattern_match_string (argmt->pspec, b))
+            {
+                gboolean always;
+
+                if (!arr)
+                {
+                    arr = g_new0 (DonnaArrangement, 1);
+                    arr->priority = DONNA_ARRANGEMENT_PRIORITY_NORMAL;
+                }
+
+                if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
+                {
+                    if (donna_config_get_string (priv->config, &arr->columns,
+                                "%s/%s/columns", sce, argmt->name))
+                    {
+                        arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+                        if (donna_config_get_boolean (priv->config, &always,
+                                    "%s/%s/columns_always", sce, argmt->name)
+                                && always)
+                            arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;
+                    }
+                }
+
+                if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
+                {
+                    if (donna_config_get_string (priv->config, &arr->sort_column,
+                                "%s/%s/sort_column", sce, argmt->name))
+                    {
+                        donna_config_get_int (priv->config,
+                                (gint *) &arr->sort_order,
+                                "%s/%s/sort_order", sce, argmt->name);
+                        arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
+                        if (donna_config_get_boolean (priv->config, &always,
+                                    "%s/%s/sort_always", sce, argmt->name)
+                                && always)
+                            arr->flags |= DONNA_ARRANGEMENT_SORT_ALWAYS;
+                    }
+                }
+
+                if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
+                {
+                    if (donna_config_get_string (priv->config, &arr->second_sort_column,
+                                "%s/%s/second_sort_column", sce, argmt->name))
+                    {
+                        gboolean sticky;
+
+                        donna_config_get_int (priv->config,
+                                (gint *) &arr->second_sort_order,
+                                "%s/%s/second_sort_order", sce, argmt->name);
+
+                        if (donna_config_get_boolean (priv->config, &sticky,
+                                    "%s/%s/second_sort_sticky", sce, argmt->name))
+                            arr->second_sort_sticky = (sticky)
+                                ? DONNA_SECOND_SORT_STICKY_ENABLED
+                                : DONNA_SECOND_SORT_STICKY_DISABLED;
+
+                        arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
+                        if (donna_config_get_boolean (priv->config, &always,
+                                    "%s/%s/second_sort_always", sce, argmt->name)
+                                && always)
+                            arr->flags |= DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS;
+                    }
+                }
+
+                if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS))
+                    if (donna_config_has_category (priv->config,
+                                "%s/%s/columns_options", sce, argmt->name))
+                    {
+                        arr->columns_options = g_strdup_printf ("%s/%s",
+                                sce, argmt->name);
+                        arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+                        if (donna_config_get_boolean (priv->config, &always,
+                                    "%s/%s/columns_options_always",
+                                    sce, argmt->name)
+                                && always)
+                            arr->flags |= DONNA_ARRANGEMENT_COLUMNS_OPTIONS_ALWAYS;
+                    }
+
+                if ((arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL)
+                    break;
+            }
+        }
+        /* at this point type can only be ENABLED or COMBINE */
+        if (type == TYPE_ENABLED || (arr /* could still be NULL */
+                    /* even in COMBINE, if arr is "full" we're done */
+                    && (arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL))
+            break;
     }
+
     if (b != buf)
         g_free (b);
-
+    if (source[0] != _source)
+        g_free (source[0]);
     return arr;
 }
 
