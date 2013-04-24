@@ -3153,33 +3153,24 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
 
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
     {
-        if (!donna_config_get_string (config, &s,
-                    "treeviews/%s/arrangement/sort", priv->name))
-            if (!donna_config_get_string (config, &s,
-                    "defaults/arrangements/%s/sort",
+        if (donna_config_get_string (config, &arr->sort_column,
+                    "treeviews/%s/arrangement/sort_column", priv->name))
+            donna_config_get_uint (config, &arr->sort_order,
+                    "treeviews/%s/arrangement/sort_order", priv->name);
+        else if (donna_config_get_string (config, &arr->sort_column,
+                    "defaults/arrangements/%s/sort_column",
                     (is_tree (tree)) ? "tree" : "list"))
-            {
-                /* we can't find anything, default to first column */
-                s = strchr (arr->columns, ',');
-                if (s)
-                    arr->sort_column = g_strndup (arr->columns, s - arr->columns);
-                else
-                    arr->sort_column = g_strdup (arr->columns);
-                s = NULL;
-            }
-        /* if we found it somewhere, it might have an order */
-        if (s)
+            donna_config_get_uint (config, &arr->sort_order,
+                    "defaults/arrangements/%s/sort_order",
+                    (is_tree (tree)) ? "tree" : "list");
+        else
         {
-            gchar *ss;
-
-            ss = strchr (s, ':');
-            if (ss)
-                *ss = '\0';
-
-            arr->sort_column = s;
-            if (ss)
-                arr->sort_order = (ss[1] == 'd')
-                    ? DONNA_SORT_DESC : DONNA_SORT_ASC;
+            /* we can't find anything, default to first column */
+            s = strchr (arr->columns, ',');
+            if (s)
+                arr->sort_column = g_strndup (arr->columns, s - arr->columns);
+            else
+                arr->sort_column = g_strdup (arr->columns);
         }
         arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
     }
@@ -3187,37 +3178,29 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     /* Note: even here, this one is optional */
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
     {
-        if (donna_config_get_string (config, &s,
-                    "treeviews/%s/arrangement/second_sort", priv->name))
+        if (donna_config_get_string (config, &arr->second_sort_column,
+                    "treeviews/%s/arrangement/second_sort_column", priv->name))
         {
+            donna_config_get_uint (config, &arr->second_sort_order,
+                    "treeviews/%s/arrangement/second_sort_order", priv->name);
             if (donna_config_get_boolean (config, &sticky,
                         "treeviews/%s/arrangement/second_sort_sticky", priv->name))
                 arr->second_sort_sticky = (sticky) ? DONNA_SECOND_SORT_STICKY_ENABLED
                     : DONNA_SECOND_SORT_STICKY_DISABLED;
+            arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
         }
-        else if (donna_config_get_string (config, &s,
-                    "defaults/arrangements/%s/second_sort",
+        else if (donna_config_get_string (config, &arr->second_sort_column,
+                    "defaults/arrangements/%s/second_sort_column",
                     (is_tree (tree)) ? "tree" : "list"))
         {
+            donna_config_get_uint (config, &arr->second_sort_order,
+                    "defaults/arrangements/%s/second_sort_order",
+                    (is_tree (tree)) ? "tree" : "list");
             if (donna_config_get_boolean (config, &sticky,
                         "defaults/arrangements/%s/second_sort_sticky",
                         (is_tree (tree)) ? "tree" : "list"))
                 arr->second_sort_sticky = (sticky) ? DONNA_SECOND_SORT_STICKY_ENABLED
                     : DONNA_SECOND_SORT_STICKY_DISABLED;
-        }
-        if (s)
-        {
-            gchar *ss;
-
-            ss = strchr (s, ':');
-            if (ss)
-                *ss = '\0';
-
-            arr->second_sort_column = s;
-            if (ss)
-                arr->second_sort_order = (ss[1] == 'd')
-                    ? DONNA_SORT_DESC : DONNA_SORT_ASC;
-
             arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
         }
     }

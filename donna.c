@@ -414,17 +414,10 @@ tree_select_arrangement (DonnaTreeView  *tree,
             if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
             {
                 if (donna_config_get_string (priv->config, &arr->sort_column,
-                            "arrangements/%s/sort", argmt->name))
+                            "arrangements/%s/sort_column", argmt->name))
                 {
-                    gchar *s;
-
-                    s = strchr (arr->sort_column, ':');
-                    if (s)
-                    {
-                        *s = '\0';
-                        arr->sort_order = (s[1] == 'd') ? DONNA_SORT_DESC : DONNA_SORT_ASC;
-                    }
-
+                    donna_config_get_uint (priv->config, &arr->sort_order,
+                            "arrangements/%s/sort_order", argmt->name);
                     arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
                     if (donna_config_get_boolean (priv->config, &always,
                                 "arrangements/%s/sort_always", argmt->name)
@@ -436,18 +429,12 @@ tree_select_arrangement (DonnaTreeView  *tree,
             if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
             {
                 if (donna_config_get_string (priv->config, &arr->second_sort_column,
-                            "arrangements/%s/second_sort", argmt->name))
+                            "arrangements/%s/second_sort_column", argmt->name))
                 {
-                    gchar *s;
                     gboolean sticky;
 
-                    s = strchr (arr->second_sort_column, ':');
-                    if (s)
-                    {
-                        *s = '\0';
-                        arr->second_sort_order = (s[1] == 'd')
-                            ? DONNA_SORT_DESC : DONNA_SORT_ASC;
-                    }
+                    donna_config_get_uint (priv->config, &arr->second_sort_order,
+                            "arrangements/%s/second_sort_order", argmt->name);
 
                     if (donna_config_get_boolean (priv->config, &sticky,
                                 "arrangements/%s/second_sort_sticky", argmt->name))
