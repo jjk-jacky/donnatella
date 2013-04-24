@@ -547,7 +547,7 @@ load_config (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv;
     DonnaConfig *config;
-    guint val;
+    gint val;
 
     /* we load/cache some options, because usually we can't just get those when
      * needed, but they need to trigger some refresh or something. So we need to
@@ -557,7 +557,7 @@ load_config (DonnaTreeView *tree)
     priv = tree->priv;
     config = donna_app_peek_config (priv->app);
 
-    if (donna_config_get_uint (config, (guint *) &val,
+    if (donna_config_get_int (config, &val,
                 "treeviews/%s/mode", priv->name))
         priv->mode = val;
     else
@@ -566,7 +566,7 @@ load_config (DonnaTreeView *tree)
                 priv->name);
         /* set default */
         val = priv->mode = DONNA_TREE_VIEW_MODE_LIST;
-        donna_config_set_uint (config, (guint) val,
+        donna_config_set_int (config, val,
                 "treeviews/%s/mode", priv->mode);
     }
 
@@ -581,7 +581,7 @@ load_config (DonnaTreeView *tree)
                 "treeviews/%s/show_hidden", priv->name);
     }
 
-    if (donna_config_get_uint (config, &val,
+    if (donna_config_get_int (config, &val,
                 "treeviews/%s/node_types", priv->name))
         priv->node_types = val;
     else
@@ -591,11 +591,11 @@ load_config (DonnaTreeView *tree)
         if (!is_tree (tree))
             val |= DONNA_NODE_ITEM;
         priv->node_types = val;
-        donna_config_set_uint (config, val,
+        donna_config_set_int (config, val,
                 "treeviews/%s/node_types", priv->name);
     }
 
-    if (donna_config_get_uint (config, &val,
+    if (donna_config_get_int (config, &val,
                 "treeviews/%s/sort_groups", priv->name))
         priv->sort_groups = val;
     else
@@ -603,7 +603,7 @@ load_config (DonnaTreeView *tree)
         /* set default */
         val = SORT_CONTAINER_FIRST;
         priv->sort_groups = val;
-        donna_config_set_uint (config, val,
+        donna_config_set_int (config, val,
                 "treeviews/%s/sort_groups", priv->name);
     }
 
@@ -622,14 +622,14 @@ load_config (DonnaTreeView *tree)
                     "treeview/%s/is_minitree", priv->name);
         }
 
-        if (donna_config_get_uint (config, &val,
+        if (donna_config_get_int (config, &val,
                     "treeviews/%s/sync_mode", priv->name))
             priv->sync_mode = val;
         else
         {
             /* set default */
             val = priv->sync_mode = DONNA_TREE_SYNC_FULL;
-            donna_config_set_uint (config, val,
+            donna_config_set_int (config, val,
                     "treeviews/%s/sync_mode", priv->name);
         }
 
@@ -2945,7 +2945,7 @@ load_arrangement (DonnaTreeView     *tree,
         /* size */
         if (snprintf (buf, 64, "columntypes/%s", col_type) >= 64)
             b = g_strdup_printf ("columntypes/%s", col_type);
-        width = donna_config_get_uint_column (config, priv->name, col,
+        width = donna_config_get_int_column (config, priv->name, col,
                 arrangement->columns_options, b, "width", 230);
         gtk_tree_view_column_set_fixed_width (column, width);
         if (b != buf)
@@ -3155,12 +3155,12 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     {
         if (donna_config_get_string (config, &arr->sort_column,
                     "treeviews/%s/arrangement/sort_column", priv->name))
-            donna_config_get_uint (config, &arr->sort_order,
+            donna_config_get_int (config, (gint *) &arr->sort_order,
                     "treeviews/%s/arrangement/sort_order", priv->name);
         else if (donna_config_get_string (config, &arr->sort_column,
                     "defaults/arrangements/%s/sort_column",
                     (is_tree (tree)) ? "tree" : "list"))
-            donna_config_get_uint (config, &arr->sort_order,
+            donna_config_get_int (config, (gint *) &arr->sort_order,
                     "defaults/arrangements/%s/sort_order",
                     (is_tree (tree)) ? "tree" : "list");
         else
@@ -3181,7 +3181,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
         if (donna_config_get_string (config, &arr->second_sort_column,
                     "treeviews/%s/arrangement/second_sort_column", priv->name))
         {
-            donna_config_get_uint (config, &arr->second_sort_order,
+            donna_config_get_int (config, (gint *) &arr->second_sort_order,
                     "treeviews/%s/arrangement/second_sort_order", priv->name);
             if (donna_config_get_boolean (config, &sticky,
                         "treeviews/%s/arrangement/second_sort_sticky", priv->name))
@@ -3193,7 +3193,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
                     "defaults/arrangements/%s/second_sort_column",
                     (is_tree (tree)) ? "tree" : "list"))
         {
-            donna_config_get_uint (config, &arr->second_sort_order,
+            donna_config_get_int (config, (gint *) &arr->second_sort_order,
                     "defaults/arrangements/%s/second_sort_order",
                     (is_tree (tree)) ? "tree" : "list");
             if (donna_config_get_boolean (config, &sticky,
@@ -3304,7 +3304,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                             donna_columntype_get_name (ct)) >= 64)
                     b = g_strdup_printf ("columntypes/%s",
                             donna_columntype_get_renderers (ct));
-                width = donna_config_get_uint_column (config, priv->name, col,
+                width = donna_config_get_int_column (config, priv->name, col,
                         arr->columns_options, b, "width", 230);
                 gtk_tree_view_column_set_fixed_width (l->data, width);
                 if (b != buf)

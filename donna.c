@@ -416,7 +416,8 @@ tree_select_arrangement (DonnaTreeView  *tree,
                 if (donna_config_get_string (priv->config, &arr->sort_column,
                             "arrangements/%s/sort_column", argmt->name))
                 {
-                    donna_config_get_uint (priv->config, &arr->sort_order,
+                    donna_config_get_int (priv->config,
+                            (gint *) &arr->sort_order,
                             "arrangements/%s/sort_order", argmt->name);
                     arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
                     if (donna_config_get_boolean (priv->config, &always,
@@ -433,7 +434,8 @@ tree_select_arrangement (DonnaTreeView  *tree,
                 {
                     gboolean sticky;
 
-                    donna_config_get_uint (priv->config, &arr->second_sort_order,
+                    donna_config_get_int (priv->config,
+                            (gint *) &arr->second_sort_order,
                             "arrangements/%s/second_sort_order", argmt->name);
 
                     if (donna_config_get_boolean (priv->config, &sticky,

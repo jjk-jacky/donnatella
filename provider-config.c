@@ -808,7 +808,6 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
     struct parsed_data *first_section;
     struct parsed_data *section;
     GRegex *re_int;
-    GRegex *re_uint;
     GRegex *re_double;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
@@ -821,8 +820,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
         return TRUE;
     }
 
-    re_int      = g_regex_new ("^[+-][0-9]+$",      G_REGEX_OPTIMIZE, 0, NULL);
-    re_uint     = g_regex_new ("^[0-9]+$",          G_REGEX_OPTIMIZE, 0, NULL);
+    re_int      = g_regex_new ("^[+-]{0,1}[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
     re_double   = g_regex_new ("^[0-9]+\\.[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
 
     g_rw_lock_writer_lock (&priv->lock);
@@ -939,23 +937,6 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     g_value_set_int (&option->value, v);
                     g_node_append_data (parent, option);
                 }
-                /* uint */
-                else if (g_regex_match (re_uint, parsed->value, 0, NULL))
-                {
-                    guint v;
-
-                    if (!sscanf (parsed->value, "%u", &v))
-                    {
-                        g_warning ("Failed to get UINT value for option '%s' in '%s', skipped",
-                                parsed->name, section->name);
-                        continue;
-                    }
-                    option = g_slice_new0 (struct option);
-                    option->name = str_chunk (priv, parsed->name);
-                    g_value_init (&option->value, G_TYPE_UINT);
-                    g_value_set_uint (&option->value, v);
-                    g_node_append_data (parent, option);
-                }
                 /* double */
                 else if (g_regex_match (re_double, parsed->value, 0, NULL))
                 {
@@ -1002,7 +983,6 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
     g_rw_lock_writer_unlock (&priv->lock);
 
     g_regex_unref (re_int);
-    g_regex_unref (re_uint);
     g_regex_unref (re_double);
 
     free_parsed_data_section (first_section);
@@ -1077,11 +1057,6 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                 option->name,
                                 (g_value_get_boolean (&option->value))
                                 ? "true" : "false");
-                        break;
-                    case G_TYPE_UINT:
-                        g_string_append_printf (str, "%s=%u\n",
-                                option->name,
-                                g_value_get_uint (&option->value));
                         break;
                     case G_TYPE_INT:
                         {
@@ -1320,14 +1295,6 @@ donna_config_has_int (DonnaConfig *config,
 }
 
 gboolean
-donna_config_has_uint (DonnaConfig *config,
-                       const gchar *fmt,
-                       ...)
-{
-    _has_opt (G_TYPE_UINT, FALSE);
-}
-
-gboolean
 donna_config_has_double (DonnaConfig *config,
                          const gchar *fmt,
                          ...)
@@ -1434,15 +1401,6 @@ donna_config_get_int (DonnaConfig    *config,
                       ...)
 {
     _get_opt (gint, G_TYPE_INT, g_value_get_int);
-}
-
-gboolean
-donna_config_get_uint (DonnaConfig    *config,
-                       guint          *value,
-                       const gchar    *fmt,
-                       ...)
-{
-    _get_opt (guint, G_TYPE_UINT, g_value_get_uint);
 }
 
 gboolean
@@ -1601,21 +1559,6 @@ donna_config_get_int_column (DonnaConfig *config,
             (cfg_set_fn) donna_config_set_int);
 }
 
-guint
-donna_config_get_uint_column (DonnaConfig *config,
-                              const gchar *tv_name,
-                              const gchar *col_name,
-                              const gchar *arr_name,
-                              const gchar *def_cat,
-                              const gchar *opt_name,
-                              guint        def_val)
-{
-    return (guint) _get_option_column (config, tv_name, col_name, arr_name,
-            def_cat, opt_name, def_val,
-            (cfg_get_fn) donna_config_get_uint,
-            (cfg_set_fn) donna_config_set_uint);
-}
-
 gdouble
 donna_config_get_double_column (DonnaConfig *config,
                                 const gchar *tv_name,
@@ -1766,15 +1709,6 @@ donna_config_set_int (DonnaConfig   *config,
                       ...)
 {
     _set_opt (G_TYPE_INT, g_value_set_int);
-}
-
-gboolean
-donna_config_set_uint (DonnaConfig  *config,
-                       guint         value,
-                       const gchar  *fmt,
-                       ...)
-{
-    _set_opt (G_TYPE_UINT, g_value_set_uint);
 }
 
 gboolean

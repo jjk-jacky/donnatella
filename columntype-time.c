@@ -232,7 +232,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    sec = donna_config_get_uint_column (config, tv_name, col_name, arr_name,
+    sec = (guint) donna_config_get_int_column (config, tv_name, col_name, arr_name,
             "time", "age_span_seconds", 7*24*3600);
     if (data->options.age_span_seconds != sec)
     {
@@ -280,7 +280,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    sec = donna_config_get_uint_column (config, tv_name, col_name, arr_name,
+    sec = (guint) donna_config_get_int_column (config, tv_name, col_name, arr_name,
             NULL, "age_span_seconds_tooltip", 7*24*3600);
     if (data->options_tooltip.age_span_seconds != sec)
     {

@@ -60,9 +60,6 @@ gboolean    donna_config_has_boolean            (DonnaConfig            *config,
 gboolean    donna_config_has_int                (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);
-gboolean    donna_config_has_uint               (DonnaConfig            *config,
-                                                 const gchar            *fmt,
-                                                 ...);
 gboolean    donna_config_has_double             (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);
@@ -78,10 +75,6 @@ gboolean    donna_config_get_boolean            (DonnaConfig            *config,
                                                  ...);
 gboolean    donna_config_get_int                (DonnaConfig            *config,
                                                  gint                   *value,
-                                                 const gchar            *fmt,
-                                                 ...);
-gboolean    donna_config_get_uint               (DonnaConfig            *config,
-                                                 guint                  *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_get_double             (DonnaConfig            *config,
@@ -111,13 +104,6 @@ gint        donna_config_get_int_column         (DonnaConfig            *config,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
                                                  gint                    def_val);
-guint       donna_config_get_uint_column        (DonnaConfig            *config,
-                                                 const gchar            *tv_name,
-                                                 const gchar            *col_name,
-                                                 const gchar            *arr_name,
-                                                 const gchar            *def_cat,
-                                                 const gchar            *opt_name,
-                                                 guint                   def_val);
 gdouble     donna_config_get_double_column      (DonnaConfig            *config,
                                                  const gchar            *tv_name,
                                                  const gchar            *col_name,
@@ -138,10 +124,6 @@ gboolean    donna_config_set_boolean            (DonnaConfig            *config,
                                                  ...);
 gboolean    donna_config_set_int                (DonnaConfig            *config,
                                                  gint                    value,
-                                                 const gchar            *fmt,
-                                                 ...);
-gboolean    donna_config_set_uint               (DonnaConfig            *config,
-                                                 guint                   value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_set_double             (DonnaConfig            *config,
