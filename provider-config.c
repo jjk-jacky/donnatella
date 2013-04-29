@@ -2801,6 +2801,7 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
     data->config     = DONNA_PROVIDER_CONFIG (provider);
     data->node       = g_object_ref (node);
     data->node_types = node_types;
+    data->ref_count  = 1;
 
     task = donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
@@ -2832,6 +2833,7 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
     data->node       = g_object_ref (node);
     data->node_types = node_types;
     data->children   = g_ptr_array_new ();
+    data->ref_count  = 1;
 
     task = donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
