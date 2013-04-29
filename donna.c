@@ -342,7 +342,6 @@ donna_donna_get_columntype (DonnaApp       *app,
     gint i;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    g_return_val_if_fail (type != NULL, NULL);
 
     priv = DONNA_DONNA (app)->priv;
 
@@ -364,7 +363,6 @@ donna_donna_run_task (DonnaApp    *app,
                       DonnaTask   *task)
 {
     g_return_if_fail (DONNA_IS_DONNA (app));
-    g_return_if_fail (DONNA_IS_TASK (task));
 
     /* FIXME if task is public, add to task manager */
     donna_task_prepare (task);
