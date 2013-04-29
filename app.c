@@ -1,5 +1,4 @@
 
-#include <glib-object.h>
 #include "app.h"
 
 enum

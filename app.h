@@ -3,6 +3,7 @@
 #define __DONNA_APP_H__
 
 #include <glib.h>
+#include <glib-object.h>
 #include "common.h"
 #include "conf.h"
 #include "treeview.h"
