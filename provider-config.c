@@ -2562,6 +2562,26 @@ ensure_option_has_node (DonnaProviderConfig *config,
                     NULL);
         }
 
+        /* set icon */
+        if (option->extra != priv->root
+                || (location[0] == '/' && location [1] == '\0'))
+        {
+            GValue val = G_VALUE_INIT;
+            GtkWidget *w;
+            GdkPixbuf *pixbuf;
+
+            g_value_init (&val, G_TYPE_OBJECT);
+            w = g_object_ref_sink (gtk_label_new (NULL));
+            pixbuf = gtk_widget_render_icon_pixbuf (w,
+                    (option->extra != priv->root)
+                     ? GTK_STOCK_PROPERTIES : GTK_STOCK_PREFERENCES,
+                    GTK_ICON_SIZE_MENU);
+            g_value_take_object (&val, pixbuf);
+            donna_node_set_property_value (option->node, "icon", &val);
+            g_value_unset (&val);
+            g_object_unref (w);
+        }
+
         /* add a toggleref, so when we have the last reference on the node, we
          * can let it go (Note: this adds a (strong) reference to node) */
         g_object_add_toggle_ref (G_OBJECT (option->node),
