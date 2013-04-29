@@ -137,7 +137,9 @@ donna_columntype_free_data (DonnaColumnType    *ct,
     DonnaColumnTypeInterface *interface;
 
     g_return_if_fail (DONNA_IS_COLUMNTYPE (ct));
-    g_return_if_fail (data != NULL);
+
+    if (G_UNLIKELY (!data))
+        return;
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
