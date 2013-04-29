@@ -112,6 +112,23 @@ donna_app_get_columntype (DonnaApp       *app,
     return (*interface->get_columntype) (app, type);
 }
 
+DonnaFilter *
+donna_app_get_filter (DonnaApp       *app,
+                      const gchar    *filter)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (filter != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_filter != NULL, NULL);
+
+    return (*interface->get_filter) (app, filter);
+}
+
 void
 donna_app_run_task (DonnaApp       *app,
                     DonnaTask      *task)

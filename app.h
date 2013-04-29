@@ -8,6 +8,7 @@
 #include "conf.h"
 #include "treeview.h"
 #include "columntype.h"
+#include "filter.h"
 
 G_BEGIN_DECLS
 
@@ -26,6 +27,8 @@ struct _DonnaAppInterface
                                                      const gchar    *domain);
     DonnaColumnType *   (*get_columntype)           (DonnaApp       *app,
                                                      const gchar    *type);
+    DonnaFilter *       (*get_filter)               (DonnaApp       *app,
+                                                     const gchar    *filter);
     void                (*run_task)                 (DonnaApp       *app,
                                                      DonnaTask      *task);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
@@ -46,6 +49,8 @@ DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
 DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
                                                      const gchar    *type);
+DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
+                                                     const gchar    *filter);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,

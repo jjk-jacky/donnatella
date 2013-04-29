@@ -10,6 +10,7 @@
 #include "task.h"
 #include "macros.h"
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
+#include "colorfilter.h"
 #include "closures.h"
 
 enum
@@ -1423,6 +1424,76 @@ spinner_fn (DonnaTreeView *tree)
     return TRUE;
 }
 
+static gpointer
+get_ct_data (const gchar *col_name, gpointer columns)
+{
+    GList *l;
+
+    for (l = columns; l; l = l->next)
+        if (streq (col_name, g_object_get_data (l->data, "column-name")))
+            return g_object_get_data (l->data, "columntype-data");
+    return NULL;
+}
+
+static void
+apply_color_filters (DonnaTreeView      *tree,
+                     GtkTreeViewColumn  *column,
+                     GtkCellRenderer    *renderer,
+                     DonnaNode          *node)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GList *columns;
+    GError *err = NULL;
+    gboolean visible;
+    GSList *l;
+
+    if (!g_type_is_a (G_TYPE_FROM_INSTANCE (renderer), GTK_TYPE_CELL_RENDERER_TEXT))
+        return;
+
+    g_object_get (renderer, "visible", &visible, NULL);
+    if (!visible)
+        return;
+
+    if (!(priv->arrangement->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS))
+        return;
+
+    columns = gtk_tree_view_get_columns ((GtkTreeView *) tree);
+    for (l = priv->arrangement->color_filters; l; )
+    {
+        DonnaColorFilter *cf = l->data;
+        gboolean keep_going;
+
+        if (donna_color_filter_apply_if_match (cf, (GObject *) renderer,
+                    g_object_get_data ((GObject *) column, "column-name"),
+                    node, get_ct_data, columns, &keep_going, &err))
+        {
+            if (!keep_going)
+                break;
+        }
+        else if (err)
+        {
+            GSList *ll;
+            gchar *filter;
+
+            /* remove color filter */
+            g_object_get (cf, "filter", &filter, NULL);
+            donna_app_show_error (priv->app, err,
+                    "Ignoring color filter '%s'", filter);
+            g_free (filter);
+            g_error_free (err);
+
+            ll = l;
+            l = l->next;
+            priv->arrangement->color_filters = g_slist_delete_link (
+                    priv->arrangement->color_filters, ll);
+            continue;
+        }
+
+        l = l->next;
+    }
+    g_list_free (columns);
+}
+
 static void
 rend_func (GtkTreeViewColumn  *column,
            GtkCellRenderer    *renderer,
@@ -1511,6 +1582,19 @@ rend_func (GtkTreeViewColumn  *column,
         return;
     }
 
+    /* because color filters might have been applied the last time this renderer
+     * was used on this column, some properties might have been - and still be -
+     * set (e.g. a foreground color). Therefore, we need to make sure they won't
+     * be used, unless ct_render (or a new matching color filter) sets them
+     * again this time */
+    if (g_type_is_a (G_TYPE_FROM_INSTANCE (renderer), GTK_TYPE_CELL_RENDERER_TEXT))
+    {
+        g_object_set (renderer, "foreground-set", FALSE, NULL);
+        g_object_set (renderer, "background-set", FALSE, NULL);
+        g_object_set (renderer, "weight-set", FALSE, NULL);
+        g_object_set (renderer, "style-set", FALSE, NULL);
+    }
+
     index -= NB_INTERNAL_RENDERERS - 1; /* -1 to start with index 1 */
 
     ct   = g_object_get_data (G_OBJECT (column), "column-type");
@@ -1574,6 +1658,7 @@ rend_func (GtkTreeViewColumn  *column,
                             "visible",  TRUE,
                             "text",     name,
                             NULL);
+                    apply_color_filters (tree, column, renderer, node);
                     g_free (name);
                     g_object_unref (node);
                     return;
@@ -1609,6 +1694,8 @@ rend_func (GtkTreeViewColumn  *column,
                 (GDestroyNotify) free_refresh_node_props_data);
         donna_app_run_task (priv->app, task);
     }
+    else
+        apply_color_filters (tree, column, renderer, node);
     g_object_unref (node);
 }
 
@@ -3126,32 +3213,25 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     config = donna_app_peek_config (priv->app);
 
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
-    {
         /* try loading our from our own arrangement */
-        if (!donna_config_get_string (config, &arr->columns,
-                    "treeviews/%s/arrangement/columns", priv->name))
+        if (!donna_config_arr_load_columns (config, arr,
+                    "treeviews/%s/arrangement", priv->name))
             /* fallback on default for our mode */
-            if (!donna_config_get_string (config, &arr->columns,
-                        "defaults/arrangements/%s/columns",
+            if (!donna_config_arr_load_columns (config, arr,
+                        "defaults/arrangements/%s",
                         (is_tree (tree)) ? "tree" : "list"))
+            {
                 /* if all else fails, use a column "name" */
                 arr->columns = g_strdup ("name");
-        arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
-    }
+                arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+            }
 
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
-    {
-        if (donna_config_get_string (config, &arr->sort_column,
-                    "treeviews/%s/arrangement/sort_column", priv->name))
-            donna_config_get_int (config, (gint *) &arr->sort_order,
-                    "treeviews/%s/arrangement/sort_order", priv->name);
-        else if (donna_config_get_string (config, &arr->sort_column,
-                    "defaults/arrangements/%s/sort_column",
+        if (!donna_config_arr_load_sort (config, arr,
+                    "treeviews/%s/arrangement", priv->name)
+                && !donna_config_arr_load_sort (config, arr,
+                    "defaults/arrangements/%s",
                     (is_tree (tree)) ? "tree" : "list"))
-            donna_config_get_int (config, (gint *) &arr->sort_order,
-                    "defaults/arrangements/%s/sort_order",
-                    (is_tree (tree)) ? "tree" : "list");
-        else
         {
             /* we can't find anything, default to first column */
             s = strchr (arr->columns, ',');
@@ -3159,56 +3239,46 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
                 arr->sort_column = g_strndup (arr->columns, s - arr->columns);
             else
                 arr->sort_column = g_strdup (arr->columns);
+            arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
         }
-        arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
-    }
 
     /* Note: even here, this one is optional */
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
-    {
-        if (donna_config_get_string (config, &arr->second_sort_column,
-                    "treeviews/%s/arrangement/second_sort_column", priv->name))
-        {
-            donna_config_get_int (config, (gint *) &arr->second_sort_order,
-                    "treeviews/%s/arrangement/second_sort_order", priv->name);
-            if (donna_config_get_boolean (config, &sticky,
-                        "treeviews/%s/arrangement/second_sort_sticky", priv->name))
-                arr->second_sort_sticky = (sticky) ? DONNA_SECOND_SORT_STICKY_ENABLED
-                    : DONNA_SECOND_SORT_STICKY_DISABLED;
-            arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
-        }
-        else if (donna_config_get_string (config, &arr->second_sort_column,
-                    "defaults/arrangements/%s/second_sort_column",
-                    (is_tree (tree)) ? "tree" : "list"))
-        {
-            donna_config_get_int (config, (gint *) &arr->second_sort_order,
-                    "defaults/arrangements/%s/second_sort_order",
+        if (!donna_config_arr_load_second_sort (config, arr,
+                    "treeviews/%s/arrangement",
+                    priv->name))
+            donna_config_arr_load_second_sort (config, arr,
+                    "defaults/arrangements/%s",
                     (is_tree (tree)) ? "tree" : "list");
-            if (donna_config_get_boolean (config, &sticky,
-                        "defaults/arrangements/%s/second_sort_sticky",
-                        (is_tree (tree)) ? "tree" : "list"))
-                arr->second_sort_sticky = (sticky) ? DONNA_SECOND_SORT_STICKY_ENABLED
-                    : DONNA_SECOND_SORT_STICKY_DISABLED;
-            arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
-        }
-    }
 
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS))
     {
-        if (donna_config_has_category (config,
-                    "treeviews/%s/arrangement/columns_options",
-                    priv->name))
-            arr->columns_options = g_strdup_printf ("treeviews/%s/arrangement",
-                    priv->name);
-        else if (donna_config_has_category (config,
-                    "defaults/arrangements/%s/columns_options",
+        if (!donna_config_arr_load_columns_options (config, arr,
+                    "treeviews/%s/arrangement",
+                    priv->name)
+                && !donna_config_arr_load_columns_options (config, arr,
+                    "defaults/arrangements/%s",
                     (is_tree (tree)) ? "tree" : "list"))
-            arr->columns_options = g_strdup_printf ("defaults/arrangements/%s",
-                    (is_tree (tree)) ? "tree" : "list");
-        /* else: we say we have something, it is NULL. This will force updating
-         * the columntype-data without using an arr_name */
+            /* else: we say we have something, it is NULL. This will force
+             * updating the columntype-data without using an arr_name */
+            arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+    }
 
-        arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+    if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS))
+    {
+        if (!donna_config_arr_load_color_filters (config, priv->app, arr,
+                    "treeviews/%s/arrangement", priv->name))
+            donna_config_arr_load_color_filters (config, priv->app, arr,
+                    "defaults/arrangements/%s",
+                    (is_tree (tree)) ? "tree" : "list");
+
+        /* special: color filters might have been loaded with a type COMBINE,
+         * which resulted in them loaded but no flag set (in order to keep
+         * loading others from other arrangements). In such a case, we now need
+         * to set the flag */
+        if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS)
+                && arr->color_filters)
+            arr->flags |= DONNA_ARRANGEMENT_HAS_COLOR_FILTERS;
     }
 
     return arr;

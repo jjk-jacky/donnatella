@@ -1,6 +1,7 @@
 
 #define _GNU_SOURCE             /* strchrnul() in string.h */
 #include <glib-object.h>
+#include <stdlib.h>             /* atoi() */
 #include <stdio.h>              /* sscanf() */
 #include <string.h>
 #include <ctype.h>              /* isblank() */
@@ -9,6 +10,7 @@
 #include "conf.h"
 #include "node.h"
 #include "task.h"
+#include "colorfilter.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -20,6 +22,15 @@ enum
 };
 
 static guint donna_config_signals[NB_SIGNALS] = { 0 };
+
+enum types
+{
+    TYPE_UNKNOWN = 0,
+    TYPE_ENABLED,
+    TYPE_DISABLED,
+    TYPE_COMBINE,
+    TYPE_IGNORE
+};
 
 struct parsed_data
 {
@@ -1667,6 +1678,418 @@ donna_config_get_string_column (DonnaConfig *config,
             (cfg_set_fn) donna_config_set_string);
     return (ret == def_val) ? g_strdup (ret) : ret;
 }
+
+
+#define get_node()  do {                                            \
+    if (*fmt == '/')                                                \
+        ++fmt;                                                      \
+                                                                    \
+    va_start (va_arg, fmt);                                         \
+    len = vsnprintf (buf, 255, fmt, va_arg);                        \
+    if (len >= 255)                                                 \
+    {                                                               \
+        b = g_new (gchar, ++len); /* +1 for NUL */                  \
+        va_end (va_arg);                                            \
+        va_start (va_arg, fmt);                                     \
+        vsnprintf (b, len, fmt, va_arg);                            \
+    }                                                               \
+    va_end (va_arg);                                                \
+                                                                    \
+    g_rw_lock_reader_lock (&priv->lock);                            \
+    node = get_option_node (priv->root, b);                         \
+    if (!node || !option_is_category (node->data, priv->root))      \
+        goto done;                                                  \
+} while (0)
+
+#define get_child(opt_name, len_opt, opt_type, is_req)  do {        \
+    child = get_child_node (node, opt_name, len_opt);               \
+    if (!child || option_is_category (child->data, priv->root))     \
+    {                                                               \
+        if (is_req)                                                 \
+            goto done;                                              \
+        else                                                        \
+        {                                                           \
+            child = NULL;                                           \
+            break;                                                  \
+        }                                                           \
+    }                                                               \
+                                                                    \
+    value = &((struct option *) child->data)->value;                \
+    if (!G_VALUE_HOLDS (value, G_TYPE_##opt_type))                  \
+    {                                                               \
+        if (is_req)                                                 \
+            goto done;                                              \
+        else                                                        \
+            child = NULL;                                           \
+    }                                                               \
+} while (0)
+
+gboolean
+donna_config_arr_load_columns (DonnaConfig            *config,
+                               DonnaArrangement       *arr,
+                               const gchar            *fmt,
+                               ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    va_list  va_arg;
+    GNode   *node;
+    GNode   *child;
+    GValue  *value;
+    gchar    buf[255], *b = buf;
+    gsize    len;
+    gboolean ret = FALSE;
+
+    g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
+    g_return_val_if_fail (arr != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+
+    priv = config->priv;
+
+    /* sanity check */
+    if (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS)
+        return FALSE;
+
+    get_node ();
+
+    get_child ("columns", 7, STRING, TRUE);
+    ret = TRUE;
+    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+    arr->columns = g_value_dup_string (value);
+
+    get_child ("columns_always", 14, BOOLEAN, TRUE);
+    if (g_value_get_boolean (value))
+        arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;
+
+done:
+    g_rw_lock_reader_unlock (&priv->lock);
+    if (b != buf)
+        g_free (b);
+    return ret;
+}
+
+gboolean
+donna_config_arr_load_sort (DonnaConfig            *config,
+                            DonnaArrangement       *arr,
+                            const gchar            *fmt,
+                            ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    va_list  va_arg;
+    GNode   *node;
+    GNode   *child;
+    GValue  *value;
+    gchar    buf[255], *b = buf;
+    gsize    len;
+    gboolean ret = FALSE;
+
+    g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
+    g_return_val_if_fail (arr != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+
+    priv = config->priv;
+
+    /* sanity check */
+    if (arr->flags & DONNA_ARRANGEMENT_HAS_SORT)
+        return FALSE;
+
+    get_node ();
+
+    get_child ("sort_column", 11, STRING, TRUE);
+    ret = TRUE;
+    arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
+    arr->sort_column = g_value_dup_string (value);
+
+    get_child ("sort_order", 10, INT, FALSE);
+    if (child)
+        arr->sort_order = g_value_get_int (value);
+
+    get_child ("sort_always", 11, BOOLEAN, TRUE);
+    if (g_value_get_boolean (value))
+        arr->flags |= DONNA_ARRANGEMENT_SORT_ALWAYS;
+
+done:
+    g_rw_lock_reader_unlock (&priv->lock);
+    if (b != buf)
+        g_free (b);
+    return ret;
+}
+
+gboolean
+donna_config_arr_load_second_sort (DonnaConfig            *config,
+                                   DonnaArrangement       *arr,
+                                   const gchar            *fmt,
+                                   ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    va_list  va_arg;
+    GNode   *node;
+    GNode   *child;
+    GValue  *value;
+    gchar    buf[255], *b = buf;
+    gsize    len;
+    gboolean ret = FALSE;
+
+    g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
+    g_return_val_if_fail (arr != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+
+    priv = config->priv;
+
+    /* sanity check */
+    if (arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT)
+        return FALSE;
+
+    get_node ();
+
+    get_child ("second_sort_column", 18, STRING, TRUE);
+    ret = TRUE;
+    arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
+    arr->second_sort_column = g_value_dup_string (value);
+
+    get_child ("second_sort_order", 17, INT, FALSE);
+    if (child)
+        arr->second_sort_order = g_value_get_int (value);
+
+    get_child ("second_sort_sticky", 18, BOOLEAN, FALSE);
+    if (child)
+        arr->second_sort_sticky = (g_value_get_boolean (value))
+            ? DONNA_SECOND_SORT_STICKY_ENABLED
+            : DONNA_SECOND_SORT_STICKY_DISABLED;
+
+    get_child ("second_sort_always", 18, BOOLEAN, TRUE);
+    if (g_value_get_boolean (value))
+        arr->flags |= DONNA_ARRANGEMENT_SECOND_SORT_ALWAYS;
+
+done:
+    g_rw_lock_reader_unlock (&priv->lock);
+    if (b != buf)
+        g_free (b);
+    return ret;
+}
+
+gboolean
+donna_config_arr_load_columns_options (DonnaConfig          *config,
+                                       DonnaArrangement       *arr,
+                                       const gchar            *fmt,
+                                       ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    va_list  va_arg;
+    GNode   *node;
+    GNode   *child;
+    GValue  *value;
+    gchar    buf[255], *b = buf;
+    gsize    len;
+    gboolean ret = FALSE;
+
+    g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
+    g_return_val_if_fail (arr != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+
+    priv = config->priv;
+
+    /* sanity check */
+    if (arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS)
+        return FALSE;
+
+    get_node ();
+
+    /* special case: we want this one to be a category */
+    child = get_child_node (node, "columns_options", 15);
+    if (!child || !option_is_category (child->data, priv->root))
+        goto done;
+
+    ret = TRUE;
+    arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
+    arr->columns_options = g_strdup (b);
+
+    get_child ("columns_options_always", 22, BOOLEAN, TRUE);
+    if (g_value_get_boolean (value))
+        arr->flags |= DONNA_ARRANGEMENT_COLUMNS_OPTIONS_ALWAYS;
+
+done:
+    g_rw_lock_reader_unlock (&priv->lock);
+    if (b != buf)
+        g_free (b);
+    return ret;
+}
+
+gboolean
+donna_config_arr_load_color_filters (DonnaConfig            *config,
+                                     DonnaApp               *app,
+                                     DonnaArrangement       *arr,
+                                     const gchar            *fmt,
+                                     ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    va_list      va_arg;
+    GNode       *node;
+    GNode       *child;
+    GValue      *value;
+    gchar        buf[255], *b = buf;
+    gsize        len;
+    gboolean     ret = FALSE;
+    enum types   type;
+
+    g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
+    g_return_val_if_fail (arr != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+
+    priv = config->priv;
+
+    /* sanity check */
+    if (arr->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS)
+        return FALSE;
+
+    get_node ();
+
+    /* special case: we want this one to be a category */
+    child = get_child_node (node, "color_filters", 13);
+    if (!child || !option_is_category (child->data, priv->root))
+        goto done;
+
+    /* color filters are special, in that the option "type" defines whether or
+     * not we load them, and also whether or not we set the flag
+     * - enabled  : load; set flag
+     * - disabled : set flag
+     * - combine  : load
+     * - ignore   : nothing
+     */
+
+    node = child;
+    get_child ("type", 4, INT, FALSE);
+    if (child)
+        type = g_value_get_int (value);
+    else
+        /* default */
+        type = TYPE_ENABLED;
+
+    switch (type)
+    {
+        case TYPE_DISABLED:
+            ret = TRUE;
+            arr->flags |= DONNA_ARRANGEMENT_HAS_COLOR_FILTERS;
+            goto done;
+            break;
+
+        case TYPE_ENABLED:
+            ret = TRUE;
+            arr->flags |= DONNA_ARRANGEMENT_HAS_COLOR_FILTERS;
+            /* fall through */
+
+        case TYPE_COMBINE:
+            break;
+
+        case TYPE_IGNORE:
+            goto done;
+            break;
+
+        case TYPE_UNKNOWN:
+        default:
+            g_warning ("Invalid option 'type' for '%s/color_filters'", b);
+            goto done;
+    }
+
+    /* only ENABLED and COMBINE reach here, to load color filters */
+
+    if (arr->color_filters)
+        arr->color_filters = g_slist_reverse (arr->color_filters);
+
+    for (node = node->children; node; node = node->next)
+    {
+        struct option *option = node->data;
+        DonnaColorFilter *cf;
+
+        if (!option_is_category (option, priv->root)
+                || streq (option->name, "type"))
+            continue;
+
+        get_child ("filter", 6, STRING, FALSE);
+        if (!child)
+            continue;
+
+        cf = g_object_new (DONNA_TYPE_COLOR_FILTER,
+                "app",      app,
+                "filter",   g_value_get_string (value),
+                NULL);
+
+        get_child ("column", 6, STRING, FALSE);
+        if (child)
+            g_object_set (cf, "column", g_value_get_string (value), NULL);
+
+        get_child ("keep_going", 10, BOOLEAN, FALSE);
+        if (child && g_value_get_boolean (value))
+            g_object_set (cf, "keep-going", TRUE, NULL);
+
+        /* all properties that we can set must be:
+         * - supported by GtkCellRendererText
+         * - listed in treeview, rend_func() (in order to reset the *-set
+         *   properties before rendering, see there for more
+         */
+
+        get_child ("foreground", 10, STRING, FALSE);
+        if (child)
+            donna_color_filter_add_prop (cf, "foreground-set",
+                    "foreground", value);
+        else
+        {
+            get_child ("foreground-rgba", 15, STRING, FALSE);
+            if (child)
+                donna_color_filter_add_prop (cf, "foreground-set",
+                        "foreground-rgba", value);
+        }
+
+        get_child ("background", 10, STRING, FALSE);
+        if (child)
+            donna_color_filter_add_prop (cf, "background-set",
+                    "background", value);
+        else
+        {
+            get_child ("background-rgba", 15, STRING, FALSE);
+            if (child)
+                donna_color_filter_add_prop (cf, "background-set",
+                        "background-rgba", value);
+        }
+
+        get_child ("bold", 4, BOOLEAN, FALSE);
+        if (child)
+        {
+            GValue v = G_VALUE_INIT;
+
+            g_value_init (&v, G_TYPE_INT);
+            g_value_set_int (&v, (g_value_get_boolean (value))
+                        ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL);
+            donna_color_filter_add_prop (cf, "weight-set", "weight", &v);
+            g_value_unset (&v);
+        }
+
+        get_child ("italic", 6, BOOLEAN, FALSE);
+        if (child)
+        {
+            GValue v = G_VALUE_INIT;
+
+            g_value_init (&v, G_TYPE_UINT);
+            g_value_set_int (&v, (g_value_get_boolean (value))
+                        ? PANGO_STYLE_ITALIC : PANGO_STYLE_NORMAL);
+            donna_color_filter_add_prop (cf, "style-set", "style", &v);
+            g_value_unset (&v);
+        }
+
+        arr->color_filters = g_slist_prepend (arr->color_filters, cf);
+    }
+
+    if (arr->color_filters)
+        arr->color_filters = g_slist_reverse (arr->color_filters);
+
+done:
+    g_rw_lock_reader_unlock (&priv->lock);
+    if (b != buf)
+        g_free (b);
+    return ret;
+}
+
+#undef get_node
+#undef get_child
 
 typedef void (*set_value_fn) (GValue *value, gintptr new_value);
 

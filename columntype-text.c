@@ -59,6 +59,14 @@ static gint             ct_text_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
+static gboolean         ct_text_is_match_filter     (DonnaColumnType    *ct,
+                                                     const gchar        *filter,
+                                                     gpointer           *filter_data,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
+static void             ct_text_free_filter_data    (DonnaColumnType    *ct,
+                                                     gpointer            filter_data);
 
 static void
 ct_text_columntype_init (DonnaColumnTypeInterface *interface)
@@ -70,6 +78,8 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_props                = ct_text_get_props;
     interface->render                   = ct_text_render;
     interface->node_cmp                 = ct_text_node_cmp;
+    interface->is_match_filter          = ct_text_is_match_filter;
+    interface->free_filter_data         = ct_text_free_filter_data;
 }
 
 static void
@@ -342,4 +352,48 @@ done:
     g_free (s1);
     g_free (s2);
     return ret;
+}
+
+static gboolean
+ct_text_is_match_filter (DonnaColumnType    *ct,
+                         const gchar        *filter,
+                         gpointer           *filter_data,
+                         gpointer            _data,
+                         DonnaNode          *node,
+                         GError            **error)
+{
+    struct tv_col_data *data = _data;
+    GPatternSpec *pspec;
+    DonnaNodeHasValue has;
+    GValue value = G_VALUE_INIT;
+    gboolean ret;
+
+    if (G_UNLIKELY (!*filter_data))
+        pspec = *filter_data = g_pattern_spec_new (filter);
+    else
+        pspec = *filter_data;
+
+    donna_node_get (node, TRUE, data->property, &has, &value, NULL);
+    if (has == DONNA_NODE_VALUE_SET)
+    {
+        if (G_VALUE_TYPE (&value) != G_TYPE_STRING)
+        {
+            warn_not_string (node);
+            g_value_unset (&value);
+            return FALSE;
+        }
+    }
+    else
+        return FALSE;
+
+    ret = g_pattern_match_string (pspec, g_value_get_string (&value));
+    g_value_unset (&value);
+    return ret;
+}
+
+static void
+ct_text_free_filter_data (DonnaColumnType    *ct,
+                          gpointer            filter_data)
+{
+    g_pattern_spec_free (filter_data);
 }

@@ -283,3 +283,46 @@ donna_columntype_node_cmp (DonnaColumnType    *ct,
 
     return (*interface->node_cmp) (ct, data, node1, node2);
 }
+
+gboolean
+donna_columntype_is_match_filter (DonnaColumnType    *ct,
+                                  const gchar        *filter,
+                                  gpointer           *filter_data,
+                                  gpointer            data,
+                                  DonnaNode          *node,
+                                  GError            **error)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+    g_return_val_if_fail (filter != NULL, 0);
+    g_return_val_if_fail (filter_data != NULL, 0);
+    g_return_val_if_fail (DONNA_IS_NODE (node), 0);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, 0);
+    g_return_val_if_fail (interface->is_match_filter != NULL, 0);
+
+    return (*interface->is_match_filter) (ct, filter, filter_data, data,
+            node, error);
+}
+
+void
+donna_columntype_free_filter_data (DonnaColumnType   *ct,
+                                   gpointer           filter_data)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+
+    if (G_UNLIKELY (!filter_data))
+        return;
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, 0);
+    g_return_val_if_fail (interface->free_filter_data != NULL, 0);
+
+    return (*interface->free_filter_data) (ct, filter_data);
+}

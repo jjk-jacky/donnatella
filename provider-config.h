@@ -2,6 +2,9 @@
 #ifndef __DONNA_PROVIDER_CONFIG_H__
 #define __DONNA_PROVIDER_CONFIG_H__
 
+typedef struct _DonnaArrangement    DonnaArrangement;
+typedef struct _DonnaApp            DonnaApp;
+
 G_BEGIN_DECLS
 
 #define DONNA_TYPE_PROVIDER_CONFIG              (donna_provider_config_get_type ())
@@ -118,6 +121,27 @@ gchar *     donna_config_get_string_column      (DonnaConfig            *config,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
                                                  gchar                  *def_val);
+gboolean    donna_config_arr_load_columns       (DonnaConfig            *config,
+                                                 DonnaArrangement       *arr,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_arr_load_sort          (DonnaConfig            *config,
+                                                 DonnaArrangement       *arr,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_arr_load_second_sort   (DonnaConfig            *config,
+                                                 DonnaArrangement       *arr,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_arr_load_columns_options (DonnaConfig          *config,
+                                                 DonnaArrangement       *arr,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_arr_load_color_filters (DonnaConfig            *config,
+                                                 DonnaApp               *app,
+                                                 DonnaArrangement       *arr,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
                                                  gboolean                value,
                                                  const gchar            *fmt,

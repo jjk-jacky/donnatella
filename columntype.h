@@ -76,6 +76,14 @@ struct _DonnaColumnTypeInterface
                                              gpointer            data,
                                              DonnaNode          *node1,
                                              DonnaNode          *node2);
+    gboolean            (*is_match_filter)  (DonnaColumnType    *ct,
+                                             const gchar        *filter,
+                                             gpointer           *filter_data,
+                                             gpointer            data,
+                                             DonnaNode          *node,
+                                             GError            **error);
+    void                (*free_filter_data) (DonnaColumnType    *ct,
+                                             gpointer            filter_data);
 };
 
 const gchar *   donna_columntype_get_name       (DonnaColumnType    *ct);
@@ -115,6 +123,14 @@ gint            donna_columntype_node_cmp       (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  DonnaNode          *node1,
                                                  DonnaNode          *node2);
+gboolean        donna_columntype_is_match_filter(DonnaColumnType    *ct,
+                                                 const gchar        *filter,
+                                                 gpointer           *filter_data,
+                                                 gpointer            data,
+                                                 DonnaNode          *node,
+                                                 GError            **error);
+void            donna_columntype_free_filter_data(DonnaColumnType   *ct,
+                                                 gpointer            filter_data);
 
 G_END_DECLS
 

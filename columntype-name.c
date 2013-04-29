@@ -1,4 +1,5 @@
 
+#define _GNU_SOURCE             /* strchrnul() in string.h */
 #include <glib-object.h>
 #include <string.h>
 #include "columntype.h"
@@ -76,6 +77,14 @@ static gint             ct_name_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
+static gboolean         ct_name_is_match_filter     (DonnaColumnType    *ct,
+                                                     const gchar        *filter,
+                                                     gpointer           *filter_data,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
+static void             ct_name_free_filter_data    (DonnaColumnType    *ct,
+                                                     gpointer            filter_data);
 
 static void
 ct_name_columntype_init (DonnaColumnTypeInterface *interface)
@@ -90,6 +99,8 @@ ct_name_columntype_init (DonnaColumnTypeInterface *interface)
     interface->render                   = ct_name_render;
     interface->set_tooltip              = ct_name_set_tooltip;
     interface->node_cmp                 = ct_name_node_cmp;
+    interface->is_match_filter          = ct_name_is_match_filter;
+    interface->free_filter_data         = ct_name_free_filter_data;
 }
 
 static void
@@ -475,4 +486,73 @@ ct_name_node_cmp (DonnaColumnType    *ct,
     g_free (name1);
     g_free (name2);
     return ret;
+}
+
+static gboolean
+ct_name_is_match_filter (DonnaColumnType    *ct,
+                         const gchar        *filter,
+                         gpointer           *filter_data,
+                         gpointer            data,
+                         DonnaNode          *node,
+                         GError            **error)
+{
+    GPtrArray *arr;
+    guint i;
+    gchar *name;
+    gboolean ret;
+
+    if (G_UNLIKELY (!*filter_data))
+    {
+        gchar *s;
+
+        s = strchrnul (filter, '|');
+        arr = *filter_data = g_ptr_array_new_full ((*s == '|') ? 2 : 1,
+                (GDestroyNotify) g_pattern_spec_free);
+        for (;;)
+        {
+            if (*s == '|')
+            {
+                if (s - filter < 255)
+                {
+                    gchar buf[255];
+                    strncpy (buf, filter, s - filter);
+                    buf[s - filter] = '\0';
+                    g_ptr_array_add (arr, g_pattern_spec_new (buf));
+                }
+                else
+                {
+                    gchar *b;
+                    b = g_strndup (filter, s - filter);
+                    g_ptr_array_add (arr, g_pattern_spec_new (b));
+                    g_free (b);
+                }
+                filter = s + 1;
+                s = strchrnul (filter, '|');
+            }
+            else
+            {
+                g_ptr_array_add (arr, g_pattern_spec_new (filter));
+                break;
+            }
+        }
+    }
+    else
+        arr = *filter_data;
+
+    name = donna_node_get_name (node);
+    for (i = 0; i < arr->len; ++i)
+    {
+        ret = g_pattern_match_string (arr->pdata[i], name);
+        if (ret)
+            break;
+    }
+    g_free (name);
+    return ret;
+}
+
+static void
+ct_name_free_filter_data (DonnaColumnType    *ct,
+                          gpointer            filter_data)
+{
+    g_ptr_array_free (filter_data, TRUE);
 }
