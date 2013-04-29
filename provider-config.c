@@ -1226,6 +1226,10 @@ get_option_node (GNode *root, const gchar *name)
     GNode *node;
     gchar *s;
 
+    /* root (most likely, from provider, or to list options) */
+    if (name[0] == '/' && name[1] == '\0')
+        return root;
+
     /* skip the main root, if specified */
     if (*name == '/')
         ++name;
@@ -2597,6 +2601,9 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
         return DONNA_TASK_FAILED;
     }
     option = gnode->data;
+    /* root doesn't have a name, but still needs one */
+    if (gnode == priv->root && !option->name)
+        option->name = g_strdup ("Configuration");
 
     g_rec_mutex_lock (&priv->nodes_mutex);
     node_created = ensure_option_has_node (data->config, data->location, option);
