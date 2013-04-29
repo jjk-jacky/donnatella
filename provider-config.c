@@ -274,22 +274,14 @@ free_option (DonnaProviderConfig *config,
 static gboolean
 free_node_data (GNode *node, DonnaProviderConfig *config)
 {
-    if (node == config->priv->root)
-        /* end-of-file comments */
-        g_free (node->data);
-    else
-        free_option (config, node->data, NULL);
+    free_option (config, node->data, NULL);
     return FALSE;
 }
 
 static gboolean
 free_node_data_removing (GNode *node, struct removing_data *data)
 {
-    if (node == data->config->priv->root)
-        /* end-of-file comments */
-        g_free (node->data);
-    else
-        free_option (data->config, node->data, data->nodes);
+    free_option (data->config, node->data, data->nodes);
     return FALSE;
 }
 
@@ -884,7 +876,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
         return TRUE;
     }
     /* store end-of-file comments */
-    priv->root->data = g_strdup (d);
+    ((struct option *) priv->root->data)->comments = g_strdup (d);
 
     re_int      = g_regex_new ("^[+-]{0,1}[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
     re_double   = g_regex_new ("^[0-9]+\\.[0-9]+$", G_REGEX_OPTIMIZE, 0, NULL);
@@ -1217,8 +1209,8 @@ donna_config_export_config (DonnaConfig *config)
     g_rw_lock_reader_lock (&priv->lock);
     export_config (priv, priv->root, str_loc, str, TRUE);
     /* end-of-file comments */
-    if (priv->root->data)
-        g_string_append (str, priv->root->data);
+    if (((struct option *) priv->root->data)->comments)
+        g_string_append (str, ((struct option *) priv->root->data)->comments);
     g_rw_lock_reader_unlock (&priv->lock);
 
     g_string_free (str_loc, TRUE);
