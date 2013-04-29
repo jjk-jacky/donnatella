@@ -2690,6 +2690,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *gnode;
+    gboolean is_root;
     gchar *location;
     gsize len;
     gboolean want_item;
@@ -2713,6 +2714,7 @@ node_children (DonnaTask *task, struct node_children_data *data)
         return DONNA_TASK_FAILED;
     }
 
+    is_root = gnode == priv->root;
     want_item = data->node_types & DONNA_NODE_ITEM;
     want_categories = data->node_types & DONNA_NODE_CONTAINER;
 
@@ -2741,11 +2743,12 @@ node_children (DonnaTask *task, struct node_children_data *data)
 
                 option = gnode->data;
                 if (len + strlen (option->name) > 255)
-                    s = g_strdup_printf ("%s/%s", location, option->name);
+                    s = g_strdup_printf ("%s/%s",
+                            (is_root) ? "" : location, option->name);
                 else
                 {
                     s = buf;
-                    sprintf (s, "%s/%s", location, option->name);
+                    sprintf (s, "%s/%s", (is_root) ? "" : location, option->name);
                 }
 
                 g_rec_mutex_lock (&priv->nodes_mutex);
