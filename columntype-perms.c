@@ -252,7 +252,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "format", "%P");
+            "columntypes/perms", "format", "%S");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -263,7 +263,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "format_tooltip", "%p %U:%G");
+            "columntypes/perms", "format_tooltip", "%p %V:%H");
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -440,9 +440,10 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
                   mode_t                         mode,
                   uid_t                          uid,
                   gid_t                          gid,
-                  gchar                          perm)
+                  gchar                          perm,
+                  gboolean                       in_color)
 {
-    gchar u_perm = perm + 'A' - 'a';
+    gchar u_perm = (in_color) ? perm + 'A' - 'a' : perm;
     mode_t S_OTH, S_GRP, S_USR;
     int group_has_perm = 0;
     gssize need;
@@ -484,8 +485,11 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
         }
         if (g->is_member)
         {
-            need = snprintf (*str, *max,
-                    "<span color=\"%s\">%c</span>", data->color_group, u_perm);
+            if (in_color)
+                need = snprintf (*str, *max,
+                        "<span color=\"%s\">%c</span>", data->color_group, u_perm);
+            else
+                need = snprintf (*str, *max, "%c", perm);
             goto done;
         }
         group_has_perm = 1;
@@ -494,22 +498,36 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
     if (mode & S_USR)
     {
         if (uid == priv->user_id)
-            need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
-                    (group_has_perm == 1) ? data->color_mixed : data->color_user,
-                    u_perm);
-
+        {
+            if (in_color)
+                need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
+                        (group_has_perm == 1) ? data->color_mixed : data->color_user,
+                        u_perm);
+            else
+                need = snprintf (*str, *max, "%c", perm);
+        }
         else
-            need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
-                (group_has_perm == 1) ? data->color_group : data->color_user,
-                perm);
+        {
+            if (in_color)
+                need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
+                        (group_has_perm == 1) ? data->color_group : data->color_user,
+                        perm);
+            else
+                need = snprintf (*str, *max, "-");
+        }
         goto done;
     }
 
-    if (group_has_perm == 1)
-        need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
-                data->color_group, perm);
+    if (in_color)
+    {
+        if (group_has_perm == 1)
+            need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
+                    data->color_group, perm);
+        else
+            need = snprintf (*str, *max, "%c", perm);
+    }
     else
-        need = snprintf (*str, *max, "%c", perm);
+        need = snprintf (*str,*max, "-");
 
 done:
     if (need < *max)
@@ -566,17 +584,21 @@ print_perms (DonnaColumnTypePerms   *ctperms,
                     add_perm (S_IXOTH, 'x');
                     fmt += 2;
                     continue;
-                case 'P':
+                case 's':
+                case 'S':
                     add_colored_perm (priv, data, &str, &max, &total,
-                            mode, uid, gid, 'r');
+                            mode, uid, gid, 'r', fmt[1] == 'S');
                     add_colored_perm (priv, data, &str, &max, &total,
-                            mode, uid, gid, 'w');
+                            mode, uid, gid, 'w', fmt[1] == 'S');
                     add_colored_perm (priv, data, &str, &max, &total,
-                            mode, uid, gid, 'x');
+                            mode, uid, gid, 'x', fmt[1] == 'S');
                     fmt += 2;
                     continue;
                 case 'u':
+                    need = snprintf (str, max, "%d", uid);
+                    break;
                 case 'U':
+                case 'V':
                     {
                         struct _user *u;
 
@@ -586,7 +608,7 @@ print_perms (DonnaColumnTypePerms   *ctperms,
                         else
                             s = u->name;
 
-                        if (fmt[1] == 'u' || uid != priv->user_id)
+                        if (fmt[1] == 'U' || uid != priv->user_id)
                             need = snprintf (str, max, "%s", s);
                         else
                         {
@@ -598,7 +620,10 @@ print_perms (DonnaColumnTypePerms   *ctperms,
                         break;
                     }
                 case 'g':
+                    need = snprintf (str, max, "%d", gid);
+                    break;
                 case 'G':
+                case 'H':
                     {
                         struct _group *g;
 
@@ -608,7 +633,7 @@ print_perms (DonnaColumnTypePerms   *ctperms,
                         else
                             s = g->name;
 
-                        if (fmt[1] == 'g' || (g && !g->is_member))
+                        if (fmt[1] == 'G' || (g && !g->is_member))
                             need = snprintf (str, max, "%s", s);
                         else
                         {
