@@ -127,12 +127,35 @@ struct provider_signals
     gulong           sid_node_new_child;
 };
 
+struct column
+{
+    /* required when passed as data to handle Ctrl+click on column header */
+    DonnaTreeView       *tree;
+    gchar               *name;
+    GtkTreeViewColumn   *column;
+    /* label in the header (for title, since we handle it ourself) */
+    GtkWidget           *label;
+    /* our arrow for secondary sort order */
+    GtkWidget           *second_arrow;
+    gint                 sort_id;
+    DonnaColumnType     *ct;
+    gpointer             ct_data;
+    /* state of mouse button when click on column header, used to handle a
+     * Ctrl+click to (un)set the secondary sort order */
+    gboolean             pressed;
+    gboolean             ctrl_held;
+};
+
 struct _DonnaTreeViewPrivate
 {
     DonnaApp            *app;
     gchar               *name;
 
     DonnaTreeStore      *store;
+    /* list of struct column */
+    GSList              *columns;
+    /* not in list above -- mode list only */
+    GtkTreeViewColumn   *blank_column;
 
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
@@ -398,6 +421,15 @@ donna_tree_view_get_property (GObject        *object,
 }
 
 static void
+free_column (struct column *_col)
+{
+    g_free (_col->name);
+    donna_columntype_free_data (_col->ct, _col->ct_data);
+    g_object_unref (_col->ct);
+    g_slice_free (struct column, _col);
+}
+
+static void
 donna_tree_view_finalize (GObject *object)
 {
     DonnaTreeViewPrivate *priv;
@@ -409,6 +441,7 @@ donna_tree_view_finalize (GObject *object)
     g_mutex_clear (&priv->refresh_node_props_mutex);
     g_array_free (priv->col_props, TRUE);
     g_ptr_array_free (priv->active_spinners, TRUE);
+    g_slist_free_full (priv->columns, (GDestroyNotify) free_column);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -685,6 +718,28 @@ is_watched_iter_valid (DonnaTreeView *tree, GtkTreeIter *iter, gboolean remove)
         }
     }
     return FALSE;
+}
+
+static inline struct column *
+get_column_by_column (DonnaTreeView *tree, GtkTreeViewColumn *column)
+{
+    GSList *l;
+
+    for (l = tree->priv->columns; l; l = l->next)
+        if (((struct column *) l->data)->column == column)
+            return l->data;
+    return NULL;
+}
+
+static inline struct column *
+get_column_by_name (DonnaTreeView *tree, const gchar *name)
+{
+    GSList *l;
+
+    for (l = tree->priv->columns; l; l = l->next)
+        if (streq (((struct column *) l->data)->name, name))
+            return l->data;
+    return NULL;
 }
 
 typedef void (*node_children_extra_cb) (DonnaTreeView *tree, GtkTreeIter *iter);
@@ -1425,14 +1480,14 @@ spinner_fn (DonnaTreeView *tree)
 }
 
 static gpointer
-get_ct_data (const gchar *col_name, gpointer columns)
+get_ct_data (const gchar *col_name, DonnaTreeView *tree)
 {
-    GList *l;
+    struct column *_col;
 
-    for (l = columns; l; l = l->next)
-        if (streq (col_name, g_object_get_data (l->data, "column-name")))
-            return g_object_get_data (l->data, "columntype-data");
-    return NULL;
+    /* since the col_name comes from user input, we could fail to find the
+     * column in this case */
+    _col = get_column_by_name (tree, col_name);
+    return (G_LIKELY (_col)) ? _col->ct_data : NULL;
 }
 
 static void
@@ -1442,7 +1497,6 @@ apply_color_filters (DonnaTreeView      *tree,
                      DonnaNode          *node)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GList *columns;
     GError *err = NULL;
     gboolean visible;
     GSList *l;
@@ -1457,15 +1511,14 @@ apply_color_filters (DonnaTreeView      *tree,
     if (!(priv->arrangement->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS))
         return;
 
-    columns = gtk_tree_view_get_columns ((GtkTreeView *) tree);
     for (l = priv->arrangement->color_filters; l; )
     {
         DonnaColorFilter *cf = l->data;
         gboolean keep_going;
 
         if (donna_color_filter_apply_if_match (cf, (GObject *) renderer,
-                    g_object_get_data ((GObject *) column, "column-name"),
-                    node, get_ct_data, columns, &keep_going, &err))
+                    get_column_by_column (tree, column)->name,
+                    node, (get_ct_data_fn) get_ct_data, tree, &keep_going, &err))
         {
             if (!keep_going)
                 break;
@@ -1491,7 +1544,6 @@ apply_color_filters (DonnaTreeView      *tree,
 
         l = l->next;
     }
-    g_list_free (columns);
 }
 
 static void
@@ -1503,7 +1555,7 @@ rend_func (GtkTreeViewColumn  *column,
 {
     DonnaTreeView *tree;
     DonnaTreeViewPrivate *priv;
-    DonnaColumnType *ct;
+    struct column *_col;
     DonnaNode *node;
     guint index = GPOINTER_TO_UINT (data);
     GPtrArray *arr;
@@ -1597,7 +1649,7 @@ rend_func (GtkTreeViewColumn  *column,
 
     index -= NB_INTERNAL_RENDERERS - 1; /* -1 to start with index 1 */
 
-    ct   = g_object_get_data (G_OBJECT (column), "column-type");
+    _col = get_column_by_column (tree, column);
     gtk_tree_model_get (model, iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
 
     if (is_tree (tree))
@@ -1606,7 +1658,7 @@ rend_func (GtkTreeViewColumn  *column,
         {
             /* this is a "fake" node, shown as a "Please Wait..." */
             /* we can only do that for a column of type "name" */
-            if (G_TYPE_FROM_INSTANCE (ct) != DONNA_TYPE_COLUMNTYPE_NAME)
+            if (G_TYPE_FROM_INSTANCE (_col->ct) != DONNA_TYPE_COLUMNTYPE_NAME)
                 return;
 
             if (index == 1)
@@ -1623,7 +1675,7 @@ rend_func (GtkTreeViewColumn  *column,
         }
 
         /* do we have some overriding to do? */
-        if (G_TYPE_FROM_INSTANCE (ct) == DONNA_TYPE_COLUMNTYPE_NAME)
+        if (G_TYPE_FROM_INSTANCE (_col->ct) == DONNA_TYPE_COLUMNTYPE_NAME)
         {
             if (index == 1)
             {
@@ -1669,9 +1721,7 @@ rend_func (GtkTreeViewColumn  *column,
     else if (!node)
         return;
 
-    arr = donna_columntype_render (ct,
-            g_object_get_data (G_OBJECT (column), "columntype-data"),
-            index, node, renderer);
+    arr = donna_columntype_render (_col->ct, _col->ct_data, index, node, renderer);
     if (arr)
     {
         DonnaTask *task;
@@ -1705,9 +1755,10 @@ sort_func (GtkTreeModel      *model,
            GtkTreeIter       *iter2,
            GtkTreeViewColumn *column)
 {
+    DonnaTreeView *tree;
     DonnaTreeViewPrivate *priv;
     GtkSortType sort_order;
-    DonnaColumnType *ct;
+    struct column *_col;
     DonnaNode *node1;
     DonnaNode *node2;
     gint ret;
@@ -1724,7 +1775,8 @@ sort_func (GtkTreeModel      *model,
         return 1;
     }
 
-    priv = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column))->priv;
+    tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
+    priv = tree->priv;
     sort_order = gtk_tree_view_column_get_sort_order (column);
 
     if (priv->sort_groups != SORT_CONTAINER_MIXED)
@@ -1755,11 +1807,8 @@ sort_func (GtkTreeModel      *model,
         }
     }
 
-    ct   = g_object_get_data (G_OBJECT (column), "column-type");
-
-    ret = donna_columntype_node_cmp (ct,
-            g_object_get_data (G_OBJECT (column), "columntype-data"),
-            node1, node2);
+    _col = get_column_by_column (tree, column);
+    ret = donna_columntype_node_cmp (_col->ct, _col->ct_data, node1, node2);
 
     /* second sort order */
     if (ret == 0 && priv->second_sort_column
@@ -1767,12 +1816,9 @@ sort_func (GtkTreeModel      *model,
             && priv->second_sort_column != column)
     {
         column = priv->second_sort_column;
+        _col = get_column_by_column (tree, column);
 
-        ct   = g_object_get_data (G_OBJECT (column), "column-type");
-
-        ret = donna_columntype_node_cmp (ct,
-                g_object_get_data (G_OBJECT (column), "columntype-data"),
-                node1, node2);
+        ret = donna_columntype_node_cmp (_col->ct, _col->ct_data, node1, node2);
         if (ret != 0)
         {
             /* if second order is DESC, we should invert ret. But, if the
@@ -2410,34 +2456,26 @@ donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node)
  * the empty column (to make blank space there) */
 static gboolean
 col_drag_func (GtkTreeView          *treev,
-               GtkTreeViewColumn    *co,
+               GtkTreeViewColumn    *col,
                GtkTreeViewColumn    *prev_col,
                GtkTreeViewColumn    *next_col,
                gpointer              data)
 {
-    if (!next_col && !g_object_get_data (G_OBJECT (prev_col), "column-type"))
+    if (!next_col && !get_column_by_column ((DonnaTreeView *) treev, prev_col))
         return FALSE;
     else
         return TRUE;
 }
 
-struct col_btn_data
-{
-    DonnaTreeView *tree;
-    GtkTreeViewColumn *column;
-    gboolean pressed;
-    gboolean ctrl_held;
-};
-
 static gboolean
-column_button_press_event_cb (GtkWidget             *btn,
-                              GdkEventButton        *event,
-                              struct col_btn_data   *data)
+column_button_press_event_cb (GtkWidget         *btn,
+                              GdkEventButton    *event,
+                              struct column     *column)
 {
     if (event->button == 1 && event->type == GDK_BUTTON_PRESS)
     {
-        data->pressed = TRUE;
-        data->ctrl_held = (event->state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK;
+        column->pressed = TRUE;
+        column->ctrl_held = (event->state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK;
     }
     return FALSE;
 }
@@ -2446,8 +2484,8 @@ static inline void
 set_second_arrow (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
+    struct column *_col;
     gboolean alt;
-    GtkWidget *arrow;
     GtkArrowType arrow_type;
 
     /* GTK settings whether to use sane/alternative arrows or not */
@@ -2460,11 +2498,11 @@ set_second_arrow (DonnaTreeView *tree)
         arrow_type = (alt) ? GTK_ARROW_DOWN : GTK_ARROW_UP;
 
     /* show/update the second arrow */
-    arrow = g_object_get_data (G_OBJECT (priv->second_sort_column),
-            "header-second-arrow");
-    gtk_arrow_set (GTK_ARROW (arrow), arrow_type, GTK_SHADOW_IN);
+    _col = get_column_by_column (tree, priv->second_sort_column);
+    gtk_arrow_set (GTK_ARROW (_col->second_arrow), arrow_type, GTK_SHADOW_IN);
     /* visible unless main & second sort are the same */
-    gtk_widget_set_visible (arrow, priv->second_sort_column != priv->sort_column);
+    gtk_widget_set_visible (_col->second_arrow,
+            priv->second_sort_column != priv->sort_column);
 }
 
 static void
@@ -2474,11 +2512,13 @@ set_sort_column (DonnaTreeView      *tree,
                  gboolean            preserve_order)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
+    struct column *_col;
     GtkTreeSortable *sortable;
     gint cur_sort_id;
     GtkSortType cur_sort_order;
     GtkSortType sort_order;
 
+    _col = get_column_by_column (tree, column);
     sortable = GTK_TREE_SORTABLE (priv->store);
     gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
 
@@ -2488,16 +2528,14 @@ set_sort_column (DonnaTreeView      *tree,
 
         /* new main sort on second sort column, remove the arrow */
         if (priv->second_sort_column == column)
-            gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->second_sort_column),
-                        "header-second-arrow"), FALSE);
+            gtk_widget_set_visible (_col->second_arrow, FALSE);
         /* if not sticky, also remove the second sort */
         if (!priv->second_sort_sticky)
         {
-            if (priv->second_sort_column)
-                gtk_widget_set_visible (g_object_get_data (
-                            G_OBJECT (priv->second_sort_column),
-                            "header-second-arrow"), FALSE);
+            if (priv->second_sort_column && priv->second_sort_column != column)
+                gtk_widget_set_visible (get_column_by_column (tree,
+                            priv->second_sort_column)->second_arrow,
+                        FALSE);
             priv->second_sort_column = NULL;
         }
         /* if sticky, and the old main sort is the second sort, bring back
@@ -2505,9 +2543,9 @@ set_sort_column (DonnaTreeView      *tree,
          * sort column is set and isn't the main sort column, of course) */
         else if (priv->second_sort_column == priv->sort_column && priv->sort_column)
         {
-            gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->second_sort_column),
-                        "header-second-arrow"), TRUE);
+            gtk_widget_set_visible (get_column_by_column (tree,
+                        priv->second_sort_column)->second_arrow,
+                    TRUE);
             /* we need to call set_second_arrow() after we've updated
              * priv->sort_colmun, else since it's the same as second_sort_column
              * it won't make the arrow visible */
@@ -2523,11 +2561,9 @@ set_sort_column (DonnaTreeView      *tree,
                 ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
         else
             sort_order = donna_columntype_get_default_sort_order (
-                    g_object_get_data (G_OBJECT (column), "column-type"),
-                    priv->name,
-                    g_object_get_data (G_OBJECT (column), "column-name"),
+                    _col->ct, priv->name, _col->name,
                     (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                    g_object_get_data (G_OBJECT (column), "columntype-data"));
+                    _col->ct_data);
         if (refresh_second_arrow)
             set_second_arrow (tree);
     }
@@ -2550,9 +2586,7 @@ set_sort_column (DonnaTreeView      *tree,
      * always first) */
     gtk_tree_view_column_set_sort_indicator (column, TRUE);
     gtk_tree_view_column_set_sort_order (column, sort_order);
-    gtk_tree_sortable_set_sort_column_id (sortable,
-            GPOINTER_TO_INT (g_object_get_data (G_OBJECT (column), "sort_id")),
-            sort_order);
+    gtk_tree_sortable_set_sort_column_id (sortable, _col->sort_id, sort_order);
 }
 
 
@@ -2563,16 +2597,18 @@ set_second_sort_column (DonnaTreeView       *tree,
                         gboolean             preserve_order)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
+    struct column *_col;
     GtkTreeSortable *sortable;
     gint cur_sort_id;
     GtkSortType cur_sort_order;
 
+    _col = get_column_by_column (tree, column);
     if (!column || priv->sort_column == column)
     {
         if (priv->second_sort_column)
-            gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->second_sort_column),
-                        "header-second-arrow"), FALSE);
+            gtk_widget_set_visible (get_column_by_column (tree,
+                        priv->second_sort_column)->second_arrow,
+                    FALSE);
         priv->second_sort_column = (priv->second_sort_sticky) ? column : NULL;
         return;
     }
@@ -2580,20 +2616,18 @@ set_second_sort_column (DonnaTreeView       *tree,
     if (priv->second_sort_column != column)
     {
         if (priv->second_sort_column)
-            gtk_widget_set_visible (g_object_get_data (
-                        G_OBJECT (priv->second_sort_column),
-                        "header-second-arrow"), FALSE);
+            gtk_widget_set_visible (get_column_by_column (tree,
+                        priv->second_sort_column)->second_arrow,
+                    FALSE);
         priv->second_sort_column = column;
         if (order != DONNA_SORT_UNKNOWN)
             priv->second_sort_order = (order == DONNA_SORT_ASC)
                 ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
         else
             priv->second_sort_order = donna_columntype_get_default_sort_order (
-                    g_object_get_data (G_OBJECT (column), "column-type"),
-                    priv->name,
-                    g_object_get_data (G_OBJECT (column), "column-name"),
+                    _col->ct, priv->name, _col->name,
                     (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                    g_object_get_data (G_OBJECT (column), "columntype-data"));
+                    _col->ct_data);
     }
     else if (order != DONNA_SORT_UNKNOWN)
     {
@@ -2641,16 +2675,16 @@ set_second_sort_column (DonnaTreeView       *tree,
  * This should allow us to deal with a regular click as well as a Ctrl+click for
  * second order, while preserving normal drawing as well as dragging. */
 static gboolean
-column_button_release_event_cb (GtkWidget             *btn,
-                                GdkEventButton        *event,
-                                struct col_btn_data   *data)
+column_button_release_event_cb (GtkWidget       *btn,
+                                GdkEventButton  *event,
+                                struct column   *column)
 {
     GtkStyleContext *context;
 
-    if (event->button != 1 || event->type != GDK_BUTTON_RELEASE || !data->pressed)
+    if (event->button != 1 || event->type != GDK_BUTTON_RELEASE || !column->pressed)
         return FALSE;
 
-    data->pressed = FALSE;
+    column->pressed = FALSE;
 
     context = gtk_widget_get_style_context (btn);
     if (gtk_style_context_has_class (context, GTK_STYLE_CLASS_DND))
@@ -2658,10 +2692,10 @@ column_button_release_event_cb (GtkWidget             *btn,
 
     /* ctrl+click on column for second sort; on current sort_column to turn off
      * the second_sort */
-    if (data->ctrl_held)
-        set_second_sort_column (data->tree, data->column, DONNA_SORT_UNKNOWN, FALSE);
+    if (column->ctrl_held)
+        set_second_sort_column (column->tree, column->column, DONNA_SORT_UNKNOWN, FALSE);
     else
-        set_sort_column (data->tree, data->column, DONNA_SORT_UNKNOWN, FALSE);
+        set_sort_column (column->tree, column->column, DONNA_SORT_UNKNOWN, FALSE);
 
     return FALSE;
 }
@@ -2718,7 +2752,7 @@ load_arrangement (DonnaTreeView     *tree,
     DonnaConfig          *config;
     GtkTreeView          *treev = GTK_TREE_VIEW (tree);
     GtkTreeSortable      *sortable;
-    GList                *list;
+    GSList               *list;
     gboolean              free_sort_column = FALSE;
     gchar                *sort_column = NULL;
     DonnaSortOrder        sort_order = DONNA_SORT_UNKNOWN;
@@ -2735,7 +2769,6 @@ load_arrangement (DonnaTreeView     *tree,
 
     config = donna_app_peek_config (priv->app);
     sortable = GTK_TREE_SORTABLE (priv->store);
-    list = gtk_tree_view_get_columns (treev);
 
     /* clear list of props we're watching to refresh tree */
     if (priv->col_props->len > 0)
@@ -2746,10 +2779,14 @@ load_arrangement (DonnaTreeView     *tree,
         /* because setting it to NULL means the first visible column will be
          * used. If we don't want an expander to show (and just eat space), we
          * need to add an invisible column and set it as expander column */
-        expander_column = gtk_tree_view_column_new ();
-        gtk_tree_view_column_set_sizing (expander_column,
-                GTK_TREE_VIEW_COLUMN_FIXED);
-        gtk_tree_view_append_column (treev, expander_column);
+        expander_column = gtk_tree_view_get_expander_column (treev);
+        if (!expander_column)
+        {
+            expander_column = gtk_tree_view_column_new ();
+            gtk_tree_view_column_set_sizing (expander_column,
+                    GTK_TREE_VIEW_COLUMN_FIXED);
+            gtk_tree_view_insert_column (treev, expander_column, 0);
+        }
         last_column = expander_column;
     }
     else
@@ -2773,8 +2810,8 @@ load_arrangement (DonnaTreeView     *tree,
     }
     else if (priv->sort_column)
     {
-        sort_column = g_strdup (g_object_get_data (G_OBJECT (priv->sort_column),
-                    "column-name"));
+        sort_column = g_strdup (get_column_by_column (tree,
+                    priv->sort_column)->name);
         free_sort_column = TRUE;
         /* also preserve sort order */
         sort_order  = (gtk_tree_view_column_get_sort_order (priv->sort_column)
@@ -2789,16 +2826,20 @@ load_arrangement (DonnaTreeView     *tree,
     }
     else if (priv->second_sort_column)
     {
-        second_sort_column = g_strdup (g_object_get_data (
-                    G_OBJECT (priv->second_sort_column), "column-name"));
+        second_sort_column = g_strdup (get_column_by_column (tree,
+                    priv->second_sort_column)->name);
         free_second_sort_column = TRUE;
         /* also preserve sort order */
         second_sort_order  = (gtk_tree_view_column_get_sort_order (priv->second_sort_column)
                 == GTK_SORT_ASCENDING) ? DONNA_SORT_ASC : DONNA_SORT_DESC;
     }
 
+    list = priv->columns;
+    priv->columns = NULL;
+
     for (;;)
     {
+        struct column     *_col;
         gchar             *col_type;
         gchar             *e;
         gboolean           is_last_col;
@@ -2807,7 +2848,7 @@ load_arrangement (DonnaTreeView     *tree,
         DonnaColumnType   *col_ct;
         guint              width;
         gchar             *title;
-        GList             *l;
+        GSList            *l;
         GtkTreeViewColumn *column;
         GtkCellRenderer   *renderer;
         const gchar       *rend;
@@ -2840,47 +2881,34 @@ load_arrangement (DonnaTreeView     *tree,
         column = NULL;
         for (l = list; l; l = l->next)
         {
-            col_ct = g_object_get_data (l->data, "column-type");
-            if (col_ct == ct)
-            {
-                gchar *name;
+            _col = l->data;
 
-                column = l->data;
-                list = g_list_delete_link (list, l);
+            if (_col->ct == ct)
+            {
+                col_ct = _col->ct;
+                column = _col->column;
 
                 /* column has a ref already, we can release ours */
                 g_object_unref (ct);
                 /* update the name if needed */
-                name = g_object_get_data (G_OBJECT (column), "column-name");
-                if (!streq (name, col))
+                if (!streq (_col->name, col))
                 {
-                    ct_data = g_object_get_data (G_OBJECT (column),
-                            "columntype-data");
-                    donna_columntype_free_data (ct, ct_data);
-                    ct_data = NULL;
-                    name = g_strdup (col);
-                    g_object_set_data_full (G_OBJECT (column), "column-name",
-                            name, g_free);
-                    donna_columntype_refresh_data (ct, priv->name, name,
-                            arrangement->columns_options, &ct_data);
-                    g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
+                    g_free (_col->name);
+                    _col->name = g_strdup (col);
+                    donna_columntype_free_data (ct, _col->ct_data);
+                    _col->ct_data = NULL;
+                    donna_columntype_refresh_data (ct, priv->name, col,
+                            arrangement->columns_options, &_col->ct_data);
                 }
                 else if (must_load_columns_options (arrangement, priv->arrangement, force))
-                {
-                    gpointer old;
-
                     /* refresh data to load new options */
-                    old = ct_data = g_object_get_data (G_OBJECT (column),
-                            "columntype-data");
-                    donna_columntype_refresh_data (ct, priv->name, name,
-                            arrangement->columns_options, &ct_data);
-                    if (ct_data != old)
-                        g_object_set_data (G_OBJECT (column), "columntype-data",
-                                ct_data);
-                }
+                    donna_columntype_refresh_data (ct, priv->name, col,
+                            arrangement->columns_options, &_col->ct_data);
                 /* move column */
                 gtk_tree_view_move_column_after (treev, column, last_column);
 
+                list = g_slist_delete_link (list, l);
+                priv->columns = g_slist_prepend (priv->columns, _col);
                 break;
             }
         }
@@ -2891,23 +2919,19 @@ load_arrangement (DonnaTreeView     *tree,
             GtkWidget *hbox;
             GtkWidget *label;
             GtkWidget *arrow;
-            struct col_btn_data *data;
-            gchar *name;
 
+            _col = g_slice_new0 (struct column);
+            _col->tree = tree;
             /* create renderer(s) & column */
-            column = gtk_tree_view_column_new ();
-            /* store the name on it, so we can get it back from e.g. rend_func */
-            name = g_strdup (col);
-            g_object_set_data_full (G_OBJECT (column), "column-name",
-                    name, g_free);
-            /* data for use in render & node_cmp */
-            ct_data = NULL;
-            donna_columntype_refresh_data (ct, priv->name, name,
-                    arrangement->columns_options, &ct_data);
-            g_object_set_data (G_OBJECT (column), "columntype-data", ct_data);
+            _col->column = column = gtk_tree_view_column_new ();
+            _col->name = g_strdup (col);
+            /* data for use in render, node_cmp, etc */
+            donna_columntype_refresh_data (ct, priv->name, col,
+                    arrangement->columns_options, &_col->ct_data);
             /* give our ref on the ct to the column */
-            g_object_set_data_full (G_OBJECT (column), "column-type",
-                    ct, g_object_unref);
+            _col->ct = ct;
+            /* add to our list of columns (order doesn't matter) */
+            priv->columns = g_slist_prepend (priv->columns, _col);
             /* to test for expander column */
             col_ct = ct;
             /* sizing stuff */
@@ -2982,16 +3006,11 @@ load_arrangement (DonnaTreeView     *tree,
             gtk_tree_view_move_column_after (treev, column, last_column);
             /* click on column header stuff -- see
              * column_button_release_event_cb() for more about this */
-            data = g_new0 (struct col_btn_data, 1);
-            data->tree = tree;
-            data->column = column;
             btn = gtk_tree_view_column_get_button (column);
             g_signal_connect (btn, "button-press-event",
-                    G_CALLBACK (column_button_press_event_cb), data);
+                    G_CALLBACK (column_button_press_event_cb), _col);
             g_signal_connect (btn, "button-release-event",
-                    G_CALLBACK (column_button_release_event_cb), data);
-            g_object_set_data_full (G_OBJECT (column), "col_btn_data",
-                    data, g_free);
+                    G_CALLBACK (column_button_release_event_cb), _col);
             /* we handle the header stuff so we can add our own arrow (for
              * second sort) */
             hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
@@ -3005,8 +3024,8 @@ load_arrangement (DonnaTreeView     *tree,
             gtk_widget_show (hbox);
             gtk_widget_show (label);
             /* so we can access/update things */
-            g_object_set_data (G_OBJECT (column), "header-label", label);
-            g_object_set_data (G_OBJECT (column), "header-second-arrow", arrow);
+            _col->label = label;
+            _col->second_arrow = arrow;
             /* lastly */
             gtk_tree_view_column_set_clickable (column, TRUE);
         }
@@ -3033,13 +3052,11 @@ load_arrangement (DonnaTreeView     *tree,
         title = donna_config_get_string_column (config, priv->name, col,
                 arrangement->columns_options, NULL, "title", col);
         gtk_tree_view_column_set_title (column, title);
-        gtk_label_set_text (GTK_LABEL (g_object_get_data (G_OBJECT (column),
-                        "header-label")), title);
+        gtk_label_set_text (GTK_LABEL (_col->label), title);
         g_free (title);
 
         /* props to watch for refresh */
-        props = donna_columntype_get_props (ct,
-                g_object_get_data (G_OBJECT (column), "columntype-data"));
+        props = donna_columntype_get_props (ct, _col->ct_data);
         if (props)
         {
             guint i;
@@ -3059,7 +3076,7 @@ load_arrangement (DonnaTreeView     *tree,
                     priv->name, col);
 
         /* sort -- (see column_button_release_event_cb() for more) */
-        g_object_set_data (G_OBJECT (column), "sort_id", GINT_TO_POINTER (sort_id));
+        _col->sort_id = sort_id;
         gtk_tree_sortable_set_sort_func (sortable, sort_id,
                 (GtkTreeIterCompareFunc) sort_func, column, NULL);
         if (sort_column && streq (sort_column, col))
@@ -3101,18 +3118,15 @@ next:
         col = e + 1;
     }
 
-    if (!is_tree (tree))
+    if (!is_tree (tree) && !priv->blank_column)
     {
-        GtkTreeViewColumn *column;
-
         /* we add an extra (empty) column, so we can have some
          * free/blank space on the right, instead of having the last
          * column to be used to fill the space and whatnot */
-        column = gtk_tree_view_column_new ();
-        gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
-        g_object_set (column, "expand", TRUE, NULL);
-        gtk_tree_view_append_column (treev, column);
-        gtk_tree_view_move_column_after (treev, column, last_column);
+        priv->blank_column = gtk_tree_view_column_new ();
+        gtk_tree_view_column_set_sizing (priv->blank_column, GTK_TREE_VIEW_COLUMN_FIXED);
+        g_object_set (priv->blank_column, "expand", TRUE, NULL);
+        gtk_tree_view_insert_column (treev, priv->blank_column, -1);
     }
 
     /* set expander column */
@@ -3135,22 +3149,19 @@ next:
     /* remove all columns left unused */
     while (list)
     {
-        gpointer ct;
+        struct column *_col = list->data;
 
-        ct = g_object_get_data (list->data, "column-type");
-        if (ct)
-        {
-            /* though we should never try to sort by a sort_id not used by a column,
-             * let's make sure if that happens, we just get a warning (instead of
-             * dereferencing a pointer pointing nowhere) */
-            gtk_tree_sortable_set_sort_func (sortable, sort_id++, no_sort, tree, NULL);
-            /* free the columntype-data */
-            donna_columntype_free_data (ct,
-                    g_object_get_data (list->data, "columntype-data"));
-        }
-        /* remove column */
-        gtk_tree_view_remove_column (treev, list->data);
-        list = g_list_delete_link (list, list);
+        /* though we should never try to sort by a sort_id not used by a column,
+         * let's make sure if that happens, we just get a warning (instead of
+         * dereferencing a pointer pointing nowhere) */
+        gtk_tree_sortable_set_sort_func (sortable, sort_id++, no_sort, tree, NULL);
+        /* free associated data */
+        g_free (_col->name);
+        donna_columntype_free_data (_col->ct, _col->ct_data);
+        g_object_unref (_col->ct);
+        gtk_tree_view_remove_column (treev, _col->column);
+        g_slice_free (struct column, _col);
+        list = g_slist_delete_link (list, list);
     }
 }
 
@@ -3303,7 +3314,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     else
     {
         DonnaConfig *config;
-        GList *list, *l;
+        GSList *l;
         gboolean need_sort;
         gboolean need_second_sort;
         gboolean need_columns_options;
@@ -3313,24 +3324,18 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
         need_second_sort = must_load_second_sort (arr, priv->arrangement, force);
         need_columns_options = must_load_columns_options (arr, priv->arrangement, force);
 
-        list = gtk_tree_view_get_columns (GTK_TREE_VIEW (tree));
-        for (l = list; l; l = l->next)
+        for (l = priv->columns; l; l = l->next)
         {
-            const gchar *col;
+            struct column *_col = l->data;
 
-            col = g_object_get_data (l->data, "column-name");
-            if (!col)
-                /* skip blank column */
-                continue;
-
-            if (need_sort && streq (col, arr->sort_column))
+            if (need_sort && streq (_col->name, arr->sort_column))
             {
-                set_sort_column (tree, l->data, arr->sort_order, TRUE);
+                set_sort_column (tree, _col->column, arr->sort_order, TRUE);
                 need_sort = FALSE;
             }
-            if (need_second_sort && streq (col, arr->second_sort_column))
+            if (need_second_sort && streq (_col->name, arr->second_sort_column))
             {
-                set_second_sort_column (tree, l->data,
+                set_second_sort_column (tree, _col->column,
                         arr->second_sort_order, TRUE);
                 if (arr->second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
                     priv->second_sort_sticky =
@@ -3342,28 +3347,23 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
 
             if (need_columns_options)
             {
-                DonnaColumnType *ct;
-                gpointer ctdata, old;
                 gchar buf[64], *b = buf;
                 guint width;
                 gchar *title;
 
                 /* ctdata */
-                ct = g_object_get_data (l->data, "column-type");
-                old = ctdata = g_object_get_data (l->data, "columntype-data");
-                donna_columntype_refresh_data (ct, priv->name, col,
-                        arr->columns_options, &ctdata);
-                if (ctdata != old)
-                    g_object_set_data (l->data, "columntype-data", ctdata);
+                donna_columntype_refresh_data (_col->ct, priv->name, _col->name,
+                        arr->columns_options, &_col->ct_data);
 
                 /* size */
                 if (snprintf (buf, 64, "columntypes/%s",
-                            donna_columntype_get_name (ct)) >= 64)
+                            donna_columntype_get_name (_col->ct)) >= 64)
                     b = g_strdup_printf ("columntypes/%s",
-                            donna_columntype_get_renderers (ct));
-                width = donna_config_get_int_column (config, priv->name, col,
-                        arr->columns_options, b, "width", 230);
-                gtk_tree_view_column_set_fixed_width (l->data, width);
+                            donna_columntype_get_renderers (_col->ct));
+                width = donna_config_get_int_column (config,
+                        priv->name, _col->name, arr->columns_options, b,
+                        "width", 230);
+                gtk_tree_view_column_set_fixed_width (_col->column, width);
                 if (b != buf)
                 {
                     g_free (b);
@@ -3371,15 +3371,14 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 }
 
                 /* title */
-                title = donna_config_get_string_column (config, priv->name, col,
-                        arr->columns_options, NULL, "title", (gchar *) col);
-                gtk_tree_view_column_set_title (l->data, title);
-                gtk_label_set_text (GTK_LABEL (g_object_get_data (l->data,
-                                "header-label")), title);
+                title = donna_config_get_string_column (config,
+                        priv->name, _col->name, arr->columns_options, NULL,
+                        "title", _col->name);
+                gtk_tree_view_column_set_title (_col->column, title);
+                gtk_label_set_text (GTK_LABEL (_col->label), title);
                 g_free (title);
             }
         }
-        g_list_free (list);
     }
 
     free_arrangement (priv->arrangement);
@@ -4706,7 +4705,7 @@ query_tooltip_cb (GtkTreeView   *treev,
 #endif
         {
             DonnaNode *node;
-            DonnaColumnType *ct;
+            struct column *_col;
             guint index = 0;
 
             gtk_tree_model_get (model, &iter,
@@ -4768,14 +4767,14 @@ query_tooltip_cb (GtkTreeView   *treev,
                 return FALSE;
             }
 #endif
-            ct  = g_object_get_data (G_OBJECT (column), "column-type");
+            _col = get_column_by_column (tree, column);
 
 #ifdef GTK_IS_JJK
             if (renderer)
             {
                 const gchar *rend;
 
-                rend = donna_columntype_get_renderers (ct);
+                rend = donna_columntype_get_renderers (_col->ct);
                 if (rend[1] == '\0')
                     /* only one renderer in this column */
                     index = 1;
@@ -4790,8 +4789,7 @@ query_tooltip_cb (GtkTreeView   *treev,
                 }
             }
 #endif
-            ret = donna_columntype_set_tooltip (ct,
-                    g_object_get_data (G_OBJECT (column), "columntype-data"),
+            ret = donna_columntype_set_tooltip (_col->ct, _col->ct_data,
                     index, node, tooltip);
 
             g_object_unref (node);
@@ -5160,7 +5158,7 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
                                       GdkEventButton *event)
 {
     gboolean ret;
-    GList *list, *l;
+    GSList *l;
 
     ret = GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_release_event (
             widget, event);
@@ -5171,26 +5169,22 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
      * So, to ensure our columns stay the size they are, and because there's no
      * event "release-post-column-resize" or something, we do the following:
      * After a button release on tree (which handles the column resize) we check
-     * all columns with a name (i.e. skip our non-visible expander or blank
-     * space on the right) and, if the property expand is TRUE, we set it back
-     * to FALSE. We also set the fixed-width to the current width otherwise the
-     * column shrinks unexpectedly. */
-    list = gtk_tree_view_get_columns (GTK_TREE_VIEW (widget));
-    for (l = list; l; l = l->next)
+     * all our columns (i.e. skip our non-visible expander or blank space on the
+     * right) and, if the property expand is TRUE, we set it back to FALSE. We
+     * also set the fixed-width to the current width otherwise the column
+     * shrinks unexpectedly. */
+    for (l = ((DonnaTreeView *) widget)->priv->columns; l; l = l->next)
     {
-        if (g_object_get_data (l->data,"column-name"))
-        {
-            gboolean expand;
+        struct column *_col = l->data;
+        gboolean expand;
 
-            g_object_get (l->data, "expand", &expand, NULL);
-            if (expand)
-                g_object_set (l->data,
-                        "expand",       FALSE,
-                        "fixed-width",  gtk_tree_view_column_get_width (l->data),
-                        NULL);
-        }
+        g_object_get (_col->column, "expand", &expand, NULL);
+        if (expand)
+            g_object_set (_col->column,
+                    "expand",       FALSE,
+                    "fixed-width",  gtk_tree_view_column_get_width (_col->column),
+                    NULL);
     }
-    g_list_free (list);
 
     return ret;
 }
