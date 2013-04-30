@@ -1301,10 +1301,10 @@ get_option_full_name (GNode *root, GNode *gnode)
     return g_string_free (str, FALSE);
 }
 
-static gboolean
-_has_option (DonnaConfig *config,
+static struct option *
+_get_option (DonnaConfig *config,
              GType        type,
-             gboolean     want_category,
+             gboolean     leave_lock_on,
              const gchar *fmt,
              va_list      va_arg)
 {
@@ -1333,7 +1333,8 @@ _has_option (DonnaConfig *config,
     option = get_option (priv->root, b);
     if (option)
     {
-        if (want_category)
+        /* G_TYPE_INVALID means we want a category */
+        if (type == G_TYPE_INVALID)
             ret = option_is_category (option, priv->root);
         else if (!option_is_category (option, priv->root))
             ret = G_VALUE_HOLDS (&option->value, type);
@@ -1342,23 +1343,27 @@ _has_option (DonnaConfig *config,
     }
     else
         ret = FALSE;
-    g_rw_lock_reader_unlock (&priv->lock);
+
+    /* allows caller to get the option value, then unlock */
+    if (!leave_lock_on)
+        g_rw_lock_reader_unlock (&priv->lock);
 
     if (b != buf)
         g_free (b);
 
-    return ret;
+    return (ret) ? option : NULL;
 }
 
-#define _has_opt(gtype, want_cat)    do {       \
-    va_list va_arg;                             \
-    gboolean ret;                               \
-                                                \
-    va_start (va_arg, fmt);                     \
-    ret = _has_option (config, gtype, want_cat, \
-            fmt, va_arg);                       \
-    va_end (va_arg);                            \
-    return ret;                                 \
+#define _has_opt(gtype)    do {             \
+    struct option *option;                  \
+    va_list va_arg;                         \
+    gboolean ret;                           \
+                                            \
+    va_start (va_arg, fmt);                 \
+    option = _get_option (config, gtype,    \
+            FALSE, fmt, va_arg);            \
+    va_end (va_arg);                        \
+    return option != NULL;                  \
 } while (0)
 
 gboolean
@@ -1366,7 +1371,7 @@ donna_config_has_boolean (DonnaConfig *config,
                           const gchar *fmt,
                           ...)
 {
-    _has_opt (G_TYPE_BOOLEAN, FALSE);
+    _has_opt (G_TYPE_BOOLEAN);
 }
 
 gboolean
@@ -1374,7 +1379,7 @@ donna_config_has_int (DonnaConfig *config,
                       const gchar *fmt,
                       ...)
 {
-    _has_opt (G_TYPE_INT, FALSE);
+    _has_opt (G_TYPE_INT);
 }
 
 gboolean
@@ -1382,7 +1387,7 @@ donna_config_has_double (DonnaConfig *config,
                          const gchar *fmt,
                          ...)
 {
-    _has_opt (G_TYPE_DOUBLE, FALSE);
+    _has_opt (G_TYPE_DOUBLE);
 }
 
 gboolean
@@ -1390,7 +1395,7 @@ donna_config_has_string (DonnaConfig *config,
                          const gchar *fmt,
                          ...)
 {
-    _has_opt (G_TYPE_STRING, FALSE);
+    _has_opt (G_TYPE_STRING);
 }
 
 gboolean
@@ -1398,74 +1403,22 @@ donna_config_has_category (DonnaConfig *config,
                            const gchar *fmt,
                            ...)
 {
-    _has_opt (G_TYPE_INVALID /* not used */, TRUE);
+    _has_opt (G_TYPE_INVALID /* i.e. category */);
 }
 
-typedef gintptr (*get_value_fn) (const GValue *value);
-
-static gboolean
-_get_option (DonnaConfig    *config,
-             gintptr        *value,
-             GType           type,
-             get_value_fn    get_value,
-             const gchar    *fmt,
-             va_list         va_arg)
-{
-    DonnaProviderConfigPrivate *priv;
-    struct option *option;
-    va_list va_arg2;
-    gchar  buf[255];
-    gchar *b = buf;
-    gint len;
-    gboolean ret;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
-    g_return_val_if_fail (fmt != NULL, FALSE);
-    g_return_val_if_fail (value != NULL, FALSE);
-
-    va_copy (va_arg2, va_arg);
-    len = vsnprintf (buf, 255, fmt, va_arg);
-    if (len >= 255)
-    {
-        b = g_new (gchar, ++len); /* +1 for NUL */
-        vsnprintf (b, len, fmt, va_arg2);
-    }
-    va_end (va_arg2);
-
-    priv = config->priv;
-    g_rw_lock_reader_lock (&priv->lock);
-    option = get_option (priv->root, b);
-    if (option)
-    {
-        if (!option_is_category (option, priv->root))
-            ret = G_VALUE_HOLDS (&option->value, type);
-        else
-            ret = FALSE;
-    }
-    else
-        ret = FALSE;
-    if (ret)
-        *value = get_value (&option->value);
-    g_rw_lock_reader_unlock (&priv->lock);
-
-    if (b != buf)
-        g_free (b);
-
-    return ret;
-}
-
-#define _get_opt(type, gtype, get_fn)  do {     \
-    va_list va_arg;                             \
-    gintptr v;                                  \
-    gboolean ret;                               \
-                                                \
-    va_start (va_arg, fmt);                     \
-    ret = _get_option (config, &v, gtype,       \
-            (get_value_fn) get_fn, fmt, va_arg);\
-    va_end (va_arg);                            \
-    if (ret)                                    \
-        *value = (type) v;                      \
-    return ret;                                 \
+#define _get_opt(gtype, get_fn)  do {                   \
+    struct option *option;                              \
+    va_list va_arg;                                     \
+    gboolean ret;                                       \
+                                                        \
+    va_start (va_arg, fmt);                             \
+    option = _get_option (config, gtype, TRUE,          \
+            fmt, va_arg);                               \
+    va_end (va_arg);                                    \
+    if (option)                                         \
+        *value = get_fn (&option->value);               \
+    g_rw_lock_reader_unlock (&config->priv->lock);      \
+    return option != NULL;                              \
 } while (0)
 
 gboolean
@@ -1474,7 +1427,7 @@ donna_config_get_boolean (DonnaConfig    *config,
                           const gchar    *fmt,
                           ...)
 {
-    _get_opt (gboolean, G_TYPE_BOOLEAN, g_value_get_boolean);
+    _get_opt (G_TYPE_BOOLEAN, g_value_get_boolean);
 }
 
 gboolean
@@ -1483,7 +1436,7 @@ donna_config_get_int (DonnaConfig    *config,
                       const gchar    *fmt,
                       ...)
 {
-    _get_opt (gint, G_TYPE_INT, g_value_get_int);
+    _get_opt (G_TYPE_INT, g_value_get_int);
 }
 
 gboolean
@@ -1492,7 +1445,7 @@ donna_config_get_double (DonnaConfig    *config,
                          const gchar    *fmt,
                          ...)
 {
-    _get_opt (gdouble, G_TYPE_DOUBLE, g_value_get_double);
+    _get_opt (G_TYPE_DOUBLE, g_value_get_double);
 }
 
 gboolean
@@ -1501,7 +1454,7 @@ donna_config_get_string (DonnaConfig          *config,
                          const gchar          *fmt,
                          ...)
 {
-    _get_opt (gchar *, G_TYPE_STRING, g_value_dup_string);
+    _get_opt (G_TYPE_STRING, g_value_dup_string);
 }
 
 gboolean
@@ -1566,51 +1519,135 @@ donna_config_list_options (DonnaConfig               *config,
     return (*options != NULL);
 }
 
-typedef gboolean (*cfg_get_fn) (DonnaConfig *config,
-                                gintptr     *value,
-                                const gchar *fmt,
-                                ...);
-typedef gboolean (*cfg_set_fn) (DonnaConfig *config,
-                                gintptr      value,
-                                const gchar *fmt,
-                                ...);
+#define get_child_cat(opt_name, len_opt, dest)  do {                \
+    child = get_child_node (node, opt_name, len_opt);               \
+    if (!child || !option_is_category (child->data, priv->root))    \
+        goto dest;                                                  \
+    node = child;                                                   \
+} while (0)
 
-static gintptr
-_get_option_column (DonnaConfig *config,
-                    const gchar *tv_name,
-                    const gchar *col_name,
-                    const gchar *arr_name,
-                    const gchar *def_cat,
-                    const gchar *opt_name,
-                    gintptr      def_val,
-                    cfg_get_fn   cfg_get,
-                    cfg_set_fn   cfg_set)
+#define get_child_opt(opt_name, len_opt, opt_type, dest)  do {      \
+    child = get_child_node (node, opt_name, len_opt);               \
+    if (!child || option_is_category (child->data, priv->root))     \
+        goto dest;                                                  \
+                                                                    \
+    v = &((struct option *) child->data)->value;                    \
+    if (!G_VALUE_HOLDS (v, opt_type))                               \
+        goto dest;                                                  \
+} while (0)
+
+static inline struct option *
+__get_option (DonnaConfig   *config,
+              GType          type,
+              gboolean       leave_lock_on,
+              const gchar   *fmt,
+              ...)
 {
-    gintptr value;
+    struct option *option;
+    va_list va_arg;
 
-    if (!(arr_name && cfg_get (config, &value, "%s/columns_options/%s/%s",
-                    arr_name, col_name, opt_name)))
-    {
-        if (!tv_name || !cfg_get (config, &value, "treeviews/%s/columns/%s/%s",
-                    tv_name, col_name, opt_name))
-        {
-            if (!cfg_get (config, &value, "columns/%s/%s", col_name, opt_name))
-            {
-                if (!def_cat)
-                {
-                    value = def_val;
-                    cfg_set (config, value, "columns/%s/%s", col_name, opt_name);
-                }
-                else if (!cfg_get (config, &value, "defaults/%s/%s", def_cat, opt_name))
-                {
-                    value = def_val;
-                    cfg_set (config, value, "defaults/%s/%s", def_cat, opt_name);
-                }
-            }
-        }
-    }
-    return value;
+    va_start (va_arg, fmt);
+    option = _get_option (config, type, leave_lock_on, fmt, va_arg);
+    va_end (va_arg);
+    return option;
 }
+
+static gboolean
+_get_option_column (DonnaConfig  *config,
+                    GType         type,
+                    GValue       *value,
+                    const gchar  *tv_name,
+                    const gchar  *col_name,
+                    const gchar  *arr_name,
+                    const gchar  *def_cat,
+                    const gchar  *opt_name)
+{
+    DonnaProviderConfigPrivate *priv = config->priv;
+    GNode *node;
+    GNode *child;
+    GValue *v;
+    gchar buf[255], *b = buf;
+    gsize len;
+    gsize len_col = strlen (col_name);
+    gsize len_opt = strlen (opt_name);
+    struct option *option;
+
+    g_rw_lock_reader_lock (&priv->lock);
+
+    if (!arr_name)
+        goto treeview;
+    node = get_option_node (priv->root, arr_name);
+    if (!node)
+        goto treeview;
+    get_child_cat ("columns_options", 15, treeview);
+    get_child_cat (col_name, len_col, treeview);
+    get_child_opt (opt_name, len_opt, type, treeview);
+    goto get_value;
+
+treeview:
+    node = priv->root;
+    get_child_cat ("treeviews", 9, column);
+    get_child_cat (tv_name, strlen (tv_name), column);
+    get_child_cat ("columns", 7, column);
+    get_child_cat (col_name, len_col, column);
+    get_child_opt (opt_name, len_opt, type, column);
+    goto get_value;
+
+column:
+    node = priv->root;
+    if (def_cat)
+    {
+        get_child_cat ("columns", 7, def);
+        get_child_cat (col_name, len_col, def);
+        get_child_opt (opt_name, len_opt, type, def);
+        goto get_value;
+    }
+    /* we need to check columns, and set the default if nothing found */
+    g_rw_lock_reader_unlock (&priv->lock);
+    option = __get_option (config, type, TRUE, "columns/%s/%s",
+            col_name, opt_name);
+    if (option)
+        g_value_copy (&option->value, value);
+    g_rw_lock_reader_unlock (&priv->lock);
+    return option != NULL;
+
+def:
+    g_rw_lock_reader_unlock (&priv->lock);
+    option = __get_option (config, type, TRUE, "defaults/%s/%s",
+            def_cat, opt_name);
+    if (option)
+        g_value_copy (&option->value, value);
+    g_rw_lock_reader_unlock (&priv->lock);
+    return option != NULL;
+
+get_value:
+    g_value_copy (v, value);
+    g_rw_lock_reader_unlock (&priv->lock);
+    return TRUE;
+}
+
+#undef get_child_opt
+#undef get_child_cat
+
+#define _get_cfg_column(type, gtype, cfg_set, gvalue_get, dup_def) do { \
+    GValue value = G_VALUE_INIT;                                    \
+    type ret;                                                       \
+                                                                    \
+    g_value_init (&value, G_TYPE_##gtype);                          \
+    if (!_get_option_column (config, G_TYPE_##gtype, &value,        \
+                tv_name, col_name, arr_name, def_cat, opt_name))    \
+    {                                                               \
+        g_value_unset (&value);                                     \
+        donna_config_set_##cfg_set (config, def_val,                \
+                (def_cat) ? "defaults/%s/%s" : "columns/%s/%s",     \
+                (def_cat) ? def_cat : col_name,                     \
+                opt_name);                                          \
+        return dup_def (def_val);                                   \
+    }                                                               \
+    ret = g_value_##gvalue_get (&value);                            \
+    g_value_unset (&value);                                         \
+    return ret;                                                     \
+} while (0)
 
 gboolean
 donna_config_get_boolean_column (DonnaConfig *config,
@@ -1621,10 +1658,7 @@ donna_config_get_boolean_column (DonnaConfig *config,
                                  const gchar *opt_name,
                                  gboolean     def_val)
 {
-    return (gboolean) _get_option_column (config, tv_name, col_name, arr_name,
-            def_cat, opt_name, def_val,
-            (cfg_get_fn) donna_config_get_boolean,
-            (cfg_set_fn) donna_config_set_boolean);
+    _get_cfg_column (gboolean, BOOLEAN, boolean, get_boolean, );
 }
 
 gint
@@ -1636,10 +1670,7 @@ donna_config_get_int_column (DonnaConfig *config,
                              const gchar *opt_name,
                              gint         def_val)
 {
-    return (gint) _get_option_column (config, tv_name, col_name, arr_name,
-            def_cat, opt_name, def_val,
-            (cfg_get_fn) donna_config_get_int,
-            (cfg_set_fn) donna_config_set_int);
+    _get_cfg_column (gint, INT, int, get_int, );
 }
 
 gdouble
@@ -1651,10 +1682,7 @@ donna_config_get_double_column (DonnaConfig *config,
                                 const gchar *opt_name,
                                 gdouble      def_val)
 {
-    return (gdouble) _get_option_column (config, tv_name, col_name, arr_name,
-            def_cat, opt_name, def_val,
-            (cfg_get_fn) donna_config_get_double,
-            (cfg_set_fn) donna_config_set_double);
+    _get_cfg_column (gdouble, DOUBLE, double, get_double, );
 }
 
 gchar *
@@ -1666,13 +1694,7 @@ donna_config_get_string_column (DonnaConfig *config,
                                 const gchar *opt_name,
                                 gchar       *def_val)
 {
-    gchar *ret;
-
-    ret = (gchar *) _get_option_column (config, tv_name, col_name, arr_name,
-            def_cat, opt_name, (gintptr) def_val,
-            (cfg_get_fn) donna_config_get_string,
-            (cfg_set_fn) donna_config_set_string);
-    return (ret == def_val) ? g_strdup (ret) : ret;
+    _get_cfg_column (gchar *, STRING, string, dup_string, g_strdup);
 }
 
 
@@ -2087,13 +2109,10 @@ done:
 #undef get_node
 #undef get_child
 
-typedef void (*set_value_fn) (GValue *value, gintptr new_value);
-
 static gboolean
 _set_option (DonnaConfig    *config,
-             gintptr         value,
              GType           type,
-             set_value_fn    set_value,
+             GValue         *value,
              const gchar    *fmt,
              va_list         va_arg)
 {
@@ -2158,7 +2177,7 @@ _set_option (DonnaConfig    *config,
         ret = TRUE;
     }
     if (ret)
-        set_value (&option->value, value);
+        g_value_copy (value, &option->value);
     g_rw_lock_writer_unlock (&priv->lock);
     /* signal & set value on node after releasing the lock, to avoid
      * any deadlocks */
@@ -2177,15 +2196,19 @@ _set_option (DonnaConfig    *config,
     return ret;
 }
 
-#define _set_opt(gtype, set_fn)  do {                   \
-    va_list va_arg;                                     \
-    gboolean ret;                                       \
-                                                        \
-    va_start (va_arg, fmt);                             \
-    ret = _set_option (config, (gintptr) value, gtype,  \
-            (set_value_fn) set_fn, fmt, va_arg);        \
-    va_end (va_arg);                                    \
-    return ret;                                         \
+#define _set_opt(gtype, set_fn)  do {           \
+    va_list va_arg;                             \
+    GValue gvalue = G_VALUE_INIT;               \
+    gboolean ret;                               \
+                                                \
+    va_start (va_arg, fmt);                     \
+    g_value_init (&gvalue, gtype);              \
+    set_fn (&gvalue, value);                    \
+    ret = _set_option (config, gtype, &gvalue,  \
+            fmt, va_arg);                       \
+    g_value_unset (&gvalue);                    \
+    va_end (va_arg);                            \
+    return ret;                                 \
 } while (0)
 
 gboolean
