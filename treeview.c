@@ -653,7 +653,7 @@ load_config (DonnaTreeView *tree)
             /* set default */
             val = priv->is_minitree = FALSE;
             donna_config_set_boolean (config, (gboolean) val,
-                    "treeview/%s/is_minitree", priv->name);
+                    "treeviews/%s/is_minitree", priv->name);
         }
 
         if (donna_config_get_int (config, &val,
