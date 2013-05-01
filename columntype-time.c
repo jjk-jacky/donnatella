@@ -970,14 +970,24 @@ compile_done:
                              * etc */
                             dt = g_date_time_new_from_unix_local (time);
 
-                            check (year,    YEAR);
-                            check (month,   MONTH);
                             if (fd->unit_age == UNIT_WEEK)
-                                check (week_of_year, WEEK);
-                            check (day_of_month, DAY);
-                            check (hour,    HOUR);
-                            check (minute,  MINUTE);
-                            check (second,  SECOND);
+                            {
+                                /* week is a special case, as one week can
+                                 * spread over two months, even two years. This
+                                 * is why here we use week_numbering_year
+                                 * instead of year, and do not check month. */
+                                check (week_numbering_year, YEAR);
+                                check (week_of_year,        WEEK);
+                            }
+                            else
+                            {
+                                check (year,         YEAR);
+                                check (month,        MONTH);
+                                check (day_of_month, DAY);
+                                check (hour,         HOUR);
+                                check (minute,       MINUTE);
+                                check (second,       SECOND);
+                            }
 age_done:
                             g_date_time_unref (dt);
                             g_date_time_unref (dt2);
