@@ -1533,7 +1533,7 @@ apply_color_filters (DonnaTreeView      *tree,
             donna_app_show_error (priv->app, err,
                     "Ignoring color filter '%s'", filter);
             g_free (filter);
-            g_error_free (err);
+            g_clear_error (&err);
 
             ll = l;
             l = l->next;
