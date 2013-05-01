@@ -17,14 +17,26 @@ enum
 
 enum cond
 {
-    COND_AND,
+    COND_AND    = 0,
     COND_OR,
+};
+
+struct element
+{
+    /* condition for the element */
+    guint8           cond       : 1;
+    /* was it prefixed with NOT */
+    guint8           is_not     : 1;
+    /* is it a block, or a (group of blocks) */
+    guint8           is_block   : 1;
+    /* pointer to the block, or the first element in the group */
+    gpointer         data;
+    /* pointer to the next element */
+    struct element  *next;
 };
 
 struct block
 {
-    /* condition for the block */
-    enum cond        condition;
     /* name of column */
     gchar           *col_name;
     /* columntype to use */
@@ -37,9 +49,9 @@ struct block
 
 struct _DonnaFilterPrivate
 {
-    gchar       *filter;
-    DonnaApp    *app;
-    GSList      *blocks;
+    gchar           *filter;
+    DonnaApp        *app;
+    struct element  *element;
 };
 
 static GParamSpec *donna_filter_props[NB_PROPS] = { NULL, };
@@ -150,6 +162,29 @@ free_block (struct block *block)
 }
 
 static void
+free_element (struct element *element)
+{
+    if (!element)
+        return;
+    for (;;)
+    {
+        struct element *next;
+
+        next = element->next;
+        if (element->data)
+        {
+            if (element->is_block)
+                free_block (element->data);
+            else
+                free_element (element->data);
+        }
+        g_slice_free (struct element, element);
+        if (!next)
+            break;
+    }
+}
+
+static void
 donna_filter_finalize (GObject *object)
 {
     DonnaFilterPrivate *priv;
@@ -157,8 +192,7 @@ donna_filter_finalize (GObject *object)
     priv = DONNA_FILTER (object)->priv;
     g_object_unref (priv->app);
     g_free (priv->filter);
-    if (priv->blocks)
-        g_slist_free_full (priv->blocks, (GDestroyNotify) free_block);
+    free_element (priv->element);
 
     G_OBJECT_CLASS (donna_filter_parent_class)->finalize (object);
 }
@@ -182,179 +216,290 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
     return ct;
 }
 
-gboolean
-donna_filter_is_match (DonnaFilter    *filter,
-                       DonnaNode      *node,
-                       get_ct_data_fn  get_ct_data,
-                       gpointer        data,
-                       GError       **error)
+#define skip_blank(s)    for ( ; isblank (*s); ++s) ;
+
+static inline gchar *
+get_quoted_string (gchar **str, gboolean get_string)
 {
-    DonnaFilterPrivate *priv;
-    GError *err = NULL;
-    struct block *block;
-    GSList *l;
-    gboolean match;
+    gchar *ret = *str;
+    gchar *f = *str;
+    gchar *s;
+    gint i;
 
-    g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
-    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    g_return_val_if_fail (get_ct_data != NULL, FALSE);
-
-    priv = filter->priv;
-
-    /* if needed, compile the filter into blocks */
-    if (!priv->blocks)
+    /* we assume it is quoted, so skip the openning quote */
+    s = f + 1;
+    for (;;)
     {
-        /* first block should be AND */
-        enum cond cond = COND_AND;
-        gchar *f = priv->filter;
-        gchar *s;
-
-        for (;;)
+        s = strchr (s, '"');
+        if (!s)
+            return NULL;
+        /* check for escaped quotes within filter */
+        for (i = 0; s[i-1] == '\\'; --i)
+            ;
+        if ((i % 2) == 0)
+            break;
+        ++s;
+    }
+    /* no quotes within, just dup */
+    if (get_string)
+    {
+        if (i == 0)
+            ret = g_strndup (f + 1, s - f - 1);
+        else
         {
-            block = g_slice_new0 (struct block);
-            block->condition = cond;
+            gsize len = s - f - 1;
+            gchar *ss;
 
-            for ( ; isblank (*f); ++f)
-                ;
-
-            /* get columntype */
-            s = strchr (f, ':');
-            if (!s)
+            /* we'll have to unescape the quotes */
+            ss = g_new (gchar, len + 1);
+            for (i = 0; (guint) i < len; ++i)
             {
-                /* this means this is just a filter for name */
-                block->col_name = g_strdup ("name");
-                block->ct = get_ct (filter, block->col_name);
-                if (!block->ct)
-                {
-                    g_set_error (error, DONNA_FILTER_ERROR,
-                            DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
-                            "Unable to load columntype for 'name'");
-                    free_block (block);
-                    goto undo;
-                }
+                if (f[1 + i] != '\\')
+                    *ss++ = f[1 + i];
+                else if (f[2 + i] == '\\')
+                    *ss++ = f[1 + ++i];
             }
-            else
-            {
-                *s = '\0';
-                block->col_name = g_strdup (f);
-                block->ct = get_ct (filter, block->col_name);
-                if (!block->ct)
-                {
-                    g_set_error (error, DONNA_FILTER_ERROR,
-                            DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
-                            "Unable to load columntype for '%s'",
-                            block->col_name);
-                    *s = ':';
-                    free_block (block);
-                    goto undo;
-                }
-                *s = ':';
-                /* move to the actual filter */
-                f = s + 1;
-            }
+            *ss = '\0';
+            ret = ss;
+        }
+    }
+    /* move to the next one (if any) */
+    *str = s + 1;
+    return ret;
+}
 
-            /* get filter */
-            if (f[0] == '"')
-            {
-                gint i;
+static struct block *
+parse_block (DonnaFilter *filter, gchar **str, GError **error)
+{
+    struct block *block;
+    gchar *f = *str;
+    gchar *s;
 
-                /* it is quoted (there's probably more behind) */
-                s = f + 1;
-                for (;;)
-                {
-                    s = strchr (s, '"');
-                    if (!s)
-                    {
-                        g_set_error (error, DONNA_FILTER_ERROR,
-                                DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                                "Missing closing quote: %s", f);
-                        free_block (block);
-                        goto undo;
-                    }
-                    /* check for escaped quotes within filter */
-                    for (i = 0; s[i-1] == '\\'; --i)
-                        ;
-                    if ((i % 2) == 0)
-                        break;
-                    ++s;
-                }
-                /* no quotes within, just dup */
-                if (i == 0)
-                    block->filter = g_strndup (f + 1, s - f - 1);
-                else
-                {
-                    gsize len = s - f - 1;
-                    gchar *ss;
+    block = g_slice_new0 (struct block);
+    skip_blank (f);
+    /* get columntype */
+    s = strchr (f, ':');
+    if (!s)
+    {
+        /* this means this is just a filter for name */
+        block->col_name = g_strdup ("name");
+        block->ct = get_ct (filter, block->col_name);
+        if (!block->ct)
+        {
+            g_set_error (error, DONNA_FILTER_ERROR,
+                    DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
+                    "Unable to load columntype for 'name'");
+            free_block (block);
+            *str = f;
+            return NULL;
+        }
+    }
+    else
+    {
+        *s = '\0';
+        block->col_name = g_strdup (f);
+        block->ct = get_ct (filter, block->col_name);
+        if (!block->ct)
+        {
+            g_set_error (error, DONNA_FILTER_ERROR,
+                    DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
+                    "Unable to load columntype for '%s'",
+                    block->col_name);
+            *s = ':';
+            free_block (block);
+            *str = f;
+            return NULL;
+        }
+        *s = ':';
+        /* move to the actual filter */
+        f = s + 1;
+    }
 
-                    /* we'll have to unescape the quotes */
-                    ss = g_new (gchar, len + 1);
-                    for (i = 0; (guint) i < len; ++i)
-                    {
-                        if (f[1 + i] != '\\')
-                            *ss++ = f[1 + i];
-                        else if (f[2 + i] == '\\')
-                            *ss++ = f[1 + ++i];
-                    }
-                    *ss = '\0';
-                    block->filter = ss;
-                }
-                /* move to the next one (if any) */
-                f = s + 1;
-            }
-            else
-            {
-                block->filter = g_strdup (f);
-                /* i.e. nothing after */
-                f = NULL;
-            }
+    /* get filter */
+    if (f[0] == '"')
+    {
+        block->filter = get_quoted_string (&f, TRUE);
+        if (!block->filter)
+        {
+            g_set_error (error, DONNA_FILTER_ERROR,
+                    DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                    "Missing closing quote: %s", f);
+            free_block (block);
+            *str = f;
+            return NULL;
+        }
+    }
+    else
+    {
+        block->filter = g_strdup (f);
+        /* i.e. nothing after */
+        f = NULL;
+    }
 
-            /* add the block */
-            priv->blocks = g_slist_prepend (priv->blocks, block);
+    *str = f;
+    return block;
+}
 
-            /* we're done */
-            if (!f || *f == '\0')
-                break;
-            /* there's more, so we get the condition */
+static struct element *
+parse_element (DonnaFilter *filter, gchar **str, GError **error)
+{
+    struct element *first_element = NULL;
+    struct element *last_element = NULL;
+    struct element *element;
+    gchar *f = *str;
 
-            for ( ; isblank (*f); ++f)
-                ;
+    for (;;)
+    {
+        element = g_slice_new0 (struct element);
+        if (last_element)
+        {
             if ((f[0] == 'a' || f[0] == 'A') && (f[1] == 'n' || f[1] == 'N')
-                    && (f[2] == 'd' || f[2] == 'D') && isblank (f[3]))
+                    && (f[2] == 'd' || f[2] == 'D')
+                    && (f[3] == '(' || isblank (f[3])))
             {
-                cond = COND_AND;
-                f += 4;
+                element->cond = COND_AND;
+                f += 3;
             }
             else if ((f[0] == 'o' || f[0] == 'O')
-                    && (f[1] == 'r' || f[1] == 'R') && isblank (f[2]))
+                    && (f[1] == 'r' || f[1] == 'R')
+                    && (f[2] == '(' || isblank (f[2])))
             {
-                cond = COND_OR;
-                f += 3;
+                element->cond = COND_OR;
+                f += 2;
             }
             else
             {
                 g_set_error (error, DONNA_FILTER_ERROR,
                         DONNA_FILTER_ERROR_INVALID_SYNTAX,
                         "Expected 'AND' or 'OR': %s", f);
+                free_element (element);
                 goto undo;
             }
         }
-        priv->blocks = g_slist_reverse (priv->blocks);
+        else
+            /* first element must be AND */
+            element->cond = COND_AND;
+
+        skip_blank (f);
+        if ((f[0] == 'N' || f[0] == 'n') && (f[1] == 'O' || f[1] == 'o')
+                && (f[2] == 'T' || f[2] == 't')
+                && (f[3] == '(' || isblank (f[3])))
+        {
+            element->is_not = TRUE;
+            f += 3;
+        }
+
+        skip_blank (f);
+        if (*f == '(')
+        {
+            /* remember beginning, as f will move to the end */
+            gchar *s = ++f;
+            /* parenthesis contained within */
+            gint c = 0;
+
+            /* find closing parenthesis */
+            for ( ; ; ++f)
+            {
+                if (*f == '\0')
+                {
+                    g_set_error (error, DONNA_FILTER_ERROR,
+                            DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                            "Missing closing parenthesis: %s", *str);
+                    free_element (element);
+                    goto undo;
+                }
+                else if (*f == '"')
+                {
+                    /* FALSE: simply move f past the closing parenthesis */
+                    if (!get_quoted_string (&f, FALSE))
+                    {
+                        g_set_error (error, DONNA_FILTER_ERROR,
+                                DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                                "Missing closing quote: %s", f);
+                        free_element (element);
+                        goto undo;
+                    }
+                    /* f was moved after the closing quote, move it back so when
+                     * moving forward in the loop we don't skip anything */
+                    --f;
+                }
+                else if (*f == '(')
+                    ++c;
+                else if (*f == ')')
+                {
+                    if (c > 0)
+                        --c;
+                    else
+                        break;
+                }
+            }
+            /* parse the string within parenthesis */
+            *f = '\0';
+            element->data = parse_element (filter, &s, error);
+            *f = ')';
+            f = s + 1;
+        }
+        else
+        {
+            element->is_block = TRUE;
+            element->data = parse_block (filter, &f, error);
+        }
+        if (!element->data)
+        {
+            free_element (element);
+            goto undo;
+        }
+
+        if (last_element)
+            last_element->next = element;
+        else
+            first_element = element;
+        last_element = element;
+
+        if (!f)
+            break;
+        skip_blank (f);
+        if (*f == '\0')
+            break;
     }
 
-    /* see if node matches the filter */
-    match = TRUE;
-    for (l = priv->blocks; l; l = l->next)
+    *str = f;
+    return first_element;
+
+undo:
+    free_element (first_element);
+    *str = f;
+    return NULL;
+}
+
+static gboolean
+is_match_element (struct element    *element,
+                  DonnaNode         *node,
+                  get_ct_data_fn     get_ct_data,
+                  gpointer           data,
+                  GError           **error)
+{
+    GError *err = NULL;
+    gboolean match = TRUE;
+
+    for ( ; element; element = element->next)
     {
-        block = l->data;
-
-        if (match && block->condition == COND_OR)
+        if (match && element->cond == COND_OR)
             break;
-        if (!match && block->condition == COND_AND)
+        if (!match && element->cond == COND_AND)
             break;
 
-        match = donna_columntype_is_match_filter (block->ct,
-                block->filter, &block->data,
-                get_ct_data (block->col_name, data), node, &err);
+        if (element->is_block)
+        {
+            struct block *block = element->data;
+
+            match = donna_columntype_is_match_filter (block->ct,
+                    block->filter, &block->data,
+                    get_ct_data (block->col_name, data), node, &err);
+        }
+        else
+            match = is_match_element (element->data, node, get_ct_data, data, &err);
+
         if (err)
         {
             if (error)
@@ -363,12 +508,37 @@ donna_filter_is_match (DonnaFilter    *filter,
                 g_clear_error (&err);
             return FALSE;
         }
+
+        if (element->is_not)
+            match = !match;
+    }
+    return match;
+}
+
+gboolean
+donna_filter_is_match (DonnaFilter    *filter,
+                       DonnaNode      *node,
+                       get_ct_data_fn  get_ct_data,
+                       gpointer        data,
+                       GError       **error)
+{
+    DonnaFilterPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    g_return_val_if_fail (get_ct_data != NULL, FALSE);
+
+    priv = filter->priv;
+
+    /* if needed, compile the filter into elements */
+    if (!priv->element)
+    {
+        gchar *f = priv->filter;
+        priv->element = parse_element (filter, &f, error);
+        if (!priv->element)
+            return FALSE;
     }
 
-    return match;
-
-undo:
-    g_slist_free_full (priv->blocks, (GDestroyNotify) free_block);
-    priv->blocks = NULL;
-    return FALSE;
+    /* see if node matches the filter */
+    return is_match_element (priv->element, node, get_ct_data, data, error);
 }
