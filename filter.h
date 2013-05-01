@@ -28,7 +28,7 @@ typedef struct _DonnaFilterClass    DonnaFilterClass;
 
 GType   donna_filter_get_type       (void) G_GNUC_CONST;
 
-typedef gpointer (get_ct_data_fn)   (const gchar *col_name, gpointer data);
+typedef gpointer (*get_ct_data_fn)  (const gchar *col_name, gpointer data);
 
 struct _DonnaFilter
 {
