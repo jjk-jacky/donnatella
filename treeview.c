@@ -160,6 +160,10 @@ struct _DonnaTreeViewPrivate
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
 
+    /* main column is the one, w/out full_row_select, that can select rows.
+     * In mode tree it's also the expander one (in list expander is hidden) */
+    GtkTreeViewColumn   *main_column;
+
     /* main/second sort columns */
     GtkTreeViewColumn   *sort_column;
     GtkTreeViewColumn   *second_sort_column;
@@ -215,6 +219,7 @@ struct _DonnaTreeViewPrivate
     guint                node_types         : 2;
     guint                show_hidden        : 1;
     guint                sort_groups        : 2; /* containers (always) first/mixed */
+    guint                full_row_select    : 1;
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
@@ -639,6 +644,18 @@ load_config (DonnaTreeView *tree)
         priv->sort_groups = val;
         donna_config_set_int (config, val,
                 "treeviews/%s/sort_groups", priv->name);
+    }
+
+    if (donna_config_get_boolean (config, &val,
+                "treeviews/%s/full_row_select", priv->name))
+        priv->full_row_select = val;
+    else
+    {
+        /* set default */
+        val = FALSE;
+        priv->full_row_select = val;
+        donna_config_set_boolean (config, val,
+                "treeviews/%s/full_row_select", priv->name);
     }
 
     if (is_tree (tree))
@@ -2836,6 +2853,7 @@ load_arrangement (DonnaTreeView     *tree,
 
     list = priv->columns;
     priv->columns = NULL;
+    priv->main_column = NULL;
 
     for (;;)
     {
@@ -3036,6 +3054,9 @@ load_arrangement (DonnaTreeView     *tree,
         if (!expander_column && col_ct == ctname)
             expander_column = column;
 
+        if (!priv->main_column && col_ct == ctname)
+            priv->main_column = column;
+
         /* size */
         if (snprintf (buf, 64, "columntypes/%s", col_type) >= 64)
             b = g_strdup_printf ("columntypes/%s", col_type);
@@ -3130,7 +3151,12 @@ next:
     }
 
     /* set expander column */
-    gtk_tree_view_set_expander_column (treev, expander_column);
+    gtk_tree_view_set_expander_column (treev,
+            (expander_column) ? expander_column : first_column);
+
+    /* ensure we have a main column */
+    if (!priv->main_column)
+        priv->main_column = first_column;
 
     /* failed to set sort order */
     if (free_sort_column)
@@ -4927,6 +4953,10 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     GtkTreeIter iter;
     gint x, y;
 
+    /* click with other than left button aren't supported yet */
+    if (event->type == GDK_BUTTON_PRESS && event->button != 1)
+        return TRUE;
+
     if (event->window != gtk_tree_view_get_bin_window (treev)
             || event->button != 1 || event->type != GDK_BUTTON_PRESS)
         goto chainup;
@@ -4949,17 +4979,28 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
         if (gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
 #endif
         {
-            if (!is_tree (tree))
+            if (is_tree (tree))
             {
-                GtkTreeSelection *sel;
-
-                /* no full row select */
-                sel = gtk_tree_view_get_selection (treev);
-                gtk_tree_selection_unselect_all (sel);
+                if (priv->full_row_select)
+                    goto chainup;
+                else
+                    return TRUE;
             }
+            else
+            {
+                if (!priv->full_row_select || column == priv->blank_column)
+                {
+                    GtkTreeSelection *sel;
 
-            /* handled */
-            return TRUE;
+                    /* no full row select */
+                    sel = gtk_tree_view_get_selection (treev);
+                    gtk_tree_selection_unselect_all (sel);
+
+                    return TRUE;
+                }
+                else
+                    goto chainup;
+            }
         }
         else
         {
@@ -5037,6 +5078,19 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
             {
                 /* not on the error icon, let treev handle it */
                 g_object_unref (node);
+                /* except w/out full_row_select we treat other (than main)
+                 * column the same as blank space */
+                if (!priv->full_row_select && column != priv->main_column)
+                {
+                    GtkTreeSelection *sel;
+
+                    /* no full row select */
+                    sel = gtk_tree_view_get_selection (treev);
+                    gtk_tree_selection_unselect_all (sel);
+
+                    /* handled */
+                    return TRUE;
+                }
                 goto chainup;
             }
 #endif
