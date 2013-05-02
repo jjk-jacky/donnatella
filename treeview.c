@@ -5413,6 +5413,7 @@ donna_tree_view_new (DonnaApp    *app,
 
     w = g_object_new (DONNA_TYPE_TREE_VIEW, NULL);
     treev = GTK_TREE_VIEW (w);
+    gtk_widget_set_name (w, name);
     gtk_tree_view_set_fixed_height_mode (treev, TRUE);
 
     /* tooltip */

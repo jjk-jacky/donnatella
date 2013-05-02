@@ -777,6 +777,14 @@ main (int argc, char *argv[])
     gtk_init (&argc, &argv);
     d = g_object_new (DONNA_TYPE_DONNA, NULL);
 
+    /* CSS */
+    GtkCssProvider *css_provider;
+    css_provider = gtk_css_provider_new ();
+    gtk_css_provider_load_from_path (css_provider, "donnatella.css", NULL);
+    gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
+            (GtkStyleProvider *) css_provider,
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
     provider_fs = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
 
     /* main window */
