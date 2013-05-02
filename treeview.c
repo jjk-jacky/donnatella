@@ -98,6 +98,14 @@ enum
     DRAW_EMPTY
 };
 
+enum
+{
+    SELECT_HIGHLIGHT_FULL_ROW = 0,
+    SELECT_HIGHLIGHT_COLUMN,
+    SELECT_HIGHLIGHT_UNDERLINE,
+    SELECT_HIGHLIGHT_COLUMN_UNDERLINE
+};
+
 struct col_prop
 {
     gchar             *prop;
@@ -154,7 +162,9 @@ struct _DonnaTreeViewPrivate
     DonnaTreeStore      *store;
     /* list of struct column */
     GSList              *columns;
-    /* not in list above -- mode list only */
+    /* not in list above
+     * list: empty column on the right
+     * tree: non-visible column used as select-highlight-column when UNDERLINE */
     GtkTreeViewColumn   *blank_column;
 
     /* so we re-use the same renderer for all columns */
@@ -220,6 +230,7 @@ struct _DonnaTreeViewPrivate
     guint                show_hidden        : 1;
     guint                sort_groups        : 2; /* containers (always) first/mixed */
     guint                full_row_select    : 1;
+    guint                select_highlight   : 2;
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
@@ -598,7 +609,7 @@ load_config (DonnaTreeView *tree)
 
     if (donna_config_get_int (config, &val,
                 "treeviews/%s/mode", priv->name))
-        priv->mode = val;
+        priv->mode = CLAMP (val, 0, 1);
     else
     {
         g_warning ("Treeview '%s': Unable to find mode, defaulting to list",
@@ -622,7 +633,7 @@ load_config (DonnaTreeView *tree)
 
     if (donna_config_get_int (config, &val,
                 "treeviews/%s/node_types", priv->name))
-        priv->node_types = val;
+        priv->node_types = CLAMP (val, 0, 3);
     else
     {
         /* set default */
@@ -636,7 +647,7 @@ load_config (DonnaTreeView *tree)
 
     if (donna_config_get_int (config, &val,
                 "treeviews/%s/sort_groups", priv->name))
-        priv->sort_groups = val;
+        priv->sort_groups = CLAMP (val, 0, 2);
     else
     {
         /* set default */
@@ -658,6 +669,18 @@ load_config (DonnaTreeView *tree)
                 "treeviews/%s/full_row_select", priv->name);
     }
 
+    if (donna_config_get_int (config, &val,
+                "treeviews/%s/select_highlight", priv->name))
+        priv->select_highlight = CLAMP (val, 0, 3);
+    else
+    {
+        /* set default */
+        val = (is_tree (tree)) ? SELECT_HIGHLIGHT_COLUMN : SELECT_HIGHLIGHT_COLUMN_UNDERLINE;
+        priv->select_highlight = val;
+        donna_config_set_int (config, val,
+                "treeviews/%s/select_highlight", priv->name);
+    }
+
     if (is_tree (tree))
     {
         gchar *s;
@@ -675,7 +698,7 @@ load_config (DonnaTreeView *tree)
 
         if (donna_config_get_int (config, &val,
                     "treeviews/%s/sync_mode", priv->name))
-            priv->sync_mode = val;
+            priv->sync_mode = CLAMP (val, 0, 4);
         else
         {
             /* set default */
@@ -3157,6 +3180,36 @@ next:
     /* ensure we have a main column */
     if (!priv->main_column)
         priv->main_column = first_column;
+
+#ifdef GTK_IS_JJK
+    if (priv->select_highlight == SELECT_HIGHLIGHT_COLUMN
+            || priv->select_highlight == SELECT_HIGHLIGHT_COLUMN_UNDERLINE)
+        gtk_tree_view_set_select_highlight_column (treev, priv->main_column);
+    else if (priv->select_highlight == SELECT_HIGHLIGHT_UNDERLINE)
+    {
+        /* since we only want an underline, we must set the select highlight
+         * column to a non-visible one */
+        if (is_tree (tree))
+        {
+            /* tree never uses an empty column on the right, so we store the
+             * extra non-visible column used for this */
+            if (!priv->blank_column)
+            {
+                priv->blank_column = gtk_tree_view_column_new ();
+                gtk_tree_view_column_set_sizing (priv->blank_column,
+                        GTK_TREE_VIEW_COLUMN_FIXED);
+                gtk_tree_view_insert_column (treev, priv->blank_column, -1);
+            }
+            gtk_tree_view_set_select_highlight_column (treev, priv->blank_column);
+        }
+        else
+            /* list: expander_column is always set to a non-visible one */
+            gtk_tree_view_set_select_highlight_column (treev, expander_column);
+    }
+    gtk_tree_view_set_select_row_underline (treev,
+            priv->select_highlight == SELECT_HIGHLIGHT_UNDERLINE
+            || priv->select_highlight == SELECT_HIGHLIGHT_COLUMN_UNDERLINE);
+#endif
 
     /* failed to set sort order */
     if (free_sort_column)
