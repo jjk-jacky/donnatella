@@ -4365,8 +4365,7 @@ scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter, gboolean select_row)
         gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
 
     if (select_row)
-        gtk_tree_selection_select_path (gtk_tree_view_get_selection (treev),
-                path);
+        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
 
     gtk_tree_path_free (path);
 }
@@ -4436,6 +4435,7 @@ node_get_children_list_cb (DonnaTask                            *task,
                            struct node_get_children_list_data   *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
+    gboolean changed_location;
     GtkTreeIter iter, *it = &iter;
     const GValue *value;
     GPtrArray *arr;
@@ -4473,6 +4473,7 @@ node_get_children_list_cb (DonnaTask                            *task,
     if (priv->future_location != data->node)
         goto free;
 
+    changed_location = priv->location != priv->future_location;
     /* clear the list */
     donna_tree_store_clear (priv->store);
     /* also the hashtable (we don't need to unref nodes (keys), as our ref was
@@ -4525,7 +4526,21 @@ node_get_children_list_cb (DonnaTask                            *task,
 
         /* do we have a child to select/scroll to? */
         if (!it && iter.stamp != 0)
-            scroll_to_iter (data->tree, &iter, /* select it */ TRUE);
+        {
+            if (changed_location)
+                /* this will scroll & try to put the row in the middle */
+                scroll_to_iter (data->tree, &iter, /* select it */ TRUE);
+            else
+            {
+                GtkTreePath *path;
+
+                /* minimum scrolling, leaving the row on top/bottom */
+
+                path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+                gtk_tree_view_set_cursor ((GtkTreeView *) data->tree, path, NULL, FALSE);
+                gtk_tree_path_free (path);
+            }
+        }
         else
             /* scroll to top-left */
             gtk_tree_view_scroll_to_point (GTK_TREE_VIEW (data->tree), 0, 0);
