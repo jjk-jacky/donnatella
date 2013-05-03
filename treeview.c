@@ -4957,6 +4957,11 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
     gchar *loc_location;
     GtkTreeIter child;
 
+    /* don't do this when we're not sync, otherwise collapsing a row where we
+     * put the focus would trigger a selection which we don't want */
+    if (priv->sync_mode == DONNA_TREE_SYNC_NONE)
+        return;
+
     loc_node = donna_tree_view_get_location (priv->sync_with);
     if (G_UNLIKELY (!gtk_tree_model_iter_children (model, &child, iter)))
     {
@@ -5346,7 +5351,8 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 
         /* might have been to SELECTION_SINGLE if there was no selection, due to
          * unsync with the list (or minitree mode) */
-        if (gtk_tree_selection_get_mode (selection) != GTK_SELECTION_BROWSE)
+        if (priv->sync_mode != DONNA_TREE_SYNC_NONE
+                && gtk_tree_selection_get_mode (selection) != GTK_SELECTION_BROWSE)
             /* trying to change it now causes a segfault in GTK */
             g_idle_add ((GSourceFunc) set_selection_browse, selection);
 
