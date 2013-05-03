@@ -4484,6 +4484,7 @@ node_get_children_list_cb (DonnaTask                            *task,
         GtkTreeSortable *sortable = GTK_TREE_SORTABLE (data->tree->priv->store);
         gint sort_col_id;
         GtkSortType order;
+        GtkWidget *w;
 
         priv->draw_state = DRAW_NOTHING;
         iter.stamp = 0;
@@ -4516,6 +4517,13 @@ node_get_children_list_cb (DonnaTask                            *task,
         else
             /* scroll to top-left */
             gtk_tree_view_scroll_to_point (GTK_TREE_VIEW (data->tree), 0, 0);
+
+        /* we give the treeview the focus, to ensure the focused row is set,
+         * hence the class focused-row applied */
+        w = gtk_widget_get_toplevel ((GtkWidget *) data->tree);
+        w = gtk_window_get_focus ((GtkWindow *) w);
+        gtk_widget_grab_focus ((GtkWidget *) data->tree);
+        gtk_widget_grab_focus (w);
     }
     else
     {
