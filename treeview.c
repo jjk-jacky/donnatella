@@ -234,6 +234,7 @@ struct _DonnaTreeViewPrivate
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
+    guint                auto_focus_sync    : 1;
     /* mode List */
     guint                draw_state         : 2;
     /* from current arrangement */
@@ -722,6 +723,17 @@ load_config (DonnaTreeView *tree)
             priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
                     "notify::location",
                     G_CALLBACK (sync_with_location_changed_cb), tree);
+
+        if (donna_config_get_boolean (config, (gboolean *) &val,
+                    "treeviews/%s/auto_focus_sync", priv->name))
+            priv->auto_focus_sync = (gboolean) val;
+        else
+        {
+            /* set default */
+            val = priv->auto_focus_sync = FALSE;
+            donna_config_set_boolean (config, (gboolean) val,
+                    "treeviews/%s/auto_focus_sync", priv->name);
+        }
     }
     else
     {
@@ -5310,6 +5322,14 @@ set_selection_browse (GtkTreeSelection *selection)
     return FALSE;
 }
 
+static gboolean
+check_focus_widget (DonnaTreeView *tree)
+{
+    if (gtk_widget_is_focus ((GtkWidget *) tree))
+        gtk_widget_grab_focus ((GtkWidget *) tree->priv->sync_with);
+    return FALSE;
+}
+
 static void
 selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 {
@@ -5351,6 +5371,14 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
                     return;
 
                 donna_tree_view_set_location (priv->sync_with, node, NULL);
+                if (priv->auto_focus_sync)
+                    /* auto_focus_sync means if we have the focus, we send it to
+                     * sync_with. We need to do this in a new idle source
+                     * because we might be getting the focus with the selection
+                     * change (i.e.  user clicked on tree while focus was
+                     * elsewhere) and is_focus() is only gonna take this into
+                     * account *after* this signal is processed. */
+                    g_idle_add ((GSourceFunc) check_focus_widget, tree);
             }
         }
         else if (node)
