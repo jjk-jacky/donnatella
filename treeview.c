@@ -622,7 +622,7 @@ load_config (DonnaTreeView *tree)
 
     if (donna_config_get_boolean (config, (gboolean *) &val,
                 "treeviews/%s/show_hidden", priv->name))
-        priv->show_hidden = val;
+        priv->show_hidden = (gboolean) val;
     else
     {
         /* set default */
@@ -657,15 +657,14 @@ load_config (DonnaTreeView *tree)
                 "treeviews/%s/sort_groups", priv->name);
     }
 
-    if (donna_config_get_boolean (config, &val,
+    if (donna_config_get_boolean (config, (gboolean *) &val,
                 "treeviews/%s/full_row_select", priv->name))
-        priv->full_row_select = val;
+        priv->full_row_select = (gboolean) val;
     else
     {
         /* set default */
-        val = FALSE;
-        priv->full_row_select = val;
-        donna_config_set_boolean (config, val,
+        val = priv->full_row_select = FALSE;
+        donna_config_set_boolean (config, (gboolean) val,
                 "treeviews/%s/full_row_select", priv->name);
     }
 
@@ -687,7 +686,7 @@ load_config (DonnaTreeView *tree)
 
         if (donna_config_get_boolean (config, (gboolean *) &val,
                     "treeviews/%s/is_minitree", priv->name))
-            priv->is_minitree = val;
+            priv->is_minitree = (gboolean) val;
         else
         {
             /* set default */
