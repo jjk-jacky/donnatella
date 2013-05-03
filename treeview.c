@@ -4635,12 +4635,13 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
     {
         GtkTreeIter *iter;
 
-        /* FIXME: depends on priv->node_types */
-        if (node_type != DONNA_NODE_CONTAINER)
+        if (!(priv->node_types & node_type))
         {
+            gchar *location = donna_node_get_location (node);
             g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Cannot go to an item",
-                    priv->name);
+                    "Treeview '%s': Cannot go to '%s:%s', invalid type",
+                    priv->name, donna_node_get_domain (node), location);
+            g_free (location);
             return FALSE;
         }
 
