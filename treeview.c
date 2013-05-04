@@ -269,14 +269,21 @@ static gboolean add_node_to_tree                        (DonnaTreeView *tree,
                                                          GtkTreeIter   *parent,
                                                          DonnaNode     *node,
                                                          GtkTreeIter   *row);
+static GtkTreeIter *get_current_root_iter               (DonnaTreeView *tree);
+static GtkTreeIter *get_closest_iter_for_node_under_iter(DonnaTreeView *tree,
+                                                         DonnaNode     *node,
+                                                         DonnaProvider *provider,
+                                                         const gchar   *location,
+                                                         GtkTreeIter   *iter_root,
+                                                         gboolean      *is_match);
 static GtkTreeIter *get_best_existing_iter_for_node     (DonnaTreeView  *tree,
                                                          DonnaNode      *node,
                                                          gboolean        even_collapsed);
 static GtkTreeIter *get_iter_expanding_if_needed        (DonnaTreeView *tree,
                                                          GtkTreeIter   *iter_root,
                                                          DonnaNode     *node,
-                                                         gboolean       only_expanded,
-                                                         gboolean       allow_creation);
+                                                         gboolean       only_accessible,
+                                                         gboolean      *was_match);
 static GtkTreeIter *get_best_iter_for_node              (DonnaTreeView  *tree,
                                                          DonnaNode      *node,
                                                          gboolean        add_root_if_needed,
@@ -551,6 +558,31 @@ sync_with_location_changed_cb (GObject       *object,
             g_object_unref (priv->location);
             priv->location = NULL;
             priv->location_iter.stamp = 0;
+        }
+
+        if (priv->sync_mode == DONNA_TREE_SYNC_NODES
+                || priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
+        {
+            gchar *location;
+
+            location = donna_node_get_location (node);
+            iter = get_closest_iter_for_node_under_iter (tree, node,
+                    donna_node_peek_provider (node), location,
+                    get_current_root_iter (tree), NULL);
+            g_free (location);
+            if (iter)
+            {
+                GtkTreePath *path;
+
+                /* we don't want to select anything here */
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+                /* just put focus on the closest accessible parent */
+                path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
+                gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+                gtk_tree_path_free (path);
+                /* restore */
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+            }
         }
     }
 
@@ -3850,7 +3882,7 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
 }
 
 /* mode tree only */
-static inline GtkTreeIter *
+static GtkTreeIter *
 get_current_root_iter (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -4020,16 +4052,16 @@ is_node_ancestor (DonnaNode         *node,
 
 /* mode tree only -- node must have its iter ending up under iter_root, and must
  * be in a non-flat domain */
-/* get an iter (under iter_root) for the node. If only_expanded we don't want
- * collapsed rows, and if allow_creation we will add new rows to the tree to get
- * the iter we want, else we stop at the closest one we could find.
- * So basically, it should always be TRUE,FALSE or FALSE,TRUE for those 2. */
+/* get an iter (under iter_root) for the node. If only_accessible we don't want
+ * any collapsed row, but the first accessible one. We can then provider the
+ * address of a gboolean that will indicate of the iter is for the node asked,
+ * or just the closest accessible ancestor. */
 static GtkTreeIter *
 get_iter_expanding_if_needed (DonnaTreeView *tree,
                               GtkTreeIter   *iter_root,
                               DonnaNode     *node,
-                              gboolean       only_expanded,
-                              gboolean       allow_creation)
+                              gboolean       only_accessible,
+                              gboolean      *was_match)
 {
     GtkTreeView *treev = GTK_TREE_VIEW (tree);
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -4049,6 +4081,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     iter = iter_root;
     provider = donna_node_peek_provider (node);
     location = donna_node_get_location (node);
+    if (was_match)
+        *was_match = FALSE;
 
     /* get the node for the given iter_root, our starting point */
     gtk_tree_model_get (model, iter,
@@ -4065,10 +4099,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             /* this _is_ the iter we're looking for */
             g_free (location);
             g_object_unref (n);
-            if (only_expanded)
-                return (is_row_accessible (tree, iter)) ? iter : last_iter;
-            else
-                return iter;
+            if (was_match)
+                *was_match = TRUE;
+            return iter;
         }
 
         /* get the node's location, and obtain the location of the next child */
@@ -4101,7 +4134,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         n = g_value_dup_object (value);
         g_object_unref (task);
 
-        if (only_expanded)
+        if (only_accessible)
         {
             /* we only remember this iter as last possible match if expanded */
             if (is_row_accessible (tree, iter))
@@ -4115,7 +4148,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         iter = get_child_iter_for_node (tree, prev_iter, n);
         if (!iter)
         {
-            if (allow_creation)
+            if (!only_accessible)
             {
                 GtkTreeIter i;
                 GSList *list;
@@ -4145,6 +4178,12 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 g_free (location);
                 return last_iter;
             }
+        }
+        else if (only_accessible && !is_row_accessible (tree, iter))
+        {
+            g_object_unref (n);
+            g_free (location);
+            return last_iter;
         }
 
         /* check if the parent (prev_iter) is expanded */
@@ -4183,6 +4222,112 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     }
 }
 
+static GtkTreeIter *
+get_closest_iter_for_node_under_iter (DonnaTreeView *tree,
+                                      DonnaNode     *node,
+                                      DonnaProvider *provider,
+                                      const gchar   *location,
+                                      GtkTreeIter   *iter_root,
+                                      gboolean      *is_match)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeView *treev = (GtkTreeView *) tree;
+    GtkTreeModel *model;
+    GtkTreeIter iter;
+    DonnaNode *n;
+    GdkRectangle rect_visible;
+    GdkRectangle rect;
+    GtkTreeIter *last_iter = NULL;
+    guint last_match = 0;
+#define LM_MATCH    (1 << 0)
+#define LM_VISIBLE  (1 << 1)
+
+    model  = (GtkTreeModel *) priv->store;
+
+    /* get visible area, so we can determine which iters are visible */
+    gtk_tree_view_get_visible_rect (treev, &rect_visible);
+    gtk_tree_view_convert_tree_to_bin_window_coords (treev,
+            0, rect_visible.y, &rect_visible.x, &rect_visible.y);
+
+    /* try all existing tree roots (if any) */
+    if (gtk_tree_model_iter_children (model, &iter, NULL))
+        do
+        {
+            /* we might have a root to skip (likely the current one, already
+             * processed before calling this */
+            if (iter_root && itereq (&iter, iter_root))
+                continue;
+
+            gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &n, -1);
+            if (n == node || is_node_ancestor (n, node, provider, location))
+            {
+                GSList *list;
+                GtkTreeIter *i;
+                gboolean match;
+
+                /* get the iter from the hashtable (we cannot end up return the
+                 * pointer to a local iter) */
+                list = g_hash_table_lookup (priv->hashtable, n);
+                for ( ; list; list = list->next)
+                    if (itereq (&iter, (GtkTreeIter *) list->data))
+                    {
+                        i = list->data;
+                        break;
+                    }
+
+                /* find the closest "accessible" iter */
+                i = get_iter_expanding_if_needed (tree, i, node, TRUE, &match);
+                if (i)
+                {
+                    GtkTreePath *path;
+
+                    /* determine if it is visible or not */
+                    path = gtk_tree_model_get_path (model, i);
+                    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+                    gtk_tree_path_free (path);
+                    if (rect.y >= rect_visible.y
+                            && rect.y + rect.height <= rect_visible.y +
+                            rect_visible.height)
+                    {
+                        if (match)
+                        {
+                            if (is_match)
+                                *is_match = match;
+                            return get_iter_expanding_if_needed (tree, i, node,
+                                    FALSE, NULL);
+                        }
+                        else if ((last_match & (LM_MATCH | LM_VISIBLE)) == 0)
+                        {
+                            last_match = LM_VISIBLE;
+                            last_iter = i;
+                        }
+                    }
+                    else
+                    {
+                        if (match)
+                        {
+                            if (!(last_match & LM_MATCH))
+                            {
+                                last_match = LM_MATCH;
+                                last_iter = i;
+                            }
+                        }
+                        else if (!last_iter)
+                        {
+                            last_match = 0;
+                            last_iter = i;
+                        }
+                    }
+                }
+            }
+        }
+        while (gtk_tree_model_iter_next (model, &iter));
+
+    if (is_match)
+        *is_match = (last_match & LM_MATCH) ? TRUE : FALSE;
+    return last_iter;
+}
+
 /* mode tree only */
 /* this will get the best iter for new location in
  * DONNA_TREE_SYNC_NODES_CHILDREN, as well as DONNA_TREE_SYNC_FULL with
@@ -4201,10 +4346,8 @@ get_best_iter_for_node (DonnaTreeView   *tree,
     gchar *location;
     GtkTreeIter *iter_cur_root;
     DonnaNode *n;
-    GtkTreeIter iter;
-    GdkRectangle rect_visible;
-    GdkRectangle rect;
-    GtkTreeIter *iter_non_vis = NULL;
+    GtkTreeIter *last_iter = NULL;
+    gboolean match;
 
     provider = donna_node_peek_provider (node);
     flags = donna_provider_get_flags (provider);
@@ -4234,79 +4377,28 @@ get_best_iter_for_node (DonnaTreeView   *tree,
             g_free (location);
             g_object_unref (n);
             return get_iter_expanding_if_needed (tree, iter_cur_root, node,
-                    FALSE, TRUE);
+                    FALSE, NULL);
         }
     }
 
-    /* get visible area, so we can determine which iters are visible */
-    gtk_tree_view_get_visible_rect (treev, &rect_visible);
-    gtk_tree_view_convert_tree_to_bin_window_coords (treev,
-            0, rect_visible.y, &rect_visible.x, &rect_visible.y);
-
-    /* try all existing tree roots (if any) */
-    if (gtk_tree_model_iter_children (model, &iter, NULL))
-        do
-        {
-            /* we've already excluded the current location's branch */
-            if (iter_cur_root && itereq (&iter, iter_cur_root))
-                continue;
-
-            gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &n, -1);
-            if (n == node || is_node_ancestor (n, node, provider, location))
-            {
-                GSList *list;
-                GtkTreeIter *i;
-
-                /* get the iter from the hashtable (we cannot end up return the
-                 * pointer to a local iter) */
-                list = g_hash_table_lookup (priv->hashtable, n);
-                for ( ; list; list = list->next)
-                    if (itereq (&iter, (GtkTreeIter *) list->data))
-                    {
-                        i = list->data;
-                        break;
-                    }
-
-                /* find the closest "accessible" iter (only expanded, no creation) */
-                i = get_iter_expanding_if_needed (tree, i, node, TRUE, FALSE);
-                if (i)
-                {
-                    GtkTreePath *path;
-
-                    /* determine if it is visible or not */
-                    path = gtk_tree_model_get_path (model, i);
-                    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-                    gtk_tree_path_free (path);
-                    if (rect.y >= rect_visible.y
-                            && rect.y + rect.height <= rect_visible.y +
-                            rect_visible.height)
-                    {
-                        /* it is, this is our match */
-                        g_free (location);
-                        g_object_unref (provider);
-                        return get_iter_expanding_if_needed (tree, i, node,
-                                FALSE, TRUE);
-                    }
-                    else if (!iter_non_vis)
-                        /* a fallback in case we don't find one visible */
-                        iter_non_vis = i;
-                }
-            }
-        }
-        while (gtk_tree_model_iter_next (model, &iter));
-
-    if (iter_non_vis || !add_root_if_needed)
+    last_iter = get_closest_iter_for_node_under_iter (tree, node,
+            provider, location, iter_cur_root, &match);
+    if (last_iter)
+    {
         g_free (location);
-
-    if (iter_non_vis)
-        return get_iter_expanding_if_needed (tree, iter_non_vis, node,
-                FALSE, TRUE);
+        if (match)
+            return last_iter;
+        else
+            return get_iter_expanding_if_needed (tree, last_iter, node,
+                    FALSE, NULL);
+    }
     else if (add_root_if_needed)
     {
         DonnaTask *task;
         const GValue *value;
         gchar *s;
         GSList *list;
+        GtkTreeIter iter;
         GtkTreeIter *i;
 
         /* the tree is empty, we need to add the first root */
@@ -4345,10 +4437,13 @@ get_best_iter_for_node (DonnaTreeView   *tree,
 
         g_object_unref (n);
         return get_iter_expanding_if_needed (tree, i, node,
-                FALSE, TRUE);
+                FALSE, NULL);
     }
     else
+    {
+        g_free (location);
         return NULL;
+    }
 }
 
 static inline void
