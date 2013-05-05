@@ -541,11 +541,6 @@ sync_with_location_changed_cb (GObject       *object,
         }
         gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
         gtk_tree_path_free (path);
-
-        /* we want to scroll to this current row, but we do it in an idle
-         * source to make sure any pending drawing has been processed;
-         * specifically any expanding that might have been requested */
-        g_idle_add ((GSourceFunc) scroll_to_current, tree);
     }
     else
     {
