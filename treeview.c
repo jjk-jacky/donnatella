@@ -292,7 +292,10 @@ static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          DonnaNode       *node,
                                                          guint           *index,
                                                          gboolean         create);
-static gboolean scroll_to_current                       (DonnaTreeView *tree);
+static inline void scroll_to_iter                       (DonnaTreeView  *tree,
+                                                         GtkTreeIter    *iter,
+                                                         gboolean        select_row);
+static gboolean scroll_to_current                       (DonnaTreeView  *tree);
 static gboolean select_arrangement_accumulator      (GSignalInvocationHint  *hint,
                                                      GValue                 *return_accu,
                                                      const GValue           *return_handler,
@@ -574,14 +577,23 @@ sync_with_location_changed_cb (GObject       *object,
             {
                 GtkTreePath *path;
 
-                /* we don't want to select anything here */
-                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
-                /* just put focus on the closest accessible parent */
+                /* we don't want to select anything here, just put focus on the
+                 * closest accessible parent we just found, also put that iter
+                 * into view */
+
+                /* scroll first, so we don't have to worry about set_cursor()
+                 * doing some minimum scrolling on its own */
+                scroll_to_iter (tree, iter, FALSE);
+
                 path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
+#ifdef GTK_IS_JJK
+                gtk_tree_view_set_focused_row (treev, path);
+#else
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
                 gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
-                gtk_tree_path_free (path);
-                /* restore */
                 gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+#endif
+                gtk_tree_path_free (path);
             }
         }
     }
@@ -5103,26 +5115,31 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
             GtkTreeSelection *sel;
             GtkTreePath *loc_path;
 
+            /* scroll first so set_cursor() won't scroll on its own */
+            scroll_to_iter (tree, &child, FALSE);
+
+            loc_path = gtk_tree_model_get_path (model, &child);
             if (n != loc_node)
             {
-                /* ancestor, so we just want to put the
-                 * cursor on the node, no selection */
+                /* ancestor, so we just want to put the cursor on the node, no
+                 * selection */
+#ifdef GTK_IS_JJK
+                gtk_tree_view_set_focused_row (treev, loc_path);
+#else
                 sel = gtk_tree_view_get_selection (treev);
                 gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+                gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
+#endif
             }
-            /* this is our location, let's make it so */
-            loc_path = gtk_tree_model_get_path (model, &child);
-            gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
+            else
+                /* this is it, so we set the cursor */
+                gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
             gtk_tree_path_free (loc_path);
+#ifndef GTK_IS_JJK
             if (n != loc_node)
-            {
-                /* restore selection mode; also grab the
-                 * focus to indicate the node has received
-                 * the cursor, i.e. collapsing will result
-                 * in a change of current location */
+                /* restore selection mode */
                 gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
-                gtk_widget_grab_focus (GTK_WIDGET (treev));
-            }
+#endif
             g_object_unref (n);
             break;
         }
