@@ -270,11 +270,11 @@ static gboolean add_node_to_tree                        (DonnaTreeView *tree,
                                                          DonnaNode     *node,
                                                          GtkTreeIter   *row);
 static GtkTreeIter *get_current_root_iter               (DonnaTreeView *tree);
-static GtkTreeIter *get_closest_iter_for_node_under_iter(DonnaTreeView *tree,
+static GtkTreeIter *get_closest_iter_for_node           (DonnaTreeView *tree,
                                                          DonnaNode     *node,
                                                          DonnaProvider *provider,
                                                          const gchar   *location,
-                                                         GtkTreeIter   *iter_root,
+                                                         GtkTreeIter   *skip_root,
                                                          gboolean      *is_match);
 static GtkTreeIter *get_best_existing_iter_for_node     (DonnaTreeView  *tree,
                                                          DonnaNode      *node,
@@ -566,9 +566,9 @@ sync_with_location_changed_cb (GObject       *object,
             gchar *location;
 
             location = donna_node_get_location (node);
-            iter = get_closest_iter_for_node_under_iter (tree, node,
+            iter = get_closest_iter_for_node (tree, node,
                     donna_node_peek_provider (node), location,
-                    get_current_root_iter (tree), NULL);
+                    NULL, NULL);
             g_free (location);
             if (iter)
             {
@@ -4223,12 +4223,12 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
 }
 
 static GtkTreeIter *
-get_closest_iter_for_node_under_iter (DonnaTreeView *tree,
-                                      DonnaNode     *node,
-                                      DonnaProvider *provider,
-                                      const gchar   *location,
-                                      GtkTreeIter   *iter_root,
-                                      gboolean      *is_match)
+get_closest_iter_for_node (DonnaTreeView *tree,
+                           DonnaNode     *node,
+                           DonnaProvider *provider,
+                           const gchar   *location,
+                           GtkTreeIter   *skip_root,
+                           gboolean      *is_match)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeView *treev = (GtkTreeView *) tree;
@@ -4255,7 +4255,7 @@ get_closest_iter_for_node_under_iter (DonnaTreeView *tree,
         {
             /* we might have a root to skip (likely the current one, already
              * processed before calling this */
-            if (iter_root && itereq (&iter, iter_root))
+            if (skip_root && itereq (&iter, skip_root))
                 continue;
 
             gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &n, -1);
@@ -4381,7 +4381,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
         }
     }
 
-    last_iter = get_closest_iter_for_node_under_iter (tree, node,
+    last_iter = get_closest_iter_for_node (tree, node,
             provider, location, iter_cur_root, &match);
     if (last_iter)
     {
