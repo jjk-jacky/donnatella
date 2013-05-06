@@ -234,6 +234,7 @@ struct _DonnaTreeViewPrivate
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
+    guint                sync_scroll        : 1;
     guint                auto_focus_sync    : 1;
     /* mode List */
     guint                draw_state         : 2;
@@ -525,7 +526,7 @@ sync_with_location_changed_cb (GObject       *object,
             break;
     }
 
-    treev = GTK_TREE_VIEW (tree);
+    treev = (GtkTreeView *) tree;
     sel = gtk_tree_view_get_selection (treev);
     if (iter)
     {
@@ -534,7 +535,7 @@ sync_with_location_changed_cb (GObject       *object,
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_BROWSE);
         /* we select the new row and put the cursor on it (required to get
          * things working when collapsing the parent) */
-        path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
+        path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, iter);
         if (priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
         {
             GtkTreePath *p;
@@ -598,20 +599,24 @@ sync_with_location_changed_cb (GObject       *object,
 #endif
         gtk_tree_path_free (path);
 
-        struct scroll_data *data;
-        data = g_slice_new (struct scroll_data);
-        data->tree = tree;
-        data->iter = iter;
+        if (priv->sync_scroll)
+        {
+            struct scroll_data *data;
+            data = g_slice_new (struct scroll_data);
+            data->tree = tree;
+            data->iter = iter;
 
-        /* the reason we use a timeout here w/ a magic number, is that expanding
-         * rows had GTK install some triggers (presize/validate_rows) that are
-         * required to be processed for things to work, i.e. if we try to call
-         * get_background_area now (which scroll_to_iter does to calculate
-         * visibility) we get BS values.
-         * I couldn't find a proper way around it, idle w/ low priority doesn't
-         * do it, only a timeout seems to work. About 15 should be enough to do
-         * the trick, so we're hoping that 42 will always work */
-        g_timeout_add (42, (GSourceFunc) idle_scroll_to_iter, data);
+            /* the reason we use a timeout here w/ a magic number, is that
+             * expanding rows had GTK install some triggers
+             * (presize/validate_rows) that are required to be processed for
+             * things to work, i.e. if we try to call get_background_area now
+             * (which scroll_to_iter does to calculate visibility) we get BS
+             * values.  I couldn't find a proper way around it, idle w/ low
+             * priority doesn't do it, only a timeout seems to work. About 15
+             * should be enough to do the trick, so we're hoping that 42 will
+             * always work */
+            g_timeout_add (42, (GSourceFunc) idle_scroll_to_iter, data);
+        }
     }
     else
     {
@@ -657,7 +662,8 @@ sync_with_location_changed_cb (GObject       *object,
 #endif
                 gtk_tree_path_free (path);
 
-                scroll_to_iter (tree, iter, FALSE);
+                if (priv->sync_scroll)
+                    scroll_to_iter (tree, iter, FALSE);
             }
         }
     }
@@ -830,6 +836,21 @@ load_config (DonnaTreeView *tree)
             priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
                     "notify::location",
                     G_CALLBACK (sync_with_location_changed_cb), tree);
+
+#ifdef GTK_IS_JJK
+        if (donna_config_get_boolean (config, (gboolean *) &val,
+                    "treeviews/%s/sync_scroll", priv->name))
+            priv->sync_scroll = (gboolean) val;
+        else
+        {
+            /* set default */
+            val = priv->sync_scroll = TRUE;
+            donna_config_set_boolean (config, (gboolean) val,
+                    "treeviews/%s/sync_scroll", priv->name);
+        }
+#else
+        priv->sync_scroll = TRUE;
+#endif
 
         if (donna_config_get_boolean (config, (gboolean *) &val,
                     "treeviews/%s/auto_focus_sync", priv->name))
@@ -5174,34 +5195,38 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
         if (n == loc_node || is_node_ancestor (n, loc_node,
                     loc_provider, loc_location))
         {
-            GtkTreeView *treev = GTK_TREE_VIEW (tree);
+            GtkTreeView *treev = (GtkTreeView *) tree;
             GtkTreeSelection *sel;
             GtkTreePath *loc_path;
 
             loc_path = gtk_tree_model_get_path (model, &child);
-            if (n != loc_node)
-            {
-                /* ancestor, so we just want to put the cursor on the node, no
-                 * selection */
 #ifdef GTK_IS_JJK
-                gtk_tree_view_set_focused_row (treev, loc_path);
-#else
+            gtk_tree_view_set_focused_row (treev, loc_path);
+#endif
+            if (n == loc_node)
+            {
+#ifdef GTK_IS_JJK
                 sel = gtk_tree_view_get_selection (treev);
-                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+                gtk_tree_selection_select_path (sel, loc_path);
+#else
                 gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
 #endif
             }
-            else
-                /* this is it, so we set the cursor */
-                gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
-            gtk_tree_path_free (loc_path);
 #ifndef GTK_IS_JJK
-            if (n != loc_node)
-                /* restore selection mode */
+            else
+            {
+                /* ancestor, so we just want to put the cursor on the node, no
+                 * selection */
+                sel = gtk_tree_view_get_selection (treev);
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+                gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
                 gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+            }
 #endif
+            gtk_tree_path_free (loc_path);
 
-            scroll_to_iter (tree, &child, FALSE);
+            if (priv->sync_scroll)
+                scroll_to_iter (tree, &child, FALSE);
 
             g_object_unref (n);
             break;
