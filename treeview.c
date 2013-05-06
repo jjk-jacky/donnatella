@@ -263,7 +263,7 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 #define remove_watch_iter(tree, iter)   \
     tree->priv->watched_iters = g_slist_remove (tree->priv->watched_iters, iter)
 
-#define is_tree(tree)       (tree->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
+#define is_tree(tree)       ((tree)->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 
 
 static gboolean add_node_to_tree                        (DonnaTreeView *tree,
@@ -1485,6 +1485,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
     return FALSE;
 }
 
+/* mode tree only -- assumes that list don't have expander */
 static void
 donna_tree_view_row_collapsed (GtkTreeView   *treev,
                                GtkTreeIter   *iter,
@@ -1496,7 +1497,8 @@ donna_tree_view_row_collapsed (GtkTreeView   *treev,
      * scrollbar anymore, it remains there.
      * Since we only have one column, we trigger an autosize to get rid of the
      * horizontal scrollbar (or adjust its size) */
-    gtk_tree_view_columns_autosize (treev);
+    if (is_tree ((DonnaTreeView *) treev))
+        gtk_tree_view_columns_autosize (treev);
 }
 
 static gboolean
