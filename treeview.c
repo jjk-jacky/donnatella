@@ -234,7 +234,7 @@ struct _DonnaTreeViewPrivate
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
-    guint                sync_scroll        : 1;
+    guint                sync_scroll        : 1; /* only used if GTK_IS_JJK */
     guint                auto_focus_sync    : 1;
     /* mode List */
     guint                draw_state         : 2;
@@ -964,7 +964,11 @@ node_get_children_tree_timeout (DonnaTask                   *task,
 /* similar to gtk_tree_store_remove() this will set iter to next row at that
  * level, or invalid it if it pointer to the last one.
  * Returns TRUE if iter is still valid, else FALSE */
-/* FIXME: should be the handler for store's row-deleted */
+/* Note: the reason we don't put this as handler for the store's row-deleted
+ * signal is that that signal happens *after* the row has been deleted, and
+ * therefore there are no iter. But we *need* an iter here, to take care of our
+ * hashlist of, well, iters. This is also why we also have special handling of
+ * removing an iter w/ children. */
 static gboolean
 remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
 {
@@ -1056,8 +1060,17 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
     }
 
     if (is_tree (tree))
+    {
+        GtkTreeIter child;
+
         /* get the parent, in case we're removing its last child */
         gtk_tree_model_iter_parent (model, &parent, iter);
+        /* we need to remove all children before we remove the row, so we can
+         * have said children processed correctly (through here) as well */
+        if (donna_tree_store_iter_children (priv->store, &child, iter))
+            while (remove_row_from_tree (tree, &child))
+                ;
+    }
     /* now we can remove the row */
     ret = donna_tree_store_remove (priv->store, iter);
     /* we have a parent, it has no more children, update expand state */
@@ -1382,14 +1395,14 @@ expand_row (DonnaTreeView           *tree,
             {
                 GtkTreeIter child;
 
-                if (donna_tree_store_iter_children (priv->store, &child, iter))
-                    while (remove_row_from_tree (tree, &child))
-                        ;
-
                 /* update expand state */
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
                         -1);
+
+                if (donna_tree_store_iter_children (priv->store, &child, iter))
+                    while (remove_row_from_tree (tree, &child))
+                        ;
 
                 if (scroll_current)
                     scroll_to_current (tree);
@@ -2117,14 +2130,14 @@ node_has_children_cb (DonnaTask                 *task,
             {
                 GtkTreeIter iter;
 
-                /* remove all children */
-                if (donna_tree_store_iter_children (store, &iter, &data->iter))
-                    while (remove_row_from_tree (data->tree, &iter))
-                        ;
                 /* update expand state */
                 donna_tree_store_set (store, &data->iter,
                         DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NONE,
                         -1);
+                /* remove all children */
+                if (donna_tree_store_iter_children (store, &iter, &data->iter))
+                    while (remove_row_from_tree (data->tree, &iter))
+                        ;
             }
             /* else: children and expand state obviously already good */
             break;
