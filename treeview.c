@@ -297,6 +297,8 @@ static inline void scroll_to_iter                       (DonnaTreeView  *tree,
                                                          GtkTreeIter    *iter,
                                                          gboolean        select_row);
 static gboolean scroll_to_current                       (DonnaTreeView  *tree);
+static void check_children_post_expand                  (DonnaTreeView  *tree,
+                                                         GtkTreeIter    *iter);
 static gboolean select_arrangement_accumulator      (GSignalInvocationHint  *hint,
                                                      GValue                 *return_accu,
                                                      const GValue           *return_handler,
@@ -319,6 +321,9 @@ static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
 static void     donna_tree_view_row_collapsed       (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
+static void     donna_tree_view_row_expanded        (GtkTreeView    *treev,
+                                                     GtkTreeIter    *iter,
+                                                     GtkTreePath    *path);
 static void     donna_tree_view_get_property        (GObject        *object,
                                                      guint           prop_id,
                                                      GValue         *value,
@@ -338,6 +343,7 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
 
     tv_class = GTK_TREE_VIEW_CLASS (klass);
     tv_class->row_activated = donna_tree_view_row_activated;
+    tv_class->row_expanded  = donna_tree_view_row_expanded;
     tv_class->row_collapsed = donna_tree_view_row_collapsed;
     tv_class->test_expand_row = donna_tree_view_test_expand_row;
 
@@ -1469,7 +1475,16 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         case DONNA_TREE_EXPAND_NEVER:
             /* this will add an idle source import_children, or start a new task
              * get_children */
-            expand_row (tree, iter, FALSE, NULL);
+            expand_row (tree, iter, FALSE,
+                    /* if we're not "in sync" with our list (i.e. there's no row
+                     * for it) we attach the extra callback to check for it once
+                     * children will have been added.
+                     * We also have the check run on every row-expanded, but
+                     * this is still needed because the row could be expanded to
+                     * only show the "fake/please wait" node... */
+                    (!priv->location && priv->sync_with)
+                    ? (node_children_extra_cb) check_children_post_expand
+                    : NULL);
             return TRUE;
 
         /* refuse expansion. This case should never happen */
@@ -1499,6 +1514,18 @@ donna_tree_view_row_collapsed (GtkTreeView   *treev,
      * horizontal scrollbar (or adjust its size) */
     if (is_tree ((DonnaTreeView *) treev))
         gtk_tree_view_columns_autosize (treev);
+}
+
+static void
+donna_tree_view_row_expanded (GtkTreeView   *treev,
+                              GtkTreeIter   *iter,
+                              GtkTreePath   *path)
+{
+    DonnaTreeView *tree = (DonnaTreeView *) treev;
+    DonnaTreeViewPrivate * priv = tree->priv;
+
+    if (is_tree (tree) && !priv->location && priv->sync_with)
+        check_children_post_expand (tree, iter);
 }
 
 static gboolean
@@ -5321,60 +5348,7 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
 #ifdef GTK_IS_JJK
             if (!renderer)
             {
-                GtkTreePath *path;
-
                 /* i.e. clicked on an expander */
-
-                path = gtk_tree_model_get_path (model, &iter);
-                if (gtk_tree_view_row_expanded (treev, path))
-                    gtk_tree_view_collapse_row (treev, path);
-                else
-                {
-                    /* are we not "in sync" with our list's location, i.e.
-                     * there's no row for it on tree */
-                    if (!priv->location && priv->sync_with)
-                    {
-                        gboolean expanded = FALSE;
-                        enum tree_expand es;
-
-                        gtk_tree_model_get (model, &iter,
-                                DONNA_TREE_COL_EXPAND_STATE,    &es,
-                                -1);
-                        switch (es)
-                        {
-                            case DONNA_TREE_EXPAND_UNKNOWN:
-                            case DONNA_TREE_EXPAND_NEVER:
-                                /* if it could expand (e.g. import children),
-                                 * returns TRUE; else (task get_children)
-                                 * returns FALSE, but has installed the extra_cb
-                                 * to be triggered after the task's cb */
-                                expanded = expand_row (tree, &iter, FALSE,
-                                        (node_children_extra_cb) check_children_post_expand);
-                                break;
-
-                            case DONNA_TREE_EXPAND_PARTIAL:
-                            case DONNA_TREE_EXPAND_FULL:
-                                /* expansion will be done instantly */
-                                gtk_tree_view_expand_row (treev, path, FALSE);
-                                expanded = TRUE;
-                                break;
-
-                            case DONNA_TREE_EXPAND_NONE:
-                            case DONNA_TREE_EXPAND_WIP:
-                                /* shouldn't happen - this is to avoid warning */
-                                break;
-                        }
-
-                        if (expanded)
-                            check_children_post_expand (tree, &iter);
-                    }
-                    else
-                        gtk_tree_view_expand_row (treev, path, FALSE);
-                }
-                gtk_tree_path_free (path);
-
-                /* handled */
-                return TRUE;
             }
             else if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
             {
