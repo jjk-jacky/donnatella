@@ -474,6 +474,20 @@ donna_tree_view_finalize (GObject *object)
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
 
+struct scroll_data
+{
+    DonnaTreeView   *tree;
+    GtkTreeIter     *iter;
+};
+
+static gboolean
+idle_scroll_to_iter (struct scroll_data *data)
+{
+    scroll_to_iter (data->tree, data->iter, FALSE);
+    g_slice_free (struct scroll_data, data);
+    return FALSE;
+}
+
 static void
 sync_with_location_changed_cb (GObject       *object,
                                GParamSpec    *pspec,
@@ -539,8 +553,65 @@ sync_with_location_changed_cb (GObject       *object,
             }
             gtk_tree_path_free (p);
         }
+
+#ifdef GTK_IS_JJK
+        /* this beauty will put focus & select the row, without doing any
+         * scrolling whatsoever. What a wonderful thing! :) */
+        gtk_tree_view_set_focused_row (treev, path);
+        gtk_tree_selection_select_path (sel, path);
+#else
+        /* Note: set_cursor() will check and do some minimum scrolling if iter
+         * isn't visible. We don't want that, but do our own scrolling (w/
+         * different align values), yet we don't care and just call
+         * scroll_to_iter afterwards.
+         *
+         * This works, because whatever set_cursor did (scrolling wise) isn't
+         * yet reflected on visible_rect (some triggers not having been
+         * processed yet).
+         * Therefore, we will still be basing our calculations of visibility on
+         * the state of things before set_cursor, and will be triggered if it
+         * was, thus overwriting what it did.
+         *
+         * This is why we shall simply call our scroll functions after. One
+         * thing not to do is try and use gtk_main_iteration do get drawing
+         * events to be processed, as that could get task's callbacks to be
+         * processed, thus adding children and doing all sorts of (scrolling)
+         * stuff we don't want (esp. if they rely on us having changed the
+         * current location, which we might not have done yet here).
+         */
+
+        /* Well: turns out this isn't good, and we need correct values because
+         * otherwise we can get the impression that a row is visible even though
+         * it's totally not, which would lead to no scrolling done when it
+         * should have. Grr.... */
+
+        /* Note: this is actually not working quite perfecly, for reasons
+         * unknown. Apparently when rows were expanded below the visible area,
+         * set_cursor will trigger some (invalid) scrolling due to the fact that
+         * all presize/validate_rows trigger haven't yet been processed I would
+         * assume, or something.
+         * In the end, the row gets into view (hopefully), but because of it we
+         * don't do our own scrolling (already in view) and so the alignment
+         * isn't as expected.
+         * Kinda sucks, get the jjk-patch to fix it :) */
         gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+#endif
         gtk_tree_path_free (path);
+
+        struct scroll_data *data;
+        data = g_slice_new (struct scroll_data);
+        data->tree = tree;
+        data->iter = iter;
+
+        /* the reason we use a timeout here w/ a magic number, is that expanding
+         * rows had GTK install some triggers (presize/validate_rows) that are
+         * required to be processed for things to work, i.e. if we try to call
+         * get_background_area now (which scroll_to_iter does to calculate
+         * visibility) we get BS values.
+         * I couldn't find a proper way around it, idle w/ low priority doesn't
+         * do it, only a timeout seems to work. About 15 should be enough to do
+         * the trick, so we're hoping that 42 will always work */
+        g_timeout_add (42, (GSourceFunc) idle_scroll_to_iter, data);
     }
     else
     {
@@ -576,10 +647,6 @@ sync_with_location_changed_cb (GObject       *object,
                  * closest accessible parent we just found, also put that iter
                  * into view */
 
-                /* scroll first, so we don't have to worry about set_cursor()
-                 * doing some minimum scrolling on its own */
-                scroll_to_iter (tree, iter, FALSE);
-
                 path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
 #ifdef GTK_IS_JJK
                 gtk_tree_view_set_focused_row (treev, path);
@@ -589,6 +656,8 @@ sync_with_location_changed_cb (GObject       *object,
                 gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
 #endif
                 gtk_tree_path_free (path);
+
+                scroll_to_iter (tree, iter, FALSE);
             }
         }
     }
@@ -4456,20 +4525,16 @@ get_best_iter_for_node (DonnaTreeView   *tree,
 static inline void
 scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter, gboolean select_row)
 {
-    GtkTreeView *treev = GTK_TREE_VIEW (tree);
+    GtkTreeView *treev = (GtkTreeView *) tree;
     GdkRectangle rect_visible, rect;
     GtkTreePath *path;
 
     /* get visible area, so we can determine if it is already visible */
     gtk_tree_view_get_visible_rect (treev, &rect_visible);
-    gtk_tree_view_convert_tree_to_bin_window_coords (treev,
-            0, rect_visible.y, &rect_visible.x, &rect_visible.y);
 
-    path = gtk_tree_model_get_path (GTK_TREE_MODEL (tree->priv->store), iter);
+    path = gtk_tree_model_get_path ((GtkTreeModel *) tree->priv->store, iter);
     gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-    if (!(rect.y >= rect_visible.y
-            && rect.y + rect.height <= rect_visible.y +
-            rect_visible.height))
+    if (rect.y < 0 || rect.y > rect_visible.height - rect.height)
         /* only scroll if not visible */
         gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
 
@@ -4629,7 +4694,10 @@ node_get_children_list_cb (DonnaTask                            *task,
         gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
 
         /* in order to scroll properly, we need to have the tree sorted &
-         * everything done; i.e. we need to have all pending events processed */
+         * everything done; i.e. we need to have all pending events processed.
+         * Note: here this should be fine, as there shouldn't be any pending
+         * events updating the list. See sync_with_location_changed_cb for more
+         * about this. */
         while (gtk_events_pending ())
             gtk_main_iteration ();
 
@@ -5110,9 +5178,6 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
             GtkTreeSelection *sel;
             GtkTreePath *loc_path;
 
-            /* scroll first so set_cursor() won't scroll on its own */
-            scroll_to_iter (tree, &child, FALSE);
-
             loc_path = gtk_tree_model_get_path (model, &child);
             if (n != loc_node)
             {
@@ -5135,6 +5200,9 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
                 /* restore selection mode */
                 gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
 #endif
+
+            scroll_to_iter (tree, &child, FALSE);
+
             g_object_unref (n);
             break;
         }
