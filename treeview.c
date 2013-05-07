@@ -32,6 +32,7 @@ enum
 {
     DONNA_TREE_COL_NODE = 0,
     DONNA_TREE_COL_EXPAND_STATE,
+    DONNA_TREE_COL_ROW_CLASS,
     DONNA_TREE_COL_NAME,
     DONNA_TREE_COL_ICON,
     DONNA_TREE_COL_BOX,
@@ -57,6 +58,9 @@ enum tree_expand
     DONNA_TREE_EXPAND_PARTIAL,      /* minitree: only some children are listed */
     DONNA_TREE_EXPAND_FULL,         /* (was) expanded, children are there */
 };
+
+#define ROW_CLASS_MINITREE          "minitree-unknown"
+#define ROW_CLASS_PARTIAL           "minitree-partial"
 
 enum
 {
@@ -265,6 +269,18 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 
 #define is_tree(tree)       ((tree)->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 
+#define set_es(priv, iter, es)                              \
+    donna_tree_store_set ((priv)->store, iter,              \
+            DONNA_TREE_COL_EXPAND_STATE,    es,             \
+            DONNA_TREE_COL_ROW_CLASS,                       \
+            ((priv)->is_minitree)                           \
+            ? (((es) == DONNA_TREE_EXPAND_PARTIAL)          \
+                ? ROW_CLASS_PARTIAL                         \
+                : ((es) == DONNA_TREE_EXPAND_NONE           \
+                    || (es) == DONNA_TREE_EXPAND_FULL)      \
+                ? NULL : ROW_CLASS_MINITREE)                \
+            : NULL,                                         \
+            -1)
 
 static gboolean add_node_to_tree                        (DonnaTreeView *tree,
                                                          GtkTreeIter   *parent,
@@ -1092,9 +1108,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         }
         else
             es = DONNA_TREE_EXPAND_NONE;
-        donna_tree_store_set (priv->store, &parent,
-                DONNA_TREE_COL_EXPAND_STATE,    es,
-                -1);
+        set_es (priv, &parent, es);
     }
 
     return ret;
@@ -1119,9 +1133,7 @@ set_children (DonnaTreeView *tree,
         GtkTreeIter child;
 
         /* set new expand state */
-        donna_tree_store_set (priv->store, iter,
-                DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
-                -1);
+        set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
         if (donna_tree_store_iter_children (priv->store, &child, iter))
             while (remove_row_from_tree (tree, &child))
                 ;
@@ -1207,13 +1219,11 @@ set_children (DonnaTreeView *tree,
             g_slist_free_1 (l);
         }
 
+        /* has_children could be TRUE when we got children from a
+         * node_children signal, but none match our node_types */
+        es = (has_children) ? DONNA_TREE_EXPAND_FULL : DONNA_TREE_EXPAND_NONE;
         /* set new expand state */
-        donna_tree_store_set (priv->store, iter,
-                DONNA_TREE_COL_EXPAND_STATE,
-                /* has_children could be TRUE when we got children from a
-                 * node_children signal, but none match our node_types */
-                (has_children) ? DONNA_TREE_EXPAND_FULL : DONNA_TREE_EXPAND_NONE,
-                -1);
+        set_es (priv, iter, es);
         if (expand)
         {
             GtkTreePath *path;
@@ -1255,9 +1265,7 @@ node_get_children_tree_cb (DonnaTask                   *task,
                 &data->iter);
         gtk_tree_view_collapse_row (GTK_TREE_VIEW (data->tree), path);
         gtk_tree_path_free (path);
-        donna_tree_store_set (data->tree->priv->store, &data->iter,
-                DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
-                -1);
+        set_es (data->tree->priv, &data->iter, DONNA_TREE_EXPAND_UNKNOWN);
 
         /* explain ourself */
         gtk_tree_model_get (model, &data->iter,
@@ -1360,9 +1368,7 @@ expand_row (DonnaTreeView           *tree,
                 } while (donna_tree_store_iter_next (priv->store, &child));
 
                 /* update expand state */
-                donna_tree_store_set (priv->store, iter,
-                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
-                        -1);
+                set_es (priv, iter, DONNA_TREE_EXPAND_FULL);
 
                 /* expand node */
                 path = gtk_tree_model_get_path (model, iter);
@@ -1396,9 +1402,7 @@ expand_row (DonnaTreeView           *tree,
                 GtkTreeIter child;
 
                 /* update expand state */
-                donna_tree_store_set (priv->store, iter,
-                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
-                        -1);
+                set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
 
                 if (donna_tree_store_iter_children (priv->store, &child, iter))
                     while (remove_row_from_tree (tree, &child))
@@ -1415,9 +1419,7 @@ expand_row (DonnaTreeView           *tree,
             g_ptr_array_unref (arr);
 
             /* update expand state */
-            donna_tree_store_set (priv->store, iter,
-                    DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_FULL,
-                    -1);
+            set_es (priv, iter, DONNA_TREE_EXPAND_FULL);
 
             /* expand node */
             path = gtk_tree_model_get_path (model, iter);
@@ -1450,13 +1452,94 @@ expand_row (DonnaTreeView           *tree,
             data,
             (GDestroyNotify) free_node_children_data);
 
-    donna_tree_store_set (priv->store, &data->iter,
-            DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_WIP,
-            -1);
+    set_es (priv, &data->iter, DONNA_TREE_EXPAND_WIP);
 
     donna_app_run_task (priv->app, task);
     g_object_unref (node);
     return FALSE;
+}
+
+/* mini-tree only */
+static gboolean
+full_expand_row (DonnaTreeView  *tree,
+                 GtkTreeIter    *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    enum tree_expand es;
+
+    gtk_tree_model_get (model, iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            -1);
+    if (es != DONNA_TREE_EXPAND_PARTIAL)
+    {
+        GtkTreePath *path;
+        gboolean ret;
+
+        path = gtk_tree_model_get_path (model, iter);
+        ret = !gtk_tree_view_row_expanded ((GtkTreeView *) tree, path);
+        if (ret)
+            gtk_tree_view_expand_row ((GtkTreeView *) tree, path, FALSE);
+        gtk_tree_path_free (path);
+        return ret;
+    }
+
+    expand_row (tree, iter, FALSE,
+            /* if we're not "in sync" with our list (i.e. there's no row
+             * for it) we attach the extra callback to check for it once
+             * children will have been added.
+             * We also have the check run on every row-expanded, but
+             * this is still needed because the row could be expanded to
+             * only show the "fake/please wait" node... */
+            (!priv->location && priv->sync_with)
+            ? (node_children_extra_cb) check_children_post_expand
+            : NULL);
+    return TRUE;
+}
+
+/* mini-tree only */
+static gboolean
+full_collapse_row (DonnaTreeView    *tree,
+                   GtkTreeIter      *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    enum tree_expand es;
+    GtkTreePath *path;
+    gboolean ret;
+
+    path = gtk_tree_model_get_path (model, iter);
+    ret = gtk_tree_view_row_expanded ((GtkTreeView *) tree, path);
+    if (ret)
+        gtk_tree_view_collapse_row ((GtkTreeView *) tree, path);
+    gtk_tree_path_free (path);
+
+    gtk_tree_model_get (model, iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            -1);
+    if (es == DONNA_TREE_EXPAND_PARTIAL || es == DONNA_TREE_EXPAND_FULL)
+    {
+        GtkTreeIter it;
+
+        /* remove all children */
+        if (donna_tree_store_iter_children (priv->store, &it, iter))
+            while (remove_row_from_tree (tree, &it))
+                ;
+        /* remove_row_from_tree will add a fake node & set expand_state to
+         * UNKNOWN if it was partial. However, if not it won't add the fake node
+         * and set expand_state to NONE so we need to adjust things */
+        if (es == DONNA_TREE_EXPAND_FULL)
+        {
+            /* add fake node */
+            donna_tree_store_insert_with_values (priv->store, NULL, iter, 0,
+                    DONNA_TREE_COL_NODE,    NULL,
+                    -1);
+            /* update expand state */
+            set_es (priv, iter, DONNA_TREE_EXPAND_UNKNOWN);
+        }
+    }
+
+    return ret;
 }
 
 static gboolean
@@ -2108,9 +2191,7 @@ node_has_children_cb (DonnaTask                 *task,
                         donna_tree_store_remove (store, &iter);
                 }
                 /* update expand state */
-                donna_tree_store_set (store, &data->iter,
-                        DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
-                        -1);
+                set_es (data->tree->priv, &data->iter, DONNA_TREE_EXPAND_NONE);
             }
             else
             {
@@ -2118,9 +2199,7 @@ node_has_children_cb (DonnaTask                 *task,
                  * unless we're WIP then we'll let get_children set it right
                  * once the children have been added */
                 if (es == DONNA_TREE_EXPAND_UNKNOWN)
-                    donna_tree_store_set (store, &data->iter,
-                            DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NEVER,
-                            -1);
+                    set_es (data->tree->priv, &data->iter, DONNA_TREE_EXPAND_NEVER);
             }
             break;
 
@@ -2131,9 +2210,7 @@ node_has_children_cb (DonnaTask                 *task,
                 GtkTreeIter iter;
 
                 /* update expand state */
-                donna_tree_store_set (store, &data->iter,
-                        DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NONE,
-                        -1);
+                set_es (data->tree->priv, &data->iter, DONNA_TREE_EXPAND_NONE);
                 /* remove all children */
                 if (donna_tree_store_iter_children (store, &iter, &data->iter))
                     while (remove_row_from_tree (data->tree, &iter))
@@ -2151,9 +2228,7 @@ node_has_children_cb (DonnaTask                 *task,
                         DONNA_TREE_COL_NODE,    NULL,
                         -1);
                 /* update expand state */
-                donna_tree_store_set (store, &data->iter,
-                        DONNA_TREE_COL_EXPAND_STATE, DONNA_TREE_EXPAND_NEVER,
-                        -1);
+                set_es (data->tree->priv, &data->iter, DONNA_TREE_EXPAND_NEVER);
             }
             /* else: already no fake node */
             break;
@@ -2504,16 +2579,20 @@ add_node_to_tree (DonnaTreeView *tree,
                     DONNA_TREE_COL_NODE,            node,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                     -1);
+            set_es (priv, &iter, DONNA_TREE_EXPAND_UNKNOWN);
             added = TRUE;
         }
         else
             g_object_unref (n);
     }
     if (!added)
+    {
         donna_tree_store_insert_with_values (priv->store, &iter, parent, -1,
                 DONNA_TREE_COL_NODE,            node,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                 -1);
+        set_es (priv, &iter, DONNA_TREE_EXPAND_UNKNOWN);
+    }
     if (iter_row)
         *iter_row = iter;
     /* add it to our hashtable */
@@ -2554,9 +2633,7 @@ add_node_to_tree (DonnaTreeView *tree,
 
         if (es)
         {
-            donna_tree_store_set (priv->store, &iter,
-                    DONNA_TREE_COL_EXPAND_STATE,    es,
-                    -1);
+            set_es (priv, &iter, es);
             if (es == DONNA_TREE_EXPAND_NEVER)
                 /* insert a fake node so the user can ask for expansion */
                 donna_tree_store_insert_with_values (priv->store, NULL, &iter, 0,
@@ -2604,9 +2681,7 @@ add_node_to_tree (DonnaTreeView *tree,
     if (added || node_type == DONNA_NODE_ITEM)
     {
         if (node_type == DONNA_NODE_ITEM)
-            donna_tree_store_set (priv->store, &iter,
-                    DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_NONE,
-                    -1);
+            set_es (priv, &iter, DONNA_TREE_EXPAND_NONE);
         /* fix some weird glitch sometimes, when adding row/root on top and
          * scrollbar is updated */
         gtk_widget_queue_draw (GTK_WIDGET (tree));
@@ -4337,10 +4412,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 gtk_tree_view_expand_row (treev, path, FALSE);
             else
             {
-                donna_tree_store_set (priv->store, prev_iter,
-                        DONNA_TREE_COL_EXPAND_STATE,    (priv->is_minitree)
-                        ? DONNA_TREE_EXPAND_PARTIAL : DONNA_TREE_EXPAND_UNKNOWN,
-                        -1);
+                es = (priv->is_minitree)
+                    ? DONNA_TREE_EXPAND_PARTIAL : DONNA_TREE_EXPAND_UNKNOWN;
+                set_es (priv, prev_iter, es);
 
                 if (priv->is_minitree)
                     gtk_tree_view_expand_row (treev, path, FALSE);
@@ -5359,9 +5433,27 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 return TRUE;
 
 #ifdef GTK_IS_JJK
-            if (!renderer)
+            if (!renderer && priv->is_minitree)
             {
                 /* i.e. clicked on an expander */
+
+                if ((event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)) ==
+                        (GDK_CONTROL_MASK | GDK_SHIFT_MASK))
+                {
+                    /* FIXME: should Crl+Shift+click be a thing? */
+                }
+                else if (event->state & GDK_CONTROL_MASK)
+                {
+                    /* Ctrl+click always does a full expand */
+                    full_expand_row (tree, &iter);
+                    return TRUE;
+                }
+                else if (event->state & GDK_SHIFT_MASK)
+                {
+                    /* Shift+click always does a full collapse */
+                    full_collapse_row (tree, &iter);
+                    return TRUE;
+                }
             }
             else if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
             {
@@ -5689,6 +5781,7 @@ donna_tree_view_new (DonnaApp    *app,
         priv->store = donna_tree_store_new (DONNA_TREE_NB_COLS,
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_NODE */
                 G_TYPE_INT,     /* DONNA_TREE_COL_EXPAND_STATE */
+                G_TYPE_STRING,  /* DONNA_TREE_COL_ROW_CLASS */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_NAME */
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_ICON */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_BOX */
@@ -5720,6 +5813,10 @@ donna_tree_view_new (DonnaApp    *app,
             (store_visible_fn) visible_func, tree, NULL);
     /* add to tree */
     gtk_tree_view_set_model (treev, model);
+#ifdef GTK_IS_JJK
+    if (is_tree (tree))
+        gtk_tree_view_set_row_class_column (treev, DONNA_TREE_COL_ROW_CLASS);
+#endif
 
     /* selection mode */
     sel = gtk_tree_view_get_selection (treev);
