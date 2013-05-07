@@ -1,3 +1,5 @@
-DonnaTreeView row:focused  { background: rgb(192,192,192); }
+DonnaTreeView row.focused-row  { background: #BBB; }
+DonnaTreeView row:focused  { background: #a0a0a0; }
+DonnaTreeView row:selected  { background: @selected_bg_color; }
 DonnaTreeView#list.select-row-underline row:selected { background: blue; }
 .second-arrow { color: alpha(@fg_color,0.5); -GtkArrow-arrow-scaling: 0.6; }
