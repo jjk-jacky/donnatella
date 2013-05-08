@@ -199,6 +199,8 @@ struct _DonnaTreeViewPrivate
     DonnaNode           *location;
     /* Tree: iter of current location */
     GtkTreeIter          location_iter;
+    /* Tree: iter of futur location, used to ensure it is visible */
+    GtkTreeIter          future_location_iter;
 
     /* List: future location (task get_children running) */
     DonnaNode           *future_location;
@@ -554,6 +556,27 @@ sync_with_location_changed_cb (GObject       *object,
     {
         GtkTreePath *path;
 
+        if (priv->future_location_iter.stamp == 0)
+        {
+            gboolean was_visible;
+
+            /* future_location_iter wasn't set, so no rows were added to the
+             * tree. But, we still might have found an already existing one that
+             * wasn't visible, so let's make sure it is visible (or else we
+             * wouldn't be able to get a path, etc) */
+            priv->future_location_iter = *iter;
+            donna_tree_store_refresh_visibility (priv->store, iter, &was_visible);
+            if (!was_visible)
+                /* we just "added" a row to the tree, since it wasn't visible.
+                 * But since it wasn't, if it has a "fake node" to provide an
+                 * expander, that node (still) isn't visible, so we should make
+                 * it.
+                 * Technically, it could very well have a bunch of children,
+                 * that should also be made visible then, e.g. if the row was
+                 * expanded, and then made non-visible. */
+                donna_tree_store_refilter (priv->store, iter);
+        }
+
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_BROWSE);
         /* we select the new row and put the cursor on it (required to get
          * things working when collapsing the parent) */
@@ -690,6 +713,7 @@ sync_with_location_changed_cb (GObject       *object,
         }
     }
 
+    priv->future_location_iter.stamp = 0;
     g_object_unref (node);
 }
 
@@ -1080,7 +1104,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         GtkTreeIter child;
 
         /* get the parent, in case we're removing its last child */
-        gtk_tree_model_iter_parent (model, &parent, iter);
+        donna_tree_store_iter_parent (priv->store, &parent, iter);
         /* we need to remove all children before we remove the row, so we can
          * have said children processed correctly (through here) as well */
         if (donna_tree_store_iter_children (priv->store, &child, iter))
@@ -1091,7 +1115,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
     ret = donna_tree_store_remove (priv->store, iter);
     /* we have a parent, it has no more children, update expand state */
     if (is_tree (tree) && parent.stamp != 0
-            && !gtk_tree_model_iter_has_child (model, &parent))
+            && !donna_tree_store_iter_has_child (priv->store, &parent))
     {
         enum tree_expand es;
 
@@ -1629,6 +1653,8 @@ visible_func (GtkTreeModel  *model,
               GtkTreeIter   *iter,
               DonnaTreeView *tree)
 {
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeIter *it_cur;
     DonnaNode *node;
     gchar *name;
     gboolean ret;
@@ -1636,9 +1662,37 @@ visible_func (GtkTreeModel  *model,
     if (tree->priv->show_hidden)
         return TRUE;
 
+    /* special case for (future) current location: we want to always show it,
+     * and its parents. future_location_iter will be set during the sync/change
+     * of location, and then has precedence over the actual current location. */
+    if (priv->future_location_iter.stamp != 0)
+        it_cur = &priv->future_location_iter;
+    else if (priv->location_iter.stamp != 0)
+        it_cur = &priv->location_iter;
+    else
+        it_cur = NULL;
+    if (it_cur && (itereq (iter, it_cur)
+            || donna_tree_store_is_ancestor (priv->store, iter, it_cur)))
+        return TRUE;
+
+    /* tree: is parent isn't visible, it isn't either. That's the rule our store
+     * expect & therefor we must always enforce. This deals with both adding
+     * children of an hidden folder (could happen while going there, first we
+     * add children, then we'll make them visible) or when adding "fake node"
+     * for non-visible iters. */
+    if (is_tree (tree))
+    {
+        GtkTreeIter parent;
+
+        donna_tree_store_iter_parent (priv->store, &parent, iter);
+        if (parent.stamp != 0
+                && !donna_tree_store_iter_is_visible (priv->store, &parent))
+            return FALSE;
+    }
+
     gtk_tree_model_get (model, iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
     if (!node)
-        return FALSE;
+        return TRUE;
 
     name = donna_node_get_name (node);
     ret = name[0] != '.';
@@ -2479,10 +2533,8 @@ get_child_iter_for_node (DonnaTreeView  *tree,
                          DonnaNode      *node)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model;
     GSList *list;
 
-    model = GTK_TREE_MODEL (priv->store);
     list = g_hash_table_lookup (priv->hashtable, node);
     for ( ; list; list = list->next)
     {
@@ -2490,7 +2542,7 @@ get_child_iter_for_node (DonnaTreeView  *tree,
         GtkTreeIter  p;
 
         /* get the parent and compare with our parent iter */
-        if (gtk_tree_model_iter_parent (model, &p, i)
+        if (donna_tree_store_iter_parent (priv->store, &p, i)
                 && itereq (&p, parent))
             return i;
     }
@@ -2566,7 +2618,7 @@ add_node_to_tree (DonnaTreeView *tree,
     /* check if the parent has a "fake" node as child, in which case we'll
      * re-use it instead of adding a new node */
     added = FALSE;
-    if (parent && gtk_tree_model_iter_children (model, &iter, parent))
+    if (parent && donna_tree_store_iter_children (priv->store, &iter, parent))
     {
         DonnaNode *n;
 
@@ -2580,6 +2632,7 @@ add_node_to_tree (DonnaTreeView *tree,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                     -1);
             set_es (priv, &iter, DONNA_TREE_EXPAND_UNKNOWN);
+            donna_tree_store_refresh_visibility (priv->store, &iter, NULL);
             added = TRUE;
         }
         else
@@ -2594,7 +2647,13 @@ add_node_to_tree (DonnaTreeView *tree,
         set_es (priv, &iter, DONNA_TREE_EXPAND_UNKNOWN);
     }
     if (iter_row)
+    {
         *iter_row = iter;
+        if (iter_row == &priv->future_location_iter)
+            /* this means this is (a parent of) the future current location, and
+             * we shall now ensure its visibility */
+            donna_tree_store_refresh_visibility (priv->store, &iter, NULL);
+    }
     /* add it to our hashtable */
     list = g_hash_table_lookup (priv->hashtable, node);
     list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
@@ -4364,11 +4423,11 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         {
             if (!only_accessible)
             {
-                GtkTreeIter i;
                 GSList *list;
 
                 /* we need to add a new row */
-                if (!add_node_to_tree (tree, prev_iter, n, &i))
+                if (!add_node_to_tree (tree, prev_iter, n,
+                            &priv->future_location_iter))
                 {
                     /* TODO */
                     g_object_unref (n);
@@ -4380,7 +4439,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                  * cannot end up return the pointer to a local iter) */
                 list = g_hash_table_lookup (priv->hashtable, n);
                 for ( ; list; list = list->next)
-                    if (itereq (&i, (GtkTreeIter *) list->data))
+                    if (itereq (&priv->future_location_iter,
+                                (GtkTreeIter *) list->data))
                     {
                         iter = list->data;
                         break;
@@ -4393,7 +4453,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 return last_iter;
             }
         }
-        else if (only_accessible && !is_row_accessible (tree, iter))
+        else if (only_accessible &&
+                (!donna_tree_store_iter_is_visible (priv->store, iter)
+                 || !is_row_accessible (tree, iter)))
         {
             g_object_unref (n);
             g_free (location);
@@ -4611,7 +4673,6 @@ get_best_iter_for_node (DonnaTreeView   *tree,
         const GValue *value;
         gchar *s;
         GSList *list;
-        GtkTreeIter iter;
         GtkTreeIter *i;
 
         /* the tree is empty, we need to add the first root */
@@ -4634,7 +4695,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
         g_object_unref (task);
         g_free (location);
 
-        add_node_to_tree (tree, NULL, n, &iter);
+        add_node_to_tree (tree, NULL, n, &priv->future_location_iter);
         /* first root added, so we might need to load an arrangement */
         if (!priv->arrangement)
             donna_tree_view_build_arrangement (tree, FALSE);
@@ -4642,7 +4703,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
          * cannot end up return the pointer to a local iter) */
         list = g_hash_table_lookup (priv->hashtable, n);
         for ( ; list; list = list->next)
-            if (itereq (&iter, (GtkTreeIter *) list->data))
+            if (itereq (&priv->future_location_iter, (GtkTreeIter *) list->data))
             {
                 i = list->data;
                 break;
@@ -4991,6 +5052,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             g_idle_add ((GSourceFunc) scroll_to_current, tree);
         }
 
+        priv->future_location_iter.stamp = 0;
         return !!iter;
     }
     else
