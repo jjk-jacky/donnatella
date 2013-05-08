@@ -959,11 +959,8 @@ donna_tree_store_refresh_visibility (DonnaTreeStore     *store,
             GtkTreePath *path;
             GtkTreeIter it;
 
-            /* update hashtable for iter */
-            g_hash_table_insert (priv->hashtable, iter->user_data,
-                    GINT_TO_POINTER (new));
-
-            /* emit signal */
+            /* emit signal (before updating hashtable, or else it'd be marked
+             * non-visible and we'd fail to get the path) */
             path = tree_store_get_path (model, iter);
             gtk_tree_model_row_deleted (model, path);
             gtk_tree_path_free (path);
