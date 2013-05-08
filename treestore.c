@@ -1002,10 +1002,13 @@ refilter (DonnaTreeStore *store, GtkTreeIter *iter)
 }
 
 void
-donna_tree_store_refilter (DonnaTreeStore     *store)
+donna_tree_store_refilter (DonnaTreeStore     *store,
+                           GtkTreeIter        *iter)
 {
     g_return_if_fail (DONNA_IS_TREE_STORE (store));
-    refilter (store, NULL);
+    if (iter)
+        donna_tree_store_refresh_visibility (store, iter, NULL);
+    refilter (store, iter);
 }
 
 GtkTreeStore *

@@ -87,7 +87,8 @@ gboolean        donna_tree_store_refresh_visibility (
                                                  DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter,
                                                  gboolean           *was_visible);
-void            donna_tree_store_refilter       (DonnaTreeStore     *store);
+void            donna_tree_store_refilter       (DonnaTreeStore     *store,
+                                                 GtkTreeIter        *iter);
 GtkTreeStore *  donna_tree_store_get_store      (DonnaTreeStore     *store);
 
 G_END_DECLS
