@@ -575,7 +575,7 @@ tree_store_rows_reordered (GtkTreeModel     *_model,
     gtk_tree_model_iter_children (_model, &it, iter);
     do
     {
-        convert[i] = (iter_is_visible (&it)) ? n++ : -1;
+        convert[i++] = (iter_is_visible (&it)) ? n++ : -1;
     } while (gtk_tree_model_iter_next (_model, &it));
 
     /* any difference? */
