@@ -227,6 +227,9 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
 
     /* add the node to our hash table -- location is a strdup already */
     g_hash_table_insert (provider->priv->nodes, location, node);
+
+    /* emit new-node signal */
+    donna_provider_new_node ((DonnaProvider *) provider, node);
 }
 
 struct get_node_data
