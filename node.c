@@ -109,7 +109,8 @@
  *
  * The refresher and setter functions will be used for all (existing) basic
  * properties. Additional properties can be added using
- * donna_node_add_property(). TODO: a signal for plugins to add props.
+ * donna_node_add_property(), which can be done by using the provider's signal
+ * #DonnaProvider::new-node, emitted upon node creation for this purpose.
  *
  * Only the owner of a property should use donna_node_set_property_value() when
  * such a change has effectively been observed on the item it represents.
@@ -894,7 +895,7 @@ donna_node_get_location (DonnaNode *node)
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
     priv = node->priv;
     g_rw_lock_reader_lock (&priv->props_lock);
-    location = g_strdup (node->priv->location);
+    location = g_strdup (priv->location);
     g_rw_lock_reader_unlock (&priv->props_lock);
     return location;
 }
