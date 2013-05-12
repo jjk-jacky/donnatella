@@ -900,6 +900,39 @@ donna_node_get_location (DonnaNode *node)
 }
 
 /**
+ * donna_node_get_full_location:
+ * @node: Node to get the full location of
+ *
+ * Helper to quickly get the full location of @node, that is the location
+ * prefixed with the domain and ':' (e.g: "fs:/home")
+ * Free it with g_free() when done.
+ *
+ * Returns: (transfer full): Full location of @node
+ */
+gchar *
+donna_node_get_full_location (DonnaNode *node)
+{
+    DonnaNodePrivate *priv;
+    const gchar *domain;
+    size_t len_d;
+    size_t len_l;
+    gchar *fl;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    priv = node->priv;
+    g_rw_lock_reader_lock (&priv->props_lock);
+    domain = donna_provider_get_domain (priv->provider);
+    len_d = strlen (domain);
+    len_l = strlen (priv->location);
+    fl = g_new (gchar, len_d + len_l + 2); /* +2: ':' and NUL */
+    memcpy (fl, domain, sizeof (gchar) * len_d);
+    fl[len_d] = ':';
+    memcpy (fl + len_d + 1 /* NUL */, priv->location, sizeof (gchar) * ++len_l);
+    g_rw_lock_reader_unlock (&priv->props_lock);
+    return fl;
+}
+
+/**
  * donna_node_get_node_type:
  * @node: Node to get the node-type of
  *

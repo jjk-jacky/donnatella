@@ -131,6 +131,7 @@ DonnaProvider *     donna_node_get_provider         (DonnaNode          *node);
 DonnaProvider *     donna_node_peek_provider        (DonnaNode          *node);
 const gchar *       donna_node_get_domain           (DonnaNode          *node);
 gchar *             donna_node_get_location         (DonnaNode          *node);
+gchar *             donna_node_get_full_location    (DonnaNode          *node);
 DonnaNodeType       donna_node_get_node_type        (DonnaNode          *node);
 gchar *             donna_node_get_filename         (DonnaNode          *node);
 gchar *             donna_node_get_name             (DonnaNode          *node);
