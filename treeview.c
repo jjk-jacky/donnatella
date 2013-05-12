@@ -37,6 +37,8 @@ enum
     DONNA_TREE_COL_ICON,
     DONNA_TREE_COL_BOX,
     DONNA_TREE_COL_HIGHLIGHT,
+    /* which of name, icon, box and/or highlight are locals (else from node) */
+    DONNA_TREE_COL_VISUALS,
     DONNA_TREE_NB_COLS
 };
 
@@ -108,6 +110,15 @@ enum
     SELECT_HIGHLIGHT_COLUMN,
     SELECT_HIGHLIGHT_UNDERLINE,
     SELECT_HIGHLIGHT_COLUMN_UNDERLINE
+};
+
+enum visual
+{
+    VISUAL_NOTHING    = 0,
+    VISUAL_NAME       = (1 << 0),
+    VISUAL_ICON       = (1 << 1),
+    VISUAL_BOX        = (1 << 2),
+    VISUAL_HIGHLIGHT  = (1 << 3),
 };
 
 struct col_prop
@@ -230,6 +241,9 @@ struct _DonnaTreeViewPrivate
     gulong               sid_sw_location_changed;
     gulong               sid_active_list_changed;
 
+    /* Tree: which visuals to load from node */
+    enum visual          node_visuals;
+
     /* "cached" options */
     guint                mode               : 1;
     guint                node_types         : 2;
@@ -271,19 +285,21 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 
 #define is_tree(tree)       ((tree)->priv->mode == DONNA_TREE_VIEW_MODE_TREE)
 
-#define set_es(priv, iter, es)                              \
-    donna_tree_store_set ((priv)->store, iter,              \
-            DONNA_TREE_COL_EXPAND_STATE,    es,             \
-            DONNA_TREE_COL_ROW_CLASS,                       \
-            ((priv)->is_minitree)                           \
-            ? (((es) == DONNA_TREE_EXPAND_PARTIAL)          \
-                ? ROW_CLASS_PARTIAL                         \
-                : ((es) == DONNA_TREE_EXPAND_NONE           \
-                    || (es) == DONNA_TREE_EXPAND_FULL)      \
-                ? NULL : ROW_CLASS_MINITREE)                \
-            : NULL,                                         \
+#define set_es(priv, iter, es)                          \
+    donna_tree_store_set ((priv)->store, iter,          \
+            DONNA_TREE_COL_EXPAND_STATE,    es,         \
+            DONNA_TREE_COL_ROW_CLASS,                   \
+            (((es) == DONNA_TREE_EXPAND_PARTIAL)        \
+             ? ROW_CLASS_PARTIAL                        \
+             : ((es) == DONNA_TREE_EXPAND_NONE          \
+                 || (es) == DONNA_TREE_EXPAND_FULL)     \
+             ? NULL : ROW_CLASS_MINITREE),              \
             -1)
 
+static inline void load_node_visuals                    (DonnaTreeView *tree,
+                                                         GtkTreeIter   *iter,
+                                                         DonnaNode     *node,
+                                                         gboolean       allow_refresh);
 static gboolean add_node_to_tree                        (DonnaTreeView *tree,
                                                          GtkTreeIter   *parent,
                                                          DonnaNode     *node,
@@ -843,6 +859,10 @@ load_config (DonnaTreeView *tree)
     if (is_tree (tree))
     {
         gchar *s;
+
+        if (donna_config_get_int (config, &val,
+                    "treeviews/%s/node_visuals", priv->name))
+            priv->node_visuals = val;
 
         if (donna_config_get_boolean (config, (gboolean *) &val,
                     "treeviews/%s/is_minitree", priv->name))
@@ -2549,6 +2569,135 @@ get_child_iter_for_node (DonnaTreeView  *tree,
     return NULL;
 }
 
+struct node_visuals_data
+{
+    DonnaTreeView   *tree;
+    GtkTreeIter      iter;
+    DonnaNode       *node;
+};
+
+static void
+free_node_visuals_data (struct node_visuals_data *data)
+{
+    g_slice_free (struct node_visuals_data, data);
+}
+
+static void
+node_refresh_visuals_cb (DonnaTask                  *task,
+                         gboolean                    timeout_called,
+                         struct node_visuals_data   *data)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+    {
+        free_node_visuals_data (data);
+        return;
+    }
+
+    load_node_visuals (data->tree, &data->iter, data->node, FALSE);
+
+    free_node_visuals_data (data);
+}
+
+#define add_prop(arr, prop) do {    \
+    if (!arr)                       \
+        arr = g_ptr_array_new ();   \
+    g_ptr_array_add (arr, prop);    \
+} while (0)
+#define load_node_visual(UPPER, lower, GTYPE, get_fn, COLUMN)   do {                \
+    if ((priv->node_visuals & VISUAL_##UPPER) && !(visuals & VISUAL_##UPPER))       \
+    {                                                                               \
+        donna_node_get (node, FALSE, "visual-" lower, &has, &value, NULL);          \
+        switch (has)                                                                \
+        {                                                                           \
+            case DONNA_NODE_VALUE_NONE:                                             \
+            case DONNA_NODE_VALUE_ERROR: /* not possible, avoids warning */         \
+                break;                                                              \
+            case DONNA_NODE_VALUE_NEED_REFRESH:                                     \
+                if (allow_refresh)                                                  \
+                    add_prop (arr, "visual-" lower);                                \
+                break;                                                              \
+            case DONNA_NODE_VALUE_SET:                                              \
+                if (G_VALUE_TYPE (&value) != GTYPE)                                 \
+                {                                                                   \
+                    gchar *location = donna_node_get_location (node);               \
+                    g_warning ("Treeview '%s': "                                    \
+                            "Unable to load visual-" lower " from node '%s:%s', "   \
+                            "property isn't of expected type (%s instead of %s)",   \
+                            priv->name,                                             \
+                            donna_node_get_domain (node),                           \
+                            location,                                               \
+                            G_VALUE_TYPE_NAME (&value),                             \
+                            g_type_name (GTYPE));                                   \
+                    g_free (location);                                              \
+                }                                                                   \
+                else                                                                \
+                    donna_tree_store_set (priv->store, iter,                        \
+                            DONNA_TREE_COL_##COLUMN,    g_value_##get_fn (&value),  \
+                            -1);                                                    \
+                g_value_unset (&value);                                             \
+                break;                                                              \
+        }                                                                           \
+    }                                                                               \
+} while (0)
+static inline void
+load_node_visuals (DonnaTreeView    *tree,
+                   GtkTreeIter      *iter,
+                   DonnaNode        *node,
+                   gboolean          allow_refresh)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    enum visual visuals;
+    DonnaNodeHasValue has;
+    GValue value = G_VALUE_INIT;
+    GPtrArray *arr = NULL;
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
+            DONNA_TREE_COL_VISUALS, &visuals,
+            -1);
+
+    load_node_visual (NAME,      "name",      G_TYPE_STRING,   get_string, NAME);
+    load_node_visual (ICON,      "icon",      GDK_TYPE_PIXBUF, get_object, ICON);
+    load_node_visual (BOX,       "box",       G_TYPE_STRING,   get_string, BOX);
+    load_node_visual (HIGHLIGHT, "highlight", G_TYPE_STRING,   get_string, HIGHLIGHT);
+
+    if (arr)
+    {
+        GError *err = NULL;
+        DonnaTask *task;
+
+        task = donna_node_refresh_arr_task (node, arr, &err);
+        if (!task)
+        {
+            gchar *location = donna_node_get_location (node);
+            donna_app_show_error (priv->app, err,
+                    "Unable to refresh visuals on node '%s:%s'",
+                    donna_node_get_domain (node),
+                    location);
+            g_free (location);
+            g_clear_error (&err);
+        }
+        else
+        {
+            struct node_visuals_data *data;
+
+            data = g_slice_new (struct node_visuals_data);
+            data->tree = tree;
+            data->iter = *iter;
+            data->node = node;
+
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_refresh_visuals_cb,
+                    data,
+                    (GDestroyNotify) free_node_visuals_data);
+            donna_app_run_task (priv->app, task);
+        }
+
+        g_ptr_array_unref (arr);
+    }
+}
+#undef load_node_visual
+#undef add_prop
+
 static gboolean
 add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *parent,
@@ -2658,6 +2807,8 @@ add_node_to_tree (DonnaTreeView *tree,
     list = g_hash_table_lookup (priv->hashtable, node);
     list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
     g_hash_table_insert (priv->hashtable, node, list);
+    /* node visuals */
+    load_node_visuals (tree, &iter, node, TRUE);
     /* check the list in case we have another tree node for that node, in which
      * case we might get the has_children info from there */
     added = FALSE;
@@ -5847,7 +5998,8 @@ donna_tree_view_new (DonnaApp    *app,
                 G_TYPE_STRING,  /* DONNA_TREE_COL_NAME */
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_ICON */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_BOX */
-                G_TYPE_STRING); /* DONNA_TREE_COL_HIGHLIGHT */
+                G_TYPE_STRING,  /* DONNA_TREE_COL_HIGHLIGHT */
+                G_TYPE_UINT);   /* DONNA_TREE_COL_VISUALS */
         model = GTK_TREE_MODEL (priv->store);
         /* some stylling */
         gtk_tree_view_set_enable_tree_lines (treev, TRUE);
@@ -5877,7 +6029,13 @@ donna_tree_view_new (DonnaApp    *app,
     gtk_tree_view_set_model (treev, model);
 #ifdef GTK_IS_JJK
     if (is_tree (tree))
-        gtk_tree_view_set_row_class_column (treev, DONNA_TREE_COL_ROW_CLASS);
+    {
+        if (priv->is_minitree)
+            gtk_tree_view_set_row_class_column (treev, DONNA_TREE_COL_ROW_CLASS);
+        if (priv->node_visuals & VISUAL_BOX)
+            gtk_tree_boxable_set_box_column ((GtkTreeBoxable *) priv->store,
+                    DONNA_TREE_COL_BOX);
+    }
 #endif
 
     /* selection mode */

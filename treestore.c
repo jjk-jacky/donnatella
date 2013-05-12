@@ -72,6 +72,30 @@ static void         tree_store_set_default_sort_func (
                                             GDestroyNotify           destroy);
 static gboolean     tree_store_has_default_sort_func (
                                             GtkTreeSortable         *sortable);
+/* GtkTreeBoxable */
+static gint         tree_store_get_box_column (
+                                            GtkTreeBoxable          *boxable);
+static gboolean     tree_store_set_box_column (
+                                            GtkTreeBoxable          *boxable,
+                                            gint                     column);
+static gboolean     tree_store_get_current_box_info (
+                                            GtkTreeBoxable          *boxable,
+                                            gchar                  **box,
+                                            gint                    *depth,
+                                            GtkTreeIter             *iter);
+static gboolean     tree_store_get_in_box_info (
+                                            GtkTreeBoxable          *boxable,
+                                            GtkTreeIter             *iter_box,
+                                            gchar                  **box,
+                                            gint                    *depth,
+                                            GtkTreeIter             *iter);
+static gboolean     tree_store_get_main_box_info (
+                                            GtkTreeBoxable          *boxable,
+                                            GtkTreeIter             *iter_box,
+                                            gchar                  **box,
+                                            gint                    *depth,
+                                            GtkTreeIter             *iter);
+
 
 static void     donna_tree_store_finalize           (GObject            *object);
 
@@ -105,11 +129,23 @@ donna_tree_store_sortable_init (GtkTreeSortableIface *interface)
     interface->has_default_sort_func = tree_store_has_default_sort_func;
 }
 
+static void
+donna_tree_store_boxable_init (GtkTreeBoxableInterface *interface)
+{
+    interface->get_box_column       = tree_store_get_box_column;
+    interface->set_box_column       = tree_store_set_box_column;
+    interface->get_current_box_info = tree_store_get_current_box_info;
+    interface->get_in_box_info      = tree_store_get_in_box_info;
+    interface->get_main_box_info    = tree_store_get_main_box_info;
+}
+
 G_DEFINE_TYPE_WITH_CODE (DonnaTreeStore, donna_tree_store, G_TYPE_OBJECT,
         G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_MODEL,
             donna_tree_store_tree_model_init)
         G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_SORTABLE,
             donna_tree_store_sortable_init)
+        G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_BOXABLE,
+            donna_tree_store_boxable_init)
         )
 
 static void
@@ -464,6 +500,60 @@ tree_store_has_default_sort_func (GtkTreeSortable         *sortable)
 {
     return gtk_tree_sortable_has_default_sort_func (
             GTK_TREE_SORTABLE (DONNA_TREE_STORE (sortable)->priv->store));
+}
+
+
+/* GtkTreeBoxable */
+
+static gint
+tree_store_get_box_column (GtkTreeBoxable          *boxable)
+{
+    return gtk_tree_boxable_get_box_column (
+            (GtkTreeBoxable *) ((DonnaTreeStore *) boxable)->priv->store);
+}
+
+static gboolean
+tree_store_set_box_column (GtkTreeBoxable          *boxable,
+                           gint                     column)
+{
+    return gtk_tree_boxable_set_box_column (
+            (GtkTreeBoxable *) ((DonnaTreeStore *) boxable)->priv->store,
+            column);
+}
+
+static gboolean
+tree_store_get_current_box_info (GtkTreeBoxable          *boxable,
+                                 gchar                  **box,
+                                 gint                    *depth,
+                                 GtkTreeIter             *iter)
+{
+    return gtk_tree_boxable_get_current_box_info (
+            (GtkTreeBoxable *) ((DonnaTreeStore *) boxable)->priv->store,
+            box, depth, iter);
+}
+
+static gboolean
+tree_store_get_in_box_info (GtkTreeBoxable          *boxable,
+                            GtkTreeIter             *iter_box,
+                            gchar                  **box,
+                            gint                    *depth,
+                            GtkTreeIter             *iter)
+{
+    return gtk_tree_boxable_get_in_box_info (
+            (GtkTreeBoxable *) ((DonnaTreeStore *) boxable)->priv->store,
+            iter_box, box, depth, iter);
+}
+
+static gboolean
+tree_store_get_main_box_info (GtkTreeBoxable          *boxable,
+                              GtkTreeIter             *iter_box,
+                              gchar                  **box,
+                              gint                    *depth,
+                              GtkTreeIter             *iter)
+{
+    return gtk_tree_boxable_get_main_box_info (
+            (GtkTreeBoxable *) ((DonnaTreeStore *) boxable)->priv->store,
+            iter_box, box, depth, iter);
 }
 
 

@@ -5,3 +5,8 @@ DonnaTreeView#list.select-row-underline row:selected { background: blue; }
 .second-arrow { color: alpha(@fg_color,0.5); -GtkArrow-arrow-scaling: 0.6; }
 DonnaTreeView row.minitree-unknown.expander { color: red; }
 DonnaTreeView row.minitree-partial.expander { color: blue; }
+
+.yellow { background: #ffc; }
+boxed.focused-row.yellow { background: #ff6; }
+.green { background: #cff; }
+boxed.focused-row.green { background: #8ff; }
