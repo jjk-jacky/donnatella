@@ -10,6 +10,7 @@
 #include "task.h"
 #include "macros.h"
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
+#include "cellrenderertext.h"
 #include "colorfilter.h"
 #include "closures.h"
 
@@ -410,6 +411,14 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
                 2,
                 G_TYPE_STRING,
                 DONNA_TYPE_NODE);
+
+    gtk_widget_class_install_style_property (w_class,
+            g_param_spec_int ("highlighted-size", "Highlighted size",
+                "Size of extra highlighted bit on the right",
+                0,  /* minimum */
+                8,  /* maximum */
+                3,  /* default */
+                G_PARAM_READABLE));
 
     g_type_class_add_private (klass, sizeof (DonnaTreeViewPrivate));
 
@@ -2017,12 +2026,14 @@ rend_func (GtkTreeViewColumn  *column,
      * set (e.g. a foreground color). Therefore, we need to make sure they won't
      * be used, unless ct_render (or a new matching color filter) sets them
      * again this time */
-    if (g_type_is_a (G_TYPE_FROM_INSTANCE (renderer), GTK_TYPE_CELL_RENDERER_TEXT))
+    if (g_type_is_a (G_TYPE_FROM_INSTANCE (renderer), DONNA_TYPE_CELL_RENDERER_TEXT))
     {
         g_object_set (renderer, "foreground-set", FALSE, NULL);
         g_object_set (renderer, "background-set", FALSE, NULL);
         g_object_set (renderer, "weight-set", FALSE, NULL);
         g_object_set (renderer, "style-set", FALSE, NULL);
+        /* VISUAL_HIGHLIGHT */
+        g_object_set (renderer, "highlight", NULL, NULL);
     }
 
     index -= NB_INTERNAL_RENDERERS - 1; /* -1 to start with index 1 */
@@ -2051,55 +2062,52 @@ rend_func (GtkTreeViewColumn  *column,
 
             return;
         }
-
-        /* do we have some overriding to do? */
-        if (G_TYPE_FROM_INSTANCE (_col->ct) == DONNA_TYPE_COLUMNTYPE_NAME)
-        {
-            if (index == 1)
-            {
-                /* GtkRendererPixbuf */
-                GdkPixbuf *pixbuf;
-
-                gtk_tree_model_get (model, iter,
-                        DONNA_TREE_COL_ICON,    &pixbuf,
-                        -1);
-                if (pixbuf)
-                {
-                    g_object_set (renderer,
-                            "visible",  TRUE,
-                            "pixbuf",   pixbuf,
-                            NULL);
-                    g_object_unref (pixbuf);
-                    g_object_unref (node);
-                    return;
-                }
-            }
-            else /* index == 2 */
-            {
-                /* GtkRendererText */
-                gchar *name;
-
-                gtk_tree_model_get (model, iter,
-                        DONNA_TREE_COL_NAME,    &name,
-                        -1);
-                if (name)
-                {
-                    g_object_set (renderer,
-                            "visible",  TRUE,
-                            "text",     name,
-                            NULL);
-                    apply_color_filters (tree, column, renderer, node);
-                    g_free (name);
-                    g_object_unref (node);
-                    return;
-                }
-            }
-        }
     }
     else if (!node)
         return;
 
     arr = donna_columntype_render (_col->ct, _col->ct_data, index, node, renderer);
+
+    /* visuals */
+    if (is_tree (tree)
+            && G_TYPE_FROM_INSTANCE (_col->ct) == DONNA_TYPE_COLUMNTYPE_NAME)
+    {
+        if (index == 1)
+        {
+            /* GtkRendererPixbuf */
+            GdkPixbuf *pixbuf;
+
+            gtk_tree_model_get (model, iter,
+                    DONNA_TREE_COL_ICON,    &pixbuf,
+                    -1);
+            if (pixbuf)
+            {
+                g_object_set (renderer, "pixbuf", pixbuf, NULL);
+                g_object_unref (pixbuf);
+            }
+        }
+        else /* index == 2 */
+        {
+            /* DonnaRendererText */
+            gchar *name, *highlight;
+
+            gtk_tree_model_get (model, iter,
+                    DONNA_TREE_COL_NAME,        &name,
+                    DONNA_TREE_COL_HIGHLIGHT,   &highlight,
+                    -1);
+            if (name)
+            {
+                g_object_set (renderer, "text", name, NULL);
+                g_free (name);
+            }
+            if (highlight)
+            {
+                g_object_set (renderer, "highlight", highlight, NULL);
+                g_free (highlight);
+            }
+        }
+    }
+
     if (arr)
     {
         DonnaTask *task;
@@ -3470,7 +3478,7 @@ load_arrangement (DonnaTreeView     *tree,
                 {
                     case DONNA_COLUMNTYPE_RENDERER_TEXT:
                         renderer = priv->renderers[RENDERER_TEXT];
-                        load_renderer = gtk_cell_renderer_text_new;
+                        load_renderer = donna_cell_renderer_text_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_PIXBUF:
                         renderer = priv->renderers[RENDERER_PIXBUF];

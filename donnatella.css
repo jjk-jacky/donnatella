@@ -8,5 +8,24 @@ DonnaTreeView row.minitree-partial.expander { color: blue; }
 
 .yellow { background: #ffc; }
 boxed.focused-row.yellow { background: #ff6; }
+.focused-row.yellow { background: #ff6; }
+.focused-row.yellow:selected { background: @selected_bg_color; }
+.focused-row.yellow:focused { background: #ff0; }
+.focused-row.yellow.blue { background: blue; color: white; }
+.focused-row.yellow.blue:selected { background: @selected_bg_color; color: @selected_fg_color; }
+.focused-row.yellow highlighted.blue { background: blue; }
+.focused-row.yellow highlighted.blue:selected { background: blue; }
+
 .green { background: #cff; }
 boxed.focused-row.green { background: #8ff; }
+.focused-row.green { background: #8ff; }
+.focused-row.green:selected { background: @selected_bg_color; }
+.focused-row.green:focused { background: #0ff; }
+
+DonnaTreeView { -DonnaTreeView-highlighted-size: 4; }
+.blue { background: blue; color: white; }
+.blue:selected { color: @selected_fg_color; }
+.focused-row.blue { background: blue; color: white; }
+.focused-row.blue:selected { background: @selected_bg_color; color: @selected_fg_color; }
+highlighted.blue:selected { background: blue; }
+highlighted.blue.focused-row:selected { background: blue; }
