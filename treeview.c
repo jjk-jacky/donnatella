@@ -122,6 +122,17 @@ enum visual
     VISUAL_HIGHLIGHT  = (1 << 3),
 };
 
+struct visuals
+{
+    /* iter of the root, or an invalid iter (stamp==0) and user_data if the
+     * number of the root, e.g. same as path_to_string */
+    GtkTreeIter  root;
+    gchar       *name;
+    GdkPixbuf   *icon;
+    gchar       *box;
+    gchar       *highlight;
+};
+
 struct col_prop
 {
     gchar             *prop;
@@ -242,6 +253,11 @@ struct _DonnaTreeViewPrivate
     gulong               sid_sw_location_changed;
     gulong               sid_active_list_changed;
 
+    /* Tree: keys are ful locations, values are GSList of struct visuals. The
+     * idea is that the list of loaded when loading for a tree file, so we can
+     * load visuals only when adding the nodes (e.g. on expanding).
+     * In minitree, we also put them back in there when nodes are removed. */
+    GHashTable          *tree_visuals;
     /* Tree: which visuals to load from node */
     enum visual          node_visuals;
 
@@ -324,6 +340,8 @@ static GtkTreeIter *get_best_iter_for_node              (DonnaTreeView  *tree,
                                                          DonnaNode      *node,
                                                          gboolean        add_root_if_needed,
                                                          GError        **error);
+static GtkTreeIter * get_root_iter                      (DonnaTreeView   *tree,
+                                                         GtkTreeIter     *iter);
 static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          DonnaNode       *node,
                                                          guint           *index,
@@ -487,6 +505,17 @@ free_hashtable (gpointer key, GSList *list, gpointer data)
 }
 
 static void
+free_visuals (struct visuals *visuals)
+{
+    g_free (visuals->name);
+    if (visuals->icon)
+        g_object_unref (visuals->icon);
+    g_free (visuals->box);
+    g_free (visuals->highlight);
+    g_slice_free (struct visuals, visuals);
+}
+
+static void
 donna_tree_view_get_property (GObject        *object,
                               guint           prop_id,
                               GValue         *value,
@@ -507,6 +536,16 @@ free_column (struct column *_col)
     g_slice_free (struct column, _col);
 }
 
+/* for use from finalize only */
+static gboolean
+free_tree_visuals (gpointer key, GSList *l)
+{
+    /* this frees the data */
+    g_slist_free_full (l, (GDestroyNotify) free_visuals);
+    /* this will take care of free-ing the key */
+    return TRUE;
+}
+
 static void
 donna_tree_view_finalize (GObject *object)
 {
@@ -520,6 +559,9 @@ donna_tree_view_finalize (GObject *object)
     g_array_free (priv->col_props, TRUE);
     g_ptr_array_free (priv->active_spinners, TRUE);
     g_slist_free_full (priv->columns, (GDestroyNotify) free_column);
+    if (priv->tree_visuals)
+        g_hash_table_foreach_remove (priv->tree_visuals,
+                (GHRFunc) free_tree_visuals, NULL);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -1039,10 +1081,12 @@ node_get_children_tree_timeout (DonnaTask                   *task,
  * hashlist of, well, iters. This is also why we also have special handling of
  * removing an iter w/ children. */
 static gboolean
-remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
+remove_row_from_tree (DonnaTreeView *tree,
+                      GtkTreeIter   *iter,
+                      gboolean       is_removal)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
     DonnaNode *node;
     DonnaProvider *provider;
     guint i;
@@ -1102,6 +1146,62 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         else
             g_hash_table_remove (priv->hashtable, node);
 
+        if (priv->is_minitree && !is_removal)
+        {
+            enum visual v;
+
+            /* place any tree_visuals back there to remember them when the node
+             * comes back */
+
+            gtk_tree_model_get (model, iter,
+                        DONNA_TREE_COL_VISUALS,     &v,
+                        -1);
+            if (v > 0)
+            {
+                struct visuals *visuals;
+                GtkTreeIter *root;
+                gchar *fl;
+                GSList *l = NULL;
+
+                visuals = g_slice_new0 (struct visuals);
+                root = get_root_iter (tree, iter);
+                visuals->root = *root;
+
+                /* we can't just get everything, since there might be
+                 * node_visuals applied */
+                if (v & VISUAL_NAME)
+                    gtk_tree_model_get (model, iter,
+                            DONNA_TREE_COL_NAME,        &visuals->name,
+                            -1);
+                if (v & VISUAL_ICON)
+                    gtk_tree_model_get (model, iter,
+                            DONNA_TREE_COL_ICON,        &visuals->icon,
+                            -1);
+                if (v & VISUAL_BOX)
+                    gtk_tree_model_get (model, iter,
+                            DONNA_TREE_COL_BOX,         &visuals->box,
+                            -1);
+                if (v & VISUAL_HIGHLIGHT)
+                    gtk_tree_model_get (model, iter,
+                            DONNA_TREE_COL_HIGHLIGHT,   &visuals->highlight,
+                            -1);
+
+                fl = donna_node_get_full_location (node);
+
+                if (priv->tree_visuals)
+                {
+                    l = g_hash_table_lookup (priv->tree_visuals, fl);
+                }
+                else
+                    priv->tree_visuals = g_hash_table_new_full (
+                            g_str_hash, g_str_equal,
+                            g_free, NULL);
+
+                l = g_slist_prepend (l, visuals);
+                g_hash_table_insert (priv->tree_visuals, fl, l);
+            }
+        }
+
         g_object_unref (node);
     }
 
@@ -1137,7 +1237,7 @@ remove_row_from_tree (DonnaTreeView *tree, GtkTreeIter *iter)
         /* we need to remove all children before we remove the row, so we can
          * have said children processed correctly (through here) as well */
         if (donna_tree_store_iter_children (priv->store, &child, iter))
-            while (remove_row_from_tree (tree, &child))
+            while (remove_row_from_tree (tree, &child, is_removal))
                 ;
     }
     /* now we can remove the row */
@@ -1188,7 +1288,7 @@ set_children (DonnaTreeView *tree,
         /* set new expand state */
         set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
         if (donna_tree_store_iter_children (priv->store, &child, iter))
-            while (remove_row_from_tree (tree, &child))
+            while (remove_row_from_tree (tree, &child, TRUE))
                 ;
     }
     else
@@ -1266,7 +1366,7 @@ set_children (DonnaTreeView *tree,
             GSList *l;
 
             l = list;
-            remove_row_from_tree (tree, l->data);
+            remove_row_from_tree (tree, l->data, TRUE);
             gtk_tree_iter_free (l->data);
             list = l->next;
             g_slist_free_1 (l);
@@ -1458,7 +1558,7 @@ expand_row (DonnaTreeView           *tree,
                 set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
 
                 if (donna_tree_store_iter_children (priv->store, &child, iter))
-                    while (remove_row_from_tree (tree, &child))
+                    while (remove_row_from_tree (tree, &child, TRUE))
                         ;
 
                 if (scroll_current)
@@ -1576,7 +1676,7 @@ full_collapse_row (DonnaTreeView    *tree,
 
         /* remove all children */
         if (donna_tree_store_iter_children (priv->store, &it, iter))
-            while (remove_row_from_tree (tree, &it))
+            while (remove_row_from_tree (tree, &it, FALSE))
                 ;
         /* remove_row_from_tree will add a fake node & set expand_state to
          * UNKNOWN if it was partial. However, if not it won't add the fake node
@@ -2295,7 +2395,7 @@ node_has_children_cb (DonnaTask                 *task,
                 set_es (data->tree->priv, &data->iter, DONNA_TREE_EXPAND_NONE);
                 /* remove all children */
                 if (donna_tree_store_iter_children (store, &iter, &data->iter))
-                    while (remove_row_from_tree (data->tree, &iter))
+                    while (remove_row_from_tree (data->tree, &iter, TRUE))
                         ;
             }
             /* else: children and expand state obviously already good */
@@ -2405,7 +2505,7 @@ real_node_removed_cb (struct node_removed_data *data)
         /* this will remove the row from the list in hashtable. IOW, it will
          * remove the current list element (list); which is why we took the next
          * element ahead of time */
-        remove_row_from_tree (data->tree, list->data);
+        remove_row_from_tree (data->tree, list->data, TRUE);
     }
 
 free:
@@ -2647,6 +2747,7 @@ node_refresh_visuals_cb (DonnaTask                  *task,
         }                                                                           \
     }                                                                               \
 } while (0)
+/* mode tree only */
 static inline void
 load_node_visuals (DonnaTreeView    *tree,
                    GtkTreeIter      *iter,
@@ -2705,6 +2806,108 @@ load_node_visuals (DonnaTreeView    *tree,
 }
 #undef load_node_visual
 #undef add_prop
+
+/* mode tree only */
+static inline void
+load_tree_visuals (DonnaTreeView    *tree,
+                   GtkTreeIter      *iter,
+                   DonnaNode        *node)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    gchar *fl;
+    GSList *list, *l;
+    GtkTreeIter *root;
+
+    if (!priv->tree_visuals)
+        return;
+
+    fl = donna_node_get_full_location (node);
+    list = g_hash_table_lookup (priv->tree_visuals, fl);
+    if (!list)
+    {
+        g_free (fl);
+        return;
+    }
+
+    root = get_root_iter (tree, iter);
+
+    for (l = list; l; l = l->next)
+    {
+        struct visuals *visuals = l->data;
+
+        if (visuals->root.stamp == 0)
+        {
+            GtkTreeIter it;
+
+            /* invalid iter means user_data holds the "path" element, i.e.
+             * number of root to use (starting at 0) */
+            if (!gtk_tree_model_iter_nth_child ((GtkTreeModel *) priv->store,
+                        &it, NULL, GPOINTER_TO_INT (visuals->root.user_data)))
+                /* we don't (yet) have that root */
+                continue;
+
+            /* make it a valid iter pointing to the row */
+            visuals->root = it;
+        }
+
+        if (itereq (root, &visuals->root))
+        {
+            enum visual v = 0;
+
+            if (visuals->name)
+            {
+                v |= VISUAL_NAME;
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_NAME,        visuals->name,
+                        -1);
+            }
+            if (visuals->icon)
+            {
+                v |= VISUAL_ICON;
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_ICON,        visuals->icon,
+                        -1);
+            }
+            if (visuals->box)
+            {
+                v |= VISUAL_BOX;
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_BOX,         visuals->box,
+                        -1);
+            }
+            if (visuals->highlight)
+            {
+                v |= VISUAL_HIGHLIGHT;
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_HIGHLIGHT,   visuals->highlight,
+                        -1);
+            }
+            donna_tree_store_set (priv->store, iter,
+                    DONNA_TREE_COL_VISUALS,         v,
+                    -1);
+
+            /* now that it's loaded, remove from the list */
+            free_visuals (visuals);
+            list = g_slist_delete_link (list, l);
+            if (list)
+                /* will free fl */
+                g_hash_table_insert (priv->tree_visuals, fl, list);
+            else
+            {
+                g_hash_table_remove (priv->tree_visuals, fl);
+                g_free (fl);
+                if (g_hash_table_size (priv->tree_visuals) == 0)
+                {
+                    g_hash_table_unref (priv->tree_visuals);
+                    priv->tree_visuals = NULL;
+                }
+            }
+
+            return;
+        }
+    }
+    g_free (fl);
+}
 
 static gboolean
 add_node_to_tree (DonnaTreeView *tree,
@@ -2815,7 +3018,8 @@ add_node_to_tree (DonnaTreeView *tree,
     list = g_hash_table_lookup (priv->hashtable, node);
     list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
     g_hash_table_insert (priv->hashtable, node, list);
-    /* node visuals */
+    /* visuals */
+    load_tree_visuals (tree, &iter, node);
     load_node_visuals (tree, &iter, node, TRUE);
     /* check the list in case we have another tree node for that node, in which
      * case we might get the has_children info from there */
@@ -4315,42 +4519,45 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
 
 /* mode tree only */
 static GtkTreeIter *
-get_current_root_iter (DonnaTreeView *tree)
+get_root_iter (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    GtkTreeIter root;
+    DonnaNode *node;
+    GSList *list;
 
-    if (priv->location_iter.stamp != 0)
+    if (iter->stamp == 0)
+        return NULL;
+
+    if (donna_tree_store_iter_depth (priv->store, iter) > 0)
     {
-        GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
-        GtkTreeIter iter;
-        DonnaNode *node;
-        GSList *list;
+        gchar *str;
 
-        if (donna_tree_store_iter_depth (priv->store,
-                    &priv->location_iter) > 0)
-        {
-            gchar *str;
-
-            str = gtk_tree_model_get_string_from_iter (model,
-                    &priv->location_iter);
-            /* there is at least one ':' since it's not a root */
-            *strchr (str, ':') = '\0';
-            gtk_tree_model_get_iter_from_string (model, &iter, str);
-            g_free (str);
-        }
-        else
-            /* current location is a root */
-            iter = priv->location_iter;
-
-        /* get the iter from the hashtable */
-        gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &node, -1);
-        list = g_hash_table_lookup (priv->hashtable, node);
-        g_object_unref (node);
-        for ( ; list; list = list->next)
-            if (itereq (&iter, (GtkTreeIter *) list->data))
-                return list->data;
+        str = gtk_tree_model_get_string_from_iter (model, iter);
+        /* there is at least one ':' since it's not a root */
+        *strchr (str, ':') = '\0';
+        gtk_tree_model_get_iter_from_string (model, &root, str);
+        g_free (str);
     }
-    return NULL;
+    else
+        /* current location is a root */
+        root = *iter;
+
+    /* get the iter from the hashtable */
+    gtk_tree_model_get (model, &root, DONNA_TREE_COL_NODE, &node, -1);
+    list = g_hash_table_lookup (priv->hashtable, node);
+    g_object_unref (node);
+    for ( ; list; list = list->next)
+        if (itereq (&root, (GtkTreeIter *) list->data))
+            return list->data;
+}
+
+/* mode tree only */
+static inline GtkTreeIter *
+get_current_root_iter (DonnaTreeView *tree)
+{
+    return get_root_iter (tree, &tree->priv->location_iter);
 }
 
 /* mode tree only */
@@ -6040,9 +6247,8 @@ donna_tree_view_new (DonnaApp    *app,
     {
         if (priv->is_minitree)
             gtk_tree_view_set_row_class_column (treev, DONNA_TREE_COL_ROW_CLASS);
-        if (priv->node_visuals & VISUAL_BOX)
-            gtk_tree_boxable_set_box_column ((GtkTreeBoxable *) priv->store,
-                    DONNA_TREE_COL_BOX);
+        gtk_tree_boxable_set_box_column ((GtkTreeBoxable *) priv->store,
+                DONNA_TREE_COL_BOX);
     }
 #endif
 
