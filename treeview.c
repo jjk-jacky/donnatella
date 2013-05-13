@@ -5861,7 +5861,7 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 return TRUE;
 
 #ifdef GTK_IS_JJK
-            if (!renderer && priv->is_minitree)
+            if (!renderer)
             {
                 /* i.e. clicked on an expander */
 
@@ -5873,7 +5873,8 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 else if (event->state & GDK_CONTROL_MASK)
                 {
                     /* Ctrl+click always does a full expand */
-                    full_expand_row (tree, &iter);
+                    if (priv->is_minitree)
+                        full_expand_row (tree, &iter);
                     return TRUE;
                 }
                 else if (event->state & GDK_SHIFT_MASK)
@@ -6245,8 +6246,7 @@ donna_tree_view_new (DonnaApp    *app,
 #ifdef GTK_IS_JJK
     if (is_tree (tree))
     {
-        if (priv->is_minitree)
-            gtk_tree_view_set_row_class_column (treev, DONNA_TREE_COL_ROW_CLASS);
+        gtk_tree_view_set_row_class_column (treev, DONNA_TREE_COL_ROW_CLASS);
         gtk_tree_boxable_set_box_column ((GtkTreeBoxable *) priv->store,
                 DONNA_TREE_COL_BOX);
     }
