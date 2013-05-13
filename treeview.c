@@ -1804,8 +1804,8 @@ visible_func (GtkTreeModel  *model,
             || donna_tree_store_is_ancestor (priv->store, iter, it_cur)))
         return TRUE;
 
-    /* tree: is parent isn't visible, it isn't either. That's the rule our store
-     * expect & therefor we must always enforce. This deals with both adding
+    /* tree: if parent isn't visible, it isn't either. That's the rule our store
+     * expect & therefore we must always enforce. This deals with both adding
      * children of an hidden folder (could happen while going there, first we
      * add children, then we'll make them visible) or when adding "fake node"
      * for non-visible iters. */
