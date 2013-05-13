@@ -4848,9 +4848,10 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                     gtk_tree_view_expand_row (treev, path, FALSE);
                 else
                 {
-                    /* this will take care of the import/get-children, TRUE to
-                     * make sure to scroll to current once children are added */
-                    expand_row (tree, prev_iter, TRUE, NULL);
+                    /* this will take care of the import/get-children, we'll
+                     * scroll (if sync_scroll) to make sure to scroll to current
+                     * once children are added */
+                    expand_row (tree, prev_iter, priv->sync_scroll, NULL);
                     /* now that the thread is started, we need to trigger it
                      * again, so the row actually gets expanded this time, which
                      * we require to be able to continue adding children &
