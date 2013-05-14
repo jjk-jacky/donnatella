@@ -4845,6 +4845,12 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             g_free (location);
             return last_iter;
         }
+        else if (!donna_tree_store_iter_is_visible (priv->store, iter))
+        {
+            /* update our future location, and ensure row's visibility */
+            priv->future_location_iter = *iter;
+            donna_tree_store_refresh_visibility (priv->store, iter, NULL);
+        }
 
         /* check if the parent (prev_iter) is expanded */
         path = gtk_tree_model_get_path (model, prev_iter);
