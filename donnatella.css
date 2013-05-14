@@ -1,10 +1,12 @@
-DonnaTreeView row.focused-row  { background: #BBB; }
-DonnaTreeView row:focused  { background: #a0a0a0; }
-DonnaTreeView row:selected  { background: @selected_bg_color; }
-DonnaTreeView#list.select-row-underline row:selected { background: blue; }
 .second-arrow { color: alpha(@fg_color,0.5); -GtkArrow-arrow-scaling: 0.6; }
 DonnaTreeView row.minitree-unknown.expander { color: red; }
 DonnaTreeView row.minitree-partial.expander { color: blue; }
+
+DonnaTreeView row.focused-row  { background: #BBB; }
+DonnaTreeView row:focused  { background: #a0a0a0; }
+DonnaTreeView row:selected  { background: @selected_bg_color; }
+
+DonnaTreeView#list.select-row-underline row:selected { background: blue; }
 
 .yellow { background: #ffc; }
 boxed.focused-row.yellow { background: #ff6; }
