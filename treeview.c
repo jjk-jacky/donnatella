@@ -5198,6 +5198,9 @@ node_get_children_list_cb (DonnaTask                            *task,
                            struct node_get_children_list_data   *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
+    GtkStyleContext *context;
+    gchar buf[64];
+    const gchar *domain;
     gboolean changed_location;
     GtkTreeIter iter, *it = &iter;
     const GValue *value;
@@ -5243,11 +5246,42 @@ node_get_children_list_cb (DonnaTask                            *task,
      * handled by the store) */
     g_hash_table_remove_all (priv->hashtable);
 
+    context = gtk_widget_get_style_context ((GtkWidget *) data->tree);
     /* update current location (now because we need this done to build
      * arrangement) */
     if (priv->location)
+    {
+        domain = donna_node_get_domain (priv->location);
+        /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
+        if (strlen (domain) <= 56)
+        {
+            strcpy (buf, "domain-");
+            strcpy (buf + 7, domain);
+            gtk_style_context_remove_class (context, buf);
+        }
+        else
+        {
+            gchar *b = g_strdup_printf ("domain-%s", domain);
+            gtk_style_context_remove_class (context, buf);
+            g_free (b);
+        }
         g_object_unref (priv->location);
+    }
     priv->location = g_object_ref (data->node);
+    domain = donna_node_get_domain (priv->location);
+    /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
+    if (strlen (domain) <= 56)
+    {
+        strcpy (buf, "domain-");
+        strcpy (buf + 7, domain);
+        gtk_style_context_add_class (context, buf);
+    }
+    else
+    {
+        gchar *b = g_strdup_printf ("domain-%s", domain);
+        gtk_style_context_add_class (context, buf);
+        g_free (b);
+    }
     /* we're there */
     priv->future_location = NULL;
     /* update arrangement for new location if needed */

@@ -2,6 +2,12 @@
 DonnaTreeView row.minitree-unknown.expander { color: red; }
 DonnaTreeView row.minitree-partial.expander { color: blue; }
 
+DonnaTreeView#list.domain-config row:nth-child(odd) { background: #ffcd96; }
+DonnaTreeView#list.domain-config row:nth-child(even) { background: #ffc882; }
+DonnaTreeView#list.domain-config row.focused-row  { background: #ffb450; }
+DonnaTreeView#list.domain-config row:focused  { background: #ffaa46; }
+DonnaTreeView#list.domain-config row:selected  { background: @selected_bg_color; }
+
 DonnaTreeView row.focused-row  { background: #BBB; }
 DonnaTreeView row:focused  { background: #a0a0a0; }
 DonnaTreeView row:selected  { background: @selected_bg_color; }
