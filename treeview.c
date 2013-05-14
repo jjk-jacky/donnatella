@@ -1274,12 +1274,10 @@ set_children (DonnaTreeView *tree,
               gboolean       expand)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
 
     if (!is_tree (tree))
         return;
-
-    model = GTK_TREE_MODEL (priv->store);
 
     if (children->len == 0)
     {
@@ -1325,7 +1323,6 @@ set_children (DonnaTreeView *tree,
             if (!(donna_node_get_node_type (node) & priv->node_types))
                 continue;
 
-            has_children = TRUE;
             /* shouldn't be able to fail/return FALSE */
             if (!add_node_to_tree (tree, iter, node, &row))
             {
@@ -1359,6 +1356,8 @@ set_children (DonnaTreeView *tree,
                     l = prev->next;
                 }
             }
+            if (!has_children)
+                has_children = donna_tree_store_iter_is_visible (priv->store, &row);
         }
         /* remove rows not in children */
         while (list)
@@ -1372,12 +1371,31 @@ set_children (DonnaTreeView *tree,
             g_slist_free_1 (l);
         }
 
-        /* has_children could be TRUE when we got children from a
+        /* has_children could be FALSE when e.g. we got children from a
          * node_children signal, but none match our node_types */
         es = (has_children) ? DONNA_TREE_EXPAND_FULL : DONNA_TREE_EXPAND_NONE;
         /* set new expand state */
         set_es (priv, iter, es);
-        if (expand)
+        /* we might have to remove the fake node */
+        if (es == DONNA_TREE_EXPAND_NONE)
+        {
+            GtkTreeIter child;
+
+            if (donna_tree_store_iter_children (priv->store, &child, iter))
+                do
+                {
+                    DonnaNode *node;
+
+                    gtk_tree_model_get (model, &child,
+                            DONNA_TREE_COL_NODE,    &node,
+                            -1);
+                    if (!node)
+                        remove_row_from_tree (tree, &child, FALSE);
+                    else
+                        g_object_unref (node);
+                } while (donna_tree_store_iter_next (priv->store, &child));
+        }
+        if (has_children && expand)
         {
             GtkTreePath *path;
 
