@@ -1029,7 +1029,7 @@ donna_tree_store_refresh_visibility (DonnaTreeStore     *store,
                                      gboolean           *was_visible)
 {
     DonnaTreeStorePrivate *priv;
-    GtkTreeModel *model = GTK_TREE_MODEL (store);
+    GtkTreeModel *model = (GtkTreeModel *) store;
     gboolean old, new;
 
     g_return_val_if_fail (DONNA_IS_TREE_STORE (store), FALSE);
@@ -1044,29 +1044,56 @@ donna_tree_store_refresh_visibility (DonnaTreeStore     *store,
 
     if (old != new)
     {
+        GtkTreeIter parent;
+        gint nb_children;
+        gboolean has_child_toggled;
+
+        /* get the parent row. We ask the "real" model because iter might not
+         * (yet) be visible, so asking our interface would then fail. */
+        gtk_tree_model_iter_parent ((GtkTreeModel *) priv->store, &parent, iter);
+        nb_children = gtk_tree_model_iter_n_children (model, &parent);
+
         if (old)
         {
             GtkTreePath *path;
             GtkTreeIter it;
 
-            /* emit signal (before updating hashtable, or else it'd be marked
-             * non-visible and we'd fail to get the path) */
+            /* get the path before updating, otherwise we couldn't get a path */
             path = tree_store_get_path (model, iter);
-            gtk_tree_model_row_deleted (model, path);
-            gtk_tree_path_free (path);
 
             /* update hashtable, as we can now assume all children are not
              * visible as well (no need to emit row-deleted for them) */
             g_hash_table_insert (priv->hashtable, iter->user_data, NULL);
-            if (gtk_tree_model_iter_children (GTK_TREE_MODEL (priv->store),
+            if (gtk_tree_model_iter_children ((GtkTreeModel *) priv->store,
                         &it, iter))
                 hide_in_hashtable (priv->hashtable,
-                        GTK_TREE_MODEL (priv->store), &it);
+                        (GtkTreeModel *) priv->store, &it);
+
+            /* now that the row is "ofifically" gone, emit the signal */
+            gtk_tree_model_row_deleted (model, path);
+            gtk_tree_path_free (path);
+
+            /* did the last child go away? */
+            has_child_toggled = nb_children == 1;
         }
         else
+        {
             /* make sure all parents are visible, if not switch them & emit the
              * row-inserted signal for them (including iter) */
             ensure_visible (store, iter);
+
+            /* did we add the first child? */
+            has_child_toggled = nb_children == 0;
+        }
+
+        if (has_child_toggled)
+        {
+            GtkTreePath *path;
+
+            path = tree_store_get_path (model, &parent);
+            gtk_tree_model_row_has_child_toggled (model, path, &parent);
+            gtk_tree_path_free (path);
+        }
     }
 
     if (was_visible)
