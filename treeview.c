@@ -6145,17 +6145,14 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                 if (str->len > 0)
                 {
                     GError *err = NULL;
-                    gchar *location;
+                    gchar *fl = donna_node_get_full_location (node);
 
                     g_set_error (&err, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
                             "%s", str->str);
-                    location = donna_node_get_location (node);
                     donna_app_show_error (priv->app, err,
-                            "Error occured on '%s:%s'",
-                            priv->name,
-                            donna_node_get_domain (node),
-                            location);
-                    g_free (location);
+                            "Treeview '%s': Error occured on '%s'",
+                            priv->name, fl);
+                    g_free (fl);
                     g_error_free (err);
                 }
                 g_string_free (str, TRUE);
