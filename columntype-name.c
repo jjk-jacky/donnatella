@@ -59,9 +59,15 @@ static GPtrArray *      ct_name_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_name_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
-static gboolean         ct_name_handle_context      (DonnaColumnType    *ct,
+static gboolean         ct_name_handle_click        (DonnaColumnType    *ct,
                                                      gpointer            data,
+                                                     DonnaClick          click,
+                                                     GdkEventButton     *event,
                                                      DonnaNode          *node,
+                                                     guint               index,
+                                                     GtkCellRenderer   **renderers,
+                                                     renderer_edit_fn    renderer_edit,
+                                                     gpointer            re_data,
                                                      DonnaTreeView      *treeview);
 static GPtrArray *      ct_name_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
@@ -95,7 +101,7 @@ ct_name_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_name_free_data;
     interface->get_props                = ct_name_get_props;
     interface->get_options_menu         = ct_name_get_options_menu;
-    interface->handle_context           = ct_name_handle_context;
+    interface->handle_click             = ct_name_handle_click;
     interface->render                   = ct_name_render;
     interface->set_tooltip              = ct_name_set_tooltip;
     interface->node_cmp                 = ct_name_node_cmp;
@@ -288,13 +294,110 @@ ct_name_get_options_menu (DonnaColumnType    *ct,
     return NULL;
 }
 
-static gboolean
-ct_name_handle_context (DonnaColumnType    *ct,
-                        gpointer            data,
-                        DonnaNode          *node,
-                        DonnaTreeView      *treeview)
+struct editing_data
 {
-    /* FIXME */
+    DonnaColumnTypeName *ctname;
+    DonnaTreeView       *tree;
+    DonnaNode           *node;
+    guint                editing_started_sid;
+    guint                editing_done_sid;
+};
+
+static void
+editing_done_cb (GtkCellEditable *editable, struct editing_data *data)
+{
+    gboolean canceled;
+
+    g_signal_handler_disconnect (editable, data->editing_done_sid);
+
+    g_object_get (editable, "editing-canceled", &canceled, NULL);
+    if (!canceled)
+    {
+        GError *err = NULL;
+        GValue value = G_VALUE_INIT;
+
+        if (G_UNLIKELY (!GTK_IS_ENTRY (editable)))
+        {
+            gchar *fl = donna_node_get_full_location (data->node);
+            donna_app_show_error (data->ctname->priv->app, NULL,
+                    "ColumnType name: Unable to change property 'name' for '%s': "
+                    "Editable widget isn't a GtkEntry", fl);
+            g_free (fl);
+            g_free (data);
+            return;
+        }
+
+        g_value_init (&value, G_TYPE_STRING);
+        g_value_set_string (&value, gtk_entry_get_text ((GtkEntry *) editable));
+        if (!donna_tree_view_set_node_property (data->tree, data->node,
+                "name", &value, &err))
+        {
+            gchar *fl = donna_node_get_full_location (data->node);
+            donna_app_show_error (data->ctname->priv->app, err,
+                    "ColumnType name: Unable to set property 'name' for '%s' to '%s'",
+                    fl, gtk_entry_get_text ((GtkEntry *) editable));
+            g_free (fl);
+            g_clear_error (&err);
+            g_value_unset (&value);
+            g_free (data);
+            return;
+        }
+        g_value_unset (&value);
+    }
+
+    g_free (data);
+}
+
+static void
+editing_started_cb (GtkCellRenderer     *renderer,
+                    GtkCellEditable     *editable,
+                    gchar               *path,
+                    struct editing_data *data)
+{
+    g_signal_handler_disconnect (renderer, data->editing_started_sid);
+    data->editing_started_sid = 0;
+
+    data->editing_done_sid = g_signal_connect (editable, "editing-done",
+            (GCallback) editing_done_cb, data);
+}
+
+static gboolean
+ct_name_handle_click (DonnaColumnType    *ct,
+                      gpointer            data,
+                      DonnaClick          click,
+                      GdkEventButton     *event,
+                      DonnaNode          *node,
+                      guint               index,
+                      GtkCellRenderer   **renderers,
+                      renderer_edit_fn    renderer_edit,
+                      gpointer            re_data,
+                      DonnaTreeView      *treeview)
+{
+    if (((click & (DONNA_CLICK_MIDDLE | DONNA_CLICK_SINGLE))
+                == (DONNA_CLICK_MIDDLE | DONNA_CLICK_SINGLE))
+            || ((click & (DONNA_CLICK_LEFT | DONNA_CLICK_SLOW_DOUBLE))
+                == (DONNA_CLICK_LEFT | DONNA_CLICK_SLOW_DOUBLE)))
+    {
+        struct editing_data *data;
+
+        data = g_new0 (struct editing_data, 1);
+        data->ctname    = (DonnaColumnTypeName *) ct;
+        data->tree      = treeview;
+        data->node      = node;
+        data->editing_started_sid = g_signal_connect (renderers[1],
+                "editing-started",
+                (GCallback) editing_started_cb, data);
+
+        g_object_set (renderers[1], "editable", TRUE, NULL);
+        if (!renderer_edit (renderers[1], re_data))
+        {
+            g_signal_handler_disconnect (renderers[1], data->editing_started_sid);
+            g_free (data);
+            return FALSE;
+        }
+        return TRUE;
+    }
+
     return FALSE;
 }
 
