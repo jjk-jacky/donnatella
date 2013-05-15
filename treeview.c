@@ -4530,7 +4530,6 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
                 donna_node_get_domain (node),
                 location);
         g_free (location);
-        g_clear_error (&err);
         return FALSE;
     }
 
