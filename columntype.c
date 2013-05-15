@@ -44,10 +44,16 @@ default_get_options_menu (DonnaColumnType    *ct,
 }
 
 static gboolean
-default_handle_context (DonnaColumnType    *ct,
-                        gpointer            data,
-                        DonnaNode          *node,
-                        DonnaTreeView      *treeview)
+default_handle_click (DonnaColumnType    *ct,
+                      gpointer            data,
+                      DonnaClick          click,
+                      GdkEventButton     *event,
+                      DonnaNode          *node,
+                      guint               index,
+                      GtkCellRenderer   **renderer,
+                      renderer_edit_fn    renderer_edit,
+                      gpointer            re_data,
+                      DonnaTreeView      *treeview)
 {
     return FALSE;
 }
@@ -67,7 +73,7 @@ donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_default_sort_order   = default_get_default_sort_order;
     interface->get_options_menu         = default_get_options_menu;
-    interface->handle_context           = default_handle_context;
+    interface->handle_click             = default_handle_click;
     interface->set_tooltip              = default_set_tooltip;
 
     g_object_interface_install_property (interface,
@@ -203,23 +209,32 @@ donna_columntype_get_options_menu (DonnaColumnType  *ct,
 }
 
 gboolean
-donna_columntype_handle_context (DonnaColumnType    *ct,
-                                 gpointer            data,
-                                 DonnaNode          *node,
-                                 DonnaTreeView      *treeview)
+donna_columntype_handle_click (DonnaColumnType    *ct,
+                               gpointer            data,
+                               DonnaClick          click,
+                               GdkEventButton     *event,
+                               DonnaNode          *node,
+                               guint               index,
+                               GtkCellRenderer   **renderers,
+                               renderer_edit_fn    renderer_edit,
+                               gpointer            re_data,
+                               DonnaTreeView      *treeview)
 {
     DonnaColumnTypeInterface *interface;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    g_return_val_if_fail (renderers != NULL && GTK_IS_CELL_RENDERER (renderers[0]), FALSE);
+    g_return_val_if_fail (renderer_edit != NULL, FALSE);
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (treeview), FALSE);
 
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->handle_context != NULL, FALSE);
+    g_return_val_if_fail (interface->handle_click != NULL, FALSE);
 
-    return (*interface->handle_context) (ct, data, node, treeview);
+    return (*interface->handle_click) (ct, data, click, event, node,
+            index, renderers, renderer_edit, re_data, treeview);
 }
 
 GPtrArray *

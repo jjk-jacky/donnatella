@@ -168,6 +168,8 @@ struct column
     DonnaTreeView       *tree;
     gchar               *name;
     GtkTreeViewColumn   *column;
+    /* renderers used in columns, indexed as per columntype */
+    GPtrArray           *renderers;
     /* label in the header (for title, since we handle it ourself) */
     GtkWidget           *label;
     /* our arrow for secondary sort order */
@@ -252,6 +254,19 @@ struct _DonnaTreeViewPrivate
     DonnaTreeView       *sync_with;
     gulong               sid_sw_location_changed;
     gulong               sid_active_list_changed;
+
+    /* info about last event, used to handle single, double & slow-dbl clicks */
+    GdkEventButton      *last_event;
+    guint                last_event_timeout; /* it was a single-click */
+    gboolean             last_event_expired; /* after sgl-clk, could get a slow-dbl */
+    /* when a renderer goes edit-mode, we need the editing-started signal to get
+     * the editable */
+    guint                renderer_editing_started_sid;
+    /* editable is kept so we can make it abort editing when the user clicks
+     * away (e.g. blank space, another row, etc) */
+    GtkCellEditable     *renderer_editable;
+    /* this one is needed to clear/disconnect when editing is done */
+    guint                renderer_editable_remove_widget_sid;
 
     /* Tree: keys are ful locations, values are GSList of struct visuals. The
      * idea is that the list of loaded when loading for a tree file, so we can
@@ -531,6 +546,7 @@ static void
 free_column (struct column *_col)
 {
     g_free (_col->name);
+    g_ptr_array_unref (_col->renderers);
     donna_columntype_free_data (_col->ct, _col->ct_data);
     g_object_unref (_col->ct);
     g_slice_free (struct column, _col);
@@ -3690,9 +3706,9 @@ load_arrangement (DonnaTreeView     *tree,
                         FALSE);
             }
             /* load renderers */
-            for (rend = donna_columntype_get_renderers (ct);
-                    *rend;
-                    ++index, ++rend)
+            rend = donna_columntype_get_renderers (ct);
+            _col->renderers = g_ptr_array_sized_new (strlen (rend));
+            for ( ; *rend; ++index, ++rend)
             {
                 GtkCellRenderer * (*load_renderer) (void);
                 /* TODO: use an external (app-global) renderer loader? */
@@ -3733,6 +3749,7 @@ load_arrangement (DonnaTreeView     *tree,
                     g_object_set_data (G_OBJECT (renderer), "renderer-type",
                             GINT_TO_POINTER (*rend));
                 }
+                g_ptr_array_add (_col->renderers, renderer);
                 gtk_tree_view_column_set_cell_data_func (column, renderer,
                         rend_func, GINT_TO_POINTER (index), NULL);
                 gtk_tree_view_column_pack_start (column, renderer, FALSE);
@@ -5841,12 +5858,76 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
     g_object_unref (loc_node);
 }
 
-static gboolean
-donna_tree_view_button_press_event (GtkWidget      *widget,
-                                    GdkEventButton *event)
+struct re_data
 {
-    DonnaTreeView *tree = DONNA_TREE_VIEW (widget);
-    GtkTreeView *treev = GTK_TREE_VIEW (tree);
+    DonnaTreeView       *tree;
+    GtkTreeViewColumn   *column;
+    GtkTreePath         *path;
+    GdkEvent            *event;
+};
+
+static void
+editable_remove_widget_cb (GtkCellEditable *editable, DonnaTreeView *tree)
+{
+    g_signal_handler_disconnect (editable,
+            tree->priv->renderer_editable_remove_widget_sid);
+    tree->priv->renderer_editable_remove_widget_sid = 0;
+    tree->priv->renderer_editable = NULL;
+}
+
+static void
+editing_started_cb (GtkCellRenderer *renderer,
+                    GtkCellEditable *editable,
+                    gchar           *path,
+                    DonnaTreeView   *tree)
+{
+    g_signal_handler_disconnect (renderer, tree->priv->renderer_editing_started_sid);
+    tree->priv->renderer_editing_started_sid = 0;
+
+    /* in case we need to abort the editing */
+    tree->priv->renderer_editable = editable;
+    /* when the editing will be done */
+    tree->priv->renderer_editable_remove_widget_sid = g_signal_connect (
+            editable, "remove-widget",
+            (GCallback) editable_remove_widget_cb, tree);
+}
+
+static gboolean
+renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
+{
+    GdkRectangle cell_area;
+    gint offset;
+
+    /* shouldn't happen, but to be safe */
+    if (G_UNLIKELY (data->tree->priv->renderer_editable))
+        return FALSE;
+
+    /* get the cell_area (i.e. where editable will be placed */
+    gtk_tree_view_get_cell_area ((GtkTreeView *) data->tree,
+            data->path, data->column, &cell_area);
+    /* in case there are other renderers in that column */
+    if (gtk_tree_view_column_cell_get_position (data->column, renderer,
+            &offset, &cell_area.width))
+        cell_area.x += offset;
+
+    /* so we can get the editable to be able to abort if needed */
+    data->tree->priv->renderer_editing_started_sid = g_signal_connect (
+            renderer, "editing-started",
+            (GCallback) editing_started_cb, data->tree);
+
+    return gtk_cell_area_activate_cell (
+            gtk_cell_layout_get_area ((GtkCellLayout *) data->column),
+            (GtkWidget *) data->tree,
+            renderer,
+            data->event,
+            &cell_area,
+            0);
+}
+
+static void
+trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
+{
+    GtkTreeView *treev = (GtkTreeView *) tree;
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeViewColumn *column;
 #ifdef GTK_IS_JJK
@@ -5856,13 +5937,12 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     GtkTreeIter iter;
     gint x, y;
 
-    /* click with other than left button aren't supported yet */
-    if (event->type == GDK_BUTTON_PRESS && event->button != 1)
-        return TRUE;
-
-    if (event->window != gtk_tree_view_get_bin_window (treev)
-            || event->button != 1 || event->type != GDK_BUTTON_PRESS)
-        goto chainup;
+    if (event->button == 1)
+        click |= DONNA_CLICK_LEFT;
+    else if (event->button == 2)
+        click |= DONNA_CLICK_MIDDLE;
+    else if (event->button == 3)
+        click |= DONNA_CLICK_RIGHT;
 
     x = (gint) event->x;
     y = (gint) event->y;
@@ -5882,33 +5962,32 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
         if (gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
 #endif
         {
-            if (is_tree (tree))
+            if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+                    == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
             {
-                if (priv->full_row_select)
-                    goto chainup;
-                else
-                    return TRUE;
-            }
-            else
-            {
-                if (!priv->full_row_select || column == priv->blank_column)
+                if (!is_tree (tree)
+                        && (column == priv->blank_column || !priv->full_row_select))
                 {
                     GtkTreeSelection *sel;
 
-                    /* no full row select */
                     sel = gtk_tree_view_get_selection (treev);
                     gtk_tree_selection_unselect_all (sel);
 
-                    return TRUE;
                 }
-                else
-                    goto chainup;
+                else if (priv->full_row_select)
+                {
+                    GtkTreePath *path;
+
+                    path = gtk_tree_model_get_path (model, &iter);
+                    gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+                    gtk_tree_path_free (path);
+                }
             }
         }
         else
         {
             DonnaNode *node;
-            struct active_spinners *as;
+            struct active_spinners *as = NULL;
             guint as_idx;
             guint i;
 
@@ -5917,58 +5996,102 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                     -1);
             if (!node)
                 /* prevent clicking/selecting a fake node */
-                return TRUE;
+                return;
 
 #ifdef GTK_IS_JJK
             if (!renderer)
             {
                 /* i.e. clicked on an expander */
 
-                if ((event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)) ==
-                        (GDK_CONTROL_MASK | GDK_SHIFT_MASK))
+                if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+                        == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
                 {
-                    /* FIXME: should Crl+Shift+click be a thing? */
-                }
-                else if (event->state & GDK_CONTROL_MASK)
-                {
-                    /* Ctrl+click always does a full expand */
-                    if (priv->is_minitree)
-                        full_expand_row (tree, &iter);
-                    return TRUE;
-                }
-                else if (event->state & GDK_SHIFT_MASK)
-                {
-                    /* Shift+click always does a full collapse */
-                    full_collapse_row (tree, &iter);
-                    return TRUE;
+                    if (event->state & GDK_CONTROL_MASK)
+                    {
+                        /* Ctrl+click does a full expand on minitree only */
+                        if (priv->is_minitree)
+                        {
+                            full_expand_row (tree, &iter);
+                            return;
+                        }
+                    }
+                    else if (event->state & GDK_SHIFT_MASK)
+                    {
+                        /* Shift+click always does a full collapse */
+                        full_collapse_row (tree, &iter);
+                        return;
+                    }
                 }
             }
-            else if (renderer != int_renderers[INTERNAL_RENDERER_PIXBUF])
+            else if (renderer == int_renderers[INTERNAL_RENDERER_PIXBUF])
+#endif
+                as = get_as_for_node (tree, node, &as_idx, FALSE);
+
+            if (!as)
             {
-                /* not on the error icon, let treev handle it */
-                g_object_unref (node);
-                /* except w/out full_row_select we treat other (than main)
-                 * column the same as blank space */
-                if (!priv->full_row_select && column != priv->main_column)
+                struct column *_col;
+                GtkTreePath *path;
+                guint index = 0;
+
+                path = gtk_tree_model_get_path (model, &iter);
+                /* we ask columntype to handle the click, unless this is the
+                 * main column, in which case we always handle single-left &
+                 * double-left clicks */
+                if (column == priv->main_column && ((click & DONNA_CLICK_LEFT)
+                            && (click & (DONNA_CLICK_SINGLE | DONNA_CLICK_DOUBLE))))
                 {
-                    GtkTreeSelection *sel;
-
-                    /* no full row select */
-                    sel = gtk_tree_view_get_selection (treev);
-                    gtk_tree_selection_unselect_all (sel);
-
-                    /* handled */
-                    return TRUE;
+                    if (click & DONNA_CLICK_SINGLE)
+                        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+                    else /* DONNA_CLICK_DOUBLE */
+                        donna_tree_view_row_activated (treev, path, column);
+                    gtk_tree_path_free (path);
+                    g_object_unref (node);
+                    return;
                 }
-                goto chainup;
-            }
+
+                _col = get_column_by_column (tree, column);
+
+                struct re_data re_data = {
+                    .tree   = tree,
+                    .column = column,
+                    .path   = path,
+                    .event  = (GdkEvent *) event
+                };
+
+#ifdef GTK_IS_JJK
+                for (index = 0; index < _col->renderers->len; ++index)
+                    if (renderer == _col->renderers->pdata[index])
+                    {
+                        ++index;
+                        break;
+                    }
 #endif
 
-            as = get_as_for_node (tree, node, &as_idx, FALSE);
-            if (G_UNLIKELY (!as))
-            {
+                if (!donna_columntype_handle_click (_col->ct, _col->ct_data,
+                        click, event, node, index,
+                        (GtkCellRenderer **) _col->renderers->pdata,
+                        (renderer_edit_fn) renderer_edit, &re_data, tree))
+                {
+                    /* some default */
+
+                    if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+                            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+                    {
+                        if (!is_tree (tree) && !priv->full_row_select)
+                        {
+                            GtkTreeSelection *sel;
+
+                            sel = gtk_tree_view_get_selection (treev);
+                            gtk_tree_selection_unselect_all (sel);
+                        }
+                        else
+                            donna_tree_view_row_activated (treev, path, column);
+                    }
+                }
+
+                gtk_tree_path_free (path);
                 g_object_unref (node);
-                goto chainup;
+                return;
             }
 
             for (i = 0; i < as->as_cols->len; ++i)
@@ -6051,29 +6174,178 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                     gtk_tree_path_free (path);
                 }
 
-                g_object_unref (node);
-                /* we've handled the click */
-                return TRUE;
+                break;
             }
             g_object_unref (node);
         }
     }
     /* no context means not on a row, so below the last row (if any) */
-    else if (!is_tree (tree))
+    else if (!is_tree (tree)
+            && (click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
     {
         GtkTreeSelection *sel;
 
         /* no full row select */
         sel = gtk_tree_view_get_selection (treev);
         gtk_tree_selection_unselect_all (sel);
+    }
+}
 
-        /* handled */
-        return TRUE;
+static gboolean
+slow_expired_cb (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+
+    g_source_remove (priv->last_event_timeout);
+    priv->last_event_timeout = 0;
+    gdk_event_free ((GdkEvent *) priv->last_event);
+    priv->last_event = NULL;
+    priv->last_event_expired = FALSE;
+
+    return FALSE;
+}
+
+static gboolean
+single_click_cb (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaClick click;
+    gint delay;
+
+    /* single click it is */
+
+    g_source_remove (priv->last_event_timeout);
+    priv->last_event_expired = TRUE;
+    /* timeout for slow dbl click. If triggered, we can free last_event */
+    g_object_get (gtk_settings_get_default (),
+            "gtk-double-click-time",    &delay,
+            NULL);
+    priv->last_event_timeout = g_timeout_add (delay,
+            (GSourceFunc) slow_expired_cb, tree);
+
+    trigger_click (tree, DONNA_CLICK_SINGLE, priv->last_event);
+
+    return FALSE;
+}
+
+static gboolean
+donna_tree_view_button_press_event (GtkWidget      *widget,
+                                    GdkEventButton *event)
+{
+    DonnaTreeView *tree = (DonnaTreeView *) widget;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    gboolean set_up_as_last = FALSE;
+
+    if (event->window != gtk_tree_view_get_bin_window ((GtkTreeView *) widget)
+            || event->type != GDK_BUTTON_PRESS)
+        return GTK_WIDGET_CLASS (donna_tree_view_parent_class)
+            ->button_press_event (widget, event);
+
+    if (priv->renderer_editable)
+    {
+        /* we abort the editing -- we just do this, because our signal handlers
+         * for remove-widget will take care of removing handlers and whatnot */
+        g_object_set (priv->renderer_editable, "editing-canceled", TRUE, NULL);
+        gtk_cell_editable_editing_done (priv->renderer_editable);
+        gtk_cell_editable_remove_widget (priv->renderer_editable);
     }
 
-chainup:
-    return GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_press_event (
-            widget, event);
+    if (!priv->last_event)
+        /* a new click */
+        set_up_as_last = TRUE;
+    else if (priv->last_event_expired)
+    {
+        priv->last_event_expired = FALSE;
+        /* since it's expired, there is a timeout, and we should remove it no
+         * matter if it is a slow-double click or not */
+        g_source_remove (priv->last_event_timeout);
+        priv->last_event_timeout = 0;
+
+        if (priv->last_event->button == event->button)
+        {
+            gint distance;
+
+            /* slow-double click? */
+
+            g_object_get (gtk_settings_get_default (),
+                    "gtk-double-click-distance",    &distance,
+                    NULL);
+
+            if ((ABS (event->x - priv->last_event->x) <= distance)
+                    && ABS (event->y - priv->last_event->y) <= distance)
+                /* slow-double click it is */
+                trigger_click (tree, DONNA_CLICK_SLOW_DOUBLE, event);
+            else
+                /* just a new click */
+                set_up_as_last = TRUE;
+        }
+        else
+            /* new click */
+            set_up_as_last = TRUE;
+
+        gdk_event_free ((GdkEvent *) priv->last_event);
+        priv->last_event = NULL;
+    }
+    else
+    {
+        /* since it's not expired, there is a timeout (for single-click), and we
+         * should remove it no matter if it is a double click or not */
+        g_source_remove (priv->last_event_timeout);
+        priv->last_event_timeout = 0;
+
+        if (priv->last_event->button == event->button)
+        {
+            gint distance;
+
+            /* double click? */
+
+            g_object_get (gtk_settings_get_default (),
+                    "gtk-double-click-distance",    &distance,
+                    NULL);
+
+            if ((ABS (event->x - priv->last_event->x) <= distance)
+                    && ABS (event->y - priv->last_event->y) <= distance)
+                /* trigger event as double click */
+                trigger_click (tree, DONNA_CLICK_DOUBLE, event);
+            else
+            {
+                /* trigger last_event as single click */
+                trigger_click (tree, DONNA_CLICK_SINGLE, priv->last_event);
+                /* and set up a new click */
+                set_up_as_last = TRUE;
+            }
+        }
+        else
+        {
+            /* trigger last_event as single click */
+            trigger_click (tree, DONNA_CLICK_SINGLE, priv->last_event);
+            /* and set up new click */
+            set_up_as_last = TRUE;
+        }
+
+        gdk_event_free ((GdkEvent *) priv->last_event);
+        priv->last_event = NULL;
+    }
+
+    if (set_up_as_last)
+    {
+        gint delay;
+
+        /* first timer. store it, and wait to see what happens next */
+
+        g_object_get (gtk_settings_get_default (),
+                "gtk-double-click-time",    &delay,
+                NULL);
+
+        priv->last_event = (GdkEventButton *) gdk_event_copy ((GdkEvent *) event);
+        priv->last_event_timeout = g_timeout_add (delay,
+                (GSourceFunc) single_click_cb, tree);
+        priv->last_event_expired = FALSE;
+    }
+
+    /* handled */
+    return TRUE;
 }
 
 static gboolean

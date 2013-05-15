@@ -4,6 +4,18 @@
 
 G_BEGIN_DECLS
 
+typedef enum
+{
+    DONNA_CLICK_LEFT        = (1 << 0),
+    DONNA_CLICK_MIDDLE      = (1 << 1),
+    DONNA_CLICK_RIGHT       = (1 << 2),
+
+    DONNA_CLICK_SINGLE      = (1 << 3),
+    DONNA_CLICK_DOUBLE      = (1 << 4),
+    DONNA_CLICK_SLOW_DOUBLE = (1 << 5),
+} DonnaClick;
+
+
 typedef struct _DonnaApp                    DonnaApp; /* dummy typedef */
 typedef struct _DonnaAppInterface           DonnaAppInterface;
 
