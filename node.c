@@ -1761,7 +1761,7 @@ donna_node_set_property_task (DonnaNode     *node,
     {
         if (streq (name, *s))
         {
-            if (priv->basic_props[i].has_value == DONNA_NODE_VALUE_NONE)
+            if (i > 0 && priv->basic_props[i - 1].has_value == DONNA_NODE_VALUE_NONE)
             {
                 gchar *location = donna_node_get_location (node);
                 g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_NOT_FOUND,
