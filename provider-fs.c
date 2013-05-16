@@ -2,6 +2,8 @@
 #include <gtk/gtk.h>
 #include <string.h>                 /* strrchr() */
 #include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
 #include "provider-fs.h"
 #include "provider.h"
 #include "node.h"
@@ -218,7 +220,87 @@ setter (DonnaTask       *task,
         const gchar     *name,
         const GValue    *value)
 {
-    /* TODO */
+    if (streq (name, "name"))
+    {
+        gchar *old;
+        gchar *new;
+        gchar *s;
+        gint st;
+        GValue v = G_VALUE_INIT;
+
+        /* TODO once we'll have our function to rename/move files, we'll use
+         * that to support relative path, moving to dir, creating new path on
+         * the fly, etc */
+
+        /* new name cannot contain any path elements */
+        new = (gchar *) g_value_get_string (value);
+        if (strchr (new, '/') != NULL)
+        {
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Invalid new name: path not supported");
+            return DONNA_TASK_FAILED;
+        }
+
+        old = donna_node_get_location (node);
+        s = strrchr (old, '/');
+        *s = '\0';
+        new = g_strdup_printf ("%s/%s", old, new);
+        *s = '/';
+
+        /* check if new exists, if so we fail. TODO: use DonnaTaskHelperAsk to
+         * ask user for confirmation of overwriting */
+        st = access (new, F_OK);
+        if (st == 0)
+        {
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Destination name already exists: %s", new);
+            g_free (old);
+            g_free (new);
+            return DONNA_TASK_FAILED;
+        }
+
+        st = rename (old, new);
+        if (st < 0)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Renaming failed: %s", buf);
+            g_free (old);
+            g_free (new);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* success - let's update the node */
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_take_string (&v, new);
+        donna_node_set_property_value (node, "location", &v);
+        donna_node_set_property_value (node, "full-name", &v);
+        g_value_unset (&v); /* free-s new */
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_set_string (&v, g_value_get_string (value));
+        donna_node_set_property_value (node, "name", &v);
+        g_value_unset (&v);
+
+        if (!refresher (NULL, node, "icon"))
+            /* unset whatever we had before. This is weird since the file is the
+             * same, but also our icon comes from the filename, so for
+             * consistency sake this might be better... */
+            donna_node_set_property_value (node, "icon", NULL);
+
+        g_free (old);
+        return DONNA_TASK_DONE;
+    }
+
+    donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+            DONNA_PROVIDER_ERROR_OTHER,
+            "Invalid property: '%s'", name);
     return DONNA_TASK_FAILED;
 }
 
