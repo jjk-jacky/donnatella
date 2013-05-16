@@ -1986,6 +1986,10 @@ donna_node_get_parent_task (DonnaNode          *node,
  * owner of the property, when the value has actually changed on the item.
  * It's usually called by the setter, or when some autorefresh is triggered.
  *
+ * For properties which can have no value set (i.e. a refresh is needed, so all
+ * properties but required ones) you can pass %NULL as @value to simply unset
+ * whatever value is currently set.
+ *
  * To (try to) change the value of a property, use
  * donna_node_set_property_task()
  */
@@ -2036,12 +2040,25 @@ donna_node_set_property_value (DonnaNode     *node,
     {
         if (streq (name, *s))
         {
-            /* copy the new value over */
-            g_value_copy (value, &node->priv->basic_props[i].value);
-            /* we assume it worked, w/out checking types, etc because this should
-             * only be used by providers and such, on properties they are handling,
-             * so if they get it wrong, they're seriously bugged */
-            node->priv->basic_props[i].has_value = DONNA_NODE_VALUE_SET;
+            if (value)
+            {
+                /* copy the new value over */
+                g_value_copy (value, &node->priv->basic_props[i].value);
+                /* we assume it worked, w/out checking types, etc because this
+                 * should only be used by providers and such, on properties they
+                 * are handling, so if they get it wrong, they're seriously
+                 * bugged */
+                node->priv->basic_props[i].has_value = DONNA_NODE_VALUE_SET;
+            }
+            else
+            {
+                GType type;
+
+                type = G_VALUE_TYPE (&node->priv->basic_props[i].value);
+                g_value_unset (&node->priv->basic_props[i].value);
+                g_value_init (&node->priv->basic_props[i].value, type);
+                node->priv->basic_props[i].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
+            }
             emit = TRUE;
             goto finish;
         }
@@ -2051,12 +2068,24 @@ donna_node_set_property_value (DonnaNode     *node,
     prop = g_hash_table_lookup (node->priv->props, (gpointer) name);
     if (prop)
     {
-        /* copy the new value over */
-        g_value_copy (value, &(prop->value));
-        /* we assume it worked, w/out checking types, etc because this should
-         * only be used by providers and such, on properties they are handling,
-         * so if they get it wrong, they're seriously bugged */
-        prop->has_value = TRUE;
+        if (value)
+        {
+            /* copy the new value over */
+            g_value_copy (value, &(prop->value));
+            /* we assume it worked, w/out checking types, etc because this
+             * should only be used by providers and such, on properties they are
+             * handling, so if they get it wrong, they're seriously bugged */
+            prop->has_value = TRUE;
+        }
+        else
+        {
+            GType type;
+
+            type = G_VALUE_TYPE (&(prop->value));
+            g_value_unset (&(prop->value));
+            g_value_init (&(prop->value), type);
+            prop->has_value = FALSE;
+        }
         emit = TRUE;
     }
 
