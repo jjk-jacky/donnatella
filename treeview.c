@@ -5569,6 +5569,42 @@ donna_tree_view_get_location (DonnaTreeView      *tree)
 }
 
 GPtrArray *
+donna_tree_view_get_selected_nodes (DonnaTreeView   *tree)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeModel *model;
+    GtkTreeSelection *sel;
+    GList *list, *l;
+    GPtrArray *arr;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    priv  = tree->priv;
+    model = (GtkTreeModel *) priv->store;
+
+    sel  = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+    list = gtk_tree_selection_get_selected_rows (sel, NULL);
+    if (!list)
+        return NULL;
+
+    arr = g_ptr_array_new_full (gtk_tree_selection_count_selected_rows (sel),
+            g_object_unref);
+    for (l = list; l; l = l->next)
+    {
+        GtkTreeIter iter;
+        DonnaNode *node;
+
+        gtk_tree_model_get_iter (model, &iter, l->data);
+        gtk_tree_model_get (model, &iter,
+                DONNA_TREE_VIEW_COL_NODE,   &node,
+                -1);
+        g_ptr_array_add (arr, node);
+    }
+    g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
+    return arr;
+}
+
+/* mode list only */
+GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
                               DonnaNode          *node,
                               DonnaNodeType       node_types)

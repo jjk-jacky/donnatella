@@ -109,6 +109,7 @@ gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
+GPtrArray *     donna_tree_view_get_selected_nodes (DonnaTreeView   *tree);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
