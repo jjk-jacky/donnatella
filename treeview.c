@@ -6284,6 +6284,16 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     gboolean set_up_as_last = FALSE;
     gboolean just_focused;
 
+    /* list: on left click that gives us the focus, we just grab the focus &
+     * ignore the click (for tree, it's expected to not have the focus, and yet
+     * see the click trigger the action) */
+    if (!is_tree (tree) && event->button == 1
+            && !gtk_widget_is_focus ((GtkWidget *) tree))
+    {
+        gtk_widget_grab_focus ((GtkWidget *) tree);
+        return TRUE;
+    }
+
     /* if app's main window just got focused, we ignore this click */
     g_object_get (priv->app, "just-focused", &just_focused, NULL);
     if (just_focused)
