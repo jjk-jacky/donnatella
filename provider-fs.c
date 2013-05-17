@@ -248,6 +248,13 @@ setter (DonnaTask       *task,
         new = g_strdup_printf ("%s/%s", old, new);
         *s = '/';
 
+        if (streq (old, new))
+        {
+            g_free (old);
+            g_free (new);
+            return DONNA_TASK_DONE;
+        }
+
         /* check if new exists, if so we fail. TODO: use DonnaTaskHelperAsk to
          * ask user for confirmation of overwriting */
         st = access (new, F_OK);
