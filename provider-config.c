@@ -2407,7 +2407,9 @@ node_prop_setter (DonnaTask     *task,
 {
     DonnaProvider *provider;
     DonnaProviderConfigPrivate *priv;
+    GNode *gnode;
     struct option *option;
+    GValue v = G_VALUE_INIT;
     gchar *location;
     gboolean is_set_value;
 
@@ -2426,8 +2428,8 @@ node_prop_setter (DonnaTask     *task,
         priv = DONNA_PROVIDER_CONFIG (provider)->priv;
 
         g_rw_lock_writer_lock (&priv->lock);
-        option = get_option (priv->root, location);
-        if (!option)
+        gnode = get_option_node (priv->root, location);
+        if (!gnode)
         {
             g_critical ("Unable to find option '%s' while trying to change its value through the associated node",
                     location);
@@ -2440,6 +2442,7 @@ node_prop_setter (DonnaTask     *task,
             g_rw_lock_writer_unlock (&priv->lock);
             return DONNA_TASK_FAILED;
         }
+        option = (struct option *) gnode->data;
 
         if (G_UNLIKELY (!G_VALUE_HOLDS (value,
                         (is_set_value) ? G_VALUE_TYPE (&option->value)
@@ -2467,6 +2470,10 @@ node_prop_setter (DonnaTask     *task,
         g_rw_lock_writer_unlock (&priv->lock);
 
         /* update the node */
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_take_string (&v, get_option_full_name (priv->root, gnode));
+        donna_node_set_property_value (node, "location", &v);
+        g_value_unset (&v);
         donna_node_set_property_value (node, name, value);
 
         g_free (location);
