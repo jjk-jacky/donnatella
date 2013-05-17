@@ -6058,6 +6058,18 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                         full_collapse_row (tree, &iter);
                         return;
                     }
+                    else
+                    {
+                        GtkTreePath *path;
+
+                        path = gtk_tree_model_get_path (model, &iter);
+                        if (gtk_tree_view_row_expanded (treev, path))
+                            gtk_tree_view_collapse_row (treev, path);
+                        else
+                            gtk_tree_view_expand_row (treev, path, FALSE);
+                        gtk_tree_path_free (path);
+                        return;
+                    }
                 }
             }
             else if (renderer == int_renderers[INTERNAL_RENDERER_PIXBUF])
