@@ -5883,6 +5883,8 @@ editing_started_cb (GtkCellRenderer *renderer,
     g_signal_handler_disconnect (renderer, tree->priv->renderer_editing_started_sid);
     tree->priv->renderer_editing_started_sid = 0;
 
+    donna_app_ensure_focused (tree->priv->app);
+
     /* in case we need to abort the editing */
     tree->priv->renderer_editable = editable;
     /* when the editing will be done */
@@ -6232,6 +6234,15 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     DonnaTreeView *tree = (DonnaTreeView *) widget;
     DonnaTreeViewPrivate *priv = tree->priv;
     gboolean set_up_as_last = FALSE;
+    gboolean just_focused;
+
+    /* if app's main window just got focused, we ignore this click */
+    g_object_get (priv->app, "just-focused", &just_focused, NULL);
+    if (just_focused)
+    {
+        g_object_set (priv->app, "just-focused", FALSE, NULL);
+        return TRUE;
+    }
 
     if (event->window != gtk_tree_view_get_bin_window ((GtkTreeView *) widget)
             || event->type != GDK_BUTTON_PRESS)

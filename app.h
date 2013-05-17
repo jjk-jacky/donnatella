@@ -21,6 +21,7 @@ struct _DonnaAppInterface
                                                      DonnaTreeView  *list);
 
     /* virtual table */
+    void                (*ensure_focused)           (DonnaApp       *app);
     DonnaConfig *       (*get_config)               (DonnaApp       *app);
     DonnaConfig *       (*peek_config)              (DonnaApp       *app);
     DonnaProvider *     (*get_provider)             (DonnaApp       *app,
@@ -43,6 +44,7 @@ void                donna_app_active_list_changed   (DonnaApp       *app,
                                                      DonnaTreeView  *list);
 
 /* API */
+void                donna_app_ensure_focused        (DonnaApp       *app);
 DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
 DonnaConfig *       donna_app_peek_config           (DonnaApp       *app);
 DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,

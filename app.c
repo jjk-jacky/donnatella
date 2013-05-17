@@ -29,6 +29,11 @@ donna_app_default_init (DonnaAppInterface *interface)
                 "Active list",
                 DONNA_TYPE_TREE_VIEW,
                 G_PARAM_READWRITE));
+    g_object_interface_install_property (interface,
+            g_param_spec_boolean ("just-focused", "just-focused",
+                "Whether or not the main window was just focused",
+                FALSE,  /* default */
+                G_PARAM_READWRITE));
 }
 
 G_DEFINE_INTERFACE (DonnaApp, donna_app, G_TYPE_OBJECT)
@@ -47,6 +52,21 @@ donna_app_active_list_changed (DonnaApp      *app,
 
 
 /* API */
+
+void
+donna_app_ensure_focused (DonnaApp       *app)
+{
+    DonnaAppInterface *interface;
+
+    g_return_if_fail (DONNA_IS_APP (app));
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_if_fail (interface != NULL);
+    g_return_if_fail (interface->ensure_focused != NULL);
+
+    (*interface->ensure_focused) (app);
+}
 
 DonnaConfig *
 donna_app_get_config (DonnaApp       *app)

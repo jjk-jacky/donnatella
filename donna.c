@@ -23,6 +23,7 @@ enum
     PROP_0,
 
     PROP_ACTIVE_LIST,
+    PROP_JUST_FOCUSED,
 
     NB_PROPS
 };
@@ -49,6 +50,7 @@ enum types
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
+    gboolean         just_focused;
     DonnaConfig     *config;
     GSList          *treeviews;
     GHashTable      *filters;
@@ -88,6 +90,7 @@ static void             donna_donna_get_property    (GObject        *object,
 static void             donna_donna_finalize        (GObject        *object);
 
 /* DonnaApp */
+static void             donna_donna_ensure_focused  (DonnaApp       *app);
 static DonnaConfig *    donna_donna_get_config      (DonnaApp       *app);
 static DonnaConfig *    donna_donna_peek_config     (DonnaApp       *app);
 static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
@@ -107,6 +110,7 @@ static void             donna_donna_show_error      (DonnaApp       *app,
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
 {
+    interface->ensure_focused   = donna_donna_ensure_focused;
     interface->get_config       = donna_donna_get_config;
     interface->peek_config      = donna_donna_peek_config;
     interface->get_provider     = donna_donna_get_provider;
@@ -128,6 +132,7 @@ donna_donna_class_init (DonnaDonnaClass *klass)
     o_class->finalize       = donna_donna_finalize;
 
     g_object_class_override_property (o_class, PROP_ACTIVE_LIST, "active-list");
+    g_object_class_override_property (o_class, PROP_JUST_FOCUSED, "just-focused");
 
     g_type_class_add_private (klass, sizeof (DonnaDonnaPrivate));
 }
@@ -276,6 +281,8 @@ donna_donna_set_property (GObject       *object,
             g_object_unref (priv->active_list);
         priv->active_list = g_value_dup_object (value);
     }
+    else if (prop_id == PROP_JUST_FOCUSED)
+        priv->just_focused = g_value_get_boolean (value);
 }
 
 static void
@@ -288,6 +295,8 @@ donna_donna_get_property (GObject       *object,
 
     if (prop_id == PROP_ACTIVE_LIST)
         g_value_set_object (value, priv->active_list);
+    else if (prop_id == PROP_JUST_FOCUSED)
+        g_value_set_boolean (value, priv->just_focused);
 }
 
 static void
@@ -371,6 +380,18 @@ donna_donna_log_handler (const gchar    *domain,
     g_string_append (str,message);
     puts (str->str);
     g_string_free (str, TRUE);
+}
+
+void
+donna_donna_ensure_focused (DonnaApp *app)
+{
+    DonnaDonnaPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_DONNA (app));
+    priv = ((DonnaDonna *) app)->priv;
+
+    if (!gtk_window_has_toplevel_focus (priv->window))
+        gtk_window_present_with_time (priv->window, GDK_CURRENT_TIME);
 }
 
 DonnaConfig *
@@ -873,6 +894,21 @@ tb_add_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
     g_object_unref (node);
 }
 
+static gboolean
+just_focused_expired (DonnaDonna *donna)
+{
+    donna->priv->just_focused = FALSE;
+    return FALSE;
+}
+
+static gboolean
+focus_in_event_cb (GtkWidget *w, GdkEvent *event, DonnaDonna *donna)
+{
+    donna->priv->just_focused = TRUE;
+    g_timeout_add (420, (GSourceFunc) just_focused_expired, donna);
+    return FALSE;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -910,6 +946,8 @@ main (int argc, char *argv[])
     window = GTK_WINDOW (_window);
     donna_donna_set_window (d, window);
 
+    g_signal_connect (window, "focus-in-event",
+            (GCallback) focus_in_event_cb, d);
     g_signal_connect (G_OBJECT (window), "destroy",
             G_CALLBACK (window_destroy_cb), NULL);
 
