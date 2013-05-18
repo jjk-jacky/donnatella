@@ -6270,7 +6270,10 @@ single_click_cb (DonnaTreeView *tree)
     priv->last_event_timeout = g_timeout_add (delay,
             (GSourceFunc) slow_expired_cb, tree);
 
-    trigger_click (tree, DONNA_CLICK_SINGLE, priv->last_event);
+    /* see button_press_event below for more about this */
+    if (priv->last_event->button != 1
+            || (priv->last_event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+        trigger_click (tree, DONNA_CLICK_SINGLE, priv->last_event);
 
     return FALSE;
 }
@@ -6317,8 +6320,24 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     }
 
     if (!priv->last_event)
-        /* a new click */
+    {
+        /* left click are processed right away, unless Ctrl and/or Shift was
+         * held. This is because:
+         * - the delay could give the impression of things being "slow"(er than
+         *   expected)
+         * - usual behavior when dbl-clicking an iten is to have it selected
+         *   (from the click) and then dbl-clicked
+         * This way we get that, yet other (middle, right) clicks, as well as
+         * when Ctrl and/or Shift is held, can have a dbl-click registered w/out
+         * a click before, so e.g. one could Ctrl+dbl-click an item without
+         * having the selection being affected. */
+        if (event->button == 1 && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+            trigger_click (tree, DONNA_CLICK_SINGLE, event);
+
+        /* we set up as last even when we triggered the click, so we can still
+         * handle (slow) double clicks */
         set_up_as_last = TRUE;
+    }
     else if (priv->last_event_expired)
     {
         priv->last_event_expired = FALSE;
