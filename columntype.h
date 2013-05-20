@@ -147,6 +147,11 @@ gboolean        donna_columntype_is_match_filter(DonnaColumnType    *ct,
 void            donna_columntype_free_filter_data(DonnaColumnType   *ct,
                                                  gpointer            filter_data);
 
+
+inline GtkWindow * donna_columntype_new_floating_window (
+                                                 DonnaTreeView      *tree,
+                                                 gboolean            destroy_on_sel_changed);
+
 G_END_DECLS
 
 #endif /* __DONNA_COLUMNTYPE_H__ */

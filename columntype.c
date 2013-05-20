@@ -341,3 +341,49 @@ donna_columntype_free_filter_data (DonnaColumnType   *ct,
 
     return (*interface->free_filter_data) (ct, filter_data);
 }
+
+/** donna_columntype_new_floating_window:
+ * @tree: #DonnaTreeView where the column is
+ * @destroy_on_sel_changed: Whether to destroy the window on selection change
+ *
+ * Helper function to create a little window that can be used to perform some
+ * property editing on a given node (or selection of nodes).
+ * This will create the window, attach it to @tree, remove decorations, set
+ * %GDK_WINDOW_TYPE_HINT_UTILITY, set position to mouse pointer, set a border of
+ * 6 pixels, make it non-resizable, and make it destroyed on location change on
+ * @tree, as well as selection change if @destroy_on_sel_changed is %TRUE.
+ *
+ * You should call donna_app_set_floating_window() on the returned window after
+ * having made it visible, otherwise this could lead to an instant destruction
+ * on the window (as this call can destroy a previous floating window, thus
+ * giving the focus back to app, thus leading to destruction of the new floating
+ * window).
+ *
+ * Return: (transfer full): A new g_object_ref_sink()ed #GtkWindow
+ */
+inline GtkWindow *
+donna_columntype_new_floating_window (DonnaTreeView *tree,
+                                      gboolean       destroy_on_sel_changed)
+{
+    GtkWindow *win;
+
+    win = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_decorated (win, FALSE);
+    gtk_window_set_type_hint (win, GDK_WINDOW_TYPE_HINT_UTILITY);
+    gtk_window_set_attached_to (win, (GtkWidget *) tree);
+    gtk_window_set_position (win, GTK_WIN_POS_MOUSE);
+    gtk_window_set_resizable (win, FALSE);
+    g_object_set (win, "border-width", 6, NULL);
+    g_object_ref_sink (win);
+    g_signal_connect_swapped (tree, "notify::location",
+            (GCallback) gtk_widget_destroy, win);
+    if (destroy_on_sel_changed)
+    {
+        GtkTreeSelection *sel;
+
+        sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+        g_signal_connect_swapped (sel, "changed",
+                (GCallback) gtk_widget_destroy, win);
+    }
+    return win;
+}
