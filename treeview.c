@@ -6346,24 +6346,7 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     }
 
     if (!priv->last_event)
-    {
-        /* left click are processed right away, unless Ctrl and/or Shift was
-         * held. This is because:
-         * - the delay could give the impression of things being "slow"(er than
-         *   expected)
-         * - usual behavior when dbl-clicking an iten is to have it selected
-         *   (from the click) and then dbl-clicked
-         * This way we get that, yet other (middle, right) clicks, as well as
-         * when Ctrl and/or Shift is held, can have a dbl-click registered w/out
-         * a click before, so e.g. one could Ctrl+dbl-click an item without
-         * having the selection being affected. */
-        if (event->button == 1 && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
-            trigger_click (tree, DONNA_CLICK_SINGLE, event);
-
-        /* we set up as last even when we triggered the click, so we can still
-         * handle (slow) double clicks */
         set_up_as_last = TRUE;
-    }
     else if (priv->last_event_expired)
     {
         priv->last_event_expired = FALSE;
@@ -6441,6 +6424,22 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     if (set_up_as_last)
     {
         gint delay;
+
+        /* left click are processed right away, unless Ctrl and/or Shift was
+         * held. This is because:
+         * - the delay could give the impression of things being "slow"(er than
+         *   expected)
+         * - usual behavior when dbl-clicking an item is to have it selected
+         *   (from the click) and then dbl-clicked
+         * This way we get that, yet other (middle, right) clicks, as well as
+         * when Ctrl and/or Shift is held, can have a dbl-click registered w/out
+         * a click before, so e.g. one could Ctrl+dbl-click an item without
+         * having the selection being affected.
+         * We still set up as last event after we triggered the click, so we can
+         * still handle (slow) double clicks */
+        if (event->button == 1 && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+            trigger_click (tree, DONNA_CLICK_SINGLE, event);
+
 
         /* first timer. store it, and wait to see what happens next */
 
