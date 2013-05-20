@@ -124,9 +124,15 @@ static GtkSortType      ct_perms_get_default_sort_order
                                                      gpointer            data);
 static GtkMenu *        ct_perms_get_options_menu   (DonnaColumnType    *ct,
                                                      gpointer            data);
-static gboolean         ct_perms_handle_context     (DonnaColumnType    *ct,
+static gboolean         ct_perms_handle_click       (DonnaColumnType    *ct,
                                                      gpointer            data,
+                                                     DonnaClick          click,
+                                                     GdkEventButton     *event,
                                                      DonnaNode          *node,
+                                                     guint               index,
+                                                     GtkCellRenderer   **renderers,
+                                                     renderer_edit_fn    renderer_edit,
+                                                     gpointer            re_data,
                                                      DonnaTreeView      *treeview);
 static GPtrArray *      ct_perms_render             (DonnaColumnType    *ct,
                                                      gpointer            data,
@@ -161,7 +167,7 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_props                = ct_perms_get_props;
     interface->get_default_sort_order   = ct_perms_get_default_sort_order;
     interface->get_options_menu         = ct_perms_get_options_menu;
-    interface->handle_context           = ct_perms_handle_context;
+    interface->handle_click             = ct_perms_handle_click;
     interface->render                   = ct_perms_render;
     interface->set_tooltip              = ct_perms_set_tooltip;
     interface->node_cmp                 = ct_perms_node_cmp;
@@ -449,13 +455,587 @@ ct_perms_get_options_menu (DonnaColumnType    *ct,
     return NULL;
 }
 
-static gboolean
-ct_perms_handle_context (DonnaColumnType    *ct,
-                         gpointer            data,
-                         DonnaNode          *node,
-                         DonnaTreeView      *treeview)
+struct editing_data
 {
-    /* FIXME */
+    DonnaApp        *app;
+    DonnaTreeView   *tree;
+    DonnaNode       *node;
+    GPtrArray       *arr;
+    mode_t           mode;
+    uid_t            uid;
+    gid_t            gid;
+    GtkWidget       *window;
+    GtkToggleButton *rad_sel;
+    GtkToggleButton *tgl_u[3];
+    GtkToggleButton *tgl_g[3];
+    GtkToggleButton *tgl_o[3];
+    GtkSpinButton   *spn_u;
+    GtkSpinButton   *spn_g;
+    GtkSpinButton   *spn_o;
+    GtkComboBox     *box_u;
+    GtkComboBox     *box_g;
+    GtkButton       *btn_set;
+    GtkToggleButton *set_perms;
+    /* struct box_changed */
+    GtkToggleButton *set_uid;
+    gulong           sid_uid;
+    /* struct box_changed */
+    GtkToggleButton *set_gid;
+    gulong           sid_gid;
+};
+
+struct box_changed
+{
+    GtkToggleButton *toggle;
+    gulong           sid;
+};
+
+static void
+spin_cb (GtkSpinButton *spin, GtkToggleButton *tgl[])
+{
+    gchar c;
+
+    c = (gchar) gtk_spin_button_get_value (spin);
+    gtk_toggle_button_set_active (tgl[0], c & 4);
+    gtk_toggle_button_set_active (tgl[1], c & 2);
+    gtk_toggle_button_set_active (tgl[2], c & 1);
+}
+
+static void
+toggle_cb (GtkToggleButton *toggle, GtkSpinButton *spin)
+{
+    gchar c;
+    gint  perm;
+
+    c = (gchar) gtk_spin_button_get_value (spin);
+    perm = GPOINTER_TO_INT (g_object_get_data ((GObject *) toggle, "perm"));
+
+    if (gtk_toggle_button_get_active (toggle))
+        c |= perm;
+    else
+        c &= ~perm;
+    gtk_spin_button_set_value (spin, c);
+}
+
+static void
+window_destroy_cb (struct editing_data *data)
+{
+    if (data->arr)
+        g_ptr_array_unref (data->arr);
+    g_free (data);
+}
+
+static void
+toggle_set (GtkToggleButton *btn, struct editing_data *data)
+{
+    gchar lbl[128];
+
+    strcpy (lbl, "Set ");
+    if (gtk_toggle_button_get_active (data->set_perms))
+        strcat (lbl, "Permissions/");
+    if (gtk_toggle_button_get_active (data->set_uid))
+        strcat (lbl, "User/");
+    if (gtk_toggle_button_get_active (data->set_gid))
+        strcat (lbl, "Group/");
+    lbl[strlen (lbl) - 1] = '\0';
+
+    gtk_button_set_label (data->btn_set, lbl);
+    gtk_widget_set_sensitive ((GtkWidget *) data->btn_set, lbl[3] != '\0');
+}
+
+static void
+box_changed (GtkComboBox *box, struct box_changed *bc)
+{
+    g_signal_handler_disconnect (box, bc->sid);
+    gtk_toggle_button_set_active (bc->toggle, TRUE);
+}
+
+static void
+set_prop (struct editing_data   *data,
+          DonnaNode             *node,
+          const gchar           *prop,
+          guint                  value)
+{
+    GError *err = NULL;
+    GValue v = G_VALUE_INIT;
+
+    g_value_init (&v, G_TYPE_UINT);
+    g_value_set_uint (&v, value);
+    if (!donna_tree_view_set_node_property (data->tree, node,
+                prop, &v, &err))
+    {
+        gboolean is_mode = streq (prop, "mode");
+        gchar *fl = donna_node_get_full_location (node);
+        donna_app_show_error (data->app, err,
+                (is_mode)
+                ? "ColumnType perms: Unable to set property '%s' for '%s' to %o"
+                : "ColumnType perms: Unable to set property '%s' for '%s' to %d",
+                prop, fl, value);
+        g_free (fl);
+        g_clear_error (&err);
+    }
+    g_value_unset (&v);
+}
+
+static void
+apply_cb (struct editing_data *data)
+{
+    GtkTreeIter iter;
+    gboolean use_arr;
+    guint set = 0;
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
+    guint i;
+
+    gtk_widget_hide (data->window);
+    use_arr = (data->arr && gtk_toggle_button_get_active (data->rad_sel));
+
+    if (gtk_toggle_button_get_active (data->set_perms))
+    {
+        mode_t m;
+
+        mode = 00;
+        m = 00;
+        if (gtk_toggle_button_get_active (data->tgl_u[0]))
+            m |= 04;
+        if (gtk_toggle_button_get_active (data->tgl_u[1]))
+            m |= 02;
+        if (gtk_toggle_button_get_active (data->tgl_u[2]))
+            m |= 01;
+        mode = 0100 * m;
+        m = 00;
+        if (gtk_toggle_button_get_active (data->tgl_g[0]))
+            m |= 04;
+        if (gtk_toggle_button_get_active (data->tgl_g[1]))
+            m |= 02;
+        if (gtk_toggle_button_get_active (data->tgl_g[2]))
+            m |= 01;
+        mode += 010 * m;
+        m = 00;
+        if (gtk_toggle_button_get_active (data->tgl_o[0]))
+            m |= 04;
+        if (gtk_toggle_button_get_active (data->tgl_o[1]))
+            m |= 02;
+        if (gtk_toggle_button_get_active (data->tgl_o[2]))
+            m |= 01;
+        mode += m;
+
+        set |= SET_PERMS;
+    }
+
+    if (gtk_toggle_button_get_active (data->set_uid))
+    {
+        if (gtk_combo_box_get_active_iter (data->box_u, &iter))
+            gtk_tree_model_get (gtk_combo_box_get_model (data->box_u), &iter,
+                    0,  &uid,
+                    -1);
+        else
+            uid = -1;
+
+        if (uid != -1)
+            set |= SET_UID;
+    }
+
+    if (gtk_toggle_button_get_active (data->set_gid))
+    {
+        if (gtk_combo_box_get_active_iter (data->box_g, &iter))
+            gtk_tree_model_get (gtk_combo_box_get_model (data->box_g), &iter,
+                    0,  &gid,
+                    -1);
+        else
+            gid = -1;
+
+        if (gid != -1)
+            set |= SET_GID;
+    }
+
+    if (set != 0)
+    {
+        if (use_arr)
+            for (i = 0; i < data->arr->len; ++i)
+            {
+                if (set & SET_PERMS)
+                    set_prop (data, data->arr->pdata[i], "mode", (guint) mode);
+                if (set & SET_UID)
+                    set_prop (data, data->arr->pdata[i], "uid", (guint) uid);
+                if (set & SET_GID)
+                    set_prop (data, data->arr->pdata[i], "gid", (guint) gid);
+            }
+        else
+        {
+            if ((set & SET_PERMS) && data->mode != mode)
+                set_prop (data, data->node, "mode", (guint) mode);
+            if ((set & SET_UID) && data->uid != uid)
+                set_prop (data, data->node, "uid", (guint) uid);
+            if ((set & SET_GID) && data->gid != gid)
+                set_prop (data, data->node, "gid", (guint) gid);
+        }
+    }
+
+    gtk_widget_destroy (data->window);
+}
+
+static gboolean
+ct_perms_handle_click (DonnaColumnType    *ct,
+                       gpointer            data,
+                       DonnaClick          click,
+                       GdkEventButton     *event,
+                       DonnaNode          *node,
+                       guint               index,
+                       GtkCellRenderer   **renderers,
+                       renderer_edit_fn    renderer_edit,
+                       gpointer            re_data,
+                       DonnaTreeView      *treeview)
+{
+    if (click == (DONNA_CLICK_SINGLE | DONNA_CLICK_MIDDLE))
+    {
+        struct editing_data *data;
+        DonnaNodeHasValue has;
+        mode_t mode;
+        uid_t uid;
+        gid_t gid;
+        GPtrArray *arr;
+        GtkWidget *w;
+        GtkWindow *win;
+        gint row;
+        gchar *s;
+        gchar c;
+
+        GtkGrid *grid;
+        GtkListStore *store_pwd, *store_grp;
+        GtkCellRenderer *renderer;
+        GtkTreeIter it_pwd, *iter_pwd = &it_pwd;
+        GtkTreeIter it_grp, *iter_grp = &it_grp;
+        struct passwd *pwd;
+        struct group *grp;
+        GtkBox *box;
+
+        /* get the perms */
+        has = donna_node_get_mode (node, TRUE, &mode);
+        has = donna_node_get_uid (node, TRUE, &uid);
+        has = donna_node_get_gid (node, TRUE, &gid);
+        /* get selected nodes (if any) */
+        arr = donna_tree_view_get_selected_nodes (treeview);
+
+        data = g_new0 (struct editing_data, 1);
+        data->app  = ((DonnaColumnTypePerms *) ct)->priv->app;
+        data->tree = treeview;
+        data->node = node;
+        data->mode = (mode & (S_IRWXU | S_IRWXG | S_IRWXO));
+        data->uid  = uid;
+        data->gid  = gid;
+
+        win = donna_columntype_new_floating_window (treeview, !!arr);
+        data->window = w = (GtkWidget *) win;
+        g_signal_connect_swapped (win, "destroy",
+                (GCallback) window_destroy_cb, data);
+
+        w = gtk_grid_new ();
+        grid = (GtkGrid *) w;
+        g_object_set (w, "column-spacing", 12, NULL);
+        gtk_container_add ((GtkContainer *) win, w);
+
+        row = 0;
+        if (!arr || (arr->len == 1 && node == arr->pdata[0]))
+        {
+            PangoAttrList *attr_list;
+
+            if (arr)
+                g_ptr_array_unref (arr);
+
+            s = donna_node_get_name (node);
+            w = gtk_label_new (s);
+            g_free (s);
+            attr_list = pango_attr_list_new ();
+            pango_attr_list_insert (attr_list,
+                    pango_attr_style_new (PANGO_STYLE_ITALIC));
+            gtk_label_set_attributes ((GtkLabel *) w, attr_list);
+            pango_attr_list_unref (attr_list);
+            gtk_grid_attach (grid, w, 0, row, 4, 1);
+        }
+        else
+        {
+            data->arr = arr;
+
+            w = gtk_label_new (NULL);
+            gtk_label_set_markup ((GtkLabel *) w, "<i>Apply to:</i>");
+            gtk_grid_attach (grid, w, 0, row++, 4, 1);
+
+            s = donna_node_get_name (node);
+            w = gtk_radio_button_new_with_label (NULL, s);
+            gtk_widget_set_tooltip_text (w, "Clicked item");
+            g_free (s);
+            gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+            ++row;
+            if (arr->len == 1)
+                s = donna_node_get_name (arr->pdata[0]);
+            else
+                s = g_strdup_printf ("%d selected items", arr->len);
+            w = gtk_radio_button_new_with_label_from_widget (
+                    (GtkRadioButton *) w, s);
+            gtk_widget_set_tooltip_text (w, (arr->len == 1)
+                    ? "Selected item" : "Selected items");
+            g_free (s);
+            data->rad_sel = (GtkToggleButton *) w;
+            gtk_grid_attach (grid, w, 0, row, 4, 1);
+        }
+        g_object_set (w, "margin-bottom", 9, NULL);
+
+        ++row;
+        w = gtk_label_new (NULL);
+        gtk_label_set_markup ((GtkLabel *) w, "<b>User</b>");
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        w = gtk_label_new (NULL);
+        gtk_label_set_markup ((GtkLabel *) w, "<b>Group</b>");
+        gtk_grid_attach (grid, w, 2, row, 1, 1);
+        w = gtk_label_new (NULL);
+        gtk_label_set_markup ((GtkLabel *) w, "<b>Other</b>");
+        gtk_grid_attach (grid, w, 3, row, 1, 1);
+
+        ++row;
+        w = gtk_label_new ("Read");
+        gtk_grid_attach (grid, w, 0, row, 1, 1);
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IRUSR)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        data->tgl_u[0] = (GtkToggleButton *) w;
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IRGRP)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 2, row, 1, 1);
+        data->tgl_g[0] = (GtkToggleButton *) w;
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IROTH)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 3, row, 1, 1);
+        data->tgl_o[0] = (GtkToggleButton *) w;
+
+        ++row;
+        w = gtk_label_new ("Write");
+        gtk_grid_attach (grid, w, 0, row, 1, 1);
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IWUSR)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        data->tgl_u[1] = (GtkToggleButton *) w;
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IWGRP)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 2, row, 1, 1);
+        data->tgl_g[1] = (GtkToggleButton *) w;
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IWOTH)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 3, row, 1, 1);
+        data->tgl_o[1] = (GtkToggleButton *) w;
+
+        ++row;
+        w = gtk_label_new ("Execute");
+        gtk_grid_attach (grid, w, 0, row, 1, 1);
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IXUSR)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        data->tgl_u[2] = (GtkToggleButton *) w;
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IXGRP)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 2, row, 1, 1);
+        data->tgl_g[2] = (GtkToggleButton *) w;
+        w = gtk_check_button_new ();
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        if (mode & S_IXOTH)
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        gtk_grid_attach (grid, w, 3, row, 1, 1);
+        data->tgl_o[2] = (GtkToggleButton *) w;
+
+        ++row;
+        w = gtk_label_new ("Permission");
+        gtk_grid_attach (grid, w, 0, row, 1, 1);
+        w = gtk_spin_button_new_with_range (0, 7, 1);
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        gtk_entry_set_width_chars ((GtkEntry *) w, 1);
+        c = 0;
+        if (mode & S_IRUSR)
+            c += 4;
+        if (mode & S_IWUSR)
+            c += 2;
+        if (mode & S_IXUSR)
+            c += 1;
+        gtk_spin_button_set_value ((GtkSpinButton *) w, c);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        data->spn_u = (GtkSpinButton *) w;
+        w = gtk_spin_button_new_with_range (0, 7, 1);
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        gtk_entry_set_width_chars ((GtkEntry *) w, 1);
+        c = 0;
+        if (mode & S_IRGRP)
+            c += 4;
+        if (mode & S_IWGRP)
+            c += 2;
+        if (mode & S_IXGRP)
+            c += 1;
+        gtk_spin_button_set_value ((GtkSpinButton *) w, c);
+        gtk_grid_attach (grid, w, 2, row, 1, 1);
+        data->spn_g = (GtkSpinButton *) w;
+        w = gtk_spin_button_new_with_range (0, 7, 1);
+        g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
+        gtk_entry_set_width_chars ((GtkEntry *) w, 1);
+        c = 0;
+        if (mode & S_IROTH)
+            c += 4;
+        if (mode & S_IWOTH)
+            c += 2;
+        if (mode & S_IXOTH)
+            c += 1;
+        gtk_spin_button_set_value ((GtkSpinButton *) w, c);
+        gtk_grid_attach (grid, w, 3, row, 1, 1);
+        data->spn_o = (GtkSpinButton *) w;
+
+        g_signal_connect (data->spn_u, "value-changed",
+                (GCallback) spin_cb, &data->tgl_u);
+        g_signal_connect (data->spn_g, "value-changed",
+                (GCallback) spin_cb, &data->tgl_g);
+        g_signal_connect (data->spn_o, "value-changed",
+                (GCallback) spin_cb, &data->tgl_o);
+
+        g_object_set_data ((GObject *) data->tgl_u[0], "perm", GINT_TO_POINTER (4));
+        g_signal_connect (data->tgl_u[0], "toggled",
+                (GCallback) toggle_cb, data->spn_u);
+        g_object_set_data ((GObject *) data->tgl_u[1], "perm", GINT_TO_POINTER (2));
+        g_signal_connect (data->tgl_u[1], "toggled",
+                (GCallback) toggle_cb, data->spn_u);
+        g_object_set_data ((GObject *) data->tgl_u[2], "perm", GINT_TO_POINTER (1));
+        g_signal_connect (data->tgl_u[2], "toggled",
+                (GCallback) toggle_cb, data->spn_u);
+
+        g_object_set_data ((GObject *) data->tgl_g[0], "perm", GINT_TO_POINTER (4));
+        g_signal_connect (data->tgl_g[0], "toggled",
+                (GCallback) toggle_cb, data->spn_g);
+        g_object_set_data ((GObject *) data->tgl_g[1], "perm", GINT_TO_POINTER (2));
+        g_signal_connect (data->tgl_g[1], "toggled",
+                (GCallback) toggle_cb, data->spn_g);
+        g_object_set_data ((GObject *) data->tgl_g[2], "perm", GINT_TO_POINTER (1));
+        g_signal_connect (data->tgl_g[2], "toggled",
+                (GCallback) toggle_cb, data->spn_g);
+
+        g_object_set_data ((GObject *) data->tgl_o[0], "perm", GINT_TO_POINTER (4));
+        g_signal_connect (data->tgl_o[0], "toggled",
+                (GCallback) toggle_cb, data->spn_o);
+        g_object_set_data ((GObject *) data->tgl_o[1], "perm", GINT_TO_POINTER (2));
+        g_signal_connect (data->tgl_o[1], "toggled",
+                (GCallback) toggle_cb, data->spn_o);
+        g_object_set_data ((GObject *) data->tgl_o[2], "perm", GINT_TO_POINTER (1));
+        g_signal_connect (data->tgl_o[2], "toggled",
+                (GCallback) toggle_cb, data->spn_o);
+
+        store_pwd = gtk_list_store_new (2, G_TYPE_INT, G_TYPE_STRING);
+        while ((pwd = getpwent ()))
+        {
+            gtk_list_store_insert_with_values (store_pwd, iter_pwd, -1,
+                    0,  pwd->pw_uid,
+                    1,  pwd->pw_name,
+                    -1);
+            if (uid == pwd->pw_uid)
+                iter_pwd = NULL;
+        }
+        endpwent ();
+
+        store_grp = gtk_list_store_new (2, G_TYPE_INT, G_TYPE_STRING);
+        while ((grp = getgrent ()))
+        {
+            gtk_list_store_insert_with_values (store_grp, iter_grp, -1,
+                    0,  grp->gr_gid,
+                    1,  grp->gr_name,
+                    -1);
+            if (gid == grp->gr_gid)
+                iter_grp = NULL;
+        }
+        endgrent ();
+
+        renderer = gtk_cell_renderer_text_new ();
+
+        ++row;
+        w = gtk_combo_box_new_with_model ((GtkTreeModel *) store_pwd);
+        data->box_u = (GtkComboBox *) w;
+        gtk_widget_set_tooltip_text (w, "User");
+        gtk_combo_box_set_active_iter ((GtkComboBox *) w, &it_pwd);
+        gtk_cell_layout_pack_start ((GtkCellLayout *) w, renderer, TRUE);
+        gtk_cell_layout_set_attributes ((GtkCellLayout *) w, renderer,
+                "text", 1, NULL);
+        g_object_set (w, "margin-top", 9, NULL);
+        gtk_grid_attach (grid, w, 0, row, 2, 1);
+        w = gtk_combo_box_new_with_model ((GtkTreeModel *) store_grp);
+        data->box_g = (GtkComboBox *) w;
+        gtk_widget_set_tooltip_text (w, "Group");
+        gtk_combo_box_set_active_iter ((GtkComboBox *) w, &it_grp);
+        gtk_cell_layout_pack_start ((GtkCellLayout *) w, renderer, TRUE);
+        gtk_cell_layout_set_attributes ((GtkCellLayout *) w, renderer,
+                "text", 1, NULL);
+        g_object_set (w, "margin-top", 9, NULL);
+        gtk_grid_attach (grid, w, 2, row, 2, 1);
+
+        ++row;
+        w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, FALSE);
+        box = (GtkBox *) w;
+        g_object_set (w, "margin-top", 15, NULL);
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
+        g_object_set (gtk_button_get_image ((GtkButton *) w),
+                "icon-size", GTK_ICON_SIZE_MENU, NULL);
+        g_signal_connect_swapped (w, "clicked",
+                (GCallback) gtk_widget_destroy, win);
+        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+        w = gtk_button_new_with_label ("Set Permissions");
+        data->btn_set = (GtkButton *) w;
+        gtk_button_set_image ((GtkButton *) w,
+                gtk_image_new_from_stock (GTK_STOCK_OK, GTK_ICON_SIZE_MENU));
+        g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, data);
+        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+        ++row;
+        w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, FALSE);
+        box = (GtkBox *) w;
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        w = gtk_label_new ("Set: ");
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+        w = gtk_check_button_new_with_label ("Permissions");
+        gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+        g_signal_connect (w, "toggled", (GCallback) toggle_set, data);
+        data->set_perms = (GtkToggleButton *) w;
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+        w = gtk_check_button_new_with_label ("User");
+        g_signal_connect (w, "toggled", (GCallback) toggle_set, data);
+        data->set_uid = (GtkToggleButton *) w;
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+        w = gtk_check_button_new_with_label ("Group");
+        g_signal_connect (w, "toggled", (GCallback) toggle_set, data);
+        data->set_gid = (GtkToggleButton *) w;
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+
+        data->sid_uid = g_signal_connect (data->box_u, "changed",
+                (GCallback) box_changed, &data->set_uid);
+        data->sid_gid = g_signal_connect (data->box_g, "changed",
+                (GCallback) box_changed, &data->set_gid);
+
+        gtk_widget_show_all (data->window);
+        donna_app_set_floating_window (((DonnaColumnTypePerms *) ct)->priv->app, win);
+        return TRUE;
+    }
+
     return FALSE;
 }
 
