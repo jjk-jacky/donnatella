@@ -9,6 +9,7 @@
 #include "node.h"
 #include "task.h"
 #include "macros.h"
+#include "renderer.h"
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
 #include "cellrenderertext.h"
 #include "colorfilter.h"
@@ -2078,6 +2079,40 @@ apply_color_filters (DonnaTreeView      *tree,
     }
 }
 
+/* Because the same renderers are used on all columns, we need to reset their
+ * properties so they don't "leak" to other columns. If we used a model, every
+ * row would have a foobar-set to TRUE or FALSE accordingly.
+ * But we don't, and not all columntypes will set the same properties, also we
+ * have things like color filters that also may set some.
+ * So we need to reset whatever what set last time a renderer was used. An easy
+ * way would be to connect to notify beforehand, have the ct & color filters do
+ * their things, w/ our handler keep track of what needs to be reset next time.
+ * Unfortunately, this can't be done because by the time we're done in rend_func
+ * and therfore disconnect, no signal has been emitted yet. And since we
+ * disconnect, we won't get to process anything.
+ * The way we deal with all this is, we ask anything that sets a property
+ * xalign, highlight and *-set on a renderer to also call this function, with
+ * names of properties that shall be reset before next use. */
+void
+donna_renderer_set (GtkCellRenderer *renderer,
+                    const gchar     *first_prop,
+                    ...)
+{
+    GPtrArray *arr = NULL;
+    va_list va_args;
+    const gchar *prop;
+
+    arr = g_object_get_data ((GObject *) renderer, "renderer-props");
+    prop = first_prop;
+    va_start (va_args, first_prop);
+    while (prop)
+    {
+        g_ptr_array_add (arr, g_strdup (prop));
+        prop = va_arg (va_args, const gchar *);
+    }
+    va_end (va_args);
+}
+
 static void
 rend_func (GtkTreeViewColumn  *column,
            GtkCellRenderer    *renderer,
@@ -2091,6 +2126,7 @@ rend_func (GtkTreeViewColumn  *column,
     DonnaNode *node;
     guint index = GPOINTER_TO_UINT (data);
     GPtrArray *arr;
+    guint i;
 
     tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
     priv = tree->priv;
@@ -2166,19 +2202,19 @@ rend_func (GtkTreeViewColumn  *column,
         return;
     }
 
-    /* because color filters might have been applied the last time this renderer
-     * was used on this column, some properties might have been - and still be -
-     * set (e.g. a foreground color). Therefore, we need to make sure they won't
-     * be used, unless ct_render (or a new matching color filter) sets them
-     * again this time */
-    if (g_type_is_a (G_TYPE_FROM_INSTANCE (renderer), DONNA_TYPE_CELL_RENDERER_TEXT))
+    /* reset any properties that was used last time on this renderer. See
+     * donna_renderer_set() for more */
+    arr = g_object_get_data ((GObject *) renderer, "renderer-props");
+    for (i = 0; i < arr->len; )
     {
-        g_object_set (renderer, "foreground-set", FALSE, NULL);
-        g_object_set (renderer, "background-set", FALSE, NULL);
-        g_object_set (renderer, "weight-set", FALSE, NULL);
-        g_object_set (renderer, "style-set", FALSE, NULL);
-        /* VISUAL_HIGHLIGHT */
-        g_object_set (renderer, "highlight", NULL, NULL);
+        if (streq (arr->pdata[i], "xalign"))
+            g_object_set ((GObject *) renderer, "xalign", 0.0, NULL);
+        else if (streq (arr->pdata[i], "highlight"))
+            g_object_set ((GObject *) renderer, "highlight", NULL, NULL);
+        else
+            g_object_set ((GObject *) renderer, arr->pdata[i], FALSE, NULL);
+        /* brings the last item to index i, hence no need to increment i */
+        g_ptr_array_remove_index_fast (arr, i);
     }
 
     index -= NB_INTERNAL_RENDERERS - 1; /* -1 to start with index 1 */
@@ -2248,6 +2284,7 @@ rend_func (GtkTreeViewColumn  *column,
             if (highlight)
             {
                 g_object_set (renderer, "highlight", highlight, NULL);
+                donna_renderer_set (renderer, "highlight", NULL);
                 g_free (highlight);
             }
         }
@@ -3721,32 +3758,33 @@ load_arrangement (DonnaTreeView     *tree,
             _col->renderers = g_ptr_array_sized_new (strlen (rend));
             for ( ; *rend; ++index, ++rend)
             {
+                GtkCellRenderer **r;
                 GtkCellRenderer * (*load_renderer) (void);
                 /* TODO: use an external (app-global) renderer loader? */
                 switch (*rend)
                 {
                     case DONNA_COLUMNTYPE_RENDERER_TEXT:
-                        renderer = priv->renderers[RENDERER_TEXT];
+                        r = &priv->renderers[RENDERER_TEXT];
                         load_renderer = donna_cell_renderer_text_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_PIXBUF:
-                        renderer = priv->renderers[RENDERER_PIXBUF];
+                        r = &priv->renderers[RENDERER_PIXBUF];
                         load_renderer = gtk_cell_renderer_pixbuf_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_PROGRESS:
-                        renderer = priv->renderers[RENDERER_PROGRESS];
+                        r = &priv->renderers[RENDERER_PROGRESS];
                         load_renderer = gtk_cell_renderer_progress_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_COMBO:
-                        renderer = priv->renderers[RENDERER_COMBO];
+                        r = &priv->renderers[RENDERER_COMBO];
                         load_renderer = gtk_cell_renderer_combo_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_TOGGLE:
-                        renderer = priv->renderers[RENDERER_TOGGLE];
+                        r = &priv->renderers[RENDERER_TOGGLE];
                         load_renderer = gtk_cell_renderer_toggle_new;
                         break;
                     case DONNA_COLUMNTYPE_RENDERER_SPINNER:
-                        renderer = priv->renderers[RENDERER_SPINNER];
+                        r = &priv->renderers[RENDERER_SPINNER];
                         load_renderer = gtk_cell_renderer_spinner_new;
                         break;
                     default:
@@ -3754,12 +3792,22 @@ load_arrangement (DonnaTreeView     *tree,
                                 priv->name, *rend, col);
                         continue;
                 }
-                if (!renderer)
+                if (!*r)
                 {
-                    renderer = load_renderer ();
-                    g_object_set_data (G_OBJECT (renderer), "renderer-type",
+                    renderer = *r = load_renderer ();
+                    g_object_set_data ((GObject * ) renderer, "renderer-type",
                             GINT_TO_POINTER (*rend));
+                    /* an array where we'll store properties that have been set
+                     * by the ct, so we can reset them before next use.
+                     * See donna_renderer_set() for more */
+                    g_object_set_data_full ((GObject *) renderer, "renderer-props",
+                            /* 4: random. There probably won't be more than 4
+                             * properties per renderer, is a guess */
+                            g_ptr_array_new_full (4, g_free),
+                            (GDestroyNotify) g_ptr_array_unref);
                 }
+                else
+                    renderer = *r;
                 g_ptr_array_add (_col->renderers, renderer);
                 gtk_tree_view_column_set_cell_data_func (column, renderer,
                         rend_func, GINT_TO_POINTER (index), NULL);

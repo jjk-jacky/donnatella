@@ -2,6 +2,7 @@
 #include <glib-object.h>
 #include "columntype.h"
 #include "columntype-size.h"
+#include "renderer.h"
 #include "node.h"
 #include "donna.h"
 #include "conf.h"
@@ -390,6 +391,7 @@ ct_size_render (DonnaColumnType    *ct,
         donna_print_size (b, len, data->format, size, data->digits, data->long_unit);
     }
     g_object_set (renderer, "visible", TRUE, "text", b, "xalign", 1.0, NULL);
+    donna_renderer_set (renderer, "xalign", NULL);
     if (b != buf)
         g_free (b);
     return NULL;

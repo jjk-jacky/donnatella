@@ -1,6 +1,7 @@
 
 #include "colorfilter.h"
 #include "filter.h"
+#include "renderer.h"
 #include "macros.h"
 
 enum
@@ -259,6 +260,7 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
 
         g_object_set_property (renderer, prop->name, &prop->value);
         g_object_set (renderer, prop->name_set, TRUE, NULL);
+        donna_renderer_set ((GtkCellRenderer *) renderer, prop->name_set, NULL);
     }
     if (keep_going)
         *keep_going = priv->keep_going;

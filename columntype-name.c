@@ -4,6 +4,7 @@
 #include <string.h>
 #include "columntype.h"
 #include "columntype-name.h"
+#include "renderer.h"
 #include "node.h"
 #include "donna.h"
 #include "conf.h"
@@ -530,7 +531,9 @@ ct_name_render (DonnaColumnType    *ct,
                 "visible",      TRUE,
                 "text",         name,
                 "ellipsize",    PANGO_ELLIPSIZE_END,
+                "ellipsize-set",TRUE,
                 NULL);
+        donna_renderer_set (renderer, "ellipsize-set", NULL);
         g_free (name);
     }
 
