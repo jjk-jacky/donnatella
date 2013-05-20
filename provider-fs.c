@@ -220,13 +220,14 @@ setter (DonnaTask       *task,
         const gchar     *name,
         const GValue    *value)
 {
+    GValue v = G_VALUE_INIT;
+
     if (streq (name, "name"))
     {
         gchar *old;
         gchar *new;
         gchar *s;
         gint st;
-        GValue v = G_VALUE_INIT;
 
         /* TODO once we'll have our function to rename/move files, we'll use
          * that to support relative path, moving to dir, creating new path on
@@ -304,6 +305,94 @@ setter (DonnaTask       *task,
         g_free (old);
         return DONNA_TASK_DONE;
     }
+    else if (streq (name, "mode"))
+    {
+        gchar *location;
+        mode_t mode;
+
+        mode = (mode_t) g_value_get_uint (value);
+        mode = mode & (S_IRWXU | S_IRWXG | S_IRWXO);
+
+        location = donna_node_get_location (node);
+        if (chmod (location, mode) < 0)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Failed to change permissions: %s", buf);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* update the node */
+        g_value_init (&v, G_TYPE_UINT);
+        g_value_set_uint (&v, (guint) mode);
+        donna_node_set_property_value (node, "mode", &v);
+        g_value_unset (&v);
+
+        g_free (location);
+        return DONNA_TASK_DONE;
+    }
+    else if (streq (name, "uid"))
+    {
+        gchar *location;
+        uid_t uid;
+
+        uid = (uid_t) g_value_get_uint (value);
+
+        location = donna_node_get_location (node);
+        if (chown (location, uid, (gid_t) -1) < 0)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Failed to change owner: %s", buf);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* update the node */
+        g_value_init (&v, G_TYPE_UINT);
+        g_value_set_uint (&v, (guint) uid);
+        donna_node_set_property_value (node, "uid", &v);
+        g_value_unset (&v);
+
+        g_free (location);
+        return DONNA_TASK_DONE;
+    }
+    else if (streq (name, "gid"))
+    {
+        gchar *location;
+        gid_t gid;
+
+        gid = (gid_t) g_value_get_uint (value);
+
+        location = donna_node_get_location (node);
+        if (chown (location, (uid_t) -1, gid) < 0)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Failed to change group: %s", buf);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* update the node */
+        g_value_init (&v, G_TYPE_UINT);
+        g_value_set_uint (&v, (guint) gid);
+        donna_node_set_property_value (node, "gid", &v);
+        g_value_unset (&v);
+
+        g_free (location);
+        return DONNA_TASK_DONE;
+    }
 
     donna_task_set_error (task, DONNA_PROVIDER_ERROR,
             DONNA_PROVIDER_ERROR_OTHER,
@@ -353,7 +442,9 @@ new_node (DonnaProviderBase *_provider,
         /* we go past the last / */
         name = strrchr (location, '/') + 1;
 
-    flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE;
+    flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE
+        | DONNA_NODE_MODE_WRITABLE | DONNA_NODE_UID_WRITABLE
+        | DONNA_NODE_GID_WRITABLE;
     if (type == DONNA_NODE_CONTAINER)
         flags &= ~(DONNA_NODE_ICON_EXISTS | DONNA_NODE_DESC_EXISTS);
 
