@@ -290,6 +290,7 @@ struct _DonnaTreeViewPrivate
     guint                auto_focus_sync    : 1;
     /* mode List */
     guint                draw_state         : 2;
+    guint                focusing_click     : 1;
     /* from current arrangement */
     guint                second_sort_sticky : 1;
 };
@@ -998,6 +999,16 @@ load_config (DonnaTreeView *tree)
     }
     else
     {
+        if (donna_config_get_boolean (config, (gboolean *) &val,
+                    "treeviews/%s/focusing_click", priv->name))
+            priv->focusing_click = (gboolean) val;
+        else
+        {
+            /* set default */
+            val = priv->focusing_click = TRUE;
+            donna_config_set_boolean (config, (gboolean) val,
+                    "treeviews/%s/focusing_click", priv->name);
+        }
     }
 }
 
@@ -5981,6 +5992,27 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     else if (event->button == 3)
         click |= DONNA_CLICK_RIGHT;
 
+    if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
+            && !gtk_widget_is_focus ((GtkWidget *) tree))
+    {
+        GtkWidget *w = NULL;
+
+        if (!is_tree (tree) && priv->focusing_click)
+            /* get the widget that currently has the focus */
+            w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
+                        (GtkWidget *) tree));
+
+        gtk_widget_grab_focus ((GtkWidget *) tree);
+
+        /* we "skip" the click if list w/ focusing_click, unless the widget that
+         * had the focus was a children of ours, i.e. a column header */
+        if (!is_tree (tree) && priv->focusing_click && w
+                && gtk_widget_get_ancestor (w,
+                        DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
+            return;
+    }
+
     x = (gint) event->x;
     y = (gint) event->y;
 
@@ -6287,16 +6319,6 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     gboolean set_up_as_last = FALSE;
     gboolean just_focused;
 
-    /* list: on left click that gives us the focus, we just grab the focus &
-     * ignore the click (for tree, it's expected to not have the focus, and yet
-     * see the click trigger the action) */
-    if (!is_tree (tree) && event->button == 1
-            && !gtk_widget_is_focus ((GtkWidget *) tree))
-    {
-        gtk_widget_grab_focus ((GtkWidget *) tree);
-        return TRUE;
-    }
-
     /* if app's main window just got focused, we ignore this click */
     g_object_get (priv->app, "just-focused", &just_focused, NULL);
     if (just_focused)
@@ -6317,6 +6339,10 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
         g_object_set (priv->renderer_editable, "editing-canceled", TRUE, NULL);
         gtk_cell_editable_editing_done (priv->renderer_editable);
         gtk_cell_editable_remove_widget (priv->renderer_editable);
+        if (priv->focusing_click && event->button == 1
+                && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+            /* this is a focusing click, don't process it further */
+            return;
     }
 
     if (!priv->last_event)
