@@ -2604,9 +2604,6 @@ node_removed_cb (DonnaProvider  *provider,
 {
     struct node_removed_data *data;
 
-    if (!is_tree (tree))
-        return;
-
     /* we might not be in the main thread, but we need to be */
     data = g_new (struct node_removed_data, 1);
     data->tree       = tree;
@@ -2690,8 +2687,7 @@ real_new_child_cb (struct new_child_data *data)
 
     if (!is_tree (data->tree))
     {
-        if (priv->location == data->node)
-            add_node_to_tree (data->tree, NULL, data->child, NULL);
+        add_node_to_tree (data->tree, NULL, data->child, NULL);
         goto free;
     }
 
@@ -3051,6 +3047,33 @@ add_node_to_tree (DonnaTreeView *tree,
         list = g_hash_table_lookup (priv->hashtable, node);
         list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
         g_hash_table_insert (priv->hashtable, node, list);
+
+        /* get provider to get task to know if it has children */
+        provider = donna_node_peek_provider (node);
+        for (i = 0; i < priv->providers->len; ++i)
+        {
+            struct provider_signals *ps = priv->providers->pdata[i];
+
+            if (ps->provider == provider)
+            {
+                ps->nb_nodes++;
+                break;
+            }
+        }
+        if (i >= priv->providers->len)
+        {
+            struct provider_signals *ps;
+
+            ps = g_new0 (struct provider_signals, 1);
+            ps->provider = g_object_ref (provider);
+            ps->nb_nodes = 1;
+            ps->sid_node_updated = g_signal_connect (provider, "node-updated",
+                    G_CALLBACK (node_updated_cb), tree);
+            ps->sid_node_removed = g_signal_connect (provider, "node-removed",
+                    G_CALLBACK (node_removed_cb), tree);
+
+            g_ptr_array_add (priv->providers, ps);
+        }
 
         return TRUE;
     }
