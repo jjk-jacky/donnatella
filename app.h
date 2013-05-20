@@ -22,6 +22,8 @@ struct _DonnaAppInterface
 
     /* virtual table */
     void                (*ensure_focused)           (DonnaApp       *app);
+    void                (*set_floating_window)      (DonnaApp       *app,
+                                                     GtkWindow      *window);
     DonnaConfig *       (*get_config)               (DonnaApp       *app);
     DonnaConfig *       (*peek_config)              (DonnaApp       *app);
     DonnaProvider *     (*get_provider)             (DonnaApp       *app,
@@ -45,6 +47,8 @@ void                donna_app_active_list_changed   (DonnaApp       *app,
 
 /* API */
 void                donna_app_ensure_focused        (DonnaApp       *app);
+void                donna_app_set_floating_window   (DonnaApp       *app,
+                                                     GtkWindow      *window);
 DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
 DonnaConfig *       donna_app_peek_config           (DonnaApp       *app);
 DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,

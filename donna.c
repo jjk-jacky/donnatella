@@ -50,6 +50,7 @@ enum types
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
+    GtkWidget       *floating_window;
     gboolean         just_focused;
     DonnaConfig     *config;
     GSList          *treeviews;
@@ -91,6 +92,9 @@ static void             donna_donna_finalize        (GObject        *object);
 
 /* DonnaApp */
 static void             donna_donna_ensure_focused  (DonnaApp       *app);
+static void             donna_donna_set_floating_window (
+                                                     DonnaApp       *app,
+                                                     GtkWindow      *window);
 static DonnaConfig *    donna_donna_get_config      (DonnaApp       *app);
 static DonnaConfig *    donna_donna_peek_config     (DonnaApp       *app);
 static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
@@ -110,15 +114,16 @@ static void             donna_donna_show_error      (DonnaApp       *app,
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
 {
-    interface->ensure_focused   = donna_donna_ensure_focused;
-    interface->get_config       = donna_donna_get_config;
-    interface->peek_config      = donna_donna_peek_config;
-    interface->get_provider     = donna_donna_get_provider;
-    interface->get_columntype   = donna_donna_get_columntype;
-    interface->get_filter       = donna_donna_get_filter;
-    interface->run_task         = donna_donna_run_task;
-    interface->get_treeview     = donna_donna_get_treeview;
-    interface->show_error       = donna_donna_show_error;
+    interface->ensure_focused       = donna_donna_ensure_focused;
+    interface->set_floating_window  = donna_donna_set_floating_window;
+    interface->get_config           = donna_donna_get_config;
+    interface->peek_config          = donna_donna_peek_config;
+    interface->get_provider         = donna_donna_get_provider;
+    interface->get_columntype       = donna_donna_get_columntype;
+    interface->get_filter           = donna_donna_get_filter;
+    interface->run_task             = donna_donna_run_task;
+    interface->get_treeview         = donna_donna_get_treeview;
+    interface->show_error           = donna_donna_show_error;
 }
 
 static void
@@ -392,6 +397,28 @@ donna_donna_ensure_focused (DonnaApp *app)
 
     if (!gtk_window_has_toplevel_focus (priv->window))
         gtk_window_present_with_time (priv->window, GDK_CURRENT_TIME);
+}
+
+static void
+floating_window_destroy_cb (GtkWidget *w, DonnaDonna *donna)
+{
+    donna->priv->floating_window = NULL;
+}
+
+void
+donna_donna_set_floating_window (DonnaApp *app, GtkWindow *window)
+{
+    DonnaDonnaPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_DONNA (app));
+    priv = ((DonnaDonna *) app)->priv;
+
+    if (priv->floating_window)
+        gtk_widget_destroy (priv->floating_window);
+
+    priv->floating_window = (GtkWidget *) window;
+    g_signal_connect (window, "destroy",
+            (GCallback) floating_window_destroy_cb, app);
 }
 
 DonnaConfig *
@@ -906,6 +933,8 @@ focus_in_event_cb (GtkWidget *w, GdkEvent *event, DonnaDonna *donna)
 {
     donna->priv->just_focused = TRUE;
     g_timeout_add (420, (GSourceFunc) just_focused_expired, donna);
+    if (donna->priv->floating_window)
+        gtk_widget_destroy (donna->priv->floating_window);
     return FALSE;
 }
 
