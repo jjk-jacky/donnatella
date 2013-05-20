@@ -4533,14 +4533,17 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     task = donna_node_set_property_task (node, prop, value, &err);
     if (!task)
     {
-        gchar *location = donna_node_get_location (node);
+        gchar *fl = donna_node_get_full_location (node);
+        if (err)
         g_propagate_prefixed_error (error, err,
-                "Treeview '%s': Cannot set property '%s' on node '%s:%s': ",
-                priv->name,
-                prop,
-                donna_node_get_domain (node),
-                location);
-        g_free (location);
+                "Treeview '%s': Cannot set property '%s' on node '%s': ",
+                priv->name, prop, fl);
+        else
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed to create task to set property '%s' on node '%s'",
+                    priv->name, prop, fl);
+        g_free (fl);
         return FALSE;
     }
 
