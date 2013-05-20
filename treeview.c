@@ -6208,7 +6208,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                             g_string_append (str, "Task failed, no error message");
 
                         /* this will get the last task in the array to j,
-                         * hence to need to move/increment j */
+                         * hence no need to move/increment j */
                         g_ptr_array_remove_index_fast (as_col->tasks, j);
 
                         /* can we remove the as_col? */
@@ -6220,6 +6220,8 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                                         as_idx);
                             else
                                 g_array_remove_index_fast (as->as_cols, i);
+
+                            break;
                         }
                     }
                     else
