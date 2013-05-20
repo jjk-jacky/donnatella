@@ -1737,9 +1737,9 @@ donna_node_set_property_task (DonnaNode     *node,
     const gchar **s;
     gint i;
 
-    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    g_return_val_if_fail (name != NULL, FALSE);
-    g_return_val_if_fail (value != NULL, FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    g_return_val_if_fail (name != NULL, NULL);
+    g_return_val_if_fail (value != NULL, NULL);
     priv = node->priv;
     prop = NULL;
 
