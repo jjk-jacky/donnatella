@@ -105,9 +105,15 @@ static GPtrArray *      ct_time_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_time_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
-static gboolean         ct_time_handle_context      (DonnaColumnType    *ct,
+static gboolean         ct_time_handle_click        (DonnaColumnType    *ct,
                                                      gpointer            data,
+                                                     DonnaClick          click,
+                                                     GdkEventButton     *event,
                                                      DonnaNode          *node,
+                                                     guint               index,
+                                                     GtkCellRenderer   **renderers,
+                                                     renderer_edit_fn    renderer_edit,
+                                                     gpointer            re_data,
                                                      DonnaTreeView      *treeview);
 static GPtrArray *      ct_time_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
@@ -141,7 +147,7 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_time_free_data;
     interface->get_props                = ct_time_get_props;
     interface->get_options_menu         = ct_time_get_options_menu;
-    interface->handle_context           = ct_time_handle_context;
+    interface->handle_click             = ct_time_handle_click;
     interface->render                   = ct_time_render;
     interface->set_tooltip              = ct_time_set_tooltip;
     interface->node_cmp                 = ct_time_node_cmp;
@@ -386,16 +392,6 @@ ct_time_get_options_menu (DonnaColumnType    *ct,
     return NULL;
 }
 
-static gboolean
-ct_time_handle_context (DonnaColumnType    *ct,
-                        gpointer            data,
-                        DonnaNode          *node,
-                        DonnaTreeView      *treeview)
-{
-    /* FIXME */
-    return FALSE;
-}
-
 #define warn_not_uint64(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
     g_warning ("ColumnType 'time': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
@@ -405,6 +401,717 @@ ct_time_handle_context (DonnaColumnType    *ct,
             g_type_name (G_TYPE_UINT64));               \
     g_free (location);                                  \
 } while (0)
+
+struct editing_data
+{
+    struct tv_col_data *data;
+    DonnaApp        *app;
+    DonnaTreeView   *tree;
+    DonnaNode       *node;
+    guint            sid;
+    GPtrArray       *arr;
+    GtkWidget       *window;
+    GtkToggleButton *rad_sel;
+    GtkToggleButton *rad_ref;
+    GtkEntry        *entry;
+};
+
+static void
+window_destroy_cb (struct editing_data *ed)
+{
+    if (ed->arr)
+        g_ptr_array_unref (ed->arr);
+    g_free (ed);
+}
+
+static gboolean
+key_press_event_cb (GtkWidget *w, GdkEventKey *event, struct editing_data *ed)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_destroy (ed->window);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static guint64
+get_ref_time (struct editing_data *ed, DonnaNode *node, gint which)
+{
+    GValue value = G_VALUE_INIT;
+    DonnaNodeHasValue has;
+    guint64 time;
+
+    if (which == WHICH_OTHER)
+        which = ed->data->which;
+
+    if (which == WHICH_MTIME)
+        has = donna_node_get_mtime (node, TRUE, &time);
+    else if (which == WHICH_ATIME)
+        has = donna_node_get_atime (node, TRUE, &time);
+    else if (which == WHICH_CTIME)
+        has = donna_node_get_ctime (node, TRUE, &time);
+    else
+        donna_node_get (node, TRUE, ed->data->property, &has, &value, NULL);
+
+    if (has != DONNA_NODE_VALUE_SET && which == WHICH_OTHER)
+    {
+        if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
+        {
+            struct tv_col_data *data = ed->data;
+
+            warn_not_uint64 (node);
+            g_value_unset (&value);
+            return (guint64) -1;
+        }
+        time = g_value_get_uint64 (&value);
+        g_value_unset (&value);
+    }
+
+    return (has == DONNA_NODE_VALUE_SET) ? time : (guint64) -1;
+}
+
+enum
+{
+    /* no joker in use */
+    JOKER_NOT_SET = 0,
+    /* before first element, use dt_ref */
+    JOKER_BEFORE,
+    /* use the joker */
+    JOKER_USE
+};
+
+#define skip_blank(s)   for ( ; isblank (*s); ++s) ;
+
+#define syntax_error()  do {                        \
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,     \
+            DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,  \
+            "Invalid date format (must be [m|a|c|v[+/- x Y|m|V|d|h|m|s] [YYYY-MM-DD[ HH:MM[:SS]] or HH:MM[:SS]]): %s", \
+            fmt);                                   \
+    g_date_time_unref (dt_ref);                     \
+    if (dt_cur)                                     \
+        g_date_time_unref (dt_cur);                 \
+    return (guint64) -1;                            \
+} while (0)
+
+#define get_element_from_dt(unit, dt)   do {                \
+    switch (unit)                                           \
+    {                                                       \
+        case UNIT_YEAR:                                     \
+            year = g_date_time_get_year (dt);               \
+            break;                                          \
+        case UNIT_MONTH:                                    \
+            month = g_date_time_get_month (dt);             \
+            break;                                          \
+        case UNIT_DAY:                                      \
+            day = g_date_time_get_day_of_month (dt);        \
+            break;                                          \
+        case UNIT_HOUR:                                     \
+            hour = g_date_time_get_hour (dt);               \
+            break;                                          \
+        case UNIT_MINUTE:                                   \
+            minute = g_date_time_get_minute (dt);           \
+            break;                                          \
+        case UNIT_SECOND:                                   \
+            seconds = g_date_time_get_second (dt);          \
+            break;                                          \
+    }                                                       \
+} while (0)
+
+static guint64
+get_ts (struct editing_data *ed,
+        const gchar         *fmt,
+        DonnaNode           *node_ref,
+        DonnaNode           *node_cur,
+        gboolean            *is_ts_fixed,
+        GError             **error)
+{
+    gsize len = strlen (fmt);
+    GDateTime *dt_ref;
+    GDateTime *dt_cur = NULL;
+    guint i;
+    guint64 ts;
+    /* "default" values, when using joker '!' */
+    gint year       = 1970;
+    gint month      = 1;
+    gint day        = 1;
+    guint hour      = 0;
+    guint minute    = 0;
+    gdouble seconds = 0;
+
+    if (is_ts_fixed)
+        *is_ts_fixed = TRUE;
+    skip_blank (fmt);
+
+    /* is there a reference specified? */
+    if (*fmt == 'n')
+    {
+        dt_ref = g_date_time_new_now_local ();
+        ++fmt;
+        skip_blank (fmt);
+    }
+    else
+    {
+        guint64 ref;
+
+        switch (*fmt)
+        {
+            case 'm':
+                ref = get_ref_time (ed, node_ref, WHICH_MTIME);
+                ++fmt;
+                skip_blank (fmt);
+                break;
+            case 'a':
+                ref = get_ref_time (ed, node_ref, WHICH_ATIME);
+                ++fmt;
+                skip_blank (fmt);
+                break;
+            case 'c':
+                ref = get_ref_time (ed, node_ref, WHICH_CTIME);
+                ++fmt;
+                skip_blank (fmt);
+                break;
+            case 'v':
+                ++fmt;
+                skip_blank (fmt);
+                /* fall through */
+            default:
+                ref = get_ref_time (ed, node_ref, WHICH_OTHER);
+                break;
+        }
+        if (ref == (guint64) -1)
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_OTHER,
+                    "Invalid reference time");
+            return (guint64) -1;
+        }
+        dt_ref = g_date_time_new_from_unix_local (ref);
+    }
+
+    /* any math to do on ref */
+    while (*fmt == '+' || *fmt == '-')
+    {
+        GDateTime *dt;
+        gint64 nb;
+
+        nb = g_ascii_strtoll (fmt, (gchar **) &fmt, 10);
+        skip_blank (fmt);
+        switch (*fmt)
+        {
+            case UNIT_YEAR:
+                dt = g_date_time_add_years (dt_ref, nb);
+                break;
+            case UNIT_MONTH:
+                dt = g_date_time_add_months (dt_ref, nb);
+                break;
+            case UNIT_WEEK:
+                dt = g_date_time_add_weeks (dt_ref, nb);
+                break;
+            case UNIT_DAY:
+                dt = g_date_time_add_days (dt_ref, nb);
+                break;
+            case UNIT_HOUR:
+                dt = g_date_time_add_hours (dt_ref, nb);
+                break;
+            case UNIT_MINUTE:
+                dt = g_date_time_add_minutes (dt_ref, nb);
+                break;
+            case UNIT_SECOND:
+                dt = g_date_time_add_seconds (dt_ref, nb);
+                break;
+            default:
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "Invalid unit '%c' in reference math: %s",
+                        *fmt, fmt);
+                g_date_time_unref (dt_ref);
+                return (guint64) -1;
+        }
+        g_date_time_unref (dt_ref);
+        dt_ref = dt;
+        ++fmt;
+        skip_blank (fmt);
+    }
+
+    struct
+    {
+        gchar unit;
+        gchar after;
+    } elements[] = {
+        { UNIT_YEAR,    '-' },
+        { UNIT_MONTH,   '-' },
+        { UNIT_DAY,      0  },
+        { UNIT_HOUR,    ':' },
+        { UNIT_MINUTE,  ':' },
+        { UNIT_SECOND,   0  }
+    };
+    guint nb = sizeof (elements) / sizeof (elements[0]);
+    gchar joker = 0;
+    gchar unit_joker;
+    gint  joker_st = JOKER_NOT_SET;
+
+    /* process all date/time elements */
+    for (i = 0; i < nb; ++i)
+    {
+        /* can we fill things with jokers? */
+        if (joker_st != JOKER_NOT_SET)
+        {
+            if (elements[i].unit == unit_joker)
+                joker_st = JOKER_USE;
+
+            if (joker_st == JOKER_BEFORE)
+                get_element_from_dt (elements[i].unit, dt_ref);
+            else /* JOKER_USE */
+            {
+                if (joker == '#')
+                    get_element_from_dt (elements[i].unit, dt_ref);
+                else if (joker == '*')
+                {
+                    if (is_ts_fixed)
+                        *is_ts_fixed = FALSE;
+                    if (!dt_cur)
+                    {
+                        guint64 ref;
+
+                        ref = get_ref_time (ed, node_cur, WHICH_OTHER);
+                        if (ref == (guint64) -1)
+                        {
+                            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                                    DONNA_COLUMNTYPE_ERROR_OTHER,
+                                    "Invalid current time");
+                            g_date_time_unref (dt_ref);
+                            return (guint64) -1;
+                        }
+                        dt_cur = g_date_time_new_from_unix_local (ref);
+                    }
+                    get_element_from_dt (elements[i].unit, dt_cur);
+                }
+                /* else ('!') nothing to do, "defaults" are already set */
+            }
+
+            continue;
+        }
+
+        if (*fmt == '!' || *fmt == '*' || *fmt == '#')
+        {
+            joker = *fmt++;
+            if (*fmt == UNIT_YEAR || *fmt == UNIT_MONTH || *fmt == UNIT_DAY
+                    || *fmt == UNIT_HOUR || *fmt == UNIT_MINUTE
+                    || *fmt == UNIT_SECOND || *fmt == '\0')
+            {
+                unit_joker = (*fmt == '\0') ? elements[i].unit : *fmt;
+                /* will be adjusted on next loop iteration */
+                joker_st = JOKER_BEFORE;
+                /* next iteration should do thing element (again) */
+                --i;
+                continue;
+            }
+        }
+        else if (*fmt >= '0' && *fmt <= '9')
+        {
+            guint64 nb;
+
+            nb = g_ascii_strtoull (fmt, (gchar **) &fmt, 10);
+            switch (elements[i].unit)
+            {
+                case UNIT_YEAR:
+                    year = (gint) nb;
+                    break;
+                case UNIT_MONTH:
+                    month = (gint) nb;
+                    break;
+                case UNIT_DAY:
+                    day = (gint) nb;
+                    break;
+                case UNIT_HOUR:
+                    hour = (guint) nb;
+                    break;
+                case UNIT_MINUTE:
+                    minute = (guint) nb;
+                    break;
+                case UNIT_SECOND:
+                    seconds = (gdouble) nb;
+                    break;
+            }
+        }
+        else if (*fmt == '\0')
+            joker = '#';
+        else
+            syntax_error ();
+
+        if (joker)
+        {
+            if (joker == '#')
+                get_element_from_dt (elements[i].unit, dt_ref);
+            else if (joker == '*')
+            {
+                if (is_ts_fixed)
+                    *is_ts_fixed = FALSE;
+                if (!dt_cur)
+                {
+                    guint64 ref;
+
+                    ref = get_ref_time (ed, node_cur, WHICH_OTHER);
+                    if (ref == (guint64) -1)
+                    {
+                        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                                DONNA_COLUMNTYPE_ERROR_OTHER,
+                                "Invalid current time");
+                        g_date_time_unref (dt_ref);
+                        return (guint64) -1;
+                    }
+                    dt_cur = g_date_time_new_from_unix_local (ref);
+                }
+                get_element_from_dt (elements[i].unit, dt_cur);
+            }
+            /* else ('!') nothing to do, "defaults" are already set */
+
+            joker = 0;
+        }
+
+        if (elements[i].unit == UNIT_DAY)
+        {
+            /* moving to possible time */
+            skip_blank (fmt);
+        }
+        else if (elements[i].after && *fmt == elements[i].after)
+            /* skip separator */
+            ++fmt;
+    }
+
+    g_date_time_unref (dt_ref);
+    if (dt_cur)
+        g_date_time_unref (dt_cur);
+
+    dt_ref = g_date_time_new_local (year, month, day, hour, minute, seconds);
+    ts = g_date_time_to_unix (dt_ref);
+    g_date_time_unref (dt_ref);
+    return ts;
+}
+
+#undef get_date_bit
+#undef syntax_error
+
+static inline void
+set_prop (struct editing_data *ed, const gchar *prop, DonnaNode *node, guint64 ts)
+{
+    GValue value = G_VALUE_INIT;
+    GError *err = NULL;
+
+    g_value_init (&value, G_TYPE_UINT64);
+    g_value_set_uint64 (&value, ts);
+    if (!donna_tree_view_set_node_property (ed->tree, node, prop, &value, &err))
+    {
+        donna_app_show_error (ed->app, err,
+                "ColumnType time: Failed to set '%s'", prop);
+        g_clear_error (&err);
+    }
+}
+
+static void
+apply_cb (struct editing_data *ed)
+{
+    GError *err = NULL;
+    gboolean use_arr;
+    gboolean is_ref_focused;
+    gboolean is_ref_unique;
+    gboolean is_ts_fixed;
+    const gchar *fmt;
+    const gchar *prop;
+    guint64 ts;
+
+    if (ed->window)
+    {
+        gtk_widget_hide (ed->window);
+
+        use_arr = (ed->arr && gtk_toggle_button_get_active (ed->rad_sel));
+        is_ref_focused = !use_arr || !gtk_toggle_button_get_active (ed->rad_ref);
+        is_ref_unique = !use_arr || (ed->arr->len == 1) || is_ref_focused;
+    }
+    else
+    {
+        use_arr = FALSE;
+        is_ref_focused = is_ref_unique = TRUE;
+    }
+    fmt = gtk_entry_get_text (ed->entry);
+
+    if (ed->data->which == WHICH_MTIME)
+        prop = "mtime";
+    else if (ed->data->which == WHICH_ATIME)
+        prop = "atime";
+    else if (ed->data->which == WHICH_CTIME)
+        prop = "ctime";
+    else
+        prop = ed->data->property;
+
+    if (is_ref_unique)
+    {
+        ts = get_ts (ed, fmt,
+                /* node for reference time */
+                (is_ref_focused) ? ed->node
+                : ((use_arr) ? ed->arr->pdata[0] : ed->node),
+                /* node for time preservation */
+                (use_arr) ? ed->arr->pdata[0] : ed->node,
+                /* whether there's time preservation or not */
+                &is_ts_fixed,
+                &err);
+        if (ts == (guint64) -1)
+        {
+            donna_app_show_error (ed->app, err,
+                    "ColumnType time: Cannot set '%s'", prop);
+            g_clear_error (&err);
+            goto done;
+        }
+    }
+    else
+        is_ts_fixed = FALSE;
+
+    if (use_arr)
+    {
+        guint i = 0;
+
+        if (is_ref_unique)
+            set_prop (ed, prop, ed->arr->pdata[i++], ts);
+
+        for ( ; i < ed->arr->len; ++i)
+        {
+            if (!is_ts_fixed)
+            {
+                ts = get_ts (ed, fmt,
+                        (is_ref_focused) ? ed->node : ed->arr->pdata[i],
+                        ed->arr->pdata[i],
+                        NULL, &err);
+                if (ts == (guint64) -1)
+                {
+                    donna_app_show_error (ed->app, err,
+                            "ColumnType time: Cannot set '%s'", prop);
+                    g_clear_error (&err);
+                    continue;
+                }
+            }
+            set_prop (ed, prop, ed->arr->pdata[i], ts);
+        }
+    }
+    else
+        set_prop (ed, prop, ed->node, ts);
+
+done:
+    if (ed->window)
+        gtk_widget_destroy (ed->window);
+}
+
+static void
+editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
+{
+    gboolean canceled;
+
+    g_signal_handler_disconnect (editable, ed->sid);
+
+    g_object_get (editable, "editing-canceled", &canceled, NULL);
+    if (!canceled)
+        apply_cb (ed);
+    /* when there's a window, ed gets free-d in window_destroy_cb; here we need
+     * to do it now (and no known there's no ed->arr) */
+    g_free (ed);
+}
+
+static void
+set_entry_icon (GtkEntry *entry)
+{
+    gtk_entry_set_icon_from_stock (entry, GTK_ENTRY_ICON_SECONDARY,
+            GTK_STOCK_HELP);
+    gtk_entry_set_icon_activatable (entry, GTK_ENTRY_ICON_SECONDARY,
+            FALSE);
+    gtk_entry_set_icon_tooltip_markup (entry, GTK_ENTRY_ICON_SECONDARY,
+            "[&lt;ref&gt;[&lt;math...&gt;]] [YYYY-MM-DD] [HH:MM:SS]\n"
+            "\n"
+            "&lt;ref&gt; can be <b>c</b>, <b>a</b>, <b>m</b>, <b>v</b> or <b>n</b> "
+            "for ctime, atime, mtime, current value or current time (now).\n"
+            "&lt;math&gt; must be +/-, a number and a unit: Y, m, V, d, H, M or S\n"
+            "Calculation will be done to &lt;ref&gt; to get the reference value.\n"
+            "If not specified, defaults to 'v' (i.e. current value).\n"
+            "\n"
+            "Each component of the date/time can be a number/value to use, or a joker:\n"
+            "-<tt> * </tt> to preserve element from the current value\n"
+            "-<tt> # </tt> to use element from the reference value\n"
+            "-<tt> ! </tt> to use element from 1970-01-01 00:00:00\n"
+            "\n"
+            "If the last character is a joker, it applies to all remaining elements.\n"
+            "Else, default joker<tt> # </tt>is used.\n"
+            "\n"
+            "The last joker can be followed by a unit (Y, m, d, H, M, or S);\n"
+            "Then<tt> # </tt>is used until that unit, then the joker is used "
+            "for this element and all remaining ones."
+            );
+}
+
+static void
+editing_started_cb (GtkCellRenderer     *renderer,
+                    GtkCellEditable     *editable,
+                    gchar               *path,
+                    struct editing_data *ed)
+{
+    g_signal_handler_disconnect (renderer, ed->sid);
+    ed->entry = (GtkEntry *) editable;
+    set_entry_icon (ed->entry);
+    ed->sid = g_signal_connect (editable, "editing-done",
+            (GCallback) editing_done_cb, ed);
+}
+
+static gboolean
+ct_time_handle_click (DonnaColumnType    *ct,
+                      gpointer            _data,
+                      DonnaClick          click,
+                      GdkEventButton     *event,
+                      DonnaNode          *node,
+                      guint               index,
+                      GtkCellRenderer   **renderers,
+                      renderer_edit_fn    renderer_edit,
+                      gpointer            re_data,
+                      DonnaTreeView      *treeview)
+{
+    struct tv_col_data *data = _data;
+
+    if (click == (DONNA_CLICK_SINGLE | DONNA_CLICK_MIDDLE))
+    {
+        DonnaNodeHasValue has;
+        GPtrArray *arr;
+        struct editing_data *ed;
+        GtkWindow *win;
+        GtkWidget *w;
+        GtkGrid *grid;
+        GtkBox *box;
+        PangoAttrList *attr_list;
+        gint row;
+        gchar *s;
+        gchar *ss;
+
+        /* get selected nodes (if any) */
+        arr = donna_tree_view_get_selected_nodes (treeview);
+
+        ed = g_new0 (struct editing_data, 1);
+        ed->data = data;
+        ed->app  = ((DonnaColumnTypeTime *) ct)->priv->app;
+        ed->tree = treeview;
+        ed->node = node;
+
+        if (!arr || (arr->len == 1 && node == arr->pdata[0]))
+        {
+            if (arr)
+                g_ptr_array_unref (arr);
+
+            ed->sid = g_signal_connect (renderers[0],
+                        "editing-started",
+                        (GCallback) editing_started_cb, ed);
+
+            g_object_set (renderers[0], "editable", TRUE, NULL);
+            if (!renderer_edit (renderers[0], re_data))
+            {
+                g_signal_handler_disconnect (renderers[0], ed->sid);
+                g_free (data);
+                return FALSE;
+            }
+            return TRUE;
+        }
+
+        win = donna_columntype_new_floating_window (treeview, !!arr);
+        ed->window = w = (GtkWidget *) win;
+        g_signal_connect_swapped (win, "destroy",
+                (GCallback) window_destroy_cb, ed);
+
+        w = gtk_grid_new ();
+        grid = (GtkGrid *) w;
+        g_object_set (w, "column-spacing", 12, NULL);
+        gtk_container_add ((GtkContainer *) win, w);
+
+        row = 0;
+        ed->arr = arr;
+
+        w = gtk_label_new (NULL);
+        gtk_label_set_markup ((GtkLabel *) w, "<i>Apply to:</i>");
+        gtk_grid_attach (grid, w, 0, row++, 4, 1);
+
+        s = ss = donna_node_get_name (node);
+        w = gtk_radio_button_new_with_label (NULL, s);
+        gtk_widget_set_tooltip_text (w, "Clicked item");
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        ++row;
+        if (arr->len == 1)
+            s = donna_node_get_name (arr->pdata[0]);
+        else
+            s = g_strdup_printf ("%d selected items", arr->len);
+        w = gtk_radio_button_new_with_label_from_widget (
+                (GtkRadioButton *) w, s);
+        gtk_widget_set_tooltip_text (w, (arr->len == 1)
+                ? "Selected item" : "Selected items");
+        g_free (s);
+        ed->rad_sel = (GtkToggleButton *) w;
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        ++row;
+        w = gtk_label_new (NULL);
+        g_object_set (w, "margin-top", 4, NULL);
+        gtk_label_set_markup ((GtkLabel *) w,
+                "<b>c</b>time, <b>m</b>time, <b>a</b>time and current <b>v</b>alue relate to:");
+        attr_list = pango_attr_list_new ();
+        pango_attr_list_insert (attr_list,
+                pango_attr_style_new (PANGO_STYLE_ITALIC));
+        gtk_label_set_attributes ((GtkLabel *) w, attr_list);
+        pango_attr_list_unref (attr_list);
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        ++row;
+        w = gtk_radio_button_new_with_label (NULL, ss);
+        gtk_widget_set_tooltip_text (w, "Clicked item");
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        ++row;
+        w = gtk_radio_button_new_with_label_from_widget (
+                (GtkRadioButton *) w, "Touched item");
+        gtk_widget_set_tooltip_text (w, "The item on which the time is set");
+        ed->rad_ref = (GtkToggleButton *) w;
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        g_free (ss);
+        g_object_set (w, "margin-bottom", 9, NULL);
+
+        ++row;
+        w = gtk_entry_new ();
+        ed->entry = (GtkEntry *) w;
+        set_entry_icon (ed->entry);
+        g_signal_connect (w, "key-press-event", (GCallback) key_press_event_cb, ed);
+        g_signal_connect_swapped (w, "activate", (GCallback) apply_cb, ed);
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        ++row;
+        w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, FALSE);
+        box = (GtkBox *) w;
+        g_object_set (w, "margin-top", 15, NULL);
+        gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+        w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
+        g_object_set (gtk_button_get_image ((GtkButton *) w),
+                "icon-size", GTK_ICON_SIZE_MENU, NULL);
+        g_signal_connect_swapped (w, "clicked",
+                (GCallback) gtk_widget_destroy, win);
+        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+        w = gtk_button_new_with_label ("Set time");
+        gtk_button_set_image ((GtkButton *) w,
+                gtk_image_new_from_stock (GTK_STOCK_OK, GTK_ICON_SIZE_MENU));
+        g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
+        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+
+        gtk_widget_show_all (ed->window);
+        gtk_widget_grab_focus ((GtkWidget *) ed->entry);
+        donna_app_set_floating_window (((DonnaColumnTypeTime *) ct)->priv->app, win);
+        return TRUE;
+    }
+
+    return FALSE;
+}
 
 static GPtrArray *
 ct_time_render (DonnaColumnType    *ct,
@@ -966,7 +1673,7 @@ compile_done:
 
                             /* special case:
                              * age = 0d == today
-                             * age = 2w == 2 weeks ago, i.e. during that week
+                             * age = 2V == 2 weeks ago, i.e. during that week
                              * etc */
                             dt = g_date_time_new_from_unix_local (time);
 
