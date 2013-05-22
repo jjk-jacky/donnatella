@@ -18,6 +18,14 @@ typedef struct _DonnaColumnTypeInterface    DonnaColumnTypeInterface;
 
 GType           donna_columntype_get_type   (void) G_GNUC_CONST;
 
+#define DONNA_COLUMNTYPE_ERROR              g_quark_from_static_string ("DonnaColumnType-Error")
+typedef enum
+{
+    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+    DONNA_COLUMNTYPE_ERROR_OTHER,
+} DonnaColumnTypeError;
+
+
 typedef DonnaColumnType *   (*new_ct)       (DonnaConfig        *config);
 
 #define DONNA_COLUMNTYPE_RENDERER_TEXT      't'
