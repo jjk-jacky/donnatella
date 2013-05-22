@@ -3,6 +3,7 @@
 #include <string.h>                 /* strrchr() */
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utime.h>
 #include <errno.h>
 #include "provider-fs.h"
 #include "provider.h"
@@ -214,6 +215,13 @@ done:
     return ret;
 }
 
+enum
+{
+    TIME_NONE = 0,
+    TIME_MTIME,
+    TIME_ATIME,
+};
+
 static DonnaTaskState
 setter (DonnaTask       *task,
         DonnaNode       *node,
@@ -221,6 +229,7 @@ setter (DonnaTask       *task,
         const GValue    *value)
 {
     GValue v = G_VALUE_INIT;
+    gint do_time = TIME_NONE;
 
     if (streq (name, "name"))
     {
@@ -305,6 +314,10 @@ setter (DonnaTask       *task,
         g_free (old);
         return DONNA_TASK_DONE;
     }
+    else if (streq (name, "mtime"))
+        do_time = TIME_MTIME;
+    else if (streq (name, "atime"))
+        do_time = TIME_ATIME;
     else if (streq (name, "mode"))
     {
         gchar *location;
@@ -394,6 +407,86 @@ setter (DonnaTask       *task,
         return DONNA_TASK_DONE;
     }
 
+    if (do_time != TIME_NONE)
+    {
+        gchar *location;
+        guint64 ts;
+        struct stat st;
+        struct utimbuf times;
+
+        location = donna_node_get_location (node);
+        if (lstat (location, &st) == -1)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Failed to change time, lstat failed: %s", buf);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* preserve current values, so we only change one */
+        if (do_time == TIME_MTIME)
+        {
+            times.modtime = (time_t) g_value_get_uint64 (value);
+            times.actime  = st.st_atime;
+        }
+        else /* TIME_ATIME */
+        {
+            times.modtime = st.st_mtime;
+            times.actime  = (time_t) g_value_get_uint64 (value);
+        }
+
+        if (utime (location, &times) == -1)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Failed to change time: %s", buf);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* get the new values (atime could be ignored, ctime was updated) */
+        if (lstat (location, &st) == -1)
+        {
+            gchar buf[255];
+            if (strerror_r (errno, buf, 255) != 0)
+                buf[0] = '\0';
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Time was set, but post-lstat failed: %s", buf);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+
+        /* update the node */
+        g_value_init (&v, G_TYPE_UINT64);
+        if (do_time == TIME_MTIME)
+        {
+            g_value_set_uint64 (&v, (guint64) st.st_mtime);
+            donna_node_set_property_value (node, "mtime", &v);
+        }
+        else /* TIME_ATIME */
+        {
+            g_value_set_uint64 (&v, (guint64) st.st_atime);
+            donna_node_set_property_value (node, "atime", &v);
+        }
+        g_value_unset (&v);
+
+        g_value_init (&v, G_TYPE_UINT64);
+        g_value_set_uint64 (&v, (guint64) st.st_ctime);
+        donna_node_set_property_value (node, "ctime", &v);
+        g_value_unset (&v);
+
+        g_free (location);
+        return DONNA_TASK_DONE;
+    }
+
     donna_task_set_error (task, DONNA_PROVIDER_ERROR,
             DONNA_PROVIDER_ERROR_OTHER,
             "Invalid property: '%s'", name);
@@ -444,7 +537,8 @@ new_node (DonnaProviderBase *_provider,
 
     flags = DONNA_NODE_ALL_EXISTS | DONNA_NODE_NAME_WRITABLE
         | DONNA_NODE_MODE_WRITABLE | DONNA_NODE_UID_WRITABLE
-        | DONNA_NODE_GID_WRITABLE;
+        | DONNA_NODE_GID_WRITABLE | DONNA_NODE_MTIME_WRITABLE
+        | DONNA_NODE_ATIME_WRITABLE;
     if (type == DONNA_NODE_CONTAINER)
         flags &= ~(DONNA_NODE_ICON_EXISTS | DONNA_NODE_DESC_EXISTS);
 
