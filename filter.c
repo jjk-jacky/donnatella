@@ -206,7 +206,7 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
     gchar *type = NULL;
 
     config = donna_app_peek_config (priv->app);
-    if (donna_config_get_string (config, &type, "columns/%s", col_name))
+    if (donna_config_get_string (config, &type, "columns/%s/type", col_name))
         ct = donna_app_get_columntype (priv->app, type);
     else
         /* fallback to its name */
