@@ -267,14 +267,18 @@ setter (DonnaTask       *task,
 
     if (streq (name, "name"))
     {
+        gboolean is_utf8;
         gchar *old;
         gchar *new;
         gchar *s;
+        gchar *new_from_utf8 = NULL;
         gint st;
 
         /* TODO once we'll have our function to rename/move files, we'll use
          * that to support relative path, moving to dir, creating new path on
          * the fly, etc */
+
+        is_utf8 = g_get_filename_charsets (NULL);
 
         /* new name cannot contain any path elements */
         new = (gchar *) g_value_get_string (value);
@@ -285,12 +289,15 @@ setter (DonnaTask       *task,
                     "Invalid new name: path not supported");
             return DONNA_TASK_FAILED;
         }
+        if (!is_utf8)
+            new = new_from_utf8 = g_filename_from_utf8 (new, -1, NULL, NULL, NULL);
 
-        old = donna_node_get_location (node);
+        old = donna_node_get_filename (node);
         s = strrchr (old, '/');
         *s = '\0';
         new = g_strdup_printf ("%s/%s", old, new);
         *s = '/';
+        g_free (new_from_utf8);
 
         if (streq (old, new))
         {
@@ -330,7 +337,24 @@ setter (DonnaTask       *task,
 
         g_value_init (&v, G_TYPE_STRING);
         g_value_take_string (&v, new);
-        donna_node_set_property_value (node, "location", &v);
+        if (is_utf8)
+            donna_node_set_property_value (node, "location", &v);
+        else
+        {
+            gchar *l;
+
+            donna_node_set_property_value (node, "filename", &v);
+            l = donna_node_get_location (node);
+            s = strrchr (l, '/');
+            *s = '\0';
+            s = g_strdup_printf ("%s/%s", l, g_value_get_string (value));
+            g_free (l);
+            g_value_unset (&v); /* free-s new */
+
+            g_value_init (&v, G_TYPE_STRING);
+            g_value_take_string (&v, s);
+            donna_node_set_property_value (node, "location", &v);
+        }
         donna_node_set_property_value (node, "full-name", &v);
         g_value_unset (&v); /* free-s new */
 
@@ -354,14 +378,14 @@ setter (DonnaTask       *task,
         do_time = TIME_ATIME;
     else if (streq (name, "mode"))
     {
-        gchar *location;
+        gchar *filename;
         mode_t mode;
 
         mode = (mode_t) g_value_get_uint (value);
         mode = mode & (S_IRWXU | S_IRWXG | S_IRWXO);
 
-        location = donna_node_get_location (node);
-        if (chmod (location, mode) < 0)
+        filename = donna_node_get_filename (node);
+        if (chmod (filename, mode) < 0)
         {
             gchar buf[255];
             if (strerror_r (errno, buf, 255) != 0)
@@ -369,7 +393,7 @@ setter (DonnaTask       *task,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
                     "Failed to change permissions: %s", buf);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_FAILED;
         }
 
@@ -379,18 +403,18 @@ setter (DonnaTask       *task,
         donna_node_set_property_value (node, "mode", &v);
         g_value_unset (&v);
 
-        g_free (location);
+        g_free (filename);
         return DONNA_TASK_DONE;
     }
     else if (streq (name, "uid"))
     {
-        gchar *location;
+        gchar *filename;
         uid_t uid;
 
         uid = (uid_t) g_value_get_uint (value);
 
-        location = donna_node_get_location (node);
-        if (chown (location, uid, (gid_t) -1) < 0)
+        filename = donna_node_get_filename (node);
+        if (chown (filename, uid, (gid_t) -1) < 0)
         {
             gchar buf[255];
             if (strerror_r (errno, buf, 255) != 0)
@@ -398,7 +422,7 @@ setter (DonnaTask       *task,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
                     "Failed to change owner: %s", buf);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_FAILED;
         }
 
@@ -408,18 +432,18 @@ setter (DonnaTask       *task,
         donna_node_set_property_value (node, "uid", &v);
         g_value_unset (&v);
 
-        g_free (location);
+        g_free (filename);
         return DONNA_TASK_DONE;
     }
     else if (streq (name, "gid"))
     {
-        gchar *location;
+        gchar *filename;
         gid_t gid;
 
         gid = (gid_t) g_value_get_uint (value);
 
-        location = donna_node_get_location (node);
-        if (chown (location, (uid_t) -1, gid) < 0)
+        filename = donna_node_get_filename (node);
+        if (chown (filename, (uid_t) -1, gid) < 0)
         {
             gchar buf[255];
             if (strerror_r (errno, buf, 255) != 0)
@@ -427,7 +451,7 @@ setter (DonnaTask       *task,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
                     "Failed to change group: %s", buf);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_FAILED;
         }
 
@@ -437,19 +461,19 @@ setter (DonnaTask       *task,
         donna_node_set_property_value (node, "gid", &v);
         g_value_unset (&v);
 
-        g_free (location);
+        g_free (filename);
         return DONNA_TASK_DONE;
     }
 
     if (do_time != TIME_NONE)
     {
-        gchar *location;
+        gchar *filename;
         guint64 ts;
         struct stat st;
         struct utimbuf times;
 
-        location = donna_node_get_location (node);
-        if (lstat (location, &st) == -1)
+        filename = donna_node_get_filename (node);
+        if (lstat (filename, &st) == -1)
         {
             gchar buf[255];
             if (strerror_r (errno, buf, 255) != 0)
@@ -457,7 +481,7 @@ setter (DonnaTask       *task,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
                     "Failed to change time, lstat failed: %s", buf);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_FAILED;
         }
 
@@ -473,7 +497,7 @@ setter (DonnaTask       *task,
             times.actime  = (time_t) g_value_get_uint64 (value);
         }
 
-        if (utime (location, &times) == -1)
+        if (utime (filename, &times) == -1)
         {
             gchar buf[255];
             if (strerror_r (errno, buf, 255) != 0)
@@ -481,12 +505,12 @@ setter (DonnaTask       *task,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
                     "Failed to change time: %s", buf);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_FAILED;
         }
 
         /* get the new values (atime could be ignored, ctime was updated) */
-        if (lstat (location, &st) == -1)
+        if (lstat (filename, &st) == -1)
         {
             gchar buf[255];
             if (strerror_r (errno, buf, 255) != 0)
@@ -494,7 +518,7 @@ setter (DonnaTask       *task,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
                     "Time was set, but post-lstat failed: %s", buf);
-            g_free (location);
+            g_free (filename);
             return DONNA_TASK_FAILED;
         }
 
@@ -517,7 +541,7 @@ setter (DonnaTask       *task,
         donna_node_set_property_value (node, "ctime", &v);
         g_value_unset (&v);
 
-        g_free (location);
+        g_free (filename);
         return DONNA_TASK_DONE;
     }
 
