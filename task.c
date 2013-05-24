@@ -59,9 +59,15 @@
  *   be run at the same time.
  * - donna_task_set_visibility() to set the ::visibility property of the task.
  *   An internal task (%DONNA_TASK_VISIBILITY_INTERNAL) will be directly run
- *   in a new thread by donna_app_run_task(), whereas a public task
+ *   in a dedicated thread by donna_app_run_task(), whereas a public task
  *   (%DONNA_TASK_VISIBILITY_PULIC) will be added to #DonnaTaskManager (in
- *   charge of starting the task as soon as possible)
+ *   charge of starting the task as soon as possible; they also run in a
+ *   dedicated thread).
+ *   Internal GUI tasks (%DONNA_TASK_VISIBILITY_INTERNAL_GUI) require to be run
+ *   in the main thread, as they need to use GTK+ functions; Fast internal ones
+ *   (%DONNA_TASK_VISIBILITY_INTERNAL_FAST) are guaranteed to be fast/not block
+ *   (i.e. all in memory, no slow process, disk access, etc) and can be run in
+ *   the current thread, even the main/GUI one.
  * - The #DonnaTask:priority is a writable property also to be used by the task
  *   manager, and that can be changed even while the task is running.
  *FIXME: function does not exists!
@@ -238,6 +244,10 @@ donna_task_class_init (DonnaTaskClass *klass)
      * will be ran into the internal thread pool managed by #DonnaApp while
      * public tasks (%DONNA_TASK_VISIBILITY_PULIC) will be handled through the
      * #DonnaTaskManager (which manages its own thread pool).
+     * Internal GUI tasks (%DONNA_TASK_VISIBILITY_INTERNAL_GUI) are required to
+     * be run in the main thread as they'll use GTK functions and such.
+     * Fast internal ones (%DONNA_TASK_VISIBILITY_INTERNAL_FAST) will be run in
+     * the current thread, as they guarantee not to be slow/block.
      */
     donna_task_props[PROP_VISIBILITY] =
         g_param_spec_int ("visibility", "visibility",
@@ -706,7 +716,9 @@ donna_task_set_visibility (DonnaTask          *task,
             g_debug2 ("Task '%s': set visibility to %s",
                 (task->priv->desc) ? task->priv->desc : "(no desc)",
                 (visibility == DONNA_TASK_VISIBILITY_INTERNAL) ? "internal"
-                : "public"));
+                : ((visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI) ? "internal GUI"
+                    : (((visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
+                            ? "internal fast" : "public")))));
     return TRUE;
 }
 

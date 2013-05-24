@@ -2691,6 +2691,7 @@ provider_config_get_node_task (DonnaProvider       *provider,
 
     task = donna_task_new ((task_fn) return_option_node, data,
             (GDestroyNotify) free_get_node_data);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
     DONNA_DEBUG (TASK,
             donna_task_take_desc (task, g_strdup_printf ("get_node() for '%s:%s'",
@@ -2865,6 +2866,7 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
 
     task = donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);
@@ -2897,6 +2899,7 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
 
     task = donna_task_new ((task_fn) node_children, data,
             (GDestroyNotify) free_node_children_data);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);
@@ -2942,6 +2945,7 @@ provider_config_remove_node_task (DonnaProvider       *provider,
     task = donna_task_new ((task_fn) node_remove_option,
             g_object_ref (node),
             g_object_unref);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);
@@ -3041,6 +3045,7 @@ provider_config_get_node_parent_task (DonnaProvider *provider,
     task = donna_task_new ((task_fn) get_node_parent,
             g_object_ref (node),
             g_object_unref);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);

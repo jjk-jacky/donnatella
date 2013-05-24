@@ -496,12 +496,22 @@ void
 donna_donna_run_task (DonnaApp    *app,
                       DonnaTask   *task)
 {
+    DonnaTaskVisibility visibility;
+
     g_return_if_fail (DONNA_IS_DONNA (app));
 
-    /* FIXME if task is public, add to task manager */
     donna_task_prepare (task);
-    g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
-            g_object_ref_sink (task), NULL);
+    g_object_get (task, "visibility", &visibility, NULL);
+    if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI)
+        g_main_context_invoke (NULL, (GSourceFunc) donna_donna_task_run,
+                g_object_ref_sink (task));
+    else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
+        donna_donna_task_run (g_object_ref_sink (task));
+    /* FIXME else if (visibility == DONNA_TASK_VISIBILITY_PULIC)
+     *      add_to_task_manager (task); */
+    else
+        g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
+                g_object_ref_sink (task), NULL);
 }
 
 static DonnaArrangement *

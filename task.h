@@ -23,7 +23,14 @@ typedef enum
 
 typedef enum
 {
+    /* internal task, to be ran in a new thread */
     DONNA_TASK_VISIBILITY_INTERNAL,
+    /* internal task that must be run in the main thread (uses GTK functions) */
+    DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    /* internal task that will be fast/cannot block (i.e. 100% memory),
+     * therefore can be run in current thread (even main/GUI one) */
+    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+    /* public task, i.e. to be sent to the task manager. Will ran in its own thread */
     DONNA_TASK_VISIBILITY_PULIC
 } DonnaTaskVisibility;
 
