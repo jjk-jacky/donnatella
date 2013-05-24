@@ -835,8 +835,9 @@ tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
 
     task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
             "/home/jjacky/donnatella/donna.c", NULL);
-    g_object_ref_sink (task);
-    donna_task_run (task);
+    donna_task_set_can_block (g_object_ref_sink (task));
+    donna_app_run_task ((DonnaApp*)d, task);
+    donna_task_wait_for_it (task);
     value = donna_task_get_return_value (task);
     node = g_value_dup_object (value);
     g_object_unref (task);

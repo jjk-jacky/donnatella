@@ -1,6 +1,7 @@
 
 #include <glib-object.h>
 #include <sys/eventfd.h>
+#include <sys/select.h>
 #include <unistd.h>         /* read(), write(), close() */
 #include <stdarg.h>         /* va_args stuff */
 #include <string.h>         /* strlen() */
@@ -121,6 +122,10 @@
  * in between, as the task remains locked during that time, and trying to do
  * anything else (even a call to donna_task_is_cancelling()) could lead to
  * deadlock.
+ *
+ * If you need to run another task from a task worker, and wait until it is done
+ * to continue execution, you can use donna_task_set_can_block() &
+ * donna_task_wait_for_it() to do so.
  */
 
 struct _DonnaTaskPrivate
@@ -167,6 +172,8 @@ struct _DonnaTaskPrivate
     GCond                cond;
     /* fd that can be used to help handle cancel/pause stuff */
     int                  fd;
+    /* fd that can be used when blocking, see donna_task_set_can_block() */
+    int                  fd_block;
     /* GPtrArray of nodes to be selected on List */
     GPtrArray           *nodes_for_selection;
     /* to hold the return value */
@@ -412,6 +419,7 @@ donna_task_init (DonnaTask *task)
     priv->state     = DONNA_TASK_WAITING;
     priv->devices   = NULL;
     priv->fd        = -1;
+    priv->fd_block  = -1;
     priv->nodes_for_selection = NULL;
     priv->value     = NULL;
     priv->error     = NULL;
@@ -436,6 +444,8 @@ donna_task_finalize (GObject *object)
     g_free (priv->status);
     if (priv->fd >= 0)
         close (priv->fd);
+    if (priv->fd_block >= 0)
+        close (priv->fd_block);
     if (priv->nodes_for_selection)
         g_ptr_array_unref (priv->nodes_for_selection);
     if (priv->value)
@@ -944,6 +954,92 @@ donna_task_set_timeout (DonnaTask       *task,
 }
 
 /**
+ * donna_task_set_can_block:
+ * @task: Task that can be blocking the current thread
+ *
+ * This functions works with donna_task_wait_for_it() and allow you to run a
+ * task and wait until its done before continuing execution, possibly having the
+ * task run in (& block) the current thread.
+ *
+ * This is intended for task worker (i.e. function that run as task) that need
+ * to run another task as part of its execution. In such cases, you might need
+ * to wait for the task to be done, but you can't simply call donna_task_run()
+ * directly, because the task might need to run in the main thread, or to be
+ * managed by the task manager.
+ *
+ * First, make sure to take a reference on the task, and call this. As a side
+ * effect, task with a visibility %DONNA_TASK_VISIBILITY_INTERNAL will be set to
+ * %DONNA_TASK_VISIBILITY_INTERNAL_FAST to have them run in the current thread.
+ *
+ * Then, start the task as usual (i.e. using donna_app_run_task()) and then call
+ * donna_task_wait_for_it(). The function will only return if the task has
+ * already finished, or wait until it does (including execution of the callback,
+ * if one was set).
+ *
+ * Returns: %TRUE if you can run @task and use donna_task_wait_for_it() on it
+ */
+gboolean
+donna_task_set_can_block (DonnaTask          *task)
+{
+    DonnaTaskPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    priv = task->priv;
+
+    if (priv->fd_block >= 0)
+        return FALSE;
+
+    priv->fd_block = eventfd (0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (priv->fd_block == -1)
+        return FALSE;
+
+    /* since we want to block the current thread waiting for the task, let's try
+     * to have it run inside instead of needing another one */
+    if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+        priv->visibility = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+
+    return TRUE;
+}
+
+/**
+ * donna_task_wait_for_it:
+ * @task: Task to wait for execution to be over
+ *
+ * This will return only if @task has already finished its execution, or wait
+ * until it has before returning (that includes full execution of the callback,
+ * if any).
+ *
+ * It will return %FALSE in case of error, e.g. if donna_task_set_can_block()
+ * wasn't used on @task before running it.
+ * Note that it will return %TRUE regardless of the ::state of @task.
+ *
+ * Please see donna_task_set_can_block() for how to use this.
+ *
+ * Returns: %TRUE is execution of @task was complete, else %FALSE
+ */
+gboolean
+donna_task_wait_for_it (DonnaTask          *task)
+{
+    DonnaTaskPrivate *priv;
+    fd_set fd_set;
+
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    priv = task->priv;
+
+    if (priv->fd_block == -1)
+        return FALSE;
+
+    FD_ZERO (&fd_set);
+    FD_SET (priv->fd_block, &fd_set);
+    if (select (priv->fd_block + 1, &fd_set, NULL, NULL, 0) == -1)
+        return FALSE;
+
+    close (priv->fd_block);
+    priv->fd_block = -1;
+    return TRUE;
+}
+
+/**
  * donna_task_can_be_duplicated:
  * @task: Task to check if it can be duplicated
  *
@@ -1105,12 +1201,16 @@ callback_cb (gpointer data)
 {
     DonnaTask *task = (DonnaTask *) data;
     DonnaTaskPrivate *priv = task->priv;
+    guint64 one = 1;
 
     DONNA_DEBUG (TASK,
             g_debug2 ("Callback for task: %s",
                 (priv->desc) ? priv->desc : "(no desc)"));
     priv->callback_fn (task, priv->timeout_ran, priv->callback_data);
 
+    /* someone blocked for us? */
+    if (priv->fd_block >= 0)
+        write (priv->fd_block, &one, sizeof (one));
     /* remove the reference we had on the task */
     g_object_unref (task);
 
@@ -1253,8 +1353,15 @@ donna_task_run (DonnaTask *task)
          * be removed after the callback has been triggered */
         g_main_context_invoke (NULL, callback_cb, task);
     else
+    {
+        guint64 one = 1;
+
+        /* someone blocked for us? */
+        if (priv->fd_block >= 0)
+            write (priv->fd_block, &one, sizeof (one));
         /* remove our reference on task */
         g_object_unref (task);
+    }
 }
 
 /**
