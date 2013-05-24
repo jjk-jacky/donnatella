@@ -6046,7 +6046,7 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
             0);
 }
 
-static void
+static gboolean
 trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 {
     GtkTreeView *treev = (GtkTreeView *) tree;
@@ -6084,7 +6084,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
         if (!is_tree (tree) && priv->focusing_click && w
                 && gtk_widget_get_ancestor (w,
                         DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
-            return;
+            return FALSE;
     }
 
     x = (gint) event->x;
@@ -6139,7 +6139,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                     -1);
             if (!node)
                 /* prevent clicking/selecting a fake node */
-                return;
+                return TRUE;
 
 #ifdef GTK_IS_JJK
             if (!renderer)
@@ -6155,14 +6155,14 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                         if (priv->is_minitree)
                         {
                             full_expand_row (tree, &iter);
-                            return;
+                            return TRUE;
                         }
                     }
                     else if (event->state & GDK_SHIFT_MASK)
                     {
                         /* Shift+click always does a full collapse */
                         full_collapse_row (tree, &iter);
-                        return;
+                        return TRUE;
                     }
                     else
                     {
@@ -6174,7 +6174,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                         else
                             gtk_tree_view_expand_row (treev, path, FALSE);
                         gtk_tree_path_free (path);
-                        return;
+                        return TRUE;
                     }
                 }
             }
@@ -6201,7 +6201,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                         donna_tree_view_row_activated (treev, path, column);
                     gtk_tree_path_free (path);
                     g_object_unref (node);
-                    return;
+                    return TRUE;
                 }
 
                 _col = get_column_by_column (tree, column);
@@ -6246,7 +6246,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 
                 gtk_tree_path_free (path);
                 g_object_unref (node);
-                return;
+                return TRUE;
             }
 
             for (i = 0; i < as->as_cols->len; ++i)
@@ -6344,6 +6344,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
         sel = gtk_tree_view_get_selection (treev);
         gtk_tree_selection_unselect_all (sel);
     }
+    return TRUE;
 }
 
 static gboolean
@@ -6514,7 +6515,9 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
          * We still set up as last event after we triggered the click, so we can
          * still handle (slow) double clicks */
         if (event->button == 1 && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
-            trigger_click (tree, DONNA_CLICK_SINGLE, event);
+            if (!trigger_click (tree, DONNA_CLICK_SINGLE, event))
+                /* click wasn't processed, i.e. focusing click */
+                return TRUE;
 
 
         /* first timer. store it, and wait to see what happens next */
