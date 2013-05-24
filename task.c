@@ -465,6 +465,9 @@ donna_task_get_property (GObject        *object,
         case PROP_DESC:
             g_value_set_string (value, priv->desc);
             break;
+        case PROP_VISIBILITY:
+            g_value_set_int (value, priv->visibility);
+            break;
         case PROP_PRIORITY:
             g_value_set_int (value, priv->priority);
             break;
