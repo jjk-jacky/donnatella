@@ -13,6 +13,7 @@ typedef enum
 {
     DONNA_PROVIDER_ERROR_WRONG_PROVIDER,
     DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+    DONNA_PROVIDER_ERROR_WRONG_NODE_TYPE,
     DONNA_PROVIDER_ERROR_OTHER,
 } DonnaProviderError;
 
@@ -62,6 +63,9 @@ struct _DonnaProviderInterface
     DonnaTask *         (*get_node_parent_task)     (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      GError        **error);
+    DonnaTask *         (*trigger_node_task)        (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     GError        **error);
 };
 
 /* signals */
@@ -98,6 +102,9 @@ DonnaTask * donna_provider_remove_node_task         (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      GError        **error);
 DonnaTask * donna_provider_get_node_parent_task     (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     GError        **error);
+DonnaTask * donna_provider_trigger_node_task        (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      GError        **error);
 

@@ -1977,6 +1977,26 @@ donna_node_get_parent_task (DonnaNode          *node,
 }
 
 /**
+ * donna_node_trigger_task:
+ * @node: Node to trigger
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to trigger @node
+ *
+ * Note: this is a helper function, that calls
+ * donna_provider_trigger_node_task() on @node's provider
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL
+ */
+DonnaTask *
+donna_node_trigger_task (DonnaNode          *node,
+                         GError            **error)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_trigger_node_task (node->priv->provider, node, error);
+}
+
+/**
  * donna_node_set_property_value:
  * @node: The node
  * @name: Name of the property

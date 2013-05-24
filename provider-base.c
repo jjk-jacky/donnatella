@@ -51,6 +51,10 @@ static DonnaTask *      provider_base_get_node_parent_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
                                             GError             **error);
+static DonnaTask *      provider_base_trigger_node_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node,
+                                            GError             **error);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -60,6 +64,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->get_node_children_task = provider_base_get_node_children_task;
     interface->remove_node_task       = provider_base_remove_node_task;
     interface->get_node_parent_task   = provider_base_get_node_parent_task;
+    interface->trigger_node_task      = provider_base_trigger_node_task;
 }
 
 static void
@@ -528,6 +533,40 @@ provider_base_get_node_parent_task (DonnaProvider   *provider,
                     donna_node_get_domain (node),
                     location));
             g_free (location));
+
+    return task;
+}
+
+static DonnaTaskState
+trigger_node (DonnaTask *task, DonnaNode *node)
+{
+    DonnaProviderBase *provider_base;
+    DonnaTaskState ret;
+
+    provider_base = (DonnaProviderBase *) donna_node_peek_provider (node);
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->trigger_node (
+            provider_base, task, node);
+    g_object_unref (node);
+    return ret;
+}
+
+static DonnaTask *
+provider_base_trigger_node_task (DonnaProvider       *provider,
+                                 DonnaNode           *node,
+                                 GError             **error)
+{
+    DonnaTask *task;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    task = donna_task_new ((task_fn) trigger_node, g_object_ref (node),
+            g_object_unref);
+
+    DONNA_DEBUG (TASK,
+            gchar *fl = donna_node_get_full_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "trigger_node() for node '%s'", fl));
+            g_free (fl));
 
     return task;
 }

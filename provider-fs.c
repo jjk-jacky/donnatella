@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <utime.h>
+#include <fcntl.h>
 #include <errno.h>
 #include "provider-fs.h"
 #include "provider.h"
@@ -35,6 +36,9 @@ static DonnaTaskState   provider_fs_get_children    (DonnaProviderBase  *provide
 static DonnaTaskState   provider_fs_remove_node     (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
+static DonnaTaskState   provider_fs_trigger_node    (DonnaProviderBase  *provider,
+                                                     DonnaTask          *task,
+                                                     DonnaNode          *node);
 
 static void
 provider_fs_provider_init (DonnaProviderInterface *interface)
@@ -53,6 +57,8 @@ donna_provider_fs_class_init (DonnaProviderFsClass *klass)
     pb_class->new_node      = provider_fs_new_node;
     pb_class->has_children  = provider_fs_has_children;
     pb_class->get_children  = provider_fs_get_children;
+    pb_class->remove_node   = provider_fs_remove_node;
+    pb_class->trigger_node  = provider_fs_trigger_node;
 
     o_class = (GObjectClass *) klass;
     o_class->finalize = provider_fs_finalize;
@@ -136,16 +142,44 @@ stat_node (DonnaNode *node, const gchar *filename)
     return TRUE;
 }
 
+static inline gchar *
+content_type_guess (const gchar *filename)
+{
+    gboolean uncertain;
+    gchar *mt;
+
+    mt = g_content_type_guess (filename, NULL, 0, &uncertain);
+    if (uncertain)
+    {
+        gint fd;
+
+        fd = open (filename, O_RDONLY);
+        if (fd > -1)
+        {
+            guchar data[1024];
+            gssize len;
+
+            len = read (fd, data, 1024);
+            if (len > 0)
+            {
+                g_free (mt);
+                mt = g_content_type_guess (filename, data, len, NULL);
+            }
+            close (fd);
+        }
+    }
+    return mt;
+}
+
 static inline gboolean
 set_icon (DonnaNode *node, const gchar *filename)
 {
     gchar *mt;
-    gboolean uncertain;
     GIcon *icon;
     GtkIconInfo *ii;
     GValue value = G_VALUE_INIT;
 
-    mt = g_content_type_guess (filename, NULL, 0, &uncertain);
+    mt = content_type_guess (filename);
     if (!mt)
         return FALSE;
 
@@ -193,7 +227,7 @@ refresher (DonnaTask    *task,
         gchar *desc;
         GValue value = G_VALUE_INIT;
 
-        mt = g_content_type_guess (filename, NULL, 0, NULL);
+        mt = content_type_guess (filename);
         if (!mt)
             goto done;
         desc = g_content_type_get_description (mt);
@@ -759,4 +793,66 @@ provider_fs_remove_node (DonnaProviderBase  *_provider,
 {
     /* TODO */
     return DONNA_TASK_FAILED;
+}
+
+static DonnaTaskState
+provider_fs_trigger_node (DonnaProviderBase  *_provider,
+                          DonnaTask          *task,
+                          DonnaNode          *node)
+{
+    GError *err = NULL;
+    DonnaTaskState ret = DONNA_TASK_DONE;
+    gchar *filename;
+    gchar *mt;
+
+    filename = donna_node_get_filename (node);
+    mt = content_type_guess (filename);
+    /* trying to avoid launching random files set executable */
+    if (g_content_type_can_be_executable (mt)
+            && g_file_test (filename, G_FILE_TEST_IS_EXECUTABLE))
+    {
+        if (!(g_spawn_command_line_async (filename, &err)))
+        {
+            ret = DONNA_TASK_FAILED;
+            donna_task_take_error (task, err);
+        }
+
+        g_free (mt);
+        g_free (filename);
+        return ret;
+    }
+    else
+    {
+        GAppInfo *appinfo;
+        GFile *gfile;
+        GList *list;
+
+        gfile = g_file_new_for_path (filename);
+        list = g_list_prepend (NULL, gfile);
+        appinfo = g_app_info_get_default_for_type (mt, FALSE);
+
+        g_free (mt);
+        g_free (filename);
+
+        if (!appinfo)
+        {
+            ret = DONNA_TASK_FAILED;
+            filename = donna_node_get_location (node);
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Failed to open '%s': cannot find application to use", filename);
+            g_free (filename);
+        }
+        else if (!g_app_info_launch (appinfo, list, NULL, &err))
+        {
+            ret = DONNA_TASK_FAILED;
+            donna_task_take_error (task, err);
+        }
+
+        if (appinfo)
+            g_object_unref (appinfo);
+        g_list_free (list);
+        g_object_unref (gfile);
+        return ret;
+    }
 }

@@ -186,6 +186,8 @@ DonnaTask *         donna_node_remove_task          (DonnaNode          *node,
                                                      GError            **error);
 DonnaTask *         donna_node_get_parent_task      (DonnaNode          *node,
                                                      GError            **error);
+DonnaTask *         donna_node_trigger_task         (DonnaNode          *node,
+                                                     GError            **error);
 void                donna_node_set_property_value   (DonnaNode          *node,
                                                      const gchar        *name,
                                                      const GValue       *value);

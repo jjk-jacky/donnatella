@@ -5890,11 +5890,20 @@ donna_tree_view_row_activated (GtkTreeView    *treev,
         donna_tree_view_set_location (tree, node, NULL);
     else
     {
-        gchar *s;
+        DonnaTask *task;
 
-        s = donna_node_get_location (node);
-        g_debug ("db-click on %s", s);
-        g_free (s);
+        /* temporary crap fest */
+
+        task = donna_node_trigger_task (node, NULL);
+        donna_task_set_can_block (g_object_ref_sink (task));
+        donna_app_run_task (priv->app, task);
+        donna_task_wait_for_it (task);
+        if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        {
+            const GError *e = donna_task_get_error (task);
+            g_debug("trigger fail: %s", e->message);
+        }
+        g_object_unref (task);
     }
 
     g_object_unref (node);
