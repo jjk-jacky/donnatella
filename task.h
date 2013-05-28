@@ -124,6 +124,7 @@ gboolean            donna_task_set_timeout      (DonnaTask          *task,
                                                  GDestroyNotify      destroy);
 gboolean            donna_task_set_can_block    (DonnaTask          *task);
 gboolean            donna_task_wait_for_it      (DonnaTask          *task);
+int                 donna_task_get_wait_fd      (DonnaTask          *task);
 
 gboolean            donna_task_can_be_duplicated(DonnaTask          *task);
 DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task,

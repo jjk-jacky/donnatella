@@ -1015,6 +1015,9 @@ donna_task_set_can_block (DonnaTask          *task)
  *
  * Please see donna_task_set_can_block() for how to use this.
  *
+ * If you need to wait for the task to complete as well as some other event, you
+ * can use donna_task_get_wait_fd() to get the file descriptor to use.
+ *
  * Returns: %TRUE is execution of @task was complete, else %FALSE
  */
 gboolean
@@ -1037,6 +1040,30 @@ donna_task_wait_for_it (DonnaTask          *task)
     close (priv->fd_block);
     priv->fd_block = -1;
     return TRUE;
+}
+
+/**
+ * donna_task_get_wait_fd:
+ * @task: Task to get the file descriptor to wait for from
+ *
+ * This will return a file descriptor that you can use to wait until the task
+ * finished its execution. This fd can be polled for reading. When data is
+ * available, it means the task has finished its execution (inc. callback).
+ * You should not try and read data from the fd.
+ *
+ * This allows you to do yourself the same as donna_task_wait_for_it(), if you
+ * need to wait on other fd as well.
+ *
+ * Obviously, this requires to have called donna_task_set_can_block() on @task
+ * before.
+ *
+ * Returns: File descriptor to be polled for reading; or -1
+ */
+int
+donna_task_get_wait_fd (DonnaTask          *task)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), -1);
+    return task->priv->fd_block;
 }
 
 /**
