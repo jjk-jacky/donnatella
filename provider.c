@@ -280,7 +280,7 @@ donna_provider_get_node_parent_task (DonnaProvider  *provider,
     flags = donna_provider_get_flags (provider);
     if (flags & DONNA_PROVIDER_FLAG_INVALID || flags & DONNA_PROVIDER_FLAG_FLAT)
     {
-        g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
+        g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_INVALID_CALL,
                 "Provider '%s' is flat: impossible to get a node's parent",
                 donna_provider_get_domain (provider));
         return NULL;
