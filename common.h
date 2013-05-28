@@ -15,6 +15,18 @@ typedef enum
     DONNA_CLICK_SLOW_DOUBLE = (1 << 5),
 } DonnaClick;
 
+typedef enum
+{
+    DONNA_ARG_TYPE_NOTHING = 0, /* for no return value */
+    DONNA_ARG_TYPE_INT,
+    DONNA_ARG_TYPE_STRING,
+    DONNA_ARG_TYPE_TREEVIEW,
+    DONNA_ARG_TYPE_NODE,
+    DONNA_ARG_TYPE_ROW,
+    DONNA_ARG_TYPE_PATH,
+    DONNA_ARG_TYPE_ROW_ID,
+} DonnaArgType;
+
 
 typedef struct _DonnaApp                    DonnaApp; /* dummy typedef */
 typedef struct _DonnaAppInterface           DonnaAppInterface;
@@ -69,6 +81,9 @@ GType           donna_provider_get_type     (void) G_GNUC_CONST;
 typedef struct _DonnaTreeView           DonnaTreeView;
 typedef struct _DonnaTreeViewPrivate    DonnaTreeViewPrivate;
 typedef struct _DonnaTreeViewClass      DonnaTreeViewClass;
+
+typedef struct _DonnaTreeRow            DonnaTreeRow;
+typedef struct _DonnaTreeRowId          DonnaTreeRowId;
 
 #define DONNA_TYPE_TREE_VIEW            (donna_tree_view_get_type ())
 #define DONNA_TREE_VIEW(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_TREE_VIEW, DonnaTreeView))

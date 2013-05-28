@@ -16,6 +16,7 @@ enum
     DONNA_TREE_VIEW_ERROR_NOMEM,
     DONNA_TREE_VIEW_ERROR_NOT_FOUND,
     DONNA_TREE_VIEW_ERROR_CANNOT_ADD_NODE,
+    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
     DONNA_TREE_VIEW_ERROR_OTHER,
 } DonnaTreeViewError;
 
@@ -77,6 +78,28 @@ struct _DonnaArrangement
     GSList                      *color_filters;
 };
 
+/* special handling for DONNA_ARG_TYPE_ROW_ID that can be a ROW, NODE, or PATH.
+ * This allows any of those to be used/parsed, and the command can check it got
+ * the right one. */
+struct _DonnaTreeRowId
+{
+    DonnaArgType    type;
+    gpointer        ptr;
+};
+
+struct _DonnaTreeRow
+{
+    DonnaNode   *node;
+    GtkTreeIter *iter;
+};
+
+typedef enum
+{
+    DONNA_TREE_SEL_SELECT,
+    DONNA_TREE_SEL_UNSELECT,
+    DONNA_TREE_SEL_INVERT,
+} DonnaTreeSelAction;
+
 struct _DonnaTreeView
 {
     /*< private >*/
@@ -110,6 +133,19 @@ gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
 GPtrArray *     donna_tree_view_get_selected_nodes (DonnaTreeView   *tree);
+gboolean        donna_tree_view_selection       (DonnaTreeView      *tree,
+                                                 DonnaTreeSelAction  action,
+                                                 DonnaTreeRowId     *rowid,
+                                                 gboolean            to_focused,
+                                                 GError            **error);
+#ifdef GTK_IS_JJK
+gboolean        donna_tree_view_set_focus       (DonnaTreeView        *tree,
+                                                 DonnaTreeRowId       *rowid,
+                                                 GError              **error);
+#endif
+gboolean        donna_tree_view_set_cursor      (DonnaTreeView        *tree,
+                                                 DonnaTreeRowId       *rowid,
+                                                 GError              **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

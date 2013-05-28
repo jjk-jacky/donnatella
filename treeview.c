@@ -5686,6 +5686,454 @@ donna_tree_view_get_selected_nodes (DonnaTreeView   *tree)
     return arr;
 }
 
+typedef enum
+{
+    ROW_ID_INVALID = 0,
+    ROW_ID_ROW,
+    ROW_ID_SELECTION,
+    ROW_ID_ALL,
+} row_id_type;
+
+static row_id_type
+convert_row_id_to_iter (DonnaTreeView   *tree,
+                        DonnaTreeRowId  *rowid,
+                        GtkTreeIter     *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GSList *list;
+
+    if (rowid->type == DONNA_ARG_TYPE_ROW)
+    {
+        DonnaTreeRow *row = rowid->ptr;
+
+        list = g_hash_table_lookup (priv->hashtable, row->node);
+        if (!list)
+            return ROW_ID_INVALID;
+        for ( ; list; list = list->next)
+            if ((GtkTreeIter *) list->data == row->iter)
+            {
+                *iter = *row->iter;
+                return ROW_ID_ROW;
+            }
+        return ROW_ID_INVALID;
+    }
+    else if (rowid->type == DONNA_ARG_TYPE_NODE)
+    {
+        list = g_hash_table_lookup (priv->hashtable, rowid->ptr);
+        if (!list)
+            return ROW_ID_INVALID;
+        *iter = * (GtkTreeIter *) list->data;
+        return ROW_ID_ROW;
+    }
+    else if (rowid->type == DONNA_ARG_TYPE_PATH)
+    {
+        gchar *s = rowid->ptr;
+
+        if (*s == ':')
+        {
+            ++s;
+            if (streq ("all", s))
+                return ROW_ID_ALL;
+            else if (streq ("selected", s))
+                return ROW_ID_SELECTION;
+            else if (streq ("focused", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
+            else if (streq ("prev", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                    return ROW_ID_INVALID;
+
+                if (!donna_tree_model_iter_previous ((GtkTreeModel *) priv->store,
+                            iter))
+                    return ROW_ID_INVALID;
+                return ROW_ID_ROW;
+            }
+            else if (streq ("next", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                    return ROW_ID_INVALID;
+
+                if (!donna_tree_model_iter_next ((GtkTreeModel *) priv->store,
+                            iter))
+                    return ROW_ID_INVALID;
+                return ROW_ID_ROW;
+            }
+            else if (streq ("last", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                    return ROW_ID_INVALID;
+
+                if (!donna_tree_model_iter_last ((GtkTreeModel *) priv->store,
+                            iter))
+                    return ROW_ID_INVALID;
+                return ROW_ID_ROW;
+            }
+            else if (streq ("up", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                if (!gtk_tree_path_up (path))
+                    return ROW_ID_INVALID;
+
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
+            else if (streq ("down", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                gtk_tree_path_down (path);
+
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
+            else if (streq ("prev-same-depth", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                if (!gtk_tree_path_prev (path))
+                    return ROW_ID_INVALID;
+
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
+            else if (streq ("next-same-depth", s))
+            {
+                GtkTreePath *path;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
+                        &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+
+                gtk_tree_path_next (path);
+
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
+            else
+                return ROW_ID_INVALID;
+        }
+        else
+        {
+            GtkTreePath *path = gtk_tree_path_new_from_string (s);
+            if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                        iter, path))
+            {
+                gtk_tree_path_free (path);
+                return ROW_ID_ROW;
+            }
+            gtk_tree_path_free (path);
+            return ROW_ID_INVALID;
+        }
+    }
+    else
+        return ROW_ID_INVALID;
+}
+
+static void
+unselect_path (gpointer p, gpointer s)
+{
+    gtk_tree_selection_unselect_path ((GtkTreeSelection *) s, (GtkTreePath *) p);
+}
+
+gboolean
+donna_tree_view_selection (DonnaTreeView        *tree,
+                           DonnaTreeSelAction    action,
+                           DonnaTreeRowId       *rowid,
+                           gboolean              to_focused,
+                           GError              **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeSelection *sel;
+    GtkTreeIter iter;
+    row_id_type type;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (action == DONNA_TREE_SEL_SELECT
+            || action == DONNA_TREE_SEL_UNSELECT
+            || action == DONNA_TREE_SEL_INVERT, FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+
+    priv = tree->priv;
+    sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type == ROW_ID_INVALID)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot update selection, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    /* tree is limited in its selection capabilities */
+    if (is_tree (tree) && !(type == ROW_ID_ROW && !to_focused
+                && action == DONNA_TREE_SEL_SELECT))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot update selection, incompatible with mode tree",
+                priv->name);
+        return FALSE;
+    }
+
+    if (type == ROW_ID_ALL)
+    {
+        if (action == DONNA_TREE_SEL_SELECT)
+            gtk_tree_selection_select_all (sel);
+        else if (action == DONNA_TREE_SEL_UNSELECT)
+            gtk_tree_selection_unselect_all (sel);
+        else /* DONNA_TREE_SEL_INVERT */
+        {
+            gint nb, count;
+            GList *list;
+
+            nb = gtk_tree_selection_count_selected_rows (sel);
+            if (nb == 0)
+            {
+                gtk_tree_selection_select_all (sel);
+                return TRUE;
+            }
+
+            count = donna_tree_model_get_count ((GtkTreeModel *) priv->store);
+            if (nb == count)
+            {
+                gtk_tree_selection_unselect_all (sel);
+                return TRUE;
+            }
+
+            list = gtk_tree_selection_get_selected_rows (sel, NULL);
+            gtk_tree_selection_select_all (sel);
+            g_list_foreach (list, unselect_path, sel);
+            g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
+        }
+        return TRUE;
+    }
+    else if (type == ROW_ID_SELECTION)
+    {
+        /* SELECT the selection means do nothing; UNSELECT & INVERT both means
+         * unselect (all) */
+        if (action == DONNA_TREE_SEL_UNSELECT || action == DONNA_TREE_SEL_INVERT)
+            gtk_tree_selection_unselect_all (sel);
+        return TRUE;
+    }
+    else /* ROW_ID_ROW */
+    {
+        if (to_focused)
+        {
+            GtkTreePath *path, *path_focus;
+
+            gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_focus, NULL);
+            if (!path_focus)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot update selection, failed to get focused row",
+                        priv->name);
+                return FALSE;
+            }
+            path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+            if (!path)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot update selection, failed to get path",
+                        priv->name);
+                gtk_tree_path_free (path_focus);
+                return FALSE;
+            }
+
+            if (action == DONNA_TREE_SEL_SELECT)
+                gtk_tree_selection_select_range (sel, path, path_focus);
+            else if (action == DONNA_TREE_SEL_UNSELECT)
+                gtk_tree_selection_unselect_range (sel, path, path_focus);
+            else /* DONNA_TREE_SEL_INVERT */
+#ifdef GTK_IS_JJK
+                gtk_tree_selection_invert_range (sel, path, path_focus);
+#else
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot invert selection on a range (Vanilla GTK+ limitation)",
+                        priv->name);
+                gtk_tree_path_free (path);
+                gtk_tree_path_free (path_focus);
+                return FALSE;
+            }
+#endif
+
+            gtk_tree_path_free (path);
+            gtk_tree_path_free (path_focus);
+            return TRUE;
+        }
+        else
+        {
+            if (action == DONNA_TREE_SEL_SELECT)
+                gtk_tree_selection_select_iter (sel, &iter);
+            else if (action == DONNA_TREE_SEL_UNSELECT)
+                gtk_tree_selection_unselect_iter (sel, &iter);
+            else /* DONNA_TREE_SEL_INVERT */
+            {
+                if (gtk_tree_selection_iter_is_selected (sel, &iter))
+                    gtk_tree_selection_unselect_iter (sel, &iter);
+                else
+                    gtk_tree_selection_select_iter (sel, &iter);
+            }
+            return TRUE;
+        }
+    }
+}
+
+#ifdef GTK_IS_JJK
+gboolean
+donna_tree_view_set_focus (DonnaTreeView        *tree,
+                           DonnaTreeRowId       *rowid,
+                           GError              **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    GtkTreePath *path;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot set focus, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+    gtk_tree_path_free (path);
+    return TRUE;
+}
+#endif
+
+gboolean
+donna_tree_view_set_cursor (DonnaTreeView        *tree,
+                            DonnaTreeRowId       *rowid,
+                            GError              **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    GtkTreePath *path;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot set cursor, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    /* more about this can be read in sync_with_location_changed_cb() */
+
+    path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+#ifdef GTK_IS_JJK
+    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+    gtk_tree_selection_select_path (
+            gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
+#else
+    gtk_tree_view_set_cursor ((GtkTreeView *) tree, path, NULL, FALSE);
+#endif
+    gtk_tree_path_free (path);
+    if (is_tree (tree) && priv->sync_scroll)
+        scroll_to_iter (tree, &iter, FALSE);
+    return TRUE;
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
