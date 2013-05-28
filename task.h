@@ -74,14 +74,14 @@ typedef DonnaTask *     (*task_duplicate_fn)    (gpointer    data,
 
 struct _DonnaTask
 {
-    GObject parent;
+    GInitiallyUnowned parent;
 
     DonnaTaskPrivate *priv;
 };
 
 struct _DonnaTaskClass
 {
-    GObjectClass parent;
+    GInitiallyUnownedClass parent;
 };
 
 DonnaTask *         donna_task_new              (task_fn             func,

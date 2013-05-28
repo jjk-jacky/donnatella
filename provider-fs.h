@@ -19,7 +19,7 @@ typedef struct _DonnaProviderFsPrivate      DonnaProviderFsPrivate;
 
 struct _DonnaProviderFs
 {
-    GObject parent;
+    DonnaProviderBase parent;
 
     DonnaProviderFsPrivate *priv;
 };
