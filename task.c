@@ -718,8 +718,10 @@ donna_task_set_visibility (DonnaTask          *task,
                            DonnaTaskVisibility visibility)
 {
     g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
-    g_return_val_if_fail (visibility != DONNA_TASK_VISIBILITY_INTERNAL
-            && visibility != DONNA_TASK_VISIBILITY_PULIC, FALSE);
+    g_return_val_if_fail (visibility == DONNA_TASK_VISIBILITY_INTERNAL
+            || visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST
+            || visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI
+            || visibility == DONNA_TASK_VISIBILITY_PULIC, FALSE);
 
     task->priv->visibility = visibility;
     DONNA_DEBUG (TASK,
