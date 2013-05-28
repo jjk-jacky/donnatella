@@ -4668,6 +4668,7 @@ get_root_iter (DonnaTreeView *tree, GtkTreeIter *iter)
     for ( ; list; list = list->next)
         if (itereq (&root, (GtkTreeIter *) list->data))
             return list->data;
+    return NULL;
 }
 
 /* mode tree only */
