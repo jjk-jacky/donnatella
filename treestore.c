@@ -449,6 +449,128 @@ tree_store_unref_node (GtkTreeModel   *model,
 
 #undef chain_up_if_possible
 
+/* GtkTreeModel extensions */
+
+gboolean
+donna_tree_model_iter_next (GtkTreeModel       *model,
+                            GtkTreeIter        *iter)
+{
+    DonnaTreeStorePrivate *priv;
+    GtkTreeIter it;
+
+    g_return_val_if_fail (DONNA_IS_TREE_STORE (model), FALSE);
+    priv = ((DonnaTreeStore *) model)->priv;
+    g_return_val_if_fail (iter_is_visible (iter), FALSE);
+
+    /* get first child if any */
+    if (tree_store_iter_children (model, &it, iter))
+    {
+        *iter = it;
+        return TRUE;
+    }
+    /* then look for sibling */
+    it = *iter;
+    if (tree_store_iter_next (model, &it))
+    {
+        *iter = it;
+        return TRUE;
+    }
+    /* then we need the parent's sibling */
+    while (1)
+    {
+        if (!tree_store_iter_parent (model, &it, iter))
+        {
+            iter->stamp = 0;
+            return FALSE;
+        }
+        *iter = it;
+        if (tree_store_iter_next (model, &it))
+        {
+            *iter = it;
+            return TRUE;
+        }
+    }
+}
+
+static gboolean
+_get_last_child (GtkTreeModel *model, GtkTreeIter *iter)
+{
+    GtkTreeIter it;
+    if (!tree_store_iter_children (model, iter, (iter->stamp == 0) ? NULL : iter))
+        return FALSE;
+    it = *iter;
+    while (tree_store_iter_next (model, &it))
+        *iter = it;
+    return TRUE;
+}
+
+#define get_last_child(model, iter) for (;;) {  \
+    if (!_get_last_child (model, iter))         \
+        break;                                  \
+}
+
+gboolean
+donna_tree_model_iter_previous (GtkTreeModel       *model,
+                                GtkTreeIter        *iter)
+{
+    DonnaTreeStorePrivate *priv;
+    GtkTreeIter it;
+
+    g_return_val_if_fail (DONNA_IS_TREE_STORE (model), FALSE);
+    priv = ((DonnaTreeStore *) model)->priv;
+    g_return_val_if_fail (iter_is_visible (iter), FALSE);
+
+    /* get previous sibbling if any */
+    it = *iter;
+    if (tree_store_iter_previous (model, &it))
+    {
+        *iter = it;
+        /* and go down to its last child */
+        get_last_child (model, iter);
+        return TRUE;
+    }
+    /* else we get the parent */
+    if (tree_store_iter_parent (model, &it, iter))
+    {
+        *iter = it;
+        return TRUE;
+    }
+    iter->stamp = 0;
+    return FALSE;
+}
+
+gboolean
+donna_tree_model_iter_last (GtkTreeModel       *model,
+                            GtkTreeIter        *iter)
+{
+    g_return_val_if_fail (DONNA_IS_TREE_STORE (model), FALSE);
+    g_return_val_if_fail (iter != NULL, FALSE);
+
+    iter->stamp = 0;
+    get_last_child (model, iter);
+    return iter->stamp != 0;
+}
+
+static void
+get_count_visible (gpointer key, gpointer value, gpointer data)
+{
+    if (value)
+        * (gint *) data = 1 + * (gint *) data;
+}
+
+gint
+donna_tree_model_get_count (GtkTreeModel       *model)
+{
+    DonnaTreeStorePrivate *priv;
+    gint count = 0;
+
+    g_return_val_if_fail (DONNA_IS_TREE_STORE (model), FALSE);
+    priv = ((DonnaTreeStore *) model)->priv;
+
+    g_hash_table_foreach (priv->hashtable, get_count_visible, &count);
+    return count;
+}
+
 
 /* GtkTreeSortable */
 
@@ -946,6 +1068,15 @@ donna_tree_store_iter_parent (DonnaTreeStore     *store,
     g_return_val_if_fail (DONNA_IS_TREE_STORE (store), FALSE);
     return gtk_tree_model_iter_parent (GTK_TREE_MODEL (store->priv->store),
             iter, child);
+}
+
+/* extension to GtkTreeModel, version for *all* iters */
+
+gint
+donna_tree_store_get_count (DonnaTreeStore     *store)
+{
+    g_return_val_if_fail (DONNA_IS_TREE_STORE (store), FALSE);
+    return (gint) g_hash_table_size (store->priv->hashtable);
 }
 
 

@@ -55,6 +55,15 @@ gint            donna_tree_store_iter_depth     (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter);
 void            donna_tree_store_clear          (DonnaTreeStore     *store);
 
+/* extensions to GtkTreeModel */
+gboolean        donna_tree_model_iter_next      (GtkTreeModel       *model,
+                                                 GtkTreeIter        *iter);
+gboolean        donna_tree_model_iter_previous  (GtkTreeModel       *model,
+                                                 GtkTreeIter        *iter);
+gboolean        donna_tree_model_iter_last      (GtkTreeModel       *model,
+                                                 GtkTreeIter        *iter);
+gint            donna_tree_model_get_count      (GtkTreeModel       *model);
+
 /* our version of GtkTreeModel interface, on all (visible & invisible) iters */
 gboolean        donna_tree_store_iter_next      (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter);
@@ -74,6 +83,8 @@ gboolean        donna_tree_store_iter_nth_child (DonnaTreeStore     *store,
 gboolean        donna_tree_store_iter_parent    (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter,
                                                  GtkTreeIter        *child);
+/* our version of extensions to GtkTreeModel */
+gint            donna_tree_store_get_count      (DonnaTreeStore     *store);
 
 /* DonnaTreeStore specific */
 gboolean        donna_tree_store_set_visible_func (
