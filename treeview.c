@@ -6425,7 +6425,7 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
         if (priv->focusing_click && event->button == 1
                 && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
             /* this is a focusing click, don't process it further */
-            return;
+            return TRUE;
     }
 
     if (!priv->last_event)
