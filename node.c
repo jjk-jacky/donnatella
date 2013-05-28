@@ -302,7 +302,8 @@ free_node_prop (DonnaNodeProp *prop)
  * Creates a new node, according to the specified parameters. This should only
  * be called by the #DonnaProvider of the node.
  *
- * If you need a node to use it, see donna_provider_get_node_task()
+ * If you need a node to use it, see donna_provider_get_node_task() or
+ * donna_app_get_node_task()
  *
  * Returns: (transfer full): The new node
  */

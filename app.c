@@ -1,5 +1,7 @@
 
+#include <string.h>
 #include "app.h"
+#include "provider.h"
 
 enum
 {
@@ -130,6 +132,47 @@ donna_app_get_provider (DonnaApp       *app,
     g_return_val_if_fail (interface->get_provider != NULL, NULL);
 
     return (*interface->get_provider) (app, domain);
+}
+
+DonnaTask *
+donna_app_get_node_task (DonnaApp    *app,
+                         const gchar *full_location)
+{
+    DonnaAppInterface *interface;
+    DonnaProvider *provider;
+    DonnaTask *task;
+    gchar buf[64], *b = buf;
+    const gchar *location;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (full_location != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_provider != NULL, NULL);
+
+    location = strchr (full_location, ':');
+    if (!location)
+        return NULL;
+
+    if (location - full_location >= 64)
+        b = g_strdup_printf ("%.*s", (gint) (location - full_location),
+                full_location);
+    else
+    {
+        *buf = '\0';
+        strncat (buf, full_location, location - full_location);
+    }
+    provider = (*interface->get_provider) (app, buf);
+    if (b != buf)
+        g_free (b);
+    if (!provider)
+        return NULL;
+
+    task = donna_provider_get_node_task (provider, ++location, NULL);
+    g_object_unref (provider);
+    return task;
 }
 
 DonnaColumnType *
