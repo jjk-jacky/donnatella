@@ -6,6 +6,7 @@
 #include "app.h"
 #include "provider.h"
 #include "provider-fs.h"
+#include "provider-command.h"
 #include "provider-config.h"
 #include "columntype.h"
 #include "columntype-name.h"
@@ -523,6 +524,8 @@ donna_donna_get_provider (DonnaApp    *app,
 
     if (streq (domain, "fs"))
         provider = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
+    else if (streq (domain, "command"))
+        provider = g_object_new (DONNA_TYPE_PROVIDER_COMMAND, "app", app, NULL);
     else
         return NULL;
 
