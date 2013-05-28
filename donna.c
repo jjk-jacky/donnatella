@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "app.h"
 #include "provider.h"
+#include "provider-fs.h"
 #include "provider-config.h"
 #include "columntype.h"
 #include "columntype-name.h"
@@ -53,6 +54,7 @@ struct _DonnaDonnaPrivate
     GtkWidget       *floating_window;
     gboolean         just_focused;
     DonnaConfig     *config;
+    GSList          *providers;
     GSList          *treeviews;
     GHashTable      *filters;
     GSList          *arrangements;
@@ -435,12 +437,97 @@ donna_donna_peek_config (DonnaApp *app)
     return DONNA_DONNA (app)->priv->config;
 }
 
+static gboolean
+visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name)
+{
+    /* FIXME: should we do something here? */
+    return TRUE;
+}
+
+static void
+new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
+{
+    gchar *fl;
+    struct visuals *visuals;
+
+    fl = donna_node_get_full_location (node);
+    visuals = g_hash_table_lookup (donna->priv->visuals, fl);
+    if (visuals)
+    {
+        GValue value = G_VALUE_INIT;
+
+        if (visuals->name)
+        {
+            g_value_init (&value, G_TYPE_STRING);
+            g_value_set_string (&value, visuals->name);
+            donna_node_add_property (node, "visual-name", G_TYPE_STRING, &value,
+                    visual_refresher, NULL, NULL);
+            g_value_unset (&value);
+        }
+
+        if (visuals->icon)
+        {
+            GdkPixbuf *pb;
+
+            pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
+                    visuals->icon, 16 /* FIXME */, 0, NULL);
+            if (pb)
+            {
+                g_value_init (&value, GDK_TYPE_PIXBUF);
+                g_value_take_object (&value, pb);
+                donna_node_add_property (node, "visual-icon", GDK_TYPE_PIXBUF, &value,
+                        visual_refresher, NULL, NULL);
+                g_value_unset (&value);
+            }
+        }
+
+        if (visuals->box)
+        {
+            g_value_init (&value, G_TYPE_STRING);
+            g_value_set_string (&value, visuals->box);
+            donna_node_add_property (node, "visual-box", G_TYPE_STRING, &value,
+                    visual_refresher, NULL, NULL);
+            g_value_unset (&value);
+        }
+
+        if (visuals->highlight)
+        {
+            g_value_init (&value, G_TYPE_STRING);
+            g_value_set_string (&value, visuals->highlight);
+            donna_node_add_property (node, "visual-highlight", G_TYPE_STRING, &value,
+                    visual_refresher, NULL, NULL);
+            g_value_unset (&value);
+        }
+    }
+    g_free (fl);
+}
+
 DonnaProvider *
 donna_donna_get_provider (DonnaApp    *app,
                           const gchar *domain)
 {
+    DonnaDonnaPrivate *priv;
+    DonnaProvider *provider = NULL;
+    GSList *l;
+
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    /* TODO */
+    priv = ((DonnaDonna *) app)->priv;
+
+    if (streq (domain, "config"))
+        return g_object_ref (priv->config);
+
+    for (l = priv->providers; l; l = l->next)
+        if (streq (domain, donna_provider_get_domain (l->data)))
+            return g_object_ref (l->data);
+
+    if (streq (domain, "fs"))
+        provider = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
+    else
+        return NULL;
+
+    g_signal_connect (provider, "new-node", (GCallback) new_node_cb, app);
+    priv->providers = g_slist_prepend (priv->providers, provider);
+    return g_object_ref (provider);
 }
 
 DonnaColumnType *
@@ -734,70 +821,7 @@ donna_donna_set_window (DonnaDonna *donna, GtkWindow *win)
     donna->priv->window = g_object_ref (win);
 }
 
-static gboolean
-visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name)
-{
-    /* FIXME: should we do something here? */
-    return TRUE;
-}
 
-static void
-new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
-{
-    gchar *fl;
-    struct visuals *visuals;
-
-    fl = donna_node_get_full_location (node);
-    visuals = g_hash_table_lookup (donna->priv->visuals, fl);
-    if (visuals)
-    {
-        GValue value = G_VALUE_INIT;
-
-        if (visuals->name)
-        {
-            g_value_init (&value, G_TYPE_STRING);
-            g_value_set_string (&value, visuals->name);
-            donna_node_add_property (node, "visual-name", G_TYPE_STRING, &value,
-                    visual_refresher, NULL, NULL);
-            g_value_unset (&value);
-        }
-
-        if (visuals->icon)
-        {
-            GdkPixbuf *pb;
-
-            pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                    visuals->icon, 16 /* FIXME */, 0, NULL);
-            if (pb)
-            {
-                g_value_init (&value, GDK_TYPE_PIXBUF);
-                g_value_take_object (&value, pb);
-                donna_node_add_property (node, "visual-icon", GDK_TYPE_PIXBUF, &value,
-                        visual_refresher, NULL, NULL);
-                g_value_unset (&value);
-            }
-        }
-
-        if (visuals->box)
-        {
-            g_value_init (&value, G_TYPE_STRING);
-            g_value_set_string (&value, visuals->box);
-            donna_node_add_property (node, "visual-box", G_TYPE_STRING, &value,
-                    visual_refresher, NULL, NULL);
-            g_value_unset (&value);
-        }
-
-        if (visuals->highlight)
-        {
-            g_value_init (&value, G_TYPE_STRING);
-            g_value_set_string (&value, visuals->highlight);
-            donna_node_add_property (node, "visual-highlight", G_TYPE_STRING, &value,
-                    visual_refresher, NULL, NULL);
-            g_value_unset (&value);
-        }
-    }
-    g_free (fl);
-}
 
 
 
@@ -814,7 +838,6 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
 
 #include "treeview.h"
 #include "provider.h"
-#include "provider-fs.h"
 #include "task.h"
 
 static DonnaProviderFs *provider_fs;
@@ -978,8 +1001,7 @@ main (int argc, char *argv[])
             (GtkStyleProvider *) css_provider,
             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-    provider_fs = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
-    g_signal_connect (provider_fs, "new-node", (GCallback) new_node_cb, d);
+    provider_fs = (DonnaProviderFs *) donna_app_get_provider ((DonnaApp*) d, "fs");
 
     /* main window */
     _window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -1088,7 +1110,7 @@ main (int argc, char *argv[])
 #endif
 
     //task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/tmp/test", NULL);
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/home/jjacky/issue", NULL);
+    task = donna_app_get_node_task ((DonnaApp *) d, "fs:/home/jjacky/issue");
     g_object_ref_sink (task);
     donna_task_run (task);
     value = donna_task_get_return_value (task);
