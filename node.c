@@ -325,7 +325,8 @@ donna_node_new (DonnaProvider       *provider,
     g_return_val_if_fail (node_type == DONNA_NODE_ITEM
             || node_type == DONNA_NODE_CONTAINER, NULL);
     g_return_val_if_fail (refresher != NULL, NULL);
-    g_return_val_if_fail (setter != NULL, NULL);
+    if ((flags & DONNA_NODE_ALL_WRITABLE) != 0)
+        g_return_val_if_fail (setter != NULL, NULL);
     g_return_val_if_fail (name != NULL, NULL);
 
     node = g_object_new (DONNA_TYPE_NODE, NULL);
