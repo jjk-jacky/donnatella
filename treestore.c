@@ -744,7 +744,6 @@ donna_tree_store_set (DonnaTreeStore     *store,
 {
     DonnaTreeStorePrivate *priv;
     va_list va_args;
-    gboolean was_visible;
 
     g_return_if_fail (DONNA_IS_TREE_STORE (store));
     priv = store->priv;

@@ -3668,7 +3668,6 @@ load_arrangement (DonnaTreeView     *tree,
         gchar             *e;
         gboolean           is_last_col;
         DonnaColumnType   *ct;
-        gpointer           ct_data;
         DonnaColumnType   *col_ct;
         guint              width;
         gchar             *title;
@@ -4083,7 +4082,6 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     DonnaConfig *config;
     DonnaArrangement *arr = NULL;
     gchar *s;
-    gboolean sticky;
 
     g_debug ("treeview '%s': select arrangement", priv->name);
 
@@ -5105,7 +5103,6 @@ get_best_iter_for_node (DonnaTreeView   *tree,
                         gboolean         add_root_if_needed,
                         GError         **error)
 {
-    GtkTreeView *treev = GTK_TREE_VIEW (tree);
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model;
     DonnaProvider *provider;
@@ -6374,7 +6371,6 @@ static gboolean
 single_click_cb (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaClick click;
     gint delay;
 
     /* single click it is */

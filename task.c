@@ -1513,7 +1513,7 @@ donna_task_cancel (DonnaTask *task)
  * The worker should not try and read data from the fd.
  *
  * If the task was only paused, and donna_task_is_cancelling() returned %FALSE
- * the fd will automaticallu have been reset, and is ready to be used again.
+ * the fd will automatically have been reset, and be ready to be used again.
  * This function should not be called more than once.
  *
  * Returns: File descriptor to be polled for reading
