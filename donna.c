@@ -144,11 +144,12 @@ donna_donna_class_init (DonnaDonnaClass *klass)
     g_type_class_add_private (klass, sizeof (DonnaDonnaPrivate));
 }
 
-static void
+static gboolean
 donna_donna_task_run (DonnaTask *task)
 {
     donna_task_run (task);
     g_object_unref (task);
+    return FALSE;
 }
 
 static GSList *
