@@ -639,8 +639,12 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
 
     node = new_node (_provider, location, NULL, TRUE);
     if (!node)
-        /* FIXME: set task error */
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Cannot create node, file doesn't exist: %s", location);
         return DONNA_TASK_FAILED;
+    }
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
