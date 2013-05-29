@@ -231,6 +231,13 @@ _donna_command_convert_arg (DonnaApp        *app,
             if (from_string)
             {
                 DonnaTask *task = donna_app_get_node_task (app, sce);
+                if (!task)
+                {
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                            "Invalid argument, can't get node for '%s'",
+                            (gchar *) sce);
+                    return FALSE;
+                }
                 donna_task_set_can_block (g_object_ref_sink (task));
                 donna_app_run_task (app, task);
                 if (donna_task_get_state (task) == DONNA_TASK_DONE)
@@ -296,6 +303,14 @@ _donna_command_convert_arg (DonnaApp        *app,
                 else
                 {
                     DonnaTask *task = donna_app_get_node_task (app, sce);
+                    if (!task)
+                    {
+                        g_free (rid);
+                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                                "Invalid argument, can't get node for '%s'",
+                                (gchar *) sce);
+                        return FALSE;
+                    }
                     donna_task_set_can_block (g_object_ref_sink (task));
                     donna_app_run_task (app, task);
                     if (donna_task_get_state (task) == DONNA_TASK_DONE)
