@@ -55,6 +55,8 @@ DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
 DonnaTask *         donna_app_get_node_task         (DonnaApp       *app,
                                                      const gchar    *full_location);
+gboolean            donna_app_trigger_node          (DonnaApp       *app,
+                                                     const gchar    *full_location);
 DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
                                                      const gchar    *type);
 DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,

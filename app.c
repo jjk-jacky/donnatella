@@ -175,6 +175,62 @@ donna_app_get_node_task (DonnaApp    *app,
     return task;
 }
 
+static void
+trigger_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (app, donna_task_get_error (task),
+                "Failed to trigger node");
+}
+
+static void
+get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+{
+    GError *err = NULL;
+    DonnaTask *trigger_task;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        donna_app_show_error (app, donna_task_get_error (task),
+                "Cannot trigger node");
+        return;
+    }
+
+    trigger_task = donna_node_trigger_task (
+            g_value_get_object (donna_task_get_return_value (task)), &err);
+    if (!trigger_task)
+    {
+        donna_app_show_error (app, err, "Cannot trigger node");
+        g_clear_error (&err);
+        return;
+    }
+
+    donna_task_set_callback (trigger_task, (task_callback_fn) trigger_node_cb,
+            app, NULL);
+    donna_app_run_task (app, trigger_task);
+}
+
+gboolean
+donna_app_trigger_node (DonnaApp       *app,
+                        const gchar    *full_location)
+{
+    DonnaAppInterface *interface;
+    DonnaTask *task;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (full_location != NULL, FALSE);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->run_task != NULL, FALSE);
+
+    task = donna_app_get_node_task (app, full_location);
+    donna_task_set_callback (task, (task_callback_fn) get_node_cb, app, NULL);
+    (*interface->run_task) (app, task);
+    return TRUE;
+}
+
 DonnaColumnType *
 donna_app_get_columntype (DonnaApp       *app,
                           const gchar    *type)
