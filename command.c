@@ -42,57 +42,12 @@ static DonnaCommandDef commands[] = {
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
 
-/* shared private API */
-
 #define skip_blank(s)   for ( ; isblank (*s); ++s) ;
 
-DonnaCommandDef *
-_donna_command_init_parse (gchar     *cmdline,
-                           gchar    **first_arg,
-                           gchar    **end,
-                           GError   **error)
-{
-    gchar  c;
-    gchar *s;
-    guint  i;
-
-    for (s = cmdline; isalnum (*s) || *s == '_'; ++s)
-        ;
-    c  = *s;
-    *s = '\0';
-    for (i = 0; i < nb_commands; ++i)
-        if (streq (commands[i].name, cmdline))
-            break;
-
-    if (i >= nb_commands)
-    {
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_NOT_FOUND,
-                "Command '%s' does not exists", cmdline);
-        *s = c;
-        return NULL;
-    }
-    *s = c;
-
-    skip_blank (s);
-    if (*s != '(')
-    {
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
-                "Command '%s': arguments not found, missing '('",
-                commands[i].name);
-        return NULL;
-    }
-
-    *first_arg = s;
-    if (!_donna_command_get_next_arg (first_arg, end, error))
-        return NULL;
-
-    return &commands[i];
-}
-
-gboolean
-_donna_command_get_next_arg (gchar  **arg,
-                             gchar  **end,
-                             GError **error)
+static gboolean
+get_next_arg (gchar  **arg,
+              gchar  **end,
+              GError **error)
 {
     gboolean in_arg = FALSE;
     gchar *s;
@@ -179,6 +134,121 @@ _donna_command_get_next_arg (gchar  **arg,
         return FALSE;
     }
     ++*end;
+    return TRUE;
+}
+
+/* shared private API */
+
+DonnaCommandDef *
+_donna_command_init_parse (gchar     *cmdline,
+                           gchar    **first_arg,
+                           gchar    **end,
+                           GError   **error)
+{
+    gchar  c;
+    gchar *s;
+    guint  i;
+
+    for (s = cmdline; isalnum (*s) || *s == '_'; ++s)
+        ;
+    c  = *s;
+    *s = '\0';
+    for (i = 0; i < nb_commands; ++i)
+        if (streq (commands[i].name, cmdline))
+            break;
+
+    if (i >= nb_commands)
+    {
+        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_NOT_FOUND,
+                "Command '%s' does not exists", cmdline);
+        *s = c;
+        return NULL;
+    }
+    *s = c;
+
+    skip_blank (s);
+    if (*s != '(')
+    {
+        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                "Command '%s': arguments not found, missing '('",
+                commands[i].name);
+        return NULL;
+    }
+
+    *first_arg = s;
+    if (!get_next_arg (first_arg, end, error))
+        return NULL;
+
+    return &commands[i];
+}
+
+gboolean
+_donna_command_get_next_arg (DonnaCommandDef *command,
+                             guint            i,
+                             gchar          **start,
+                             gchar          **end,
+                             GError         **error)
+{
+    /* get next arg. should succeed even when there are no more args */
+    *start = *end;
+    if (!get_next_arg (start, end, error))
+    {
+        if (i + 2 > command->argc)
+            g_prefix_error (error, "Command '%s', too many arguments; ",
+                    command->name);
+        else
+            g_prefix_error (error, "Command '%s', argument %d: ",
+                    command->name, i + 2);
+        return FALSE;
+    }
+    else if (!*start && i + 1 < command->argc)
+    {
+        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MISSING_ARG,
+                "Command '%s': missing argument %d/%d",
+                command->name, i + 2, command->argc);
+        return FALSE;
+    }
+    else
+        return TRUE;
+}
+
+gboolean
+_donna_command_checks_post_parsing (DonnaCommandDef *command,
+                                    guint            i,
+                                    gchar           *start,
+                                    gchar           *end,
+                                    GError         **error)
+{
+    if (i == 0)
+    {
+        /* special case for commands w/out args. make sure nothing was
+         * specified */
+        for ( ; start < end; ++start)
+            if (!isblank (*start))
+            {
+                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                        "Command '%s', too many arguments",
+                        command->name);
+                return FALSE;
+            }
+
+        /* parse to go to the end */
+        if (!get_next_arg (&start, &end, error))
+        {
+            g_prefix_error (error, "Command '%s', too many arguments: ",
+                    command->name);
+            return FALSE;
+        }
+    }
+
+    if (start != NULL)
+    {
+        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                "Command '%s', too many arguments",
+                command->name);
+        return FALSE;
+    }
+
     return TRUE;
 }
 
@@ -439,60 +509,17 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
         *end = c;
         g_ptr_array_add (arr, ptr);
 
-        /* get next arg. should succeed even when there are no more args */
-        start = end;
-        if (!_donna_command_get_next_arg (&start, &end, &err))
+        if (!_donna_command_get_next_arg (command, i, &start, &end, &err))
         {
-            if (i + 2 > command->argc)
-                g_prefix_error (&err, "Command '%s', too many arguments; ",
-                        command->name);
-            else
-                g_prefix_error (&err, "Command '%s', argument %d: ",
-                        command->name, i + 2);
-            donna_task_take_error (task, err);
-            _donna_command_free_args (command, arr);
-            return DONNA_TASK_FAILED;
-        }
-        else if (!start && i + 1 < command->argc)
-        {
-            donna_task_set_error (task, COMMAND_ERROR, COMMAND_ERROR_MISSING_ARG,
-                    "Command '%s': missing argument %d/%d",
-                    command->name, i + 2, command->argc);
-            _donna_command_free_args (command, arr);
-            return DONNA_TASK_FAILED;
-        }
-    }
-
-    if (i == 0)
-    {
-        /* special case for commands w/out args. make sure nothing was
-         * specified */
-        for ( ; start < end; ++start)
-            if (!isblank (*start))
-            {
-                donna_task_set_error (task, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
-                        "Command '%s', too many arguments",
-                        command->name);
-                _donna_command_free_args (command, arr);
-                return DONNA_TASK_FAILED;
-            }
-
-        /* parse to go to the end */
-        if (!_donna_command_get_next_arg (&start, &end, &err))
-        {
-            g_prefix_error (&err, "Command '%s', too many arguments: ",
-                    command->name);
             donna_task_take_error (task, err);
             _donna_command_free_args (command, arr);
             return DONNA_TASK_FAILED;
         }
     }
 
-    if (start != NULL)
+    if (!_donna_command_checks_post_parsing (command, i, start, end, &err))
     {
-        donna_task_set_error (task, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
-                "Command '%s', too many arguments",
-                command->name);
+        donna_task_take_error (task, err);
         _donna_command_free_args (command, arr);
         return DONNA_TASK_FAILED;
     }

@@ -50,8 +50,16 @@ DonnaCommandDef *       _donna_command_init_parse   (gchar           *cmdline,
                                                      gchar          **first_arg,
                                                      gchar          **end,
                                                      GError         **error);
-gboolean                _donna_command_get_next_arg (gchar          **arg,
+gboolean                _donna_command_get_next_arg (DonnaCommandDef *command,
+                                                     guint            i,
+                                                     gchar          **arg,
                                                      gchar          **end,
+                                                     GError         **error);
+gboolean                _donna_command_checks_post_parsing (
+                                                     DonnaCommandDef *command,
+                                                     guint            i,
+                                                     gchar           *start,
+                                                     gchar           *end,
                                                      GError         **error);
 gboolean                _donna_command_convert_arg  (DonnaApp        *app,
                                                      DonnaArgType     type,
