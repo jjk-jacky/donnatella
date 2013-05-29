@@ -94,12 +94,14 @@ _donna_command_get_next_arg (gchar  **arg,
                              gchar  **end,
                              GError **error)
 {
+    gboolean in_arg = FALSE;
     gchar *s;
 
     if (**arg == ',' || **arg == '(')
     {
         /* we were on the separator, or opening for the 1st arg. Skip it &
          * blanks */
+        in_arg = TRUE;
         ++*arg;
         skip_blank (*arg);
     }
@@ -112,6 +114,7 @@ _donna_command_get_next_arg (gchar  **arg,
         if (**arg == ',')
         {
             /* found the separator. Skit it & blanks */
+            in_arg = TRUE;
             ++*arg;
             skip_blank (*arg);
         }
@@ -156,7 +159,14 @@ _donna_command_get_next_arg (gchar  **arg,
     if (**arg == ')')
     {
         *arg = *end = NULL;
-        return TRUE;
+        if (!in_arg)
+            return TRUE;
+        else
+        {
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                    "Missing value before ')'");
+            return FALSE;
+        }
     }
 
     for (s = *end = *arg; *s != ',' && *s != ')' && *s != '\0'; ++s)
