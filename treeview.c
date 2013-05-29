@@ -8,6 +8,7 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
+#include "command.h"
 #include "macros.h"
 #include "renderer.h"
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
@@ -329,6 +330,16 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
                  || (es) == DONNA_TREE_EXPAND_FULL)     \
              ? NULL : ROW_CLASS_MINITREE),              \
             -1)
+
+/* internal from provider-config.c */
+gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
+                                             const gchar   *tv_name,
+                                             const gchar   *col_name,
+                                             const gchar   *arr_name,
+                                             const gchar   *def_cat,
+                                             const gchar   *opt_name,
+                                             gchar         *def_val);
+
 
 static inline void load_node_visuals                    (DonnaTreeView *tree,
                                                          GtkTreeIter   *iter,
@@ -4634,6 +4645,30 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     return TRUE;
 }
 
+static DonnaTreeRow *
+get_row_for_iter (DonnaTreeView *tree, GtkTreeIter *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+    GSList *l;
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
+            DONNA_TREE_VIEW_COL_NODE,   &node,
+            -1);
+    g_object_unref (node);
+    for (l = g_hash_table_lookup (priv->hashtable, node); l; l = l->next)
+        if (itereq (iter, (GtkTreeIter *) l->data))
+        {
+            DonnaTreeRow *row;
+
+            row = g_new (DonnaTreeRow, 1);
+            row->node = node;
+            row->iter = l->data;
+            return row;
+        }
+    g_return_val_if_reached (NULL);
+}
+
 /* mode tree only */
 static GtkTreeIter *
 get_root_iter (DonnaTreeView *tree, GtkTreeIter *iter)
@@ -6516,15 +6551,393 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
             0);
 }
 
+#define ensure_str()  do {                          \
+    if (!str)                                       \
+        str = g_string_new (NULL);                  \
+    g_string_append_len (str, sce, s - sce);        \
+} while (0)
+gchar *
+tree_parse_location (DonnaTreeView  *tree,
+                     DonnaTreeRow   *row,
+                     struct column  *_col,
+                     const gchar    *sce)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+    GString *str = NULL;
+    gchar *s = (gchar *) sce;
+    gchar *ss;
+
+    while ((s = strchr (s, '%')))
+    {
+        switch (s[1])
+        {
+            case 'o':
+                ensure_str ();
+                g_string_append (str, priv->name);
+                break;
+
+            case 'L':
+                ensure_str ();
+                if (priv->location)
+                {
+                    ss = donna_node_get_full_location (priv->location);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                }
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            case 'l':
+                ensure_str ();
+                if (priv->location)
+                {
+                    ss = donna_node_get_location (priv->location);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                }
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            case 'R':
+                ensure_str ();
+                g_string_append (str, _col->name);
+                break;
+
+            case 'r':
+                ensure_str ();
+                if (row)
+                    g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            case 'N':
+                ensure_str ();
+                if (row)
+                {
+                    ss = donna_node_get_full_location (row->node);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                }
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            case 'n':
+                ensure_str ();
+                if (row)
+                {
+                    ss = donna_node_get_location (row->node);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                }
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            default:
+                s += 2;
+                continue;
+        }
+        s += 2;
+        sce = (const gchar *) s;
+    }
+
+    if (!str)
+        return NULL;
+
+    g_string_append (str, sce);
+    return g_string_free (str, FALSE);
+}
+#undef ensure_str
+
+static void
+free_command_arr (GPtrArray *arr)
+{
+    /* the command (DonnaCommandDef) was put as last element of the array, so we
+     * should get it back and remove it, so free_args() doesn't try to free it
+     * and fail */
+    DonnaCommandDef *command = arr->pdata[arr->len - 1];
+    g_ptr_array_remove_index_fast (arr, arr->len - 1);
+    _donna_command_free_args (command, arr);
+}
+
+static void
+command_run_cb (DonnaTask *task, gboolean timeout_called, GPtrArray *arr)
+{
+    free_command_arr (arr);
+}
+
+#define is_regular_left_click(click, event)             \
+    ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))  \
+     == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)         \
+     && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+
+static void
+handle_click (DonnaTreeView     *tree,
+              DonnaClick         click,
+              GdkEventButton    *event,
+              GtkTreeIter       *iter,
+              GtkTreeViewColumn *column,
+              GtkCellRenderer   *renderer,
+              gboolean           is_blank)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaConfig *config;
+    DonnaTreeRow *row = NULL;
+    struct column *_col;
+    /* longest possible is "blankcol_ctrl_shift_middle_double_click" (len=39) */
+    gchar buf[40];
+    gchar *b;
+    gchar *s = buf + 9; /* leave space for "blankcol_" prefix */
+    const gchar *def = NULL;
+
+    if (event->state & GDK_CONTROL_MASK)
+    {
+        strcpy (s, "ctrl_");
+        s += 5;
+    }
+    if (event->state & GDK_SHIFT_MASK)
+    {
+        strcpy (s, "shift_");
+        s += 6;
+    }
+    if (click & DONNA_CLICK_LEFT)
+    {
+        strcpy (s, "left_");
+        s += 5;
+    }
+    else if (click & DONNA_CLICK_MIDDLE)
+    {
+        strcpy (s, "middle_");
+        s += 7;
+    }
+    else /* DONNA_CLICK_RIGHT */
+    {
+        strcpy (s, "right_");
+        s += 6;
+    }
+    if (click & DONNA_CLICK_DOUBLE)
+    {
+        strcpy (s, "double_");
+        s += 7;
+    }
+    else if (click & DONNA_CLICK_SLOW_DOUBLE)
+    {
+        strcpy (s, "slow_");
+        s += 5;
+    }
+    /* else DONNA_CLICK_SINGLE; we don't print anything for it */
+    strcpy (s, "click");
+
+    config = donna_app_peek_config (priv->app);
+    _col = get_column_by_column (tree, column);
+
+    if (!iter)
+    {
+        memcpy (buf, "blankrow_", 9 * sizeof (gchar));
+        b = buf;
+    }
+    else if (!_col)
+    {
+        memcpy (buf, "blankcol_", 9 * sizeof (gchar));
+        b = buf;
+    }
+    else if (is_blank)
+    {
+        memcpy (buf + 3, "blank_", 6 * sizeof (gchar));
+        b = buf + 3;
+    }
+    else
+        b = buf + 9;
+
+    /* a few of those should have valid defaults, just in case */
+    if (is_tree (tree))
+    {
+        if (streq (b, "left_click"))
+            def = "command:set_cursor (%o, %r)";
+        else if (streq (b, "left_double_click"))
+            def = "command:activate (%o, %r)";
+    }
+    else
+    {
+        if (streq (b, "left_click"))
+            def = "command:set_focus (%o, %r)";
+        else if (streq (b, "blank_left_click")
+                || streq (b, "blankcol_left_click")
+                || streq (b, "blankrow_left_click"))
+            def = "command:selection (%o, unselect, :all, -)";
+        else if (streq (b, "left_double_click"))
+            def = "command:activate (%o, %r)";
+    }
+
+    s = _donna_config_get_string_tree_column (config, priv->name,
+            (_col) ? _col->name : NULL,
+            priv->arrangement->columns_options,
+            (is_tree (tree)) ? "clicks/tree" : "clicks/list",
+            b, (gchar *) def);
+
+    if (!s)
+        return;
+
+    if (iter)
+        row = get_row_for_iter (tree, iter);
+
+    /* for commands we'll do the parsing directly, to avoid converting args to
+     * string and back, or the need to use get_node tasks */
+    if (streqn (s, "command:", 8))
+    {
+        GError *err = NULL;
+        DonnaTask *task;
+        DonnaCommandDef *command;
+        gchar *start, *end;
+        guint i;
+        GPtrArray *arr;
+
+        command = _donna_command_init_parse (s + 8, &start, &end, &err);
+        if (!command)
+        {
+            donna_app_show_error (priv->app, err,
+                    "Cannot trigger action, parsing command failed");
+            g_clear_error (&err);
+            g_free (s);
+            g_free (row);
+            return;
+        }
+
+        arr = g_ptr_array_sized_new (command->argc + 2);
+        g_ptr_array_add (arr, /* no parent task */ NULL);
+        for (i = 0; i < command->argc; ++i)
+        {
+            gchar c;
+
+            c = *end;
+            *end = '\0';
+            if (streq (start, "%o"))
+            {
+                if (command->arg_type[i] == DONNA_ARG_TYPE_TREEVIEW)
+                    g_ptr_array_add (arr, g_object_ref (tree));
+                else
+                    goto str_parsing;
+            }
+            else if (streq (start, "%L"))
+            {
+                if (command->arg_type[i] == DONNA_ARG_TYPE_NODE)
+                    g_ptr_array_add (arr, g_object_ref (priv->location));
+                else
+                    goto str_parsing;
+            }
+            else if (streq (start, "%r"))
+            {
+                if (command->arg_type[i] == DONNA_ARG_TYPE_ROW_ID)
+                {
+                    DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                    DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
+                    rid->type = DONNA_ARG_TYPE_ROW;
+                    rid->ptr  = r;
+                    r->node = row->node;
+                    r->iter = row->iter;
+                    g_ptr_array_add (arr, rid);
+                }
+                else if (command->arg_type[i] == DONNA_ARG_TYPE_ROW)
+                {
+                    DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
+                    r->node = row->node;
+                    r->iter = row->iter;
+                    g_ptr_array_add (arr, r);
+                }
+                else
+                    goto str_parsing;
+            }
+            else if (streq (start, "%N"))
+            {
+                if (command->arg_type[i] == DONNA_ARG_TYPE_NODE)
+                    g_ptr_array_add (arr, g_object_ref (row->node));
+                else
+                    goto str_parsing;
+            }
+            else
+            {
+                gchar *ss;
+                gpointer ptr;
+
+str_parsing:
+                ss = tree_parse_location (tree, row, _col, start);
+                if (!_donna_command_convert_arg (priv->app, command->arg_type[i],
+                            TRUE, (ss) ? ss : start, &ptr, &err))
+                {
+                    donna_app_show_error (priv->app, err,
+                            "Cannot trigger action, parsing command failed");
+                    g_clear_error (&err);
+                    g_free (s);
+                    g_free (row);
+                    _donna_command_free_args (command, arr);
+                    return;
+                }
+                g_free (ss);
+                g_ptr_array_add (arr, ptr);
+            }
+            *end = c;
+
+            if (!_donna_command_get_next_arg (command, i, &start, &end, &err))
+            {
+                donna_app_show_error (priv->app, err,
+                        "Cannot trigger action, parsing command failed");
+                g_clear_error (&err);
+                g_free (s);
+                g_free (row);
+                _donna_command_free_args (command, arr);
+                return;
+            }
+        }
+
+        if (!_donna_command_checks_post_parsing (command, i, start, end, &err))
+        {
+            donna_app_show_error (priv->app, err,
+                    "Cannot trigger action, parsing command failed");
+            g_clear_error (&err);
+            g_free (s);
+            g_free (row);
+            _donna_command_free_args (command, arr);
+            return;
+        }
+
+        /* let's add command into the array, so we can actually free it */
+        g_ptr_array_add (arr, command);
+
+        task = donna_task_new ((task_fn) command->cmd_fn, arr, NULL);
+        donna_task_set_visibility (task, command->visibility);
+        donna_task_set_callback (task, (task_callback_fn) command_run_cb, arr,
+                (GDestroyNotify) free_command_arr);
+        donna_app_run_task (priv->app, task);
+    }
+    else
+    {
+        gchar *ss;
+
+        ss = tree_parse_location (tree, row, _col, s);
+        if (ss)
+        {
+            g_free (s);
+            s = ss;
+        }
+        donna_app_trigger_node (priv->app, s);
+    }
+
+    g_free (s);
+    g_free (row);
+}
+
 static gboolean
 trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 {
     GtkTreeView *treev = (GtkTreeView *) tree;
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeViewColumn *column;
-#ifdef GTK_IS_JJK
-    GtkCellRenderer *renderer;
-#endif
+    GtkCellRenderer *renderer = NULL;
     GtkTreeModel *model;
     GtkTreeIter iter;
     gint x, y;
@@ -6536,8 +6949,14 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     else if (event->button == 3)
         click |= DONNA_CLICK_RIGHT;
 
-    if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
+    /* a click will grab the focus if:
+     * - tree: it's a regular left click (i.e. no Ctrl/Shift held)
+     * - list: it's a left click (event w/ Ctrl/Shift)
+     * and, ofc, focus isn't on tree already */
+    if (((is_tree (tree) && is_regular_left_click (click, event))
+                || (!is_tree (tree)
+                    && (click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+                    == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)))
             && !gtk_widget_is_focus ((GtkWidget *) tree))
     {
         GtkWidget *w = NULL;
@@ -6574,29 +6993,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 #else
         if (gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
 #endif
-        {
-            if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                    == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-            {
-                if (!is_tree (tree)
-                        && (column == priv->blank_column || !priv->full_row_select))
-                {
-                    GtkTreeSelection *sel;
-
-                    sel = gtk_tree_view_get_selection (treev);
-                    gtk_tree_selection_unselect_all (sel);
-
-                }
-                else if (priv->full_row_select)
-                {
-                    GtkTreePath *path;
-
-                    path = gtk_tree_model_get_path (model, &iter);
-                    gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
-                    gtk_tree_path_free (path);
-                }
-            }
-        }
+            handle_click (tree, click, event, &iter, column, renderer, TRUE);
         else
         {
             DonnaNode *node;
@@ -6654,68 +7051,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 
             if (!as)
             {
-                struct column *_col;
-                GtkTreePath *path;
-                guint index = 0;
-
-                path = gtk_tree_model_get_path (model, &iter);
-                /* we ask columntype to handle the click, unless this is the
-                 * main column, in which case we always handle single-left &
-                 * double-left clicks */
-                if (column == priv->main_column && ((click & DONNA_CLICK_LEFT)
-                            && (click & (DONNA_CLICK_SINGLE | DONNA_CLICK_DOUBLE))))
-                {
-                    if (click & DONNA_CLICK_SINGLE)
-                        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
-                    else /* DONNA_CLICK_DOUBLE */
-                        donna_tree_view_row_activated (treev, path, column);
-                    gtk_tree_path_free (path);
-                    g_object_unref (node);
-                    return TRUE;
-                }
-
-                _col = get_column_by_column (tree, column);
-
-                struct re_data re_data = {
-                    .tree   = tree,
-                    .column = column,
-                    .path   = path,
-                    .event  = (GdkEvent *) event
-                };
-
-#ifdef GTK_IS_JJK
-                for (index = 0; index < _col->renderers->len; ++index)
-                    if (renderer == _col->renderers->pdata[index])
-                    {
-                        ++index;
-                        break;
-                    }
-#endif
-
-                if (!donna_columntype_handle_click (_col->ct, _col->ct_data,
-                        click, event, node, index,
-                        (GtkCellRenderer **) _col->renderers->pdata,
-                        (renderer_edit_fn) renderer_edit, &re_data, tree))
-                {
-                    /* some default */
-
-                    if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                    {
-                        if (!is_tree (tree) && !priv->full_row_select)
-                        {
-                            GtkTreeSelection *sel;
-
-                            sel = gtk_tree_view_get_selection (treev);
-                            gtk_tree_selection_unselect_all (sel);
-                        }
-                        else
-                            donna_tree_view_row_activated (treev, path, column);
-                    }
-                }
-
-                gtk_tree_path_free (path);
-                g_object_unref (node);
+                handle_click (tree, click, event, &iter, column, renderer, FALSE);
                 return TRUE;
             }
 
@@ -6798,22 +7134,16 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                     gtk_tree_path_free (path);
                 }
 
-                break;
+                g_object_unref (node);
+                return TRUE;
             }
             g_object_unref (node);
+            /* there was no as for this column */
+            handle_click (tree, click, event, &iter, column, renderer, FALSE);
         }
     }
-    /* no context means not on a row, so below the last row (if any) */
-    else if (!is_tree (tree)
-            && (click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-    {
-        GtkTreeSelection *sel;
-
-        /* no full row select */
-        sel = gtk_tree_view_get_selection (treev);
-        gtk_tree_selection_unselect_all (sel);
-    }
+    else
+        handle_click (tree, click, event, NULL, NULL, NULL, TRUE);
     return TRUE;
 }
 
