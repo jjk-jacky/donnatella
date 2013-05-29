@@ -381,9 +381,6 @@ _donna_command_free_args (DonnaCommandDef *command, GPtrArray *arr)
                 g_free (arr->pdata[i]);
                 break;
 
-                gtk_tree_path_free (arr->pdata[i]);
-                break;
-
             case DONNA_ARG_TYPE_ROW_ID:
                 {
                     DonnaTreeRowId *rowid;
