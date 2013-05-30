@@ -375,8 +375,7 @@ static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          guint           *index,
                                                          gboolean         create);
 static inline void scroll_to_iter                       (DonnaTreeView  *tree,
-                                                         GtkTreeIter    *iter,
-                                                         gboolean        select_row);
+                                                         GtkTreeIter    *iter);
 static gboolean scroll_to_current                       (DonnaTreeView  *tree);
 static void check_children_post_expand                  (DonnaTreeView  *tree,
                                                          GtkTreeIter    *iter);
@@ -604,7 +603,7 @@ struct scroll_data
 static gboolean
 idle_scroll_to_iter (struct scroll_data *data)
 {
-    scroll_to_iter (data->tree, data->iter, FALSE);
+    scroll_to_iter (data->tree, data->iter);
     g_slice_free (struct scroll_data, data);
     return FALSE;
 }
@@ -804,7 +803,7 @@ sync_with_location_changed_cb (GObject       *object,
                 gtk_tree_path_free (path);
 
                 if (priv->sync_scroll)
-                    scroll_to_iter (tree, iter, FALSE);
+                    scroll_to_iter (tree, iter);
             }
         }
     }
@@ -5258,7 +5257,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
 }
 
 static inline void
-scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter, gboolean select_row)
+scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     GtkTreeView *treev = (GtkTreeView *) tree;
     GdkRectangle rect_visible, rect;
@@ -5272,9 +5271,6 @@ scroll_to_iter (DonnaTreeView *tree, GtkTreeIter *iter, gboolean select_row)
     if (rect.y < 0 || rect.y > rect_visible.height - rect.height)
         /* only scroll if not visible */
         gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
-
-    if (select_row)
-        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
 
     gtk_tree_path_free (path);
 }
@@ -5291,7 +5287,7 @@ scroll_to_current (DonnaTreeView *tree)
                 &iter))
         return FALSE;
 
-    scroll_to_iter (tree, &iter, FALSE);
+    scroll_to_iter (tree, &iter);
     return FALSE;
 }
 
@@ -5374,7 +5370,7 @@ node_get_children_list_cb (DonnaTask                            *task,
             /* since we couldn't go there, make sure our real current location
              * is known (e.g. when user clicked on tree, it should go back to
              * where we are, since we failed to change location) */
-            g_object_notify_by_pspec (G_OBJECT (data->tree),
+            g_object_notify_by_pspec ((GObject *) data->tree,
                     donna_tree_view_props[PROP_LOCATION]);
         }
 
@@ -5437,7 +5433,7 @@ node_get_children_list_cb (DonnaTask                            *task,
     arr = g_value_get_boxed (value);
     if (arr->len > 0)
     {
-        GtkTreeSortable *sortable = GTK_TREE_SORTABLE (data->tree->priv->store);
+        GtkTreeSortable *sortable = (GtkTreeSortable *) data->tree->priv->store;
         gint sort_col_id;
         GtkSortType order;
         GtkWidget *w;
@@ -5470,26 +5466,33 @@ node_get_children_list_cb (DonnaTask                            *task,
         while (gtk_events_pending ())
             gtk_main_iteration ();
 
-        /* do we have a child to select/scroll to? */
+        /* do we have a child to focus/scroll to? */
         if (!it && iter.stamp != 0)
         {
+            GtkTreePath *path;
+
+            /* we bring the row into view as needed, then focus it only. If not
+             * patched, we can just set_cursor() & then unselect, since we know
+             * there are no selection */
+
+            path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
             if (changed_location)
-                /* this will scroll & try to put the row in the middle */
-                scroll_to_iter (data->tree, &iter, /* select it */ TRUE);
+                scroll_to_iter (data->tree, &iter);
             else
-            {
-                GtkTreePath *path;
-
-                /* minimum scrolling, leaving the row on top/bottom */
-
-                path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
-                gtk_tree_view_set_cursor ((GtkTreeView *) data->tree, path, NULL, FALSE);
-                gtk_tree_path_free (path);
-            }
+                gtk_tree_view_scroll_to_cell ((GtkTreeView *) data->tree, path,
+                        NULL, FALSE, 0.0, 0.0);
+#ifdef GTK_IS_JJK
+            gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
+#else
+            gtk_tree_view_set_cursor ((GtkTreeView *) data->tree, path, NULL, FALSE);
+            gtk_tree_selection_unselect_all (
+                    gtk_tree_view_get_selection ((GtkTreeView *) data->tree));
+#endif
+            gtk_tree_path_free (path);
         }
         else
             /* scroll to top-left */
-            gtk_tree_view_scroll_to_point (GTK_TREE_VIEW (data->tree), 0, 0);
+            gtk_tree_view_scroll_to_point ((GtkTreeView *) data->tree, 0, 0);
 
         /* we give the treeview the focus, to ensure the focused row is set,
          * hence the class focused-row applied */
@@ -5502,11 +5505,11 @@ node_get_children_list_cb (DonnaTask                            *task,
     {
         /* show the "location empty" message */
         priv->draw_state = DRAW_EMPTY;
-        gtk_widget_queue_draw (GTK_WIDGET (data->tree));
+        gtk_widget_queue_draw ((GtkWidget *) data->tree);
     }
 
     /* emit signal */
-    g_object_notify_by_pspec (G_OBJECT (data->tree),
+    g_object_notify_by_pspec ((GObject *) data->tree,
             donna_tree_view_props[PROP_LOCATION]);
 
 free:
@@ -6195,7 +6198,7 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
 #endif
     gtk_tree_path_free (path);
     if (is_tree (tree) && priv->sync_scroll)
-        scroll_to_iter (tree, &iter, FALSE);
+        scroll_to_iter (tree, &iter);
     return TRUE;
 }
 
@@ -6559,7 +6562,7 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
             gtk_tree_path_free (loc_path);
 
             if (priv->sync_scroll)
-                scroll_to_iter (tree, &child, FALSE);
+                scroll_to_iter (tree, &child);
 
             g_object_unref (n);
             break;
