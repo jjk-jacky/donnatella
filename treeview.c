@@ -117,16 +117,6 @@ enum
     SELECT_HIGHLIGHT_COLUMN_UNDERLINE
 };
 
-enum visual
-{
-    VISUAL_NOTHING    = 0,
-    VISUAL_NAME       = (1 << 0),
-    VISUAL_ICON       = (1 << 1),
-    VISUAL_BOX        = (1 << 2),
-    VISUAL_HIGHLIGHT  = (1 << 3),
-    VISUAL_CLICKS     = (1 << 4),
-};
-
 struct visuals
 {
     /* iter of the root, or an invalid iter (stamp==0) and user_data if the
@@ -281,7 +271,7 @@ struct _DonnaTreeViewPrivate
      * In minitree, we also put them back in there when nodes are removed. */
     GHashTable          *tree_visuals;
     /* Tree: which visuals to load from node */
-    enum visual          node_visuals;
+    DonnaTreeVisual      node_visuals;
 
     /* "cached" options */
     guint                mode               : 1;
@@ -1250,7 +1240,7 @@ remove_row_from_tree (DonnaTreeView *tree,
         }
         else if (!is_removal)
         {
-            enum visual v;
+            DonnaTreeVisual v;
 
             /* place any tree_visuals back there to remember them when the node
              * comes back */
@@ -1271,24 +1261,24 @@ remove_row_from_tree (DonnaTreeView *tree,
 
                 /* we can't just get everything, since there might be
                  * node_visuals applied */
-                if (v & VISUAL_NAME)
+                if (v & DONNA_TREE_VISUAL_NAME)
                     gtk_tree_model_get (model, iter,
                             DONNA_TREE_COL_NAME,        &visuals->name,
                             -1);
-                if (v & VISUAL_ICON)
+                if (v & DONNA_TREE_VISUAL_ICON)
                     gtk_tree_model_get (model, iter,
                             DONNA_TREE_COL_ICON,        &visuals->icon,
                             -1);
-                if (v & VISUAL_BOX)
+                if (v & DONNA_TREE_VISUAL_BOX)
                     gtk_tree_model_get (model, iter,
                             DONNA_TREE_COL_BOX,         &visuals->box,
                             -1);
-                if (v & VISUAL_HIGHLIGHT)
+                if (v & DONNA_TREE_VISUAL_HIGHLIGHT)
                     gtk_tree_model_get (model, iter,
                             DONNA_TREE_COL_HIGHLIGHT,   &visuals->highlight,
                             -1);
                 /* not a visual, but treated the same */
-                if (v & VISUAL_CLICKS)
+                if (v & DONNA_TREE_VISUAL_CLICKS)
                     gtk_tree_model_get (model, iter,
                             DONNA_TREE_COL_CLICKS,      &visuals->clicks,
                             -1);
@@ -2866,7 +2856,8 @@ node_refresh_visuals_cb (DonnaTask                  *task,
     g_ptr_array_add (arr, prop);    \
 } while (0)
 #define load_node_visual(UPPER, lower, GTYPE, get_fn, COLUMN)   do {                \
-    if ((priv->node_visuals & VISUAL_##UPPER) && !(visuals & VISUAL_##UPPER))       \
+    if ((priv->node_visuals & DONNA_TREE_VISUAL_##UPPER)                            \
+            && !(visuals & DONNA_TREE_VISUAL_##UPPER))                              \
     {                                                                               \
         donna_node_get (node, FALSE, "visual-" lower, &has, &value, NULL);          \
         switch (has)                                                                \
@@ -2909,7 +2900,7 @@ load_node_visuals (DonnaTreeView    *tree,
                    gboolean          allow_refresh)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    enum visual visuals;
+    DonnaTreeVisual visuals;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
     GPtrArray *arr = NULL;
@@ -3006,32 +2997,32 @@ load_tree_visuals (DonnaTreeView    *tree,
 
         if (itereq (root, &visuals->root))
         {
-            enum visual v = 0;
+            DonnaTreeVisual v = 0;
 
             if (visuals->name)
             {
-                v |= VISUAL_NAME;
+                v |= DONNA_TREE_VISUAL_NAME;
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_NAME,        visuals->name,
                         -1);
             }
             if (visuals->icon)
             {
-                v |= VISUAL_ICON;
+                v |= DONNA_TREE_VISUAL_ICON;
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_ICON,        visuals->icon,
                         -1);
             }
             if (visuals->box)
             {
-                v |= VISUAL_BOX;
+                v |= DONNA_TREE_VISUAL_BOX;
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_BOX,         visuals->box,
                         -1);
             }
             if (visuals->highlight)
             {
-                v |= VISUAL_HIGHLIGHT;
+                v |= DONNA_TREE_VISUAL_HIGHLIGHT;
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_HIGHLIGHT,   visuals->highlight,
                         -1);
@@ -3039,7 +3030,7 @@ load_tree_visuals (DonnaTreeView    *tree,
             /* not a visual, but treated the same */
             if (visuals->clicks)
             {
-                v |= VISUAL_CLICKS;
+                v |= DONNA_TREE_VISUAL_CLICKS;
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_CLICKS,  visuals->clicks,
                         -1);
@@ -6375,6 +6366,160 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
 
     gtk_tree_path_free (path);
     return TRUE;
+}
+
+gboolean
+donna_tree_view_set_visual (DonnaTreeView      *tree,
+                            DonnaTreeRowId     *rowid,
+                            DonnaTreeVisual     visual,
+                            const gchar        *_value,
+                            GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    DonnaTreeVisual v;
+    gpointer value = (gpointer) _value;
+    guint col;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    g_return_val_if_fail (visual != 0, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': set_visual() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot set visual, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    if (visual == DONNA_TREE_VISUAL_NAME)
+        col = DONNA_TREE_COL_NAME;
+    else if (visual == DONNA_TREE_VISUAL_ICON)
+    {
+        col = DONNA_TREE_COL_ICON;
+        value = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
+                    _value, 16 /* FIXME */, 0, NULL);
+    }
+    else if (visual == DONNA_TREE_VISUAL_BOX)
+        col = DONNA_TREE_COL_BOX;
+    else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
+        col = DONNA_TREE_COL_HIGHLIGHT;
+    else if (visual == DONNA_TREE_VISUAL_CLICKS)
+        col = DONNA_TREE_COL_CLICKS;
+    else
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot set visual, invalid visual type",
+                priv->name);
+        return FALSE;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            DONNA_TREE_COL_VISUALS,     &v,
+            -1);
+    v |= visual;
+    donna_tree_store_set (priv->store, &iter,
+            DONNA_TREE_COL_VISUALS,     v,
+            col,                        value,
+            -1);
+
+    if (visual == DONNA_TREE_VISUAL_ICON)
+        g_object_unref (value);
+
+    return TRUE;
+}
+
+gchar *
+donna_tree_view_get_visual (DonnaTreeView           *tree,
+                            DonnaTreeRowId          *rowid,
+                            DonnaTreeVisual          visual,
+                            DonnaTreeVisualSource    source,
+                            GError                 **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    DonnaTreeVisual v;
+    guint col;
+    gchar *value;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    g_return_val_if_fail (rowid != NULL, NULL);
+    g_return_val_if_fail (visual != 0, NULL);
+    g_return_val_if_fail (source == DONNA_TREE_VISUAL_SOURCE_TREE
+            || source == DONNA_TREE_VISUAL_SOURCE_NODE
+            || source == DONNA_TREE_VISUAL_SOURCE_ANY, NULL);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': get_visual() doesn't apply in mode list",
+                priv->name);
+        return NULL;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot set visual, invalid row-id",
+                priv->name);
+        return NULL;
+    }
+
+    if (visual == DONNA_TREE_VISUAL_NAME)
+        col = DONNA_TREE_COL_NAME;
+    else if (visual == DONNA_TREE_VISUAL_BOX)
+        col = DONNA_TREE_COL_BOX;
+    else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
+        col = DONNA_TREE_COL_HIGHLIGHT;
+    else if (visual == DONNA_TREE_VISUAL_CLICKS)
+        col = DONNA_TREE_COL_CLICKS;
+    else
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot get visual, invalid visual type",
+                priv->name);
+        return NULL;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            DONNA_TREE_COL_VISUALS,     &v,
+            -1);
+
+    if (source == DONNA_TREE_VISUAL_SOURCE_TREE)
+    {
+        if (!(v & visual))
+            return NULL;
+    }
+    else if (source == DONNA_TREE_VISUAL_SOURCE_NODE)
+    {
+        if (v & visual)
+            return NULL;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            col,    &value,
+            -1);
+
+    return value;
 }
 
 /* mode list only */

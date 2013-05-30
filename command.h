@@ -28,6 +28,8 @@ typedef enum
     DONNA_COMMAND_ACTIVATE_ROW,
     DONNA_COMMAND_TOGGLE_ROW,
     DONNA_COMMAND_ACTION_NODE,
+    DONNA_COMMAND_SET_TREE_VISUAL,
+    DONNA_COMMAND_GET_TREE_VISUAL,
 } DonnaCommand;
 
 typedef DonnaTaskState (*cmd_fn) (DonnaTask *task, GPtrArray *args);

@@ -100,6 +100,25 @@ typedef enum
     DONNA_TREE_SEL_INVERT,
 } DonnaTreeSelAction;
 
+typedef enum
+{
+    DONNA_TREE_VISUAL_NOTHING   = 0,
+    DONNA_TREE_VISUAL_NAME      = (1 << 0),
+    DONNA_TREE_VISUAL_ICON      = (1 << 1),
+    DONNA_TREE_VISUAL_BOX       = (1 << 2),
+    DONNA_TREE_VISUAL_HIGHLIGHT = (1 << 3),
+    DONNA_TREE_VISUAL_CLICKS    = (1 << 4),
+} DonnaTreeVisual;
+
+typedef enum
+{
+    DONNA_TREE_VISUAL_SOURCE_TREE   = (1 << 0),
+    DONNA_TREE_VISUAL_SOURCE_NODE   = (1 << 1),
+
+    DONNA_TREE_VISUAL_SOURCE_ANY    = DONNA_TREE_VISUAL_SOURCE_TREE
+        | DONNA_TREE_VISUAL_SOURCE_NODE,
+} DonnaTreeVisualSource;
+
 struct _DonnaTreeView
 {
     /*< private >*/
@@ -158,6 +177,16 @@ gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
 gchar *         donna_tree_view_export_tree     (DonnaTreeView      *tree);
 gboolean        donna_tree_view_add_root        (DonnaTreeView      *tree,
                                                  DonnaNode          *node);
+gboolean        donna_tree_view_set_visual      (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaTreeVisual     visual,
+                                                 const gchar        *value,
+                                                 GError            **error);
+gchar *         donna_tree_view_get_visual      (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaTreeVisual     visual,
+                                                 DonnaTreeVisualSource source,
+                                                 GError            **error);
 /* Mode List */
 GPtrArray *     donna_tree_view_get_children    (DonnaTreeView      *tree,
                                                  DonnaNode          *node,

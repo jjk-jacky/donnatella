@@ -12,6 +12,8 @@ static DonnaTaskState   cmd_selection       (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_activate_row    (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_toggle_row      (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_action_node     (DonnaTask *task, GPtrArray *args);
+static DonnaTaskState   cmd_set_tree_visual (DonnaTask *task, GPtrArray *args);
+static DonnaTaskState   cmd_get_tree_visual (DonnaTask *task, GPtrArray *args);
 
 static DonnaCommandDef commands[] = {
     {
@@ -68,6 +70,26 @@ static DonnaCommandDef commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_action_node
+    },
+    {
+        .command        = DONNA_COMMAND_SET_TREE_VISUAL,
+        .name           = "set_tree_visual",
+        .argc           = 4,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_set_tree_visual
+    },
+    {
+        .command        = DONNA_COMMAND_GET_TREE_VISUAL,
+        .name           = "get_tree_visual",
+        .argc           = 4,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_STRING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_get_tree_visual
     },
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
@@ -746,5 +768,101 @@ cmd_action_node (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
     g_object_unref (tree);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_set_tree_visual (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaTreeVisual visual;
+
+    if (streq (args->pdata[3], "name"))
+        visual = DONNA_TREE_VISUAL_NAME;
+    else if (streq (args->pdata[3], "icon"))
+        visual = DONNA_TREE_VISUAL_ICON;
+    else if (streq (args->pdata[3], "box"))
+        visual = DONNA_TREE_VISUAL_BOX;
+    else if (streq (args->pdata[3], "highlight"))
+        visual = DONNA_TREE_VISUAL_HIGHLIGHT;
+    else if (streq (args->pdata[3], "clicks"))
+        visual = DONNA_TREE_VISUAL_CLICKS;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Cannot set tree visual, unknown type '%s'. "
+                "Must be 'name', 'icon', 'box', 'highlight' or 'clicks'",
+                args->pdata[3]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_tree_view_set_visual (args->pdata[1], args->pdata[2], visual,
+                args->pdata[4], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_get_tree_visual (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaTreeVisual visual;
+    DonnaTreeVisualSource source;
+    gchar *s;
+    GValue *value;
+
+    if (streq (args->pdata[3], "name"))
+        visual = DONNA_TREE_VISUAL_NAME;
+    else if (streq (args->pdata[3], "box"))
+        visual = DONNA_TREE_VISUAL_BOX;
+    else if (streq (args->pdata[3], "highlight"))
+        visual = DONNA_TREE_VISUAL_HIGHLIGHT;
+    else if (streq (args->pdata[3], "clicks"))
+        visual = DONNA_TREE_VISUAL_CLICKS;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Cannot set tree visual, unknown type '%s'. "
+                "Must be 'name', 'box', 'highlight' or 'clicks'",
+                args->pdata[3]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (streq (args->pdata[4], "any"))
+        source = DONNA_TREE_VISUAL_SOURCE_ANY;
+    else if (streq (args->pdata[4], "tree"))
+        source = DONNA_TREE_VISUAL_SOURCE_TREE;
+    else if (streq (args->pdata[4], "node"))
+        source = DONNA_TREE_VISUAL_SOURCE_NODE;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Cannot set tree visual, unknown source '%s'. "
+                "Must be 'tree', 'node', or 'any'",
+                args->pdata[4]);
+        return DONNA_TASK_FAILED;
+    }
+
+    s = donna_tree_view_get_visual (args->pdata[1], args->pdata[2], visual,
+                source, &err);
+    if (!s)
+    {
+        if (err)
+            donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (value, G_TYPE_STRING);
+    g_value_take_string (value, s);
+    donna_task_release_return_value (task);
+
     return DONNA_TASK_DONE;
 }
