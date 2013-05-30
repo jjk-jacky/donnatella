@@ -6252,6 +6252,63 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
     }
 }
 
+gboolean
+donna_tree_view_toggle_row (DonnaTreeView      *tree,
+                            DonnaTreeRowId     *rowid,
+                            GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeView *treev = (GtkTreeView *) tree;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    enum tree_expand es;
+    GtkTreePath *path;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': toggle_node() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot toggle row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            -1);
+    if (es == DONNA_TREE_EXPAND_NONE)
+        return TRUE;
+
+    path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+    if (G_UNLIKELY (!path))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Failed to obtain path for iter", priv->name);
+        return FALSE;
+    }
+
+    if (gtk_tree_view_row_expanded (treev, path))
+        gtk_tree_view_collapse_row (treev, path);
+    else
+        gtk_tree_view_expand_row (treev, path, FALSE);
+
+    gtk_tree_path_free (path);
+    return TRUE;
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
@@ -6788,7 +6845,7 @@ handle_click (DonnaTreeView     *tree,
         if (streq (b, "left_click"))
             def = "command:set_cursor (%o, %r)";
         else if (streq (b, "left_double_click"))
-            def = "command:activate_row (%o, %r)";
+            def = "command:toggle_row (%o, %r)";
     }
     else
     {

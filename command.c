@@ -10,6 +10,7 @@ static DonnaTaskState   cmd_set_focus       (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_set_cursor      (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_selection       (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_activate_row    (DonnaTask *task, GPtrArray *args);
+static DonnaTaskState   cmd_toggle_row      (DonnaTask *task, GPtrArray *args);
 
 static DonnaCommandDef commands[] = {
     {
@@ -48,6 +49,15 @@ static DonnaCommandDef commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_activate_row
+    },
+    {
+        .command        = DONNA_COMMAND_TOGGLE_ROW,
+        .name           = "toggle_row",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_toggle_row
     },
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
@@ -639,6 +649,20 @@ cmd_activate_row (DonnaTask *task, GPtrArray *args)
     GError *err = NULL;
 
     if (!donna_tree_view_activate_row (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_toggle_row (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;

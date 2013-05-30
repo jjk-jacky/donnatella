@@ -26,6 +26,7 @@ typedef enum
     DONNA_COMMAND_SET_CURSOR,
     DONNA_COMMAND_SELECTION,
     DONNA_COMMAND_ACTIVATE_ROW,
+    DONNA_COMMAND_TOGGLE_ROW,
 } DonnaCommand;
 
 typedef DonnaTaskState (*cmd_fn) (DonnaTask *task, GPtrArray *args);

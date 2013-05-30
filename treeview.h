@@ -149,6 +149,9 @@ gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
 gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
+gboolean        donna_tree_view_toggle_row      (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
