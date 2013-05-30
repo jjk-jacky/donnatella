@@ -6899,7 +6899,7 @@ handle_click (DonnaTreeView     *tree,
             return;
         }
 
-        arr = g_ptr_array_sized_new (command->argc + 2);
+        arr = g_ptr_array_sized_new (command->argc + 3);
         g_ptr_array_add (arr, /* no parent task */ NULL);
         for (i = 0; i < command->argc; ++i)
         {
@@ -6995,6 +6995,9 @@ str_parsing:
             _donna_command_free_args (command, arr);
             return;
         }
+
+        /* add DonnaApp* as extra arg for command */
+        g_ptr_array_add (arr, priv->app);
 
         /* let's add command into the array, so we can actually free it */
         g_ptr_array_add (arr, command);

@@ -449,10 +449,12 @@ _donna_command_free_args (DonnaCommandDef *command, GPtrArray *arr)
 {
     guint i;
 
-    /* we use arr->len and not command->argc because the array might not be
-     * fully filled, in case of error halfway through parsing/converting.
-     * We start at 1 because pdata[0] is NULL or the "parent task" */
-    for (i = 1; i < arr->len; ++i)
+    /* we use arr->len because the array might not be fuly filled, in case of
+     * error halfway through parsing/converting; We *also* use command->argc
+     * because the arr sent to the command contains an extra pointer, to
+     * DonnaApp in case the command needs it (e.g. to access config, etc).
+     * And we start at 1 because pdata[0] is NULL or the "parent task" */
+    for (i = 1; i < arr->len && command->argc ; ++i)
     {
         switch (command->arg_type[i - 1])
         {
@@ -508,7 +510,7 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
         return DONNA_TASK_FAILED;
     }
 
-    arr = g_ptr_array_sized_new (command->argc + 1);
+    arr = g_ptr_array_sized_new (command->argc + 2);
     g_ptr_array_add (arr, task);
     for (i = 0; i < command->argc; ++i)
     {
@@ -543,6 +545,9 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
         _donna_command_free_args (command, arr);
         return DONNA_TASK_FAILED;
     }
+
+    /* add DonnaApp* as extra arg for command */
+    g_ptr_array_add (arr, cr->app);
 
     /* run the command */
     cmd_task = donna_task_new ((task_fn) command->cmd_fn, arr, NULL);
