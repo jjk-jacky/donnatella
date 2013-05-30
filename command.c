@@ -11,6 +11,7 @@ static DonnaTaskState   cmd_set_cursor      (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_selection       (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_activate_row    (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_toggle_row      (DonnaTask *task, GPtrArray *args);
+static DonnaTaskState   cmd_action_node     (DonnaTask *task, GPtrArray *args);
 
 static DonnaCommandDef commands[] = {
     {
@@ -58,6 +59,15 @@ static DonnaCommandDef commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_toggle_row
+    },
+    {
+        .command        = DONNA_COMMAND_ACTION_NODE,
+        .name           = "action_node",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_INT },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_action_node
     },
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
@@ -673,5 +683,68 @@ cmd_toggle_row (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
+    return DONNA_TASK_DONE;
+}
+
+static void
+show_err_on_task_failed (DonnaTask  *task,
+                         gboolean    timeout_called,
+                         DonnaApp   *app)
+{
+    if (donna_task_get_state (task) != DONNA_TASK_FAILED)
+        return;
+
+    donna_app_show_error (app, donna_task_get_error (task),
+            "Command 'action_node': Failed to trigger node");
+}
+
+static DonnaTaskState
+cmd_action_node (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    gboolean is_alt = GPOINTER_TO_INT (args->pdata[2]);
+    DonnaTreeView *tree;
+
+    if (donna_node_get_node_type (args->pdata[1]) == DONNA_NODE_CONTAINER)
+    {
+        if (is_alt)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_OTHER,
+                    "action_node (CONTAINER, 1) == popup; not yet implemented");
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else /* DONNA_NODE_ITEM */
+    {
+        if (!is_alt)
+        {
+            DonnaTask *trigger_task;
+
+            trigger_task = donna_node_trigger_task (args->pdata[1], &err);
+            if (!trigger_task)
+            {
+                donna_task_take_error (task_for_ret_err (), err);
+                return DONNA_TASK_FAILED;
+            }
+
+            donna_task_set_callback (trigger_task,
+                    (task_callback_fn) show_err_on_task_failed,
+                    args->pdata[3], NULL);
+            donna_app_run_task (args->pdata[3], trigger_task);
+            return DONNA_TASK_DONE;
+        }
+    }
+
+    /* (CONTAINER && !is_alt) || (ITEM && is_alt) */
+
+    g_object_get (args->pdata[3], "active-list", &tree, NULL);
+    if (!donna_tree_view_set_location (tree, args->pdata[1], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        g_object_unref (tree);
+        return DONNA_TASK_FAILED;
+    }
+    g_object_unref (tree);
     return DONNA_TASK_DONE;
 }
