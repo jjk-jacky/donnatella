@@ -5654,12 +5654,15 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         {
             if (donna_provider_get_flags (provider) == DONNA_PROVIDER_FLAG_FLAT)
             {
-                /* flat means no parent, so we can only do one thing: trigger
-                 * the item */
+                gchar *fl;
 
-                /* TODO */
-
-                return TRUE;
+                fl = donna_node_get_full_location (node);
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot set node '%s' as current location, provider is flat (i.e. no parent to go to)",
+                        priv->name, fl);
+                g_free (fl);
+                return FALSE;
             }
 
             data = g_slice_new0 (struct node_get_children_list_data);
