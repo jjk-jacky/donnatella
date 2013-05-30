@@ -40,7 +40,9 @@ enum
     DONNA_TREE_COL_ICON,
     DONNA_TREE_COL_BOX,
     DONNA_TREE_COL_HIGHLIGHT,
-    /* which of name, icon, box and/or highlight are locals (else from node) */
+    DONNA_TREE_COL_CLICKS,
+    /* which of name, icon, box and/or highlight are locals (else from node).
+     * Also includes clicks even though it's not a visual/can't come from node */
     DONNA_TREE_COL_VISUALS,
     DONNA_TREE_NB_COLS
 };
@@ -122,6 +124,7 @@ enum visual
     VISUAL_ICON       = (1 << 1),
     VISUAL_BOX        = (1 << 2),
     VISUAL_HIGHLIGHT  = (1 << 3),
+    VISUAL_CLICKS     = (1 << 4),
 };
 
 struct visuals
@@ -133,6 +136,8 @@ struct visuals
     GdkPixbuf   *icon;
     gchar       *box;
     gchar       *highlight;
+    /* not a visual, but treated the same */
+    gchar       *clicks;
 };
 
 struct col_prop
@@ -335,6 +340,7 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
                                              const gchar   *tv_name,
                                              const gchar   *col_name,
+                                             gboolean       is_clicks,
                                              const gchar   *arr_name,
                                              const gchar   *def_cat,
                                              const gchar   *opt_name,
@@ -539,6 +545,7 @@ free_visuals (struct visuals *visuals)
         g_object_unref (visuals->icon);
     g_free (visuals->box);
     g_free (visuals->highlight);
+    g_free (visuals->clicks);
     g_slice_free (struct visuals, visuals);
 }
 
@@ -1279,6 +1286,11 @@ remove_row_from_tree (DonnaTreeView *tree,
                 if (v & VISUAL_HIGHLIGHT)
                     gtk_tree_model_get (model, iter,
                             DONNA_TREE_COL_HIGHLIGHT,   &visuals->highlight,
+                            -1);
+                /* not a visual, but treated the same */
+                if (v & VISUAL_CLICKS)
+                    gtk_tree_model_get (model, iter,
+                            DONNA_TREE_COL_CLICKS,      &visuals->clicks,
                             -1);
 
                 fl = donna_node_get_full_location (node);
@@ -3022,6 +3034,14 @@ load_tree_visuals (DonnaTreeView    *tree,
                 v |= VISUAL_HIGHLIGHT;
                 donna_tree_store_set (priv->store, iter,
                         DONNA_TREE_COL_HIGHLIGHT,   visuals->highlight,
+                        -1);
+            }
+            /* not a visual, but treated the same */
+            if (visuals->clicks)
+            {
+                v |= VISUAL_CLICKS;
+                donna_tree_store_set (priv->store, iter,
+                        DONNA_TREE_COL_CLICKS,  visuals->clicks,
                         -1);
             }
             donna_tree_store_set (priv->store, iter,
@@ -6821,6 +6841,8 @@ handle_click (DonnaTreeView     *tree,
     DonnaConfig *config;
     DonnaTreeRow *row = NULL;
     struct column *_col;
+    gboolean is_tree = is_tree (tree);
+    gchar *clicks = NULL;
     /* longest possible is "blankcol_ctrl_shift_middle_double_click" (len=39) */
     gchar buf[40];
     gchar *b;
@@ -6887,7 +6909,7 @@ handle_click (DonnaTreeView     *tree,
         b = buf + 9;
 
     /* a few of those should have valid defaults, just in case */
-    if (is_tree (tree))
+    if (is_tree)
     {
         if (streq (b, "left_click"))
             def = "command:set_cursor (%o, %r)";
@@ -6906,11 +6928,19 @@ handle_click (DonnaTreeView     *tree,
             def = "command:activate_row (%o, %r)";
     }
 
+    if (is_tree && iter)
+        gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
+                DONNA_TREE_COL_CLICKS,  &clicks,
+                -1);
+
     s = _donna_config_get_string_tree_column (config, priv->name,
             (_col) ? _col->name : NULL,
-            priv->arrangement->columns_options,
-            (is_tree (tree)) ? "clicks/tree" : "clicks/list",
+            is_tree,
+            (is_tree) ? clicks : priv->arrangement->columns_options,
+            (is_tree) ? "clicks/tree" : "clicks/list",
             b, (gchar *) def);
+
+    g_free (clicks);
 
     if (!s)
         return;
@@ -7668,6 +7698,7 @@ donna_tree_view_new (DonnaApp    *app,
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_ICON */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_BOX */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_HIGHLIGHT */
+                G_TYPE_STRING,  /* DONNA_TREE_COL_CLICKS */
                 G_TYPE_UINT);   /* DONNA_TREE_COL_VISUALS */
         model = GTK_TREE_MODEL (priv->store);
         /* some stylling */
