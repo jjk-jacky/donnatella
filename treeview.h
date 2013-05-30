@@ -139,13 +139,16 @@ gboolean        donna_tree_view_selection       (DonnaTreeView      *tree,
                                                  gboolean            to_focused,
                                                  GError            **error);
 #ifdef GTK_IS_JJK
-gboolean        donna_tree_view_set_focus       (DonnaTreeView        *tree,
-                                                 DonnaTreeRowId       *rowid,
-                                                 GError              **error);
+gboolean        donna_tree_view_set_focus       (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
 #endif
-gboolean        donna_tree_view_set_cursor      (DonnaTreeView        *tree,
-                                                 DonnaTreeRowId       *rowid,
-                                                 GError              **error);
+gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
+gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

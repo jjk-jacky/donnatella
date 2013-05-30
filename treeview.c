@@ -1077,6 +1077,18 @@ get_column_by_name (DonnaTreeView *tree, const gchar *name)
     return NULL;
 }
 
+static void
+show_err_on_task_failed (DonnaTask      *task,
+                         gboolean        timeout_called,
+                         DonnaTreeView  *tree)
+{
+    if (donna_task_get_state (task) != DONNA_TASK_FAILED)
+        return;
+
+    donna_app_show_error (tree->priv->app, donna_task_get_error (task),
+            "Treeview '%s': Failed to trigger node", tree->priv->name);
+}
+
 typedef void (*node_children_extra_cb) (DonnaTreeView *tree, GtkTreeIter *iter);
 
 struct node_children_data
@@ -6184,6 +6196,62 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
     return TRUE;
 }
 
+gboolean
+donna_tree_view_activate_row (DonnaTreeView      *tree,
+                              DonnaTreeRowId     *rowid,
+                              GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    DonnaNode   *node;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot activate row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            DONNA_TREE_VIEW_COL_NODE,   &node,
+            -1);
+    if (!node)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': No node matching the given row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    /* since the node is in the tree, we already have a ref on it */
+    g_object_unref (node);
+
+    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+        return donna_tree_view_set_location (tree, node, error);
+    else /* DONNA_NODE_ITEM */
+    {
+        DonnaTask *task;
+
+        task = donna_node_trigger_task (node, error);
+        if (!task)
+            return FALSE;
+
+        donna_task_set_callback (task,
+                (task_callback_fn) show_err_on_task_failed, tree, NULL);
+        donna_app_run_task (priv->app, task);
+        return TRUE;
+    }
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
@@ -6351,58 +6419,18 @@ donna_tree_view_row_activated (GtkTreeView    *treev,
                                GtkTreePath    *path,
                                GtkTreeViewColumn *column)
 {
-    DonnaTreeView *tree = DONNA_TREE_VIEW (treev);
-    DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
-    GtkTreeIter iter;
-    DonnaNode *node;
+    DonnaTreeView *tree = (DonnaTreeView *) treev;
+    DonnaTreeRowId rowid;
 
-    if (!gtk_tree_model_get_iter (model, &iter, path))
-        return;
+    /* warning because this shouldn't happen, as we're doing things our own way.
+     * If this happens, it's probably an oversight somewhere that should be
+     * fixed. So warning, and then we just do our ativating */
+    g_warning ("Treeview '%s': row-activated signal was emitted", tree->priv->name);
 
-    if (is_tree (tree))
-    {
-        enum tree_expand es;
-
-        gtk_tree_model_get (model, &iter,
-                DONNA_TREE_COL_EXPAND_STATE,    &es,
-                -1);
-        if (es == DONNA_TREE_EXPAND_NONE)
-            return;
-
-        if (gtk_tree_view_row_expanded (treev, path))
-            gtk_tree_view_collapse_row (treev, path);
-        else
-            gtk_tree_view_expand_row (treev, path, FALSE);
-
-        return;
-    }
-
-    gtk_tree_model_get (model, &iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
-    if (!node)
-        return;
-
-    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
-        donna_tree_view_set_location (tree, node, NULL);
-    else
-    {
-        DonnaTask *task;
-
-        /* temporary crap fest */
-
-        task = donna_node_trigger_task (node, NULL);
-        donna_task_set_can_block (g_object_ref_sink (task));
-        donna_app_run_task (priv->app, task);
-        donna_task_wait_for_it (task);
-        if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        {
-            const GError *e = donna_task_get_error (task);
-            g_debug("trigger fail: %s", e->message);
-        }
-        g_object_unref (task);
-    }
-
-    g_object_unref (node);
+    rowid.type = DONNA_ARG_TYPE_PATH;
+    rowid.ptr  = gtk_tree_path_to_string (path);
+    donna_tree_view_activate_row (tree, &rowid, NULL);
+    g_free (rowid.ptr);
 }
 
 static void
@@ -6760,7 +6788,7 @@ handle_click (DonnaTreeView     *tree,
         if (streq (b, "left_click"))
             def = "command:set_cursor (%o, %r)";
         else if (streq (b, "left_double_click"))
-            def = "command:activate (%o, %r)";
+            def = "command:activate_row (%o, %r)";
     }
     else
     {
@@ -6771,7 +6799,7 @@ handle_click (DonnaTreeView     *tree,
                 || streq (b, "blankrow_left_click"))
             def = "command:selection (%o, unselect, :all, -)";
         else if (streq (b, "left_double_click"))
-            def = "command:activate (%o, %r)";
+            def = "command:activate_row (%o, %r)";
     }
 
     s = _donna_config_get_string_tree_column (config, priv->name,
