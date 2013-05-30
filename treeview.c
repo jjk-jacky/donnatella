@@ -1196,7 +1196,7 @@ remove_row_from_tree (DonnaTreeView *tree,
         else
             g_hash_table_remove (priv->hashtable, node);
 
-        if (priv->is_minitree && !is_removal)
+        if (!is_removal)
         {
             enum visual v;
 
@@ -1718,7 +1718,6 @@ full_expand_row (DonnaTreeView  *tree,
     return TRUE;
 }
 
-/* mini-tree only */
 static gboolean
 full_collapse_row (DonnaTreeView    *tree,
                    GtkTreeIter      *iter)
