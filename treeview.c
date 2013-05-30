@@ -1122,6 +1122,32 @@ node_get_children_tree_timeout (DonnaTask                   *task,
     gtk_tree_path_free (path);
 }
 
+struct ctv_data
+{
+    DonnaTreeView *tree;
+    GtkTreeIter   *iter;
+};
+
+static gboolean
+clean_tree_visuals (gchar *fl, GSList *list, struct ctv_data *data)
+{
+    GSList *l, *next;
+
+    for (l = list; l; l = next)
+    {
+        struct visuals *visuals = l->data;
+        next = l->next;
+
+        if (itereq (data->iter, &visuals->root))
+        {
+            free_visuals (visuals);
+            list = g_slist_delete_link (list, l);
+        }
+    }
+
+    return list == NULL;
+}
+
 /* similar to gtk_tree_store_remove() this will set iter to next row at that
  * level, or invalid it if it pointer to the last one.
  * Returns TRUE if iter is still valid, else FALSE */
@@ -1196,7 +1222,26 @@ remove_row_from_tree (DonnaTreeView *tree,
         else
             g_hash_table_remove (priv->hashtable, node);
 
-        if (!is_removal)
+        if (donna_tree_store_iter_depth (priv->store, iter) == 0)
+        {
+            /* removing a root, that means we also need to clean tree_visuals
+             * for anything that was under that root. Removing a root means
+             * forgetting any and all tree visuals under there. */
+
+            if (priv->tree_visuals)
+            {
+                struct ctv_data data = { .tree = tree, .iter = iter };
+
+                g_hash_table_foreach_remove (priv->tree_visuals,
+                        (GHRFunc) clean_tree_visuals, &data);
+                if (g_hash_table_size (priv->tree_visuals) == 0)
+                {
+                    g_hash_table_unref (priv->tree_visuals);
+                    priv->tree_visuals = NULL;
+                }
+            }
+        }
+        else if (!is_removal)
         {
             enum visual v;
 
@@ -1239,9 +1284,7 @@ remove_row_from_tree (DonnaTreeView *tree,
                 fl = donna_node_get_full_location (node);
 
                 if (priv->tree_visuals)
-                {
                     l = g_hash_table_lookup (priv->tree_visuals, fl);
-                }
                 else
                     priv->tree_visuals = g_hash_table_new_full (
                             g_str_hash, g_str_equal,
