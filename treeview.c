@@ -6696,7 +6696,6 @@ tree_parse_location (DonnaTreeView  *tree,
                      const gchar    *sce)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaNode *node;
     GString *str = NULL;
     gchar *s = (gchar *) sce;
     gchar *ss;
