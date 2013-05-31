@@ -6,92 +6,101 @@
 #include "macros.h"
 #include "debug.h"
 
-static DonnaTaskState   cmd_set_focus       (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_set_cursor      (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_selection       (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_activate_row    (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_toggle_row      (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_action_node     (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_set_tree_visual (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_get_tree_visual (DonnaTask *task, GPtrArray *args);
-static DonnaTaskState   cmd_edit_column     (DonnaTask *task, GPtrArray *args);
+static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_activate_row               (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_edit_column                (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_get_visual                 (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_selection                  (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_set_cursor                 (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_set_focus                  (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_set_visual                 (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_toggle_row                 (DonnaTask *task,
+                                                             GPtrArray *args);
 
 static DonnaCommand commands[] = {
     {
-        .name           = "set_focus",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_set_focus
-    },
-    {
-        .name           = "set_cursor",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_set_cursor
-    },
-    {
-        .name           = "selection",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_selection
-    },
-    {
-        .name           = "activate_row",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_activate_row
-    },
-    {
-        .name           = "toggle_row",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_toggle_row
-    },
-    {
-        .name           = "action_node",
+        .name           = "node_activate",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_INT },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_action_node
+        .cmd_fn         = cmd_node_activate
     },
     {
-        .name           = "set_tree_visual",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .name           = "tree_activate_row",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_set_tree_visual
+        .cmd_fn         = cmd_tree_activate_row
     },
     {
-        .name           = "get_tree_visual",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_STRING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_get_tree_visual
-    },
-    {
-        .name           = "edit_column",
+        .name           = "tree_edit_column",
         .argc           = 3,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
             DONNA_ARG_TYPE_STRING },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_edit_column
+        .cmd_fn         = cmd_tree_edit_column
+    },
+    {
+        .name           = "tree_get_visual",
+        .argc           = 4,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_STRING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_get_visual
+    },
+    {
+        .name           = "tree_selection",
+        .argc           = 4,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_selection
+    },
+    {
+        .name           = "tree_set_cursor",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_set_cursor
+    },
+    {
+        .name           = "tree_set_focus",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_set_focus
+    },
+    {
+        .name           = "tree_set_visual",
+        .argc           = 4,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_set_visual
+    },
+    {
+        .name           = "tree_toggle_row",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_toggle_row
     },
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
@@ -631,100 +640,6 @@ _donna_command_free_cr (struct _donna_command_run *cr)
 
 #define task_for_ret_err()  ((args->pdata[0]) ? args->pdata[0] : task)
 
-static DonnaTaskState
-cmd_set_focus (DonnaTask *task, GPtrArray *args)
-{
-    GError *err = NULL;
-
-#ifdef GTK_IS_JJK
-    if (!donna_tree_view_set_focus (args->pdata[1], args->pdata[2], &err))
-    {
-        donna_task_take_error (task_for_ret_err (), err);
-        return DONNA_TASK_FAILED;
-    }
-#else
-    donna_task_set_error (task_for_ret_err (), COMMAND_ERROR, COMMAND_ERROR_OTHER,
-            "Command 'set_focus' isn't supported with vanilla GTK+");
-    return DONNA_TASK_FAILED;
-#endif
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_set_cursor (DonnaTask *task, GPtrArray *args)
-{
-    GError *err = NULL;
-
-    if (!donna_tree_view_set_cursor (args->pdata[1], args->pdata[2], &err))
-    {
-        donna_task_take_error (task_for_ret_err (), err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_selection (DonnaTask *task, GPtrArray *args)
-{
-    GError              *err = NULL;
-    DonnaTreeSelAction   action;
-
-    if (streq ("select", args->pdata[2]))
-        action = DONNA_TREE_SEL_SELECT;
-    else if (streq ("unselect", args->pdata[2]))
-        action = DONNA_TREE_SEL_UNSELECT;
-    else if (streq ("invert", args->pdata[2]))
-        action = DONNA_TREE_SEL_INVERT;
-    else
-    {
-        donna_task_set_error (task_for_ret_err (),
-                COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
-                "Invalid argument 'action': '%s', expected 'select', 'unselect' or 'invert'",
-                args->pdata[2]);
-        return DONNA_TASK_FAILED;
-    }
-
-    if (!donna_tree_view_selection (args->pdata[1], action, args->pdata[3],
-                (gboolean) GPOINTER_TO_INT (args->pdata[4]),
-                &err))
-    {
-        donna_task_take_error (task_for_ret_err (), err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_activate_row (DonnaTask *task, GPtrArray *args)
-{
-    GError *err = NULL;
-
-    if (!donna_tree_view_activate_row (args->pdata[1], args->pdata[2], &err))
-    {
-        donna_task_take_error (task_for_ret_err (), err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_toggle_row (DonnaTask *task, GPtrArray *args)
-{
-    GError *err = NULL;
-
-    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], &err))
-    {
-        donna_task_take_error (task_for_ret_err (), err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
 static void
 show_err_on_task_failed (DonnaTask  *task,
                          gboolean    timeout_called,
@@ -738,7 +653,7 @@ show_err_on_task_failed (DonnaTask  *task,
 }
 
 static DonnaTaskState
-cmd_action_node (DonnaTask *task, GPtrArray *args)
+cmd_node_activate (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
     gboolean is_alt = GPOINTER_TO_INT (args->pdata[2]);
@@ -789,33 +704,11 @@ cmd_action_node (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_set_tree_visual (DonnaTask *task, GPtrArray *args)
+cmd_tree_activate_row (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
-    DonnaTreeVisual visual;
 
-    if (streq (args->pdata[3], "name"))
-        visual = DONNA_TREE_VISUAL_NAME;
-    else if (streq (args->pdata[3], "icon"))
-        visual = DONNA_TREE_VISUAL_ICON;
-    else if (streq (args->pdata[3], "box"))
-        visual = DONNA_TREE_VISUAL_BOX;
-    else if (streq (args->pdata[3], "highlight"))
-        visual = DONNA_TREE_VISUAL_HIGHLIGHT;
-    else if (streq (args->pdata[3], "clicks"))
-        visual = DONNA_TREE_VISUAL_CLICKS;
-    else
-    {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
-                "Cannot set tree visual, unknown type '%s'. "
-                "Must be 'name', 'icon', 'box', 'highlight' or 'clicks'",
-                args->pdata[3]);
-        return DONNA_TASK_FAILED;
-    }
-
-    if (!donna_tree_view_set_visual (args->pdata[1], args->pdata[2], visual,
-                args->pdata[4], &err))
+    if (!donna_tree_view_activate_row (args->pdata[1], args->pdata[2], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -825,7 +718,22 @@ cmd_set_tree_visual (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_get_tree_visual (DonnaTask *task, GPtrArray *args)
+cmd_tree_edit_column (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_edit_column (args->pdata[1], args->pdata[2],
+                args->pdata[3], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
     DonnaTreeVisual visual;
@@ -885,12 +793,113 @@ cmd_get_tree_visual (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_edit_column (DonnaTask *task, GPtrArray *args)
+cmd_tree_selection (DonnaTask *task, GPtrArray *args)
+{
+    GError              *err = NULL;
+    DonnaTreeSelAction   action;
+
+    if (streq ("select", args->pdata[2]))
+        action = DONNA_TREE_SEL_SELECT;
+    else if (streq ("unselect", args->pdata[2]))
+        action = DONNA_TREE_SEL_UNSELECT;
+    else if (streq ("invert", args->pdata[2]))
+        action = DONNA_TREE_SEL_INVERT;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (),
+                COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                "Invalid argument 'action': '%s', expected 'select', 'unselect' or 'invert'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_tree_view_selection (args->pdata[1], action, args->pdata[3],
+                (gboolean) GPOINTER_TO_INT (args->pdata[4]),
+                &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_set_cursor (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
 
-    if (!donna_tree_view_edit_column (args->pdata[1], args->pdata[2],
-                args->pdata[3], &err))
+    if (!donna_tree_view_set_cursor (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_set_focus (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+#ifdef GTK_IS_JJK
+    if (!donna_tree_view_set_focus (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+#else
+    donna_task_set_error (task_for_ret_err (), COMMAND_ERROR, COMMAND_ERROR_OTHER,
+            "Command 'set_focus' isn't supported with vanilla GTK+");
+    return DONNA_TASK_FAILED;
+#endif
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_set_visual (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaTreeVisual visual;
+
+    if (streq (args->pdata[3], "name"))
+        visual = DONNA_TREE_VISUAL_NAME;
+    else if (streq (args->pdata[3], "icon"))
+        visual = DONNA_TREE_VISUAL_ICON;
+    else if (streq (args->pdata[3], "box"))
+        visual = DONNA_TREE_VISUAL_BOX;
+    else if (streq (args->pdata[3], "highlight"))
+        visual = DONNA_TREE_VISUAL_HIGHLIGHT;
+    else if (streq (args->pdata[3], "clicks"))
+        visual = DONNA_TREE_VISUAL_CLICKS;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Cannot set tree visual, unknown type '%s'. "
+                "Must be 'name', 'icon', 'box', 'highlight' or 'clicks'",
+                args->pdata[3]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_tree_view_set_visual (args->pdata[1], args->pdata[2], visual,
+                args->pdata[4], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;

@@ -7272,20 +7272,20 @@ handle_click (DonnaTreeView     *tree,
     if (is_tree)
     {
         if (streq (b, "left_click"))
-            def = "command:set_cursor (%o, %r)";
+            def = "command:tree_set_cursor (%o, %r)";
         else if (streq (b, "left_double_click"))
-            def = "command:toggle_row (%o, %r)";
+            def = "command:tree_toggle_row (%o, %r)";
     }
     else
     {
         if (streq (b, "left_click"))
-            def = "command:set_focus (%o, %r)";
+            def = "command:tree_set_focus (%o, %r)";
         else if (streq (b, "blank_left_click")
                 || streq (b, "blankcol_left_click")
                 || streq (b, "blankrow_left_click"))
-            def = "command:selection (%o, unselect, :all, -)";
+            def = "command:tree_selection (%o, unselect, :all, -)";
         else if (streq (b, "left_double_click"))
-            def = "command:activate_row (%o, %r)";
+            def = "command:tree_activate_row (%o, %r)";
     }
 
     if (is_tree && iter)
