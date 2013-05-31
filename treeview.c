@@ -762,15 +762,6 @@ sync_with_location_changed_cb (GObject       *object,
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
         gtk_tree_selection_unselect_all (sel);
 
-        /* we need to update current location (since there's no call to
-         * selection_changed_cb to do it)  */
-        if (priv->location)
-        {
-            g_object_unref (priv->location);
-            priv->location = NULL;
-            priv->location_iter.stamp = 0;
-        }
-
         if (priv->sync_mode == DONNA_TREE_SYNC_NODES
                 || priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
         {
@@ -7837,6 +7828,36 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         }
         else if (node)
             g_object_unref (node);
+    }
+    else if (gtk_tree_selection_get_mode (selection) != GTK_SELECTION_BROWSE)
+    {
+        /* if we're not in BROWSE mode anymore, it means this is the result of
+         * being out of sync with our list, resulting in a temporary switch to
+         * SINGLE. So, we just don't have a current location for the moment */
+        if (priv->location)
+        {
+            g_object_unref (priv->location);
+            priv->location = NULL;
+            priv->location_iter.stamp = 0;
+        }
+    }
+    else
+    {
+        GtkTreePath *path;
+
+        /* if that happens while in BROWSE, this is most likely a bug or
+         * something in GTK, where user could unselect w/out making a new
+         * selection.
+         * One way to do this is to move the focus up/outside the branch, then
+         * collapse the parent of the selected node. No more selection!
+         * If that happens, we select something to make it our new current
+         * location, and we use the focus for that */
+
+        gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
+        if (!path)
+            path = gtk_tree_path_new_from_string ("0");
+        gtk_tree_selection_select_path (selection, path);
+        gtk_tree_path_free (path);
     }
 }
 
