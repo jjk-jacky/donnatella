@@ -6718,13 +6718,10 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
     if (priv->sync_mode == DONNA_TREE_SYNC_NONE)
         return;
 
-    loc_node = donna_tree_view_get_location (priv->sync_with);
     if (G_UNLIKELY (!gtk_tree_model_iter_children (model, &child, iter)))
-    {
-        g_object_unref (loc_node);
         return;
-    }
 
+    loc_node = donna_tree_view_get_location (priv->sync_with);
     loc_provider = donna_node_peek_provider (loc_node);
     loc_location = donna_node_get_location (loc_node);
     do
