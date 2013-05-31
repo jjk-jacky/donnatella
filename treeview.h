@@ -17,6 +17,7 @@ enum
     DONNA_TREE_VIEW_ERROR_NOT_FOUND,
     DONNA_TREE_VIEW_ERROR_CANNOT_ADD_NODE,
     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+    DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
     DONNA_TREE_VIEW_ERROR_OTHER,
 } DonnaTreeViewError;
 
@@ -170,6 +171,10 @@ gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_toggle_row      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
+                                                 GError            **error);
+gboolean        donna_tree_view_edit_column     (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 const gchar        *column,
                                                  GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,

@@ -69,16 +69,14 @@ struct _DonnaColumnTypeInterface
                                              gpointer            data);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
                                              gpointer            data);
-    gboolean            (*handle_click)     (DonnaColumnType    *ct,
+    gboolean            (*edit)             (DonnaColumnType    *ct,
                                              gpointer            data,
-                                             DonnaClick          click,
-                                             GdkEventButton     *event,
                                              DonnaNode          *node,
-                                             guint               index,
                                              GtkCellRenderer   **renderers,
                                              renderer_edit_fn    renderer_edit,
                                              gpointer            re_data,
-                                             DonnaTreeView      *treeview);
+                                             DonnaTreeView      *treeview,
+                                             GError            **error);
     GPtrArray *         (*render)           (DonnaColumnType    *ct,
                                              gpointer            data,
                                              guint               index,
@@ -122,16 +120,14 @@ GtkSortType     donna_columntype_get_default_sort_order
                                                  gpointer            data);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  gpointer            data);
-gboolean        donna_columntype_handle_click   (DonnaColumnType    *ct,
+gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
                                                  gpointer            data,
-                                                 DonnaClick          click,
-                                                 GdkEventButton     *event,
                                                  DonnaNode          *node,
-                                                 guint               index,
                                                  GtkCellRenderer   **renderers,
                                                  renderer_edit_fn    renderer_edit,
                                                  gpointer            re_data,
-                                                 DonnaTreeView      *treeview);
+                                                 DonnaTreeView      *treeview,
+                                                 GError            **error);
 GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  guint               index,

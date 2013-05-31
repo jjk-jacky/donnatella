@@ -14,6 +14,7 @@ static DonnaTaskState   cmd_toggle_row      (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_action_node     (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_set_tree_visual (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_get_tree_visual (DonnaTask *task, GPtrArray *args);
+static DonnaTaskState   cmd_edit_column     (DonnaTask *task, GPtrArray *args);
 
 static DonnaCommandDef commands[] = {
     {
@@ -90,6 +91,16 @@ static DonnaCommandDef commands[] = {
         .return_type    = DONNA_ARG_TYPE_STRING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_get_tree_visual
+    },
+    {
+        .command        = DONNA_COMMAND_EDIT_COLUMN,
+        .name           = "edit_column",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_edit_column
     },
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
@@ -878,6 +889,21 @@ cmd_get_tree_visual (DonnaTask *task, GPtrArray *args)
     g_value_init (value, G_TYPE_STRING);
     g_value_take_string (value, s);
     donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_edit_column (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_edit_column (args->pdata[1], args->pdata[2],
+                args->pdata[3], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
 
     return DONNA_TASK_DONE;
 }

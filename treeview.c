@@ -6513,6 +6513,136 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     return value;
 }
 
+struct re_data
+{
+    DonnaTreeView       *tree;
+    GtkTreeViewColumn   *column;
+    GtkTreePath         *path;
+};
+
+static void
+editable_remove_widget_cb (GtkCellEditable *editable, DonnaTreeView *tree)
+{
+    g_signal_handler_disconnect (editable,
+            tree->priv->renderer_editable_remove_widget_sid);
+    tree->priv->renderer_editable_remove_widget_sid = 0;
+    tree->priv->renderer_editable = NULL;
+}
+
+static void
+editing_started_cb (GtkCellRenderer *renderer,
+                    GtkCellEditable *editable,
+                    gchar           *path,
+                    DonnaTreeView   *tree)
+{
+    g_signal_handler_disconnect (renderer, tree->priv->renderer_editing_started_sid);
+    tree->priv->renderer_editing_started_sid = 0;
+
+    donna_app_ensure_focused (tree->priv->app);
+
+    /* in case we need to abort the editing */
+    tree->priv->renderer_editable = editable;
+    /* when the editing will be done */
+    tree->priv->renderer_editable_remove_widget_sid = g_signal_connect (
+            editable, "remove-widget",
+            (GCallback) editable_remove_widget_cb, tree);
+}
+
+static gboolean
+renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
+{
+    GdkEventAny event = { .type = GDK_NOTHING };
+    GtkTreePath *path;
+    GdkRectangle cell_area;
+    gint offset;
+
+    /* shouldn't happen, but to be safe */
+    if (G_UNLIKELY (data->tree->priv->renderer_editable))
+        return FALSE;
+
+    /* get the cell_area (i.e. where editable will be placed */
+    gtk_tree_view_get_cell_area ((GtkTreeView *) data->tree,
+            data->path, data->column, &cell_area);
+    /* in case there are other renderers in that column */
+    if (gtk_tree_view_column_cell_get_position (data->column, renderer,
+            &offset, &cell_area.width))
+        cell_area.x += offset;
+
+    /* so we can get the editable to be able to abort if needed */
+    data->tree->priv->renderer_editing_started_sid = g_signal_connect (
+            renderer, "editing-started",
+            (GCallback) editing_started_cb, data->tree);
+
+    return gtk_cell_area_activate_cell (
+            gtk_cell_layout_get_area ((GtkCellLayout *) data->column),
+            (GtkWidget *) data->tree,
+            renderer,
+            (GdkEvent *) &event,
+            &cell_area,
+            0);
+}
+
+gboolean
+donna_tree_view_edit_column (DonnaTreeView      *tree,
+                             DonnaTreeRowId     *rowid,
+                             const gchar        *column,
+                             GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    struct column *_col;
+    DonnaNode *node;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    g_return_val_if_fail (rowid != NULL, NULL);
+    g_return_val_if_fail (column != NULL, NULL);
+    priv = tree->priv;
+
+    _col = get_column_by_name (tree, column);
+    if (!_col)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
+                "Treeview '%s': Cannot edit column, unknown column '%s'",
+                priv->name, column);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot edit column, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    struct re_data re_data = {
+        .tree   = tree,
+        .column = _col->column,
+        .path   = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter),
+    };
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            DONNA_TREE_VIEW_COL_NODE,   &node,
+            -1);
+
+    if (!donna_columntype_edit (_col->ct, _col->ct_data, node,
+                (GtkCellRenderer **) _col->renderers->pdata,
+                (renderer_edit_fn) renderer_edit, &re_data, tree, error))
+    {
+        g_object_unref (node);
+        return FALSE;
+    }
+
+    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
+
+    g_object_unref (node);
+    return TRUE;
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
@@ -6767,74 +6897,6 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
 
     g_free (loc_location);
     g_object_unref (loc_node);
-}
-
-struct re_data
-{
-    DonnaTreeView       *tree;
-    GtkTreeViewColumn   *column;
-    GtkTreePath         *path;
-    GdkEvent            *event;
-};
-
-static void
-editable_remove_widget_cb (GtkCellEditable *editable, DonnaTreeView *tree)
-{
-    g_signal_handler_disconnect (editable,
-            tree->priv->renderer_editable_remove_widget_sid);
-    tree->priv->renderer_editable_remove_widget_sid = 0;
-    tree->priv->renderer_editable = NULL;
-}
-
-static void
-editing_started_cb (GtkCellRenderer *renderer,
-                    GtkCellEditable *editable,
-                    gchar           *path,
-                    DonnaTreeView   *tree)
-{
-    g_signal_handler_disconnect (renderer, tree->priv->renderer_editing_started_sid);
-    tree->priv->renderer_editing_started_sid = 0;
-
-    donna_app_ensure_focused (tree->priv->app);
-
-    /* in case we need to abort the editing */
-    tree->priv->renderer_editable = editable;
-    /* when the editing will be done */
-    tree->priv->renderer_editable_remove_widget_sid = g_signal_connect (
-            editable, "remove-widget",
-            (GCallback) editable_remove_widget_cb, tree);
-}
-
-static gboolean
-renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
-{
-    GdkRectangle cell_area;
-    gint offset;
-
-    /* shouldn't happen, but to be safe */
-    if (G_UNLIKELY (data->tree->priv->renderer_editable))
-        return FALSE;
-
-    /* get the cell_area (i.e. where editable will be placed */
-    gtk_tree_view_get_cell_area ((GtkTreeView *) data->tree,
-            data->path, data->column, &cell_area);
-    /* in case there are other renderers in that column */
-    if (gtk_tree_view_column_cell_get_position (data->column, renderer,
-            &offset, &cell_area.width))
-        cell_area.x += offset;
-
-    /* so we can get the editable to be able to abort if needed */
-    data->tree->priv->renderer_editing_started_sid = g_signal_connect (
-            renderer, "editing-started",
-            (GCallback) editing_started_cb, data->tree);
-
-    return gtk_cell_area_activate_cell (
-            gtk_cell_layout_get_area ((GtkCellLayout *) data->column),
-            (GtkWidget *) data->tree,
-            renderer,
-            data->event,
-            &cell_area,
-            0);
 }
 
 #define ensure_str()  do {                          \
@@ -7268,55 +7330,6 @@ handle_click (DonnaTreeView     *tree,
         g_free (data.fl);
         g_free (data.row);
     }
-
-
-#if 0
-    {
-        _col = get_column_by_column (tree, column);
-
-        struct re_data re_data = {
-            .tree   = tree,
-            .column = column,
-            .path   = path,
-            .event  = (GdkEvent *) event
-        };
-
-#ifdef GTK_IS_JJK
-        for (index = 0; index < _col->renderers->len; ++index)
-            if (renderer == _col->renderers->pdata[index])
-            {
-                ++index;
-                break;
-            }
-#endif
-
-        if (!donna_columntype_handle_click (_col->ct, _col->ct_data,
-                    click, event, node, index,
-                    (GtkCellRenderer **) _col->renderers->pdata,
-                    (renderer_edit_fn) renderer_edit, &re_data, tree))
-        {
-            /* some default */
-
-            if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                    == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-            {
-                if (!is_tree (tree) && !priv->full_row_select)
-                {
-                    GtkTreeSelection *sel;
-
-                    sel = gtk_tree_view_get_selection (treev);
-                    gtk_tree_selection_unselect_all (sel);
-                }
-                else
-                    donna_tree_view_row_activated (treev, path, column);
-            }
-        }
-
-        gtk_tree_path_free (path);
-        g_object_unref (node);
-        return;
-    }
-#endif
 }
 
 static gboolean

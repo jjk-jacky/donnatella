@@ -105,16 +105,14 @@ static GPtrArray *      ct_time_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_time_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
-static gboolean         ct_time_handle_click        (DonnaColumnType    *ct,
+static gboolean         ct_time_edit                (DonnaColumnType    *ct,
                                                      gpointer            data,
-                                                     DonnaClick          click,
-                                                     GdkEventButton     *event,
                                                      DonnaNode          *node,
-                                                     guint               index,
                                                      GtkCellRenderer   **renderers,
                                                      renderer_edit_fn    renderer_edit,
                                                      gpointer            re_data,
-                                                     DonnaTreeView      *treeview);
+                                                     DonnaTreeView      *treeview,
+                                                     GError            **error);
 static GPtrArray *      ct_time_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -147,7 +145,7 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_time_free_data;
     interface->get_props                = ct_time_get_props;
     interface->get_options_menu         = ct_time_get_options_menu;
-    interface->handle_click             = ct_time_handle_click;
+    interface->edit                     = ct_time_edit;
     interface->render                   = ct_time_render;
     interface->set_tooltip              = ct_time_set_tooltip;
     interface->node_cmp                 = ct_time_node_cmp;
@@ -960,157 +958,150 @@ editing_started_cb (GtkCellRenderer     *renderer,
 }
 
 static gboolean
-ct_time_handle_click (DonnaColumnType    *ct,
-                      gpointer            _data,
-                      DonnaClick          click,
-                      GdkEventButton     *event,
-                      DonnaNode          *node,
-                      guint               index,
-                      GtkCellRenderer   **renderers,
-                      renderer_edit_fn    renderer_edit,
-                      gpointer            re_data,
-                      DonnaTreeView      *treeview)
+ct_time_edit (DonnaColumnType    *ct,
+              gpointer            data,
+              DonnaNode          *node,
+              GtkCellRenderer   **renderers,
+              renderer_edit_fn    renderer_edit,
+              gpointer            re_data,
+              DonnaTreeView      *treeview,
+              GError            **error)
 {
-    struct tv_col_data *data = _data;
+    DonnaNodeHasValue has;
+    GPtrArray *arr;
+    struct editing_data *ed;
+    GtkWindow *win;
+    GtkWidget *w;
+    GtkGrid *grid;
+    GtkBox *box;
+    PangoAttrList *attr_list;
+    gint row;
+    gchar *s;
+    gchar *ss;
 
-    if (click == (DONNA_CLICK_SINGLE | DONNA_CLICK_MIDDLE))
+    /* get selected nodes (if any) */
+    arr = donna_tree_view_get_selected_nodes (treeview);
+
+    ed = g_new0 (struct editing_data, 1);
+    ed->data = data;
+    ed->app  = ((DonnaColumnTypeTime *) ct)->priv->app;
+    ed->tree = treeview;
+    ed->node = node;
+
+    if (!arr || (arr->len == 1 && node == arr->pdata[0]))
     {
-        DonnaNodeHasValue has;
-        GPtrArray *arr;
-        struct editing_data *ed;
-        GtkWindow *win;
-        GtkWidget *w;
-        GtkGrid *grid;
-        GtkBox *box;
-        PangoAttrList *attr_list;
-        gint row;
-        gchar *s;
-        gchar *ss;
+        if (arr)
+            g_ptr_array_unref (arr);
 
-        /* get selected nodes (if any) */
-        arr = donna_tree_view_get_selected_nodes (treeview);
+        ed->sid = g_signal_connect (renderers[0],
+                "editing-started",
+                (GCallback) editing_started_cb, ed);
 
-        ed = g_new0 (struct editing_data, 1);
-        ed->data = data;
-        ed->app  = ((DonnaColumnTypeTime *) ct)->priv->app;
-        ed->tree = treeview;
-        ed->node = node;
-
-        if (!arr || (arr->len == 1 && node == arr->pdata[0]))
+        g_object_set (renderers[0], "editable", TRUE, NULL);
+        if (!renderer_edit (renderers[0], re_data))
         {
-            if (arr)
-                g_ptr_array_unref (arr);
-
-            ed->sid = g_signal_connect (renderers[0],
-                        "editing-started",
-                        (GCallback) editing_started_cb, ed);
-
-            g_object_set (renderers[0], "editable", TRUE, NULL);
-            if (!renderer_edit (renderers[0], re_data))
-            {
-                g_signal_handler_disconnect (renderers[0], ed->sid);
-                g_free (data);
-                return FALSE;
-            }
-            return TRUE;
+            g_signal_handler_disconnect (renderers[0], ed->sid);
+            g_free (ed);
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+                    "ColumnType 'time': Failed to put renderer in edit mode");
+            return FALSE;
         }
-
-        win = donna_columntype_new_floating_window (treeview, !!arr);
-        ed->window = w = (GtkWidget *) win;
-        g_signal_connect_swapped (win, "destroy",
-                (GCallback) window_destroy_cb, ed);
-
-        w = gtk_grid_new ();
-        grid = (GtkGrid *) w;
-        g_object_set (w, "column-spacing", 12, NULL);
-        gtk_container_add ((GtkContainer *) win, w);
-
-        row = 0;
-        ed->arr = arr;
-
-        w = gtk_label_new (NULL);
-        gtk_label_set_markup ((GtkLabel *) w, "<i>Apply to:</i>");
-        gtk_grid_attach (grid, w, 0, row++, 4, 1);
-
-        s = ss = donna_node_get_name (node);
-        w = gtk_radio_button_new_with_label (NULL, s);
-        gtk_widget_set_tooltip_text (w, "Clicked item");
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        ++row;
-        if (arr->len == 1)
-            s = donna_node_get_name (arr->pdata[0]);
-        else
-            s = g_strdup_printf ("%d selected items", arr->len);
-        w = gtk_radio_button_new_with_label_from_widget (
-                (GtkRadioButton *) w, s);
-        gtk_widget_set_tooltip_text (w, (arr->len == 1)
-                ? "Selected item" : "Selected items");
-        g_free (s);
-        ed->rad_sel = (GtkToggleButton *) w;
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        ++row;
-        w = gtk_label_new (NULL);
-        g_object_set (w, "margin-top", 4, NULL);
-        gtk_label_set_markup ((GtkLabel *) w,
-                "<b>c</b>time, <b>m</b>time, <b>a</b>time and current <b>v</b>alue relate to:");
-        attr_list = pango_attr_list_new ();
-        pango_attr_list_insert (attr_list,
-                pango_attr_style_new (PANGO_STYLE_ITALIC));
-        gtk_label_set_attributes ((GtkLabel *) w, attr_list);
-        pango_attr_list_unref (attr_list);
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        ++row;
-        w = gtk_radio_button_new_with_label (NULL, ss);
-        gtk_widget_set_tooltip_text (w, "Clicked item");
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        ++row;
-        w = gtk_radio_button_new_with_label_from_widget (
-                (GtkRadioButton *) w, "Touched item");
-        gtk_widget_set_tooltip_text (w, "The item on which the time is set");
-        ed->rad_ref = (GtkToggleButton *) w;
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        g_free (ss);
-        g_object_set (w, "margin-bottom", 9, NULL);
-
-        ++row;
-        w = gtk_entry_new ();
-        ed->entry = (GtkEntry *) w;
-        set_entry_icon (ed->entry);
-        g_signal_connect (w, "key-press-event", (GCallback) key_press_event_cb, ed);
-        g_signal_connect_swapped (w, "activate", (GCallback) apply_cb, ed);
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        ++row;
-        w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, FALSE);
-        box = (GtkBox *) w;
-        g_object_set (w, "margin-top", 15, NULL);
-        gtk_grid_attach (grid, w, 0, row, 4, 1);
-
-        w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
-        g_object_set (gtk_button_get_image ((GtkButton *) w),
-                "icon-size", GTK_ICON_SIZE_MENU, NULL);
-        g_signal_connect_swapped (w, "clicked",
-                (GCallback) gtk_widget_destroy, win);
-        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
-        w = gtk_button_new_with_label ("Set time");
-        gtk_button_set_image ((GtkButton *) w,
-                gtk_image_new_from_stock (GTK_STOCK_OK, GTK_ICON_SIZE_MENU));
-        g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
-        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
-
-
-        gtk_widget_show_all (ed->window);
-        gtk_widget_grab_focus ((GtkWidget *) ed->entry);
-        donna_app_set_floating_window (((DonnaColumnTypeTime *) ct)->priv->app, win);
         return TRUE;
     }
 
-    return FALSE;
+    win = donna_columntype_new_floating_window (treeview, !!arr);
+    ed->window = w = (GtkWidget *) win;
+    g_signal_connect_swapped (win, "destroy",
+            (GCallback) window_destroy_cb, ed);
+
+    w = gtk_grid_new ();
+    grid = (GtkGrid *) w;
+    g_object_set (w, "column-spacing", 12, NULL);
+    gtk_container_add ((GtkContainer *) win, w);
+
+    row = 0;
+    ed->arr = arr;
+
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, "<i>Apply to:</i>");
+    gtk_grid_attach (grid, w, 0, row++, 4, 1);
+
+    s = ss = donna_node_get_name (node);
+    w = gtk_radio_button_new_with_label (NULL, s);
+    gtk_widget_set_tooltip_text (w, "Clicked item");
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    ++row;
+    if (arr->len == 1)
+        s = donna_node_get_name (arr->pdata[0]);
+    else
+        s = g_strdup_printf ("%d selected items", arr->len);
+    w = gtk_radio_button_new_with_label_from_widget (
+            (GtkRadioButton *) w, s);
+    gtk_widget_set_tooltip_text (w, (arr->len == 1)
+            ? "Selected item" : "Selected items");
+    g_free (s);
+    ed->rad_sel = (GtkToggleButton *) w;
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    ++row;
+    w = gtk_label_new (NULL);
+    g_object_set (w, "margin-top", 4, NULL);
+    gtk_label_set_markup ((GtkLabel *) w,
+            "<b>c</b>time, <b>m</b>time, <b>a</b>time and current <b>v</b>alue relate to:");
+    attr_list = pango_attr_list_new ();
+    pango_attr_list_insert (attr_list,
+            pango_attr_style_new (PANGO_STYLE_ITALIC));
+    gtk_label_set_attributes ((GtkLabel *) w, attr_list);
+    pango_attr_list_unref (attr_list);
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    ++row;
+    w = gtk_radio_button_new_with_label (NULL, ss);
+    gtk_widget_set_tooltip_text (w, "Clicked item");
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    ++row;
+    w = gtk_radio_button_new_with_label_from_widget (
+            (GtkRadioButton *) w, "Touched item");
+    gtk_widget_set_tooltip_text (w, "The item on which the time is set");
+    ed->rad_ref = (GtkToggleButton *) w;
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    g_free (ss);
+    g_object_set (w, "margin-bottom", 9, NULL);
+
+    ++row;
+    w = gtk_entry_new ();
+    ed->entry = (GtkEntry *) w;
+    set_entry_icon (ed->entry);
+    g_signal_connect (w, "key-press-event", (GCallback) key_press_event_cb, ed);
+    g_signal_connect_swapped (w, "activate", (GCallback) apply_cb, ed);
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    ++row;
+    w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, FALSE);
+    box = (GtkBox *) w;
+    g_object_set (w, "margin-top", 15, NULL);
+    gtk_grid_attach (grid, w, 0, row, 4, 1);
+
+    w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
+    g_object_set (gtk_button_get_image ((GtkButton *) w),
+            "icon-size", GTK_ICON_SIZE_MENU, NULL);
+    g_signal_connect_swapped (w, "clicked",
+            (GCallback) gtk_widget_destroy, win);
+    gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+    w = gtk_button_new_with_label ("Set time");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_stock (GTK_STOCK_OK, GTK_ICON_SIZE_MENU));
+    g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
+    gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+
+    gtk_widget_show_all (ed->window);
+    gtk_widget_grab_focus ((GtkWidget *) ed->entry);
+    donna_app_set_floating_window (((DonnaColumnTypeTime *) ct)->priv->app, win);
+    return TRUE;
 }
 
 static GPtrArray *

@@ -60,16 +60,14 @@ static GPtrArray *      ct_name_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_name_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
-static gboolean         ct_name_handle_click        (DonnaColumnType    *ct,
+static gboolean         ct_name_edit                (DonnaColumnType    *ct,
                                                      gpointer            data,
-                                                     DonnaClick          click,
-                                                     GdkEventButton     *event,
                                                      DonnaNode          *node,
-                                                     guint               index,
                                                      GtkCellRenderer   **renderers,
                                                      renderer_edit_fn    renderer_edit,
                                                      gpointer            re_data,
-                                                     DonnaTreeView      *treeview);
+                                                     DonnaTreeView      *treeview,
+                                                     GError            **error);
 static GPtrArray *      ct_name_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -102,7 +100,7 @@ ct_name_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_name_free_data;
     interface->get_props                = ct_name_get_props;
     interface->get_options_menu         = ct_name_get_options_menu;
-    interface->handle_click             = ct_name_handle_click;
+    interface->edit                     = ct_name_edit;
     interface->render                   = ct_name_render;
     interface->set_tooltip              = ct_name_set_tooltip;
     interface->node_cmp                 = ct_name_node_cmp;
@@ -437,43 +435,35 @@ editing_started_cb (GtkCellRenderer     *renderer,
 }
 
 static gboolean
-ct_name_handle_click (DonnaColumnType    *ct,
-                      gpointer            data,
-                      DonnaClick          click,
-                      GdkEventButton     *event,
-                      DonnaNode          *node,
-                      guint               index,
-                      GtkCellRenderer   **renderers,
-                      renderer_edit_fn    renderer_edit,
-                      gpointer            re_data,
-                      DonnaTreeView      *treeview)
+ct_name_edit (DonnaColumnType    *ct,
+              gpointer            data,
+              DonnaNode          *node,
+              GtkCellRenderer   **renderers,
+              renderer_edit_fn    renderer_edit,
+              gpointer            re_data,
+              DonnaTreeView      *treeview,
+              GError            **error)
 {
-    if (((click & (DONNA_CLICK_MIDDLE | DONNA_CLICK_SINGLE))
-                == (DONNA_CLICK_MIDDLE | DONNA_CLICK_SINGLE))
-            || ((click & (DONNA_CLICK_LEFT | DONNA_CLICK_SLOW_DOUBLE))
-                == (DONNA_CLICK_LEFT | DONNA_CLICK_SLOW_DOUBLE)))
+    struct editing_data *ed;
+
+    ed = g_new0 (struct editing_data, 1);
+    ed->ctname    = (DonnaColumnTypeName *) ct;
+    ed->tree      = treeview;
+    ed->node      = node;
+    ed->editing_started_sid = g_signal_connect (renderers[1],
+            "editing-started",
+            (GCallback) editing_started_cb, ed);
+
+    g_object_set (renderers[1], "editable", TRUE, NULL);
+    if (!renderer_edit (renderers[1], re_data))
     {
-        struct editing_data *data;
-
-        data = g_new0 (struct editing_data, 1);
-        data->ctname    = (DonnaColumnTypeName *) ct;
-        data->tree      = treeview;
-        data->node      = node;
-        data->editing_started_sid = g_signal_connect (renderers[1],
-                "editing-started",
-                (GCallback) editing_started_cb, data);
-
-        g_object_set (renderers[1], "editable", TRUE, NULL);
-        if (!renderer_edit (renderers[1], re_data))
-        {
-            g_signal_handler_disconnect (renderers[1], data->editing_started_sid);
-            g_free (data);
-            return FALSE;
-        }
-        return TRUE;
+        g_signal_handler_disconnect (renderers[1], ed->editing_started_sid);
+        g_free (ed);
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+                "ColumnType 'name': Failed to put renderer in edit mode");
+        return FALSE;
     }
-
-    return FALSE;
+    return TRUE;
 }
 
 static GPtrArray *
