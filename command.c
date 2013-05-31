@@ -308,6 +308,7 @@ gboolean
 _donna_command_convert_arg (DonnaApp        *app,
                             DonnaArgType     type,
                             gboolean         from_string,
+                            gboolean         can_block,
                             gpointer         sce,
                             gpointer        *dst,
                             GError         **error)
@@ -352,6 +353,13 @@ _donna_command_convert_arg (DonnaApp        *app,
         case DONNA_ARG_TYPE_NODE:
             if (from_string)
             {
+                if (!can_block)
+                {
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+                            "Converting argument would required to use a (possibly blocking) task");
+                    return FALSE;
+                }
+
                 DonnaTask *task = donna_app_get_node_task (app, sce);
                 if (!task)
                 {
@@ -424,6 +432,13 @@ _donna_command_convert_arg (DonnaApp        *app,
                 }
                 else
                 {
+                    if (!can_block)
+                    {
+                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+                                "Converting argument would required to use a (possibly blocking) task");
+                        return FALSE;
+                    }
+
                     DonnaTask *task = donna_app_get_node_task (app, sce);
                     if (!task)
                     {
@@ -551,7 +566,7 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
         c = *end;
         *end = '\0';
         if (!_donna_command_convert_arg (cr->app, command->arg_type[i], TRUE,
-                    start, &ptr, &err))
+                    TRUE, start, &ptr, &err))
         {
             g_prefix_error (&err, "Command '%s', argument %d: ",
                     command->name, i + 1);

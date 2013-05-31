@@ -17,6 +17,7 @@ typedef enum
     COMMAND_ERROR_NOT_FOUND,
     COMMAND_ERROR_SYNTAX,
     COMMAND_ERROR_MISSING_ARG,
+    COMMAND_ERROR_MIGHT_BLOCK,
     COMMAND_ERROR_OTHER,
 } CommandError;
 
@@ -69,6 +70,7 @@ gboolean                _donna_command_checks_post_parsing (
 gboolean                _donna_command_convert_arg  (DonnaApp        *app,
                                                      DonnaArgType     type,
                                                      gboolean         from_string,
+                                                     gboolean         can_block,
                                                      gpointer         sce,
                                                      gpointer        *dst,
                                                      GError         **error);
