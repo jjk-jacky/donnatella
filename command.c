@@ -16,9 +16,8 @@ static DonnaTaskState   cmd_set_tree_visual (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_get_tree_visual (DonnaTask *task, GPtrArray *args);
 static DonnaTaskState   cmd_edit_column     (DonnaTask *task, GPtrArray *args);
 
-static DonnaCommandDef commands[] = {
+static DonnaCommand commands[] = {
     {
-        .command        = DONNA_COMMAND_SET_FOCUS,
         .name           = "set_focus",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
@@ -27,7 +26,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_set_focus
     },
     {
-        .command        = DONNA_COMMAND_SET_CURSOR,
         .name           = "set_cursor",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
@@ -36,7 +34,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_set_cursor
     },
     {
-        .command        = DONNA_COMMAND_SELECTION,
         .name           = "selection",
         .argc           = 4,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
@@ -46,7 +43,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_selection
     },
     {
-        .command        = DONNA_COMMAND_ACTIVATE_ROW,
         .name           = "activate_row",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
@@ -55,7 +51,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_activate_row
     },
     {
-        .command        = DONNA_COMMAND_TOGGLE_ROW,
         .name           = "toggle_row",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
@@ -64,7 +59,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_toggle_row
     },
     {
-        .command        = DONNA_COMMAND_ACTION_NODE,
         .name           = "action_node",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_INT },
@@ -73,7 +67,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_action_node
     },
     {
-        .command        = DONNA_COMMAND_SET_TREE_VISUAL,
         .name           = "set_tree_visual",
         .argc           = 4,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
@@ -83,7 +76,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_set_tree_visual
     },
     {
-        .command        = DONNA_COMMAND_GET_TREE_VISUAL,
         .name           = "get_tree_visual",
         .argc           = 4,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
@@ -93,7 +85,6 @@ static DonnaCommandDef commands[] = {
         .cmd_fn         = cmd_get_tree_visual
     },
     {
-        .command        = DONNA_COMMAND_EDIT_COLUMN,
         .name           = "edit_column",
         .argc           = 3,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
@@ -202,7 +193,7 @@ get_next_arg (gchar  **arg,
 
 /* shared private API */
 
-DonnaCommandDef *
+DonnaCommand *
 _donna_command_init_parse (gchar     *cmdline,
                            gchar    **first_arg,
                            gchar    **end,
@@ -246,7 +237,7 @@ _donna_command_init_parse (gchar     *cmdline,
 }
 
 gboolean
-_donna_command_get_next_arg (DonnaCommandDef *command,
+_donna_command_get_next_arg (DonnaCommand    *command,
                              guint            i,
                              gchar          **start,
                              gchar          **end,
@@ -276,7 +267,7 @@ _donna_command_get_next_arg (DonnaCommandDef *command,
 }
 
 gboolean
-_donna_command_checks_post_parsing (DonnaCommandDef *command,
+_donna_command_checks_post_parsing (DonnaCommand    *command,
                                     guint            i,
                                     gchar           *start,
                                     gchar           *end,
@@ -503,7 +494,7 @@ _donna_command_convert_arg (DonnaApp        *app,
 }
 
 void
-_donna_command_free_args (DonnaCommandDef *command, GPtrArray *arr)
+_donna_command_free_args (DonnaCommand *command, GPtrArray *arr)
 {
     guint i;
 
@@ -553,7 +544,7 @@ DonnaTaskState
 _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
 {
     GError *err = NULL;
-    DonnaCommandDef *command;
+    DonnaCommand *command;
     DonnaTask *cmd_task;
     gchar *start, *end;
     gchar  c;

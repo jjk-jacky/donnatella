@@ -170,7 +170,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
                            const gchar        *location)
 {
     GError *err = NULL;
-    DonnaCommandDef *cmd;
+    DonnaCommand *cmd;
     DonnaNode *node;
     GValue *value;
     GtkWidget *w;

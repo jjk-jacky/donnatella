@@ -7013,7 +7013,7 @@ struct rc_data
     struct column   *_col;
     DonnaTreeRow    *row;
     gchar           *fl;
-    DonnaCommandDef *command;
+    DonnaCommand    *command;
     gchar           *start;
     gchar           *end;
     guint            i;
