@@ -227,6 +227,8 @@ struct _DonnaTreeViewPrivate
     /* List: future location (task get_children running) */
     DonnaNode           *future_location;
 
+    /* tree: list of iters for roots, in order */
+    GSList              *roots;
     /* hashtable of nodes & their iters on TV */
     GHashTable          *hashtable;
 
@@ -1210,81 +1212,94 @@ remove_row_from_tree (DonnaTreeView *tree,
         else
             g_hash_table_remove (priv->hashtable, node);
 
-        if (donna_tree_store_iter_depth (priv->store, iter) == 0)
+        if (is_tree (tree))
         {
-            /* removing a root, that means we also need to clean tree_visuals
-             * for anything that was under that root. Removing a root means
-             * forgetting any and all tree visuals under there. */
-
-            if (priv->tree_visuals)
+            /* removing a root? */
+            if (donna_tree_store_iter_depth (priv->store, iter) == 0)
             {
-                struct ctv_data data = { .tree = tree, .iter = iter };
+                GSList *l;
 
-                g_hash_table_foreach_remove (priv->tree_visuals,
-                        (GHRFunc) clean_tree_visuals, &data);
-                if (g_hash_table_size (priv->tree_visuals) == 0)
-                {
-                    g_hash_table_unref (priv->tree_visuals);
-                    priv->tree_visuals = NULL;
-                }
-            }
-        }
-        else if (!is_removal)
-        {
-            DonnaTreeVisual v;
+                for (l = priv->roots; l; l = l->next)
+                    if (itereq (iter, (GtkTreeIter *) l->data))
+                    {
+                        priv->roots = g_slist_delete_link (priv->roots, l);
+                        break;
+                    }
 
-            /* place any tree_visuals back there to remember them when the node
-             * comes back */
-
-            gtk_tree_model_get (model, iter,
-                        DONNA_TREE_COL_VISUALS,     &v,
-                        -1);
-            if (v > 0)
-            {
-                struct visuals *visuals;
-                GtkTreeIter *root;
-                gchar *fl;
-                GSList *l = NULL;
-
-                visuals = g_slice_new0 (struct visuals);
-                root = get_root_iter (tree, iter);
-                visuals->root = *root;
-
-                /* we can't just get everything, since there might be
-                 * node_visuals applied */
-                if (v & DONNA_TREE_VISUAL_NAME)
-                    gtk_tree_model_get (model, iter,
-                            DONNA_TREE_COL_NAME,        &visuals->name,
-                            -1);
-                if (v & DONNA_TREE_VISUAL_ICON)
-                    gtk_tree_model_get (model, iter,
-                            DONNA_TREE_COL_ICON,        &visuals->icon,
-                            -1);
-                if (v & DONNA_TREE_VISUAL_BOX)
-                    gtk_tree_model_get (model, iter,
-                            DONNA_TREE_COL_BOX,         &visuals->box,
-                            -1);
-                if (v & DONNA_TREE_VISUAL_HIGHLIGHT)
-                    gtk_tree_model_get (model, iter,
-                            DONNA_TREE_COL_HIGHLIGHT,   &visuals->highlight,
-                            -1);
-                /* not a visual, but treated the same */
-                if (v & DONNA_TREE_VISUAL_CLICKS)
-                    gtk_tree_model_get (model, iter,
-                            DONNA_TREE_COL_CLICKS,      &visuals->clicks,
-                            -1);
-
-                fl = donna_node_get_full_location (node);
+                /* also means we need to clean tree_visuals for anything that
+                 * was under that root. Removing a root means forgetting any and
+                 * all tree visuals under there. */
 
                 if (priv->tree_visuals)
-                    l = g_hash_table_lookup (priv->tree_visuals, fl);
-                else
-                    priv->tree_visuals = g_hash_table_new_full (
-                            g_str_hash, g_str_equal,
-                            g_free, NULL);
+                {
+                    struct ctv_data data = { .tree = tree, .iter = iter };
 
-                l = g_slist_prepend (l, visuals);
-                g_hash_table_insert (priv->tree_visuals, fl, l);
+                    g_hash_table_foreach_remove (priv->tree_visuals,
+                            (GHRFunc) clean_tree_visuals, &data);
+                    if (g_hash_table_size (priv->tree_visuals) == 0)
+                    {
+                        g_hash_table_unref (priv->tree_visuals);
+                        priv->tree_visuals = NULL;
+                    }
+                }
+            }
+            else if (!is_removal)
+            {
+                DonnaTreeVisual v;
+
+                /* place any tree_visuals back there to remember them when the
+                 * node comes back */
+
+                gtk_tree_model_get (model, iter,
+                        DONNA_TREE_COL_VISUALS,     &v,
+                        -1);
+                if (v > 0)
+                {
+                    struct visuals *visuals;
+                    GtkTreeIter *root;
+                    gchar *fl;
+                    GSList *l = NULL;
+
+                    visuals = g_slice_new0 (struct visuals);
+                    root = get_root_iter (tree, iter);
+                    visuals->root = *root;
+
+                    /* we can't just get everything, since there might be
+                     * node_visuals applied */
+                    if (v & DONNA_TREE_VISUAL_NAME)
+                        gtk_tree_model_get (model, iter,
+                                DONNA_TREE_COL_NAME,        &visuals->name,
+                                -1);
+                    if (v & DONNA_TREE_VISUAL_ICON)
+                        gtk_tree_model_get (model, iter,
+                                DONNA_TREE_COL_ICON,        &visuals->icon,
+                                -1);
+                    if (v & DONNA_TREE_VISUAL_BOX)
+                        gtk_tree_model_get (model, iter,
+                                DONNA_TREE_COL_BOX,         &visuals->box,
+                                -1);
+                    if (v & DONNA_TREE_VISUAL_HIGHLIGHT)
+                        gtk_tree_model_get (model, iter,
+                                DONNA_TREE_COL_HIGHLIGHT,   &visuals->highlight,
+                                -1);
+                    /* not a visual, but treated the same */
+                    if (v & DONNA_TREE_VISUAL_CLICKS)
+                        gtk_tree_model_get (model, iter,
+                                DONNA_TREE_COL_CLICKS,      &visuals->clicks,
+                                -1);
+
+                    fl = donna_node_get_full_location (node);
+
+                    if (priv->tree_visuals)
+                        l = g_hash_table_lookup (priv->tree_visuals, fl);
+                    else
+                        priv->tree_visuals = g_hash_table_new_full (
+                                g_str_hash, g_str_equal,
+                                g_free, NULL);
+
+                    l = g_slist_prepend (l, visuals);
+                    g_hash_table_insert (priv->tree_visuals, fl, l);
+                }
             }
         }
 
@@ -2402,6 +2417,21 @@ sort_func (GtkTreeModel      *model,
 
     tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
     priv = tree->priv;
+
+    /* are iters roots? */
+    if (is_tree (tree) && donna_tree_store_iter_depth (priv->store, iter1) == 0)
+    {
+        GSList *l;
+
+        /* so we decide the order. First one on our (ordered) list is first */
+        for (l = priv->roots; l; l = l->next)
+            if (itereq (iter1, (GtkTreeIter *) l->data))
+                return -1;
+            else if (itereq (iter2, (GtkTreeIter *) l->data))
+                return 1;
+        g_warning ("Treeview '%s': Failed to find order of roots", priv->name);
+    }
+
     sort_order = gtk_tree_view_column_get_sort_order (column);
 
     if (priv->sort_groups != SORT_CONTAINER_MIXED)
@@ -3063,6 +3093,7 @@ add_node_to_tree (DonnaTreeView *tree,
     DonnaTreeViewPrivate    *priv;
     GtkTreeModel            *model;
     GtkTreeIter              iter;
+    GtkTreeIter             *it;
     GSList                  *list;
     GSList                  *l;
     DonnaProvider           *provider;
@@ -3186,9 +3217,13 @@ add_node_to_tree (DonnaTreeView *tree,
             donna_tree_store_refresh_visibility (priv->store, &iter, NULL);
     }
     /* add it to our hashtable */
+    it   = gtk_tree_iter_copy (&iter);
     list = g_hash_table_lookup (priv->hashtable, node);
-    list = g_slist_prepend (list, gtk_tree_iter_copy (&iter));
+    list = g_slist_prepend (list, it);
     g_hash_table_insert (priv->hashtable, node, list);
+    /* new root? */
+    if (!parent)
+        priv->roots = g_slist_append (priv->roots, it);
     /* visuals */
     load_tree_visuals (tree, &iter, node);
     load_node_visuals (tree, &iter, node, TRUE);
