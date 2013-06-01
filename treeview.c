@@ -4925,9 +4925,9 @@ is_node_ancestor (DonnaNode         *node,
      * with its parent's location and a slash */
     location = donna_node_get_location (node);
     len = strlen (location);
-    ret = strncmp (location, descendant_location, len) == 0
-        /* FIXME root isn't always len==1 */
-        && (len == 1 || descendant_location[len] == '/');
+    ret = streq (location, "/") /* node is the root */
+        || (streqn (location, descendant_location, len)
+                && descendant_location[len] == '/');
     g_free (location);
     return ret;
 }

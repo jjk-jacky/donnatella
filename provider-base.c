@@ -7,6 +7,7 @@
 #include "node.h"
 #include "task.h"
 #include "debug.h"
+#include "macros.h"
 
 struct _DonnaProviderBasePrivate
 {
@@ -471,8 +472,8 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     provider_base = (DonnaProviderBase *) donna_node_peek_provider (node);
     location = donna_node_get_location (node);
 
-    /* is this a root? */
-    if (location[strlen (location) - 1] == '/')
+    /* is this root? */
+    if (streq (location, "/"))
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
