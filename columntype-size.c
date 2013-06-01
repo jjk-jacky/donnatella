@@ -74,10 +74,6 @@ static GPtrArray *      ct_size_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_size_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
-static gboolean         ct_size_handle_context      (DonnaColumnType    *ct,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
-                                                     DonnaTreeView      *treeview);
 static GPtrArray *      ct_size_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -110,7 +106,6 @@ ct_size_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_size_free_data;
     interface->get_props                = ct_size_get_props;
     interface->get_options_menu         = ct_size_get_options_menu;
-    interface->handle_context           = ct_size_handle_context;
     interface->render                   = ct_size_render;
     interface->set_tooltip              = ct_size_set_tooltip;
     interface->node_cmp                 = ct_size_node_cmp;
@@ -307,16 +302,6 @@ ct_size_get_options_menu (DonnaColumnType    *ct,
 {
     /* FIXME */
     return NULL;
-}
-
-static gboolean
-ct_size_handle_context (DonnaColumnType    *ct,
-                        gpointer            data,
-                        DonnaNode          *node,
-                        DonnaTreeView      *treeview)
-{
-    /* FIXME */
-    return FALSE;
 }
 
 #define warn_not_uint64(node)    do {                   \
