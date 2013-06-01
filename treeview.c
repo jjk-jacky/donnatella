@@ -35,6 +35,10 @@ enum
 {
     DONNA_TREE_COL_NODE = 0,
     DONNA_TREE_COL_EXPAND_STATE,
+    /* TRUE when expanded, back to FALSE only when manually collapsed, as
+     * opposed to GTK default including collapsing a parent. This will allow to
+     * preserve expansion when collapsing a parent */
+    DONNA_TREE_COL_EXPAND_FLAG,
     DONNA_TREE_COL_ROW_CLASS,
     DONNA_TREE_COL_NAME,
     DONNA_TREE_COL_ICON,
@@ -1873,6 +1877,10 @@ donna_tree_view_row_collapsed (GtkTreeView   *treev,
                                GtkTreeIter   *iter,
                                GtkTreePath   *path)
 {
+    /* this node was collapsed, update the flag */
+    donna_tree_store_set (((DonnaTreeView *) treev)->priv->store, iter,
+            DONNA_TREE_COL_EXPAND_FLAG, FALSE,
+            -1);
     /* After row is collapsed, there might still be an horizontal scrollbar,
      * because the column has been enlarged due to a long-ass children, and
      * it hasn't been resized since. So even though there's no need for the
@@ -1890,6 +1898,33 @@ donna_tree_view_row_expanded (GtkTreeView   *treev,
 {
     DonnaTreeView *tree = (DonnaTreeView *) treev;
     DonnaTreeViewPrivate * priv = tree->priv;
+    GtkTreeIter child;
+
+    /* this node was expanded, update the flag */
+    donna_tree_store_set (((DonnaTreeView *) treev)->priv->store, iter,
+            DONNA_TREE_COL_EXPAND_FLAG, TRUE,
+            -1);
+    /* also go through all its children and expand them if the flag is set, tjus
+     * restoring the previous expand state. This expansion will trigger a new
+     * call to this very function, thus taking care of the recursion */
+    if (gtk_tree_model_iter_children ((GtkTreeModel *) priv->store, &child, iter))
+    {
+        GtkTreeModel *model = (GtkTreeModel *) priv->store;
+        do
+        {
+            gboolean expand_flag;
+
+            gtk_tree_model_get (model, &child,
+                    DONNA_TREE_COL_EXPAND_FLAG, &expand_flag,
+                    -1);
+            if (expand_flag)
+            {
+                GtkTreePath *p = gtk_tree_model_get_path (model, &child);
+                gtk_tree_view_expand_row (treev, p, FALSE);
+                gtk_tree_path_free (p);
+            }
+        } while (gtk_tree_model_iter_next (model, &child));
+    }
 
     if (is_tree (tree) && !priv->location && priv->sync_with)
         check_children_post_expand (tree, iter);
@@ -7994,6 +8029,7 @@ donna_tree_view_new (DonnaApp    *app,
         priv->store = donna_tree_store_new (DONNA_TREE_NB_COLS,
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_NODE */
                 G_TYPE_INT,     /* DONNA_TREE_COL_EXPAND_STATE */
+                G_TYPE_BOOLEAN, /* DONNA_TREE_COL_EXPAND_FLAG */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_ROW_CLASS */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_NAME */
                 G_TYPE_OBJECT,  /* DONNA_TREE_COL_ICON */
