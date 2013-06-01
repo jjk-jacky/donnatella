@@ -67,7 +67,7 @@ enum tree_expand
     DONNA_TREE_EXPAND_NEVER,        /* never expanded, children unknown */
     DONNA_TREE_EXPAND_WIP,          /* we have a running task getting children */
     DONNA_TREE_EXPAND_PARTIAL,      /* minitree: only some children are listed */
-    DONNA_TREE_EXPAND_FULL,         /* (was) expanded, children are there */
+    DONNA_TREE_EXPAND_MAXI,         /* (was) expanded, children are there */
 };
 
 #define ROW_CLASS_MINITREE          "minitree-unknown"
@@ -328,7 +328,7 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
             (((es) == DONNA_TREE_EXPAND_PARTIAL)        \
              ? ROW_CLASS_PARTIAL                        \
              : ((es) == DONNA_TREE_EXPAND_NONE          \
-                 || (es) == DONNA_TREE_EXPAND_FULL)     \
+                 || (es) == DONNA_TREE_EXPAND_MAXI)     \
              ? NULL : ROW_CLASS_MINITREE),              \
             -1)
 
@@ -1404,7 +1404,7 @@ set_children (DonnaTreeView *tree,
         gtk_tree_model_get (model, iter,
                 DONNA_TREE_COL_EXPAND_STATE,    &es,
                 -1);
-        if (es == DONNA_TREE_EXPAND_FULL || es == DONNA_TREE_EXPAND_PARTIAL)
+        if (es == DONNA_TREE_EXPAND_MAXI || es == DONNA_TREE_EXPAND_PARTIAL)
         {
             GtkTreeIter i;
 
@@ -1478,7 +1478,7 @@ set_children (DonnaTreeView *tree,
 
         /* has_children could be FALSE when e.g. we got children from a
          * node_children signal, but none match our node_types */
-        es = (has_children) ? DONNA_TREE_EXPAND_FULL : DONNA_TREE_EXPAND_NONE;
+        es = (has_children) ? DONNA_TREE_EXPAND_MAXI : DONNA_TREE_EXPAND_NONE;
         /* set new expand state */
         set_es (priv, iter, es);
         /* we might have to remove the fake node */
@@ -1617,7 +1617,7 @@ expand_row (DonnaTreeView           *tree,
             gtk_tree_model_get (model, i,
                     DONNA_TREE_COL_EXPAND_STATE,    &es,
                     -1);
-            if (es == DONNA_TREE_EXPAND_FULL)
+            if (es == DONNA_TREE_EXPAND_MAXI)
             {
                 GtkTreeIter child;
                 GtkTreePath *path;
@@ -1644,7 +1644,7 @@ expand_row (DonnaTreeView           *tree,
                 } while (donna_tree_store_iter_next (priv->store, &child));
 
                 /* update expand state */
-                set_es (priv, iter, DONNA_TREE_EXPAND_FULL);
+                set_es (priv, iter, DONNA_TREE_EXPAND_MAXI);
 
                 /* expand node */
                 path = gtk_tree_model_get_path (model, iter);
@@ -1695,7 +1695,7 @@ expand_row (DonnaTreeView           *tree,
             g_ptr_array_unref (arr);
 
             /* update expand state */
-            set_es (priv, iter, DONNA_TREE_EXPAND_FULL);
+            set_es (priv, iter, DONNA_TREE_EXPAND_MAXI);
 
             /* expand node */
             path = gtk_tree_model_get_path (model, iter);
@@ -1737,7 +1737,7 @@ expand_row (DonnaTreeView           *tree,
 
 /* mini-tree only */
 static gboolean
-full_expand_row (DonnaTreeView  *tree,
+maxi_expand_row (DonnaTreeView  *tree,
                  GtkTreeIter    *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -1773,8 +1773,9 @@ full_expand_row (DonnaTreeView  *tree,
     return TRUE;
 }
 
+/* tree only */
 static gboolean
-full_collapse_row (DonnaTreeView    *tree,
+maxi_collapse_row (DonnaTreeView    *tree,
                    GtkTreeIter      *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -1792,7 +1793,7 @@ full_collapse_row (DonnaTreeView    *tree,
     gtk_tree_model_get (model, iter,
             DONNA_TREE_COL_EXPAND_STATE,    &es,
             -1);
-    if (es == DONNA_TREE_EXPAND_PARTIAL || es == DONNA_TREE_EXPAND_FULL)
+    if (es == DONNA_TREE_EXPAND_PARTIAL || es == DONNA_TREE_EXPAND_MAXI)
     {
         GtkTreeIter it;
 
@@ -1803,7 +1804,7 @@ full_collapse_row (DonnaTreeView    *tree,
         /* remove_row_from_tree will add a fake node & set expand_state to
          * UNKNOWN if it was partial. However, if not it won't add the fake node
          * and set expand_state to NONE so we need to adjust things */
-        if (es == DONNA_TREE_EXPAND_FULL)
+        if (es == DONNA_TREE_EXPAND_MAXI)
         {
             /* add fake node */
             donna_tree_store_insert_with_values (priv->store, NULL, iter, 0,
@@ -1838,7 +1839,7 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         /* allow expansion */
         case DONNA_TREE_EXPAND_WIP:
         case DONNA_TREE_EXPAND_PARTIAL:
-        case DONNA_TREE_EXPAND_FULL:
+        case DONNA_TREE_EXPAND_MAXI:
             return FALSE;
 
         /* refuse expansion, import_children or get_children */
@@ -2590,7 +2591,7 @@ node_has_children_cb (DonnaTask                 *task,
             break;
 
         case DONNA_TREE_EXPAND_PARTIAL:
-        case DONNA_TREE_EXPAND_FULL:
+        case DONNA_TREE_EXPAND_MAXI:
             if (!has_children)
             {
                 GtkTreeIter iter;
@@ -2757,7 +2758,7 @@ real_node_children_cb (struct node_children_cb_data *data)
     gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &priv->location_iter,
             DONNA_TREE_COL_EXPAND_STATE,    &es,
             -1);
-    if (es == DONNA_TREE_EXPAND_FULL)
+    if (es == DONNA_TREE_EXPAND_MAXI)
     {
         g_debug ("treeview '%s': updating children for current location",
                 priv->name);
@@ -3281,7 +3282,7 @@ add_node_to_tree (DonnaTreeView *tree,
             /* node has children */
             case DONNA_TREE_EXPAND_NEVER:
             case DONNA_TREE_EXPAND_PARTIAL:
-            case DONNA_TREE_EXPAND_FULL:
+            case DONNA_TREE_EXPAND_MAXI:
                 es = DONNA_TREE_EXPAND_NEVER;
                 break;
 
@@ -5119,7 +5120,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             gtk_tree_model_get (model, prev_iter,
                     DONNA_TREE_COL_EXPAND_STATE,    &es,
                     -1);
-            if (es == DONNA_TREE_EXPAND_FULL
+            if (es == DONNA_TREE_EXPAND_MAXI
                     || es == DONNA_TREE_EXPAND_PARTIAL)
                 gtk_tree_view_expand_row (treev, path, FALSE);
             else
@@ -7489,17 +7490,17 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                 {
                     if (event->state & GDK_CONTROL_MASK)
                     {
-                        /* Ctrl+click does a full expand on minitree only */
+                        /* Ctrl+click does a maxi expand on minitree only */
                         if (priv->is_minitree)
                         {
-                            full_expand_row (tree, &iter);
+                            maxi_expand_row (tree, &iter);
                             return TRUE;
                         }
                     }
                     else if (event->state & GDK_SHIFT_MASK)
                     {
-                        /* Shift+click always does a full collapse */
-                        full_collapse_row (tree, &iter);
+                        /* Shift+click always does a maxi collapse */
+                        maxi_collapse_row (tree, &iter);
                         return TRUE;
                     }
                     else
