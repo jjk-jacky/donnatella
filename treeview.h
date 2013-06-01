@@ -103,6 +103,13 @@ typedef enum
 
 typedef enum
 {
+    DONNA_TREE_TOGGLE_STANDARD,
+    DONNA_TREE_TOGGLE_FULL,
+    DONNA_TREE_TOGGLE_MAXI,
+} DonnaTreeToggle;
+
+typedef enum
+{
     DONNA_TREE_VISUAL_NOTHING   = 0,
     DONNA_TREE_VISUAL_NAME      = (1 << 0),
     DONNA_TREE_VISUAL_ICON      = (1 << 1),
@@ -169,9 +176,6 @@ gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
 gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
-gboolean        donna_tree_view_toggle_row      (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
-                                                 GError            **error);
 gboolean        donna_tree_view_edit_column     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  const gchar        *column,
@@ -191,6 +195,23 @@ gchar *         donna_tree_view_get_visual      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  DonnaTreeVisual     visual,
                                                  DonnaTreeVisualSource source,
+                                                 GError            **error);
+gboolean        donna_tree_view_toggle_row      (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaTreeToggle     toggle,
+                                                 GError            **error);
+gboolean        donna_tree_view_full_expand     (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
+gboolean        donna_tree_view_full_collapse   (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
+/* Mini-Tree */
+gboolean        donna_tree_view_maxi_expand     (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
+gboolean        donna_tree_view_maxi_collapse   (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
                                                  GError            **error);
 /* Mode List */
 GPtrArray *     donna_tree_view_get_children    (DonnaTreeView      *tree,

@@ -1568,7 +1568,7 @@ node_get_children_tree_cb (DonnaTask                   *task,
     if (data->scroll_to_current)
         scroll_to_current (data->tree);
 
-    /* for check_children_post_expand() */
+    /* for check_children_post_expand() or full_expand_children() */
     if (data->extra_callback)
         data->extra_callback (data->tree, &data->iter);
 
@@ -6382,6 +6382,7 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
 gboolean
 donna_tree_view_toggle_row (DonnaTreeView      *tree,
                             DonnaTreeRowId     *rowid,
+                            DonnaTreeToggle     toggle,
                             GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -6390,6 +6391,7 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
     row_id_type  type;
     enum tree_expand es;
     GtkTreePath *path;
+    gboolean     ret = TRUE;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (rowid != NULL, FALSE);
@@ -6428,11 +6430,273 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
     }
 
     if (gtk_tree_view_row_expanded (treev, path))
-        gtk_tree_view_collapse_row (treev, path);
+    {
+        if (toggle == DONNA_TREE_TOGGLE_STANDARD)
+            gtk_tree_view_collapse_row (treev, path);
+        else if (toggle == DONNA_TREE_TOGGLE_FULL)
+            ret = donna_tree_view_full_collapse (tree, rowid, error);
+        else /* DONNA_TREE_TOGGLE_MAXI */
+        {
+            /* maxi is a special kind of toggle: if partially expanded, we
+             * maxi-expand; Else, we maxi collapse */
+            if (es == DONNA_TREE_EXPAND_PARTIAL)
+                ret = donna_tree_view_maxi_expand (tree, rowid, error);
+            else
+                ret = donna_tree_view_maxi_collapse (tree, rowid, error);
+        }
+    }
     else
-        gtk_tree_view_expand_row (treev, path, FALSE);
+    {
+        if (toggle == DONNA_TREE_TOGGLE_STANDARD)
+            gtk_tree_view_expand_row (treev, path, FALSE);
+        else if (toggle == DONNA_TREE_TOGGLE_FULL)
+            ret = donna_tree_view_full_expand (tree, rowid, error);
+        else /* DONNA_TREE_TOGGLE_MAXI */
+        {
+            /* maxi is a special kind of toggle: if never expanded, we (maxi)
+             * expand; Else we maxi collapse */
+            if (es == DONNA_TREE_EXPAND_NEVER || es == DONNA_TREE_EXPAND_UNKNOWN)
+                gtk_tree_view_expand_row (treev, path, FALSE);
+            else
+                ret = donna_tree_view_maxi_collapse (tree, rowid, error);
+        }
+    }
 
     gtk_tree_path_free (path);
+    return ret;
+}
+
+static void full_expand_children (DonnaTreeView *tree, GtkTreeIter *iter);
+
+static inline void
+full_expand (DonnaTreeView *tree, GtkTreeIter *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    enum tree_expand es;
+
+    gtk_tree_model_get (model, iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            -1);
+    switch (es)
+    {
+        case DONNA_TREE_EXPAND_UNKNOWN:
+        case DONNA_TREE_EXPAND_NEVER:
+            /* will import/create get_children task. Will also call ourself
+             * on iter, or make sure it gets called from the task's cb */
+            expand_row (tree, iter, FALSE, full_expand_children);
+            break;
+
+        case DONNA_TREE_EXPAND_PARTIAL:
+        case DONNA_TREE_EXPAND_MAXI:
+            {
+                GtkTreePath *path;
+                path = gtk_tree_model_get_path (model, iter);
+                gtk_tree_view_expand_row ((GtkTreeView *) tree, path, FALSE);
+                gtk_tree_path_free (path);
+                /* recursion */
+                full_expand_children (tree, iter);
+            }
+            break;
+
+        case DONNA_TREE_EXPAND_NONE:
+        case DONNA_TREE_EXPAND_WIP:
+            break;
+    }
+}
+
+static void
+full_expand_children (DonnaTreeView *tree, GtkTreeIter *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    GtkTreeIter child;
+
+    if (G_UNLIKELY (!gtk_tree_model_iter_children (model, &child, iter)))
+        return;
+
+    do
+    {
+        full_expand (tree, &child);
+    } while (gtk_tree_model_iter_next (model, &child));
+}
+
+gboolean
+donna_tree_view_full_expand (DonnaTreeView      *tree,
+                             DonnaTreeRowId     *rowid,
+                             GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeView *treev = (GtkTreeView *) tree;
+    GtkTreeIter  iter;
+    row_id_type  type;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': full_expand() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot full-expand row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    full_expand (tree, &iter);
+    return TRUE;
+}
+
+static void
+reset_expand_flag (GtkTreeModel *model, GtkTreeIter *iter)
+{
+    GtkTreeIter child;
+
+    if (G_UNLIKELY (!gtk_tree_model_iter_children (model, &child, iter)))
+        return;
+
+    do
+    {
+        donna_tree_store_set ((DonnaTreeStore *) model, &child,
+                DONNA_TREE_COL_EXPAND_FLAG, FALSE,
+                -1);
+        reset_expand_flag (model, &child);
+    } while (gtk_tree_model_iter_next (model, &child));
+}
+
+gboolean
+donna_tree_view_full_collapse (DonnaTreeView      *tree,
+                               DonnaTreeRowId     *rowid,
+                               GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter   iter;
+    row_id_type   type;
+    GtkTreePath  *path;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': full_collapse() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot full-collapse row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+    gtk_tree_view_collapse_row ((GtkTreeView *) tree, path);
+    gtk_tree_path_free (path);
+
+    /* we also need to recursively set the EXPAND_FLAG to FALSE */
+    reset_expand_flag ((GtkTreeModel *) priv->store, &iter);
+
+    return TRUE;
+}
+
+gboolean
+donna_tree_view_maxi_expand (DonnaTreeView      *tree,
+                             DonnaTreeRowId     *rowid,
+                             GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter   iter;
+    row_id_type   type;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': maxi_expand() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+    if (G_UNLIKELY (!priv->is_minitree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': maxi_expand() only works in mini-tree",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot maxi-expand row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    maxi_expand_row (tree, &iter);
+    return TRUE;
+}
+
+gboolean
+donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
+                               DonnaTreeRowId     *rowid,
+                               GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter   iter;
+    row_id_type   type;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': maxi_collapse() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+    if (G_UNLIKELY (!priv->is_minitree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': maxi_collapse() only works in mini-tree",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot maxi-collapse row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    maxi_collapse_row (tree, &iter);
     return TRUE;
 }
 
@@ -7359,7 +7623,7 @@ handle_click (DonnaTreeView     *tree,
         if (streq (b, "left_click"))
             def = "command:tree_set_cursor (%o, %r)";
         else if (streq (b, "left_double_click"))
-            def = "command:tree_toggle_row (%o, %r)";
+            def = "command:tree_toggle_row (%o, %r, std)";
     }
     else
     {

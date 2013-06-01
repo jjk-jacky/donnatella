@@ -12,7 +12,15 @@ static DonnaTaskState   cmd_tree_activate_row               (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_edit_column                (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_full_collapse              (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_full_expand                (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_get_visual                 (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_maxi_collapse              (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_maxi_expand                (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_selection                  (DonnaTask *task,
                                                              GPtrArray *args);
@@ -52,6 +60,22 @@ static DonnaCommand commands[] = {
         .cmd_fn         = cmd_tree_edit_column
     },
     {
+        .name           = "tree_full_collapse",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_full_collapse
+    },
+    {
+        .name           = "tree_full_expand",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_full_expand
+    },
+    {
         .name           = "tree_get_visual",
         .argc           = 4,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
@@ -59,6 +83,22 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_STRING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_get_visual
+    },
+    {
+        .name           = "tree_maxi_collapse",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_maxi_collapse
+    },
+    {
+        .name           = "tree_maxi_expand",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_maxi_expand
     },
     {
         .name           = "tree_selection",
@@ -96,8 +136,9 @@ static DonnaCommand commands[] = {
     },
     {
         .name           = "tree_toggle_row",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_STRING},
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_toggle_row
@@ -733,6 +774,34 @@ cmd_tree_edit_column (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
+cmd_tree_full_collapse (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_full_collapse (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_full_expand (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_full_expand (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
@@ -788,6 +857,34 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
     g_value_init (value, G_TYPE_STRING);
     g_value_take_string (value, s);
     donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_maxi_collapse (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_maxi_collapse (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_maxi_expand (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_maxi_expand (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
 
     return DONNA_TASK_DONE;
 }
@@ -898,8 +995,24 @@ static DonnaTaskState
 cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
+    DonnaTreeToggle toggle;
 
-    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], &err))
+    if (streq (args->pdata[3], "std"))
+        toggle = DONNA_TREE_TOGGLE_STANDARD;
+    else if (streq (args->pdata[3], "full"))
+        toggle = DONNA_TREE_TOGGLE_FULL;
+    else if (streq (args->pdata[3], "maxi"))
+        toggle = DONNA_TREE_TOGGLE_MAXI;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Cannot toggle row, unknown toggle type '%s'. Must be 'std', 'full' or 'maxi'",
+                args->pdata[3]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], toggle, &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
