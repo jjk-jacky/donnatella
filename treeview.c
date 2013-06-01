@@ -7111,6 +7111,10 @@ free_rc_data (struct rc_data *data)
 static void
 command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
 {
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (data->tree->priv->app, donna_task_get_error (task),
+                "Treeview '%s': Action triggered failed",
+                data->tree->priv->name);
     free_rc_data (data);
 }
 
@@ -7127,7 +7131,8 @@ run_command (DonnaTask *task, struct rc_data *data)
         if (!data->command)
         {
             donna_app_show_error (data->tree->priv->app, err,
-                    "Cannot trigger action, parsing command failed");
+                    "Treeview '%s': Cannot trigger action, parsing command failed",
+                    data->tree->priv->name);
             g_clear_error (&err);
             free_rc_data (data);
             return DONNA_TASK_FAILED;
@@ -7217,7 +7222,8 @@ str_parsing:
                     return DONNA_TASK_DONE;
                 }
                 donna_app_show_error (data->tree->priv->app, err,
-                        "Cannot trigger action, parsing command failed");
+                        "Treeview '%s': Cannot trigger action, parsing command failed",
+                        data->tree->priv->name);
                 g_clear_error (&err);
                 free_rc_data (data);
                 return DONNA_TASK_FAILED;
@@ -7231,7 +7237,8 @@ str_parsing:
                     &data->start, &data->end, &err))
         {
             donna_app_show_error (data->tree->priv->app, err,
-                    "Cannot trigger action, parsing command failed");
+                    "Treeview '%s': Cannot trigger action, parsing command failed",
+                    data->tree->priv->name);
             g_clear_error (&err);
             free_rc_data (data);
             return DONNA_TASK_FAILED;
@@ -7242,7 +7249,8 @@ str_parsing:
                 data->start, data->end, &err))
     {
         donna_app_show_error (data->tree->priv->app, err,
-                "Cannot trigger action, parsing command failed");
+                "Treeview '%s': Cannot trigger action, parsing command failed",
+                data->tree->priv->name);
         g_clear_error (&err);
         free_rc_data (data);
         return DONNA_TASK_FAILED;
