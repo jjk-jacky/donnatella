@@ -7538,6 +7538,13 @@ str_parsing:
     }
 }
 
+enum
+{
+    CLICK_REGULAR = 0,
+    CLICK_ON_BLANK,
+    CLICK_ON_EXPANDER,
+};
+
 static void
 handle_click (DonnaTreeView     *tree,
               DonnaClick         click,
@@ -7545,7 +7552,7 @@ handle_click (DonnaTreeView     *tree,
               GtkTreeIter       *iter,
               GtkTreeViewColumn *column,
               GtkCellRenderer   *renderer,
-              gboolean           is_blank)
+              guint              click_on)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
@@ -7609,10 +7616,15 @@ handle_click (DonnaTreeView     *tree,
         memcpy (buf, "blankcol_", 9 * sizeof (gchar));
         b = buf;
     }
-    else if (is_blank)
+    else if (click_on == CLICK_ON_BLANK)
     {
         memcpy (buf + 3, "blank_", 6 * sizeof (gchar));
         b = buf + 3;
+    }
+    else if (click_on == CLICK_ON_EXPANDER)
+    {
+        memcpy (buf, "expander_", 9 * sizeof (gchar));
+        b = buf;
     }
     else
         b = buf + 9;
@@ -7622,7 +7634,8 @@ handle_click (DonnaTreeView     *tree,
     {
         if (streq (b, "left_click"))
             def = "command:tree_set_cursor (%o, %r)";
-        else if (streq (b, "left_double_click"))
+        else if (streq (b, "left_double_click")
+                || streq (b, "expander_left_click"))
             def = "command:tree_toggle_row (%o, %r, std)";
     }
     else
@@ -7743,7 +7756,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 #else
         if (gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
 #endif
-            handle_click (tree, click, event, &iter, column, renderer, TRUE);
+            handle_click (tree, click, event, &iter, column, renderer, CLICK_ON_BLANK);
         else
         {
             DonnaNode *node;
@@ -7762,38 +7775,9 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
             if (!renderer)
             {
                 /* i.e. clicked on an expander */
-
-                if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                        == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                {
-                    if (event->state & GDK_CONTROL_MASK)
-                    {
-                        /* Ctrl+click does a maxi expand on minitree only */
-                        if (priv->is_minitree)
-                        {
-                            maxi_expand_row (tree, &iter);
-                            return TRUE;
-                        }
-                    }
-                    else if (event->state & GDK_SHIFT_MASK)
-                    {
-                        /* Shift+click always does a maxi collapse */
-                        maxi_collapse_row (tree, &iter);
-                        return TRUE;
-                    }
-                    else
-                    {
-                        GtkTreePath *path;
-
-                        path = gtk_tree_model_get_path (model, &iter);
-                        if (gtk_tree_view_row_expanded (treev, path))
-                            gtk_tree_view_collapse_row (treev, path);
-                        else
-                            gtk_tree_view_expand_row (treev, path, FALSE);
-                        gtk_tree_path_free (path);
-                        return TRUE;
-                    }
-                }
+                handle_click (tree, click, event, &iter, column, renderer,
+                        CLICK_ON_EXPANDER);
+                return TRUE;
             }
             else if (renderer == int_renderers[INTERNAL_RENDERER_PIXBUF])
 #endif
@@ -7801,7 +7785,8 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 
             if (!as)
             {
-                handle_click (tree, click, event, &iter, column, renderer, FALSE);
+                handle_click (tree, click, event, &iter, column, renderer,
+                        CLICK_REGULAR);
                 return TRUE;
             }
 
@@ -7889,11 +7874,11 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
             }
             g_object_unref (node);
             /* there was no as for this column */
-            handle_click (tree, click, event, &iter, column, renderer, FALSE);
+            handle_click (tree, click, event, &iter, column, renderer, CLICK_REGULAR);
         }
     }
     else
-        handle_click (tree, click, event, NULL, NULL, NULL, TRUE);
+        handle_click (tree, click, event, NULL, NULL, NULL, CLICK_ON_BLANK);
     return TRUE;
 }
 
@@ -8092,6 +8077,13 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
     gboolean ret;
     GSList *l;
 
+    /* Note: this call will have GTK toggle (expand/collapse) a row when it was
+     * double-left-clicked on an expander. It would be a PITA to avoid w/out
+     * breaking other things (column resize/drag, rubber band, etc) so we leave
+     * it as is.
+     * After all, the left click will probably do that already, so no one in
+     * their right might would really use expander-dbl-left-click for anything
+     * really. (Middle/right dbl-click are fine.) */
     ret = GTK_WIDGET_CLASS (donna_tree_view_parent_class)->button_release_event (
             widget, event);
 
