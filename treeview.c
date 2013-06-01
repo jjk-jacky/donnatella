@@ -1654,6 +1654,9 @@ expand_row (DonnaTreeView           *tree,
                 if (scroll_current)
                     scroll_to_current (tree);
 
+                if (extra_callback)
+                    extra_callback (tree, iter);
+
                 return TRUE;
             }
         }
@@ -1704,6 +1707,9 @@ expand_row (DonnaTreeView           *tree,
 
             if (scroll_current)
                 scroll_to_current (tree);
+
+            if (extra_callback)
+                extra_callback (tree, iter);
 
             return TRUE;
         }
