@@ -316,7 +316,14 @@ donna_columntype_is_match_filter (DonnaColumnType    *ct,
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, 0);
-    g_return_val_if_fail (interface->is_match_filter != NULL, 0);
+    if (!interface->is_match_filter)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_OTHER,
+                "ColumnType '%s': no filtering supported",
+                donna_columntype_get_name (ct));
+        return FALSE;
+    }
 
     return (*interface->is_match_filter) (ct, filter, filter_data, data,
             node, error);
