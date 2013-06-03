@@ -1,0 +1,55 @@
+
+#ifndef __DONNA_PROVIDER_TASK_H__
+#define __DONNA_PROVIDER_TASK_H__
+
+#include "provider-base.h"
+#include "common.h"
+
+G_BEGIN_DECLS
+
+#define DONNA_TYPE_PROVIDER_TASK                (donna_provider_task_get_type ())
+#define DONNA_PROVIDER_TASK(obj)                (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_PROVIDER_TASK, DonnaProviderTask))
+#define DONNA_PROVIDER_TASK_CLASS(klass)        (G_TYPE_CHECK_CLASS_CAST ((klass), DONNA_TYPE_PROVIDER_TASK, DonnaProviderTaskClass))
+#define DONNA_IS_PROVIDER_TASK(obj)             (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_PROVIDER_TASK))
+#define DONNA_IS_PROVIDER_TASK_CLASS(klass)     (G_TYPE_CHECK_CLASS_TYPE ((klass), DONNA_TYPE_PROVIDER_TASK))
+#define DONNA_PROVIDER_TASK_GET_CLASS(obj)      (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_PROVIDER_TASK, DonnaProviderTaskClass))
+
+typedef struct _DonnaProviderTask               DonnaProviderTask;
+typedef struct _DonnaProviderTaskClass          DonnaProviderTaskClass;
+typedef struct _DonnaProviderTaskPrivate        DonnaProviderTaskPrivate;
+
+
+#define DONNA_TASK_MANAGER(obj)                 ((DonnaTaskManager *) (obj))
+#define DONNA_IS_TASK_MANAGER(obj)              DONNA_IS_PROVIDER_TASK(obj)
+
+typedef DonnaProviderTask                       DonnaTaskManager;
+
+#define DONNA_TASK_MANAGER_ERROR                g_quark_from_static_string ("DonnaTaskManager-Error")
+typedef enum
+{
+    DONNA_TASK_MANAGER_ERROR_INVALID_TASK_VISIBILITY,
+    DONNA_TASK_MANAGER_ERROR_OTHER
+} DonnaTaskManagerError;
+
+
+struct _DonnaProviderTask
+{
+    DonnaProviderBase parent;
+
+    DonnaProviderTaskPrivate *priv;
+};
+
+struct _DonnaProviderTaskClass
+{
+    DonnaProviderBaseClass parent;
+};
+
+GType       donna_provider_task_get_type        (void) G_GNUC_CONST;
+/* task manager */
+gboolean    donna_task_manager_add_task         (DonnaTaskManager       *tm,
+                                                 DonnaTask              *task,
+                                                 GError                **error);
+
+G_END_DECLS
+
+#endif /* __DONNA_PROVIDER_TASK_H__ */

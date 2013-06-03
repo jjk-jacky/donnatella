@@ -57,6 +57,9 @@ typedef enum
 
     /* task hasn't ran yet */
     DONNA_TASK_PRE_RUN          = (DONNA_TASK_STOPPED | DONNA_TASK_WAITING),
+    /* task is running */
+    DONNA_TASK_IN_RUN           = (DONNA_TASK_RUNNING | DONNA_TASK_PAUSING
+            | DONNA_TASK_CANCELLING),
     /* task has ran */
     DONNA_TASK_POST_RUN         = (DONNA_TASK_DONE | DONNA_TASK_CANCELLED
             | DONNA_TASK_FAILED),

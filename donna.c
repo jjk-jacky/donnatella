@@ -8,6 +8,7 @@
 #include "provider-fs.h"
 #include "provider-command.h"
 #include "provider-config.h"
+#include "provider-task.h"
 #include "columntype.h"
 #include "columntype-name.h"
 #include "columntype-size.h"
@@ -55,6 +56,7 @@ struct _DonnaDonnaPrivate
     GtkWidget       *floating_window;
     gboolean         just_focused;
     DonnaConfig     *config;
+    DonnaTaskManager*task_manager;
     GSList          *providers;
     GSList          *treeviews;
     GHashTable      *filters;
@@ -229,6 +231,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_PERMS].type = DONNA_TYPE_COLUMNTYPE_PERMS;
     priv->column_types[COL_TYPE_TEXT].name = "text";
     priv->column_types[COL_TYPE_TEXT].type = DONNA_TYPE_COLUMNTYPE_TEXT;
+
+    priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", donna, NULL);
 
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
@@ -517,6 +521,8 @@ donna_donna_get_provider (DonnaApp    *app,
 
     if (streq (domain, "config"))
         return g_object_ref (priv->config);
+    else if (streq (domain, "task"))
+        return g_object_ref (priv->task_manager);
 
     for (l = priv->providers; l; l = l->next)
         if (streq (domain, donna_provider_get_domain (l->data)))
@@ -598,8 +604,9 @@ donna_donna_run_task (DonnaApp    *app,
                 g_object_ref_sink (task));
     else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
         donna_donna_task_run (g_object_ref_sink (task));
-    /* FIXME else if (visibility == DONNA_TASK_VISIBILITY_PULIC)
-     *      add_to_task_manager (task); */
+    else if (visibility == DONNA_TASK_VISIBILITY_PULIC)
+        donna_task_manager_add_task (((DonnaDonna *) app)->priv->task_manager,
+                task, NULL);
     else
         g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
                 g_object_ref_sink (task), NULL);
