@@ -15,6 +15,8 @@
 #include "columntype-time.h"
 #include "columntype-perms.h"
 #include "columntype-text.h"
+#include "columntype-label.h"
+#include "columntype-progress.h"
 #include "node.h"
 #include "filter.h"
 #include "macros.h"
@@ -38,6 +40,8 @@ enum
     COL_TYPE_TIME,
     COL_TYPE_PERMS,
     COL_TYPE_TEXT,
+    COL_TYPE_LABEL,
+    COL_TYPE_PROGRESS,
     NB_COL_TYPES
 };
 
@@ -231,6 +235,10 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_PERMS].type = DONNA_TYPE_COLUMNTYPE_PERMS;
     priv->column_types[COL_TYPE_TEXT].name = "text";
     priv->column_types[COL_TYPE_TEXT].type = DONNA_TYPE_COLUMNTYPE_TEXT;
+    priv->column_types[COL_TYPE_LABEL].name = "label";
+    priv->column_types[COL_TYPE_LABEL].type = DONNA_TYPE_COLUMNTYPE_LABEL;
+    priv->column_types[COL_TYPE_PROGRESS].name = "progress";
+    priv->column_types[COL_TYPE_PROGRESS].type = DONNA_TYPE_COLUMNTYPE_PROGRESS;
 
     priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", donna, NULL);
 
