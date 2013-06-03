@@ -3959,7 +3959,8 @@ load_arrangement (DonnaTreeView     *tree,
                 }
                 if (!*r)
                 {
-                    renderer = *r = load_renderer ();
+                    /* FIXME use a weakref instead? */
+                    renderer = *r = g_object_ref (load_renderer ());
                     g_object_set_data ((GObject * ) renderer, "renderer-type",
                             GINT_TO_POINTER (*rend));
                     /* an array where we'll store properties that have been set
