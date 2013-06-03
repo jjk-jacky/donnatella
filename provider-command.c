@@ -170,6 +170,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
                            const gchar        *location)
 {
     GError *err = NULL;
+    DonnaProviderBaseClass *klass;
     DonnaCommand *cmd;
     DonnaNode *node;
     GValue *value;
@@ -228,11 +229,16 @@ provider_command_new_node (DonnaProviderBase  *_provider,
         g_prefix_error (&err, "Provider 'command': Cannot create new node, "
                 "failed to add property 'trigger-visibility': ");
         donna_task_take_error (task, err);
+        g_value_unset (&v);
         g_object_unref (node);
         return DONNA_TASK_FAILED;
     }
+    g_value_unset (&v);
 
-    DONNA_PROVIDER_BASE_GET_CLASS (_provider)->add_node_to_cache (_provider, node);
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    klass->lock_nodes (_provider);
+    klass->add_node_to_cache (_provider, node);
+    klass->unlock_nodes (_provider);
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
