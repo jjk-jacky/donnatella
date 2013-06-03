@@ -2849,7 +2849,7 @@ node_new_child_cb (DonnaProvider *provider,
         return;
 
     /* if we don't care for this type of nodes, nothing to do */
-    if (!(donna_node_get_node_type (node) & priv->node_types))
+    if (!(donna_node_get_node_type (child) & priv->node_types))
         return;
 
     /* we can't check if node is in the tree though, because there's no lock,
