@@ -28,6 +28,7 @@ typedef DonnaProviderTask                       DonnaTaskManager;
 typedef enum
 {
     DONNA_TASK_MANAGER_ERROR_INVALID_TASK_VISIBILITY,
+    DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE,
     DONNA_TASK_MANAGER_ERROR_OTHER
 } DonnaTaskManagerError;
 
@@ -48,6 +49,10 @@ GType       donna_provider_task_get_type        (void) G_GNUC_CONST;
 /* task manager */
 gboolean    donna_task_manager_add_task         (DonnaTaskManager       *tm,
                                                  DonnaTask              *task,
+                                                 GError                **error);
+gboolean    donna_task_manager_set_state        (DonnaTaskManager       *tm,
+                                                 DonnaNode              *node,
+                                                 DonnaTaskState          state,
                                                  GError                **error);
 
 G_END_DECLS

@@ -1175,7 +1175,7 @@ donna_task_get_return_value (DonnaTask *task)
     return task->priv->value;
 }
 
-static inline const gchar *
+inline const gchar *
 state_name (DonnaTaskState state)
 {
     switch (state)

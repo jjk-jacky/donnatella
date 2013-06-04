@@ -7,10 +7,16 @@ G_BEGIN_DECLS
 
 typedef enum
 {
-    DONNA_DEBUG_NODE        = (1 << 0),
-    DONNA_DEBUG_TASK        = (1 << 1),
+    DONNA_DEBUG_NODE         = (1 << 0),
+    DONNA_DEBUG_TASK         = (1 << 1),
+    DONNA_DEBUG_TREEVIEW     = (1 << 2),
+    DONNA_DEBUG_TASK_MANAGER = (1 << 3),
+    DONNA_DEBUG_PROVIDER     = (1 << 4),
+    DONNA_DEBUG_CONFIG       = (1 << 5),
 
-    DONNA_DEBUG_ALL         = DONNA_DEBUG_NODE | DONNA_DEBUG_TASK
+    DONNA_DEBUG_ALL          = DONNA_DEBUG_NODE | DONNA_DEBUG_TASK
+        | DONNA_DEBUG_TREEVIEW | DONNA_DEBUG_TASK_MANAGER
+        | DONNA_DEBUG_PROVIDER | DONNA_DEBUG_CONFIG
 } DonnaDebugFlags;
 
 #ifdef DONNA_ENABLE_DEBUG

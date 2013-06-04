@@ -6,6 +6,7 @@
 #include "node.h"
 #include "task.h"
 #include "macros.h"
+#include "debug.h"
 
 enum
 {
@@ -14,6 +15,18 @@ enum
     PROP_APP,
 
     NB_PROPS
+};
+
+enum
+{
+    ST_STOPPED = 0,
+    ST_WAITING,
+    ST_RUNNING,
+    ST_ON_HOLD,
+    ST_PAUSED,
+    ST_CANCELLED,
+    ST_FAILED,
+    ST_DONE,
 };
 
 typedef enum
@@ -86,6 +99,9 @@ static DonnaTaskState   provider_task_remove_node   (DonnaProviderBase  *provide
 static DonnaTaskState   provider_task_trigger_node  (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
+
+/* internal -- from task.c */
+inline const gchar *state_name (DonnaTaskState state);
 
 static void
 provider_task_provider_init (DonnaProviderInterface *interface)
@@ -329,8 +345,11 @@ static DonnaNode *
 new_node (DonnaProviderBase *_provider,
           const gchar       *location,
           DonnaTask         *t,
+          gboolean           has_lock,
           GError           **error)
 {
+    DonnaTaskManager *tm = (DonnaTaskManager *) _provider;
+    DonnaProviderTaskPrivate *priv = tm->priv;
     DonnaNode *node;
     GValue v = G_VALUE_INIT;
     gchar *desc;
@@ -361,7 +380,57 @@ new_node (DonnaProviderBase *_provider,
     g_free (desc);
 
     g_value_init (&v, G_TYPE_INT);
-    g_value_set_int (&v, state);
+    switch (state)
+    {
+        case DONNA_TASK_STOPPED:
+            g_value_set_int (&v, ST_STOPPED);
+            break;
+        case DONNA_TASK_WAITING:
+            g_value_set_int (&v, ST_WAITING);
+            break;
+        case DONNA_TASK_RUNNING:
+        case DONNA_TASK_PAUSING:
+        case DONNA_TASK_CANCELLING:
+        case DONNA_TASK_IN_RUN: /* silence warning */
+            g_value_set_int (&v, ST_RUNNING);
+            break;
+        case DONNA_TASK_PAUSED:
+            {
+                guint i;
+
+                if (!has_lock)
+                    lock_manager (tm, TM_BUSY_READ);
+                for (i = 0; i < priv->tasks->len; ++i)
+                {
+                    struct task *_t = &g_array_index (priv->tasks, struct task, i);
+                    if (_t->task == t)
+                    {
+                        if (_t->own_pause)
+                            g_value_set_int (&v, ST_ON_HOLD);
+                        else
+                            g_value_set_int (&v, ST_PAUSED);
+                        break;
+                    }
+                }
+                if (!has_lock)
+                    unlock_manager (tm, TM_BUSY_READ);
+                break;
+            }
+        case DONNA_TASK_CANCELLED:
+            g_value_set_int (&v, ST_CANCELLED);
+            break;
+        case DONNA_TASK_FAILED:
+            g_value_set_int (&v, ST_FAILED);
+            break;
+        case DONNA_TASK_DONE:
+            g_value_set_int (&v, ST_DONE);
+            break;
+        case DONNA_TASK_STATE_UNKNOWN:
+        case DONNA_TASK_PRE_RUN:
+        case DONNA_TASK_POST_RUN:
+            /* silence warning */
+            break;
+    }
     if (!donna_node_add_property (node, "state", G_TYPE_INT,
                 &v, refresher, NULL, error))
     {
@@ -446,7 +515,7 @@ provider_task_new_node (DonnaProviderBase  *_provider,
             {
                 GError *err = NULL;
 
-                node = new_node (_provider, location, t, &err);
+                node = new_node (_provider, location, t, TRUE, &err);
                 if (!node)
                 {
                     donna_task_take_error (task, err);
@@ -535,7 +604,7 @@ provider_task_get_children (DonnaProviderBase  *_provider,
             node = klass->get_cached_node (_provider, location);
             if (!node)
             {
-                node = new_node (_provider, location, t->task, &err);
+                node = new_node (_provider, location, t->task, TRUE, &err);
                 if (node)
                     /* adds another reference, for the caller/task */
                     klass->add_node_to_cache (_provider, node);
@@ -572,27 +641,81 @@ provider_task_remove_node (DonnaProviderBase  *_provider,
     return DONNA_TASK_FAILED;
 }
 
+inline const gchar *
+st_name (guint st)
+{
+    switch (st)
+    {
+        case ST_STOPPED:
+            return "stopped";
+        case ST_WAITING:
+            return "waiting";
+        case ST_RUNNING:
+            return "running";
+        case ST_ON_HOLD:
+            return "on hold";
+        case ST_PAUSED:
+            return "paused";
+        case ST_CANCELLED:
+            return "cancelled";
+        case ST_FAILED:
+            return "failed";
+        case ST_DONE:
+            return "done";
+        default:
+            return "unknown";
+    }
+}
+
 static DonnaTaskState
 provider_task_trigger_node (DonnaProviderBase  *_provider,
                             DonnaTask          *task,
                             DonnaNode          *node)
 {
     DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) _provider)->priv;
-    DonnaTask *t;
-    gchar *location;
+    guint state;
+    DonnaNodeHasValue has;
+    GValue value = G_VALUE_INIT;
+    GError *err = NULL;
 
-    location = donna_node_get_location (node);
-    if (sscanf (location, "/%p", &t) != 1)
+    donna_node_get (node, FALSE, "state", &has, &value, NULL);
+    /* we know it's a node ITEM of ours, so the property should exist & be set */
+    if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
     {
-        g_free (location);
+        gchar *fl = donna_node_get_full_location (node);
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Failed to get property 'state' from node '%s'", fl);
+        g_free (fl);
         return DONNA_TASK_FAILED;
     }
-    g_free (location);
 
-    if (donna_task_get_state (t) == DONNA_TASK_PAUSED)
-        donna_task_resume (t);
+    state = (guint) g_value_get_int (&value);
+    g_value_unset (&value);
+
+    if (state == ST_PAUSED || state == ST_STOPPED)
+        state = DONNA_TASK_RUNNING;
+    else if (state == ST_RUNNING || state == ST_ON_HOLD)
+        state = DONNA_TASK_PAUSED;
+    else if (state == ST_WAITING)
+        state = DONNA_TASK_STOPPED;
     else
-        donna_task_pause (t);
+    {
+        gchar *desc = donna_node_get_name (node);
+        donna_task_set_error (task, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE,
+                "Cannot toggle task '%s', incompatible current state (%s)",
+                desc, st_name (state));
+        g_free (desc);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_task_manager_set_state ((DonnaTaskManager *) _provider,
+                node, state, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
 
     return DONNA_TASK_DONE;
 }
@@ -798,6 +921,11 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
             if (!g_slist_find (should, l->data))
             {
                 struct task *t = (struct task *) l->data;
+                DONNA_DEBUG (TASK_MANAGER,
+                        gchar *d = donna_task_get_desc (t->task);
+                        g_debug ("TaskManager: auto-pause task '%s' (%p)",
+                            d, t->task);
+                        g_free (d));
                 donna_task_pause (t->task);
                 t->own_pause = TRUE;
                 did_pause = TRUE;
@@ -811,11 +939,23 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
             DonnaTaskState state = donna_task_get_state (t->task);
             if (state == DONNA_TASK_PAUSED)
             {
+                DONNA_DEBUG (TASK_MANAGER,
+                        gchar *d = donna_task_get_desc (t->task);
+                        g_debug ("TaskManager: auto-resume task '%s' (%p)",
+                            d, t->task);
+                        g_free (d));
                 donna_task_resume (t->task);
                 t->own_pause = FALSE;
             }
+            /* avoid race condition where we already put it in our pool, but
+             * it's still WAITING (i.e. about to go RUNNING, nothing to do) */
             else if (state == DONNA_TASK_WAITING && !t->in_pool)
             {
+                DONNA_DEBUG (TASK_MANAGER,
+                        gchar *d = donna_task_get_desc (t->task);
+                        g_debug ("TaskManager: auto-start task '%s' (%p)",
+                            d, t->task);
+                        g_free (d));
                 g_thread_pool_push (priv->pool, t->task, NULL);
                 t->in_pool = TRUE;
             }
@@ -859,7 +999,55 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
         if (is_state)
         {
             g_value_init (&v, G_TYPE_INT);
-            g_value_set_int (&v, donna_task_get_state (task));
+            switch (donna_task_get_state (task))
+            {
+                case DONNA_TASK_STOPPED:
+                    g_value_set_int (&v, ST_STOPPED);
+                    break;
+                case DONNA_TASK_WAITING:
+                    g_value_set_int (&v, ST_WAITING);
+                    break;
+                case DONNA_TASK_RUNNING:
+                case DONNA_TASK_PAUSING:
+                case DONNA_TASK_CANCELLING:
+                case DONNA_TASK_IN_RUN: /* silence warning */
+                    g_value_set_int (&v, ST_RUNNING);
+                    break;
+                case DONNA_TASK_PAUSED:
+                    {
+                        guint i;
+
+                        lock_manager (tm, TM_BUSY_READ);
+                        for (i = 0; i < priv->tasks->len; ++i)
+                        {
+                            struct task *t = &g_array_index (priv->tasks, struct task, i);
+                            if (t->task == task)
+                            {
+                                if (t->own_pause)
+                                    g_value_set_int (&v, ST_ON_HOLD);
+                                else
+                                    g_value_set_int (&v, ST_PAUSED);
+                                break;
+                            }
+                        }
+                        unlock_manager (tm, TM_BUSY_READ);
+                        break;
+                    }
+                case DONNA_TASK_CANCELLED:
+                    g_value_set_int (&v, ST_CANCELLED);
+                    break;
+                case DONNA_TASK_FAILED:
+                    g_value_set_int (&v, ST_FAILED);
+                    break;
+                case DONNA_TASK_DONE:
+                    g_value_set_int (&v, ST_DONE);
+                    break;
+                case DONNA_TASK_STATE_UNKNOWN:
+                case DONNA_TASK_PRE_RUN:
+                case DONNA_TASK_POST_RUN:
+                    /* silence warning */
+                    break;
+            }
         }
         else if (is_progress)
         {
@@ -899,13 +1087,15 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
                              DonnaTask              *task,
                              GError                **error)
 {
-    DonnaProviderTaskPrivate *priv = tm->priv;
+    DonnaProviderTaskPrivate *priv;
     DonnaProviderBaseClass *klass;
     DonnaProviderBase *pb = (DonnaProviderBase *) tm;
     DonnaTaskVisibility visibility;
     struct task t;
-    DonnaTask *_task;
     DonnaNode *node;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    priv = tm->priv;
 
     g_object_get (task, "visibility", &visibility, NULL);
     if (visibility != DONNA_TASK_VISIBILITY_PULIC)
@@ -916,6 +1106,11 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
         return FALSE;
     }
 
+    DONNA_DEBUG (TASK_MANAGER,
+            gchar *d = donna_task_get_desc (task);
+            g_debug ("TaskManager: add task '%s' (%p)", d, task);
+            g_free (d));
+
     t.task = g_object_ref_sink (task);
     t.in_pool = t.own_pause = FALSE;
     lock_manager (tm, TM_BUSY_WRITE);
@@ -924,8 +1119,8 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
 
     g_signal_connect (task, "notify", (GCallback) notify_cb, tm);
 
-    _task = donna_task_new ((task_fn) refresh_tm, tm, NULL);
-    donna_app_run_task (priv->app, _task);
+    donna_app_run_task (priv->app,
+            donna_task_new ((task_fn) refresh_tm, tm, NULL));
 
     /* we should signal a new child? */
     klass = DONNA_PROVIDER_BASE_GET_CLASS (pb);
@@ -937,7 +1132,7 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
         GError *err = NULL;
         DonnaNode *child;
 
-        child = new_node (pb, NULL, task, &err);
+        child = new_node (pb, NULL, task, FALSE, &err);
         if (G_LIKELY (child))
         {
             klass->add_node_to_cache (pb, child);
@@ -958,4 +1153,193 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
         klass->unlock_nodes (pb);
 
     return TRUE;
+}
+
+gboolean
+donna_task_manager_set_state (DonnaTaskManager  *tm,
+                              DonnaNode         *node,
+                              DonnaTaskState     state,
+                              GError           **error)
+{
+    DonnaProviderTaskPrivate *priv;
+    DonnaTask *task;
+    DonnaTaskState cur_state;
+    gchar *location;
+    gboolean ret = TRUE;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    priv = tm->priv;
+
+    if (donna_node_peek_provider (node) != (DonnaProvider *) tm
+            /* not an item == a container == root/task manager */
+            || donna_node_get_node_type (node) != DONNA_NODE_ITEM)
+    {
+        gchar *fl = donna_node_get_full_location (node);
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Cannot set task state, node '%s' isn't a task", fl);
+        g_free (fl);
+        return FALSE;
+    }
+
+    location = donna_node_get_location (node);
+    if (sscanf (location, "/%p", &task) != 1)
+    {
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Failed to get task from node 'task:%s'", location);
+        g_free (location);
+        return FALSE;
+    }
+    g_free (location);
+
+    cur_state = donna_task_get_state (task);
+
+    DONNA_DEBUG (TASK_MANAGER,
+            gchar *d = donna_task_get_desc (task);
+            g_debug ("TaskManager: switch task '%s' (%p) from %s to %s",
+                d, task, state_name (cur_state), state_name (state));
+            g_free (d));
+
+    switch (state)
+    {
+        case DONNA_TASK_RUNNING:
+            if (cur_state == DONNA_TASK_PAUSED)
+            {
+                guint i;
+
+                /* if we didn't own the pause (i.e. it was a manual one) then we
+                 * take ownership (make it "on hold") & trigger a refresh. This
+                 * might start the task or not, based or other tasks in the
+                 * manager.  If we already own the pause, nothing to do. */
+
+                lock_manager (tm, TM_BUSY_READ);
+                for (i = 0; i < priv->tasks->len; ++i)
+                {
+                    struct task *t = &g_array_index (priv->tasks, struct task, i);
+                    if (t->task == task)
+                    {
+                        if (!t->own_pause)
+                        {
+                            GValue v = G_VALUE_INIT;
+
+                            t->own_pause = TRUE;
+
+                            g_value_init (&v, G_TYPE_INT);
+                            g_value_set_int (&v, ST_ON_HOLD);
+                            donna_node_set_property_value (node, "state", &v);
+                            g_value_unset (&v);
+
+                            donna_app_run_task (priv->app,
+                                    donna_task_new ((task_fn) refresh_tm, tm, NULL));
+                        }
+                        break;
+                    }
+                }
+                unlock_manager (tm, TM_BUSY_READ);
+            }
+            else if (cur_state == DONNA_TASK_PAUSING)
+                /* try to override the pausing we a resume */
+                donna_task_resume (task);
+            else if (cur_state == DONNA_TASK_STOPPED)
+                /* make it WAITING, which will trigger a refresh. It may or may
+                 * not start the task, again, based on other tasks in the TM */
+                donna_task_set_autostart (task, TRUE);
+            else if (cur_state != DONNA_TASK_RUNNING
+                    && cur_state != DONNA_TASK_WAITING)
+                ret = FALSE;
+            break;
+
+        case DONNA_TASK_PAUSING:
+        case DONNA_TASK_PAUSED:
+            if (cur_state == DONNA_TASK_RUNNING)
+                donna_task_pause (task);
+            else if (cur_state == DONNA_TASK_PAUSED)
+            {
+                guint i;
+
+                /* if we owned the pause, we shall release it, so it becomes a
+                 * manual pause again (and not "on hold") */
+
+                lock_manager (tm, TM_BUSY_READ);
+                for (i = 0; i < priv->tasks->len; ++i)
+                {
+                    struct task *t = &g_array_index (priv->tasks, struct task, i);
+                    if (t->task == task)
+                    {
+                        if (t->own_pause)
+                        {
+                            GValue v = G_VALUE_INIT;
+
+                            t->own_pause = FALSE;
+
+                            g_value_init (&v, G_TYPE_INT);
+                            g_value_set_int (&v, ST_PAUSED);
+                            donna_node_set_property_value (node, "state", &v);
+                            g_value_unset (&v);
+
+                            donna_app_run_task (priv->app,
+                                    donna_task_new ((task_fn) refresh_tm, tm, NULL));
+                        }
+                        break;
+                    }
+                }
+                unlock_manager (tm, TM_BUSY_READ);
+            }
+            else if (cur_state != DONNA_TASK_PAUSING)
+                ret = FALSE;
+            break;
+
+        case DONNA_TASK_CANCELLING:
+        case DONNA_TASK_CANCELLED:
+            if (cur_state == DONNA_TASK_RUNNING
+                    || cur_state == DONNA_TASK_PAUSED
+                    || cur_state == DONNA_TASK_PAUSING)
+                donna_task_cancel (task);
+            else if (cur_state != DONNA_TASK_CANCELLED
+                    && cur_state != DONNA_TASK_CANCELLING)
+                ret = FALSE;
+            break;
+
+        case DONNA_TASK_STOPPED:
+            if (cur_state == DONNA_TASK_WAITING)
+                donna_task_set_autostart (task, FALSE);
+            else if (cur_state != DONNA_TASK_STOPPED)
+                ret = FALSE;
+            break;
+
+        case DONNA_TASK_WAITING:
+            if (cur_state == DONNA_TASK_STOPPED)
+                donna_task_set_autostart (task, TRUE);
+            else if (cur_state != DONNA_TASK_WAITING)
+                ret = FALSE;
+            break;
+
+        case DONNA_TASK_DONE:
+        case DONNA_TASK_FAILED:
+        case DONNA_TASK_STATE_UNKNOWN:
+        default:
+            {
+                gchar *desc = donna_task_get_desc (task);
+                g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                        DONNA_TASK_MANAGER_ERROR_OTHER,
+                        "Cannot set state of task '%s', invalid state (%d)",
+                        desc, state);
+                g_free (desc);
+                return FALSE;
+            }
+
+    }
+
+    if (!ret)
+    {
+        gchar *desc = donna_task_get_desc (task);
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE,
+                "Cannot set state of task '%s' to '%s', incompatible current state (%s)",
+                desc, state_name (state), state_name (cur_state));
+        g_free (desc);
+    }
+
+    return ret;
 }
