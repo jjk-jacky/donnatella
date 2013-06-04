@@ -1129,6 +1129,21 @@ donna_task_get_state (DonnaTask *task)
 }
 
 /**
+ * donna_task_get_desc:
+ * @task: Task to get the description of
+ *
+ * Helper function to get the ::desc property of @task
+ *
+ * Returns: Current description of @task (if any)
+ */
+gchar *
+donna_task_get_desc (DonnaTask *task)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), NULL);
+    return g_strdup (task->priv->desc);
+}
+
+/**
  * donna_task_get_error:
  * @task: Task to get the error from
  *

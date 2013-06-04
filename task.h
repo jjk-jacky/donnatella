@@ -133,6 +133,7 @@ gboolean            donna_task_can_be_duplicated(DonnaTask          *task);
 DonnaTask *         donna_task_get_duplicate    (DonnaTask          *task,
                                                  GError            **error);
 DonnaTaskState      donna_task_get_state        (DonnaTask          *task);
+gchar *             donna_task_get_desc         (DonnaTask          *task);
 const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);
 void                donna_task_prepare          (DonnaTask          *task);
