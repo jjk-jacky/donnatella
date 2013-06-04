@@ -282,6 +282,21 @@ donna_app_run_task (DonnaApp       *app,
     return (*interface->run_task) (app, task);
 }
 
+DonnaTaskManager *
+donna_app_get_task_manager (DonnaApp       *app)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_task_manager != NULL, NULL);
+
+    return (*interface->get_task_manager) (app);
+}
+
 DonnaTreeView *
 donna_app_get_treeview (DonnaApp    *app,
                         const gchar *name)

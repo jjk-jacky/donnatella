@@ -114,6 +114,7 @@ static DonnaFilter *    donna_donna_get_filter      (DonnaApp       *app,
                                                      const gchar    *filter);
 static void             donna_donna_run_task        (DonnaApp       *app,
                                                      DonnaTask      *task);
+static DonnaTaskManager*donna_donna_get_task_manager(DonnaApp       *app);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
 static void             donna_donna_show_error      (DonnaApp       *app,
@@ -131,6 +132,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_columntype       = donna_donna_get_columntype;
     interface->get_filter           = donna_donna_get_filter;
     interface->run_task             = donna_donna_run_task;
+    interface->get_task_manager     = donna_donna_get_task_manager;
     interface->get_treeview         = donna_donna_get_treeview;
     interface->show_error           = donna_donna_show_error;
 }
@@ -765,6 +767,17 @@ tree_select_arrangement (DonnaTreeView  *tree,
     if (source[0] != _source)
         g_free (source[0]);
     return arr;
+}
+
+static DonnaTaskManager *
+donna_donna_get_task_manager (DonnaApp *app)
+{
+    DonnaDonnaPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    priv = ((DonnaDonna *) app)->priv;
+
+    return priv->task_manager;
 }
 
 DonnaTreeView *

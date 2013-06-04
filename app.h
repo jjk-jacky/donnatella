@@ -6,6 +6,7 @@
 #include <glib-object.h>
 #include "common.h"
 #include "conf.h"
+#include "task-manager.h"
 #include "treeview.h"
 #include "columntype.h"
 #include "filter.h"
@@ -34,6 +35,7 @@ struct _DonnaAppInterface
                                                      const gchar    *filter);
     void                (*run_task)                 (DonnaApp       *app,
                                                      DonnaTask      *task);
+    DonnaTaskManager *  (*get_task_manager)         (DonnaApp       *app);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
                                                      const gchar    *name);
     void                (*show_error)               (DonnaApp       *app,
@@ -63,6 +65,7 @@ DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
                                                      const gchar    *filter);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
+DonnaTaskManager *  donna_app_get_task_manager      (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);
 void                donna_app_show_error            (DonnaApp       *app,
