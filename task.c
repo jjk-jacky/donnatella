@@ -71,11 +71,10 @@
  *   the current thread, even the main/GUI one.
  * - The #DonnaTask:priority is a writable property also to be used by the task
  *   manager, and that can be changed even while the task is running.
- *FIXME: function does not exists!
- * - donna_task_set_autostart() is also aimed at the task manager: if false, the
- *   task's initial state will be %DONNA_TASK_STOPPED (instead of
+ * - donna_task_set_autostart() is also aimed at the task manager: if %FALSE,
+ *   the task's initial state will be %DONNA_TASK_STOPPED (instead of
  *   %DONNA_TASK_WAITING) and the task manager will therefore not automatically
- *   start the task. It obviously has no effect on "internal" task.
+ *   start the task. It obviously has no effect on "internal" tasks.
  * - donna_task_set_desc() and donna_task_take_desc() both allow to set the
  *   task's description, to be shown by the task manager (and in error/debugging
  *   messages). The caller can also use donna_task_prefix_desc() to add a prefix
@@ -1391,6 +1390,67 @@ donna_task_run (DonnaTask *task)
         /* remove our reference on task */
         g_object_unref (task);
     }
+}
+
+/**
+ * donna_task_set_autostart:
+ * @task: Task to set autostart on
+ * @autostart: whether to enable or disable autostart
+ *
+ * When set, tasks have their ::state set to %DONNA_TASK_WAITING so the task
+ * manager can start them as soon as possible; otherwise it's set to
+ * %DONNA_TASK_STOPPED and a manual intervention is required.
+ *
+ * This will return %TRUE is @task's property ::state either was already set as
+ * needed, or was just changed, which can only happen if the previous value
+ * of ::state was either %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED.
+ * Else, %FALSE will be returned.
+ *
+ * Note that autostart is a feature that only applies to task handled by the
+ * task manager, i.e. with a ::visibility of %DONNA_TASK_VISIBILITY_PULIC
+ *
+ * Returns: %TRUE if @task's ::state was (just/already) set to
+ * %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED (based on @autostart)
+ */
+gboolean
+donna_task_set_autostart (DonnaTask          *task,
+                          gboolean            autostart)
+{
+    DonnaTaskPrivate *priv;
+    /* 2 == changed (need to notify); 1 == already there; 0 == fail */
+    gint ret = 2;
+
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    priv = task->priv;
+
+    LOCK_TASK (task);
+
+    if (autostart)
+    {
+        if (priv->state == DONNA_TASK_STOPPED)
+            priv->state = DONNA_TASK_WAITING;
+        else if (priv->state == DONNA_TASK_WAITING)
+            ret = 1;
+        else
+            ret = 0;
+    }
+    else
+    {
+        if (priv->state == DONNA_TASK_WAITING)
+            priv->state = DONNA_TASK_STOPPED;
+        else if (priv->state == DONNA_TASK_STOPPED)
+            ret = 1;
+        else
+            ret = 0;
+    }
+
+    UNLOCK_TASK (task);
+
+    /* notify change of state (in main thread) */
+    if (ret == 2)
+        notify_prop (task, PROP_STATE);
+
+    return ret > 0;
 }
 
 /**

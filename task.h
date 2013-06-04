@@ -137,6 +137,8 @@ const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);
 void                donna_task_prepare          (DonnaTask          *task);
 void                donna_task_run              (DonnaTask          *task);
+gboolean            donna_task_set_autostart    (DonnaTask          *task,
+                                                 gboolean            autostart);
 void                donna_task_pause            (DonnaTask          *task);
 void                donna_task_resume           (DonnaTask          *task);
 void                donna_task_cancel           (DonnaTask          *task);
