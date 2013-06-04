@@ -3,10 +3,15 @@
 #include <ctype.h>
 #include "command.h"
 #include "treeview.h"
+#include "task-manager.h"
 #include "macros.h"
 #include "debug.h"
 
 static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_task_set_state                  (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_task_toggle                     (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_activate_row               (DonnaTask *task,
                                                              GPtrArray *args);
@@ -41,6 +46,22 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_node_activate
+    },
+    {
+        .name           = "task_set_state",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_task_set_state
+    },
+    {
+        .name           = "task_toggle",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_NODE },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_task_toggle
     },
     {
         .name           = "tree_activate_row",
@@ -741,6 +762,97 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
     g_object_unref (tree);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_task_set_state (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaTaskState state;
+
+    if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
+    {
+        gchar *fl = donna_node_get_full_location (args->pdata[1]);
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Command 'task_set_state' cannot be used on '%s', only works on node in domain 'task'",
+                fl);
+        g_free (fl);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (streq (args->pdata[2], "run"))
+        state = DONNA_TASK_RUNNING;
+    else if (streq (args->pdata[2], "pause"))
+        state = DONNA_TASK_PAUSED;
+    else if (streq (args->pdata[2], "cancel"))
+        state = DONNA_TASK_CANCELLED;
+    else if (streq (args->pdata[2], "stop"))
+        state = DONNA_TASK_STOPPED;
+    else if (streq (args->pdata[2], "wait"))
+        state = DONNA_TASK_WAITING;
+    else
+    {
+        gchar *d = donna_node_get_name (args->pdata[1]);
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Invalid state for task '%s': '%s' "
+                "Must be 'run', 'pause', 'cancel', 'stop' or 'wait'",
+                d, args->pdata[2]);
+        g_free (d);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_task_manager_set_state (
+                donna_app_get_task_manager (args->pdata[3]),
+                args->pdata[1], state, &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_task_toggle (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaTask *t;
+
+    if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
+    {
+        gchar *fl = donna_node_get_full_location (args->pdata[1]);
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Command 'task_toggle' cannot be used on '%s', only works on node in domain 'task'",
+                fl);
+        g_free (fl);
+        return DONNA_TASK_FAILED;
+    }
+
+    t = donna_node_trigger_task (args->pdata[1], &err);
+    if (!t)
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (args->pdata[2], t);
+    donna_task_wait_for_it (t);
+
+    if (donna_task_get_state (t) != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+            donna_task_take_error (task_for_ret_err (), g_error_copy (err));
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
+
+    g_object_unref (t);
     return DONNA_TASK_DONE;
 }
 
