@@ -2697,7 +2697,78 @@ struct node_removed_data
 {
     DonnaTreeView   *tree;
     DonnaNode       *node;
+    gchar           *location;
 };
+
+static void
+free_node_removed_data (struct node_removed_data *data)
+{
+    g_object_unref (data->node);
+    g_free (data->location);
+    g_free (data);
+}
+
+static void
+list_go_up_cb (DonnaTask                *task,
+               gboolean                  timeout_called,
+               struct node_removed_data *data)
+{
+    GError *err = NULL;
+    DonnaTask *t;
+    gchar *s;
+
+    if (!task)
+        data->location = donna_node_get_location (data->node);
+    else if (donna_task_get_state (task) == DONNA_TASK_DONE)
+    {
+        DonnaNode *node;
+
+        node = g_value_get_object (donna_task_get_return_value (task));
+        if (!donna_tree_view_set_location (data->tree, node, &err))
+        {
+            gchar *fl = donna_node_get_full_location (data->node);
+            donna_app_show_error (data->tree->priv->app, err,
+                    "Treeview '%s': Failed to go to '%s' (as parent of '%s')",
+                    data->tree->priv->name, data->location, fl);
+            g_free (fl);
+        }
+        free_node_removed_data (data);
+        return;
+    }
+
+    if (streq (data->location, "/"))
+    {
+        gchar *fl = donna_node_get_full_location (data->node);
+        donna_app_show_error (data->tree->priv->app, err,
+                "Treeview '%s': Failed to go to any parent of '%s'",
+                data->tree->priv->name, fl);
+        g_free (fl);
+        free_node_removed_data (data);
+        return;
+    }
+
+    /* location can't be "/" since root can't be removed */
+    s = strrchr (data->location, '/');
+    if (s == data->location)
+        ++s;
+    *s = '\0';
+
+    t = donna_provider_get_node_task (donna_node_peek_provider (data->node),
+            data->location, &err);
+    if (!t)
+    {
+        gchar *fl = donna_node_get_full_location (data->node);
+        donna_app_show_error (data->tree->priv->app, err,
+                "Treeview '%s': Failed to go to a parent of '%s'",
+                data->tree->priv->name, fl);
+        g_free (fl);
+        free_node_removed_data (data);
+        return;
+    }
+    donna_task_set_callback (t, (task_callback_fn) list_go_up_cb, data,
+            (GDestroyNotify) free_node_removed_data);
+    donna_app_run_task (data->tree->priv->app, t);
+}
 
 static gboolean
 real_node_removed_cb (struct node_removed_data *data)
@@ -2705,6 +2776,22 @@ real_node_removed_cb (struct node_removed_data *data)
     DonnaTreeViewPrivate *priv = data->tree->priv;
     GSList *list;
     GSList *next;
+
+    if (!is_tree (data->tree) && priv->location == data->node)
+    {
+        if (donna_provider_get_flags (donna_node_peek_provider (data->node))
+                & DONNA_PROVIDER_FLAG_FLAT)
+        {
+            gchar *fl = donna_node_get_full_location (data->node);
+            donna_app_show_error (priv->app, NULL,
+                    "Treeview '%s': Current location (%s) has been removed",
+                    priv->name, fl);
+            g_free (fl);
+            goto free;
+        }
+        list_go_up_cb (NULL, FALSE, data);
+        return FALSE;
+    }
 
     list = g_hash_table_lookup (priv->hashtable, data->node);
     if (!list)
@@ -2720,8 +2807,7 @@ real_node_removed_cb (struct node_removed_data *data)
     }
 
 free:
-    g_object_unref (data->node);
-    g_free (data);
+    free_node_removed_data (data);
     /* don't repeat */
     return FALSE;
 }
@@ -2734,7 +2820,7 @@ node_removed_cb (DonnaProvider  *provider,
     struct node_removed_data *data;
 
     /* we might not be in the main thread, but we need to be */
-    data = g_new (struct node_removed_data, 1);
+    data = g_new0 (struct node_removed_data, 1);
     data->tree       = tree;
     data->node       = g_object_ref (node);
     g_main_context_invoke (NULL, (GSourceFunc) real_node_removed_cb, data);
@@ -2816,7 +2902,21 @@ real_new_child_cb (struct new_child_data *data)
 
     if (!is_tree (data->tree))
     {
-        add_node_to_tree (data->tree, NULL, data->child, NULL);
+        gboolean was_empty = g_hash_table_size (priv->hashtable) == 0;
+        if (add_node_to_tree (data->tree, NULL, data->child, NULL) && was_empty)
+        {
+            GtkWidget *w;
+
+            /* remove the "location empty" message */
+            priv->draw_state = DRAW_NOTHING;
+
+            /* we give the treeview the focus, to ensure the focused row is set,
+             * hence the class focused-row applied */
+            w = gtk_widget_get_toplevel ((GtkWidget *) data->tree);
+            w = gtk_window_get_focus ((GtkWindow *) w);
+            gtk_widget_grab_focus ((GtkWidget *) data->tree);
+            gtk_widget_grab_focus (w);
+        }
         goto free;
     }
 
@@ -5486,6 +5586,8 @@ node_get_children_list_cb (DonnaTask                            *task,
     const GValue *value;
     GPtrArray *arr;
     guint i;
+    DonnaProvider *provider;
+    DonnaProvider *provider_location;
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
@@ -5531,6 +5633,7 @@ node_get_children_list_cb (DonnaTask                            *task,
      * arrangement) */
     if (priv->location)
     {
+        provider_location = donna_node_get_provider (priv->location);
         domain = donna_node_get_domain (priv->location);
         /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
         if (strlen (domain) <= 56)
@@ -5547,6 +5650,8 @@ node_get_children_list_cb (DonnaTask                            *task,
         }
         g_object_unref (priv->location);
     }
+    else
+        provider_location = NULL;
     priv->location = g_object_ref (data->node);
     domain = donna_node_get_domain (priv->location);
     /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
@@ -5644,6 +5749,65 @@ node_get_children_list_cb (DonnaTask                            *task,
         /* show the "location empty" message */
         priv->draw_state = DRAW_EMPTY;
         gtk_widget_queue_draw ((GtkWidget *) data->tree);
+    }
+
+    /* connect to provider's signals of current location (if needed) */
+    provider = donna_node_peek_provider (priv->location);
+    if (provider != provider_location)
+    {
+        struct provider_signals *ps;
+        gint done = (provider_location) ? 0 : 1;
+        gint found = -1;
+
+        for (i = 0; i < priv->providers->len; ++i)
+        {
+            ps = priv->providers->pdata[i];
+
+            if (ps->provider == provider)
+            {
+                found = i;
+                ps->nb_nodes++;
+                ++done;
+            }
+            else if (ps->provider == provider_location)
+            {
+                if (--ps->nb_nodes == 0)
+                    /* this will disconnect handlers from provider & free memory */
+                    g_ptr_array_remove_index_fast (priv->providers, i--);
+                else
+                {
+                    /* still connected for children listed on list, but not the
+                     * current location. So, we can disconnect from new_child */
+                    g_signal_handler_disconnect (ps->provider,
+                            ps->sid_node_new_child);
+                    ps->sid_node_new_child = 0;
+                }
+                ++done;
+            }
+
+            if (done == 2)
+                break;
+        }
+        if (found < 0)
+        {
+            ps = g_new0 (struct provider_signals, 1);
+            ps->provider = g_object_ref (provider);
+            ps->nb_nodes = 1;
+            ps->sid_node_updated = g_signal_connect (provider, "node-updated",
+                    G_CALLBACK (node_updated_cb), data->tree);
+            ps->sid_node_removed = g_signal_connect (provider, "node-removed",
+                    G_CALLBACK (node_removed_cb), data->tree);
+
+            g_ptr_array_add (priv->providers, ps);
+        }
+        else
+            ps = priv->providers->pdata[found];
+        /* whether or not we created ps, we need to connect to new_child, since
+         * it's only useful for current location */
+        ps->sid_node_new_child = g_signal_connect (provider, "node-new-child",
+                G_CALLBACK (node_new_child_cb), data->tree);
+        if (provider_location)
+            g_object_unref (provider_location);
     }
 
     /* emit signal */
