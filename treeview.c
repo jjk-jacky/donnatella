@@ -3622,7 +3622,6 @@ set_second_sort_column (DonnaTreeView       *tree,
     gtk_tree_sortable_set_sort_column_id (sortable,
             GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
     gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
-
 }
 
 /* we have a "special" handling of clicks on column headers. First off, we
@@ -4176,7 +4175,24 @@ next:
         g_free (_col->name);
         donna_columntype_free_data (_col->ct, _col->ct_data);
         g_object_unref (_col->ct);
+#ifndef GTK_IS_JJK
+        /* "Fix" a bug in GTK that doesn't take care of the button properly.
+         * This is a memory leak (button doesn't get unref-d/finalized), but
+         * could also cause a few issues for us:
+         * - it could lead to a column header (the button) not having its hover
+         *   effect done on the right area, still using info from an old
+         *   button. Could look bad, could also make it impossible to click a
+         *   column!
+         * - On button-release-event the wrong signal handler would get called,
+         *   leading to use of a free-d memory, and segfault.
+         */
+        GtkWidget *btn;
+        btn = gtk_tree_view_column_get_button (_col->column);
+#endif
         gtk_tree_view_remove_column (treev, _col->column);
+#ifndef GTK_IS_JJK
+        gtk_widget_unparent (btn);
+#endif
         g_slice_free (struct column, _col);
         list = g_slist_delete_link (list, list);
     }
