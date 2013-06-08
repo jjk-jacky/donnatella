@@ -32,6 +32,26 @@ typedef enum
         DONNA_CONFIG_OPTION_TYPE_CATEGORY,
 } DonnaConfigOptionType;
 
+typedef enum
+{
+    DONNA_CONFIG_EXTRA_TYPE_LIST,
+    DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+} DonnaConfigExtraType;
+
+typedef struct
+{
+    gint     value;
+    gchar   *desc;
+} DonnaConfigExtraListInt;
+
+typedef gchar       DonnaConfigExtraList;
+
+typedef struct
+{
+    DonnaConfigExtraType type;
+    gpointer            *values;
+} DonnaConfigExtra;
+
 struct _DonnaProviderConfig
 {
     GObject parent;
@@ -57,6 +77,10 @@ gboolean    donna_config_load_config_def        (DonnaConfig            *config,
 gboolean    donna_config_load_config            (DonnaConfig            *config,
                                                  gchar                  *data);
 gchar *     donna_config_export_config          (DonnaConfig            *config);
+const DonnaConfigExtra *
+            donna_config_get_extras             (DonnaConfig            *config,
+                                                 const gchar            *extra,
+                                                 GError                **error);
 gboolean    donna_config_has_boolean            (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);

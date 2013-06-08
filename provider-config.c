@@ -40,24 +40,6 @@ struct parsed_data
     struct parsed_data  *next;
 };
 
-enum extra_type
-{
-    EXTRA_TYPE_LIST,
-    EXTRA_TYPE_LIST_INT,
-};
-
-struct extra_list_int
-{
-    gint     value;
-    gchar   *desc;
-};
-
-struct extra
-{
-    enum extra_type type;
-    gpointer        values;
-};
-
 struct option
 {
     /* name of the option */
@@ -127,7 +109,7 @@ static DonnaTask *      provider_config_get_node_parent_task (
                                             GError             **error);
 
 
-static void free_extra  (struct extra  *extra);
+static void free_extra  (DonnaConfigExtra  *extra);
 
 static void
 provider_config_provider_init (DonnaProviderInterface *interface)
@@ -226,17 +208,17 @@ config_option_removed (DonnaConfig *config, const gchar *name)
 }
 
 static void
-free_extra (struct extra *extra)
+free_extra (DonnaConfigExtra *extra)
 {
     if (!extra)
         return;
-    if (extra->type == EXTRA_TYPE_LIST)
-        g_strfreev (extra->values);
+    if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+        g_strfreev ((DonnaConfigExtraList **) extra->values);
     else
     {
-        struct extra_list_int **values;
+        DonnaConfigExtraListInt **values;
 
-        for (values = extra->values; *values; ++values)
+        for (values = (DonnaConfigExtraListInt **) extra->values; *values; ++values)
         {
             g_free ((*values)->desc);
             g_free (*values);
@@ -611,8 +593,8 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
         if (streq (s, "list"))
         {
             struct parsed_data *parsed;
-            struct extra *extra;
-            gchar **values;
+            DonnaConfigExtra *extra;
+            DonnaConfigExtraList **values;
             gint c;
 
             if (g_hash_table_contains (priv->extras, section->name))
@@ -621,7 +603,8 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
                 continue;
             }
 
-            values = g_new0 (gchar *, get_count (section->value, "value") + 1);
+            values = g_new0 (DonnaConfigExtraList *,
+                    get_count (section->value, "value") + 1);
             for (parsed = section->value, c = 0; parsed; parsed = parsed->next)
             {
                 if (streq (parsed->name, "value"))
@@ -631,9 +614,9 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
                             parsed->name, s, section->name);
             }
 
-            extra = g_new (struct extra, 1);
-            extra->type = EXTRA_TYPE_LIST;
-            extra->values = values;
+            extra = g_new (DonnaConfigExtra, 1);
+            extra->type = DONNA_CONFIG_EXTRA_TYPE_LIST;
+            extra->values = (gpointer) values;
 
             g_hash_table_insert (priv->extras,
                     str_chunk (priv, section->name),
@@ -642,8 +625,8 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
         else if (streq (s, "list-int"))
         {
             struct parsed_data *parsed;
-            struct extra *extra;
-            struct extra_list_int **values;
+            DonnaConfigExtra *extra;
+            DonnaConfigExtraListInt **values;
             gint c;
 
             if (g_hash_table_contains (priv->extras, section->name))
@@ -652,19 +635,19 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
                 continue;
             }
 
-            values = g_new0 (struct extra_list_int *,
+            values = g_new0 (DonnaConfigExtraListInt *,
                     get_count (section->value, "value") + 1);
             for (parsed = section->value, c = 0; parsed; parsed = parsed->next)
             {
                 if (streq (parsed->name, "value"))
                 {
-                    struct extra_list_int *v;
+                    DonnaConfigExtraListInt *v;
                     gchar *sep;
 
                     sep = strchr (parsed->value, ':');
                     if (!sep)
                     {
-                        struct extra_list_int **v;
+                        DonnaConfigExtraListInt **v;
 
                         g_warning ("Invalid format for value '%s' of extra '%s', "
                                 "skipping entire definition",
@@ -679,7 +662,7 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
                         break;
                     }
 
-                    v = g_new0 (struct extra_list_int, 1);
+                    v = g_new0 (DonnaConfigExtraListInt, 1);
                     *sep = '\0';
                     sscanf (parsed->value, "%d", &v->value);
                     *sep = ':';
@@ -694,9 +677,9 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
             if (!values)
                 continue;
 
-            extra = g_new (struct extra, 1);
-            extra->type = EXTRA_TYPE_LIST_INT;
-            extra->values = values;
+            extra = g_new (DonnaConfigExtra, 1);
+            extra->type = DONNA_CONFIG_EXTRA_TYPE_LIST_INT;
+            extra->values = (gpointer) values;
 
             g_hash_table_insert (priv->extras,
                     str_chunk (priv, section->name),
@@ -832,23 +815,23 @@ next:
 }
 
 static gboolean
-is_extra_value (struct extra *extra, gpointer value)
+is_extra_value (DonnaConfigExtra *extra, gpointer value)
 {
-    if (extra->type == EXTRA_TYPE_LIST)
+    if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
     {
         gchar **v;
         gchar *val = * (gchar **) value;
 
-        for (v = extra->values; *v; ++v)
+        for (v = (DonnaConfigExtraList **) extra->values; *v; ++v)
             if (streq (*v, val))
                 return TRUE;
     }
-    else /* EXTRA_TYPE_LIST_INT */
+    else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
     {
-        struct extra_list_int **v;
+        DonnaConfigExtraListInt **v;
         gint val = * (gint *) value;
 
-        for (v = extra->values; *v; ++v)
+        for (v = (DonnaConfigExtraListInt **) extra->values; *v; ++v)
             if ((*v)->value == val)
                 return TRUE;
     }
@@ -912,7 +895,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
             s = strchr (parsed->name, ':');
             if (s)
             {
-                struct extra *extra;
+                DonnaConfigExtra *extra;
 
                 *s = '\0';
                 extra = g_hash_table_lookup (priv->extras, ++s);
@@ -925,7 +908,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 }
 
                 option = g_slice_new0 (struct option);
-                if (extra->type == EXTRA_TYPE_LIST)
+                if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
                 {
                     if (!is_extra_value (extra, &parsed->value))
                     {
@@ -938,7 +921,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     g_value_init (&option->value, G_TYPE_STRING);
                     g_value_set_string (&option->value, parsed->value);
                 }
-                else /* EXTRA_TYPE_LIST_INT */
+                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
                 {
                     gint v;
 
@@ -1218,6 +1201,28 @@ donna_config_export_config (DonnaConfig *config)
 }
 
 /*** ACCESSING CONFIGURATION ***/
+
+const DonnaConfigExtra *
+donna_config_get_extras (DonnaConfig            *config,
+                         const gchar            *name,
+                         GError                **error)
+{
+    DonnaProviderConfigPrivate *priv;
+    DonnaConfigExtra *extra;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), NULL);
+    priv = config->priv;
+
+    extra = g_hash_table_lookup (priv->extras, name);
+    if (!extra)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
+                "No extra '%s' found", name);
+        return NULL;
+    }
+
+    return extra;
+}
 
 /* assumes reader lock on config */
 static GNode *
