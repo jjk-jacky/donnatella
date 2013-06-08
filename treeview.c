@@ -3899,6 +3899,24 @@ load_arrangement (DonnaTreeView     *tree,
                 == GTK_SORT_ASCENDING) ? DONNA_SORT_ASC : DONNA_SORT_DESC;
     }
 
+    /* because we'll "re-fill" priv->columns, we can't keep the sort columns set
+     * up, as calling set_sort_column() or set_second_sort_column() would risk
+     * segfaulting, when get_column_by_column() would return NULL (because the
+     * old/current columns aren't in priv->columns anymore).
+     * So, we unset them both, so they can be set properly */
+    if (priv->second_sort_column)
+    {
+        gtk_widget_set_visible (get_column_by_column (tree,
+                    priv->second_sort_column)->second_arrow,
+                FALSE);
+        priv->second_sort_column = NULL;
+    }
+    if (priv->sort_column)
+    {
+        gtk_tree_view_column_set_sort_indicator (priv->sort_column, FALSE);
+        priv->sort_column = NULL;
+    }
+
     list = priv->columns;
     priv->columns = NULL;
     priv->main_column = NULL;
