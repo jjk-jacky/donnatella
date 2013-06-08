@@ -1357,7 +1357,6 @@ _get_option (DonnaConfig *config,
 #define _has_opt(gtype)    do {             \
     struct option *option;                  \
     va_list va_arg;                         \
-    gboolean ret;                           \
                                             \
     va_start (va_arg, fmt);                 \
     option = _get_option (config, gtype,    \
@@ -1409,7 +1408,6 @@ donna_config_has_category (DonnaConfig *config,
 #define _get_opt(gtype, get_fn)  do {                   \
     struct option *option;                              \
     va_list va_arg;                                     \
-    gboolean ret;                                       \
                                                         \
     va_start (va_arg, fmt);                             \
     option = _get_option (config, gtype, TRUE,          \
@@ -1567,8 +1565,6 @@ _get_option_column (DonnaConfig  *config,
     GNode *node;
     GNode *child;
     GValue *v;
-    gchar buf[255], *b = buf;
-    gsize len;
     gsize len_col = (col_name) ? strlen (col_name) : 0;
     gsize len_opt = strlen (opt_name);
     struct option *option;
