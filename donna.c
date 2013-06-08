@@ -17,6 +17,7 @@
 #include "columntype-text.h"
 #include "columntype-label.h"
 #include "columntype-progress.h"
+#include "columntype-value.h"
 #include "node.h"
 #include "filter.h"
 #include "macros.h"
@@ -42,6 +43,7 @@ enum
     COL_TYPE_TEXT,
     COL_TYPE_LABEL,
     COL_TYPE_PROGRESS,
+    COL_TYPE_VALUE,
     NB_COL_TYPES
 };
 
@@ -241,6 +243,8 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_LABEL].type = DONNA_TYPE_COLUMNTYPE_LABEL;
     priv->column_types[COL_TYPE_PROGRESS].name = "progress";
     priv->column_types[COL_TYPE_PROGRESS].type = DONNA_TYPE_COLUMNTYPE_PROGRESS;
+    priv->column_types[COL_TYPE_VALUE].name = "value";
+    priv->column_types[COL_TYPE_VALUE].type = DONNA_TYPE_COLUMNTYPE_VALUE;
 
     priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", donna, NULL);
 
