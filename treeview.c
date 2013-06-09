@@ -2700,6 +2700,52 @@ done:
 }
 
 static void
+row_changed_cb (GtkTreeModel    *model,
+                GtkTreePath     *path,
+                GtkTreeIter     *iter,
+                DonnaTreeView   *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeIter it;
+    gboolean resort = FALSE;
+    gint wrong;
+
+    /* row was updated, refresh was done, but there's no auto-resort. So let's
+     * do it ourself */
+    if (!priv->sort_column)
+        return;
+
+    wrong = (gtk_tree_view_column_get_sort_order (priv->sort_column)
+            == GTK_SORT_DESCENDING) ? -1 : 1;
+
+    it = *iter;
+    if (gtk_tree_model_iter_previous (model, &it))
+        /* should previous iter be switched? */
+        if (sort_func (model, &it, iter, priv->sort_column) == wrong)
+            resort = TRUE;
+
+    it = *iter;
+    if (!resort && gtk_tree_model_iter_next (model, &it))
+        /* should next iter be switched? */
+        if (sort_func (model, iter, &it, priv->sort_column) == wrong)
+            resort = TRUE;
+
+    if (resort)
+    {
+        GtkTreeSortable *sortable;
+        GtkSortType cur_sort_order;
+        gint cur_sort_id;
+
+        /* trigger a resort */
+        sortable = (GtkTreeSortable *) priv->store;
+        gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
+        gtk_tree_sortable_set_sort_column_id (sortable,
+                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
+        gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
+    }
+}
+
+static void
 node_has_children_cb (DonnaTask                 *task,
                       gboolean                   timeout_called,
                       struct node_children_data *data)
@@ -8725,6 +8771,9 @@ donna_tree_view_new (DonnaApp    *app,
     /* to show/hide .files, set Visual Filters, etc */
     donna_tree_store_set_visible_func (priv->store,
             (store_visible_fn) visible_func, tree, NULL);
+    /* because on property update the refesh does only that, i.e. there's no
+     * auto-resort */
+    g_signal_connect (model, "row-changed", (GCallback) row_changed_cb, tree);
     /* add to tree */
     gtk_tree_view_set_model (treev, model);
 #ifdef GTK_IS_JJK
