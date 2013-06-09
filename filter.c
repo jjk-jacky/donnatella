@@ -4,6 +4,7 @@
 #include "filter.h"
 #include "app.h"
 #include "columntype.h"
+#include "macros.h"
 
 enum
 {
@@ -51,6 +52,8 @@ struct _DonnaFilterPrivate
 {
     gchar           *filter;
     DonnaApp        *app;
+    gulong           option_set_sid;
+    gulong           option_removed_sid;
     struct element  *element;
 };
 
@@ -188,13 +191,62 @@ static void
 donna_filter_finalize (GObject *object)
 {
     DonnaFilterPrivate *priv;
+    DonnaConfig *config;
 
     priv = DONNA_FILTER (object)->priv;
+    config = donna_app_peek_config (priv->app);
+    if (priv->option_set_sid > 0)
+        g_signal_handler_disconnect (config, priv->option_set_sid);
+    if (priv->option_removed_sid > 0)
+        g_signal_handler_disconnect (config, priv->option_removed_sid);
     g_object_unref (priv->app);
     g_free (priv->filter);
     free_element (priv->element);
 
     G_OBJECT_CLASS (donna_filter_parent_class)->finalize (object);
+}
+
+static gboolean
+element_need_recompile (struct element *element, const gchar *option)
+{
+    for ( ; element; element = element->next)
+    {
+        gboolean ret;
+
+        if (element->is_block)
+        {
+            struct block *block = element->data;
+            gchar buf[255], *b = buf;
+
+            if (snprintf (buf, 255, "/columns/%s/type", block->col_name) >= 255)
+                b = g_strdup_printf ("/columns/%s/type", block->col_name);
+            ret = streq (option, b);
+            if (b != buf)
+                g_free (b);
+        }
+        else
+            ret = element_need_recompile (element->data, option);
+
+        if (ret)
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+static void
+option_cb (DonnaConfig *config, const gchar *option, DonnaFilter *filter)
+{
+    DonnaFilterPrivate *priv = filter->priv;
+
+    if (!streqn (option, "/columns/", 9))
+        return;
+
+    if (element_need_recompile (priv->element, option))
+    {
+        free_element (priv->element);
+        priv->element = NULL;
+    }
 }
 
 static inline DonnaColumnType *
@@ -206,6 +258,14 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
     gchar *type = NULL;
 
     config = donna_app_peek_config (priv->app);
+
+    if (priv->option_set_sid == 0)
+        priv->option_set_sid = g_signal_connect (config, "option-set",
+                (GCallback) option_cb, filter);
+    if (priv->option_removed_sid == 0)
+        priv->option_removed_sid = g_signal_connect (config, "option-removed",
+                (GCallback) option_cb, filter);
+
     if (donna_config_get_string (config, &type, "columns/%s/type", col_name))
         ct = donna_app_get_columntype (priv->app, type);
     else
