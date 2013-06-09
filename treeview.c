@@ -205,8 +205,9 @@ struct _DonnaTreeViewPrivate
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
 
-    /* main column is the one, w/out full_row_select, that can select rows.
-     * In mode tree it's also the expander one (in list expander is hidden) */
+    /* main column is the one where the SELECT_HIGHLIGHT_COLUMN effect is
+     * applied to. In mode tree it's also the expander one (in list expander is
+     * hidden) */
     GtkTreeViewColumn   *main_column;
 
     /* main/second sort columns */
@@ -4030,9 +4031,8 @@ load_arrangement (DonnaTreeView     *tree,
         }
         last_column = expander_column;
     }
-    else
-        /* so we can make the first column to use it the expander column */
-        ctname = donna_app_get_columntype (priv->app, "name");
+    /* to set default for main (tree: & expander) column */
+    ctname = donna_app_get_columntype (priv->app, "name");
 
     col = arrangement->columns;
     /* just to be safe, but this function should only be called with arrangement
@@ -4392,6 +4392,7 @@ next:
         *e = ',';
         col = e + 1;
     }
+    g_object_unref (ctname);
 
     if (!is_tree (tree) && !priv->blank_column)
     {
