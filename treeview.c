@@ -290,7 +290,6 @@ struct _DonnaTreeViewPrivate
     guint                node_types         : 2;
     guint                show_hidden        : 1;
     guint                sort_groups        : 2; /* containers (always) first/mixed */
-    guint                full_row_select    : 1;
     guint                select_highlight   : 2;
     /* mode Tree */
     guint                is_minitree        : 1;
@@ -1073,17 +1072,6 @@ load_config (DonnaTreeView *tree)
         priv->sort_groups = val;
         donna_config_set_int (config, val,
                 "treeviews/%s/sort_groups", priv->name);
-    }
-
-    if (donna_config_get_boolean (config, (gboolean *) &val,
-                "treeviews/%s/full_row_select", priv->name))
-        priv->full_row_select = (gboolean) val;
-    else
-    {
-        /* set default */
-        val = priv->full_row_select = FALSE;
-        donna_config_set_boolean (config, (gboolean) val,
-                "treeviews/%s/full_row_select", priv->name);
     }
 
     if (donna_config_get_int (config, &val,
