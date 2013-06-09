@@ -2915,7 +2915,7 @@ real_new_child_cb (struct new_child_data *data)
             w = gtk_widget_get_toplevel ((GtkWidget *) data->tree);
             w = gtk_window_get_focus ((GtkWindow *) w);
             gtk_widget_grab_focus ((GtkWidget *) data->tree);
-            gtk_widget_grab_focus (w);
+            gtk_widget_grab_focus ((w) ? w : (GtkWidget *) data->tree);
         }
         goto free;
     }
@@ -5760,7 +5760,7 @@ node_get_children_list_cb (DonnaTask                            *task,
         w = gtk_widget_get_toplevel ((GtkWidget *) data->tree);
         w = gtk_window_get_focus ((GtkWindow *) w);
         gtk_widget_grab_focus ((GtkWidget *) data->tree);
-        gtk_widget_grab_focus (w);
+        gtk_widget_grab_focus ((w) ? w : (GtkWidget *) data->tree);
     }
     else
     {
