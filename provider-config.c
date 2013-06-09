@@ -2472,6 +2472,8 @@ node_prop_setter (DonnaTask     *task,
     struct option *option;
     GValue v = G_VALUE_INIT;
     gchar *location;
+    gchar *fl;
+    gchar *old;
     gboolean is_set_value;
 
     is_set_value = streq (name, "option-value");
@@ -2526,13 +2528,24 @@ node_prop_setter (DonnaTask     *task,
             /* set the new value */
             g_value_copy (value, &option->value);
         else
+        {
             /* rename option */
+            old = get_option_full_name (priv->root, gnode);
             option->name = str_chunk (priv, g_value_get_string (value));
+        }
         g_rw_lock_writer_unlock (&priv->lock);
+
+        if (!is_set_value)
+        {
+            config_option_removed ((DonnaConfig *) provider, old);
+            g_free (old);
+        }
+        fl = get_option_full_name (priv->root, gnode);
+        config_option_set ((DonnaConfig *) provider, fl);
 
         /* update the node */
         g_value_init (&v, G_TYPE_STRING);
-        g_value_take_string (&v, get_option_full_name (priv->root, gnode));
+        g_value_take_string (&v, fl);
         donna_node_set_property_value (node, "location", &v);
         g_value_unset (&v);
         donna_node_set_property_value (node, name, value);
