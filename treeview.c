@@ -2796,21 +2796,26 @@ free:
     free_node_children_data (data);
 }
 
-static void
-node_updated_cb (DonnaProvider  *provider,
-                 DonnaNode      *node,
-                 const gchar    *name,
-                 DonnaTreeView  *tree)
+struct node_updated_data
 {
+    DonnaTreeView   *tree;
+    DonnaNode       *node;
+    gchar           *name;
+};
+
+static gboolean
+real_node_updated_cb (struct node_updated_data *data)
+{
+    DonnaTreeView *tree = data->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model;
     GSList *list, *l;
     guint i;
 
     /* do we have this node on tree? */
-    l = g_hash_table_lookup (priv->hashtable, node);
+    l = g_hash_table_lookup (priv->hashtable, data->node);
     if (!l)
-        return;
+        goto done;
 
     /* should that property cause a refresh? */
     for (i = 0; i < priv->col_props->len; ++i)
@@ -2818,32 +2823,32 @@ node_updated_cb (DonnaProvider  *provider,
         struct col_prop *cp;
 
         cp = &g_array_index (priv->col_props, struct col_prop, i);
-        if (streq (name, cp->prop))
+        if (streq (data->name, cp->prop))
             break;
     }
     if (i >= priv->col_props->len)
-        return;
+        goto done;
 
     /* should we ignore this prop/node combo ? See refresh_node_prop_cb */
     g_mutex_lock (&priv->refresh_node_props_mutex);
     for (list = priv->refresh_node_props; list; list = list->next)
     {
-        struct refresh_node_props_data *data = list->data;
+        struct refresh_node_props_data *d = list->data;
 
-        if (data->node == node)
+        if (d->node == data->node)
         {
-            for (i = 0; i < data->props->len; ++i)
+            for (i = 0; i < d->props->len; ++i)
             {
-                if (streq (name, data->props->pdata[i]))
+                if (streq (data->name, d->props->pdata[i]))
                     break;
             }
-            if (i < data->props->len)
+            if (i < d->props->len)
                 break;
         }
     }
     g_mutex_unlock (&priv->refresh_node_props_mutex);
     if (list)
-        return;
+        goto done;
 
     /* trigger refresh on all rows for that node */
     model = GTK_TREE_MODEL (priv->store);
@@ -2856,6 +2861,29 @@ node_updated_cb (DonnaProvider  *provider,
         gtk_tree_model_row_changed (model, path, iter);
         gtk_tree_path_free (path);
     }
+
+done:
+    g_object_unref (data->node);
+    g_free (data->name);
+    g_free (data);
+    return FALSE;
+}
+
+static void
+node_updated_cb (DonnaProvider  *provider,
+                 DonnaNode      *node,
+                 const gchar    *name,
+                 DonnaTreeView  *tree)
+{
+    struct node_updated_data *data;
+
+    /* we might not be in the main thread, but we need to be */
+
+    data = g_new (struct node_updated_data, 1);
+    data->tree = tree;
+    data->node = g_object_ref (node);
+    data->name = g_strdup (name);
+    g_main_context_invoke (NULL, (GSourceFunc) real_node_updated_cb, data);
 }
 
 struct node_removed_data
