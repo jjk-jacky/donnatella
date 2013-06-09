@@ -187,8 +187,13 @@ struct column
 struct _DonnaTreeViewPrivate
 {
     DonnaApp            *app;
+    gulong               option_set_sid;
+    gulong               option_removed_sid;
+
+    /* tree name */
     gchar               *name;
 
+    /* tree store */
     DonnaTreeStore      *store;
     /* list of struct column */
     GSList              *columns;
@@ -343,6 +348,12 @@ gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
                                              gchar         *def_val);
 
 
+static inline struct column *
+                    get_column_by_column                (DonnaTreeView *tree,
+                                                         GtkTreeViewColumn *column);
+static inline struct column *
+                    get_column_by_name                  (DonnaTreeView *tree,
+                                                         const gchar *name);
 static inline void load_node_visuals                    (DonnaTreeView *tree,
                                                          GtkTreeIter   *iter,
                                                          DonnaNode     *node,
@@ -841,6 +852,163 @@ active_list_changed_cb (GObject         *object,
     g_object_unref (node);
 }
 
+struct option_data
+{
+    DonnaTreeView *tree;
+    gchar *option;
+};
+
+static gboolean
+real_option_cb (struct option_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    gboolean is_column = FALSE;
+    gchar buf[255], *b = buf;
+    gchar *opt;
+    GSList *l;
+    gsize len;
+
+    len = snprintf (buf, 255, "/treeviews/%s/", priv->name);
+    if (len >= 255)
+        b = g_strdup_printf ("/treeviews/%s/", priv->name);
+
+    if (streqn (data->option, b, len))
+    {
+        if (streqn (data->option + len, "columns/", 8))
+        {
+            opt = data->option + len + 8;
+            is_column = TRUE;
+        }
+        else
+        {
+            /* treeview option */
+        }
+    }
+    else
+    {
+        /* columns option */
+        opt = data->option + 9; /* 9 == strlen ("/columns/") */
+        is_column = TRUE;
+    }
+
+    if (is_column)
+    {
+        gchar *s;
+
+        s = strchr (opt, '/');
+        if (s)
+        {
+            struct column *_col;
+
+            /* is this change about a column we are using right now? */
+            *s = '\0';
+            _col = get_column_by_name (data->tree, opt);
+            *s = '/';
+            if (_col)
+            {
+                if (streq (s + 1, "title"))
+                {
+                    gchar *s = NULL;
+
+                    /* we know we will get a value, but it might not be from the
+                     * config changed that occured, since the value might be
+                     * overridden by current arrangement, etc */
+                    s = donna_config_get_string_column (
+                            donna_app_peek_config (priv->app),
+                            priv->name, _col->name,
+                            priv->arrangement->columns_options,
+                            NULL, "title", s);
+                    gtk_tree_view_column_set_title (_col->column, s);
+                    gtk_label_set_text ((GtkLabel *) _col->label, s);
+                    g_free (s);
+                }
+                else if (streq (s + 1, "width"))
+                {
+                    gint w = 0;
+
+                    /* we know we will get a value, but it might not be from the
+                     * config changed that occured, since the value might be
+                     * overridden by current arrangement, etc */
+                    w = donna_config_get_int_column (
+                            donna_app_peek_config (priv->app),
+                            priv->name, _col->name,
+                            priv->arrangement->columns_options,
+                            NULL, "width", w);
+                    gtk_tree_view_column_set_fixed_width (_col->column, w);
+                }
+                else
+                {
+                    DonnaColumnTypeNeed need;
+
+                    /* ask the ct if something needs to happen */
+                    need = donna_columntype_refresh_data (_col->ct,
+                            priv->name, _col->name,
+                            priv->arrangement->columns_options, &_col->ct_data);
+                    if (need & DONNA_COLUMNTYPE_NEED_RESORT)
+                    {
+                        GtkTreeSortable *sortable;
+                        gint cur_sort_id;
+                        GtkSortType cur_sort_order;
+
+                        /* trigger a resort */
+
+                        sortable = (GtkTreeSortable *) priv->store;
+                        gtk_tree_sortable_get_sort_column_id (sortable,
+                                &cur_sort_id, &cur_sort_order);
+                        gtk_tree_sortable_set_sort_column_id (sortable,
+                                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID,
+                                cur_sort_order);
+                        gtk_tree_sortable_set_sort_column_id (sortable,
+                                cur_sort_id, cur_sort_order);
+                    }
+                    if (need & DONNA_COLUMNTYPE_NEED_REDRAW)
+                        gtk_widget_queue_draw ((GtkWidget *) data->tree);
+                }
+            }
+        }
+    }
+
+    g_free (data);
+    return FALSE;
+}
+
+static void
+option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
+{
+    gchar buf[255], *b = buf;
+    gsize len;
+    gboolean match;
+
+    /* options we care about are ones for the tree (in "/treeviews/<NAME>") or
+     * for one of our columns:
+     * /treeviews/<NAME>/columns/<NAME>
+     * /columns/<NAME>
+     * This excludes options in the current arrangement, but that's
+     * okay/expected: arrangement are loaded/"created" on location change.
+     *
+     * Here we can only check if the option starts with "/treeviews/<NAME>" or
+     * "/columns/" and that's it, to loop through our columns we need the GTK
+     * lock, i.e. go in main thread */
+
+    len = snprintf (buf, 255, "/treeviews/%s/", tree->priv->name);
+    if (len >= 255)
+        b = g_strdup_printf ("/treeviews/%s/", tree->priv->name);
+
+    match = streqn (option, b, len) || streqn (option, "/columns/", 9);
+    if (b != buf)
+        g_free (b);
+
+    if (match)
+    {
+        struct option_data *data;
+
+        data = g_new (struct option_data, 1);
+        data->tree = tree;
+        data->option = g_strdup (option);
+        g_main_context_invoke (NULL, (GSourceFunc) real_option_cb, data);
+    }
+}
+
 static void
 load_config (DonnaTreeView *tree)
 {
@@ -1015,6 +1183,14 @@ load_config (DonnaTreeView *tree)
                     "treeviews/%s/focusing_click", priv->name);
         }
     }
+
+    /* listen to config changes */
+    if (priv->option_set_sid == 0)
+        priv->option_set_sid = g_signal_connect (config, "option-set",
+                (GCallback) option_cb, tree);
+    if (priv->option_removed_sid == 0)
+        priv->option_removed_sid = g_signal_connect (config, "option-removed",
+                (GCallback) option_cb, tree);
 }
 
 static gboolean
