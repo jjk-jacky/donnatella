@@ -1835,6 +1835,10 @@ donna_config_arr_load_columns (DonnaConfig            *config,
     arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
     arr->columns = g_value_dup_string (value);
 
+    get_child ("main_column", 11, STRING, FALSE);
+    if (child)
+        arr->main_column = g_value_dup_string (value);
+
     get_child ("columns_always", 14, BOOLEAN, TRUE);
     if (g_value_get_boolean (value))
         arr->flags |= DONNA_ARRANGEMENT_COLUMNS_ALWAYS;

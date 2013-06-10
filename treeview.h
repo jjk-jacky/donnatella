@@ -70,6 +70,7 @@ struct _DonnaArrangement
     DonnaArrangementPriority     priority;
     DonnaArrangementFlags        flags;
     gchar                       *columns;
+    gchar                       *main_column;
     gchar                       *sort_column;
     DonnaSortOrder               sort_order;
     gchar                       *second_sort_column;

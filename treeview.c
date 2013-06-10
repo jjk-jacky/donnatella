@@ -4054,7 +4054,7 @@ load_arrangement (DonnaTreeView     *tree,
 {
     DonnaTreeViewPrivate *priv  = tree->priv;
     DonnaConfig          *config;
-    GtkTreeView          *treev = GTK_TREE_VIEW (tree);
+    GtkTreeView          *treev = (GtkTreeView *) tree;
     GtkTreeSortable      *sortable;
     GSList               *list;
     gboolean              free_sort_column = FALSE;
@@ -4068,11 +4068,12 @@ load_arrangement (DonnaTreeView     *tree,
     GtkTreeViewColumn    *first_column = NULL;
     GtkTreeViewColumn    *last_column = NULL;
     GtkTreeViewColumn    *expander_column = NULL;
+    GtkTreeViewColumn    *ctname_column = NULL;
     DonnaColumnType      *ctname;
     gint                  sort_id = 0;
 
     config = donna_app_peek_config (priv->app);
-    sortable = GTK_TREE_SORTABLE (priv->store);
+    sortable = (GtkTreeSortable *) priv->store;
 
     /* clear list of props we're watching to refresh tree */
     if (priv->col_props->len > 0)
@@ -4367,10 +4368,11 @@ load_arrangement (DonnaTreeView     *tree,
         if (!first_column)
             first_column = column;
 
-        if (!expander_column && col_ct == ctname)
-            expander_column = column;
+        if (!ctname_column && col_ct == ctname)
+            ctname_column = column;
 
-        if (!priv->main_column && col_ct == ctname)
+        if (!priv->main_column && arrangement->main_column
+                && streq (col, arrangement->main_column))
             priv->main_column = column;
 
         /* size */
@@ -4456,6 +4458,14 @@ next:
     }
     g_object_unref (ctname);
 
+    /* ensure we have an expander column */
+    if (!expander_column)
+        expander_column = (ctname_column) ? ctname_column : first_column;
+
+    /* ensure we have a main column */
+    if (!priv->main_column)
+        priv->main_column = (ctname_column) ? ctname_column : first_column;
+
     if (!is_tree (tree) && !priv->blank_column)
     {
         /* we add an extra (empty) column, so we can have some
@@ -4468,12 +4478,7 @@ next:
     }
 
     /* set expander column */
-    gtk_tree_view_set_expander_column (treev,
-            (expander_column) ? expander_column : first_column);
-
-    /* ensure we have a main column */
-    if (!priv->main_column)
-        priv->main_column = first_column;
+    gtk_tree_view_set_expander_column (treev, expander_column);
 
 #ifdef GTK_IS_JJK
     if (priv->select_highlight == SELECT_HIGHLIGHT_COLUMN
