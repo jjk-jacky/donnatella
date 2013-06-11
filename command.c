@@ -708,6 +708,70 @@ _donna_command_free_cr (struct _donna_command_run *cr)
 }
 
 
+/* helpers */
+
+static gint
+get_arg_from_list (gint nb, const gchar *choices[], const gchar *arg)
+{
+    gchar to_lower = 'A' - 'a';
+    gint *matches;
+    gint i;
+
+    if (!arg)
+        return -1;
+
+    matches = g_new (gint, nb);
+    for (i = 0; i < nb; ++i)
+        matches[i] = i;
+
+    for (i = 0; arg[i] != '\0'; ++i)
+    {
+        gchar a;
+        gint *m;
+
+        a = arg[i];
+        if (a >= 'A' && a <= 'Z')
+            a -= to_lower;
+
+        for (m = matches; *m > -1; )
+        {
+            gchar c;
+
+            c = choices[*m][i];
+            if (c >= 'A' && c <= 'Z')
+                c -= to_lower;
+
+            if (c != a)
+            {
+                /* not a match */
+                if (--nb == 0)
+                {
+                    /* no match, we're done */
+                    g_free (matches);
+                    return -1;
+                }
+                /* get the last index in current place, so no need to increment
+                 * m in the current loop */
+                *m = matches[nb];
+                matches[nb] = -1;
+            }
+            else
+                ++m;
+        }
+    }
+
+    if (nb == 1)
+        i = matches[0];
+    else
+        i = -2;
+    g_free (matches);
+    return i;
+}
+
+#define get_choice_from_arg(choices, index)   \
+    get_arg_from_list (sizeof (choices) / sizeof (choices[0]), choices, \
+            args->pdata[index])
+
 /* commands */
 
 #define task_for_ret_err()  ((args->pdata[0]) ? args->pdata[0] : task)
@@ -779,7 +843,10 @@ static DonnaTaskState
 cmd_task_set_state (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
-    DonnaTaskState state;
+    const gchar *choices[] = { "run", "pause", "cancel", "stop", "wait" };
+    DonnaTaskState state[] = { DONNA_TASK_RUNNING, DONNA_TASK_PAUSED,
+        DONNA_TASK_CANCELLED, DONNA_TASK_STOPPED, DONNA_TASK_WAITING };
+    gint c;
 
     if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
     {
@@ -792,17 +859,8 @@ cmd_task_set_state (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (streq (args->pdata[2], "run"))
-        state = DONNA_TASK_RUNNING;
-    else if (streq (args->pdata[2], "pause"))
-        state = DONNA_TASK_PAUSED;
-    else if (streq (args->pdata[2], "cancel"))
-        state = DONNA_TASK_CANCELLED;
-    else if (streq (args->pdata[2], "stop"))
-        state = DONNA_TASK_STOPPED;
-    else if (streq (args->pdata[2], "wait"))
-        state = DONNA_TASK_WAITING;
-    else
+    c = get_choice_from_arg (choices, 2);
+    if (c < 0)
     {
         gchar *d = donna_node_get_name (args->pdata[1]);
         donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
@@ -816,7 +874,7 @@ cmd_task_set_state (DonnaTask *task, GPtrArray *args)
 
     if (!donna_task_manager_set_state (
                 donna_app_get_task_manager (args->pdata[3]),
-                args->pdata[1], state, &err))
+                args->pdata[1], state[c], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -927,20 +985,19 @@ static DonnaTaskState
 cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
-    DonnaTreeVisual visual;
-    DonnaTreeVisualSource source;
+    const gchar *c_visual[] = { "name", "box", "highlight", "clicks" };
+    DonnaTreeVisual visual[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_BOX,
+        DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+    const gchar *c_source[] = { "any", "tree", "node" };
+    DonnaTreeVisualSource source[] = { DONNA_TREE_VISUAL_SOURCE_ANY,
+        DONNA_TREE_VISUAL_SOURCE_TREE, DONNA_TREE_VISUAL_SOURCE_NODE };
     gchar *s;
     GValue *value;
+    gint c_v;
+    gint c_s;
 
-    if (streq (args->pdata[3], "name"))
-        visual = DONNA_TREE_VISUAL_NAME;
-    else if (streq (args->pdata[3], "box"))
-        visual = DONNA_TREE_VISUAL_BOX;
-    else if (streq (args->pdata[3], "highlight"))
-        visual = DONNA_TREE_VISUAL_HIGHLIGHT;
-    else if (streq (args->pdata[3], "clicks"))
-        visual = DONNA_TREE_VISUAL_CLICKS;
-    else
+    c_v = get_choice_from_arg (c_visual, 3);
+    if (c_v < 0)
     {
         donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
                 COMMAND_ERROR_OTHER,
@@ -950,13 +1007,8 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (streq (args->pdata[4], "any"))
-        source = DONNA_TREE_VISUAL_SOURCE_ANY;
-    else if (streq (args->pdata[4], "tree"))
-        source = DONNA_TREE_VISUAL_SOURCE_TREE;
-    else if (streq (args->pdata[4], "node"))
-        source = DONNA_TREE_VISUAL_SOURCE_NODE;
-    else
+    c_s = get_choice_from_arg (c_source, 4);
+    if (c_s < 0)
     {
         donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
                 COMMAND_ERROR_OTHER,
@@ -966,8 +1018,8 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    s = donna_tree_view_get_visual (args->pdata[1], args->pdata[2], visual,
-                source, &err);
+    s = donna_tree_view_get_visual (args->pdata[1], args->pdata[2], visual[c_v],
+                source[c_s], &err);
     if (!s)
     {
         if (err)
@@ -1015,17 +1067,14 @@ static DonnaTaskState
 cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
-    DonnaTreeRefreshMode mode;
+    const gchar *choices[] = { "visible", "simple", "normal", "reload" };
+    DonnaTreeRefreshMode mode[] = { DONNA_TREE_REFRESH_VISIBLE,
+        DONNA_TREE_REFRESH_SIMPLE, DONNA_TREE_REFRESH_NORMAL,
+        DONNA_TREE_REFRESH_RELOAD };
+    gint c;
 
-    if (streq ("visible", args->pdata[2]))
-        mode = DONNA_TREE_REFRESH_VISIBLE;
-    else if (streq ("simple", args->pdata[2]))
-        mode = DONNA_TREE_REFRESH_SIMPLE;
-    else if (streq ("normal", args->pdata[2]))
-        mode = DONNA_TREE_REFRESH_NORMAL;
-    else if (streq ("reload", args->pdata[2]))
-        mode = DONNA_TREE_REFRESH_RELOAD;
-    else
+    c = get_choice_from_arg (choices, 2);
+    if (c < 0)
     {
         donna_task_set_error (task_for_ret_err (),
                 COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
@@ -1034,7 +1083,7 @@ cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_refresh (args->pdata[1], mode, &err))
+    if (!donna_tree_view_refresh (args->pdata[1], mode[c], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -1047,15 +1096,13 @@ static DonnaTaskState
 cmd_tree_selection (DonnaTask *task, GPtrArray *args)
 {
     GError              *err = NULL;
-    DonnaTreeSelAction   action;
+    const gchar *choices[] = { "select", "unselect", "invert" };
+    DonnaTreeSelAction action[] = { DONNA_TREE_SEL_SELECT,
+        DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT };
+    gint c;
 
-    if (streq ("select", args->pdata[2]))
-        action = DONNA_TREE_SEL_SELECT;
-    else if (streq ("unselect", args->pdata[2]))
-        action = DONNA_TREE_SEL_UNSELECT;
-    else if (streq ("invert", args->pdata[2]))
-        action = DONNA_TREE_SEL_INVERT;
-    else
+    c = get_choice_from_arg (choices, 2);
+    if (c < 0)
     {
         donna_task_set_error (task_for_ret_err (),
                 COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
@@ -1064,7 +1111,7 @@ cmd_tree_selection (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_selection (args->pdata[1], action, args->pdata[3],
+    if (!donna_tree_view_selection (args->pdata[1], action[c], args->pdata[3],
                 (gboolean) GPOINTER_TO_INT (args->pdata[4]),
                 &err))
     {
@@ -1113,19 +1160,14 @@ static DonnaTaskState
 cmd_tree_set_visual (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
-    DonnaTreeVisual visual;
+    const gchar *choices[] = { "name", "icon", "box", "highlight", "clicks" };
+    DonnaTreeVisual visual[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
+        DONNA_TREE_VISUAL_CLICKS };
+    gint c;
 
-    if (streq (args->pdata[3], "name"))
-        visual = DONNA_TREE_VISUAL_NAME;
-    else if (streq (args->pdata[3], "icon"))
-        visual = DONNA_TREE_VISUAL_ICON;
-    else if (streq (args->pdata[3], "box"))
-        visual = DONNA_TREE_VISUAL_BOX;
-    else if (streq (args->pdata[3], "highlight"))
-        visual = DONNA_TREE_VISUAL_HIGHLIGHT;
-    else if (streq (args->pdata[3], "clicks"))
-        visual = DONNA_TREE_VISUAL_CLICKS;
-    else
+    c = get_choice_from_arg (choices, 3);
+    if (c < 0)
     {
         donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
                 COMMAND_ERROR_OTHER,
@@ -1135,7 +1177,7 @@ cmd_tree_set_visual (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_set_visual (args->pdata[1], args->pdata[2], visual,
+    if (!donna_tree_view_set_visual (args->pdata[1], args->pdata[2], visual[c],
                 args->pdata[4], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
@@ -1149,24 +1191,22 @@ static DonnaTaskState
 cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
-    DonnaTreeToggle toggle;
+    const gchar *choices[] = { "standard", "full", "maxi" };
+    DonnaTreeToggle toggle[] = { DONNA_TREE_TOGGLE_STANDARD,
+        DONNA_TREE_TOGGLE_FULL, DONNA_TREE_TOGGLE_MAXI };
+    gint c;
 
-    if (streq (args->pdata[3], "std"))
-        toggle = DONNA_TREE_TOGGLE_STANDARD;
-    else if (streq (args->pdata[3], "full"))
-        toggle = DONNA_TREE_TOGGLE_FULL;
-    else if (streq (args->pdata[3], "maxi"))
-        toggle = DONNA_TREE_TOGGLE_MAXI;
-    else
+    c = get_choice_from_arg (choices, 3);
+    if (c < 0)
     {
         donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
                 COMMAND_ERROR_SYNTAX,
-                "Cannot toggle row, unknown toggle type '%s'. Must be 'std', 'full' or 'maxi'",
+                "Cannot toggle row, unknown toggle type '%s'. Must be 'standard', 'full' or 'maxi'",
                 args->pdata[3]);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], toggle, &err))
+    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], toggle[c], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;

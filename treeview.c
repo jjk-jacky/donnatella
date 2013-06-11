@@ -8612,7 +8612,7 @@ handle_click (DonnaTreeView     *tree,
             def = "command:tree_set_cursor (%o, %r)";
         else if (streq (b, "left_double_click")
                 || streq (b, "expander_left_click"))
-            def = "command:tree_toggle_row (%o, %r, std)";
+            def = "command:tree_toggle_row (%o, %r, standard)";
     }
     else
     {
