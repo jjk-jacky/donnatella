@@ -1554,6 +1554,7 @@ donna_node_refresh_task (DonnaNode   *node,
     {
         GHashTableIter iter;
         gpointer key, value;
+        const gchar **s;
 
         /* we'll send the list of all properties, because node_refresh() needs
          * to know which refresher to call, and it can't have a lock on the hash
@@ -1561,8 +1562,15 @@ donna_node_refresh_task (DonnaNode   *node,
          * take a writer lock... */
 
         g_rw_lock_reader_lock (&node->priv->props_lock);
-        names = g_ptr_array_new_full (g_hash_table_size (node->priv->props),
+        names = g_ptr_array_new_full (
+                /* basic props + required props - those that never need to be
+                 * refreshed, i.e. provider/domain/location/node-type */
+                NB_BASIC_PROPS + FIRST_BASIC_PROP - 4
+                + g_hash_table_size (node->priv->props),
                 g_free);
+        for (s = node_basic_properties + FIRST_REQUIRED_PROP; *s; ++s)
+            g_ptr_array_add (names, g_strdup (*s));
+
         g_hash_table_iter_init (&iter, node->priv->props);
         while (g_hash_table_iter_next (&iter, &key, &value))
         {
