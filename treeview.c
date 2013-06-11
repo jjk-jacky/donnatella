@@ -3038,11 +3038,15 @@ real_node_removed_cb (struct node_removed_data *data)
 
     for ( ; list; list = next)
     {
+        GtkTreeIter it;
+
         next = list->next;
+        it = * (GtkTreeIter *) list->data;
         /* this will remove the row from the list in hashtable. IOW, it will
          * remove the current list element (list); which is why we took the next
-         * element ahead of time */
-        remove_row_from_tree (data->tree, list->data, TRUE);
+         * element ahead of time. Because it also assumes we own iter (to set it
+         * to the next children) we need to use a local one */
+        remove_row_from_tree (data->tree, &it, TRUE);
     }
 
 free:
