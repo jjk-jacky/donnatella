@@ -1510,6 +1510,83 @@ remove_row_from_tree (DonnaTreeView *tree,
             while (remove_row_from_tree (tree, &child, is_removal))
                 ;
     }
+#ifdef GTK_IS_JJK
+    /* removing the row with the focus will have GTK do a set_cursor(), this
+     * isn't the best of behaviors, so let's see if we can do "better" */
+    if (donna_tree_model_get_count (model) > 1)
+    {
+        GtkTreeView *treev = (GtkTreeView *) tree;
+        GtkTreePath *path_cursor;
+
+        gtk_tree_view_get_cursor (treev, &path_cursor, NULL);
+        if (path_cursor)
+        {
+            GtkTreeIter  iter_cursor;
+
+            gtk_tree_model_get_iter (model, &iter_cursor, path_cursor);
+            if (itereq (iter, &iter_cursor))
+            {
+                GtkTreeIter  it = iter_cursor;
+                gboolean found = FALSE;
+
+                /* we will move the focus to the next item (or prev if there's
+                 * no next). In list, it's a simple next/prev; on tree we use
+                 * our "natural" version.
+                 * This is just a focus move, to keep things right and not
+                 * affect the selection. Of course, on tree removing the current
+                 * location should probably do something,
+                 * - if this is a removal, sync_with will gives us a new
+                 *   location to jump to (list_go_up_cb)
+                 * - if the user removed the node (minitree), then action shall
+                 *   be taken re: the sync_mode -- TODO */
+
+                if (is_tree (tree))
+                {
+                    for (;;)
+                    {
+                        if (!donna_tree_model_iter_next (model, &it))
+                        {
+                            for (it = iter_cursor; ; )
+                            {
+                                if (!donna_tree_model_iter_previous (model, &it))
+                                    break;
+                                else if (is_row_accessible (tree, &it))
+                                {
+                                    found = TRUE;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        if (is_row_accessible (tree, &it))
+                        {
+                            found = TRUE;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    if (!gtk_tree_model_iter_next (model, &it))
+                    {
+                        it = iter_cursor;
+                        gtk_tree_model_iter_previous (model, &it);
+                    }
+                    found = TRUE;
+                }
+
+                if (found)
+                {
+                    GtkTreePath *path;
+                    path = gtk_tree_model_get_path (model, &it);
+                    gtk_tree_view_set_focused_row (treev, path);
+                    gtk_tree_path_free (path);
+                }
+            }
+            gtk_tree_path_free (path_cursor);
+        }
+    }
+#endif
     /* now we can remove the row */
     ret = donna_tree_store_remove (priv->store, iter);
     /* we have a parent, it has no more children, update expand state */
