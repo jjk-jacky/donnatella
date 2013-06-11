@@ -27,6 +27,8 @@ static DonnaTaskState   cmd_tree_maxi_collapse              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_maxi_expand                (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_refresh                    (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_selection                  (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_set_cursor                 (DonnaTask *task,
@@ -120,6 +122,14 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_maxi_expand
+    },
+    {
+        .name           = "tree_refresh",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_refresh
     },
     {
         .name           = "tree_selection",
@@ -993,6 +1003,38 @@ cmd_tree_maxi_expand (DonnaTask *task, GPtrArray *args)
     GError *err = NULL;
 
     if (!donna_tree_view_maxi_expand (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaTreeRefreshMode mode;
+
+    if (streq ("visible", args->pdata[2]))
+        mode = DONNA_TREE_REFRESH_VISIBLE;
+    else if (streq ("simple", args->pdata[2]))
+        mode = DONNA_TREE_REFRESH_SIMPLE;
+    else if (streq ("normal", args->pdata[2]))
+        mode = DONNA_TREE_REFRESH_NORMAL;
+    else if (streq ("reload", args->pdata[2]))
+        mode = DONNA_TREE_REFRESH_RELOAD;
+    else
+    {
+        donna_task_set_error (task_for_ret_err (),
+                COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                "Invalid argument 'mode': '%s', expected 'visible', 'simple', 'normal' or 'reload'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_tree_view_refresh (args->pdata[1], mode, &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;

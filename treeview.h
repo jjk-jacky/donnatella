@@ -111,6 +111,14 @@ typedef enum
 
 typedef enum
 {
+    DONNA_TREE_REFRESH_VISIBLE,
+    DONNA_TREE_REFRESH_SIMPLE,
+    DONNA_TREE_REFRESH_NORMAL,
+    DONNA_TREE_REFRESH_RELOAD
+} DonnaTreeRefreshMode;
+
+typedef enum
+{
     DONNA_TREE_VISUAL_NOTHING   = 0,
     DONNA_TREE_VISUAL_NAME      = (1 << 0),
     DONNA_TREE_VISUAL_ICON      = (1 << 1),
@@ -181,6 +189,9 @@ gboolean        donna_tree_view_edit_column     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  const gchar        *column,
                                                  GError            **error);
+gboolean        donna_tree_view_refresh         (DonnaTreeView      *tree,
+                                                 DonnaTreeRefreshMode mode,
+                                                 GError             **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

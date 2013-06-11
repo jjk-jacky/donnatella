@@ -285,6 +285,8 @@ struct _DonnaTreeViewPrivate
     /* Tree: which visuals to load from node */
     DonnaTreeVisual      node_visuals;
 
+    /* ignore any & all node-updated signals */
+    guint                refresh_on_hold    : 1;
     /* "cached" options */
     guint                mode               : 1;
     guint                node_types         : 2;
@@ -382,6 +384,8 @@ static GtkTreeIter *get_best_iter_for_node              (DonnaTreeView  *tree,
                                                          gboolean        add_root_if_needed,
                                                          GError        **error);
 static GtkTreeIter * get_root_iter                      (DonnaTreeView   *tree,
+                                                         GtkTreeIter     *iter);
+static gboolean is_row_accessible                       (DonnaTreeView   *tree,
                                                          GtkTreeIter     *iter);
 static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          DonnaNode       *node,
@@ -1614,38 +1618,121 @@ remove_row_from_tree (DonnaTreeView *tree,
     return ret;
 }
 
+struct refresh_data
+{
+    DonnaTreeView   *tree;
+    GMutex           mutex;
+    guint            count;
+    gboolean         done;
+};
+
+/* when doing a refresh, we ask every node on tree (or every visible node for
+ * DONNA_TREE_REFRESH_VISIBLE) to refresh its set properties, and we then get
+ * flooded by node-updated signals.
+ * In a tree w/ 800 rows/nodes, that's 800 * nb_props, so even with only 6
+ * properties (name, size, time, uid, gid, mode) that's 4 800 callbacks, which
+ * is a lot.
+ * And apparently the slow bit that might make the UI a bit unresponsive or make
+ * it slow until the refresh "appears on screen" comes from the thousands of
+ * calls to gtk_tree_model_get_path() (the path being needed to call
+ * gtk_tree_model_row_changed).
+ * So to try and make this a bit better/feel faster, we put refresh_on_hold
+ * (i.e. all signals node-updated are no-op. We don't actually block them just
+ * because I'm lazy, and in tree there can be plenty of providers/handlers to
+ * block/unblock. Could be better though...) and simply trigger a redraw when
+ * done, to refresh only the visible rows. Much better.
+ * This is done using a refresh_data with the number of tasks started, all of
+ * which having this callback to decrement the counter (under lock, ofc). After
+ * all tasks have been started, this function is called with no task, to set the
+ * flag done to TRUE. When done is TRUE & count == 0, it means everything has
+ * been processed, we can trigger the refresh & free memory */
+static void
+refresh_node_cb (DonnaTask              *task,
+                 gboolean                timeout_called,
+                 struct refresh_data    *data)
+{
+    g_mutex_lock (&data->mutex);
+    if (task)
+        --data->count;
+    else
+        data->done = TRUE;
+    if (data->done && data->count == 0)
+    {
+        g_mutex_unlock (&data->mutex);
+        g_mutex_clear (&data->mutex);
+        data->tree->priv->refresh_on_hold = FALSE;
+        gtk_widget_queue_draw ((GtkWidget *) data->tree);
+        g_free (data);
+    }
+    else
+        g_mutex_unlock (&data->mutex);
+}
+
+static gboolean may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter);
+
 static void
 set_children (DonnaTreeView *tree,
               GtkTreeIter   *iter,
               GPtrArray     *children,
-              gboolean       expand)
+              gboolean       expand,
+              gboolean       refresh)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model = (GtkTreeModel *) priv->store;
-
-    if (!is_tree (tree))
-        return;
+    gboolean is_tree = is_tree (tree);
 
     if (children->len == 0)
     {
         GtkTreeIter child;
 
-        /* set new expand state */
-        set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
-        if (donna_tree_store_iter_children (priv->store, &child, iter))
-            while (remove_row_from_tree (tree, &child, TRUE))
-                ;
+        if (is_tree)
+        {
+            /* set new expand state */
+            set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
+            if (donna_tree_store_iter_children (priv->store, &child, iter))
+                while (remove_row_from_tree (tree, &child, TRUE))
+                    ;
+        }
+        else
+        {
+            /* clear the list */
+            donna_tree_store_clear (priv->store);
+            /* also the hashtable (we don't need to unref nodes (keys), as our ref was
+             * handled by the store) */
+            g_hash_table_remove_all (priv->hashtable);
+
+            /* show the "location empty" message */
+            priv->draw_state = DRAW_EMPTY;
+            gtk_widget_queue_draw ((GtkWidget *) tree);
+        }
     }
     else
     {
         GSList *list = NULL;
+        struct refresh_data *data;
+        guint nb_real;
         enum tree_expand es;
         guint i;
-        gboolean has_children = FALSE;
+        gboolean has_children = !is_tree;
 
-        gtk_tree_model_get (model, iter,
-                DONNA_TREE_COL_EXPAND_STATE,    &es,
-                -1);
+        if (is_tree)
+            gtk_tree_model_get (model, iter,
+                    DONNA_TREE_COL_EXPAND_STATE,    &es,
+                    -1);
+        else
+        {
+            /* see refresh_node_cb() for more about this */
+            data = g_new (struct refresh_data, 1);
+            data->tree = tree;
+            g_mutex_init (&data->mutex);
+            data->count = children->len;
+            data->done = FALSE;
+            priv->refresh_on_hold = TRUE;
+            nb_real = 0;
+
+            es = DONNA_TREE_EXPAND_MAXI;
+        }
+
         if (es == DONNA_TREE_EXPAND_MAXI || es == DONNA_TREE_EXPAND_PARTIAL)
         {
             GtkTreeIter i;
@@ -1670,8 +1757,24 @@ set_children (DonnaTreeView *tree,
             if (!(donna_node_get_node_type (node) & priv->node_types))
                 continue;
 
-            /* shouldn't be able to fail/return FALSE */
-            if (!add_node_to_tree (tree, iter, node, &row))
+            /* in tree, we want to just call add_node_to_tree(), which will
+             * check if there's already a row for the given parent, if so set it
+             * in &row else set the newly added one.
+             * But, in list (i.e. parent (here iter) == NULL), this check
+             * doesn't happen. But since we don't wanna add what's already
+             * there, we need to check it first. */
+            row.stamp = 0;
+            if (!is_tree)
+            {
+                GSList *l;
+
+                l = g_hash_table_lookup (priv->hashtable, node);
+                if (l)
+                    row = * (GtkTreeIter *) l->data;
+            }
+
+            /* add_node_to_tree() shouldn't be able to fail/return FALSE */
+            if (row.stamp == 0 && !add_node_to_tree (tree, iter, node, &row))
             {
                 gchar *location = donna_node_get_location (node);
                 g_critical ("Treeview '%s': failed to add node for '%s:%s'",
@@ -1683,6 +1786,23 @@ set_children (DonnaTreeView *tree,
             else if (es)
             {
                 GSList *l, *prev = NULL;
+
+                if (refresh
+                        && donna_tree_store_iter_is_visible (priv->store, &row))
+                    if (is_tree)
+                        may_get_children_refresh (tree, &row);
+                    else
+                    {
+                        DonnaTask *task;
+
+                        ++nb_real;
+                        task = donna_node_refresh_task (node,
+                                DONNA_NODE_REFRESH_SET_VALUES, NULL);
+                        donna_task_set_callback (task,
+                                (task_callback_fn) refresh_node_cb,
+                                data, NULL);
+                        donna_app_run_task (priv->app, task);
+                    }
 
                 /* remove the iter for that row */
                 l = list;
@@ -1718,39 +1838,55 @@ set_children (DonnaTreeView *tree,
             g_slist_free_1 (l);
         }
 
-        /* has_children could be FALSE when e.g. we got children from a
-         * node_children signal, but none match our node_types */
-        es = (has_children) ? DONNA_TREE_EXPAND_MAXI : DONNA_TREE_EXPAND_NONE;
-        /* set new expand state */
-        set_es (priv, iter, es);
-        /* we might have to remove the fake node */
-        if (es == DONNA_TREE_EXPAND_NONE)
+        if (is_tree)
         {
-            GtkTreeIter child;
+            /* has_children could be FALSE when e.g. we got children from a
+             * node_children signal, but none match our node_types */
+            es = (has_children) ? DONNA_TREE_EXPAND_MAXI : DONNA_TREE_EXPAND_NONE;
+            /* set new expand state */
+            set_es (priv, iter, es);
+            /* we might have to remove the fake node */
+            if (es == DONNA_TREE_EXPAND_NONE)
+            {
+                GtkTreeIter child;
 
-            if (donna_tree_store_iter_children (priv->store, &child, iter))
-                do
-                {
-                    DonnaNode *node;
+                if (donna_tree_store_iter_children (priv->store, &child, iter))
+                    do
+                    {
+                        DonnaNode *node;
 
-                    gtk_tree_model_get (model, &child,
-                            DONNA_TREE_COL_NODE,    &node,
-                            -1);
-                    if (!node)
-                        remove_row_from_tree (tree, &child, FALSE);
-                    else
-                        g_object_unref (node);
-                } while (donna_tree_store_iter_next (priv->store, &child));
+                        gtk_tree_model_get (model, &child,
+                                DONNA_TREE_COL_NODE,    &node,
+                                -1);
+                        if (!node)
+                            remove_row_from_tree (tree, &child, FALSE);
+                        else
+                            g_object_unref (node);
+                    } while (donna_tree_store_iter_next (priv->store, &child));
+            }
+            if (has_children && expand)
+            {
+                GtkTreePath *path;
+
+                /* and make sure the row gets expanded (since we "blocked" it
+                 * when clicked */
+                path = gtk_tree_model_get_path (model, iter);
+                gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
+                gtk_tree_path_free (path);
+            }
         }
-        if (has_children && expand)
+        else if (refresh)
         {
-            GtkTreePath *path;
-
-            /* and make sure the row gets expanded (since we "blocked" it when
-             * clicked */
-            path = gtk_tree_model_get_path (model, iter);
-            gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
-            gtk_tree_path_free (path);
+            /* we might have to adjust the number we set, because children has
+             * nodes of type we don't care for, because some were not visible,
+             * etc */
+            if (nb_real != children->len)
+            {
+                g_mutex_lock (&data->mutex);
+                data->count -= children->len - nb_real;
+                g_mutex_unlock (&data->mutex);
+            }
+            refresh_node_cb (NULL, FALSE, data);
         }
     }
 }
@@ -1805,7 +1941,8 @@ node_get_children_tree_cb (DonnaTask                   *task,
 
     set_children (data->tree, &data->iter,
             g_value_get_boxed (donna_task_get_return_value (task)),
-            TRUE /* expand row */);
+            TRUE /* expand row */,
+            FALSE /* no refresh */);
 
     if (data->scroll_to_current)
         scroll_to_current (data->tree);
@@ -2974,7 +3111,7 @@ real_node_updated_cb (struct node_updated_data *data)
         goto done;
 
     /* trigger refresh on all rows for that node */
-    model = GTK_TREE_MODEL (priv->store);
+    model = (GtkTreeModel *) priv->store;
     for ( ; l; l = l->next)
     {
         GtkTreeIter *iter = l->data;
@@ -2999,6 +3136,9 @@ node_updated_cb (DonnaProvider  *provider,
                  DonnaTreeView  *tree)
 {
     struct node_updated_data *data;
+
+    if (tree->priv->refresh_on_hold)
+        return;
 
     /* we might not be in the main thread, but we need to be */
 
@@ -3174,7 +3314,7 @@ real_node_children_cb (struct node_children_cb_data *data)
     {
         g_debug ("treeview '%s': updating children for current location",
                 priv->name);
-        set_children (data->tree, &priv->location_iter, data->children, FALSE);
+        set_children (data->tree, &priv->location_iter, data->children, FALSE, FALSE);
     }
 
 free:
@@ -7505,6 +7645,318 @@ donna_tree_view_edit_column (DonnaTreeView      *tree,
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
 
     g_object_unref (node);
+    return TRUE;
+}
+
+/* list only */
+static void
+node_get_children_refresh_list_cb (DonnaTask     *task,
+                                   gboolean       timeout_called,
+                                   DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        donna_app_show_error (priv->app, donna_task_get_error (task),
+                "Treeview '%s': Failed to refresh", priv->name);
+        return;
+    }
+
+    set_children (tree, NULL,
+            g_value_get_boxed (donna_task_get_return_value (task)),
+            FALSE, TRUE);
+}
+
+struct node_children_refresh_data
+{
+    DonnaTreeView *tree;
+    GtkTreeIter iter;
+};
+
+/* tree only */
+static void
+node_get_children_refresh_tree_cb (DonnaTask                         *task,
+                                   gboolean                           timeout_called,
+                                   struct node_children_refresh_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+
+    if (!is_watched_iter_valid (data->tree, &data->iter, TRUE))
+        goto free;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        donna_app_show_error (priv->app, donna_task_get_error (task),
+                "Treeview '%s': Failed to refresh", priv->name);
+        goto free;
+    }
+
+    set_children (data->tree, &data->iter,
+            g_value_get_boxed (donna_task_get_return_value (task)),
+            FALSE, TRUE);
+
+free:
+    g_free (data);
+}
+
+/* tree only */
+static gboolean
+may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GError *err = NULL;
+    GtkTreeView  *treev = (GtkTreeView *) tree;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    GtkTreePath *path;
+    DonnaTask *task;
+    DonnaNode *node;
+    enum tree_expand es;
+    gboolean ret = FALSE;
+
+    path = gtk_tree_model_get_path (model, iter);
+
+    /* refresh the node */
+    gtk_tree_model_get (model, iter,
+            DONNA_TREE_COL_NODE,            &node,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            -1);
+    task = donna_node_refresh_task (node, &err, DONNA_NODE_REFRESH_SET_VALUES);
+    if (!task)
+    {
+        gchar *fl = donna_node_get_full_location (node);
+        g_warning ("Treeview '%s': Failed to refresh '%s': %s",
+                priv->name, fl, err->message);
+        g_clear_error (&err);
+        g_free (fl);
+        g_object_unref (node);
+        gtk_tree_path_free (path);
+        return FALSE;
+    }
+    donna_app_run_task (priv->app, task);
+
+    /* if EXPAND_MAXI, update children */
+    if (es == DONNA_TREE_EXPAND_MAXI)
+    {
+        struct node_children_refresh_data *data;
+
+        ret = TRUE;
+        task = donna_node_get_children_task (node,
+                priv->node_types, &err);
+        if (!task)
+        {
+            gchar *fl = donna_node_get_full_location (node);
+            g_warning ("Treeview '%s': Failed to trigger children update for '%s': %s",
+                    priv->name, fl, err->message);
+            g_clear_error (&err);
+            g_free (fl);
+            g_object_unref (node);
+            gtk_tree_path_free (path);
+            return FALSE;
+        }
+
+        data = g_new0 (struct node_children_refresh_data, 1);
+        data->tree = tree;
+        data->iter = *iter;
+        watch_iter (tree, &data->iter);
+
+        donna_task_set_callback (task,
+                (task_callback_fn) node_get_children_refresh_tree_cb,
+                data, NULL);
+        donna_app_run_task (priv->app, task);
+    }
+    gtk_tree_path_free (path);
+    g_object_unref (node);
+    return ret;
+}
+
+gboolean
+donna_tree_view_refresh (DonnaTreeView          *tree,
+                         DonnaTreeRefreshMode    mode,
+                         GError                **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeView *treev = (GtkTreeView *) tree;
+    GtkTreeModel *model;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (mode == DONNA_TREE_REFRESH_VISIBLE
+            || mode == DONNA_TREE_REFRESH_SIMPLE
+            || mode == DONNA_TREE_REFRESH_NORMAL
+            || mode == DONNA_TREE_REFRESH_RELOAD, FALSE);
+    priv = tree->priv;
+    model = (GtkTreeModel *) priv->store;
+
+    if (mode == DONNA_TREE_REFRESH_VISIBLE || mode == DONNA_TREE_REFRESH_SIMPLE)
+    {
+        struct refresh_data *data;
+        GtkTreePath *start = NULL;
+        GtkTreePath *end = NULL;
+        GtkTreeIter  it_end;
+        GtkTreeIter  it;
+        guint nb_org, nb_real;
+
+        if (donna_tree_model_get_count (model) == 0)
+            return TRUE;
+
+        if (mode == DONNA_TREE_REFRESH_VISIBLE)
+        {
+            if (!gtk_tree_view_get_visible_range (treev, &start, &end)
+                    || !gtk_tree_model_get_iter (model, &it, start)
+                    || !gtk_tree_model_get_iter (model, &it_end, end))
+            {
+                if (start)
+                    gtk_tree_path_free (start);
+                if (end)
+                    gtk_tree_path_free (end);
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Failed to get visible range of rows",
+                        priv->name);
+                return FALSE;
+            }
+            gtk_tree_path_free (start);
+            gtk_tree_path_free (end);
+        }
+        else /* DONNA_TREE_REFRESH_SIMPLE */
+        {
+            if (!gtk_tree_model_iter_children (model, &it, NULL))
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Failed to get first row",
+                        priv->name);
+                return FALSE;
+            }
+        }
+
+        /* see refresh_node_cb() for more about this */
+        data = g_new (struct refresh_data, 1);
+        data->tree = tree;
+        g_mutex_init (&data->mutex);
+        data->count = nb_org = donna_tree_model_get_count (model);
+        data->done = FALSE;
+        priv->refresh_on_hold = TRUE;
+
+        nb_real = 0;
+        do
+        {
+            GError *err = NULL;
+            DonnaNode *node;
+            DonnaTask *task;
+
+            if (!is_row_accessible (tree, &it))
+                continue;
+
+            gtk_tree_model_get (model, &it,
+                    DONNA_TREE_COL_NODE,    &node,
+                    -1);
+            task = donna_node_refresh_task (node, &err, DONNA_NODE_REFRESH_SET_VALUES);
+            if (G_UNLIKELY (!task))
+            {
+                gchar *fl = donna_node_get_full_location (node);
+                g_warning ("Treeview '%s': Failed to refresh '%s': %s",
+                        priv->name, fl, err->message);
+                g_clear_error (&err);
+                g_free (fl);
+                continue;
+            }
+            donna_task_set_callback (task,
+                    (task_callback_fn) refresh_node_cb,
+                    data, NULL);
+            donna_app_run_task (priv->app, task);
+            g_object_unref (node);
+            ++nb_real;
+        } while ((mode == DONNA_TREE_REFRESH_SIMPLE || !itereq (&it, &it_end))
+                && donna_tree_model_iter_next (model, &it));
+
+        /* we might have to adjust the number we set, either because some task
+         * failed to be created, or just because this is mode VISIBLE */
+        if (nb_real != nb_org)
+        {
+            g_mutex_lock (&data->mutex);
+            data->count -= nb_org - nb_real;
+            g_mutex_unlock (&data->mutex);
+        }
+        /* set flag done to TRUE and handles things in odd change all tasks are
+         * already done */
+        refresh_node_cb (NULL, FALSE, data);
+
+        return TRUE;
+    }
+    else if (mode == DONNA_TREE_REFRESH_NORMAL)
+    {
+        if (is_tree (tree))
+        {
+            GtkTreeIter it;
+            gboolean (*next_fn) (GtkTreeModel *model, GtkTreeIter *iter);
+
+            if (donna_tree_model_get_count (model) == 0)
+                return TRUE;
+
+            if (!gtk_tree_model_iter_children (model, &it, NULL))
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Failed to get first root",
+                        priv->name);
+                return FALSE;
+            }
+
+            do
+            {
+                if (!is_row_accessible (tree, &it))
+                    continue;
+
+                if (may_get_children_refresh (tree, &it))
+                    next_fn = gtk_tree_model_iter_next;
+                else
+                    next_fn = donna_tree_model_iter_next;
+            } while (next_fn (model, &it));
+
+            return TRUE;
+        }
+        else
+        {
+            DonnaTask *task;
+
+            task = donna_node_get_children_task (priv->location,
+                    priv->node_types, NULL);
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_get_children_refresh_list_cb,
+                    tree, NULL);
+            donna_app_run_task (priv->app, task);
+            return TRUE;
+        }
+    }
+    /* DONNA_TREE_REFRESH_RELOAD */
+
+    if (is_tree (tree))
+    {
+        /* TODO save to file; clear; load arr; load from file... or something */
+    }
+    else
+    {
+        struct node_get_children_list_data *data;
+        DonnaTask *task;
+
+        data = g_slice_new0 (struct node_get_children_list_data);
+        data->tree = tree;
+        data->node = g_object_ref (priv->location);
+
+        task = donna_node_get_children_task (data->node, priv->node_types, NULL);
+        donna_task_set_timeout (task, 800, /* FIXME */
+                (task_timeout_fn) node_get_children_list_timeout,
+                data,
+                NULL);
+        donna_task_set_callback (task,
+                (task_callback_fn) node_get_children_list_cb,
+                data,
+                (GDestroyNotify) free_node_get_children_list_data);
+        priv->future_location = data->node;
+        donna_app_run_task (priv->app, task);
+    }
+
     return TRUE;
 }
 
