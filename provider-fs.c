@@ -115,7 +115,12 @@ stat_node (DonnaNode *node, const gchar *filename)
     GValue value = G_VALUE_INIT;
 
     if (lstat (filename, &st) == -1)
+    {
+        if (errno == ENOENT)
+            /* seems the file has been removed */
+            donna_provider_node_removed (donna_node_peek_provider (node), node);
         return FALSE;
+    }
 
     g_value_init (&value, G_TYPE_UINT);
 
