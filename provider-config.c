@@ -2187,6 +2187,7 @@ _set_option (DonnaConfig    *config,
     struct option *option;
     gchar  buf[255];
     gchar *b = buf;
+    gchar *st;
     gint len;
     va_list va_arg2;
     const gchar *s;
@@ -2194,9 +2195,6 @@ _set_option (DonnaConfig    *config,
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (fmt != NULL, FALSE);
-
-    if (*fmt == '/')
-        ++fmt;
 
     va_copy (va_arg2, va_arg);
     len = vsnprintf (buf, 255, fmt, va_arg);
@@ -2207,12 +2205,14 @@ _set_option (DonnaConfig    *config,
     }
     va_end (va_arg2);
 
+    st = (*b == '/') ? b + 1 : b;
+
     priv = config->priv;
     g_rw_lock_writer_lock (&priv->lock);
-    s = strrchr (b, '/');
+    s = strrchr (st, '/');
     if (s)
     {
-        parent = ensure_categories (config, b, s - b);
+        parent = ensure_categories (config, st, s - st);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -2222,7 +2222,7 @@ _set_option (DonnaConfig    *config,
     }
     else
     {
-        s = b;
+        s = st;
         parent = priv->root;
     }
 
