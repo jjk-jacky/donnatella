@@ -3185,11 +3185,15 @@ real_node_updated_cb (struct node_updated_data *data)
     for ( ; l; l = l->next)
     {
         GtkTreeIter *iter = l->data;
-        GtkTreePath *path;
 
-        path = gtk_tree_model_get_path (model, iter);
-        gtk_tree_model_row_changed (model, path, iter);
-        gtk_tree_path_free (path);
+        if (donna_tree_store_iter_is_visible (priv->store, iter))
+        {
+            GtkTreePath *path;
+
+            path = gtk_tree_model_get_path (model, iter);
+            gtk_tree_model_row_changed (model, path, iter);
+            gtk_tree_path_free (path);
+        }
     }
 
 done:
