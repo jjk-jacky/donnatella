@@ -8750,6 +8750,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     GtkTreeModel *model;
     GtkTreeIter iter;
     gint x, y;
+    gboolean tree_might_grab_focus = FALSE;
 
     if (event->button == 1)
         click |= DONNA_CLICK_LEFT;
@@ -8759,29 +8760,31 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
         click |= DONNA_CLICK_RIGHT;
 
     /* a click will grab the focus if:
-     * - tree: it's a regular left click (i.e. no Ctrl/Shift held)
+     * - tree: it's a regular left click (i.e. no Ctrl/Shift held) unless click
+     *   was on expander
      * - list: it's a left click (event w/ Ctrl/Shift)
-     * and, ofc, focus isn't on tree already */
-    if (((is_tree (tree) && is_regular_left_click (click, event))
-                || (!is_tree (tree)
-                    && (click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                    == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)))
+     * and, ofc, focus isn't on treeview already. */
+    if (is_tree (tree))
+        /* might, as we don't know if this was on expander or not yet */
+        tree_might_grab_focus = is_regular_left_click (click, event)
+            && !gtk_widget_is_focus ((GtkWidget *) tree);
+    else if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
             && !gtk_widget_is_focus ((GtkWidget *) tree))
     {
         GtkWidget *w = NULL;
 
-        if (!is_tree (tree) && priv->focusing_click)
+        if (priv->focusing_click)
             /* get the widget that currently has the focus */
             w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
                         (GtkWidget *) tree));
 
         gtk_widget_grab_focus ((GtkWidget *) tree);
 
-        /* we "skip" the click if list w/ focusing_click, unless the widget that
-         * had the focus was a children of ours, i.e. a column header */
-        if (!is_tree (tree) && priv->focusing_click && w
-                && gtk_widget_get_ancestor (w,
-                        DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
+        /* we "skip" the click if focusing_click, unless the widget that had the
+         * focus was a children of ours, i.e. a column header */
+        if (priv->focusing_click && w && gtk_widget_get_ancestor (w,
+                    DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
             return FALSE;
     }
 
@@ -8802,7 +8805,11 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 #else
         if (gtk_tree_view_is_blank_at_pos (treev, x, y, NULL, &column, NULL, NULL))
 #endif
+        {
+            if (tree_might_grab_focus)
+                gtk_widget_grab_focus ((GtkWidget *) tree);
             handle_click (tree, click, event, &iter, column, renderer, CLICK_ON_BLANK);
+        }
         else
         {
             DonnaNode *node;
@@ -8820,7 +8827,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 #ifdef GTK_IS_JJK
             if (!renderer)
             {
-                /* i.e. clicked on an expander */
+                /* i.e. clicked on an expander (never grab focus) */
                 handle_click (tree, click, event, &iter, column, renderer,
                         CLICK_ON_EXPANDER);
                 return TRUE;
@@ -8831,6 +8838,8 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 
             if (!as)
             {
+                if (tree_might_grab_focus)
+                    gtk_widget_grab_focus ((GtkWidget *) tree);
                 handle_click (tree, click, event, &iter, column, renderer,
                         CLICK_REGULAR);
                 return TRUE;
@@ -8919,12 +8928,18 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                 return TRUE;
             }
             g_object_unref (node);
+            if (tree_might_grab_focus)
+                gtk_widget_grab_focus ((GtkWidget *) tree);
             /* there was no as for this column */
             handle_click (tree, click, event, &iter, column, renderer, CLICK_REGULAR);
         }
     }
     else
+    {
+        if (tree_might_grab_focus)
+            gtk_widget_grab_focus ((GtkWidget *) tree);
         handle_click (tree, click, event, NULL, NULL, NULL, CLICK_ON_BLANK);
+    }
     return TRUE;
 }
 
