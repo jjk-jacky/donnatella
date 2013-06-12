@@ -195,6 +195,8 @@ struct _DonnaTreeViewPrivate
 
     /* tree store */
     DonnaTreeStore      *store;
+    /* tree only -- see row_has_child_toggled_cb() and remove_row_from_tree() */
+    gulong               row_has_child_toggled_sid;
     /* list of struct column */
     GSList              *columns;
     /* not in list above
@@ -1506,6 +1508,13 @@ remove_row_from_tree (DonnaTreeView *tree,
     {
         GtkTreeIter child;
 
+        /* this signal is used to possibly "undo" the removal of expander (see
+         * row_has_child_toggled_cb() for more), this will not be that case but
+         * since we're possibly removing a lot/causing a bunch of those signals,
+         * might as well avoid useless processing */
+        if (priv->row_has_child_toggled_sid)
+            g_signal_handler_block (priv->store, priv->row_has_child_toggled_sid);
+
         /* get the parent, in case we're removing its last child */
         donna_tree_store_iter_parent (priv->store, &parent, iter);
         /* we need to remove all children before we remove the row, so we can
@@ -1513,6 +1522,9 @@ remove_row_from_tree (DonnaTreeView *tree,
         if (donna_tree_store_iter_children (priv->store, &child, iter))
             while (remove_row_from_tree (tree, &child, is_removal))
                 ;
+
+        if (priv->row_has_child_toggled_sid)
+            g_signal_handler_unblock (priv->store, priv->row_has_child_toggled_sid);
     }
 #ifdef GTK_IS_JJK
     /* removing the row with the focus will have GTK do a set_cursor(), this
@@ -3055,6 +3067,64 @@ node_has_children_cb (DonnaTask                 *task,
 free:
     free_node_children_data (data);
 }
+
+/* tree only -- there is a case where we might need to override/undo this
+ * toggle: in mode tree, mini-tree, when the row is in EXPAND_PARTIAL.
+ * In such a case, the expander might has vanished because of a store_refilter
+ * (i.e. change of VF or show_hidden) that hide the last/only child. But since
+ * this was a partial expand, there might actually be legitimate children that
+ * could be shown there, so in such cases we need to put back a fake node &
+ * trigger a has_children */
+static void
+row_has_child_toggled_cb (GtkTreeModel  *model,
+                          GtkTreePath   *path,
+                          GtkTreeIter   *iter,
+                          DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    enum tree_expand es;
+    DonnaNode *node;
+    DonnaTask *task;
+
+    if (!is_tree (tree) || !priv->is_minitree
+            || gtk_tree_model_iter_has_child (model, iter))
+        return;
+
+    gtk_tree_model_get (model, iter,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            DONNA_TREE_COL_NODE,            &node,
+            -1);
+    if (es != DONNA_TREE_EXPAND_PARTIAL || !node)
+    {
+        if (node)
+            g_object_unref (node);
+        return;
+    }
+
+    set_es (priv, iter, DONNA_TREE_EXPAND_UNKNOWN);
+    donna_tree_store_insert_with_values (priv->store, NULL, iter, 0,
+            DONNA_TREE_COL_NODE,    NULL,
+            -1);
+
+    task = donna_node_has_children_task (node, priv->node_types, NULL);
+    if (task)
+    {
+        struct node_children_data *data;
+
+        data = g_slice_new0 (struct node_children_data);
+        data->tree  = tree;
+        data->iter  = *iter;
+        watch_iter (tree, &data->iter);
+
+        donna_task_set_callback (task,
+                (task_callback_fn) node_has_children_cb,
+                data,
+                (GDestroyNotify) free_node_children_data);
+        donna_app_run_task (priv->app, task);
+    }
+    g_object_unref (node);
+}
+
 
 struct node_updated_data
 {
@@ -9312,6 +9382,11 @@ donna_tree_view_new (DonnaApp    *app,
     /* because on property update the refesh does only that, i.e. there's no
      * auto-resort */
     g_signal_connect (model, "row-changed", (GCallback) row_changed_cb, tree);
+    if (is_tree (tree))
+        /* because we might have to "undo" this -- see has_child_toggled_cb() */
+        priv->row_has_child_toggled_sid = g_signal_connect (model,
+                "row-has-child-toggled",
+                (GCallback) row_has_child_toggled_cb, tree);
     /* add to tree */
     gtk_tree_view_set_model (treev, model);
 #ifdef GTK_IS_JJK
