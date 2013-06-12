@@ -294,7 +294,7 @@ struct _DonnaTreeViewPrivate
     guint                node_types         : 2;
     guint                show_hidden        : 1;
     guint                sort_groups        : 2; /* containers (always) first/mixed */
-    guint                select_highlight   : 2;
+    guint                select_highlight   : 2; /* only used if GTK_IS_JJK */
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
@@ -1066,6 +1066,7 @@ load_config (DonnaTreeView *tree)
                 "treeviews/%s/sort_groups", priv->name);
     }
 
+#ifdef GTK_IS_JJK
     if (donna_config_get_int (config, &val,
                 "treeviews/%s/select_highlight", priv->name))
         priv->select_highlight = CLAMP (val, 0, 3);
@@ -1077,6 +1078,9 @@ load_config (DonnaTreeView *tree)
         donna_config_set_int (config, val,
                 "treeviews/%s/select_highlight", priv->name);
     }
+#else
+    priv->select_highlight = SELECT_HIGHLIGHT_FULL_ROW;
+#endif
 
     if (is_tree (tree))
     {
