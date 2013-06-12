@@ -9230,7 +9230,10 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 
                 /* should we ask the list to change its location? */
                 n = donna_tree_view_get_location (priv->sync_with);
-                g_object_unref (n);
+                if (n)
+                    g_object_unref (n);
+                else
+                    return;
                 if (n == node)
                     return;
 
