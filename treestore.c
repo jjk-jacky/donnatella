@@ -1181,7 +1181,9 @@ donna_tree_store_refresh_visibility (DonnaTreeStore     *store,
         /* get the parent row. We ask the "real" model because iter might not
          * (yet) be visible, so asking our interface would then fail. */
         gtk_tree_model_iter_parent ((GtkTreeModel *) priv->store, &parent, iter);
-        nb_children = gtk_tree_model_iter_n_children (model, &parent);
+        nb_children = gtk_tree_model_iter_n_children (
+                (GtkTreeModel *) priv->store,
+                (parent.stamp == 0) ? NULL : &parent);
 
         if (old)
         {
