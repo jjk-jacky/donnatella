@@ -1471,29 +1471,6 @@ remove_row_from_tree (DonnaTreeView *tree,
         g_object_unref (node);
     }
 
-    /* remove all watched_iters to this row */
-    l = priv->watched_iters;
-    while (l)
-    {
-        if (itereq (iter, (GtkTreeIter *) l->data))
-        {
-            GSList *next = l->next;
-
-            if (prev)
-                prev->next = next;
-            else
-                priv->watched_iters = next;
-
-            g_slist_free_1 (l);
-            l = next;
-        }
-        else
-        {
-            prev = l;
-            l = l->next;
-        }
-    }
-
     if (is_tree (tree))
     {
         GtkTreeIter child;
@@ -1593,8 +1570,33 @@ remove_row_from_tree (DonnaTreeView *tree,
         }
     }
 #endif
+
+    /* remove all watched_iters to this row */
+    l = priv->watched_iters;
+    while (l)
+    {
+        if (itereq (iter, (GtkTreeIter *) l->data))
+        {
+            GSList *next = l->next;
+
+            if (prev)
+                prev->next = next;
+            else
+                priv->watched_iters = next;
+
+            g_slist_free_1 (l);
+            l = next;
+        }
+        else
+        {
+            prev = l;
+            l = l->next;
+        }
+    }
+
     /* now we can remove the row */
     ret = donna_tree_store_remove (priv->store, iter);
+
     /* we have a parent, it has no more children, update expand state */
     if (is_tree (tree) && parent.stamp != 0
             && !donna_tree_store_iter_has_child (priv->store, &parent))
