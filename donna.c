@@ -843,10 +843,9 @@ donna_donna_show_error (DonnaApp       *app,
             GTK_MESSAGE_ERROR,
             GTK_BUTTONS_CLOSE,
             title);
-    if (error)
-        gtk_message_dialog_format_secondary_text (GTK_MESSAGE_DIALOG (w), "%s",
-                error->message);
-    g_signal_connect_swapped (w, "response", G_CALLBACK (gtk_widget_destroy), w);
+    gtk_message_dialog_format_secondary_text ((GtkMessageDialog *) w, "%s",
+            (error) ? error->message : "");
+    g_signal_connect_swapped (w, "response", (GCallback) gtk_widget_destroy, w);
     gtk_widget_show_all (w);
 }
 
