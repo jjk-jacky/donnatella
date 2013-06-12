@@ -398,6 +398,7 @@ static inline void scroll_to_iter                       (DonnaTreeView  *tree,
 static gboolean scroll_to_current                       (DonnaTreeView  *tree);
 static void check_children_post_expand                  (DonnaTreeView  *tree,
                                                          GtkTreeIter    *iter);
+static inline void resort_tree                          (DonnaTreeView  *tree);
 static gboolean select_arrangement_accumulator      (GSignalInvocationHint  *hint,
                                                      GValue                 *return_accu,
                                                      const GValue           *return_handler,
@@ -951,22 +952,7 @@ real_option_cb (struct option_data *data)
                             priv->name, _col->name,
                             priv->arrangement->columns_options, &_col->ct_data);
                     if (need & DONNA_COLUMNTYPE_NEED_RESORT)
-                    {
-                        GtkTreeSortable *sortable;
-                        gint cur_sort_id;
-                        GtkSortType cur_sort_order;
-
-                        /* trigger a resort */
-
-                        sortable = (GtkTreeSortable *) priv->store;
-                        gtk_tree_sortable_get_sort_column_id (sortable,
-                                &cur_sort_id, &cur_sort_order);
-                        gtk_tree_sortable_set_sort_column_id (sortable,
-                                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID,
-                                cur_sort_order);
-                        gtk_tree_sortable_set_sort_column_id (sortable,
-                                cur_sort_id, cur_sort_order);
-                    }
+                        resort_tree (data->tree);
                     if (need & DONNA_COLUMNTYPE_NEED_REDRAW)
                         gtk_widget_queue_draw ((GtkWidget *) data->tree);
                 }
@@ -2925,6 +2911,23 @@ done:
     return ret;
 }
 
+static inline void
+resort_tree (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeSortable *sortable;
+    gint cur_sort_id;
+    GtkSortType cur_sort_order;
+
+    /* trigger a resort */
+
+    sortable = (GtkTreeSortable *) priv->store;
+    gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
+    gtk_tree_sortable_set_sort_column_id (sortable,
+            GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
+    gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
+}
+
 static void
 row_changed_cb (GtkTreeModel    *model,
                 GtkTreePath     *path,
@@ -2957,18 +2960,7 @@ row_changed_cb (GtkTreeModel    *model,
             resort = TRUE;
 
     if (resort)
-    {
-        GtkTreeSortable *sortable;
-        GtkSortType cur_sort_order;
-        gint cur_sort_id;
-
-        /* trigger a resort */
-        sortable = (GtkTreeSortable *) priv->store;
-        gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
-        gtk_tree_sortable_set_sort_column_id (sortable,
-                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
-        gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
-    }
+        resort_tree (tree);
 }
 
 static void
@@ -4198,9 +4190,6 @@ set_second_sort_column (DonnaTreeView       *tree,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     struct column *_col;
-    GtkTreeSortable *sortable;
-    gint cur_sort_id;
-    GtkSortType cur_sort_order;
 
     _col = get_column_by_column (tree, column);
     if (!column || priv->sort_column == column)
@@ -4251,11 +4240,7 @@ set_second_sort_column (DonnaTreeView       *tree,
     set_second_arrow (tree);
 
     /* trigger a resort */
-    sortable = GTK_TREE_SORTABLE (priv->store);
-    gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
-    gtk_tree_sortable_set_sort_column_id (sortable,
-            GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
-    gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
+    resort_tree (tree);
 }
 
 /* we have a "special" handling of clicks on column headers. First off, we
