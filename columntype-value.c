@@ -255,7 +255,7 @@ changed_cb (GtkCellRendererCombo    *renderer,
         gchar *s;
 
         g_value_init (&value, G_TYPE_STRING);
-        gtk_tree_model_get (model, iter, 0, &s, -1);
+        gtk_tree_model_get (model, iter, 1, &s, -1);
         g_value_take_string (&value, s);
     }
 
@@ -447,10 +447,11 @@ ct_value_edit (DonnaColumnType    *ct,
         {
             DonnaConfigExtraList **extra;
 
-            store = gtk_list_store_new (1, G_TYPE_STRING);
+            store = gtk_list_store_new (2, G_TYPE_STRING, G_TYPE_STRING);
             for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
                 gtk_list_store_insert_with_values (store, NULL, -1,
-                        0,  *extra,
+                        0,  ((*extra)->label) ? (*extra)->label : (*extra)->value,
+                        1,  (*extra)->value,
                         -1);
         }
         else if (type == G_TYPE_INT && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
@@ -461,7 +462,7 @@ ct_value_edit (DonnaColumnType    *ct,
             for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
             {
                 gtk_list_store_insert_with_values (store, NULL, -1,
-                        0,  (*extra)->desc,
+                        0,  ((*extra)->label) ? (*extra)->label : (*extra)->in_file,
                         1,  (*extra)->value,
                         -1);
             }
@@ -540,7 +541,6 @@ render_type (DonnaColumnType    *ct,
     GValue extra = G_VALUE_INIT;
     GType type;
     const gchar *lbl;
-    gchar *s = NULL;
 
     if (index == RND_COMBO)
     {
@@ -574,9 +574,7 @@ render_type (DonnaColumnType    *ct,
 
         extras = donna_config_get_extras (donna_app_peek_config (priv->app),
                 g_value_get_string (&extra), NULL);
-        lbl = s = g_strdup_printf ("%s (%s)",
-                (type == G_TYPE_INT) ? "Integer" : "String",
-                (extras) ? g_value_get_string (&extra) : "<unknown extra>");
+        lbl = (extras) ? g_value_get_string (&extra) : "<unknown extra>";
     }
     else if (type == G_TYPE_BOOLEAN)
         lbl = "Boolean";
@@ -591,7 +589,6 @@ render_type (DonnaColumnType    *ct,
             "text",     lbl,
             "visible",  TRUE,
             NULL);
-    g_free (s);
     return NULL;
 }
 
@@ -636,12 +633,37 @@ render_value (DonnaColumnType    *ct,
 
     if (type == G_TYPE_STRING)
     {
-        if ((has == DONNA_NODE_VALUE_NONE && index == RND_TEXT)
-                || (has == DONNA_NODE_VALUE_SET && index == RND_COMBO))
+        if (has == DONNA_NODE_VALUE_NONE && index == RND_TEXT)
             g_object_set (renderer,
                     "visible",  TRUE,
                     "text",     g_value_get_string (&value),
                     NULL);
+        else if (has == DONNA_NODE_VALUE_SET && index == RND_COMBO)
+        {
+            const DonnaConfigExtra *extras;
+            const gchar *label;
+
+            label = g_value_get_string (&value);
+            extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+                        g_value_get_string (&extra), NULL);
+            if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+            {
+                DonnaConfigExtraList **extra;
+
+                for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+                    if (streq ((*extra)->value, label))
+                    {
+                        if ((*extra)->label)
+                            label = (*extra)->label;
+                        break;
+                    }
+            }
+
+            g_object_set (renderer,
+                    "visible",  TRUE,
+                    "text",     label,
+                    NULL);
+        }
         else
             g_object_set (renderer, "visible", FALSE, NULL);
     }
@@ -662,7 +684,6 @@ render_value (DonnaColumnType    *ct,
             const gchar *label;
             gint id;
 
-            s = NULL;
             label = "<failed to get label>";
             extras = donna_config_get_extras (donna_app_peek_config (priv->app),
                         g_value_get_string (&extra), NULL);
@@ -674,8 +695,10 @@ render_value (DonnaColumnType    *ct,
                 for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
                     if ((*extra)->value == id)
                     {
-                        label = s = g_strdup_printf ("%d (%s)",
-                                id, (*extra)->desc);
+                        if ((*extra)->label)
+                            label = (*extra)->label;
+                        else
+                            label = (*extra)->in_file;
                         break;
                     }
             }
@@ -684,7 +707,6 @@ render_value (DonnaColumnType    *ct,
                     "visible",  TRUE,
                     "text",     label,
                     NULL);
-            g_free (s);
         }
         else
             g_object_set (renderer, "visible", FALSE, NULL);
@@ -771,10 +793,51 @@ load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
         type = G_VALUE_TYPE (value);
         donna_node_get (node, TRUE, "option-extra", &has, &extra, NULL);
         if (has == DONNA_NODE_VALUE_SET)
-            if (type != G_TYPE_STRING)
-                type = G_TYPE_INVALID;
+        {
+            const DonnaConfigExtra *extras;
 
-        if (type == G_TYPE_BOOLEAN)
+            if (type == G_TYPE_STRING)
+                val->s = g_value_get_string (value);
+            else
+                val->s = "<failed to get label>";
+            type = G_TYPE_STRING;
+
+            extras = donna_config_get_extras (config,
+                    g_value_get_string (&extra), NULL);
+            if (extras)
+            {
+                if (extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+                {
+                    DonnaConfigExtraList **extra;
+
+                    for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+                        if (streq ((*extra)->value, val->s))
+                        {
+                            if ((*extra)->label)
+                                val->s = (*extra)->label;
+                            break;
+                        }
+                }
+                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
+                {
+                    DonnaConfigExtraListInt **extra;
+                    gint id;
+
+                    id = g_value_get_int (value);
+                    for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+                        if ((*extra)->value == id)
+                        {
+                            if ((*extra)->label)
+                                val->s = (*extra)->label;
+                            else
+                                val->s = (*extra)->in_file;
+                            break;
+                        }
+                }
+            }
+            g_value_unset (&extra);
+        }
+        else if (type == G_TYPE_BOOLEAN)
             val->i = g_value_get_boolean (value);
         else if (type == G_TYPE_INT)
             val->i = g_value_get_int (value);
@@ -782,32 +845,6 @@ load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
             val->d = g_value_get_double (value);
         else if (type == G_TYPE_STRING)
             val->s = g_value_get_string (value);
-        else /* G_TYPE_INVALID == DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
-        {
-            const DonnaConfigExtra *extras;
-
-            type = G_TYPE_STRING;
-            val->s = "<failed to get label>";
-
-            extras = donna_config_get_extras (config,
-                    g_value_get_string (&extra), NULL);
-            if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
-            {
-                DonnaConfigExtraListInt **extra;
-                gint id;
-
-                id = g_value_get_int (value);
-                for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
-                    if ((*extra)->value == id)
-                    {
-                        val->s = (*extra)->desc;
-                        break;
-                    }
-            }
-        }
-
-        if (has == DONNA_NODE_VALUE_SET)
-            g_value_unset (&extra);
     }
     else
         type = G_TYPE_INVALID;
@@ -835,40 +872,57 @@ ct_value_node_cmp (DonnaColumnType    *ct,
     if (* (gboolean *) data)
     {
         DonnaNodeHasValue has;
+        const gchar *t1;
+        const gchar *t2;
 
-        donna_node_get (node1, TRUE, "option-value", &has, &value1, NULL);
-        if (has != DONNA_NODE_VALUE_SET)
-            type1 = G_TYPE_INVALID;
+        donna_node_get (node1, TRUE, "option-extra", &has, &value1, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+            t1 = g_value_get_string (&value1);
         else
-            type1 = G_VALUE_TYPE (&value1);
+        {
+            donna_node_get (node1, TRUE, "option-value", &has, &value1, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                type1 = G_VALUE_TYPE (&value1);
+                if (type1 == G_TYPE_BOOLEAN)
+                    t1 = "Boolean";
+                else if (type1 == G_TYPE_INT)
+                    t1 = "Integer";
+                else if (type1 == G_TYPE_STRING)
+                    t1 = "String";
+                else /* G_TYPE_DOUBLE */
+                    t1 = "Double";
+            }
+            else
+                t1 = "<unknown>";
+        }
+
+        donna_node_get (node2, TRUE, "option-extra", &has, &value2, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+            t2 = g_value_get_string (&value2);
+        else
+        {
+            donna_node_get (node2, TRUE, "option-value", &has, &value2, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                type2 = G_VALUE_TYPE (&value2);
+                if (type2 == G_TYPE_BOOLEAN)
+                    t2 = "Boolean";
+                else if (type2 == G_TYPE_INT)
+                    t2 = "Integer";
+                else if (type2 == G_TYPE_STRING)
+                    t2 = "String";
+                else /* G_TYPE_DOUBLE */
+                    t2 = "Double";
+            }
+            else
+                t2 = "<unknown>";
+        }
+
+        ret = donna_strcmp (t1, t2, DONNA_SORT_CASE_INSENSITIVE);
         g_value_unset (&value1);
-
-        donna_node_get (node2, TRUE, "option-value", &has, &value2, NULL);
-        if (has != DONNA_NODE_VALUE_SET)
-            type2 = G_TYPE_INVALID;
-        else
-            type2 = G_VALUE_TYPE (&value2);
         g_value_unset (&value2);
-
-        if (type1 == type2)
-            return 0;
-
-        if (type1 == G_TYPE_INVALID)
-            return 1;
-        else if (type2 == G_TYPE_INVALID)
-            return -1;
-
-        if (type1 == G_TYPE_BOOLEAN)
-            return -1;
-        else if (type2 == G_TYPE_BOOLEAN)
-            return 1;
-
-        if (type1 == G_TYPE_STRING)
-            return 1;
-        else if (type2 == G_TYPE_STRING)
-            return -1;
-
-        return 0;
+        return ret;
     }
 
     type1 = load_val (config, node1, &value1, &val1);

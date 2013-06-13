@@ -109,6 +109,7 @@ static DonnaTask *      provider_config_get_node_parent_task (
                                             GError             **error);
 
 
+static gchar *get_option_full_name (GNode *root, GNode *gnode);
 static void free_extra  (DonnaConfigExtra  *extra);
 
 static void
@@ -213,18 +214,28 @@ free_extra (DonnaConfigExtra *extra)
     if (!extra)
         return;
     if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
-        g_strfreev ((DonnaConfigExtraList **) extra->values);
+    {
+        DonnaConfigExtraList **values;
+
+        for (values = (DonnaConfigExtraList **) extra->values; *values; ++values)
+        {
+            g_free ((*values)->value);
+            g_free ((*values)->label);
+            g_slice_free (DonnaConfigExtraList, *values);
+        }
+    }
     else
     {
         DonnaConfigExtraListInt **values;
 
         for (values = (DonnaConfigExtraListInt **) extra->values; *values; ++values)
         {
-            g_free ((*values)->desc);
-            g_free (*values);
+            g_free ((*values)->in_file);
+            g_free ((*values)->label);
+            g_slice_free (DonnaConfigExtraListInt, *values);
         }
     }
-    g_free (extra);
+    g_slice_free (DonnaConfigExtra, extra);
 }
 
 struct removing_data
@@ -608,7 +619,23 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
             for (parsed = section->value, c = 0; parsed; parsed = parsed->next)
             {
                 if (streq (parsed->name, "value"))
-                    values[c++] = g_strdup (parsed->value);
+                {
+                    DonnaConfigExtraList *v;
+                    gchar *sep;
+
+                    v = g_slice_new0 (DonnaConfigExtraList);
+                    sep = strchr (parsed->value, ':');
+                    if (sep)
+                        *sep = '\0';
+                    v->value = g_strdup (parsed->value);
+                    if (sep)
+                    {
+                        *sep = ':';
+                        v->label = g_strdup (sep + 1);
+                    }
+
+                    values[c++] = v;
+                }
                 else if (!streq (parsed->name, "type"))
                     g_warning ("Invalid option '%s' in definition of %s '%s'",
                             parsed->name, s, section->name);
@@ -654,19 +681,30 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
                                 (gchar *) parsed->value, section->name);
                         for (v = values; *v; ++v)
                         {
-                            g_free ((*v)->desc);
-                            g_free (*v);
+                            g_free ((*v)->in_file);
+                            g_free ((*v)->label);
+                            g_slice_free (DonnaConfigExtraListInt, *v);
                         }
                         g_free (values);
                         values = NULL;
                         break;
                     }
 
-                    v = g_new0 (DonnaConfigExtraListInt, 1);
+                    v = g_slice_new0 (DonnaConfigExtraListInt);
                     *sep = '\0';
                     sscanf (parsed->value, "%d", &v->value);
                     *sep = ':';
-                    v->desc = g_strdup (sep + 1);
+                    v->in_file = sep + 1;
+                    sep = strchr (v->in_file, ':');
+                    if (sep)
+                    {
+                        *sep = '\0';
+                        v->in_file = g_strdup (v->in_file);
+                        *sep = ':';
+                        v->label = g_strdup (sep + 1);
+                    }
+                    else
+                        v->in_file = g_strdup (v->in_file);
 
                     values[c++] = v;
                 }
@@ -815,25 +853,29 @@ next:
 }
 
 static gboolean
-is_extra_value (DonnaConfigExtra *extra, gpointer value)
+get_extra_value (DonnaConfigExtra *extra, gchar *str, gpointer value)
 {
     if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
     {
-        gchar **v;
-        gchar *val = * (gchar **) value;
+        DonnaConfigExtraList **v;
 
         for (v = (DonnaConfigExtraList **) extra->values; *v; ++v)
-            if (streq (*v, val))
+            if (streq (str, (*v)->value))
+            {
+                * (gchar **) value = (*v)->value;
                 return TRUE;
+            }
     }
     else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
     {
         DonnaConfigExtraListInt **v;
-        gint val = * (gint *) value;
 
         for (v = (DonnaConfigExtraListInt **) extra->values; *v; ++v)
-            if ((*v)->value == val)
+            if (streq (str, (*v)->in_file))
+            {
+                * (gint *) value = (*v)->value;
                 return TRUE;
+            }
     }
     return FALSE;
 }
@@ -910,7 +952,9 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 option = g_slice_new0 (struct option);
                 if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
                 {
-                    if (!is_extra_value (extra, &parsed->value))
+                    gchar *v;
+
+                    if (!get_extra_value (extra, parsed->value, &v))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
@@ -919,21 +963,13 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                         continue;
                     }
                     g_value_init (&option->value, G_TYPE_STRING);
-                    g_value_set_string (&option->value, parsed->value);
+                    g_value_set_string (&option->value, v);
                 }
                 else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
                 {
                     gint v;
 
-                    if (!sscanf (parsed->value, "%d", &v))
-                    {
-                        g_warning ("Failed to get INT value for option '%s' in '%s', skipped",
-                                parsed->name, section->name);
-                        *--s = ':';
-                        g_slice_free (struct option, option);
-                        continue;
-                    }
-                    if (!is_extra_value (extra, &v))
+                    if (!get_extra_value (extra, parsed->value, &v))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
@@ -1076,30 +1112,71 @@ export_config (DonnaProviderConfigPrivate   *priv,
 
             if (option->extra)
             {
-                if (G_VALUE_HOLDS (&option->value, G_TYPE_STRING))
-                {
-                    const gchar *s;
+                DonnaConfigExtra *extra;
 
-                    s = g_value_get_string (&option->value);
-                    if (streq (s, "true") || streq (s, "false")
-                            || isblank (s[0])
-                            || (s[0] != '\0' && isblank (s[strlen (s) - 1])))
-                        g_string_append_printf (str, "%s:%s=\"%s\"\n",
-                                option->name,
-                                (gchar *) option->extra,
-                                s);
+                extra = g_hash_table_lookup (priv->extras, option->extra);
+                if (G_UNLIKELY (!extra))
+                {
+                    gchar *fn = get_option_full_name (priv->root, child);
+                    g_warning ("Failed to export option '%s': extra '%s' not found",
+                            fn, option->extra);
+                    g_free (fn);
+                    continue;
+                }
+
+                if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+                {
+                    DonnaConfigExtraList **v;
+                    const gchar *cur = g_value_get_string (&option->value);
+
+                    for (v = (DonnaConfigExtraList **) extra->values;
+                            *v; ++v)
+                        if (streq (cur, (*v)->value))
+                            break;
+                    if (G_UNLIKELY (!v))
+                    {
+                        gchar *fn = get_option_full_name (priv->root, child);
+                        g_warning ("Failed to export option '%s': value %d not found for extra '%s'",
+                                fn, cur, option->extra);
+                        g_free (fn);
+                    }
+                    else
+                    {
+                        if (streq (cur, "true") || streq (cur, "false")
+                                || isblank (cur[0])
+                                || (cur[0] != '\0' && isblank (cur[strlen (cur) - 1])))
+                            g_string_append_printf (str, "%s:%s=\"%s\"\n",
+                                    option->name,
+                                    (gchar *) option->extra,
+                                    cur);
+                        else
+                            g_string_append_printf (str, "%s:%s=%s\n",
+                                    option->name,
+                                    (gchar *) option->extra,
+                                    cur);
+                    }
+                }
+                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
+                {
+                    DonnaConfigExtraListInt **v;
+                    gint cur = g_value_get_int (&option->value);
+
+                    for (v = (DonnaConfigExtraListInt **) extra->values;
+                            *v; ++v)
+                        if (cur == (*v)->value)
+                            break;
+                    if (G_UNLIKELY (!v))
+                    {
+                        gchar *fn = get_option_full_name (priv->root, child);
+                        g_warning ("Failed to export option '%s': value %d not found for extra '%s'",
+                                fn, cur, option->extra);
+                        g_free (fn);
+                    }
                     else
                         g_string_append_printf (str, "%s:%s=%s\n",
                                 option->name,
                                 (gchar *) option->extra,
-                                s);
-                }
-                else
-                {
-                    g_string_append_printf (str, "%s:%s=%d\n",
-                            option->name,
-                            (gchar *) option->extra,
-                            g_value_get_int (&option->value));
+                                (*v)->in_file);
                 }
             }
             else
