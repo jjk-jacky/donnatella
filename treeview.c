@@ -2814,6 +2814,8 @@ rend_func (GtkTreeViewColumn  *column,
     g_object_unref (node);
 }
 
+/* XXX: model is NOT our model, but the store's internal GtkTreeStore. See
+ * tree_store_set_sort_func() for more */
 static gint
 sort_func (GtkTreeModel      *model,
            GtkTreeIter       *iter1,

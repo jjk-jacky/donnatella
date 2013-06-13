@@ -594,6 +594,12 @@ tree_store_set_sort_column_id (GtkTreeSortable         *sortable,
             sort_column_id, order);
 }
 
+/* XXX: so this is a "bad" implementation of GtkTreeSortable, because since we
+ * just "relay" to our internal GtkTreeStore, when the sort_func is called, it
+ * will receive said GtkTreeStore as model, and not our store as it should/would
+ * be expected.
+ * But, since this store is only used in DonnaTreeView and we know about this,
+ * and I'm lazy, it stays like this (for now?). */
 static void
 tree_store_set_sort_func (GtkTreeSortable         *sortable,
                           gint                     sort_column_id,
