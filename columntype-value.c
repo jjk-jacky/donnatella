@@ -222,12 +222,15 @@ struct editing_data
     DonnaColumnTypeValue    *ctv;
     DonnaTreeView           *tree;
     DonnaNode               *node;
+    /* most stuff -- combo (menu) or text (entry) */
     GtkCellRenderer         *rnd_combo;
     guint                    key_limit;
     gulong                   editing_started_sid;
     gulong                   editing_done_sid;
     gulong                   changed_sid;
     gulong                   key_press_event_sid;
+    /* custom window for flags */
+    GtkWidget               *window;
 };
 
 static void
@@ -380,6 +383,54 @@ editing_started_cb (GtkCellRenderer     *renderer,
                 (GCallback) key_press_event_cb, ed);
 }
 
+static void
+apply_cb (GtkButton *button, struct editing_data *ed)
+{
+    GError *err = NULL;
+    GtkWidget *w;
+    GList *list, *l;
+    gint val = 0;
+    GValue value = G_VALUE_INIT;
+
+    gtk_widget_hide (ed->window);
+
+    /* get the box */
+    w = gtk_bin_get_child ((GtkBin *) ed->window);
+    /* get children */
+    list = gtk_container_get_children ((GtkContainer *) w);
+
+    for (l = list; l; l = l->next)
+    {
+        w = l->data;
+
+        if (GTK_IS_TOGGLE_BUTTON (w))
+        {
+            gboolean active;
+
+            g_object_get (w, "active", &active, NULL);
+            if (active)
+                val |= GPOINTER_TO_INT (g_object_get_data ((GObject *) w, "flag-value"));
+        }
+    }
+
+    g_value_init (&value, G_TYPE_INT);
+    g_value_set_int (&value, val);
+    if (!donna_tree_view_set_node_property (ed->tree, ed->node,
+                "option-value", &value, &err))
+    {
+        gchar *fl = donna_node_get_full_location (ed->node);
+        donna_app_show_error (ed->ctv->priv->app, err,
+                "ColumnType 'value': Unable to set value of '%s'",
+                fl);
+        g_free (fl);
+        g_clear_error (&err);
+    }
+    g_value_unset (&value);
+
+    g_list_free (list);
+    gtk_widget_destroy (ed->window);
+}
+
 static gboolean
 ct_value_edit (DonnaColumnType    *ct,
                gpointer            data,
@@ -466,6 +517,57 @@ ct_value_edit (DonnaColumnType    *ct,
                         1,  (*extra)->value,
                         -1);
             }
+        }
+        else if (type == G_TYPE_INT && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+        {
+            DonnaConfigExtraListFlags **extra;
+            GtkWindow *win;
+            GtkBox *box;
+            GtkWidget *w;
+            gint cur = g_value_get_int (&value);
+
+            ed = g_new0 (struct editing_data, 1);
+            ed->ctv       = (DonnaColumnTypeValue *) ct;
+            ed->tree      = treeview;
+            ed->node      = node;
+
+            win = donna_columntype_new_floating_window (treeview, FALSE);
+            ed->window = w = (GtkWidget *) win;
+            g_signal_connect_swapped (win, "destroy", (GCallback) g_free, ed);
+
+            box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+            gtk_container_add ((GtkContainer *) win, (GtkWidget *) box);
+
+            for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+            {
+                w = gtk_check_button_new_with_label (
+                        ((*extra)->label) ? (*extra)->label : (*extra)->in_file);
+                g_object_set_data ((GObject *) w, "flag-value",
+                        GINT_TO_POINTER ((*extra)->value));
+                g_object_set (w, "active", !!(cur & (*extra)->value), NULL);
+                gtk_box_pack_start (box, w, 0, 0, FALSE);
+            }
+
+            w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+            g_object_set (w, "margin-top", 10, NULL);
+            gtk_box_pack_start (box, w, 0, 0, FALSE);
+            box = (GtkBox *) w;
+
+            w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
+            g_object_set (gtk_button_get_image ((GtkButton *) w),
+                    "icon-size", GTK_ICON_SIZE_MENU, NULL);
+            g_signal_connect_swapped (w, "clicked",
+                    (GCallback) gtk_widget_destroy, win);
+            gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+            w = gtk_button_new_from_stock (GTK_STOCK_APPLY);
+            g_object_set (gtk_button_get_image ((GtkButton *) w),
+                    "icon-size", GTK_ICON_SIZE_MENU, NULL);
+            g_signal_connect (w, "clicked", (GCallback) apply_cb, ed);
+            gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+            gtk_widget_show_all (ed->window);
+            donna_app_set_floating_window (ed->ctv->priv->app, win);
+            return TRUE;
         }
         else
         {
@@ -682,6 +784,7 @@ render_value (DonnaColumnType    *ct,
         {
             const DonnaConfigExtra *extras;
             const gchar *label;
+            gchar *s = NULL;
             gint id;
 
             label = "<failed to get label>";
@@ -702,11 +805,35 @@ render_value (DonnaColumnType    *ct,
                         break;
                     }
             }
+            else if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+            {
+                DonnaConfigExtraListFlags **extra;
+                GString *str;
+
+                id = g_value_get_int (&value);
+                str = g_string_sized_new (23 /* random */);
+                for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+                    if (id & (*extra)->value)
+                        g_string_append_printf (str, "%s, ", ((*extra)->label)
+                                ? (*extra)->label : (*extra)->in_file);
+                if (G_LIKELY (str->len > 0))
+                {
+                    /* remove trailing comma & space */
+                    g_string_truncate (str, str->len - 2);
+                    label = s = g_string_free (str, FALSE);
+                }
+                else
+                {
+                    g_string_free (str, TRUE);
+                    label = "(nothing)";
+                }
+            }
 
             g_object_set (renderer,
                     "visible",  TRUE,
                     "text",     label,
                     NULL);
+            g_free (s);
         }
         else
             g_object_set (renderer, "visible", FALSE, NULL);
@@ -810,7 +937,8 @@ load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
                 {
                     DonnaConfigExtraList **extra;
 
-                    for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+                    for (extra = (DonnaConfigExtraList **) extras->values;
+                            *extra; ++extra)
                         if (streq ((*extra)->value, val->s))
                         {
                             if ((*extra)->label)
@@ -818,13 +946,14 @@ load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
                             break;
                         }
                 }
-                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
+                else if (extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
                 {
                     DonnaConfigExtraListInt **extra;
                     gint id;
 
                     id = g_value_get_int (value);
-                    for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+                    for (extra = (DonnaConfigExtraListInt **) extras->values;
+                            *extra; ++extra)
                         if ((*extra)->value == id)
                         {
                             if ((*extra)->label)
@@ -834,6 +963,26 @@ load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
                             break;
                         }
                 }
+                else if (extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+                {
+                    DonnaConfigExtraListFlags **extra;
+                    gint id;
+
+                    id = g_value_get_int (value);
+                    for (extra = (DonnaConfigExtraListFlags **) extras->values;
+                            *extra; ++extra)
+                        if (id & (*extra)->value)
+                        {
+                            if ((*extra)->label)
+                                val->s = (*extra)->label;
+                            else
+                                val->s = (*extra)->in_file;
+                            break;
+                        }
+                }
+                else
+                    g_warning ("ColumnType 'value': Unknown extra type %d",
+                            extras->type);
             }
             g_value_unset (&extra);
         }

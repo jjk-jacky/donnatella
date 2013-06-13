@@ -27,6 +27,7 @@ typedef DonnaProviderConfig     DonnaConfig;
 typedef struct _DonnaConfigExtra                DonnaConfigExtra;
 typedef struct _DonnaConfigExtraList            DonnaConfigExtraList;
 typedef struct _DonnaConfigExtraListInt         DonnaConfigExtraListInt;
+typedef struct _DonnaConfigExtraListFlags       DonnaConfigExtraListFlags;
 
 typedef enum
 {
@@ -40,6 +41,7 @@ typedef enum
 {
     DONNA_CONFIG_EXTRA_TYPE_LIST,
     DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+    DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
 } DonnaConfigExtraType;
 
 struct _DonnaConfigExtraList
@@ -49,6 +51,13 @@ struct _DonnaConfigExtraList
 };
 
 struct _DonnaConfigExtraListInt
+{
+    gint     value;
+    gchar   *in_file;
+    gchar   *label;
+};
+
+struct _DonnaConfigExtraListFlags
 {
     gint     value;
     gchar   *in_file;

@@ -224,7 +224,7 @@ free_extra (DonnaConfigExtra *extra)
             g_slice_free (DonnaConfigExtraList, *values);
         }
     }
-    else
+    else if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
     {
         DonnaConfigExtraListInt **values;
 
@@ -235,6 +235,20 @@ free_extra (DonnaConfigExtra *extra)
             g_slice_free (DonnaConfigExtraListInt, *values);
         }
     }
+    else if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags **values;
+
+        for (values = (DonnaConfigExtraListFlags **) extra->values; *values; ++values)
+        {
+            g_free ((*values)->in_file);
+            g_free ((*values)->label);
+            g_slice_free (DonnaConfigExtraListFlags, *values);
+        }
+    }
+    else
+        g_warning ("Config: free-ing invalid type of extra: %d", extra->type);
+
     g_slice_free (DonnaConfigExtra, extra);
 }
 
@@ -723,6 +737,98 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
                     str_chunk (priv, section->name),
                     extra);
         }
+        else if (streq (s, "list-flags"))
+        {
+            struct parsed_data *parsed;
+            DonnaConfigExtra *extra;
+            DonnaConfigExtraListFlags **values;
+            gint c;
+
+            if (g_hash_table_contains (priv->extras, section->name))
+            {
+                g_warning ("Cannot redefine extra '%s'", section->name);
+                continue;
+            }
+
+            values = g_new0 (DonnaConfigExtraListFlags *,
+                    get_count (section->value, "value") + 1);
+            for (parsed = section->value, c = 0; parsed; parsed = parsed->next)
+            {
+                if (streq (parsed->name, "value"))
+                {
+                    DonnaConfigExtraListFlags *e;
+                    gchar *sep;
+
+                    sep = strchr (parsed->value, ':');
+                    if (!sep)
+                    {
+                        DonnaConfigExtraListFlags **v;
+
+                        g_warning ("Invalid format for value '%s' of extra '%s', "
+                                "skipping entire definition",
+                                (gchar *) parsed->value, section->name);
+                        for (v = values; *v; ++v)
+                        {
+                            g_free ((*v)->in_file);
+                            g_free ((*v)->label);
+                            g_slice_free (DonnaConfigExtraListFlags, *v);
+                        }
+                        g_free (values);
+                        values = NULL;
+                        break;
+                    }
+
+                    e = g_slice_new0 (DonnaConfigExtraListFlags);
+                    *sep = '\0';
+                    sscanf (parsed->value, "%d", &e->value);
+                    if (e->value == 0 || (e->value & (~e->value + 1)) != e->value)
+                    {
+                        DonnaConfigExtraListFlags **v;
+
+                        g_warning ("Invalid value (%u) for extra '%s', only non-zero power of 2 are allowed, "
+                                "skipping entire definition",
+                                e->value, section->name);
+                        g_slice_free (DonnaConfigExtraListFlags, e);
+                        for (v = values; *v; ++v)
+                        {
+                            g_free ((*v)->in_file);
+                            g_free ((*v)->label);
+                            g_slice_free (DonnaConfigExtraListFlags, *v);
+                        }
+                        g_free (values);
+                        values = NULL;
+                        break;
+                    }
+                    *sep = ':';
+                    e->in_file = sep + 1;
+                    sep = strchr (e->in_file, ':');
+                    if (sep)
+                    {
+                        *sep = '\0';
+                        e->in_file = g_strdup (e->in_file);
+                        *sep = ':';
+                        e->label = g_strdup (sep + 1);
+                    }
+                    else
+                        e->in_file = g_strdup (e->in_file);
+
+                    values[c++] = e;
+                }
+                else if (!streq (parsed->name, "type"))
+                    g_warning ("Invalid option '%s' in definition of %s '%s'",
+                            parsed->name, s, section->name);
+            }
+            if (!values)
+                continue;
+
+            extra = g_new (DonnaConfigExtra, 1);
+            extra->type = DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS;
+            extra->values = (gpointer) values;
+
+            g_hash_table_insert (priv->extras,
+                    str_chunk (priv, section->name),
+                    extra);
+        }
         else
             g_warning ("Unknown type '%s' for definition '%s'", s, section->name);
     }
@@ -853,6 +959,20 @@ next:
 }
 
 static gboolean
+add_flag_value (DonnaConfigExtra *extra, gchar *str, gint *val)
+{
+    DonnaConfigExtraListFlags **v;
+
+    for (v = (DonnaConfigExtraListFlags **) extra->values; *v; ++v)
+        if (streq (str, (*v)->in_file))
+        {
+            *val += (*v)->value;
+            return TRUE;
+        }
+    return FALSE;
+}
+
+static gboolean
 get_extra_value (DonnaConfigExtra *extra, gchar *str, gpointer value)
 {
     if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
@@ -866,7 +986,7 @@ get_extra_value (DonnaConfigExtra *extra, gchar *str, gpointer value)
                 return TRUE;
             }
     }
-    else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
+    else if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
     {
         DonnaConfigExtraListInt **v;
 
@@ -876,6 +996,33 @@ get_extra_value (DonnaConfigExtra *extra, gchar *str, gpointer value)
                 * (gint *) value = (*v)->value;
                 return TRUE;
             }
+    }
+    else /* DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS */
+    {
+        gint val = 0;
+        gchar *s;
+
+        for (;;)
+        {
+            s = strchr (str, ',');
+            if (s)
+                *s = '\0';
+            if (!add_flag_value (extra, str, &val))
+            {
+                if (s)
+                    *s = ',';
+                return FALSE;
+            }
+            if (s)
+            {
+                *s = ',';
+                str = s + 1;
+            }
+            else
+                break;
+        }
+        * (gint *) value = val;
+        return TRUE;
     }
     return FALSE;
 }
@@ -965,7 +1112,23 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                     g_value_init (&option->value, G_TYPE_STRING);
                     g_value_set_string (&option->value, v);
                 }
-                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
+                else if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+                {
+                    gint v;
+
+                    if (!get_extra_value (extra, parsed->value, &v))
+                    {
+                        g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
+                                parsed->name, s);
+                        *--s = ':';
+                        g_slice_free (struct option, option);
+                        continue;
+                    }
+                    g_value_init (&option->value, G_TYPE_INT);
+                    g_value_set_int (&option->value, v);
+
+                }
+                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS */
                 {
                     gint v;
 
@@ -1156,7 +1319,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                     cur);
                     }
                 }
-                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_INT */
+                else if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
                 {
                     DonnaConfigExtraListInt **v;
                     gint cur = g_value_get_int (&option->value);
@@ -1177,6 +1340,37 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                 option->name,
                                 (gchar *) option->extra,
                                 (*v)->in_file);
+                }
+                else /* DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS */
+                {
+                    DonnaConfigExtraListFlags **v;
+                    gint cur = g_value_get_int (&option->value);
+
+                    if (cur > 0)
+                    {
+                        GString *s_val;
+
+                        /* 23 = random magic number */
+                        s_val = g_string_sized_new (23);
+                        for (v = (DonnaConfigExtraListFlags **) extra->values;
+                                *v; ++v)
+                        {
+                            if (cur & (*v)->value)
+                                g_string_append_printf (s_val, "%s,", (*v)->in_file);
+                        }
+                        /* remove trailing ',' */
+                        g_string_truncate (s_val, s_val->len - 1);
+
+                        g_string_append_printf (str, "%s:%s=%s\n",
+                                option->name,
+                                (gchar *) option->extra,
+                                s_val->str);
+                        g_string_free (s_val, TRUE);
+                    }
+                    else
+                        g_string_append_printf (str, "%s:%s=""\n",
+                                option->name,
+                                (gchar *) option->extra);
                 }
             }
             else
