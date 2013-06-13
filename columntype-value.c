@@ -410,7 +410,7 @@ ct_value_edit (DonnaColumnType    *ct,
     {
         gchar *fl = donna_node_get_full_location (node);
         g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
-                "ColumnType 'value': Failed to get property for '%s'");
+                "ColumnType 'value': Failed to get property for '%s'", fl);
         g_free (fl);
         return FALSE;
     }
@@ -470,7 +470,7 @@ ct_value_edit (DonnaColumnType    *ct,
         {
             gchar *fl = donna_node_get_full_location (node);
             g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
-                    "ColumnType 'value': Failed to get matching extras for '%s'");
+                    "ColumnType 'value': Failed to get matching extras for '%s'", fl);
             g_free (fl);
             return FALSE;
         }
@@ -742,8 +742,6 @@ ct_value_render (DonnaColumnType    *ct,
                  DonnaNode          *node,
                  GtkCellRenderer    *renderer)
 {
-    DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
-
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
 
     if (* (gboolean *) data)
