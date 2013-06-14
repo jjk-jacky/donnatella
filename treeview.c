@@ -7409,13 +7409,6 @@ donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
                 priv->name);
         return FALSE;
     }
-    if (G_UNLIKELY (!priv->is_minitree))
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': maxi_collapse() only works in mini-tree",
-                priv->name);
-        return FALSE;
-    }
 
     type = convert_row_id_to_iter (tree, rowid, &iter);
     if (type != ROW_ID_ROW)
