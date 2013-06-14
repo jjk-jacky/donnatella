@@ -331,7 +331,60 @@ refresher (DonnaTask    *task,
         gint state;
         g_object_get (t, "state", &state, NULL);
         g_value_init (&v, G_TYPE_INT);
-        g_value_set_int (&v, state);
+        switch (state)
+        {
+            case DONNA_TASK_STOPPED:
+                g_value_set_int (&v, ST_STOPPED);
+                break;
+            case DONNA_TASK_WAITING:
+                g_value_set_int (&v, ST_WAITING);
+                break;
+            case DONNA_TASK_RUNNING:
+            case DONNA_TASK_PAUSING:
+            case DONNA_TASK_CANCELLING:
+            case DONNA_TASK_IN_RUN: /* silence warning */
+                g_value_set_int (&v, ST_RUNNING);
+                break;
+            case DONNA_TASK_PAUSED:
+                {
+                    DonnaProviderTask *tm;
+                    DonnaProviderTaskPrivate *priv;
+                    guint i;
+
+                    tm = (DonnaProviderTask *) donna_node_peek_provider (node);
+                    priv = tm->priv;
+
+                    lock_manager (tm, TM_BUSY_READ);
+                    for (i = 0; i < priv->tasks->len; ++i)
+                    {
+                        struct task *_t = &g_array_index (priv->tasks, struct task, i);
+                        if (_t->task == t)
+                        {
+                            if (_t->own_pause)
+                                g_value_set_int (&v, ST_ON_HOLD);
+                            else
+                                g_value_set_int (&v, ST_PAUSED);
+                            break;
+                        }
+                    }
+                    unlock_manager (tm, TM_BUSY_READ);
+                    break;
+                }
+            case DONNA_TASK_CANCELLED:
+                g_value_set_int (&v, ST_CANCELLED);
+                break;
+            case DONNA_TASK_FAILED:
+                g_value_set_int (&v, ST_FAILED);
+                break;
+            case DONNA_TASK_DONE:
+                g_value_set_int (&v, ST_DONE);
+                break;
+            case DONNA_TASK_STATE_UNKNOWN:
+            case DONNA_TASK_PRE_RUN:
+            case DONNA_TASK_POST_RUN:
+                /* silence warning */
+                break;
+        }
     }
     else
         return FALSE;
