@@ -67,6 +67,7 @@ struct _DonnaConfigExtraListFlags
 struct _DonnaConfigExtra
 {
     DonnaConfigExtraType type;
+    gchar               *title;
     gpointer            *values;
 };
 

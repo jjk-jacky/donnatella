@@ -676,7 +676,8 @@ render_type (DonnaColumnType    *ct,
 
         extras = donna_config_get_extras (donna_app_peek_config (priv->app),
                 g_value_get_string (&extra), NULL);
-        lbl = (extras) ? g_value_get_string (&extra) : "<unknown extra>";
+        lbl = (extras) ? ((extras->title) ? extras->title
+                : g_value_get_string (&extra)) : "<unknown extra>";
     }
     else if (type == G_TYPE_BOOLEAN)
         lbl = "Boolean";
@@ -1026,7 +1027,14 @@ ct_value_node_cmp (DonnaColumnType    *ct,
 
         donna_node_get (node1, TRUE, "option-extra", &has, &value1, NULL);
         if (has == DONNA_NODE_VALUE_SET)
-            t1 = g_value_get_string (&value1);
+        {
+            const DonnaConfigExtra *extras;
+
+            extras = donna_config_get_extras (config,
+                    g_value_get_string (&value1), NULL);
+            t1 = (extras) ? ((extras->title) ? extras->title
+                    : g_value_get_string (&value1)) : "<unknown extra>";
+        }
         else
         {
             donna_node_get (node1, TRUE, "option-value", &has, &value1, NULL);
@@ -1048,7 +1056,14 @@ ct_value_node_cmp (DonnaColumnType    *ct,
 
         donna_node_get (node2, TRUE, "option-extra", &has, &value2, NULL);
         if (has == DONNA_NODE_VALUE_SET)
-            t2 = g_value_get_string (&value2);
+        {
+            const DonnaConfigExtra *extras;
+
+            extras = donna_config_get_extras (config,
+                    g_value_get_string (&value2), NULL);
+            t2 = (extras) ? ((extras->title) ? extras->title
+                    : g_value_get_string (&value2)) : "<unknown extra>";
+        }
         else
         {
             donna_node_get (node2, TRUE, "option-value", &has, &value2, NULL);

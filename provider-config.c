@@ -213,6 +213,7 @@ free_extra (DonnaConfigExtra *extra)
 {
     if (!extra)
         return;
+    g_free (extra->title);
     if (extra->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
     {
         DonnaConfigExtraList **values;
@@ -605,6 +606,7 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
     for (section = first_section ; section; section = section->next)
     {
+        gchar *title;
         gchar *s;
 
         s = get_value (section->value, "type");
@@ -615,6 +617,7 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
             continue;
         }
 
+        title = NULL;
         if (streq (s, "list"))
         {
             struct parsed_data *parsed;
@@ -650,6 +653,8 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
                     values[c++] = v;
                 }
+                else if (streq (parsed->name, "title"))
+                    title = g_strdup (parsed->value);
                 else if (!streq (parsed->name, "type"))
                     g_warning ("Invalid option '%s' in definition of %s '%s'",
                             parsed->name, s, section->name);
@@ -657,6 +662,7 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
             extra = g_new (DonnaConfigExtra, 1);
             extra->type = DONNA_CONFIG_EXTRA_TYPE_LIST;
+            extra->title = title;
             extra->values = (gpointer) values;
 
             g_hash_table_insert (priv->extras,
@@ -722,6 +728,8 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
                     values[c++] = v;
                 }
+                else if (streq (parsed->name, "title"))
+                    title = g_strdup (parsed->value);
                 else if (!streq (parsed->name, "type"))
                     g_warning ("Invalid option '%s' in definition of %s '%s'",
                             parsed->name, s, section->name);
@@ -731,6 +739,7 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
             extra = g_new (DonnaConfigExtra, 1);
             extra->type = DONNA_CONFIG_EXTRA_TYPE_LIST_INT;
+            extra->title = title;
             extra->values = (gpointer) values;
 
             g_hash_table_insert (priv->extras,
@@ -814,6 +823,8 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
                     values[c++] = e;
                 }
+                else if (streq (parsed->name, "title"))
+                    title = g_strdup (parsed->value);
                 else if (!streq (parsed->name, "type"))
                     g_warning ("Invalid option '%s' in definition of %s '%s'",
                             parsed->name, s, section->name);
@@ -823,6 +834,7 @@ donna_config_load_config_def (DonnaConfig *config, gchar *data)
 
             extra = g_new (DonnaConfigExtra, 1);
             extra->type = DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS;
+            extra->title = title;
             extra->values = (gpointer) values;
 
             g_hash_table_insert (priv->extras,
