@@ -62,6 +62,11 @@ static GPtrArray *      ct_value_render             (DonnaColumnType    *ct,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkCellRenderer    *renderer);
+static gboolean         ct_value_set_tooltip        (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     guint               index,
+                                                     DonnaNode          *node,
+                                                     GtkTooltip         *tooltip);
 static gint             ct_value_node_cmp           (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
@@ -77,6 +82,7 @@ ct_value_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_props        = ct_value_get_props;
     interface->edit             = ct_value_edit;
     interface->render           = ct_value_render;
+    interface->set_tooltip      = ct_value_set_tooltip;
     interface->node_cmp         = ct_value_node_cmp;
 }
 
@@ -632,30 +638,24 @@ ct_value_edit (DonnaColumnType    *ct,
 }
 
 static GPtrArray *
-render_type (DonnaColumnType    *ct,
-             guint               index,
-             DonnaNode          *node,
-             GtkCellRenderer    *renderer)
+get_text_for_type (DonnaColumnType  *ct,
+                   guint             index,
+                   DonnaNode        *node,
+                   GValue           *value,
+                   gchar           **text,
+                   gchar           **free)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
     DonnaNodeHasValue has;
-    GValue value = G_VALUE_INIT;
     GValue extra = G_VALUE_INIT;
     GType type;
-    const gchar *lbl;
 
     if (index == RND_COMBO)
-    {
-        g_object_set (renderer, "visible", FALSE, NULL);
         return NULL;
-    }
 
-    donna_node_get (node, FALSE, "option-value", &has, &value, NULL);
+    donna_node_get (node, FALSE, "option-value", &has, value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
-    {
-        g_object_set (renderer, "visible", FALSE, NULL);
         return NULL;
-    }
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
     {
         GPtrArray *arr;
@@ -663,11 +663,10 @@ render_type (DonnaColumnType    *ct,
         arr = g_ptr_array_new_full (2, g_free);
         g_ptr_array_add (arr, g_strdup ("option-value"));
         g_ptr_array_add (arr, g_strdup ("option-extra"));
-        g_object_set (renderer, "visible", FALSE, NULL);
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
-    type = G_VALUE_TYPE (&value);
+    type = G_VALUE_TYPE (value);
 
     donna_node_get (node, FALSE, "option-extra", &has, &extra, NULL);
     if (has == DONNA_NODE_VALUE_SET)
@@ -676,44 +675,45 @@ render_type (DonnaColumnType    *ct,
 
         extras = donna_config_get_extras (donna_app_peek_config (priv->app),
                 g_value_get_string (&extra), NULL);
-        lbl = (extras) ? ((extras->title) ? extras->title
-                : g_value_get_string (&extra)) : "<unknown extra>";
+        if (extras)
+        {
+            if (extras->title)
+                *text = extras->title;
+            else
+                *text = *free = g_value_dup_string (&extra);
+        }
+        else
+            *text = "<unknown extra>";
+        g_value_unset (&extra);
     }
     else if (type == G_TYPE_BOOLEAN)
-        lbl = "Boolean";
+        *text = "Boolean";
     else if (type == G_TYPE_INT)
-        lbl = "Integer";
+        *text = "Integer";
     else if (type == G_TYPE_STRING)
-        lbl = "String";
+        *text = "String";
     else /* G_TYPE_DOUBLE */
-        lbl = "Double";
+        *text = "Double";
 
-    g_object_set (renderer,
-            "text",     lbl,
-            "visible",  TRUE,
-            NULL);
     return NULL;
 }
 
 static GPtrArray *
-render_value (DonnaColumnType    *ct,
-              guint               index,
-              DonnaNode          *node,
-              GtkCellRenderer    *renderer)
+get_text_for_value (DonnaColumnType *ct,
+                    guint            index,
+                    DonnaNode       *node,
+                    GValue          *value,
+                    gchar          **text,
+                    gchar          **free)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
     DonnaNodeHasValue has;
-    GValue value = G_VALUE_INIT;
     GValue extra = G_VALUE_INIT;
     GType type;
-    gchar *s;
 
-    donna_node_get (node, FALSE, "option-value", &has, &value, NULL);
+    donna_node_get (node, FALSE, "option-value", &has, value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
-    {
-        g_object_set (renderer, "visible", FALSE, NULL);
         return NULL;
-    }
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
     {
         GPtrArray *arr;
@@ -721,11 +721,10 @@ render_value (DonnaColumnType    *ct,
         arr = g_ptr_array_new_full (2, g_free);
         g_ptr_array_add (arr, g_strdup ("option-value"));
         g_ptr_array_add (arr, g_strdup ("option-extra"));
-        g_object_set (renderer, "visible", FALSE, NULL);
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
-    type = G_VALUE_TYPE (&value);
+    type = G_VALUE_TYPE (value);
 
     donna_node_get (node, FALSE, "option-extra", &has, &extra, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR
@@ -737,16 +736,12 @@ render_value (DonnaColumnType    *ct,
     if (type == G_TYPE_STRING)
     {
         if (has == DONNA_NODE_VALUE_NONE && index == RND_TEXT)
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     g_value_get_string (&value),
-                    NULL);
+            *text = (gchar *) g_value_get_string (value);
         else if (has == DONNA_NODE_VALUE_SET && index == RND_COMBO)
         {
             const DonnaConfigExtra *extras;
-            const gchar *label;
 
-            label = g_value_get_string (&value);
+            *text = (gchar *) g_value_get_string (value);
             extras = donna_config_get_extras (donna_app_peek_config (priv->app),
                         g_value_get_string (&extra), NULL);
             if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
@@ -754,55 +749,39 @@ render_value (DonnaColumnType    *ct,
                 DonnaConfigExtraList **extra;
 
                 for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
-                    if (streq ((*extra)->value, label))
+                    if (streq ((*extra)->value, *text))
                     {
                         if ((*extra)->label)
-                            label = (*extra)->label;
+                            *text = (*extra)->label;
                         break;
                     }
             }
-
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     label,
-                    NULL);
         }
-        else
-            g_object_set (renderer, "visible", FALSE, NULL);
     }
     else if (type == G_TYPE_INT)
     {
         if (has == DONNA_NODE_VALUE_NONE && index == RND_TEXT)
-        {
-            s = g_strdup_printf ("%d", g_value_get_int (&value));
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     s,
-                    NULL);
-            g_free (s);
-        }
+            *text = *free = g_strdup_printf ("%d", g_value_get_int (value));
         else if (has == DONNA_NODE_VALUE_SET && index == RND_COMBO)
         {
             const DonnaConfigExtra *extras;
-            const gchar *label;
-            gchar *s = NULL;
             gint id;
 
-            label = "<failed to get label>";
+            *text = "<failed to get label>";
             extras = donna_config_get_extras (donna_app_peek_config (priv->app),
                         g_value_get_string (&extra), NULL);
             if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
             {
                 DonnaConfigExtraListInt **extra;
 
-                id = g_value_get_int (&value);
+                id = g_value_get_int (value);
                 for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
                     if ((*extra)->value == id)
                     {
                         if ((*extra)->label)
-                            label = (*extra)->label;
+                            *text = (*extra)->label;
                         else
-                            label = (*extra)->in_file;
+                            *text = (*extra)->in_file;
                         break;
                     }
             }
@@ -811,7 +790,7 @@ render_value (DonnaColumnType    *ct,
                 DonnaConfigExtraListFlags **extra;
                 GString *str;
 
-                id = g_value_get_int (&value);
+                id = g_value_get_int (value);
                 str = g_string_sized_new (23 /* random */);
                 for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
                     if (id & (*extra)->value)
@@ -821,65 +800,27 @@ render_value (DonnaColumnType    *ct,
                 {
                     /* remove trailing comma & space */
                     g_string_truncate (str, str->len - 2);
-                    label = s = g_string_free (str, FALSE);
+                    *text = *free = g_string_free (str, FALSE);
                 }
                 else
                 {
                     g_string_free (str, TRUE);
-                    label = "(nothing)";
+                    *text = "(nothing)";
                 }
             }
-
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     label,
-                    NULL);
-            g_free (s);
         }
-        else
-            g_object_set (renderer, "visible", FALSE, NULL);
     }
-    else if (type == G_TYPE_DOUBLE)
+    else if (index == RND_TEXT)
     {
-        if (index == RND_TEXT)
-        {
-            s = g_strdup_printf ("%f", g_value_get_double (&value));
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     s,
-                    NULL);
-            g_free (s);
-        }
+        if (type == G_TYPE_DOUBLE)
+            *text = *free = g_strdup_printf ("%f", g_value_get_double (value));
+        if (type == G_TYPE_BOOLEAN)
+            *text = (g_value_get_boolean (value)) ? "TRUE" : "FALSE";
         else
-            g_object_set (renderer, "visible", FALSE, NULL);
-    }
-    else if (type == G_TYPE_BOOLEAN)
-    {
-        if (index == RND_TEXT)
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     (g_value_get_boolean (&value)) ? "TRUE" : "FALSE",
-                    NULL);
-        else
-            g_object_set (renderer, "visible", FALSE, NULL);
-    }
-    else
-    {
-        if (index == RND_TEXT)
-        {
-            s = g_strdup_printf ("<unsupported option type:%s>",
+            *text = *free = g_strdup_printf ("<unsupported option type:%s>",
                     g_type_name (type));
-            g_object_set (renderer,
-                    "visible",  TRUE,
-                    "text",     s,
-                    NULL);
-            g_free (s);
-        }
-        else
-            g_object_set (renderer, "visible", FALSE, NULL);
     }
 
-    g_value_unset (&value);
     if (has == DONNA_NODE_VALUE_SET)
         g_value_unset (&extra);
     return NULL;
@@ -892,12 +833,62 @@ ct_value_render (DonnaColumnType    *ct,
                  DonnaNode          *node,
                  GtkCellRenderer    *renderer)
 {
+    GValue value = G_VALUE_INIT;
+    gchar *text = NULL;
+    gchar *free = NULL;
+    GPtrArray *arr;
+
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
 
     if (* (gboolean *) data)
-        return render_type (ct, index, node, renderer);
+        arr = get_text_for_type (ct, index, node, &value, &text, &free);
     else
-        return render_value (ct, index, node, renderer);
+        arr = get_text_for_value (ct, index, node, &value, &text, &free);
+
+    if (text)
+        g_object_set (renderer,
+                "text",         text,
+                "ellipsize",    PANGO_ELLIPSIZE_END,
+                "ellipsize-set",TRUE,
+                "visible",      TRUE,
+                NULL);
+    else
+        g_object_set (renderer, "visible", FALSE, NULL);
+
+    g_free (free);
+    if (G_IS_VALUE (&value))
+        g_value_unset (&value);
+    return arr;
+}
+
+static gboolean
+ct_value_set_tooltip (DonnaColumnType    *ct,
+                      gpointer            data,
+                      guint               index,
+                      DonnaNode          *node,
+                      GtkTooltip         *tooltip)
+{
+    GValue value = G_VALUE_INIT;
+    gchar *text = NULL;
+    gchar *free = NULL;
+    GPtrArray *arr;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
+
+    if (* (gboolean *) data)
+        arr = get_text_for_type (ct, index, node, &value, &text, &free);
+    else
+        arr = get_text_for_value (ct, index, node, &value, &text, &free);
+
+    if (arr)
+        g_ptr_array_unref (arr);
+
+    if (text)
+        gtk_tooltip_set_text (tooltip, text);
+
+    g_free (free);
+    g_value_unset (&value);
+    return text != NULL;
 }
 
 union val
