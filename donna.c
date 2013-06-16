@@ -20,6 +20,8 @@
 #include "columntype-value.h"
 #include "node.h"
 #include "filter.h"
+#include "sort.h"
+#include "command.h"
 #include "macros.h"
 
 guint donna_debug_flags = 0;
@@ -119,6 +121,10 @@ static void             donna_donna_run_task        (DonnaApp       *app,
 static DonnaTaskManager*donna_donna_get_task_manager(DonnaApp       *app);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
+static gboolean         donna_donna_show_menu       (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     const gchar    *menu,
+                                                     GError       **error);
 static void             donna_donna_show_error      (DonnaApp       *app,
                                                      const gchar    *title,
                                                      const GError   *error);
@@ -136,6 +142,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->run_task             = donna_donna_run_task;
     interface->get_task_manager     = donna_donna_get_task_manager;
     interface->get_treeview         = donna_donna_get_treeview;
+    interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
 }
 
@@ -825,6 +832,518 @@ donna_donna_get_treeview (DonnaApp       *app,
         }
     }
     return tree;
+}
+
+struct menu_click_data
+{
+    DonnaDonna  *donna;
+    gchar       *name;
+    GPtrArray   *nodes;
+};
+
+static gboolean
+menu_unmap_cb (GtkWidget *menu, GdkEvent *event, struct menu_click_data *data)
+{
+    gtk_widget_destroy (menu);
+    g_object_unref (menu);
+    g_ptr_array_unref (data->nodes);
+    g_free (data->name);
+    g_free (data);
+    return FALSE;
+}
+
+#define ensure_str()  do {                          \
+    if (!str)                                       \
+        str = g_string_new (NULL);                  \
+    g_string_append_len (str, sce, s - sce);        \
+} while (0)
+gchar *
+menu_parse_location (DonnaDonna     *donna,
+                     const gchar    *sce,
+                     DonnaNode      *node)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    GString *str = NULL;
+    gchar *s = (gchar *) sce;
+    gchar *ss;
+
+    while ((s = strchr (s, '%')))
+    {
+        switch (s[1])
+        {
+            case 'N':
+                ensure_str ();
+                if (node)
+                {
+                    ss = donna_node_get_full_location (node);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                }
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            case 'n':
+                ensure_str ();
+                if (node)
+                {
+                    ss = donna_node_get_location (node);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                }
+                else
+                    g_string_append_c (str, '-');
+                break;
+
+            default:
+                s += 2;
+                continue;
+        }
+        s += 2;
+        sce = (const gchar *) s;
+    }
+
+    if (!str)
+        return NULL;
+
+    g_string_append (str, sce);
+    return g_string_free (str, FALSE);
+}
+#undef ensure_str
+
+struct rc_data
+{
+    gboolean         is_heap;
+    DonnaApp        *app;
+    DonnaNode       *node;
+    gchar           *fl;
+    DonnaCommand    *command;
+    gchar           *start;
+    gchar           *end;
+    guint            i;
+    GPtrArray       *arr;
+};
+
+static void
+free_rc_data (struct rc_data *data)
+{
+    g_free (data->fl);
+    if (data->node)
+        g_object_unref (data->node);
+    if (data->arr)
+        _donna_command_free_args (data->command, data->arr);
+    if (data->is_heap)
+        g_free (data);
+}
+
+static void
+command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (data->app, donna_task_get_error (task),
+                "Action triggered failed");
+    free_rc_data (data);
+}
+
+static DonnaTaskState
+run_command (DonnaTask *task, struct rc_data *data)
+{
+    GError *err = NULL;
+    DonnaTask *cmd_task;
+
+    if (!data->command)
+    {
+        data->command = _donna_command_init_parse (data->fl + 8,
+                &data->start, &data->end, &err);
+        if (!data->command)
+        {
+            donna_app_show_error (data->app, err,
+                    "Cannot trigger action, parsing command failed");
+            g_clear_error (&err);
+            free_rc_data (data);
+            return DONNA_TASK_FAILED;
+        }
+
+        data->arr = g_ptr_array_sized_new (data->command->argc + 3);
+        g_ptr_array_add (data->arr, task);
+    }
+    for ( ; data->i < data->command->argc; ++data->i)
+    {
+        gchar c;
+
+        c = *data->end;
+        *data->end = '\0';
+        if (streq (data->start, "%N"))
+        {
+            if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_NODE)
+                g_ptr_array_add (data->arr, g_object_ref (data->node));
+            else
+                goto str_parsing;
+        }
+        else
+        {
+            gchar *ss;
+            gpointer ptr;
+
+str_parsing:
+            ss = menu_parse_location ((DonnaDonna *) data->app, data->start,
+                    data->node);
+            if (!_donna_command_convert_arg (data->app,
+                        data->command->arg_type[data->i], TRUE, task != NULL,
+                        (ss) ? ss : data->start, &ptr, &err))
+            {
+                g_free (ss);
+                if (g_error_matches (err, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK))
+                {
+                    struct rc_data *d;
+
+                    /* restore */
+                    *data->end = c;
+
+                    /* need to put data on heap */
+                    d = g_new (struct rc_data, 1);
+                    memcpy (d, data, sizeof (struct rc_data));
+                    d->is_heap = TRUE;
+
+                    /* and continue parsing in a task/new thread */
+                    task = donna_task_new ((task_fn) run_command, d,
+                            (GDestroyNotify) free_rc_data);
+                    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
+                    donna_app_run_task (data->app, task);
+                    return DONNA_TASK_DONE;
+                }
+                donna_app_show_error (data->app, err,
+                        "Cannot trigger action, parsing command failed");
+                g_clear_error (&err);
+                free_rc_data (data);
+                return DONNA_TASK_FAILED;
+            }
+            g_free (ss);
+            g_ptr_array_add (data->arr, ptr);
+        }
+        *data->end = c;
+
+        if (!_donna_command_get_next_arg (data->command, data->i,
+                    &data->start, &data->end, &err))
+        {
+            donna_app_show_error (data->app, err,
+                    "Cannot trigger action, parsing command failed");
+            g_clear_error (&err);
+            free_rc_data (data);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    if (!_donna_command_checks_post_parsing (data->command, data->i,
+                data->start, data->end, &err))
+    {
+        donna_app_show_error (data->app, err,
+                "Cannot trigger action, parsing command failed");
+        g_clear_error (&err);
+        free_rc_data (data);
+        return DONNA_TASK_FAILED;
+    }
+
+    /* add DonnaApp* as extra arg for command */
+    g_ptr_array_add (data->arr, data->app);
+
+    cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
+    donna_task_set_visibility (cmd_task, data->command->visibility);
+    donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb, data,
+            (GDestroyNotify) free_rc_data);
+    if (task)
+        /* avoid starting another thread, since we're already in one */
+        donna_task_set_can_block (g_object_ref_sink (cmd_task));
+    donna_app_run_task (data->app, cmd_task);
+    if (task)
+    {
+        donna_task_wait_for_it (cmd_task);
+        g_object_unref (cmd_task);
+    }
+}
+
+static gboolean
+menuitem_button_press_cb (GtkWidget              *item,
+                          GdkEventButton         *event,
+                          struct menu_click_data *mc)
+{
+    DonnaDonnaPrivate *priv = mc->donna->priv;
+    struct rc_data data;
+    /* longest possible is "ctrl_shift_middle_click" (len=23) */
+    gchar buf[24];
+    gchar *b = buf;
+
+    if (event->state & GDK_CONTROL_MASK)
+    {
+        strcpy (b, "ctrl_");
+        b += 5;
+    }
+    if (event->state & GDK_SHIFT_MASK)
+    {
+        strcpy (b, "shift_");
+        b += 6;
+    }
+    if (event->button == 1)
+    {
+        strcpy (b, "left_");
+        b += 5;
+    }
+    else if (event->button == 2)
+    {
+        strcpy (b, "middle_");
+        b += 7;
+    }
+    else if (event->button == 3)
+    {
+        strcpy (b, "right_");
+        b += 6;
+    }
+    else
+        return FALSE;
+
+    strcpy (b, "click");
+
+    memset (&data, 0, sizeof (data));
+
+    if (!donna_config_get_string (priv->config, &data.fl, "menus/%s/%s",
+                mc->name, buf))
+        donna_config_get_string (priv->config, &data.fl, "defaults/menus/%s", buf);
+
+    if (!data.fl)
+    {
+        if (streq (buf, "left_click"))
+            /* hard-coded default for sanity */
+            data.fl = g_strdup ("command:node_activate (%N,0)");
+        else
+            return FALSE;
+    }
+
+    data.node = g_object_get_data ((GObject *) item, "node");
+    if (data.node)
+        g_object_ref (data.node);
+
+    /* for commands we'll do the parsing directly, to avoid converting args to
+     * string and back */
+    if (streqn (data.fl, "command:", 8))
+    {
+        data.app = (DonnaApp *) mc->donna;
+        /* run_command() will take care of freeing data as/when needed */
+        run_command (NULL, &data);
+    }
+    else
+    {
+        gchar *s;
+
+        s = menu_parse_location (mc->donna, data.fl, data.node);
+        if (s)
+        {
+            g_free (data.fl);
+            data.fl = s;
+        }
+        donna_app_trigger_node ((DonnaApp *) mc->donna, data.fl);
+        g_free (data.fl);
+        g_object_unref (data.node);
+    }
+    return FALSE;
+}
+
+struct sort_data
+{
+    guint               container_first    : 1;
+    guint               is_locale_based    : 1;
+    DonnaSortOptions    options            : 5;
+    guint               sort_special_first : 1;
+};
+
+static gint
+node_cmp (gconstpointer n1, gconstpointer n2, struct sort_data *sd)
+{
+    DonnaNode *node1 = * (DonnaNode **) n1;
+    DonnaNode *node2 = * (DonnaNode **) n2;
+    gchar *name1;
+    gchar *name2;
+    gint ret;
+
+    if (!node1)
+        return (node2) ? -1 : 0;
+    else if (!node2)
+        return 1;
+
+    if (sd->container_first)
+    {
+        gboolean is_container1;
+        gboolean is_container2;
+
+        is_container1 = donna_node_get_node_type (node1) == DONNA_NODE_CONTAINER;
+        is_container2 = donna_node_get_node_type (node2) == DONNA_NODE_CONTAINER;
+
+        if (is_container1)
+        {
+            if (!is_container2)
+            return -1;
+        }
+        else if (is_container2)
+            return 1;
+    }
+
+    name1 = donna_node_get_name (node1);
+    name2 = donna_node_get_name (node2);
+
+    if (sd->is_locale_based)
+    {
+        gchar *key1;
+        gchar *key2;
+
+        key1 = donna_sort_get_utf8_collate_key (name1, -1,
+                sd->options & DONNA_SORT_DOT_FIRST,
+                sd->sort_special_first,
+                sd->options & DONNA_SORT_NATURAL_ORDER);
+        key2 = donna_sort_get_utf8_collate_key (name2, -1,
+                sd->options & DONNA_SORT_DOT_FIRST,
+                sd->sort_special_first,
+                sd->options & DONNA_SORT_NATURAL_ORDER);
+
+        ret = strcmp (key1, key2);
+
+        g_free (key1);
+        g_free (key2);
+        g_free (name1);
+        g_free (name2);
+        return ret;
+    }
+
+    ret = donna_strcmp (name1, name2, sd->options);
+
+    g_free (name1);
+    g_free (name2);
+    return ret;
+}
+
+#define get_boolean(var, option, def_val)   do {            \
+    if (!donna_config_get_boolean (priv->config, &var,      \
+                "/menus/%s/" option, name))                 \
+        if (!donna_config_get_boolean (priv->config, &var,  \
+                    "/defaults/menus/" option))             \
+        {                                                   \
+            var = def_val;                                  \
+            donna_config_set_boolean (priv->config, var,    \
+                    "/defaults/menus/" option);             \
+        }                                                   \
+} while (0)
+
+static gboolean
+donna_donna_show_menu (DonnaApp       *app,
+                       GPtrArray      *nodes,
+                       const gchar    *name,
+                       GError       **error)
+{
+    DonnaDonnaPrivate *priv;
+    struct menu_click_data *data;
+    GtkWidget *menu;
+    gboolean sort;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
+    priv = ((DonnaDonna *) app)->priv;
+
+    get_boolean (sort, "sort", TRUE);
+    if (sort)
+    {
+        struct sort_data sd;
+        gboolean b;
+
+        memset (&sd, 0, sizeof (struct sort_data));
+
+        get_boolean (b, "container_first", TRUE);
+        sd.container_first = b;
+
+        get_boolean (b, "locale_based", FALSE);
+        sd.is_locale_based = b;
+
+        get_boolean (b, "natural_order", TRUE);
+        if (b)
+            sd.options |= DONNA_SORT_NATURAL_ORDER;
+
+        get_boolean (b, "dot_first", TRUE);
+        if (b)
+            sd.options |= DONNA_SORT_DOT_FIRST;
+
+        if (sd.is_locale_based)
+        {
+            get_boolean (b, "special_first", TRUE);
+            sd.sort_special_first = b;
+        }
+        else
+        {
+            get_boolean (b, "dot_mixed", FALSE);
+            if (b)
+                sd.options |= DONNA_SORT_DOT_MIXED;
+
+            get_boolean (b, "case_sensitive", FALSE);
+            if (!b)
+                sd.options |= DONNA_SORT_CASE_INSENSITIVE;
+
+            get_boolean (b, "ignore_spunct", FALSE);
+            if (b)
+                sd.options |= DONNA_SORT_IGNORE_SPUNCT;
+        }
+
+        g_ptr_array_sort_with_data (nodes, (GCompareDataFunc) node_cmp, &sd);
+    }
+
+    data = g_new (struct menu_click_data, 1);
+    data->donna = (DonnaDonna *) app;
+    data->name  = g_strdup (name);
+    data->nodes = nodes;
+
+    /* menu will not be packed anywhere, so we need to take ownership and handle
+     * it when done, i.e. when unmapped. It's also when we'll release our ref on
+     * the array of nodes. */
+    menu = g_object_ref_sink (gtk_menu_new ());
+    gtk_widget_add_events (menu, GDK_STRUCTURE_MASK);
+    g_signal_connect (menu, "unmap-event", (GCallback) menu_unmap_cb, data);
+
+    for (i = 0; i < nodes->len; ++i)
+    {
+        DonnaNode *node = nodes->pdata[i];
+        GtkWidget *item;
+        GtkWidget *image;
+        GdkPixbuf *icon;
+        gchar *name;
+
+        if (!node)
+            item = gtk_separator_menu_item_new ();
+        else
+        {
+            name = donna_node_get_name (node);
+            item = gtk_image_menu_item_new_with_label (name);
+            g_free (name);
+
+            if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
+            {
+                image = gtk_image_new_from_pixbuf (icon);
+                g_object_unref (icon);
+            }
+            else if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+                image = gtk_image_new_from_stock (GTK_STOCK_FILE, GTK_ICON_SIZE_MENU);
+            else /* DONNA_NODE_CONTAINER */
+                image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY, GTK_ICON_SIZE_MENU);
+
+            gtk_image_menu_item_set_image ((GtkImageMenuItem *) item, image);
+        }
+
+        g_object_set_data ((GObject *) item, "node", node);
+        gtk_widget_add_events (item, GDK_BUTTON_PRESS_MASK);
+        g_signal_connect (item, "button-press-event",
+                (GCallback) menuitem_button_press_cb, data);
+
+        gtk_widget_show (item);
+        gtk_menu_attach ((GtkMenu *) menu, item, 0, 1, i, i + 1);
+    }
+
+    gtk_menu_popup ((GtkMenu *) menu, NULL, NULL, NULL, NULL, 0,
+            gtk_get_current_event_time ());
+    return TRUE;
 }
 
 static void

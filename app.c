@@ -314,6 +314,33 @@ donna_app_get_treeview (DonnaApp    *app,
     return (*interface->get_treeview) (app, name);
 }
 
+gboolean
+donna_app_show_menu (DonnaApp       *app,
+                     GPtrArray      *nodes,
+                     const gchar    *menu,
+                     GError        **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (nodes != NULL, NULL);
+
+    if (G_UNLIKELY (nodes->len == 0))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Unable to show menu, empty array of nodes given");
+        g_ptr_array_unref (nodes);
+        return FALSE;
+    }
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->show_menu != NULL, NULL);
+
+    return (*interface->show_menu) (app, nodes, menu, error);
+}
+
 void
 donna_app_show_error (DonnaApp       *app,
                       const GError   *error,

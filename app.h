@@ -13,6 +13,12 @@
 
 G_BEGIN_DECLS
 
+#define DONNA_APP_ERROR         g_quark_from_static_string ("DonnaApp-Error")
+typedef enum
+{
+    DONNA_APP_ERROR_OTHER,
+} DonnaAppError;
+
 struct _DonnaAppInterface
 {
     GTypeInterface parent;
@@ -38,6 +44,10 @@ struct _DonnaAppInterface
     DonnaTaskManager *  (*get_task_manager)         (DonnaApp       *app);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
                                                      const gchar    *name);
+    gboolean            (*show_menu)                (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     const gchar    *menu,
+                                                     GError       **error);
     void                (*show_error)               (DonnaApp       *app,
                                                      const gchar    *title,
                                                      const GError   *error);
@@ -68,6 +78,10 @@ void                donna_app_run_task              (DonnaApp       *app,
 DonnaTaskManager *  donna_app_get_task_manager      (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);
+gboolean            donna_app_show_menu             (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     const gchar    *menu,
+                                                     GError        **error);
 void                donna_app_show_error            (DonnaApp       *app,
                                                      const GError   *error,
                                                      const gchar    *fmt,
