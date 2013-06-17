@@ -184,6 +184,14 @@ struct column
     gboolean             ctrl_held;
 };
 
+/* when filters use columns not loaded/used in tree */
+struct column_filter
+{
+    gchar           *name;
+    DonnaColumnType *ct;
+    gpointer         ct_data;
+};
+
 struct _DonnaTreeViewPrivate
 {
     DonnaApp            *app;
@@ -203,6 +211,8 @@ struct _DonnaTreeViewPrivate
      * list: empty column on the right
      * tree: non-visible column used as select-highlight-column when UNDERLINE */
     GtkTreeViewColumn   *blank_column;
+    /* list of struct column_filter */
+    GSList              *columns_filter;
 
     /* so we re-use the same renderer for all columns */
     GtkCellRenderer     *renderers[NB_RENDERERS];
@@ -589,6 +599,15 @@ free_column (struct column *_col)
     g_slice_free (struct column, _col);
 }
 
+static void
+free_column_filter (struct column_filter *col)
+{
+    g_free (col->name);
+    donna_columntype_free_data (col->ct, col->ct_data);
+    g_object_unref (col->ct);
+    g_free (col);
+}
+
 /* for use from finalize only */
 static gboolean
 free_tree_visuals (gpointer key, GSList *l)
@@ -612,6 +631,7 @@ donna_tree_view_finalize (GObject *object)
     g_array_free (priv->col_props, TRUE);
     g_ptr_array_free (priv->active_spinners, TRUE);
     g_slist_free_full (priv->columns, (GDestroyNotify) free_column);
+    g_slist_free_full (priv->columns_filter, (GDestroyNotify) free_column_filter);
     if (priv->tree_visuals)
         g_hash_table_foreach_remove (priv->tree_visuals,
                 (GHRFunc) free_tree_visuals, NULL);
@@ -2779,11 +2799,42 @@ static gpointer
 get_ct_data (const gchar *col_name, DonnaTreeView *tree)
 {
     struct column *_col;
+    gpointer ctdata;
+    GSList *l;
 
     /* since the col_name comes from user input, we could fail to find the
      * column in this case */
     _col = get_column_by_name (tree, col_name);
-    return (G_LIKELY (_col)) ? _col->ct_data : NULL;
+    if (_col)
+        return _col->ct_data;
+    /* this means it's a column not loaded/used in tree. But, we know it does
+     * exist (because filter has the ct) so we need to get it & load a ctdata,
+     * if we haven't already */
+    for (l = tree->priv->columns_filter; l; l = l->next)
+    {
+        struct column_filter *cf = l->data;
+
+        if (streq (cf->name, col_name))
+            return cf->ct_data;
+    }
+
+    {
+        DonnaTreeViewPrivate *priv = tree->priv;
+        struct column_filter *cf;
+        gchar *col_type = NULL;
+
+        cf = g_new (struct column_filter, 1);
+        cf->name = g_strdup (col_name);
+        donna_config_get_string (donna_app_peek_config (priv->app), &col_type,
+                "columns/%s/type", col_name);
+        cf->ct   = donna_app_get_columntype (priv->app,
+                (col_type) ? col_type : col_name);
+        g_free (col_type);
+        donna_columntype_refresh_data (cf->ct, priv->name, col_name,
+                priv->arrangement->columns_options, &cf->ct_data);
+        priv->columns_filter = g_slist_prepend (priv->columns_filter, cf);
+        return cf->ct_data;
+    }
 }
 
 static void
@@ -5113,6 +5164,10 @@ next:
         g_slice_free (struct column, _col);
         list = g_slist_delete_link (list, list);
     }
+
+    /* remove any column_filter we had loaded */
+    g_slist_free_full (priv->columns_filter, (GDestroyNotify) free_column_filter);
+    priv->columns_filter = NULL;
 }
 
 static gboolean
