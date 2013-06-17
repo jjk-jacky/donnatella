@@ -5106,6 +5106,7 @@ next:
         btn = gtk_tree_view_column_get_button (_col->column);
 #endif
         gtk_tree_view_remove_column (treev, _col->column);
+        g_ptr_array_unref (_col->renderers);
 #ifndef GTK_IS_JJK
         gtk_widget_unparent (btn);
 #endif
