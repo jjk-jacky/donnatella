@@ -8542,303 +8542,10 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
     g_object_unref (loc_node);
 }
 
-#define ensure_str()  do {                          \
-    if (!str)                                       \
-        str = g_string_new (NULL);                  \
-    g_string_append_len (str, sce, s - sce);        \
-} while (0)
-gchar *
-tree_parse_location (DonnaTreeView  *tree,
-                     DonnaTreeRow   *row,
-                     struct column  *_col,
-                     const gchar    *sce)
-{
-    DonnaTreeViewPrivate *priv = tree->priv;
-    GString *str = NULL;
-    gchar *s = (gchar *) sce;
-    gchar *ss;
-
-    while ((s = strchr (s, '%')))
-    {
-        switch (s[1])
-        {
-            case 'o':
-                ensure_str ();
-                g_string_append (str, priv->name);
-                break;
-
-            case 'L':
-                ensure_str ();
-                if (priv->location)
-                {
-                    ss = donna_node_get_full_location (priv->location);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            case 'l':
-                ensure_str ();
-                if (priv->location)
-                {
-                    ss = donna_node_get_location (priv->location);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            case 'R':
-                ensure_str ();
-                g_string_append (str, _col->name);
-                break;
-
-            case 'r':
-                ensure_str ();
-                if (row)
-                    g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            case 'N':
-                ensure_str ();
-                if (row)
-                {
-                    ss = donna_node_get_full_location (row->node);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            case 'n':
-                ensure_str ();
-                if (row)
-                {
-                    ss = donna_node_get_location (row->node);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            default:
-                s += 2;
-                continue;
-        }
-        s += 2;
-        sce = (const gchar *) s;
-    }
-
-    if (!str)
-        return NULL;
-
-    g_string_append (str, sce);
-    return g_string_free (str, FALSE);
-}
-#undef ensure_str
-
 #define is_regular_left_click(click, event)             \
     ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))  \
      == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)         \
      && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
-
-struct rc_data
-{
-    gboolean         is_heap;
-    DonnaTreeView   *tree;
-    struct column   *_col;
-    DonnaTreeRow    *row;
-    gchar           *fl;
-    DonnaCommand    *command;
-    gchar           *start;
-    gchar           *end;
-    guint            i;
-    GPtrArray       *arr;
-};
-
-static void
-free_rc_data (struct rc_data *data)
-{
-    g_free (data->row);
-    g_free (data->fl);
-    if (data->arr)
-        _donna_command_free_args (data->command, data->arr);
-    if (data->is_heap)
-        g_free (data);
-}
-
-static void
-command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
-{
-    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        donna_app_show_error (data->tree->priv->app, donna_task_get_error (task),
-                "Treeview '%s': Action triggered failed",
-                data->tree->priv->name);
-    free_rc_data (data);
-}
-
-static DonnaTaskState
-run_command (DonnaTask *task, struct rc_data *data)
-{
-    GError *err = NULL;
-    DonnaTask *cmd_task;
-
-    if (!data->command)
-    {
-        data->command = _donna_command_init_parse (data->fl + 8,
-                &data->start, &data->end, &err);
-        if (!data->command)
-        {
-            donna_app_show_error (data->tree->priv->app, err,
-                    "Treeview '%s': Cannot trigger action, parsing command failed",
-                    data->tree->priv->name);
-            g_clear_error (&err);
-            free_rc_data (data);
-            return DONNA_TASK_FAILED;
-        }
-
-        data->arr = g_ptr_array_sized_new (data->command->argc + 3);
-        g_ptr_array_add (data->arr, task);
-    }
-    for ( ; data->i < data->command->argc; ++data->i)
-    {
-        gchar c;
-
-        c = *data->end;
-        *data->end = '\0';
-        if (streq (data->start, "%o"))
-        {
-            if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_TREEVIEW)
-                g_ptr_array_add (data->arr, g_object_ref (data->tree));
-            else
-                goto str_parsing;
-        }
-        else if (streq (data->start, "%L"))
-        {
-            if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_NODE)
-                g_ptr_array_add (data->arr, g_object_ref (data->tree->priv->location));
-            else
-                goto str_parsing;
-        }
-        else if (streq (data->start, "%r"))
-        {
-            if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_ROW_ID)
-            {
-                DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
-                DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
-                rid->type = DONNA_ARG_TYPE_ROW;
-                rid->ptr  = r;
-                r->node = data->row->node;
-                r->iter = data->row->iter;
-                g_ptr_array_add (data->arr, rid);
-            }
-            else if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_ROW)
-            {
-                DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
-                r->node = data->row->node;
-                r->iter = data->row->iter;
-                g_ptr_array_add (data->arr, r);
-            }
-            else
-                goto str_parsing;
-        }
-        else if (streq (data->start, "%N"))
-        {
-            if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_NODE)
-                g_ptr_array_add (data->arr, g_object_ref (data->row->node));
-            else
-                goto str_parsing;
-        }
-        else
-        {
-            gchar *ss;
-            gpointer ptr;
-
-str_parsing:
-            ss = tree_parse_location (data->tree, data->row, data->_col, data->start);
-            if (!_donna_command_convert_arg (data->tree->priv->app,
-                        data->command->arg_type[data->i], TRUE, task != NULL,
-                        (ss) ? ss : data->start, &ptr, &err))
-            {
-                g_free (ss);
-                if (g_error_matches (err, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK))
-                {
-                    struct rc_data *d;
-
-                    /* restore */
-                    *data->end = c;
-
-                    /* need to put data on heap */
-                    d = g_new (struct rc_data, 1);
-                    memcpy (d, data, sizeof (struct rc_data));
-                    d->is_heap = TRUE;
-
-                    /* and continue parsing in a task/new thread */
-                    task = donna_task_new ((task_fn) run_command, d,
-                            (GDestroyNotify) free_rc_data);
-                    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
-                    donna_app_run_task (data->tree->priv->app, task);
-                    return DONNA_TASK_DONE;
-                }
-                donna_app_show_error (data->tree->priv->app, err,
-                        "Treeview '%s': Cannot trigger action, parsing command failed",
-                        data->tree->priv->name);
-                g_clear_error (&err);
-                free_rc_data (data);
-                return DONNA_TASK_FAILED;
-            }
-            g_free (ss);
-            g_ptr_array_add (data->arr, ptr);
-        }
-        *data->end = c;
-
-        if (!_donna_command_get_next_arg (data->command, data->i,
-                    &data->start, &data->end, &err))
-        {
-            donna_app_show_error (data->tree->priv->app, err,
-                    "Treeview '%s': Cannot trigger action, parsing command failed",
-                    data->tree->priv->name);
-            g_clear_error (&err);
-            free_rc_data (data);
-            return DONNA_TASK_FAILED;
-        }
-    }
-
-    if (!_donna_command_checks_post_parsing (data->command, data->i,
-                data->start, data->end, &err))
-    {
-        donna_app_show_error (data->tree->priv->app, err,
-                "Treeview '%s': Cannot trigger action, parsing command failed",
-                data->tree->priv->name);
-        g_clear_error (&err);
-        free_rc_data (data);
-        return DONNA_TASK_FAILED;
-    }
-
-    /* add DonnaApp* as extra arg for command */
-    g_ptr_array_add (data->arr, data->tree->priv->app);
-
-    cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
-    donna_task_set_visibility (cmd_task, data->command->visibility);
-    donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb, data,
-            (GDestroyNotify) free_rc_data);
-    if (task)
-        /* avoid starting another thread, since we're already in one */
-        donna_task_set_can_block (g_object_ref_sink (cmd_task));
-    donna_app_run_task (data->tree->priv->app, cmd_task);
-    if (task)
-    {
-        donna_task_wait_for_it (cmd_task);
-        g_object_unref (cmd_task);
-    }
-}
 
 enum
 {
@@ -8846,6 +8553,149 @@ enum
     CLICK_ON_BLANK,
     CLICK_ON_EXPANDER,
 };
+
+struct conv_data
+{
+    DonnaTreeView *tree;
+    DonnaTreeRow  *row;
+    struct column *_col;
+};
+
+static void
+free_conv_data (struct conv_data *data)
+{
+    g_free (data->row);
+    g_free (data);
+}
+
+static gboolean
+tree_conv_flag (const gchar       c,
+                DonnaArgType      type,
+                gpointer         *out,
+                struct conv_data *data)
+{
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    GString *str = *out;
+    gchar *s;
+
+    switch (c)
+    {
+        case 'o':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+                g_string_append (str, priv->name);
+            else if (type == DONNA_ARG_TYPE_TREEVIEW)
+                *out = g_object_ref (data->tree);
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'L':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (priv->location)
+                {
+                    s = donna_node_get_full_location (priv->location);
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+                else
+                    g_string_append_c (str, '-');
+            }
+            else if (type == DONNA_ARG_TYPE_NODE)
+                *out = g_object_ref (priv->location);
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'l':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (priv->location)
+                {
+                    s = donna_node_get_location (priv->location);
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+                else
+                    g_string_append_c (str, '-');
+            }
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'R':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+                g_string_append (str, data->_col->name);
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'r':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (data->row)
+                    g_string_append_printf (str, "[%p;%p]",
+                            data->row->node, data->row->iter);
+                else
+                    g_string_append_c (str, '-');
+            }
+            else if (type == DONNA_ARG_TYPE_ROW_ID)
+            {
+                DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
+                rid->type = DONNA_ARG_TYPE_ROW;
+                rid->ptr  = r;
+                r->node = data->row->node;
+                r->iter = data->row->iter;
+                *out = rid;
+            }
+            else if (type == DONNA_ARG_TYPE_ROW)
+            {
+                DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
+                r->node = data->row->node;
+                r->iter = data->row->iter;
+                *out = r;
+            }
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'N':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (data->row)
+                {
+                    s = donna_node_get_full_location (data->row->node);
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+                else
+                    g_string_append_c (str, '-');
+            }
+            else if (type == DONNA_ARG_TYPE_NODE)
+                *out = g_object_ref (data->row->node);
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'n':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (data->row)
+                {
+                    s = donna_node_get_location (data->row->node);
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+                else
+                    g_string_append_c (str, '-');
+            }
+            else
+                return FALSE;
+            return TRUE;
+    }
+    return FALSE;
+}
 
 static void
 handle_click (DonnaTreeView     *tree,
@@ -8858,7 +8708,8 @@ handle_click (DonnaTreeView     *tree,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
-    struct rc_data data;
+    struct conv_data *data;
+    gchar *fl;
     gboolean is_tree = is_tree (tree);
     gchar *clicks = NULL;
     /* longest possible is "blankcol_ctrl_shift_middle_double_click" (len=39) */
@@ -8905,15 +8756,16 @@ handle_click (DonnaTreeView     *tree,
     strcpy (b, "click");
 
     config = donna_app_peek_config (priv->app);
-    memset (&data, 0, sizeof (data));
-    data._col = get_column_by_column (tree, column);
+    data = g_new0 (struct conv_data, 1);
+    data->tree = tree;
+    data->_col = get_column_by_column (tree, column);
 
     if (!iter)
     {
         memcpy (buf, "blankrow_", 9 * sizeof (gchar));
         b = buf;
     }
-    else if (!data._col)
+    else if (!data->_col)
     {
         memcpy (buf, "blankcol_", 9 * sizeof (gchar));
         b = buf;
@@ -8957,8 +8809,8 @@ handle_click (DonnaTreeView     *tree,
                 DONNA_TREE_COL_CLICKS,  &clicks,
                 -1);
 
-    data.fl = _donna_config_get_string_tree_column (config, priv->name,
-            (data._col) ? data._col->name : NULL,
+    fl = _donna_config_get_string_tree_column (config, priv->name,
+            (data->_col) ? data->_col->name : NULL,
             is_tree,
             (is_tree) ? clicks : priv->arrangement->columns_options,
             (is_tree) ? "treeviews/tree" : "treeviews/list",
@@ -8966,34 +8818,18 @@ handle_click (DonnaTreeView     *tree,
 
     g_free (clicks);
 
-    if (!data.fl)
+    if (!fl)
+    {
+        g_free (data);
         return;
+    }
 
     if (iter)
-        data.row = get_row_for_iter (tree, iter);
+        data->row = get_row_for_iter (tree, iter);
 
-    /* for commands we'll do the parsing directly, to avoid converting args to
-     * string and back, or the need to use get_node tasks */
-    if (streqn (data.fl, "command:", 8))
-    {
-        data.tree = tree;
-        /* run_command() will take care of freeing data as/when needed */
-        run_command (NULL, &data);
-    }
-    else
-    {
-        gchar *ss;
-
-        ss = tree_parse_location (tree, data.row, data._col, data.fl);
-        if (ss)
-        {
-            g_free (data.fl);
-            data.fl = ss;
-        }
-        donna_app_trigger_node (priv->app, data.fl);
-        g_free (data.fl);
-        g_free (data.row);
-    }
+    _donna_command_parse_run (priv->app, "olLrRnN",
+            (_conv_flag_fn) tree_conv_flag, data,
+            (GDestroyNotify) free_conv_data, fl);
 }
 
 static gboolean

@@ -317,7 +317,7 @@ _donna_command_init_parse (gchar     *cmdline,
     return &commands[i];
 }
 
-gboolean
+static gboolean
 _donna_command_get_next_arg (DonnaCommand    *command,
                              guint            i,
                              gchar          **start,
@@ -387,7 +387,7 @@ _donna_command_checks_post_parsing (DonnaCommand    *command,
     return TRUE;
 }
 
-gboolean
+static gboolean
 _donna_command_convert_arg (DonnaApp        *app,
                             DonnaArgType     type,
                             gboolean         from_string,
@@ -574,7 +574,7 @@ _donna_command_convert_arg (DonnaApp        *app,
     return TRUE;
 }
 
-void
+static void
 _donna_command_free_args (DonnaCommand *command, GPtrArray *arr)
 {
     guint i;
@@ -707,6 +707,225 @@ _donna_command_free_cr (struct _donna_command_run *cr)
     g_free (cr);
 }
 
+/* for parsing/running commands from treeview, menu or toolbar */
+
+struct rc_data
+{
+    DonnaApp        *app;
+    gboolean         is_heap;
+    const gchar     *conv_flags;
+    _conv_flag_fn    conv_fn;
+    gpointer         conv_data;
+    GDestroyNotify   conv_destroy;
+    gchar           *fl;
+    DonnaCommand    *command;
+    gchar           *start;
+    gchar           *end;
+    guint            i;
+    GPtrArray       *arr;
+};
+
+static gchar *
+parse_location (const gchar *sce, struct rc_data *data)
+{
+    GString *str = NULL;
+    gchar *s = (gchar *) sce;
+
+    while ((s = strchr (s, '%')))
+    {
+        if (strchr (data->conv_flags, s[1]))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_len (str, sce, s - sce);
+            data->conv_fn (s[1], DONNA_ARG_TYPE_NOTHING, (gpointer *) &str,
+                    data->conv_data);
+            s += 2;
+            sce = (const gchar *) s;
+        }
+        else
+            s += 2;
+    }
+
+    if (!str)
+        return NULL;
+
+    g_string_append (str, sce);
+    return g_string_free (str, FALSE);
+}
+
+static void
+free_rc_data (struct rc_data *data)
+{
+    if (data->conv_data && data->conv_destroy)
+        data->conv_destroy (data->conv_data);
+    g_free (data->fl);
+    if (data->arr)
+        _donna_command_free_args (data->command, data->arr);
+    if (data->is_heap)
+        g_free (data);
+}
+
+static void
+command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (data->app, donna_task_get_error (task),
+                "Action triggered failed");
+    free_rc_data (data);
+}
+
+static DonnaTaskState
+run_command (DonnaTask *task, struct rc_data *data)
+{
+    GError *err = NULL;
+    DonnaTask *cmd_task;
+
+    if (!data->command)
+    {
+        data->command = _donna_command_init_parse (data->fl + 8,
+                &data->start, &data->end, &err);
+        if (!data->command)
+        {
+            donna_app_show_error (data->app, err,
+                    "Cannot trigger action, parsing command failed");
+            g_clear_error (&err);
+            free_rc_data (data);
+            return DONNA_TASK_FAILED;
+        }
+
+        data->arr = g_ptr_array_sized_new (data->command->argc + 3);
+        g_ptr_array_add (data->arr, task);
+    }
+    for ( ; data->i < data->command->argc; ++data->i)
+    {
+        gpointer ptr;
+        gchar c;
+
+        c = *data->end;
+        *data->end = '\0';
+
+        if (data->start[0] == '%' && strchr (data->conv_flags, data->start[1])
+                && data->conv_fn (data->start[1], data->command->arg_type[data->i],
+                    &ptr, data->conv_data))
+                g_ptr_array_add (data->arr, ptr);
+        else
+        {
+            gchar *s;
+
+            s = parse_location (data->start, data);
+            if (!_donna_command_convert_arg (data->app,
+                        data->command->arg_type[data->i], TRUE, task != NULL,
+                        (s) ? s : data->start, &ptr, &err))
+            {
+                g_free (s);
+                if (g_error_matches (err, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK))
+                {
+                    struct rc_data *d;
+
+                    /* restore */
+                    *data->end = c;
+
+                    /* need to put data on heap */
+                    d = g_new (struct rc_data, 1);
+                    memcpy (d, data, sizeof (struct rc_data));
+                    d->is_heap = TRUE;
+
+                    /* and continue parsing in a task/new thread */
+                    task = donna_task_new ((task_fn) run_command, d,
+                            (GDestroyNotify) free_rc_data);
+                    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
+                    donna_app_run_task (data->app, task);
+                    return DONNA_TASK_DONE;
+                }
+                donna_app_show_error (data->app, err,
+                        "Cannot trigger action, parsing command failed");
+                g_clear_error (&err);
+                free_rc_data (data);
+                return DONNA_TASK_FAILED;
+            }
+            g_free (s);
+            g_ptr_array_add (data->arr, ptr);
+        }
+        *data->end = c;
+
+        if (!_donna_command_get_next_arg (data->command, data->i,
+                    &data->start, &data->end, &err))
+        {
+            donna_app_show_error (data->app, err,
+                    "Cannot trigger action, parsing command failed");
+            g_clear_error (&err);
+            free_rc_data (data);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    if (!_donna_command_checks_post_parsing (data->command, data->i,
+                data->start, data->end, &err))
+    {
+        donna_app_show_error (data->app, err,
+                "Cannot trigger action, parsing command failed");
+        g_clear_error (&err);
+        free_rc_data (data);
+        return DONNA_TASK_FAILED;
+    }
+
+    /* add DonnaApp* as extra arg for command */
+    g_ptr_array_add (data->arr, data->app);
+
+    cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
+    donna_task_set_visibility (cmd_task, data->command->visibility);
+    donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb, data,
+            (GDestroyNotify) free_rc_data);
+    if (task)
+        /* avoid starting another thread, since we're already in one */
+        donna_task_set_can_block (g_object_ref_sink (cmd_task));
+    donna_app_run_task (data->app, cmd_task);
+    if (task)
+    {
+        donna_task_wait_for_it (cmd_task);
+        g_object_unref (cmd_task);
+    }
+    return DONNA_TASK_DONE;
+}
+
+void
+_donna_command_parse_run (DonnaApp       *app,
+                          const gchar    *conv_flags,
+                          _conv_flag_fn   conv_fn,
+                          gpointer        conv_data,
+                          GDestroyNotify  conv_destroy,
+                          gchar          *fl)
+{
+    struct rc_data data;
+
+    memset (&data, 0, sizeof (struct rc_data));
+    data.app          = app;
+    data.conv_flags   = conv_flags;
+    data.conv_fn      = conv_fn;
+    data.conv_data    = conv_data;
+    data.conv_destroy = conv_destroy;
+    data.fl           = fl;
+
+    if (streqn (fl, "command:", 8))
+    {
+        /* run_command() will take care of freeing data as/when needed */
+        run_command (NULL, &data);
+    }
+    else
+    {
+        gchar *ss;
+
+        ss = parse_location (fl, &data);
+        if (ss)
+        {
+            g_free (data.fl);
+            data.fl = ss;
+        }
+        donna_app_trigger_node (app, data.fl);
+        free_rc_data (&data);
+    }
+}
 
 /* helpers */
 

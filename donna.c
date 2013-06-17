@@ -852,214 +852,52 @@ menu_unmap_cb (GtkWidget *menu, GdkEvent *event, struct menu_click_data *data)
     return FALSE;
 }
 
-#define ensure_str()  do {                          \
-    if (!str)                                       \
-        str = g_string_new (NULL);                  \
-    g_string_append_len (str, sce, s - sce);        \
-} while (0)
-gchar *
-menu_parse_location (DonnaDonna     *donna,
-                     const gchar    *sce,
-                     DonnaNode      *node)
+static gboolean
+menu_conv_flag (const gchar  c,
+                DonnaArgType type,
+                gpointer    *out,
+                DonnaNode   *node)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
-    GString *str = NULL;
-    gchar *s = (gchar *) sce;
-    gchar *ss;
+    GString *str = *out;
+    gchar *s;
 
-    while ((s = strchr (s, '%')))
+    switch (c)
     {
-        switch (s[1])
-        {
-            case 'N':
-                ensure_str ();
-                if (node)
-                {
-                    ss = donna_node_get_full_location (node);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            case 'n':
-                ensure_str ();
-                if (node)
-                {
-                    ss = donna_node_get_location (node);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                break;
-
-            default:
-                s += 2;
-                continue;
-        }
-        s += 2;
-        sce = (const gchar *) s;
-    }
-
-    if (!str)
-        return NULL;
-
-    g_string_append (str, sce);
-    return g_string_free (str, FALSE);
-}
-#undef ensure_str
-
-struct rc_data
-{
-    gboolean         is_heap;
-    DonnaApp        *app;
-    DonnaNode       *node;
-    gchar           *fl;
-    DonnaCommand    *command;
-    gchar           *start;
-    gchar           *end;
-    guint            i;
-    GPtrArray       *arr;
-};
-
-static void
-free_rc_data (struct rc_data *data)
-{
-    g_free (data->fl);
-    if (data->node)
-        g_object_unref (data->node);
-    if (data->arr)
-        _donna_command_free_args (data->command, data->arr);
-    if (data->is_heap)
-        g_free (data);
-}
-
-static void
-command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
-{
-    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        donna_app_show_error (data->app, donna_task_get_error (task),
-                "Action triggered failed");
-    free_rc_data (data);
-}
-
-static DonnaTaskState
-run_command (DonnaTask *task, struct rc_data *data)
-{
-    GError *err = NULL;
-    DonnaTask *cmd_task;
-
-    if (!data->command)
-    {
-        data->command = _donna_command_init_parse (data->fl + 8,
-                &data->start, &data->end, &err);
-        if (!data->command)
-        {
-            donna_app_show_error (data->app, err,
-                    "Cannot trigger action, parsing command failed");
-            g_clear_error (&err);
-            free_rc_data (data);
-            return DONNA_TASK_FAILED;
-        }
-
-        data->arr = g_ptr_array_sized_new (data->command->argc + 3);
-        g_ptr_array_add (data->arr, task);
-    }
-    for ( ; data->i < data->command->argc; ++data->i)
-    {
-        gchar c;
-
-        c = *data->end;
-        *data->end = '\0';
-        if (streq (data->start, "%N"))
-        {
-            if (data->command->arg_type[data->i] == DONNA_ARG_TYPE_NODE)
-                g_ptr_array_add (data->arr, g_object_ref (data->node));
-            else
-                goto str_parsing;
-        }
-        else
-        {
-            gchar *ss;
-            gpointer ptr;
-
-str_parsing:
-            ss = menu_parse_location ((DonnaDonna *) data->app, data->start,
-                    data->node);
-            if (!_donna_command_convert_arg (data->app,
-                        data->command->arg_type[data->i], TRUE, task != NULL,
-                        (ss) ? ss : data->start, &ptr, &err))
+        case 'N':
+            if (type == DONNA_ARG_TYPE_NOTHING)
             {
-                g_free (ss);
-                if (g_error_matches (err, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK))
+                if (node)
                 {
-                    struct rc_data *d;
-
-                    /* restore */
-                    *data->end = c;
-
-                    /* need to put data on heap */
-                    d = g_new (struct rc_data, 1);
-                    memcpy (d, data, sizeof (struct rc_data));
-                    d->is_heap = TRUE;
-
-                    /* and continue parsing in a task/new thread */
-                    task = donna_task_new ((task_fn) run_command, d,
-                            (GDestroyNotify) free_rc_data);
-                    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
-                    donna_app_run_task (data->app, task);
-                    return DONNA_TASK_DONE;
+                    s = donna_node_get_full_location (node);
+                    g_string_append (str, s);
+                    g_free (s);
                 }
-                donna_app_show_error (data->app, err,
-                        "Cannot trigger action, parsing command failed");
-                g_clear_error (&err);
-                free_rc_data (data);
-                return DONNA_TASK_FAILED;
+                else
+                    g_string_append_c (str, '-');
             }
-            g_free (ss);
-            g_ptr_array_add (data->arr, ptr);
-        }
-        *data->end = c;
+            else if (type == DONNA_ARG_TYPE_NODE && node)
+                *out = g_object_ref (node);
+            else
+                return FALSE;
+            return TRUE;
 
-        if (!_donna_command_get_next_arg (data->command, data->i,
-                    &data->start, &data->end, &err))
-        {
-            donna_app_show_error (data->app, err,
-                    "Cannot trigger action, parsing command failed");
-            g_clear_error (&err);
-            free_rc_data (data);
-            return DONNA_TASK_FAILED;
-        }
+        case 'n':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (node)
+                {
+                    s = donna_node_get_location (node);
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+                else
+                    g_string_append_c (str, '-');
+            }
+            else
+                return FALSE;
+            return TRUE;;
     }
-
-    if (!_donna_command_checks_post_parsing (data->command, data->i,
-                data->start, data->end, &err))
-    {
-        donna_app_show_error (data->app, err,
-                "Cannot trigger action, parsing command failed");
-        g_clear_error (&err);
-        free_rc_data (data);
-        return DONNA_TASK_FAILED;
-    }
-
-    /* add DonnaApp* as extra arg for command */
-    g_ptr_array_add (data->arr, data->app);
-
-    cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
-    donna_task_set_visibility (cmd_task, data->command->visibility);
-    donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb, data,
-            (GDestroyNotify) free_rc_data);
-    if (task)
-        /* avoid starting another thread, since we're already in one */
-        donna_task_set_can_block (g_object_ref_sink (cmd_task));
-    donna_app_run_task (data->app, cmd_task);
-    if (task)
-    {
-        donna_task_wait_for_it (cmd_task);
-        g_object_unref (cmd_task);
-    }
+    return FALSE;
 }
 
 static gboolean
@@ -1068,7 +906,8 @@ menuitem_button_press_cb (GtkWidget              *item,
                           struct menu_click_data *mc)
 {
     DonnaDonnaPrivate *priv = mc->donna->priv;
-    struct rc_data data;
+    DonnaNode *node;
+    gchar *fl = NULL;
     /* longest possible is "ctrl_shift_middle_click" (len=23) */
     gchar buf[24];
     gchar *b = buf;
@@ -1103,47 +942,25 @@ menuitem_button_press_cb (GtkWidget              *item,
 
     strcpy (b, "click");
 
-    memset (&data, 0, sizeof (data));
-
-    if (!donna_config_get_string (priv->config, &data.fl, "menus/%s/%s",
+    if (!donna_config_get_string (priv->config, &fl, "menus/%s/%s",
                 mc->name, buf))
-        donna_config_get_string (priv->config, &data.fl, "defaults/menus/%s", buf);
+        donna_config_get_string (priv->config, &fl, "defaults/menus/%s", buf);
 
-    if (!data.fl)
+    if (!fl)
     {
         if (streq (buf, "left_click"))
             /* hard-coded default for sanity */
-            data.fl = g_strdup ("command:node_activate (%N,0)");
+            fl = g_strdup ("command:node_activate (%N,0)");
         else
             return FALSE;
     }
 
-    data.node = g_object_get_data ((GObject *) item, "node");
-    if (data.node)
-        g_object_ref (data.node);
+    node = g_object_get_data ((GObject *) item, "node");
+    if (node)
+        g_object_ref (node);
 
-    /* for commands we'll do the parsing directly, to avoid converting args to
-     * string and back */
-    if (streqn (data.fl, "command:", 8))
-    {
-        data.app = (DonnaApp *) mc->donna;
-        /* run_command() will take care of freeing data as/when needed */
-        run_command (NULL, &data);
-    }
-    else
-    {
-        gchar *s;
-
-        s = menu_parse_location (mc->donna, data.fl, data.node);
-        if (s)
-        {
-            g_free (data.fl);
-            data.fl = s;
-        }
-        donna_app_trigger_node ((DonnaApp *) mc->donna, data.fl);
-        g_free (data.fl);
-        g_object_unref (data.node);
-    }
+    _donna_command_parse_run ((DonnaApp *) mc->donna, "nN",
+            (_conv_flag_fn) menu_conv_flag, node, g_object_unref, fl);
     return FALSE;
 }
 

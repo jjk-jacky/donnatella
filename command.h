@@ -23,6 +23,11 @@ typedef enum
 
 typedef DonnaTaskState (*cmd_fn) (DonnaTask *task, GPtrArray *args);
 
+typedef gboolean (*_conv_flag_fn) (const gchar  c,
+                                   DonnaArgType type,
+                                   gpointer    *out,
+                                   gpointer     data);
+
 typedef struct
 {
     gchar               *name;
@@ -43,29 +48,15 @@ DonnaCommand *          _donna_command_init_parse   (gchar           *cmdline,
                                                      gchar          **first_arg,
                                                      gchar          **end,
                                                      GError         **error);
-gboolean                _donna_command_get_next_arg (DonnaCommand   *command,
-                                                     guint            i,
-                                                     gchar          **arg,
-                                                     gchar          **end,
-                                                     GError         **error);
-gboolean                _donna_command_checks_post_parsing (
-                                                     DonnaCommand   *command,
-                                                     guint            i,
-                                                     gchar           *start,
-                                                     gchar           *end,
-                                                     GError         **error);
-gboolean                _donna_command_convert_arg  (DonnaApp        *app,
-                                                     DonnaArgType     type,
-                                                     gboolean         from_string,
-                                                     gboolean         can_block,
-                                                     gpointer         sce,
-                                                     gpointer        *dst,
-                                                     GError         **error);
-void                    _donna_command_free_args    (DonnaCommand   *command,
-                                                     GPtrArray       *arr);
 DonnaTaskState          _donna_command_run          (DonnaTask       *task,
                                                      struct _donna_command_run *cr);
 void                    _donna_command_free_cr      (struct _donna_command_run *cr);
+void                    _donna_command_parse_run    (DonnaApp        *app,
+                                                     const gchar     *conv_flags,
+                                                     _conv_flag_fn    conv_fn,
+                                                     gpointer         conv_data,
+                                                     GDestroyNotify   conv_destroy,
+                                                     gchar           *fl);
 
 G_END_DECLS
 
