@@ -107,6 +107,10 @@ static DonnaTask *      provider_config_get_node_parent_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
                                             GError             **error);
+static DonnaTask *      provider_config_trigger_node_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node,
+                                            GError             **error);
 
 
 static gchar *get_option_full_name (GNode *root, GNode *gnode);
@@ -122,6 +126,7 @@ provider_config_provider_init (DonnaProviderInterface *interface)
     interface->get_node_children_task = provider_config_get_node_children_task;
     interface->remove_node_task       = provider_config_remove_node_task;
     interface->get_node_parent_task   = provider_config_get_node_parent_task;
+    interface->trigger_node_task      = provider_config_trigger_node_task;
 }
 
 static void
@@ -3417,4 +3422,14 @@ provider_config_get_node_parent_task (DonnaProvider *provider,
             g_free (location));
 
     return task;
+}
+
+static DonnaTask *
+provider_config_trigger_node_task (DonnaProvider       *provider,
+                                   DonnaNode           *node,
+                                   GError             **error)
+{
+    g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
+            "Options cannot be triggered -- What would it even do?");
+    return NULL;
 }
