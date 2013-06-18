@@ -125,7 +125,6 @@ donna_columntype_refresh_data (DonnaColumnType  *ct,
     DonnaColumnTypeInterface *interface;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (tv_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
     g_return_val_if_fail (col_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
     g_return_val_if_fail (data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
 

@@ -366,3 +366,71 @@ donna_app_show_error (DonnaApp       *app,
     (*interface->show_error) (app, title, error);
     g_free (title);
 }
+
+gboolean
+_donna_filter_nodes (DonnaApp        *app,
+                     GPtrArray       *nodes,
+                     const gchar     *filter_str,
+                     get_ct_data_fn   get_ct_data,
+                     gpointer         data,
+                     GError         **error)
+{
+    GError *err = NULL;
+    DonnaFilter *filter;
+    guint i;
+
+    g_return_val_if_fail (get_ct_data != NULL, FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    g_return_val_if_fail (filter_str != NULL, FALSE);
+
+    if (G_UNLIKELY (nodes->len == 0))
+        return FALSE;
+
+    filter = donna_app_get_filter (app, filter_str);
+    if (G_UNLIKELY (!filter))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to create a filter object for '%s'",
+                filter_str);
+        return FALSE;
+    }
+
+    for (i = 0; i < nodes->len; )
+        if (!donna_filter_is_match (filter, nodes->pdata[i],
+                    get_ct_data, data, &err))
+        {
+            if (err)
+            {
+                g_propagate_error (error, err);
+                g_object_unref (filter);
+                return FALSE;
+            }
+            /* last element comes here, hence no need to increment i */
+            g_ptr_array_remove_index_fast (nodes, i);
+        }
+        else
+            ++i;
+
+    g_object_unref (filter);
+    return TRUE;
+}
+
+gboolean
+donna_app_filter_nodes (DonnaApp       *app,
+                        GPtrArray      *nodes,
+                        const gchar    *filter_str,
+                        GError       **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    g_return_val_if_fail (filter_str != NULL, FALSE);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->filter_nodes != NULL, FALSE);
+
+    return (*interface->filter_nodes) (app, nodes, filter_str, error);
+}

@@ -192,6 +192,10 @@ gboolean        donna_tree_view_edit_column     (DonnaTreeView      *tree,
 gboolean        donna_tree_view_refresh         (DonnaTreeView      *tree,
                                                  DonnaTreeRefreshMode mode,
                                                  GError             **error);
+gboolean        donna_tree_view_filter_nodes    (DonnaTreeView      *tree,
+                                                 GPtrArray          *nodes,
+                                                 const gchar        *filter_str,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

@@ -8345,6 +8345,17 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     return TRUE;
 }
 
+gboolean
+donna_tree_view_filter_nodes (DonnaTreeView *tree,
+                              GPtrArray     *nodes,
+                              const gchar   *filter_str,
+                              GError       **error)
+{
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    return _donna_filter_nodes (tree->priv->app, nodes, filter_str,
+            (get_ct_data_fn) get_ct_data, tree, error);
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,

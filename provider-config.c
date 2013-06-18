@@ -1884,6 +1884,8 @@ _get_option_column (DonnaConfig  *config,
     goto get_value;
 
 treeview:
+    if (!tv_name)
+        goto column;
     node = priv->root;
     get_child_cat ("treeviews", 9, column);
     get_child_cat (tv_name, strlen (tv_name), column);

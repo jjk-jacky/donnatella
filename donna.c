@@ -143,6 +143,10 @@ static gboolean         donna_donna_show_menu       (DonnaApp       *app,
 static void             donna_donna_show_error      (DonnaApp       *app,
                                                      const gchar    *title,
                                                      const GError   *error);
+static gboolean         donna_donna_filter_nodes    (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     const gchar    *filter,
+                                                     GError        **error);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -159,6 +163,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_treeview         = donna_donna_get_treeview;
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
+    interface->filter_nodes         = donna_donna_filter_nodes;
 }
 
 static void
@@ -1318,6 +1323,70 @@ donna_donna_show_error (DonnaApp       *app,
             (error) ? error->message : "");
     g_signal_connect_swapped (w, "response", (GCallback) gtk_widget_destroy, w);
     gtk_widget_show_all (w);
+}
+
+struct get_ct_data
+{
+    DonnaDonna *donna;
+    gpointer    ct_data[NB_COL_TYPES];
+};
+
+static gpointer
+get_ct_data (const gchar *col_name, struct get_ct_data *data)
+{
+    DonnaDonnaPrivate *priv = data->donna->priv;
+    gchar *type = NULL;
+    guint i;
+
+    donna_config_get_string (priv->config, &type, "columns/%s/type", col_name);
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    for (i = 0; i < NB_COL_TYPES; ++i)
+    {
+        if (streq (type, priv->column_types[i].name))
+        {
+            /* should never be possible, since filter has the ct */
+            if (G_UNLIKELY (!priv->column_types[i].ct))
+                priv->column_types[i].ct = g_object_new (
+                        priv->column_types[i].type, "app", data->donna, NULL);
+            if (!data->ct_data[i])
+                donna_columntype_refresh_data (priv->column_types[i].ct,
+                        NULL, col_name, NULL, &data->ct_data[i]);
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            g_free (type);
+            return data->ct_data[i];
+        }
+    }
+    /* Again: this cannot happen, since the filter has the ct */
+    g_rec_mutex_unlock (&priv->rec_mutex);
+    g_free (type);
+    return NULL;
+}
+
+static gboolean
+donna_donna_filter_nodes (DonnaApp       *app,
+                          GPtrArray      *nodes,
+                          const gchar    *filter,
+                          GError        **error)
+{
+    struct get_ct_data data;
+    gboolean ret;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
+
+    memset (&data, 0, sizeof (struct get_ct_data));
+    data.donna = (DonnaDonna *) app;
+
+    ret = _donna_filter_nodes (app, nodes, filter,
+            (get_ct_data_fn) get_ct_data, &data, error);
+
+    for (i = 0; i < NB_COL_TYPES; ++i)
+        if (data.ct_data[i])
+            donna_columntype_free_data (data.donna->priv->column_types[i].ct,
+                    data.ct_data[i]);
+
+    return ret;
 }
 
 void
