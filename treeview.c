@@ -361,6 +361,13 @@ gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
                                              const gchar   *opt_name,
                                              gchar         *def_val);
 
+/* internal from app.c */
+gboolean _donna_app_filter_nodes (DonnaApp        *app,
+                                  GPtrArray       *nodes,
+                                  const gchar     *filter_str,
+                                  get_ct_data_fn   get_ct_data,
+                                  gpointer         data,
+                                  GError         **error);
 
 static inline struct column *
                     get_column_by_column                (DonnaTreeView *tree,
@@ -8352,7 +8359,7 @@ donna_tree_view_filter_nodes (DonnaTreeView *tree,
                               GError       **error)
 {
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    return _donna_filter_nodes (tree->priv->app, nodes, filter_str,
+    return _donna_app_filter_nodes (tree->priv->app, nodes, filter_str,
             (get_ct_data_fn) get_ct_data, tree, error);
 }
 

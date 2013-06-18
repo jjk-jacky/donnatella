@@ -51,10 +51,8 @@ struct _DonnaAppInterface
     void                (*show_error)               (DonnaApp       *app,
                                                      const gchar    *title,
                                                      const GError   *error);
-    gboolean            (*filter_nodes)             (DonnaApp       *app,
-                                                     GPtrArray      *nodes,
-                                                     const gchar    *filter,
-                                                     GError        **error);
+    gpointer            (*get_ct_data)              (DonnaApp       *app,
+                                                     const gchar    *col_name);
 };
 
 /* signals */
@@ -90,18 +88,12 @@ void                donna_app_show_error            (DonnaApp       *app,
                                                      const GError   *error,
                                                      const gchar    *fmt,
                                                      ...);
+gpointer            donna_app_get_ct_data           (const gchar    *col_name,
+                                                     DonnaApp       *app);
 gboolean            donna_app_filter_nodes          (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *filter,
                                                      GError       **error);
-
-/* helper function */
-gboolean            _donna_filter_nodes             (DonnaApp        *app,
-                                                     GPtrArray       *nodes,
-                                                     const gchar     *filter_str,
-                                                     get_ct_data_fn   get_ct_data,
-                                                     gpointer         data,
-                                                     GError         **error);
 
 G_END_DECLS
 

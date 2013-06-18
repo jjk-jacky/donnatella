@@ -367,13 +367,14 @@ donna_app_show_error (DonnaApp       *app,
     g_free (title);
 }
 
+/* not static so it can be used from treeview.c with its own get_ct_data */
 gboolean
-_donna_filter_nodes (DonnaApp        *app,
-                     GPtrArray       *nodes,
-                     const gchar     *filter_str,
-                     get_ct_data_fn   get_ct_data,
-                     gpointer         data,
-                     GError         **error)
+_donna_app_filter_nodes (DonnaApp        *app,
+                         GPtrArray       *nodes,
+                         const gchar     *filter_str,
+                         get_ct_data_fn   get_ct_data,
+                         gpointer         data,
+                         GError         **error)
 {
     GError *err = NULL;
     DonnaFilter *filter;
@@ -415,22 +416,31 @@ _donna_filter_nodes (DonnaApp        *app,
     return TRUE;
 }
 
+gpointer
+donna_app_get_ct_data (const gchar    *col_name,
+                       DonnaApp       *app)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (col_name != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_ct_data != NULL, NULL);
+
+    return (*interface->get_ct_data) (app, col_name);
+}
+
 gboolean
 donna_app_filter_nodes (DonnaApp       *app,
                         GPtrArray      *nodes,
                         const gchar    *filter_str,
                         GError       **error)
 {
-    DonnaAppInterface *interface;
-
     g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
-    g_return_val_if_fail (nodes != NULL, FALSE);
-    g_return_val_if_fail (filter_str != NULL, FALSE);
 
-    interface = DONNA_APP_GET_INTERFACE (app);
-
-    g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->filter_nodes != NULL, FALSE);
-
-    return (*interface->filter_nodes) (app, nodes, filter_str, error);
+    return _donna_app_filter_nodes (app, nodes, filter_str,
+            (get_ct_data_fn) donna_app_get_ct_data, app, error);
 }
