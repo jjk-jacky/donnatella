@@ -378,6 +378,7 @@ static void
 donna_donna_finalize (GObject *object)
 {
     DonnaDonnaPrivate *priv;
+    guint i;
 
     priv = DONNA_DONNA (object)->priv;
 
@@ -388,6 +389,10 @@ donna_donna_finalize (GObject *object)
     g_hash_table_destroy (priv->filters);
     g_hash_table_destroy (priv->visuals);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
+
+    for (i = 0; i < NB_COL_TYPES; ++i)
+        if (priv->column_types[i].ct)
+            g_object_unref (priv->column_types[i].ct);
 
     G_OBJECT_CLASS (donna_donna_parent_class)->finalize (object);
 }
