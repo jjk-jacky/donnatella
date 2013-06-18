@@ -239,7 +239,7 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
     GSList *l;
 
     g_return_val_if_fail (DONNA_IS_COLOR_FILTER (cf), FALSE);
-    g_return_val_if_fail (G_IS_OBJECT (renderer), FALSE);
+    g_return_val_if_fail (GTK_IS_CELL_RENDERER (renderer), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (get_ct_data != NULL, FALSE);
 
