@@ -12,6 +12,7 @@ enum
     PROP_FILTER,
     PROP_COLUMN,
     PROP_KEEP_GOING,
+    PROP_VIA_TREEVIEW,
 
     NB_PROPS
 };
@@ -30,6 +31,7 @@ struct _DonnaColorFilterPrivate
     DonnaApp    *app;
     gchar       *column;
     gboolean     keep_going;
+    gboolean     via_treeview;
     GSList      *props;
 };
 
@@ -73,10 +75,16 @@ donna_color_filter_class_init (DonnaColorFilterClass *klass)
                 NULL,   /* default */
                 G_PARAM_READWRITE);
 
-    donna_color_filter_props[PROP_KEEP_GOING]=
+    donna_color_filter_props[PROP_KEEP_GOING] =
         g_param_spec_boolean ("keep-going", "keep-going",
                 "Whether to keep processing color filters after a match",
                 FALSE,  /* default */
+                G_PARAM_READWRITE);
+
+    donna_color_filter_props[PROP_VIA_TREEVIEW] =
+        g_param_spec_boolean ("via-treeview", "via-treeview",
+                "Whether the filter should be done via treeview, or app",
+                TRUE, /* default */
                 G_PARAM_READWRITE);
 
     g_object_class_install_properties (o_class, NB_PROPS, donna_color_filter_props);
@@ -91,6 +99,7 @@ donna_color_filter_init (DonnaColorFilter *cf)
 
     priv = cf->priv = G_TYPE_INSTANCE_GET_PRIVATE (cf,
             DONNA_TYPE_COLOR_FILTER, DonnaColorFilterPrivate);
+    priv->via_treeview = TRUE;
 }
 
 static void
@@ -119,6 +128,9 @@ donna_color_filter_set_property (GObject            *object,
         case PROP_KEEP_GOING:
             priv->keep_going = g_value_get_boolean (value);
             break;
+        case PROP_VIA_TREEVIEW:
+            priv->via_treeview = g_value_get_boolean (value);
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
             break;
@@ -146,6 +158,9 @@ donna_color_filter_get_property (GObject            *object,
             break;
         case PROP_KEEP_GOING:
             g_value_set_boolean (value, priv->keep_going);
+            break;
+        case PROP_VIA_TREEVIEW:
+            g_value_set_boolean (value, priv->via_treeview);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -241,9 +256,11 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
     g_return_val_if_fail (DONNA_IS_COLOR_FILTER (cf), FALSE);
     g_return_val_if_fail (GTK_IS_CELL_RENDERER (renderer), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    g_return_val_if_fail (get_ct_data != NULL, FALSE);
 
     priv = cf->priv;
+
+    if (priv->via_treeview)
+        g_return_val_if_fail (get_ct_data != NULL, FALSE);
 
     if (priv->column && !streq (priv->column, col_name))
         return FALSE;
@@ -251,7 +268,9 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
     if (!priv->filter_obj)
         priv->filter_obj = donna_app_get_filter (priv->app, priv->filter);
 
-    if (!donna_filter_is_match (priv->filter_obj, node, get_ct_data, data, error))
+    if (!donna_filter_is_match (priv->filter_obj, node,
+                (priv->via_treeview) ? get_ct_data : NULL,
+                data, error))
         return FALSE;
 
     for (l = priv->props; l; l = l->next)

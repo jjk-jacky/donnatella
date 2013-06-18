@@ -2394,6 +2394,10 @@ donna_config_arr_load_color_filters (DonnaConfig            *config,
         if (child && g_value_get_boolean (value))
             g_object_set (cf, "keep-going", TRUE, NULL);
 
+        get_child ("via_treeview", 12, BOOLEAN, FALSE);
+        if (child && !g_value_get_boolean (value))
+            g_object_set (cf, "via-treeview", FALSE, NULL);
+
         /* all properties that we can set must be:
          * - supported by GtkCellRendererText
          * - listed in treeview, rend_func() (in order to reset the *-set
