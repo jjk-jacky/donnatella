@@ -4615,9 +4615,12 @@ free_arrangement (DonnaArrangement *arr)
     if (!arr)
         return;
     g_free (arr->columns);
+    g_free (arr->main_column);
     g_free (arr->sort_column);
     g_free (arr->second_sort_column);
     g_free (arr->columns_options);
+    if (arr->color_filters)
+        g_slist_free_full (arr->color_filters, g_object_unref);
     g_free (arr);
 }
 
