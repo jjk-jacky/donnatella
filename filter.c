@@ -586,7 +586,6 @@ donna_filter_is_match (DonnaFilter    *filter,
 
     g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    g_return_val_if_fail (get_ct_data != NULL, FALSE);
 
     priv = filter->priv;
 
@@ -600,7 +599,10 @@ donna_filter_is_match (DonnaFilter    *filter,
     }
 
     /* see if node matches the filter */
-    return is_match_element (priv->element, node, get_ct_data, data, error);
+    return is_match_element (priv->element, node,
+            (get_ct_data) ? get_ct_data : (get_ct_data_fn) donna_app_get_ct_data,
+            (get_ct_data) ? data : priv->app,
+            error);
 }
 
 /* this is needed for filter_toggle_ref_cb() in donna.c where we need to get the
