@@ -602,3 +602,13 @@ donna_filter_is_match (DonnaFilter    *filter,
     /* see if node matches the filter */
     return is_match_element (priv->element, node, get_ct_data, data, error);
 }
+
+/* this is needed for filter_toggle_ref_cb() in donna.c where we need to get the
+ * filter string, but can't use g_object_get() as it would take a ref on it,
+ * thus triggering the toggle_ref and enterring an infinite recursion... */
+gchar *
+donna_filter_get_filter (DonnaFilter *filter)
+{
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), NULL);
+    return g_strdup (filter->priv->filter);
+}

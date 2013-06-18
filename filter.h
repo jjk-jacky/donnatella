@@ -42,6 +42,7 @@ struct _DonnaFilterClass
     GObjectClass parent_class;
 };
 
+gchar *             donna_filter_get_filter         (DonnaFilter    *filter);
 gboolean            donna_filter_is_match           (DonnaFilter    *filter,
                                                      DonnaNode      *node,
                                                      get_ct_data_fn  get_ct_data,

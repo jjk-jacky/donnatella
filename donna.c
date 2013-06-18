@@ -58,6 +58,13 @@ enum types
     TYPE_IGNORE
 };
 
+struct filter
+{
+    DonnaFilter *filter;
+    guint        toggle_count;
+    guint        timeout;
+};
+
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
@@ -65,19 +72,27 @@ struct _DonnaDonnaPrivate
     gboolean         just_focused;
     DonnaConfig     *config;
     DonnaTaskManager*task_manager;
-    GSList          *providers;
     GSList          *treeviews;
-    GHashTable      *filters;
     GSList          *arrangements;
-    GHashTable      *visuals;
     GThreadPool     *pool;
     DonnaTreeView   *active_list;
+    /* visuals are under a RW lock so everyone can read them at the same time
+     * (e.g. creating nodes, get_children() & the likes). The write operation
+     * should be quite rare. */
+    GRWLock          lock;
+    GHashTable      *visuals;
+    /* ct, providers & filters are all under the same lock because there
+     * shouldn't be a need to separate them all. We use a recursive mutex
+     * because we need it for filters, to handle correctly the toggle_ref */
+    GRecMutex        rec_mutex;
     struct col_type
     {
         const gchar     *name;
         GType            type;
         DonnaColumnType *ct;
     } column_types[NB_COL_TYPES];
+    GSList          *providers;
+    GHashTable      *filters;
 };
 
 struct argmt
@@ -224,6 +239,13 @@ free_visuals (struct visuals *visuals)
 }
 
 static void
+free_filter (struct filter *f)
+{
+    g_object_unref (f->filter);
+    g_free (f);
+}
+
+static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
@@ -234,6 +256,9 @@ donna_donna_init (DonnaDonna *donna)
 
     priv = donna->priv = G_TYPE_INSTANCE_GET_PRIVATE (donna,
             DONNA_TYPE_DONNA, DonnaDonnaPrivate);
+
+    g_rw_lock_init (&priv->lock);
+    g_rec_mutex_init (&priv->rec_mutex);
 
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
@@ -265,7 +290,7 @@ donna_donna_init (DonnaDonna *donna)
     priv->arrangements = load_arrangements (priv->config, "arrangements");
 
     priv->filters = g_hash_table_new_full (g_str_hash, g_str_equal,
-            g_free, g_object_unref);
+            g_free, (GDestroyNotify) free_filter);
 
     priv->visuals = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_visuals);
@@ -356,6 +381,8 @@ donna_donna_finalize (GObject *object)
 
     priv = DONNA_DONNA (object)->priv;
 
+    g_rw_lock_clear (&priv->lock);
+    g_rec_mutex_clear (&priv->rec_mutex);
     g_object_unref (priv->config);
     free_arrangements (priv->arrangements);
     g_hash_table_destroy (priv->filters);
@@ -478,6 +505,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
     struct visuals *visuals;
 
     fl = donna_node_get_full_location (node);
+    g_rw_lock_reader_lock (&donna->priv->lock);
     visuals = g_hash_table_lookup (donna->priv->visuals, fl);
     if (visuals)
     {
@@ -526,6 +554,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
             g_value_unset (&value);
         }
     }
+    g_rw_lock_reader_unlock (&donna->priv->lock);
     g_free (fl);
 }
 
@@ -545,19 +574,27 @@ donna_donna_get_provider (DonnaApp    *app,
     else if (streq (domain, "task"))
         return g_object_ref (priv->task_manager);
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (l = priv->providers; l; l = l->next)
         if (streq (domain, donna_provider_get_domain (l->data)))
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
             return g_object_ref (l->data);
+        }
 
     if (streq (domain, "fs"))
         provider = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
     else if (streq (domain, "command"))
         provider = g_object_new (DONNA_TYPE_PROVIDER_COMMAND, "app", app, NULL);
     else
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         return NULL;
+    }
 
     g_signal_connect (provider, "new-node", (GCallback) new_node_cb, app);
     priv->providers = g_slist_prepend (priv->providers, provider);
+    g_rec_mutex_unlock (&priv->rec_mutex);
     return g_object_ref (provider);
 }
 
@@ -572,6 +609,7 @@ donna_donna_get_columntype (DonnaApp       *app,
 
     priv = DONNA_DONNA (app)->priv;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
         if (streq (type, priv->column_types[i].name))
@@ -582,7 +620,90 @@ donna_donna_get_columntype (DonnaApp       *app,
             break;
         }
     }
+    g_rec_mutex_unlock (&priv->rec_mutex);
     return (i < NB_COL_TYPES) ? g_object_ref (priv->column_types[i].ct) : NULL;
+}
+
+struct filter_toggle
+{
+    DonnaDonna *donna;
+    gchar *filter_str;
+};
+
+static void
+free_filter_toggle (struct filter_toggle *t)
+{
+    g_free (t->filter_str);
+    g_free (t);
+}
+
+static gboolean
+filter_remove (struct filter_toggle *t)
+{
+    DonnaDonnaPrivate *priv = t->donna->priv;
+    struct filter *f;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    f = g_hash_table_lookup (priv->filters, t->filter_str);
+    if (f->toggle_count > 0)
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return FALSE;
+    }
+
+    /* will also unref filter */
+    g_hash_table_remove (priv->filters, t->filter_str);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+    return FALSE;
+}
+
+/* see node_toggle_ref_cb() in provider-base.c for more. Here we only add a
+ * little extra: we don't unref/remove the filter (from hashtable) right away,
+ * but after a little delay.
+ * Mostly useful since on each location change/new arrangement, all color
+ * filters are let go, then loaded again (assuming they stay active). */
+static void
+filter_toggle_ref_cb (DonnaDonna *donna, DonnaFilter *filter, gboolean is_last)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    struct filter *f;
+    gchar *filter_str;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    /* can NOT use g_object_get, as it takes a ref on the object! */
+    filter_str = donna_filter_get_filter (filter);
+    f = g_hash_table_lookup (priv->filters, filter_str);
+    if (is_last)
+    {
+        struct filter_toggle *t;
+
+        if (f->timeout)
+            g_source_remove (f->timeout);
+        if (--f->toggle_count > 0)
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            g_free (filter_str);
+            return;
+        }
+        t = g_new (struct filter_toggle, 1);
+        t->donna = donna;
+        t->filter_str = filter_str;
+        f->timeout = g_timeout_add_full (G_PRIORITY_LOW,
+                1000 * 60 * 15, /* 15min */
+                (GSourceFunc) filter_remove,
+                t, (GDestroyNotify) free_filter_toggle);
+    }
+    else
+    {
+        ++f->toggle_count;
+        if (f->timeout)
+        {
+            g_source_remove (f->timeout);
+            f->timeout = 0;
+        }
+        g_free (filter_str);
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
 }
 
 DonnaFilter *
@@ -590,24 +711,33 @@ donna_donna_get_filter (DonnaApp    *app,
                         const gchar *filter)
 {
     DonnaDonnaPrivate *priv;
-    DonnaFilter *filter_obj;
+    struct filter *f;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
 
     priv = ((DonnaDonna *) app)->priv;
 
-    filter_obj = g_hash_table_lookup (priv->filters, filter);
-    if (!filter_obj)
+    g_rec_mutex_lock (&priv->rec_mutex);
+    f = g_hash_table_lookup (priv->filters, filter);
+    if (!f)
     {
-        filter_obj = g_object_new (DONNA_TYPE_FILTER,
+        f = g_new (struct filter, 1);
+        f->filter = g_object_new (DONNA_TYPE_FILTER,
                 "app",      app,
                 "filter",   filter,
                 NULL);
-        g_hash_table_insert (priv->filters, g_strdup (filter),
-                g_object_ref (filter_obj));
+        f->toggle_count = 1;
+        f->timeout = 0;
+        /* add a toggle ref, which adds a strong ref to filter */
+        g_object_add_toggle_ref ((GObject *) f->filter,
+                (GToggleNotify) filter_toggle_ref_cb, app);
+        g_hash_table_insert (priv->filters, g_strdup (filter), f);
     }
+    else
+        g_object_ref (f->filter);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
-    return filter_obj;
+    return f->filter;
 }
 
 void
