@@ -268,7 +268,8 @@ get_next_arg (gchar  **arg,
                 "Missing argument separator ',' or ')'");
         return FALSE;
     }
-    ++*end;
+    if (**end != ',' && **end != ')')
+        ++*end;
     return TRUE;
 }
 
