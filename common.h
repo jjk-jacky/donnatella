@@ -17,14 +17,16 @@ typedef enum
 
 typedef enum
 {
-    DONNA_ARG_TYPE_NOTHING = 0, /* for no return value */
-    DONNA_ARG_TYPE_INT,
-    DONNA_ARG_TYPE_STRING,
-    DONNA_ARG_TYPE_TREEVIEW,
-    DONNA_ARG_TYPE_NODE,
-    DONNA_ARG_TYPE_ROW,
-    DONNA_ARG_TYPE_PATH,
-    DONNA_ARG_TYPE_ROW_ID,
+    DONNA_ARG_TYPE_NOTHING  = 0, /* for no return value */
+    DONNA_ARG_TYPE_INT      = (1 << 0),
+    DONNA_ARG_TYPE_STRING   = (1 << 1),
+    DONNA_ARG_TYPE_TREEVIEW = (1 << 2),
+    DONNA_ARG_TYPE_NODE     = (1 << 3),
+    DONNA_ARG_TYPE_ROW      = (1 << 4),
+    DONNA_ARG_TYPE_PATH     = (1 << 5),
+    DONNA_ARG_TYPE_ROW_ID   = (1 << 6),
+
+    DONNA_ARG_IS_OPTIONAL   = (1 << 15),
 } DonnaArgType;
 
 

@@ -135,7 +135,7 @@ static DonnaCommand commands[] = {
         .name           = "tree_selection",
         .argc           = 4,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT },
+            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_selection
@@ -332,6 +332,10 @@ _donna_command_get_next_arg (DonnaCommand    *command,
         if (i + 2 > command->argc)
             g_prefix_error (error, "Command '%s', too many arguments; ",
                     command->name);
+        else if (*start == *end && i + 2 == command->argc
+                && (command->arg_type[i + 1] & DONNA_ARG_IS_OPTIONAL))
+            /* no last arg, but it is optional */
+            return TRUE;
         else
             g_prefix_error (error, "Command '%s', argument %d: ",
                     command->name, i + 2);
@@ -342,6 +346,15 @@ _donna_command_get_next_arg (DonnaCommand    *command,
         g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MISSING_ARG,
                 "Command '%s': missing argument %d/%d",
                 command->name, i + 2, command->argc);
+        return FALSE;
+    }
+    else if (*start == *end && i + 2 <= command->argc
+            && !(command->arg_type[i] & DONNA_ARG_IS_OPTIONAL))
+    {
+        return 1;
+        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                "Command '%s', argument %d missing",
+                command->name, i + 2);
         return FALSE;
     }
     else
@@ -397,88 +410,171 @@ _donna_command_convert_arg (DonnaApp        *app,
                             gpointer        *dst,
                             GError         **error)
 {
-    switch (type)
+    if (type & DONNA_ARG_TYPE_INT)
     {
-        case DONNA_ARG_TYPE_INT:
-            if (from_string)
-                * (gint *) dst = g_ascii_strtoll (sce, NULL, 10);
-            else
-                *dst = g_strdup_printf ("%d", GPOINTER_TO_INT (sce));
-            break;
-
-        case DONNA_ARG_TYPE_STRING:
-        case DONNA_ARG_TYPE_PATH:
+        if (from_string)
+            * (gint *) dst = g_ascii_strtoll (sce, NULL, 10);
+        else
+            *dst = g_strdup_printf ("%d", GPOINTER_TO_INT (sce));
+    }
+    else if (type & (DONNA_ARG_TYPE_STRING | DONNA_ARG_TYPE_PATH))
+    {
+        gchar *s;
         /* PATH is treated as a string, because it will be. The reason we keep
          * it as a string is to allow donna-specific things that we otherwise
          * couldn't convert (w/out the tree), such as ":last" or ":prev" */
+        for (s = sce; *s && isblank (*s); ++s)
+            ;
+        if (!s || *s == '\0')
+            *dst = NULL;
+        else
             *dst = g_strdup (sce);
-            break;
-
-        case DONNA_ARG_TYPE_TREEVIEW:
-            if (from_string)
+    }
+    else if (type & DONNA_ARG_TYPE_TREEVIEW)
+    {
+        if (from_string)
+        {
+            if (streq (sce, ":active"))
+                g_object_get (app, "active-list", dst, NULL);
+            else if (* (gchar *) sce == '<')
             {
-                if (streq (sce, ":active"))
-                    g_object_get (app, "active-list", dst, NULL);
-                else if (* (gchar *) sce == '<')
+                gchar *s = sce;
+                gsize len = strlen (s) - 1;
+                if (s[len] != '>')
                 {
-                    gchar *s = sce;
-                    gsize len = strlen (s) - 1;
-                    if (s[len] != '>')
-                    {
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
-                                "Invalid treeview name/reference: '%s'",
-                                (gchar *) sce);
-                        return FALSE;
-                    }
-                    *dst = donna_app_get_int_ref (app, sce);
-                    if (!*dst)
-                    {
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                                "Invalid internal reference '%s'",
-                                (gchar *) sce);
-                        return FALSE;
-                    }
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                            "Invalid treeview name/reference: '%s'",
+                            (gchar *) sce);
+                    return FALSE;
                 }
-                else
+                *dst = donna_app_get_int_ref (app, sce);
+                if (!*dst)
                 {
-                    *dst = donna_app_get_treeview (app, sce);
-                    if (!*dst)
-                    {
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_NOT_FOUND,
-                                "Treeview '%s' not found", (gchar *) sce);
-                        return FALSE;
-                    }
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                            "Invalid internal reference '%s'",
+                            (gchar *) sce);
+                    return FALSE;
                 }
             }
             else
-                *dst = g_strdup (donna_tree_view_get_name (sce));
-            break;
-
-        case DONNA_ARG_TYPE_NODE:
-            if (from_string)
             {
-                if (* (gchar *) sce == '<')
+                *dst = donna_app_get_treeview (app, sce);
+                if (!*dst)
                 {
-                    gchar *s = sce;
-                    gsize len = strlen (s) - 1;
-                    if (s[len] != '>')
-                    {
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
-                                "Invalid node full location/reference: '%s'",
-                                (gchar *) sce);
-                        return FALSE;
-                    }
-                    *dst = donna_app_get_int_ref (app, sce);
-                    if (!*dst)
-                    {
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                                "Invalid internal reference '%s'",
-                                (gchar *) sce);
-                        return FALSE;
-                    }
-                    return TRUE;
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_NOT_FOUND,
+                            "Treeview '%s' not found", (gchar *) sce);
+                    return FALSE;
                 }
+            }
+        }
+        else
+            *dst = g_strdup (donna_tree_view_get_name (sce));
+    }
+    else if (type & DONNA_ARG_TYPE_NODE)
+    {
+        if (from_string)
+        {
+            if (* (gchar *) sce == '<')
+            {
+                gchar *s = sce;
+                gsize len = strlen (s) - 1;
+                if (s[len] != '>')
+                {
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                            "Invalid node full location/reference: '%s'",
+                            (gchar *) sce);
+                    return FALSE;
+                }
+                *dst = donna_app_get_int_ref (app, sce);
+                if (!*dst)
+                {
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                            "Invalid internal reference '%s'",
+                            (gchar *) sce);
+                    return FALSE;
+                }
+                return TRUE;
+            }
 
+            if (!can_block)
+            {
+                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+                        "Converting argument would required to use a (possibly blocking) task");
+                return FALSE;
+            }
+
+            DonnaTask *task = donna_app_get_node_task (app, sce);
+            if (!task)
+            {
+                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                        "Invalid argument, can't get node for '%s'",
+                        (gchar *) sce);
+                return FALSE;
+            }
+            donna_task_set_can_block (g_object_ref_sink (task));
+            donna_app_run_task (app, task);
+            if (donna_task_get_state (task) == DONNA_TASK_DONE)
+                *dst = g_value_dup_object (donna_task_get_return_value (task));
+            else
+            {
+                if (error)
+                    *error = g_error_copy (donna_task_get_error (task));
+                g_object_unref (task);
+                return FALSE;
+            }
+            g_object_unref (task);
+        }
+        else
+            *dst = donna_node_get_full_location (sce);
+    }
+    else if (type & DONNA_ARG_TYPE_ROW)
+    {
+        if (from_string)
+        {
+            DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
+            if (sscanf (sce, "[%p;%p]", &row->node, &row->iter) != 2)
+            {
+                g_free (row);
+                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                        "Invalid argument syntax for TREE_ROW");
+                return FALSE;
+            }
+            *dst = row;
+        }
+        else
+        {
+            DonnaTreeRow *row = sce;
+            *dst = g_strdup_printf ("[%p;%p]", row->node, row->iter);
+        }
+    }
+    else if (type & DONNA_ARG_TYPE_ROW_ID)
+    {
+        if (from_string)
+        {
+            DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+            gchar *s = sce;
+
+            if (*s == '[')
+            {
+                DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
+                if (sscanf (sce, "[%p;%p]", &row->node, &row->iter) != 2)
+                {
+                    g_free (row);
+                    g_free (rid);
+                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                            "Invalid argument syntax TREE_ROW for TREE_ROW_ID");
+                    return FALSE;
+                }
+                rid->type = DONNA_ARG_TYPE_ROW;
+                rid->ptr  = row;
+            }
+            else if (*s == ':' || (*s >= '0' && *s <= '9'))
+            {
+                rid->type = DONNA_ARG_TYPE_PATH;
+                rid->ptr  = g_strdup (sce);
+            }
+            else
+            {
                 if (!can_block)
                 {
                     g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
@@ -489,6 +585,7 @@ _donna_command_convert_arg (DonnaApp        *app,
                 DonnaTask *task = donna_app_get_node_task (app, sce);
                 if (!task)
                 {
+                    g_free (rid);
                     g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
                             "Invalid argument, can't get node for '%s'",
                             (gchar *) sce);
@@ -497,122 +594,41 @@ _donna_command_convert_arg (DonnaApp        *app,
                 donna_task_set_can_block (g_object_ref_sink (task));
                 donna_app_run_task (app, task);
                 if (donna_task_get_state (task) == DONNA_TASK_DONE)
-                    *dst = g_value_dup_object (donna_task_get_return_value (task));
+                    rid->ptr = g_value_dup_object (donna_task_get_return_value (task));
                 else
                 {
                     if (error)
                         *error = g_error_copy (donna_task_get_error (task));
                     g_object_unref (task);
+                    g_free (rid);
                     return FALSE;
                 }
                 g_object_unref (task);
+                rid->type = DONNA_ARG_TYPE_NODE;
             }
-            else
-                *dst = donna_node_get_full_location (sce);
-            break;
-
-        case DONNA_ARG_TYPE_ROW:
-            if (from_string)
-            {
-                DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
-                if (sscanf (sce, "[%p;%p]", &row->node, &row->iter) != 2)
-                {
-                    g_free (row);
-                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                            "Invalid argument syntax for TREE_ROW");
-                    return FALSE;
-                }
-                *dst = row;
-            }
-            else
-            {
-                DonnaTreeRow *row = sce;
-                *dst = g_strdup_printf ("[%p;%p]", row->node, row->iter);
-            }
-            break;
-
-        case DONNA_ARG_TYPE_ROW_ID:
-            if (from_string)
-            {
-                DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
-                gchar *s = sce;
-
-                if (*s == '[')
-                {
-                    DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
-                    if (sscanf (sce, "[%p;%p]", &row->node, &row->iter) != 2)
-                    {
-                        g_free (row);
-                        g_free (rid);
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                                "Invalid argument syntax TREE_ROW for TREE_ROW_ID");
-                        return FALSE;
-                    }
-                    rid->type = DONNA_ARG_TYPE_ROW;
-                    rid->ptr  = row;
-                }
-                else if (*s == ':' || (*s >= '0' && *s <= '9'))
-                {
-                    rid->type = DONNA_ARG_TYPE_PATH;
-                    rid->ptr  = g_strdup (sce);
-                }
-                else
-                {
-                    if (!can_block)
-                    {
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
-                                "Converting argument would required to use a (possibly blocking) task");
-                        return FALSE;
-                    }
-
-                    DonnaTask *task = donna_app_get_node_task (app, sce);
-                    if (!task)
-                    {
-                        g_free (rid);
-                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                                "Invalid argument, can't get node for '%s'",
-                                (gchar *) sce);
-                        return FALSE;
-                    }
-                    donna_task_set_can_block (g_object_ref_sink (task));
-                    donna_app_run_task (app, task);
-                    if (donna_task_get_state (task) == DONNA_TASK_DONE)
-                        rid->ptr = g_value_dup_object (donna_task_get_return_value (task));
-                    else
-                    {
-                        if (error)
-                            *error = g_error_copy (donna_task_get_error (task));
-                        g_object_unref (task);
-                        g_free (rid);
-                        return FALSE;
-                    }
-                    g_object_unref (task);
-                    rid->type = DONNA_ARG_TYPE_NODE;
-                }
-                *dst = rid;
-            }
-            else
-            {
-                /* ROW_ID cannot be used on return value */
-                g_warning ("convert_arg() called for DONNA_ARG_TYPE_ROW_ID");
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                        "Invalid argument type");
-                return FALSE;
-            }
-            break;
-
-        case DONNA_ARG_TYPE_NOTHING:
-            if (from_string)
-            {
-                /* NOTHING cannot be used on args */
-                g_warning ("convert_arg() called for DONNA_ARG_TYPE_NOTHING");
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
-                        "Invalid argument type");
-                return FALSE;
-            }
-            else
-                *dst = NULL;
-            break;
+            *dst = rid;
+        }
+        else
+        {
+            /* ROW_ID cannot be used on return value */
+            g_warning ("convert_arg() called for DONNA_ARG_TYPE_ROW_ID");
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    "Invalid argument type");
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_ARG_TYPE_NOTHING)
+    {
+        if (from_string)
+        {
+            /* NOTHING cannot be used on args */
+            g_warning ("convert_arg() called for DONNA_ARG_TYPE_NOTHING");
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    "Invalid argument type");
+            return FALSE;
+        }
+        else
+            *dst = NULL;
     }
     return TRUE;
 }
@@ -629,36 +645,25 @@ _donna_command_free_args (DonnaCommand *command, GPtrArray *arr)
      * And we start at 1 because pdata[0] is NULL or the "parent task" */
     for (i = 1; i < arr->len && command->argc ; ++i)
     {
-        switch (command->arg_type[i - 1])
+        if (!arr->pdata[i])
+            /* arg must have been optional & not specified */
+            continue;
+        else if (command->arg_type[i - 1] & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+            g_object_unref (arr->pdata[i]);
+        else if (command->arg_type[i - 1] & (DONNA_ARG_TYPE_STRING
+                    | DONNA_ARG_TYPE_ROW | DONNA_ARG_TYPE_PATH))
+            g_free (arr->pdata[i]);
+        else if (command->arg_type[i - 1] & DONNA_ARG_TYPE_ROW_ID)
         {
-            case DONNA_ARG_TYPE_TREEVIEW:
-            case DONNA_ARG_TYPE_NODE:
-                g_object_unref (arr->pdata[i]);
-                break;
+            DonnaTreeRowId *rowid;
 
-            case DONNA_ARG_TYPE_NOTHING:
-            case DONNA_ARG_TYPE_INT:
-                break;
+            rowid = arr->pdata[i];
+            if (rowid->type == DONNA_ARG_TYPE_NODE)
+                g_object_unref (rowid->ptr);
+            else
+                g_free (rowid->ptr);
 
-            case DONNA_ARG_TYPE_STRING:
-            case DONNA_ARG_TYPE_ROW:
-            case DONNA_ARG_TYPE_PATH:
-                g_free (arr->pdata[i]);
-                break;
-
-            case DONNA_ARG_TYPE_ROW_ID:
-                {
-                    DonnaTreeRowId *rowid;
-
-                    rowid = arr->pdata[i];
-                    if (rowid->type == DONNA_ARG_TYPE_NODE)
-                        g_object_unref (rowid->ptr);
-                    else
-                        g_free (rowid->ptr);
-
-                    g_free (rowid);
-                }
-                break;
+            g_free (rowid);
         }
     }
     g_ptr_array_unref (arr);
@@ -688,6 +693,13 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
     for (i = 0; i < command->argc; ++i)
     {
         gpointer ptr;
+
+        /* last arg is optional and wasn't specified (so start & end are NULL) */
+        if (i + 1 == command->argc && !end)
+        {
+            g_ptr_array_add (arr, NULL);
+            break;
+        }
 
         c = *end;
         *end = '\0';
@@ -885,6 +897,13 @@ run_command (DonnaTask *task, struct rc_data *data)
     {
         gpointer ptr;
         gchar c;
+
+        /* last arg is optional and wasn't specified (so start & end are NULL) */
+        if (data->i + 1 == data->command->argc && !data->end)
+        {
+            g_ptr_array_add (data->arr, NULL);
+            break;
+        }
 
         c = *data->end;
         *data->end = '\0';

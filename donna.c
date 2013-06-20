@@ -1165,7 +1165,7 @@ menu_conv_flag (const gchar  c,
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_NODE && node)
+            else if ((type & DONNA_ARG_TYPE_NODE) && node)
                 *out = g_object_ref (node);
             else
                 return FALSE;

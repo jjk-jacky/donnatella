@@ -8672,7 +8672,7 @@ tree_conv_flag (const gchar       c,
                     g_free (s);
                 }
             }
-            else if (type == DONNA_ARG_TYPE_TREEVIEW)
+            else if (type & DONNA_ARG_TYPE_TREEVIEW)
                 *out = g_object_ref (data->tree);
             else
                 return FALSE;
@@ -8710,7 +8710,7 @@ tree_conv_flag (const gchar       c,
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_NODE)
+            else if (type & DONNA_ARG_TYPE_NODE)
                 *out = g_object_ref (priv->location);
             else
                 return FALSE;
@@ -8732,7 +8732,7 @@ tree_conv_flag (const gchar       c,
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_ROW_ID)
+            else if (type & DONNA_ARG_TYPE_ROW_ID)
             {
                 DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
                 DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
@@ -8742,7 +8742,7 @@ tree_conv_flag (const gchar       c,
                 r->iter = data->row->iter;
                 *out = rid;
             }
-            else if (type == DONNA_ARG_TYPE_ROW)
+            else if (type & DONNA_ARG_TYPE_ROW)
             {
                 DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
                 r->node = data->row->node;
@@ -8785,7 +8785,7 @@ tree_conv_flag (const gchar       c,
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_NODE)
+            else if (type & DONNA_ARG_TYPE_NODE)
                 *out = g_object_ref (data->row->node);
             else
                 return FALSE;
