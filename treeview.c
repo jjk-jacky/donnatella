@@ -8648,6 +8648,8 @@ free_conv_data (struct conv_data *data)
 static gboolean
 tree_conv_flag (const gchar       c,
                 DonnaArgType      type,
+                gboolean          dereferenced,
+                DonnaApp         *app,
                 gpointer         *out,
                 struct conv_data *data)
 {
@@ -8659,7 +8661,17 @@ tree_conv_flag (const gchar       c,
     {
         case 'o':
             if (type == DONNA_ARG_TYPE_NOTHING)
-                g_string_append (str, priv->name);
+            {
+                if (dereferenced)
+                    g_string_append (str, priv->name);
+                else
+                {
+                    s = donna_app_new_int_ref (app, DONNA_ARG_TYPE_TREEVIEW,
+                            g_object_ref (data->tree));
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+            }
             else if (type == DONNA_ARG_TYPE_TREEVIEW)
                 *out = g_object_ref (data->tree);
             else
@@ -8671,15 +8683,13 @@ tree_conv_flag (const gchar       c,
             {
                 if (priv->location)
                 {
-                    s = donna_node_get_full_location (priv->location);
+                    s = donna_node_get_location (priv->location);
                     g_string_append (str, s);
                     g_free (s);
                 }
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_NODE)
-                *out = g_object_ref (priv->location);
             else
                 return FALSE;
             return TRUE;
@@ -8689,13 +8699,19 @@ tree_conv_flag (const gchar       c,
             {
                 if (priv->location)
                 {
-                    s = donna_node_get_location (priv->location);
+                    if (dereferenced)
+                        s = donna_node_get_full_location (priv->location);
+                    else
+                        s = donna_app_new_int_ref (app, DONNA_ARG_TYPE_NODE,
+                                g_object_ref (priv->location));
                     g_string_append (str, s);
                     g_free (s);
                 }
                 else
                     g_string_append_c (str, '-');
             }
+            else if (type == DONNA_ARG_TYPE_NODE)
+                *out = g_object_ref (priv->location);
             else
                 return FALSE;
             return TRUE;
@@ -8742,15 +8758,13 @@ tree_conv_flag (const gchar       c,
             {
                 if (data->row)
                 {
-                    s = donna_node_get_full_location (data->row->node);
+                    s = donna_node_get_location (data->row->node);
                     g_string_append (str, s);
                     g_free (s);
                 }
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_NODE)
-                *out = g_object_ref (data->row->node);
             else
                 return FALSE;
             return TRUE;
@@ -8760,13 +8774,19 @@ tree_conv_flag (const gchar       c,
             {
                 if (data->row)
                 {
-                    s = donna_node_get_location (data->row->node);
+                    if (dereferenced)
+                        s = donna_node_get_location (data->row->node);
+                    else
+                        s = donna_app_new_int_ref (app, DONNA_ARG_TYPE_NODE,
+                                g_object_ref (data->row->node));
                     g_string_append (str, s);
                     g_free (s);
                 }
                 else
                     g_string_append_c (str, '-');
             }
+            else if (type == DONNA_ARG_TYPE_NODE)
+                *out = g_object_ref (data->row->node);
             else
                 return FALSE;
             return TRUE;

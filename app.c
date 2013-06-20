@@ -314,6 +314,61 @@ donna_app_get_treeview (DonnaApp    *app,
     return (*interface->get_treeview) (app, name);
 }
 
+gchar *
+donna_app_new_int_ref (DonnaApp       *app,
+                       DonnaArgType    type,
+                       gpointer        ptr)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (ptr != NULL, NULL);
+    g_return_val_if_fail (type == DONNA_ARG_TYPE_TREEVIEW
+            || type == DONNA_ARG_TYPE_NODE, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->new_int_ref != NULL, NULL);
+
+    return (*interface->new_int_ref) (app, type, ptr);
+}
+
+gpointer
+donna_app_get_int_ref (DonnaApp       *app,
+                       const gchar    *intref)
+
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (intref != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_int_ref != NULL, NULL);
+
+    return (*interface->get_int_ref) (app, intref);
+}
+
+gboolean
+donna_app_free_int_ref (DonnaApp       *app,
+                        const gchar    *intref)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (intref != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->free_int_ref != NULL, NULL);
+
+    return (*interface->free_int_ref) (app, intref);
+}
+
 gboolean
 donna_app_show_menu (DonnaApp       *app,
                      GPtrArray      *nodes,

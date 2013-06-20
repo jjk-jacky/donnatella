@@ -44,6 +44,13 @@ struct _DonnaAppInterface
     DonnaTaskManager *  (*get_task_manager)         (DonnaApp       *app);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
                                                      const gchar    *name);
+    gchar *             (*new_int_ref)              (DonnaApp       *app,
+                                                     DonnaArgType    type,
+                                                     gpointer        ptr);
+    gpointer            (*get_int_ref)              (DonnaApp       *app,
+                                                     const gchar    *intref);
+    gboolean            (*free_int_ref)             (DonnaApp       *app,
+                                                     const gchar    *intref);
     gboolean            (*show_menu)                (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
@@ -80,6 +87,13 @@ void                donna_app_run_task              (DonnaApp       *app,
 DonnaTaskManager *  donna_app_get_task_manager      (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);
+gchar *             donna_app_new_int_ref           (DonnaApp       *app,
+                                                     DonnaArgType    type,
+                                                     gpointer        ptr);
+gpointer            donna_app_get_int_ref           (DonnaApp       *app,
+                                                     const gchar    *intref);
+gboolean            donna_app_free_int_ref          (DonnaApp       *app,
+                                                     const gchar    *intref);
 gboolean            donna_app_show_menu             (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,

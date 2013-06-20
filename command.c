@@ -418,6 +418,26 @@ _donna_command_convert_arg (DonnaApp        *app,
             {
                 if (streq (sce, ":active"))
                     g_object_get (app, "active-list", dst, NULL);
+                else if (* (gchar *) sce == '<')
+                {
+                    gchar *s = sce;
+                    gsize len = strlen (s) - 1;
+                    if (s[len] != '>')
+                    {
+                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                                "Invalid treeview name/reference: '%s'",
+                                (gchar *) sce);
+                        return FALSE;
+                    }
+                    *dst = donna_app_get_int_ref (app, sce);
+                    if (!*dst)
+                    {
+                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                                "Invalid internal reference '%s'",
+                                (gchar *) sce);
+                        return FALSE;
+                    }
+                }
                 else
                 {
                     *dst = donna_app_get_treeview (app, sce);
@@ -436,6 +456,28 @@ _donna_command_convert_arg (DonnaApp        *app,
         case DONNA_ARG_TYPE_NODE:
             if (from_string)
             {
+                if (* (gchar *) sce == '<')
+                {
+                    gchar *s = sce;
+                    gsize len = strlen (s) - 1;
+                    if (s[len] != '>')
+                    {
+                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                                "Invalid node full location/reference: '%s'",
+                                (gchar *) sce);
+                        return FALSE;
+                    }
+                    *dst = donna_app_get_int_ref (app, sce);
+                    if (!*dst)
+                    {
+                        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                                "Invalid internal reference '%s'",
+                                (gchar *) sce);
+                        return FALSE;
+                    }
+                    return TRUE;
+                }
+
                 if (!can_block)
                 {
                     g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
@@ -733,13 +775,22 @@ parse_location (const gchar *sce, struct rc_data *data)
 
     while ((s = strchr (s, '%')))
     {
-        if (strchr (data->conv_flags, s[1]))
+        gboolean dereference = s[1] == '*';
+        gboolean match;
+
+        if (!dereference)
+            match = strchr (data->conv_flags, s[1]) != NULL;
+        else
+            match = strchr (data->conv_flags, s[2]) != NULL;
+        if (match)
         {
             if (!str)
                 str = g_string_new (NULL);
             g_string_append_len (str, sce, s - sce);
-            data->conv_fn (s[1], DONNA_ARG_TYPE_NOTHING, (gpointer *) &str,
-                    data->conv_data);
+            if (dereference)
+                ++s;
+            data->conv_fn (s[1], DONNA_ARG_TYPE_NOTHING, dereference, data->app,
+                    (gpointer *) &str, data->conv_data);
             s += 2;
             sce = (const gchar *) s;
         }
@@ -807,7 +858,7 @@ run_command (DonnaTask *task, struct rc_data *data)
 
         if (data->start[0] == '%' && strchr (data->conv_flags, data->start[1])
                 && data->conv_fn (data->start[1], data->command->arg_type[data->i],
-                    &ptr, data->conv_data))
+                    FALSE, NULL, &ptr, data->conv_data))
                 g_ptr_array_add (data->arr, ptr);
         else
         {

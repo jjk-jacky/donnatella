@@ -65,6 +65,13 @@ struct filter
     guint        timeout;
 };
 
+struct intref
+{
+    DonnaArgType type;
+    gpointer     ptr;
+    gint64       last;
+};
+
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
@@ -81,8 +88,8 @@ struct _DonnaDonnaPrivate
      * should be quite rare. */
     GRWLock          lock;
     GHashTable      *visuals;
-    /* ct, providers & filters are all under the same lock because there
-     * shouldn't be a need to separate them all. We use a recursive mutex
+    /* ct, providers, filters & intrefs are all under the same lock because
+     * there shouldn't be a need to separate them all. We use a recursive mutex
      * because we need it for filters, to handle correctly the toggle_ref */
     GRecMutex        rec_mutex;
     struct col_type
@@ -94,6 +101,8 @@ struct _DonnaDonnaPrivate
     } column_types[NB_COL_TYPES];
     GSList          *providers;
     GHashTable      *filters;
+    GHashTable      *intrefs;
+    guint            intrefs_timeout;
 };
 
 struct argmt
@@ -137,6 +146,13 @@ static void             donna_donna_run_task        (DonnaApp       *app,
 static DonnaTaskManager*donna_donna_get_task_manager(DonnaApp       *app);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
+static gchar *          donna_donna_new_int_ref     (DonnaApp       *app,
+                                                     DonnaArgType    type,
+                                                     gpointer        ptr);
+static gpointer         donna_donna_get_int_ref     (DonnaApp       *app,
+                                                     const gchar    *intref);
+static gboolean         donna_donna_free_int_ref    (DonnaApp       *app,
+                                                     const gchar    *intref);
 static gboolean         donna_donna_show_menu       (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
@@ -160,6 +176,9 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->run_task             = donna_donna_run_task;
     interface->get_task_manager     = donna_donna_get_task_manager;
     interface->get_treeview         = donna_donna_get_treeview;
+    interface->new_int_ref          = donna_donna_new_int_ref;
+    interface->get_int_ref          = donna_donna_get_int_ref;
+    interface->free_int_ref         = donna_donna_free_int_ref;
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
@@ -250,6 +269,17 @@ free_filter (struct filter *f)
 }
 
 static void
+free_intref (struct intref *ir)
+{
+    if (ir->type == DONNA_ARG_TYPE_TREEVIEW || ir->type == DONNA_ARG_TYPE_NODE)
+        g_object_unref (ir->ptr);
+    else
+        g_warning ("free_intref(): Invalid type: %d", ir->type);
+
+    g_free (ir);
+}
+
+static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
@@ -298,6 +328,9 @@ donna_donna_init (DonnaDonna *donna)
 
     priv->visuals = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_visuals);
+
+    priv->intrefs = g_hash_table_new_full (g_str_hash, g_str_equal,
+            g_free, (GDestroyNotify) free_intref);
 
     if (donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
@@ -392,6 +425,7 @@ donna_donna_finalize (GObject *object)
     free_arrangements (priv->arrangements);
     g_hash_table_destroy (priv->filters);
     g_hash_table_destroy (priv->visuals);
+    g_hash_table_destroy (priv->intrefs);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
 
     for (i = 0; i < NB_COL_TYPES; ++i)
@@ -978,6 +1012,96 @@ donna_donna_get_treeview (DonnaApp       *app,
     return tree;
 }
 
+static gboolean
+intrefs_remove (gchar *key, struct intref *ir, gpointer data)
+{
+    /* remove after 15min */
+    return ir->last + (G_USEC_PER_SEC * 60 * 15) <= g_get_monotonic_time ();
+}
+
+static gboolean
+intrefs_gc (DonnaDonna *donna)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    gboolean keep_going;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    g_hash_table_foreach_remove (priv->intrefs, (GHRFunc) intrefs_remove, NULL);
+    keep_going = g_hash_table_size (priv->intrefs) > 0;
+    if (!keep_going)
+        priv->intrefs_timeout = 0;
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return keep_going;
+}
+
+static gchar *
+donna_donna_new_int_ref (DonnaApp       *app,
+                         DonnaArgType    type,
+                         gpointer        ptr)
+{
+    DonnaDonnaPrivate *priv;
+    struct intref *ir;
+    gchar *s;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    priv = ((DonnaDonna *) app)->priv;
+
+    ir = g_new (struct intref, 1);
+    ir->type = type;
+    ir->ptr  = ptr;
+    ir->last = g_get_monotonic_time ();
+
+    s = g_strdup_printf ("<%u%u>", rand (), ir);
+    g_rec_mutex_lock (&priv->rec_mutex);
+    g_hash_table_insert (priv->intrefs, g_strdup (s), ir);
+    if (priv->intrefs_timeout == 0)
+        priv->intrefs_timeout = g_timeout_add_seconds_full (G_PRIORITY_LOW,
+                60 * 15, /* 15min */
+                (GSourceFunc) intrefs_gc, app, NULL);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+    return s;
+}
+
+static gpointer
+donna_donna_get_int_ref (DonnaApp       *app,
+                         const gchar    *intref)
+{
+    DonnaDonnaPrivate *priv;
+    struct intref *ir;
+    gpointer ptr;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    priv = ((DonnaDonna *) app)->priv;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    ir = g_hash_table_lookup (priv->intrefs, intref);
+    if (ir)
+        ir->last = g_get_monotonic_time ();
+    ptr = (ir) ? ir->ptr : NULL;
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return ptr;
+}
+
+static gboolean
+donna_donna_free_int_ref (DonnaApp       *app,
+                          const gchar    *intref)
+{
+    DonnaDonnaPrivate *priv;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    priv = ((DonnaDonna *) app)->priv;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    /* frees key & value */
+    ret = g_hash_table_remove (priv->intrefs, intref);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return ret;
+}
+
 struct menu_click_data
 {
     DonnaDonna  *donna;
@@ -999,6 +1123,8 @@ menu_unmap_cb (GtkWidget *menu, GdkEvent *event, struct menu_click_data *data)
 static gboolean
 menu_conv_flag (const gchar  c,
                 DonnaArgType type,
+                gboolean     dereference,
+                DonnaApp    *app,
                 gpointer    *out,
                 DonnaNode   *node)
 {
@@ -1012,15 +1138,13 @@ menu_conv_flag (const gchar  c,
             {
                 if (node)
                 {
-                    s = donna_node_get_full_location (node);
+                    s = donna_node_get_location (node);
                     g_string_append (str, s);
                     g_free (s);
                 }
                 else
                     g_string_append_c (str, '-');
             }
-            else if (type == DONNA_ARG_TYPE_NODE && node)
-                *out = g_object_ref (node);
             else
                 return FALSE;
             return TRUE;
@@ -1030,13 +1154,19 @@ menu_conv_flag (const gchar  c,
             {
                 if (node)
                 {
-                    s = donna_node_get_location (node);
+                    if (dereference)
+                        s = donna_node_get_full_location (node);
+                    else
+                        s = donna_app_new_int_ref (app, DONNA_ARG_TYPE_NODE,
+                                g_object_ref (node));
                     g_string_append (str, s);
                     g_free (s);
                 }
                 else
                     g_string_append_c (str, '-');
             }
+            else if (type == DONNA_ARG_TYPE_NODE && node)
+                *out = g_object_ref (node);
             else
                 return FALSE;
             return TRUE;;
@@ -1094,7 +1224,7 @@ menuitem_button_press_cb (GtkWidget              *item,
     {
         if (streq (buf, "left_click"))
             /* hard-coded default for sanity */
-            fl = g_strdup ("command:node_activate (%N,0)");
+            fl = g_strdup ("command:node_activate (%n,0)");
         else
             return FALSE;
     }

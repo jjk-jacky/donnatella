@@ -25,6 +25,8 @@ typedef DonnaTaskState (*cmd_fn) (DonnaTask *task, GPtrArray *args);
 
 typedef gboolean (*_conv_flag_fn) (const gchar  c,
                                    DonnaArgType type,
+                                   gboolean     dereferenced,
+                                   DonnaApp    *app,
                                    gpointer    *out,
                                    gpointer     data);
 
