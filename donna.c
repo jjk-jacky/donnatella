@@ -736,8 +736,8 @@ filter_toggle_ref_cb (DonnaDonna *donna, DonnaFilter *filter, gboolean is_last)
         t = g_new (struct filter_toggle, 1);
         t->donna = donna;
         t->filter_str = filter_str;
-        f->timeout = g_timeout_add_full (G_PRIORITY_LOW,
-                1000 * 60 * 15, /* 15min */
+        f->timeout = g_timeout_add_seconds_full (G_PRIORITY_LOW,
+                60 * 15, /* 15min */
                 (GSourceFunc) filter_remove,
                 t, (GDestroyNotify) free_filter_toggle);
     }
