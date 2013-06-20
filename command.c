@@ -827,6 +827,39 @@ command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
     free_rc_data (data);
 }
 
+struct err
+{
+    DonnaApp    *app;
+    GError      *err;
+    gchar       *msg;
+};
+
+static gboolean
+real_show_error (struct err *e)
+{
+    donna_app_show_error (e->app, e->err, e->msg);
+    g_clear_error (&e->err);
+    g_free (e->msg);
+    g_free (e);
+    return FALSE;
+}
+
+/* because we might be in a thread */
+static inline void
+show_error (DonnaApp *app, GError *err, const gchar *msg, ...)
+{
+    struct err *e;
+    va_list va_arg;
+
+    e = g_new (struct err, 1);
+    e->app = app;
+    e->err = err;
+    va_start (va_arg, msg);
+    e->msg = g_strdup_vprintf (msg, va_arg);
+    va_end (va_arg);
+    g_main_context_invoke (NULL, (GSourceFunc) real_show_error, e);
+}
+
 static DonnaTaskState
 run_command (DonnaTask *task, struct rc_data *data)
 {
@@ -839,9 +872,8 @@ run_command (DonnaTask *task, struct rc_data *data)
                 &data->start, &data->end, &err);
         if (!data->command)
         {
-            donna_app_show_error (data->app, err,
-                    "Cannot trigger action, parsing command failed");
-            g_clear_error (&err);
+            show_error (data->app, err,
+                    "Cannot trigger node, parsing command failed");
             free_rc_data (data);
             return DONNA_TASK_FAILED;
         }
@@ -890,9 +922,9 @@ run_command (DonnaTask *task, struct rc_data *data)
                     donna_app_run_task (data->app, task);
                     return DONNA_TASK_DONE;
                 }
-                donna_app_show_error (data->app, err,
-                        "Cannot trigger action, parsing command failed");
-                g_clear_error (&err);
+                show_error (data->app, err,
+                        "Cannot trigger node, parsing argument %d failed",
+                        data->i + 1);
                 free_rc_data (data);
                 return DONNA_TASK_FAILED;
             }
@@ -904,9 +936,8 @@ run_command (DonnaTask *task, struct rc_data *data)
         if (!_donna_command_get_next_arg (data->command, data->i,
                     &data->start, &data->end, &err))
         {
-            donna_app_show_error (data->app, err,
-                    "Cannot trigger action, parsing command failed");
-            g_clear_error (&err);
+            show_error (data->app, err,
+                    "Cannot trigger node, parsing command failed");
             free_rc_data (data);
             return DONNA_TASK_FAILED;
         }
@@ -915,9 +946,8 @@ run_command (DonnaTask *task, struct rc_data *data)
     if (!_donna_command_checks_post_parsing (data->command, data->i,
                 data->start, data->end, &err))
     {
-        donna_app_show_error (data->app, err,
-                "Cannot trigger action, parsing command failed");
-        g_clear_error (&err);
+        show_error (data->app, err,
+                "Cannot trigger node, parsing command failed");
         free_rc_data (data);
         return DONNA_TASK_FAILED;
     }
