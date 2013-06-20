@@ -226,6 +226,8 @@ donna_app_trigger_node (DonnaApp       *app,
     g_return_val_if_fail (interface->run_task != NULL, FALSE);
 
     task = donna_app_get_node_task (app, full_location);
+    if (G_UNLIKELY (!task))
+        return FALSE;
     donna_task_set_callback (task, (task_callback_fn) get_node_cb, app, NULL);
     (*interface->run_task) (app, task);
     return TRUE;
