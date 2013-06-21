@@ -294,7 +294,7 @@ get_quoted_string (gchar **str, gboolean get_string)
         if (!s)
             return NULL;
         /* check for escaped quotes within filter */
-        for (i = 0; s[i-1] == '\\'; --i)
+        for (i = 0; &s[i - 1] >= f + 1 && s[i - 1] == '\\'; --i)
             ;
         if ((i % 2) == 0)
             break;
