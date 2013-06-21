@@ -9,6 +9,8 @@
 
 static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_task_set_state                  (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_task_toggle                     (DonnaTask *task,
@@ -48,6 +50,17 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_node_activate
+    },
+    {
+        .name           = "node_popup_children",
+        .argc           = 5,
+        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
+        .cmd_fn         = cmd_node_popup_children
     },
     {
         .name           = "task_set_state",
@@ -1168,6 +1181,127 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
     }
     g_object_unref (tree);
     return DONNA_TASK_DONE;
+}
+
+struct popup_children_data
+{
+    DonnaApp        *app;
+    DonnaTreeView   *tree;
+    gchar           *filter;
+    GPtrArray       *nodes;
+    gchar           *menus;
+};
+
+static DonnaTaskState
+popup_children (DonnaTask *task, struct popup_children_data *data)
+{
+    GError *err = NULL;
+
+    if (data->filter)
+    {
+        gboolean rc;
+
+        if (data->tree)
+            rc = donna_tree_view_filter_nodes (data->tree, data->nodes,
+                    data->filter, &err);
+        else
+            rc = donna_app_filter_nodes (data->app, data->nodes,
+                    data->filter, &err);
+        if (!rc)
+        {
+            g_prefix_error (&err, "Command 'node_popup_children': Failed to filter children: ");
+            donna_task_take_error (task, err);
+            g_ptr_array_unref (data->nodes);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    if (!donna_app_show_menu (data->app, data->nodes, data->menus, &err))
+    {
+        g_prefix_error (&err, "Command 'node_popup_children': Failed to show menu: ");
+        return DONNA_TASK_FAILED;
+    }
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_children[] = { "all", "item", "container" };
+    DonnaNodeType children[]  = { DONNA_NODE_ITEM | DONNA_NODE_CONTAINER,
+        DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
+    DonnaTaskState state;
+    DonnaTask *t;
+    struct popup_children_data data;
+    gint c;
+
+    c = get_choice_from_arg (c_children, 2);
+    if (c < 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Invalid type of node children: '%s'; Must be 'item', 'container' or 'all'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    t = donna_node_get_children_task (args->pdata[1], children[c], &err);
+    if (!t)
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (args->pdata[6], t);
+    donna_task_wait_for_it (t);
+
+    state = donna_task_get_state (t);
+    if (state != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+        {
+            err = g_error_copy (err);
+            g_prefix_error (&err, "Command 'node_popup_children' failed: ");
+            donna_task_take_error (task_for_ret_err (), err);
+        }
+        else
+        {
+            gchar *fl = donna_node_get_full_location (args->pdata[1]);
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_OTHER,
+                    "Command 'node_popup_children' failed: Unable to get children of '%s'",
+                    fl);
+            g_free (fl);
+        }
+        g_object_unref (t);
+        return state;
+    }
+
+    data.app    = args->pdata[6];
+    data.tree   = args->pdata[5];
+    data.filter = args->pdata[4];
+    data.menus  = args->pdata[3];
+    data.nodes  = g_value_dup_boxed (donna_task_get_return_value (t));
+    g_object_unref (t);
+
+    t = donna_task_new ((task_fn) popup_children, &data, NULL);
+    donna_task_set_visibility (t, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (data.app, t);
+    donna_task_wait_for_it (t);
+
+    state = donna_task_get_state (t);
+    if (state != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+            donna_task_take_error (task_for_ret_err (), g_error_copy (err));
+    }
+    g_object_unref (t);
+    return state;
 }
 
 static DonnaTaskState
