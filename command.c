@@ -223,12 +223,16 @@ get_next_arg (gchar  **arg,
 
     if (**arg == '"')
     {
+        gint unesc = 0;
         for (s = ++*arg; ; )
         {
             gint i;
 
             for ( ; *s != '"' && *s != '\0'; ++s)
-                ;
+                if (unesc < 0)
+                    s[unesc] = *s;
+            if (unesc < 0)
+                s[unesc] = *s;
             if (*s == '\0')
             {
                 g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
@@ -236,12 +240,19 @@ get_next_arg (gchar  **arg,
                 return FALSE;
             }
             /* check for escaped quotes */
-            for (i = 0; s[i - 1] == '\\'; --i)
+            for (i = 0; &s[i + unesc - 1] >= *arg && s[i + unesc - 1] == '\\'; --i)
                 ;
             if ((i % 2) == 0)
                 break;
+            s[--unesc] = *s;
             ++s;
         }
+        if (unesc < 0)
+            s[unesc] = '\0';
+        /* the *end will still be the last char. "originally" ending it, i.e. the
+         * actual ending quote. Meaning that using *arg it's the unescaped
+         * string ending a little before *end, which is as usual so moving to
+         * the next arg works as expected/usual */
         *end = s;
         return TRUE;
     }
