@@ -352,10 +352,16 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
             -1)
 
 /* internal from provider-config.c */
+enum
+{
+    TREE_COL_TREE,          /* mode tree, clicks */
+    TREE_COL_LIST,          /* mode list */
+    TREE_COL_LIST_SELECTED, /* mode list, selected */
+};
 gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
                                              const gchar   *tv_name,
                                              const gchar   *col_name,
-                                             gboolean       is_clicks,
+                                             guint          tree_col,
                                              const gchar   *arr_name,
                                              const gchar   *def_cat,
                                              const gchar   *opt_name,
@@ -8837,6 +8843,7 @@ handle_click (DonnaTreeView     *tree,
     struct conv_data *data;
     gchar *fl;
     gboolean is_tree = is_tree (tree);
+    gboolean is_selected;
     gchar *clicks = NULL;
     /* longest possible is "blankcol_ctrl_shift_middle_double_click" (len=39) */
     gchar buf[40];
@@ -8925,7 +8932,7 @@ handle_click (DonnaTreeView     *tree,
         else if (streq (b, "blank_left_click")
                 || streq (b, "blankcol_left_click")
                 || streq (b, "blankrow_left_click"))
-            def = "command:tree_selection (%o, unselect, :all, -)";
+            def = "command:tree_selection (%o, unselect, :all, )";
         else if (streq (b, "left_double_click"))
             def = "command:tree_activate_row (%o, %r)";
     }
@@ -8935,12 +8942,24 @@ handle_click (DonnaTreeView     *tree,
                 DONNA_TREE_COL_CLICKS,  &clicks,
                 -1);
 
+    /* list only: different source when the clicked item is selected */
+    is_selected = !is_tree && iter && gtk_tree_selection_iter_is_selected (
+            gtk_tree_view_get_selection ((GtkTreeView *) tree), iter);
+
     fl = _donna_config_get_string_tree_column (config, priv->name,
             (data->_col) ? data->_col->name : NULL,
-            is_tree,
+            (is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
             (is_tree) ? clicks : priv->arrangement->columns_options,
             (is_tree) ? "treeviews/tree" : "treeviews/list",
             b, (gchar *) def);
+    if (!fl && is_selected)
+        /* nothing found under "selected", fallback to regular clicks */
+        fl = _donna_config_get_string_tree_column (config, priv->name,
+                (data->_col) ? data->_col->name : NULL,
+                TREE_COL_LIST,
+                priv->arrangement->columns_options,
+                "treeviews/list",
+                b, (gchar *) def);
 
     g_free (clicks);
 

@@ -1843,6 +1843,13 @@ __get_option (DonnaConfig   *config,
     return option;
 }
 
+enum
+{
+    TREE_COL_TREE = 1,      /* mode tree, clicks */
+    TREE_COL_LIST,          /* mode list */
+    TREE_COL_LIST_SELECTED, /* mode list, selected */
+};
+
 static gboolean
 _get_option_column (DonnaConfig  *config,
                     GType         type,
@@ -1852,7 +1859,7 @@ _get_option_column (DonnaConfig  *config,
                     const gchar  *arr_name,
                     const gchar  *def_cat,
                     const gchar  *opt_name,
-                    gint          is_tree_col)
+                    guint         tree_col)
 {
     DonnaProviderConfigPrivate *priv = config->priv;
     GNode *node;
@@ -1864,7 +1871,7 @@ _get_option_column (DonnaConfig  *config,
 
     g_rw_lock_reader_lock (&priv->lock);
 
-    if (is_tree_col == 2 && arr_name)
+    if (tree_col == TREE_COL_TREE && arr_name)
     {
         node = priv->root;
         get_child_cat ("clicks", 6, treeview);
@@ -1880,6 +1887,8 @@ _get_option_column (DonnaConfig  *config,
         goto treeview;
     get_child_cat ("columns_options", 15, treeview);
     get_child_cat (col_name, len_col, treeview);
+    if (tree_col == TREE_COL_LIST_SELECTED)
+        get_child_cat ("selected", 8, treeview);
     get_child_opt (opt_name, len_opt, type, treeview);
     goto get_value;
 
@@ -1891,6 +1900,8 @@ treeview:
     get_child_cat (tv_name, strlen (tv_name), column);
     get_child_cat ("columns", 7, column);
     get_child_cat (col_name, len_col, column);
+    if (tree_col == TREE_COL_LIST_SELECTED)
+        get_child_cat ("selected", 8, treeview);
     get_child_opt (opt_name, len_opt, type, column);
     goto get_value;
 
@@ -1901,10 +1912,12 @@ column:
     node = priv->root;
     if (def_cat)
     {
-        if (is_tree_col)
+        if (tree_col)
         {
             get_child_cat ("columns", 7, tree_col);
             get_child_cat (col_name, len_col, tree_col);
+            if (tree_col == TREE_COL_LIST_SELECTED)
+                get_child_cat ("selected", 8, tree_col);
             get_child_opt (opt_name, len_opt, type, tree_col);
         }
         else
@@ -1928,13 +1941,17 @@ tree_col:
     node = priv->root;
     get_child_cat ("treeviews", 9, def);
     get_child_cat (tv_name, strlen (tv_name), def);
+    if (tree_col == TREE_COL_LIST_SELECTED)
+        get_child_cat ("selected", 8, def);
     get_child_opt (opt_name, len_opt, type, def);
     goto get_value;
 
 def:
     g_rw_lock_reader_unlock (&priv->lock);
-    option = __get_option (config, type, TRUE, "defaults/%s/%s",
-            def_cat, opt_name);
+    option = __get_option (config, type, TRUE, "defaults/%s/%s%s",
+            def_cat,
+            (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
+            opt_name);
     if (option)
         g_value_copy (&option->value, value);
     g_rw_lock_reader_unlock (&priv->lock);
@@ -2022,7 +2039,7 @@ gchar *
 _donna_config_get_string_tree_column (DonnaConfig   *config,
                                       const gchar   *tv_name,
                                       const gchar   *col_name,
-                                      gboolean       is_clicks,
+                                      guint          tree_col,
                                       const gchar   *arr_name,
                                       const gchar   *def_cat,
                                       const gchar   *opt_name,
@@ -2035,12 +2052,15 @@ _donna_config_get_string_tree_column (DonnaConfig   *config,
 
     g_value_init (&value, G_TYPE_STRING);
     if (!_get_option_column (config, G_TYPE_STRING, &value,
-                tv_name, col_name, arr_name, def_cat, opt_name, (is_clicks) ? 2 : 1))
+                tv_name, col_name, arr_name, def_cat, opt_name, tree_col))
     {
         g_value_unset (&value);
         if (!def_val)
             return NULL;
-        donna_config_set_string (config, def_val, "defaults/%s/%s", def_cat, opt_name);
+        donna_config_set_string (config, def_val, "defaults/%s/%s%s",
+                def_cat,
+                (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
+                opt_name);
         return g_strdup (def_val);
     }
     ret = g_value_dup_string (&value);
