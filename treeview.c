@@ -2830,7 +2830,7 @@ get_ct_data (const gchar *col_name, DonnaTreeView *tree)
         struct column_filter *cf;
         gchar *col_type = NULL;
 
-        cf = g_new (struct column_filter, 1);
+        cf = g_new0 (struct column_filter, 1);
         cf->name = g_strdup (col_name);
         donna_config_get_string (donna_app_peek_config (priv->app), &col_type,
                 "columns/%s/type", col_name);
