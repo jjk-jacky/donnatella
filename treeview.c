@@ -7392,16 +7392,19 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
                               GError            **error)
 {
     DonnaTreeViewPrivate *priv;
-    GtkTreeIter  iter;
-    row_id_type  type;
-    DonnaNode   *node;
+    GtkTreeSelection *sel;
+    GtkTreeModel *model;
+    GtkTreeIter iter;
+    row_id_type type;
+    gboolean ret = TRUE;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (rowid != NULL, FALSE);
-    priv = tree->priv;
+    priv  = tree->priv;
+    model = (GtkTreeModel *) priv->store;
 
     type = convert_row_id_to_iter (tree, rowid, &iter);
-    if (type != ROW_ID_ROW)
+    if (type == ROW_ID_INVALID)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
@@ -7410,36 +7413,62 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
-            DONNA_TREE_VIEW_COL_NODE,   &node,
-            -1);
-    if (!node)
+    if (type == ROW_ID_SELECTION)
+        sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+    if (type == ROW_ID_SELECTION || type == ROW_ID_ALL)
+        /* for SELECTION we'll also iter through each row, and check whether or
+         * not they're selected. Might not seem like the best of choices, but
+         * this is what gtk_tree_selection_get_selected_rows() actually does,
+         * so this makes this code simpler (and avoids GList "overhead") */
+        if (!gtk_tree_model_iter_children (model, &iter, NULL))
+            /* empty tree. I consider this a success */
+            return TRUE;
+
+    for (;;)
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': No node matching the given row-id",
-                priv->name);
-        return FALSE;
+        DonnaNode   *node;
+
+        if (type == ROW_ID_SELECTION
+                && !gtk_tree_selection_iter_is_selected (sel, &iter))
+            goto next;
+
+        gtk_tree_model_get (model, &iter,
+                DONNA_TREE_VIEW_COL_NODE,   &node,
+                -1);
+        if (G_UNLIKELY (!node))
+            goto next;
+
+        /* since the node is in the tree, we already have a ref on it */
+        g_object_unref (node);
+
+        if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+        {
+            /* only for single row; else we'd risk having to go into multiple
+             * locations, so we just don't support it/ignore them */
+            if (type == ROW_ID_ROW)
+                ret = (donna_tree_view_set_location (tree, node, error)) ? ret : FALSE;
+        }
+        else /* DONNA_NODE_ITEM */
+        {
+            DonnaTask *task;
+
+            task = donna_node_trigger_task (node, error);
+            if (G_UNLIKELY (!task))
+            {
+                ret = FALSE;
+                goto next;
+            }
+
+            donna_task_set_callback (task,
+                    (task_callback_fn) show_err_on_task_failed, tree, NULL);
+            donna_app_run_task (priv->app, task);
+        }
+
+next:
+        if (type == ROW_ID_ROW || !donna_tree_model_iter_next (model, &iter))
+            break;
     }
-
-    /* since the node is in the tree, we already have a ref on it */
-    g_object_unref (node);
-
-    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
-        return donna_tree_view_set_location (tree, node, error);
-    else /* DONNA_NODE_ITEM */
-    {
-        DonnaTask *task;
-
-        task = donna_node_trigger_task (node, error);
-        if (!task)
-            return FALSE;
-
-        donna_task_set_callback (task,
-                (task_callback_fn) show_err_on_task_failed, tree, NULL);
-        donna_app_run_task (priv->app, task);
-        return TRUE;
-    }
+    return ret;
 }
 
 gboolean
