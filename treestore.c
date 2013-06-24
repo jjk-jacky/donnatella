@@ -495,10 +495,10 @@ donna_tree_model_iter_next (GtkTreeModel       *model,
 static gboolean
 _get_last_child (GtkTreeModel *model, GtkTreeIter *iter)
 {
-    GtkTreeIter it;
-    if (!tree_store_iter_children (model, iter, (iter->stamp == 0) ? NULL : iter))
+    GtkTreeIter it = *iter;
+    if (!tree_store_iter_children (model, &it, (iter->stamp == 0) ? NULL : iter))
         return FALSE;
-    it = *iter;
+    *iter = it;
     while (tree_store_iter_next (model, &it))
         *iter = it;
     return TRUE;
