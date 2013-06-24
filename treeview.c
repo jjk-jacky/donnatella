@@ -8722,8 +8722,6 @@ tree_conv_flag (const gchar       c,
                     g_string_append (str, s);
                     g_free (s);
                 }
-                else
-                    g_string_append_c (str, '-');
             }
             else
                 return FALSE;
@@ -8742,8 +8740,6 @@ tree_conv_flag (const gchar       c,
                     g_string_append (str, s);
                     g_free (s);
                 }
-                else
-                    g_string_append_c (str, '-');
             }
             else if (type & DONNA_ARG_TYPE_NODE)
                 *out = g_object_ref (priv->location);
@@ -8764,8 +8760,6 @@ tree_conv_flag (const gchar       c,
                 if (data->row)
                     g_string_append_printf (str, "[%p;%p]",
                             data->row->node, data->row->iter);
-                else
-                    g_string_append_c (str, '-');
             }
             else if (type & DONNA_ARG_TYPE_ROW_ID)
             {
@@ -8797,8 +8791,6 @@ tree_conv_flag (const gchar       c,
                     g_string_append (str, s);
                     g_free (s);
                 }
-                else
-                    g_string_append_c (str, '-');
             }
             else
                 return FALSE;
@@ -8817,8 +8809,6 @@ tree_conv_flag (const gchar       c,
                     g_string_append (str, s);
                     g_free (s);
                 }
-                else
-                    g_string_append_c (str, '-');
             }
             else if (type & DONNA_ARG_TYPE_NODE)
                 *out = g_object_ref (data->row->node);
