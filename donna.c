@@ -1233,7 +1233,7 @@ menuitem_button_press_cb (GtkWidget              *item,
     if (node)
         g_object_ref (node);
 
-    _donna_command_parse_run ((DonnaApp *) mc->donna, "nN",
+    _donna_command_parse_run ((DonnaApp *) mc->donna, FALSE, "nN",
             (_conv_flag_fn) menu_conv_flag, node, g_object_unref, fl);
     return FALSE;
 }

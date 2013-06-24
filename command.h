@@ -53,7 +53,8 @@ DonnaCommand *          _donna_command_init_parse   (gchar           *cmdline,
 DonnaTaskState          _donna_command_run          (DonnaTask       *task,
                                                      struct _donna_command_run *cr);
 void                    _donna_command_free_cr      (struct _donna_command_run *cr);
-void                    _donna_command_parse_run    (DonnaApp        *app,
+gboolean                _donna_command_parse_run    (DonnaApp        *app,
+                                                     gboolean         blocking,
                                                      const gchar     *conv_flags,
                                                      _conv_flag_fn    conv_fn,
                                                      gpointer         conv_data,

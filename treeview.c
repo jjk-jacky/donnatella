@@ -8962,7 +8962,7 @@ handle_click (DonnaTreeView     *tree,
     if (iter)
         data->row = get_row_for_iter (tree, iter);
 
-    _donna_command_parse_run (priv->app, "olLrRnN",
+    _donna_command_parse_run (priv->app, FALSE, "olLrRnN",
             (_conv_flag_fn) tree_conv_flag, data,
             (GDestroyNotify) free_conv_data, fl);
 }

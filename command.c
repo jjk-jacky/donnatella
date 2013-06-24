@@ -792,6 +792,7 @@ struct rc_data
 {
     DonnaApp        *app;
     gboolean         is_heap;
+    gboolean         blocking;
     const gchar     *conv_flags;
     _conv_flag_fn    conv_fn;
     gpointer         conv_data;
@@ -942,7 +943,8 @@ run_command (DonnaTask *task, struct rc_data *data)
 
             s = parse_location (data->start, data);
             if (!_donna_command_convert_arg (data->app,
-                        data->command->arg_type[data->i], TRUE, task != NULL,
+                        data->command->arg_type[data->i], TRUE,
+                        task != NULL || data->blocking,
                         (s) ? s : data->start, &ptr, &err))
             {
                 g_free (s);
@@ -1002,11 +1004,11 @@ run_command (DonnaTask *task, struct rc_data *data)
     donna_task_set_visibility (cmd_task, data->command->visibility);
     donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb, data,
             (GDestroyNotify) free_rc_data);
-    if (task)
+    if (task || data->blocking)
         /* avoid starting another thread, since we're already in one */
         donna_task_set_can_block (g_object_ref_sink (cmd_task));
     donna_app_run_task (data->app, cmd_task);
-    if (task)
+    if (task || data->blocking)
     {
         donna_task_wait_for_it (cmd_task);
         g_object_unref (cmd_task);
@@ -1014,8 +1016,9 @@ run_command (DonnaTask *task, struct rc_data *data)
     return DONNA_TASK_DONE;
 }
 
-void
+gboolean
 _donna_command_parse_run (DonnaApp       *app,
+                          gboolean        blocking,
                           const gchar    *conv_flags,
                           _conv_flag_fn   conv_fn,
                           gpointer        conv_data,
@@ -1026,6 +1029,7 @@ _donna_command_parse_run (DonnaApp       *app,
 
     memset (&data, 0, sizeof (struct rc_data));
     data.app          = app;
+    data.blocking     = blocking;
     data.conv_flags   = conv_flags;
     data.conv_fn      = conv_fn;
     data.conv_data    = conv_data;
@@ -1035,7 +1039,7 @@ _donna_command_parse_run (DonnaApp       *app,
     if (streqn (fl, "command:", 8))
     {
         /* run_command() will take care of freeing data as/when needed */
-        run_command (NULL, &data);
+        return run_command (NULL, &data) == DONNA_TASK_DONE;
     }
     else
     {
@@ -1047,9 +1051,44 @@ _donna_command_parse_run (DonnaApp       *app,
             g_free (data.fl);
             data.fl = ss;
         }
-        donna_app_trigger_node (app, data.fl);
+
+        if (!blocking)
+            donna_app_trigger_node (app, data.fl);
+        else
+        {
+            DonnaTask *task;
+            DonnaNode *node;
+
+            task = donna_app_get_node_task (app, data.fl);
+            donna_task_set_can_block (g_object_ref_sink (task));
+            donna_app_run_task (app, task);
+            donna_task_wait_for_it (task);
+
+            if (donna_task_get_state (task) != DONNA_TASK_DONE)
+            {
+                g_object_unref (task);
+                free_rc_data (&data);
+                return FALSE;
+            }
+            node = g_value_get_object (donna_task_get_return_value (task));
+            g_object_unref (task);
+
+            task = donna_node_trigger_task (node, NULL);
+            donna_task_set_can_block (g_object_ref_sink (task));
+            donna_app_run_task (app, task);
+            donna_task_wait_for_it (task);
+
+            if (donna_task_get_state (task) != DONNA_TASK_DONE)
+            {
+                g_object_unref (task);
+                free_rc_data (&data);
+                return FALSE;
+            }
+            g_object_unref (task);
+        }
         free_rc_data (&data);
     }
+    return TRUE;
 }
 
 /* helpers */
