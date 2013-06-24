@@ -121,6 +121,33 @@ enum
     SELECT_HIGHLIGHT_COLUMN_UNDERLINE
 };
 
+enum spec_type
+{
+    SPEC_NONE        = 0,
+    /* a-z */
+    SPEC_LOWER      = (1 << 0),
+    /* A-Z */
+    SPEC_UPPER      = (1 << 1),
+    /* 0-9 */
+    SPEC_DIGITS     = (1 << 2),
+    /* key of type motion */
+    SPEC_MOTION     = (1 << 3),
+};
+
+enum key_type
+{
+    /* key does nothing */
+    KEY_DISABLED = 0,
+    /* gets an extra spec (can't be MOTION) for following action */
+    KEY_COMBINE,
+    /* direct trigger */
+    KEY_DIRECT,
+    /* key takes a spec */
+    KEY_SPEC,
+    /* key is "aliased" to another one */
+    KEY_ALIAS,
+};
+
 struct visuals
 {
     /* iter of the root, or an invalid iter (stamp==0) and user_data if the
@@ -280,6 +307,14 @@ struct _DonnaTreeViewPrivate
     GdkEventButton      *last_event;
     guint                last_event_timeout; /* it was a single-click */
     gboolean             last_event_expired; /* after sgl-clk, could get a slow-dbl */
+    /* info to handle the keys */
+    gchar               *key_combine_name;  /* combine that was used */
+    gchar                key_combine;       /* the spec from the combine */
+    enum spec_type       key_spec_type;     /* spec we're waiting for */
+    guint                key_m;             /* key multiplier */
+    guint                key_val;           /* (main) key pressed */
+    guint                key_motion_m;      /* motion multiplier */
+    guint                key_motion;        /* motion's key */
     /* when a renderer goes edit-mode, we need the editing-started signal to get
      * the editable */
     guint                renderer_editing_started_sid;
@@ -439,6 +474,8 @@ static gboolean donna_tree_view_button_press_event  (GtkWidget      *widget,
                                                      GdkEventButton *event);
 static gboolean donna_tree_view_button_release_event(GtkWidget      *widget,
                                                      GdkEventButton *event);
+static gboolean donna_tree_view_key_press_event     (GtkWidget      *widget,
+                                                     GdkEventKey    *event);
 static void     donna_tree_view_row_activated       (GtkTreeView    *treev,
                                                      GtkTreePath    *path,
                                                      GtkTreeViewColumn *column);
@@ -478,6 +515,7 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     w_class->draw = donna_tree_view_draw;
     w_class->button_press_event = donna_tree_view_button_press_event;
     w_class->button_release_event = donna_tree_view_button_release_event;
+    w_class->key_press_event = donna_tree_view_key_press_event;
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->get_property   = donna_tree_view_get_property;
@@ -8666,11 +8704,20 @@ enum
     CLICK_ON_EXPANDER,
 };
 
+enum
+{
+    IS_KEY_NOT = 0, /* i.e. a click */
+    IS_KEY_MOTION,
+    IS_KEY_ACTION,
+};
+
 struct conv_data
 {
     DonnaTreeView *tree;
     DonnaTreeRow  *row;
     struct column *_col;
+    gint           key;
+    gchar          spec;
 };
 
 static void
@@ -8812,6 +8859,40 @@ tree_conv_flag (const gchar       c,
             }
             else if (type & DONNA_ARG_TYPE_NODE)
                 *out = g_object_ref (data->row->node);
+            else
+                return FALSE;
+            return TRUE;
+
+        /* keys only */
+
+        case 'c':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (priv->key_combine)
+                    g_string_append_c (str, priv->key_combine);
+            }
+            else
+                return FALSE;
+            return TRUE;
+
+        case 'm':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (data->key == IS_KEY_MOTION)
+                    g_string_append_printf (str, "%d", priv->key_motion_m);
+                else
+                    g_string_append_printf (str, "%d", priv->key_m);
+            }
+            else
+                return FALSE;
+            return TRUE;
+
+        case 's':
+            if (type == DONNA_ARG_TYPE_NOTHING)
+            {
+                if (data->spec)
+                    g_string_append_c (str, data->spec);
+            }
             else
                 return FALSE;
             return TRUE;
@@ -9400,6 +9481,350 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
 
     return ret;
 }
+
+static inline gchar *
+find_key_config (DonnaTreeView *tree, DonnaConfig *config, gchar *key)
+{
+    if (donna_config_has_category (config, "treeviews/%s/keys/key_%s",
+                tree->priv->name, key))
+        return g_strdup_printf ("treeviews/%s/keys/key_%s", tree->priv->name, key);
+    if (donna_config_has_category (config, "defaults/treeviews/%s/keys/key_%s",
+                (is_tree (tree)) ? "tree" : "list", key))
+        return g_strdup_printf ("defaults/treeviews/%s/keys/key_%s",
+                (is_tree (tree)) ? "tree" : "list", key);
+    return NULL;
+}
+
+static gint
+find_key_from (DonnaTreeView *tree,
+               DonnaConfig   *config,
+               gchar        **key,
+               gchar        **alias,
+               gchar        **from)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    gint level = 0;
+    gint type;
+
+    *from = find_key_config (tree, config, *key);
+    if (!*from)
+        return -1;
+
+repeat:
+    if (!donna_config_get_int (config, &type, "%s/type", *from))
+        /* default */
+        type = KEY_DIRECT;
+
+    if (type == KEY_DISABLED)
+        return -1;
+    else if (type == KEY_ALIAS)
+    {
+        if (!donna_config_get_string (config, alias, "%s/key", *from))
+        {
+            g_warning ("Treeview '%s': Key '%s' of type ALIAS without alias set",
+                    priv->name, *key);
+            return -1;
+        }
+        g_free (*from);
+        *from = find_key_config (tree, config, *alias);
+        if (!*from)
+            return -1;
+        *key = *alias;
+        if (++level > 10)
+        {
+            g_warning ("Treeview '%s': There might be an infinite loop in key aliasing, "
+                    "bailing out on key '%s' reaching level %d",
+                    priv->name, *key, level);
+            return -1;
+        }
+        goto repeat;
+    }
+    return type;
+}
+
+#define wrong_key(beep) do {            \
+    if (beep)                           \
+    {                                   \
+        printf ("\a"); /* beep */       \
+        fflush (stdout);                \
+    }                                   \
+    g_free (from);                      \
+    g_free (alias);                     \
+    g_free (priv->key_combine_name);    \
+    priv->key_combine_name = NULL;      \
+    priv->key_combine = 0;              \
+    priv->key_spec_type = SPEC_NONE;    \
+    priv->key_m = 0;                    \
+    priv->key_val = 0;                  \
+    priv->key_motion_m = 0;             \
+    priv->key_motion = 0;               \
+    return TRUE;                        \
+} while (0)
+
+static gboolean
+trigger_key (DonnaTreeView *tree, gchar spec)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaConfig *config;
+    GtkTreePath *path;
+    GtkTreeIter iter;
+    gchar *key;
+    gchar *alias = NULL;
+    gchar *from  = NULL;
+    gchar *s;
+    struct conv_data *data;
+
+    config = donna_app_peek_config (priv->app);
+    data = g_new0 (struct conv_data, 1);
+    data->tree = tree;
+    data->spec = spec;
+
+    /* is there a motion? */
+    if (priv->key_motion)
+    {
+        gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
+        if (!path)
+        {
+            g_free (data);
+            wrong_key (TRUE);
+        }
+        gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &iter, path);
+        gtk_tree_path_free (path);
+
+        key = gdk_keyval_name (priv->key_motion);
+        if (G_UNLIKELY (find_key_from (tree, config, &key, &alias, &from) == -1))
+        {
+            g_free (data);
+            wrong_key (TRUE);
+        }
+        if (!donna_config_get_string (config, &s, "%s/trigger", from))
+        {
+            g_free (data);
+            wrong_key (TRUE);
+        }
+
+        data->key = IS_KEY_MOTION;
+        data->row = get_row_for_iter (tree, &iter);
+        if (!_donna_command_parse_run (priv->app, TRUE, "olLrnNms",
+                (_conv_flag_fn) tree_conv_flag, data, NULL, s))
+        {
+            g_free (data->row);
+            g_free (data);
+            wrong_key (TRUE);
+        }
+        g_free (data->row);
+    }
+
+    key = gdk_keyval_name (priv->key_val);
+    if (G_UNLIKELY (find_key_from (tree, config, &key, &alias, &from) == -1))
+    {
+        g_free (data);
+        wrong_key (TRUE);
+    }
+    if (!donna_config_get_string (config, &s, "%s/trigger", from))
+    {
+        g_free (data);
+        wrong_key (TRUE);
+    }
+
+    gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
+    if (!path)
+    {
+        g_free (data);
+        wrong_key (TRUE);
+    }
+    gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &iter, path);
+    gtk_tree_path_free (path);
+
+    data->key = IS_KEY_ACTION;
+    data->row = get_row_for_iter (tree, &iter);
+    _donna_command_parse_run (priv->app, FALSE, "olLrnNcms",
+            (_conv_flag_fn) tree_conv_flag, data,
+            (GDestroyNotify) free_conv_data, s);
+
+    g_free (from);
+    g_free (alias);
+    g_free (priv->key_combine_name);
+    priv->key_combine_name = NULL;
+    priv->key_combine = 0;
+    priv->key_spec_type = SPEC_NONE;
+    priv->key_m = 0;
+    priv->key_val = 0;
+    priv->key_motion_m = 0;
+    priv->key_motion = 0;
+    return FALSE;
+}
+
+static gboolean
+donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
+{
+    DonnaTreeView *tree = (DonnaTreeView *) widget;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaConfig *config;
+    gchar *key;
+    gchar *alias = NULL;
+    gchar *from  = NULL;
+    enum key_type type;
+    gint i;
+
+    config = donna_app_peek_config (priv->app);
+    key = gdk_keyval_name (event->keyval);
+    if (!key)
+        return FALSE;
+
+    g_debug("key=%s",key);
+
+    if (priv->key_spec_type != SPEC_NONE)
+    {
+        if (priv->key_spec_type & SPEC_LOWER)
+            if (event->keyval >= GDK_KEY_a && event->keyval <= GDK_KEY_z)
+                goto next;
+        if (priv->key_spec_type & SPEC_UPPER)
+            if (event->keyval >= GDK_KEY_A && event->keyval <= GDK_KEY_Z)
+                goto next;
+        if (priv->key_spec_type & SPEC_DIGITS)
+            if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
+                goto next;
+        if (priv->key_spec_type & SPEC_MOTION)
+        {
+            gboolean is_motion = FALSE;
+
+            if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
+            {
+                /* multiplier */
+                priv->key_motion_m *= 10;
+                priv->key_motion_m += event->keyval - GDK_KEY_0;
+                return TRUE;
+            }
+
+            if (find_key_from (tree, config, &key, &alias, &from) == -1)
+                wrong_key (TRUE);
+
+            donna_config_get_boolean (config, &is_motion, "%s/is_motion", from);
+            if (is_motion)
+                goto next;
+        }
+        wrong_key (TRUE);
+        /* not reached */
+next:
+        if (priv->key_combine_name && priv->key_combine == 0)
+        {
+            priv->key_combine = (gchar) gdk_keyval_to_unicode (event->keyval);
+            priv->key_spec_type = SPEC_NONE;
+            g_free (from);
+            g_free (alias);
+            return TRUE;
+        }
+    }
+
+    if (priv->key_val)
+    {
+        /* means the spec was just specified */
+
+        if (priv->key_spec_type & SPEC_MOTION)
+        {
+            priv->key_spec_type = SPEC_NONE;
+            priv->key_motion = event->keyval;
+
+            type = find_key_from (tree, config, &key, &alias, &from);
+            if (type == KEY_DIRECT)
+                trigger_key (tree, 0);
+            else if (type == KEY_SPEC)
+            {
+                if (!donna_config_get_int (config, &i, "%s/spec", from))
+                    /* defaults */
+                    i = SPEC_LOWER | SPEC_UPPER;
+                if (i & SPEC_MOTION)
+                    /* a motion can't ask for a motion */
+                    wrong_key (TRUE);
+                priv->key_spec_type = CLAMP (i, 1, 15);
+            }
+            else
+                wrong_key (TRUE);
+        }
+        else
+            trigger_key (tree, (gchar) gdk_keyval_to_unicode (event->keyval));
+    }
+    else if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
+    {
+        /* multiplier */
+        priv->key_m *= 10;
+        priv->key_m += event->keyval - GDK_KEY_0;
+    }
+    else
+    {
+        type = find_key_from (tree, config, &key, &alias, &from);
+        switch (type)
+        {
+            case KEY_COMBINE:
+                if (priv->key_m > 0 || priv->key_combine_name)
+                    /* no COMBINE with a multiplier; only one at a time */
+                    wrong_key (TRUE);
+                if (!donna_config_get_string (config, &priv->key_combine_name,
+                            "%s/combine", from))
+                {
+                    g_warning ("Treeview '%s': Key '%s' missing its name as COMBINE",
+                            priv->name, key);
+                    wrong_key (TRUE);
+                }
+                if (!donna_config_get_int (config, &i, "%s/spec", from))
+                    /* defaults */
+                    i = SPEC_LOWER | SPEC_UPPER;
+                if (i & SPEC_MOTION)
+                {
+                    g_warning ("Treeview '%s': Key '%s' cannot be COMBINE with spec MOTION",
+                            priv->name, key);
+                    wrong_key (TRUE);
+                }
+                priv->key_spec_type = CLAMP (i, 1, 15);
+                break;
+
+            case KEY_DIRECT:
+                priv->key_val = event->keyval;
+                trigger_key (tree, 0);
+                break;
+
+            case KEY_SPEC:
+                priv->key_val = event->keyval;
+                if (!donna_config_get_int (config, &i, "%s/spec", from))
+                    /* defaults */
+                    i = SPEC_LOWER | SPEC_UPPER;
+                if (i & SPEC_MOTION)
+                    /* make sure there's no BS like SPEC_LOWER | SPEC_MOTION */
+                    i = SPEC_MOTION;
+                priv->key_spec_type = CLAMP (i, 1, 15);
+                break;
+
+            case KEY_ALIAS:
+                /* to silence warning, but it can't happen since find_key_from()
+                 * will "resolve" aliases */
+                /* fall through */
+            case KEY_DISABLED:
+                /* fall through */
+            default:
+                wrong_key (priv->key_m || priv->key_combine_name);
+        }
+        if (type != KEY_COMBINE && priv->key_combine_name)
+        {
+            gchar *s;
+
+            if (!donna_config_get_string (config, &s, "%s/combine", from))
+                wrong_key (TRUE);
+            if (!streq (s, priv->key_combine_name))
+            {
+                g_free (s);
+                wrong_key (TRUE);
+            }
+            g_free (s);
+        }
+    }
+
+    g_free (from);
+    g_free (alias);
+    return TRUE;
+}
+
+#undef wrong_key
 
 static gboolean
 set_selection_browse (GtkTreeSelection *selection)
