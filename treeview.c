@@ -9677,16 +9677,16 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     }
 
     gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
-    if (!path)
+    if (path)
     {
-        g_free (data);
-        wrong_key (TRUE);
+        gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &iter, path);
+        gtk_tree_path_free (path);
+        data->row = get_row_for_iter (tree, &iter);
     }
-    gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &iter, path);
-    gtk_tree_path_free (path);
+    else
+        data->row = NULL;
 
     data->key = IS_KEY_ACTION;
-    data->row = get_row_for_iter (tree, &iter);
     _donna_command_parse_run (priv->app, FALSE, "olLrnNcms",
             (_conv_flag_fn) tree_conv_flag, data,
             (GDestroyNotify) free_conv_data, s);
