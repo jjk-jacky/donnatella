@@ -25,6 +25,8 @@ static DonnaTaskState   cmd_tree_full_expand                (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_get_visual                 (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_goto_line                  (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_maxi_collapse              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_maxi_expand                (DonnaTask *task,
@@ -119,6 +121,16 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_STRING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_get_visual
+    },
+    {
+        .name           = "tree_goto_line",
+        .argc           = 5,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_goto_line
     },
     {
         .name           = "tree_maxi_collapse",
@@ -1536,6 +1548,90 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
     g_value_take_string (value, s);
     donna_task_release_return_value (task);
 
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_set[] = { "scroll", "focus", "cursor" };
+    DonnaTreeSet _set[] = { DONNA_TREE_SET_SCROLL, DONNA_TREE_SET_FOCUS,
+        DONNA_TREE_SET_CURSOR };
+    const gchar *c_nb_type[] = { "repeat", "line", "percent" };
+    DonnaTreeGoto nb_type[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
+        DONNA_TREE_GOTO_PERCENT };
+    DonnaTreeSet set;
+    gchar *s;
+    gint c_n;
+    gint nb_sets;
+
+    nb_sets = sizeof (c_set) / sizeof (c_set[0]);
+    s = args->pdata[2];
+    set = 0;
+    for (;;)
+    {
+        gchar *ss;
+        gchar *start, *end, e;
+        gint c_s;
+
+        ss = strchr (s, '+');
+        if (ss)
+            *ss = '\0';
+
+        /* since we're allowing separators, we have do "trim" things */
+        for (start = s; isblank (*start); ++start)
+            ;
+        for (end = start; !isblank (*end) && *end != '\0'; ++end)
+            ;
+        if (*end == '\0')
+            end = NULL;
+        else
+        {
+            e = *end;
+            *end = '\0';
+        }
+
+        c_s = get_arg_from_list (nb_sets, c_set, start);
+
+        /* "undo trim" */
+        if (ss)
+            *ss = '+';
+        if (end)
+            *end = e;
+
+        if (c_s < 0)
+        {
+            set = 0;
+            break;
+        }
+        set |= _set[c_s];
+
+        if (ss)
+            s = ss + 1;
+        else
+            break;
+    }
+    if (set == 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_OTHER,
+                "Cannot go to line, unknown set type '%s'. "
+                "Must be (a '+'-separated combination of) 'scroll', 'focus' and/or 'cursor'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    c_n = get_choice_from_arg (c_nb_type, 5);
+    if (c_n < 0)
+        c_n = 0;
+
+    if (!donna_tree_view_goto_line (args->pdata[1], set, args->pdata[3],
+                GPOINTER_TO_INT (args->pdata[4]), nb_type[c_n], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
     return DONNA_TASK_DONE;
 }
 

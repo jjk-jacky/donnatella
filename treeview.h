@@ -136,6 +136,20 @@ typedef enum
         | DONNA_TREE_VISUAL_SOURCE_NODE,
 } DonnaTreeVisualSource;
 
+typedef enum
+{
+    DONNA_TREE_SET_SCROLL   = (1 << 0),
+    DONNA_TREE_SET_FOCUS    = (1 << 1),
+    DONNA_TREE_SET_CURSOR   = (1 << 2),
+} DonnaTreeSet;
+
+typedef enum
+{
+    DONNA_TREE_GOTO_LINE,
+    DONNA_TREE_GOTO_REPEAT,
+    DONNA_TREE_GOTO_PERCENT,
+} DonnaTreeGoto;
+
 struct _DonnaTreeView
 {
     /*< private >*/
@@ -195,6 +209,12 @@ gboolean        donna_tree_view_refresh         (DonnaTreeView      *tree,
 gboolean        donna_tree_view_filter_nodes    (DonnaTreeView      *tree,
                                                  GPtrArray          *nodes,
                                                  const gchar        *filter_str,
+                                                 GError            **error);
+gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
+                                                 DonnaTreeSet        set,
+                                                 DonnaTreeRowId     *rowid,
+                                                 guint               nb,
+                                                 DonnaTreeGoto       nb_type,
                                                  GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,

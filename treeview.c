@@ -8485,6 +8485,306 @@ donna_tree_view_filter_nodes (DonnaTreeView *tree,
             (get_ct_data_fn) get_ct_data, tree, error);
 }
 
+gboolean
+donna_tree_view_goto_line (DonnaTreeView      *tree,
+                           DonnaTreeSet        set,
+                           DonnaTreeRowId     *rowid,
+                           guint               nb,
+                           DonnaTreeGoto       nb_type,
+                           GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeView *treev = (GtkTreeView *) tree;
+    GtkTreeModel *model;
+    GtkTreeIter   iter;
+    row_id_type   type;
+    GtkTreePath  *path  = NULL;
+    gboolean      is_tb = FALSE;
+    GtkTreeIter   tb_iter;
+    guint         rows = 0;
+    guint         max;
+    GdkRectangle  rect_visible;
+    GdkRectangle  rect;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv  = tree->priv;
+    model = (GtkTreeModel *) priv->store;
+
+    if (nb_type == DONNA_TREE_GOTO_PERCENT)
+    {
+        GdkRectangle rect;
+        gint height;
+
+        /* locate first row */
+        path = gtk_tree_path_new_from_indices (0, -1);
+        gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+        gtk_tree_path_free (path);
+        height = ABS (rect.y);
+
+        /* locate last row */
+        if (!donna_tree_model_iter_last (model, &iter))
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed getting the last line",
+                    priv->name);
+            return FALSE;
+        }
+        path = gtk_tree_model_get_path (model, &iter);
+        if (!path)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed getting path to the last line",
+                    priv->name);
+            return FALSE;
+        }
+        gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+        gtk_tree_path_free (path);
+        height += ABS (rect.y) + rect.height;
+
+        /* nb of rows accessible on tree */
+        rows = height / rect.height;
+
+        /* get the one at specified percent */
+        nb = (rows * ((gdouble) nb / 100.0)) + 1;
+
+        /* this can now be treated as LINE */
+        nb_type = DONNA_TREE_GOTO_LINE;
+    }
+
+    if (nb_type == DONNA_TREE_GOTO_LINE && nb > 0)
+    {
+        if (!is_tree (tree))
+        {
+            /* list, so line n is path n-1 */
+            path = gtk_tree_path_new_from_indices (nb - 1, -1);
+            if (!gtk_tree_model_get_iter (model, &iter, path))
+            {
+                gtk_tree_path_free (path);
+                /* row doesn't exist, i.e. number is too high, let's just go to
+                 * the last one */
+                if (!donna_tree_model_iter_last (model, &iter))
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "Treeview '%s': Failed getting the last line (<%d)",
+                            priv->name, nb);
+                    return FALSE;
+                }
+                path = gtk_tree_model_get_path (model, &iter);
+            }
+        }
+        else
+        {
+            guint i;
+
+            /* tree, so we'll go to the first and move down */
+            if (!gtk_tree_model_iter_children (model, &iter, NULL))
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Failed getting the first line (going to %d)",
+                        priv->name, nb);
+                return FALSE;
+            }
+
+            for (i = 1; i < nb; )
+            {
+                if (!donna_tree_model_iter_next (model, &iter))
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "Treeview '%s': Failed going to line %d (going to %d)",
+                            priv->name, i, nb);
+                    return FALSE;
+                }
+                if (is_row_accessible (tree, &iter))
+                    ++i;
+            }
+            path = gtk_tree_model_get_path (model, &iter);
+        }
+        nb = 1;
+        goto move;
+    }
+
+    /* those are special cases, where if the focus is already there, we want to
+     * go one up/down more screen */
+    if (rowid->type == DONNA_ARG_TYPE_PATH
+            && (streq (rowid->ptr, ":top")
+                || streq (rowid->ptr, ":bottom")
+                || streq (rowid->ptr, ":top-vis")
+                || streq (rowid->ptr, ":bottom-vis")))
+    {
+        is_tb = TRUE;
+        gtk_tree_view_get_cursor (treev, &path, NULL);
+        if (!path)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                    "Treeview '%s': Cannot go to line, failed to get cursor",
+                    priv->name);
+            return FALSE;
+        }
+        if (!gtk_tree_model_get_iter (model, &tb_iter, path))
+        {
+            gtk_tree_path_free (path);
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                    "Treeview '%s': Cannot go to line, failed to get cursor",
+                    priv->name);
+            return FALSE;
+        }
+        gtk_tree_path_free (path);
+        path = NULL;
+    }
+
+    if (nb > 1 && nb_type == DONNA_TREE_GOTO_REPEAT)
+    {
+        /* only those make sense to be repeated */
+        if (rowid->type != DONNA_ARG_TYPE_PATH
+                || !(is_tb || streq (rowid->ptr, ":top")
+                    || streq (rowid->ptr, ":bottom")
+                    || streq (rowid->ptr, ":top-vis")
+                    || streq (rowid->ptr, ":bottom-vis")
+                    || streq (rowid->ptr, ":prev")
+                    || streq (rowid->ptr, ":next")
+                    || streq (rowid->ptr, ":up")
+                    || streq (rowid->ptr, ":down")
+                    || streq (rowid->ptr, ":prev-same-depth")
+                    || streq (rowid->ptr, ":next-same-depth")))
+            nb = 1;
+    }
+    else
+        nb = 1;
+
+    for ( ; nb > 0; --nb)
+    {
+        if (path)
+            gtk_tree_path_free (path);
+
+        type = convert_row_id_to_iter (tree, rowid, &iter);
+        if (type != ROW_ID_ROW)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                    "Treeview '%s': Cannot go to line, invalid row-id",
+                    priv->name);
+            return FALSE;
+        }
+
+        path = gtk_tree_model_get_path (model, &iter);
+
+        if (is_tb)
+        {
+            /* scroll only; or we're already there: let's go beyond */
+            if (set == DONNA_TREE_SET_SCROLL || itereq (&iter, &tb_iter))
+            {
+                if (!rows)
+                {
+                    gtk_tree_view_get_visible_rect (treev, &rect_visible);
+                    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+                    rows = rect_visible.height / rect.height;
+                    max  = donna_tree_model_get_count (model) - 1;
+                }
+
+                if (!is_tree (tree))
+                {
+                    gint *indices;
+                    gint i;
+
+                    indices = gtk_tree_path_get_indices (path);
+                    i = indices[0];
+                    if (((gchar *) rowid->ptr)[1] == 't')
+                    {
+                        i -= rows;
+                        i = MAX (i, 0);
+                    }
+                    else
+                    {
+                        i += rows;
+                        i = MIN ((guint) i, max);
+                    }
+
+                    gtk_tree_path_free (path);
+                    path = gtk_tree_path_new_from_indices (i, -1);
+                    gtk_tree_model_get_iter (model, &iter, path);
+                }
+                else
+                {
+                    guint i;
+                    gboolean (*move_fn) (GtkTreeModel *, GtkTreeIter *);
+
+                    if (((gchar *) rowid->ptr)[1] == 't')
+                        move_fn = donna_tree_model_iter_previous;
+                    else
+                        move_fn = donna_tree_model_iter_next;
+
+                    for (i = 1; i < rows; )
+                    {
+                        if (!move_fn (model, &iter))
+                        {
+                            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                                    DONNA_TREE_VIEW_ERROR_OTHER,
+                                    "Treeview '%s': Failed moving around",
+                                    priv->name);
+                            return FALSE;
+                        }
+                        if (is_row_accessible (tree, &iter))
+                            ++i;
+                    }
+                    path = gtk_tree_model_get_path (model, &iter);
+                }
+
+            }
+            tb_iter = iter;
+        }
+move:
+        if (set & DONNA_TREE_SET_FOCUS)
+            gtk_tree_view_set_focused_row (treev, path);
+        else if (set & DONNA_TREE_SET_CURSOR)
+        {
+#ifdef GTK_IS_JJK
+            gtk_tree_view_set_focused_row (treev, path);
+            gtk_tree_selection_select_path (
+                    gtk_tree_view_get_selection (treev), path);
+#else
+            gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+#endif
+        }
+    }
+
+    if (set & DONNA_TREE_SET_SCROLL)
+    {
+        /* get visible area, so we can determine if it is already visible */
+        gtk_tree_view_get_visible_rect (treev, &rect_visible);
+
+        gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+        if (nb_type == DONNA_TREE_GOTO_LINE)
+        {
+            /* when going to a specific line, let's center it */
+            if (rect.y < 0 || rect.y > rect_visible.height - rect.height)
+                gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.5, 0.0);
+        }
+        else
+        {
+            /* only scroll if not visible. Using FALSE is supposed to get the tree
+             * to do the minimum of scrolling, but that's apparently prety bugged,
+             * and sometimes for a row only half visible on the bottom, GTK feels
+             * that minimum scrolling means putting it on top (!!).
+             * So, this is why we force it ourself as such. */
+            if (rect.y < 0)
+                gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 0.0, 0.0);
+            if (rect.y > rect_visible.height - rect.height)
+                gtk_tree_view_scroll_to_cell (treev, path, NULL, TRUE, 1.0, 0.0);
+        }
+    }
+
+    gtk_tree_path_free (path);
+    return TRUE;
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
