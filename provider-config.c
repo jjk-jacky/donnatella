@@ -385,7 +385,15 @@ is_valid_name (gchar *name, gboolean is_section)
         }
         else if (is_first)
             return FALSE;
-        for (c = '0'; c <= '9'; ++c)
+        for (c = 'A'; c <= 'Z'; ++c)
+        {
+            if (*name == c)
+            {
+                match = 1;
+                break;
+            }
+        }
+        for (c = '0'; !match && c <= '9'; ++c)
         {
             if (*name == c)
             {
