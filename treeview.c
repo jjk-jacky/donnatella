@@ -934,10 +934,21 @@ active_list_changed_cb (GObject         *object,
     g_object_unref (node);
 }
 
+enum
+{
+    OPT_NONE = 0,
+    OPT_DEFAULT,
+    OPT_TREEVIEW,
+    OPT_TREEVIEW_COLUMN,
+    OPT_COLUMN,
+};
+
 struct option_data
 {
     DonnaTreeView *tree;
     gchar *option;
+    guint opt;
+    gssize len;
 };
 
 static gboolean
@@ -1121,213 +1132,190 @@ real_option_cb (struct option_data *data)
     DonnaTreeView *tree = data->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
-    gboolean is_column = FALSE;
-    gchar buf[255], *b = buf;
     gchar *opt;
-    GSList *l;
-    gsize len;
+    gchar *s;
 
     config = donna_app_peek_config (priv->app);
+    opt = data->option + data->len;
 
-    len = snprintf (buf, 255, "/treeviews/%s/", priv->name);
-    if (len >= 255)
-        b = g_strdup_printf ("/treeviews/%s/", priv->name);
-
-    if (streqn (data->option, b, len))
+    if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT)
     {
-        if (streqn (data->option + len, "columns/", 8))
+        gint val;
+
+        /* treeview option */
+
+        if (streq (opt, "mode"))
         {
-            opt = data->option + len + 8;
-            is_column = TRUE;
+            val = cfg_get_mode (tree, config);
+            if (priv->mode != val)
+            {
+                donna_app_show_error (priv->app, NULL,
+                        "Treeview '%s': option 'mode' was changed; Please restart the application to have it applied.",
+                        priv->name);
+            }
         }
-        else
+        else if (streq (opt, "show_hidden"))
         {
-            gint val;
-            gchar *s;
+            val = cfg_get_show_hidden (tree, config);
+            if (priv->show_hidden != val)
+            {
+                priv->show_hidden = val;
+                donna_tree_store_refilter (priv->store, NULL);
+            }
+        }
+        else if (streq (opt, "node_types"))
+        {
+            val = cfg_get_node_types (tree, config);
+            if (priv->node_types != val)
+            {
+                priv->node_types = val;
+                donna_tree_view_refresh (data->tree,
+                        DONNA_TREE_REFRESH_RELOAD, NULL);
+            }
+        }
+        else if (streq (opt, "sort_groups"))
+        {
+            val = cfg_get_sort_groups (tree, config);
+            if (priv->sort_groups != val)
+            {
+                priv->sort_groups = val;
+                resort_tree (data->tree);
+            }
+        }
+        else if (streq (opt, "select_highlight"))
+        {
+            val = cfg_get_select_highlight (tree, config);
+            if (priv->select_highlight != val)
+            {
+                GtkTreeView *treev = (GtkTreeView *) data->tree;
 
-            /* treeview option */
-
-            if (streq (data->option + len, "mode"))
-            {
-                val = cfg_get_mode (tree, config);
-                if (priv->mode != val)
+                priv->select_highlight = val;
+                if (priv->select_highlight == SELECT_HIGHLIGHT_COLUMN
+                        || priv->select_highlight == SELECT_HIGHLIGHT_COLUMN_UNDERLINE)
+                    gtk_tree_view_set_select_highlight_column (treev, priv->main_column);
+                else if (priv->select_highlight == SELECT_HIGHLIGHT_UNDERLINE)
                 {
-                    donna_app_show_error (priv->app, NULL,
-                            "Treeview '%s': option 'mode' was changed; Please restart the application to have it applied.",
-                            priv->name);
-                }
-            }
-            else if (streq (data->option + len, "show_hidden"))
-            {
-                val = cfg_get_show_hidden (tree, config);
-                if (priv->show_hidden != val)
-                {
-                    priv->show_hidden = val;
-                    donna_tree_store_refilter (priv->store, NULL);
-                }
-            }
-            else if (streq (data->option + len, "node_types"))
-            {
-                val = cfg_get_node_types (tree, config);
-                if (priv->node_types != val)
-                {
-                    priv->node_types = val;
-                    donna_tree_view_refresh (data->tree,
-                            DONNA_TREE_REFRESH_RELOAD, NULL);
-                }
-            }
-            else if (streq (data->option + len, "sort_groups"))
-            {
-                val = cfg_get_sort_groups (tree, config);
-                if (priv->sort_groups != val)
-                {
-                    priv->sort_groups = val;
-                    resort_tree (data->tree);
-                }
-            }
-            else if (streq (data->option + len, "select_highlight"))
-            {
-                val = cfg_get_select_highlight (tree, config);
-                if (priv->select_highlight != val)
-                {
-                    GtkTreeView *treev = (GtkTreeView *) data->tree;
-
-                    priv->select_highlight = val;
-                    if (priv->select_highlight == SELECT_HIGHLIGHT_COLUMN
-                            || priv->select_highlight == SELECT_HIGHLIGHT_COLUMN_UNDERLINE)
-                        gtk_tree_view_set_select_highlight_column (treev, priv->main_column);
-                    else if (priv->select_highlight == SELECT_HIGHLIGHT_UNDERLINE)
+                    /* since we only want an underline, we must set the select highlight
+                     * column to a non-visible one */
+                    if (is_tree (data->tree))
                     {
-                        /* since we only want an underline, we must set the select highlight
-                         * column to a non-visible one */
-                        if (is_tree (data->tree))
+                        /* tree never uses an empty column on the right, so we store the
+                         * extra non-visible column used for this */
+                        if (!priv->blank_column)
                         {
-                            /* tree never uses an empty column on the right, so we store the
-                             * extra non-visible column used for this */
-                            if (!priv->blank_column)
-                            {
-                                priv->blank_column = gtk_tree_view_column_new ();
-                                gtk_tree_view_column_set_sizing (priv->blank_column,
-                                        GTK_TREE_VIEW_COLUMN_FIXED);
-                                gtk_tree_view_insert_column (treev, priv->blank_column, -1);
-                            }
-                            gtk_tree_view_set_select_highlight_column (treev, priv->blank_column);
+                            priv->blank_column = gtk_tree_view_column_new ();
+                            gtk_tree_view_column_set_sizing (priv->blank_column,
+                                    GTK_TREE_VIEW_COLUMN_FIXED);
+                            gtk_tree_view_insert_column (treev, priv->blank_column, -1);
                         }
-                        else
-                            /* list: expander_column is always set to a non-visible one */
-                            gtk_tree_view_set_select_highlight_column (treev,
-                                    gtk_tree_view_get_expander_column (treev));
+                        gtk_tree_view_set_select_highlight_column (treev, priv->blank_column);
                     }
                     else
-                        gtk_tree_view_set_select_highlight_column (treev, NULL);
+                        /* list: expander_column is always set to a non-visible one */
+                        gtk_tree_view_set_select_highlight_column (treev,
+                                gtk_tree_view_get_expander_column (treev));
+                }
+                else
+                    gtk_tree_view_set_select_highlight_column (treev, NULL);
 
-                    gtk_tree_view_set_select_row_underline (treev,
-                            priv->select_highlight == SELECT_HIGHLIGHT_UNDERLINE
-                            || priv->select_highlight == SELECT_HIGHLIGHT_COLUMN_UNDERLINE);
+                gtk_tree_view_set_select_row_underline (treev,
+                        priv->select_highlight == SELECT_HIGHLIGHT_UNDERLINE
+                        || priv->select_highlight == SELECT_HIGHLIGHT_COLUMN_UNDERLINE);
 
-                    gtk_widget_queue_draw ((GtkWidget *) treev);
+                gtk_widget_queue_draw ((GtkWidget *) treev);
+            }
+        }
+        else if (is_tree (data->tree))
+        {
+            if (streq (opt, "node_visuals"))
+            {
+                val = cfg_get_node_visuals (tree, config);
+                if (priv->node_visuals != val)
+                {
+                    priv->node_visuals = val;
+                    gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
+                            (GtkTreeModelForeachFunc) reset_node_visuals,
+                            data->tree);
                 }
             }
-            else if (is_tree (data->tree))
+            else if (streq (opt, "is_minitree"))
             {
-                if (streq (data->option + len, "node_visuals"))
+                val = cfg_get_is_minitree (tree, config);
+                if (priv->is_minitree != val)
                 {
-                    val = cfg_get_node_visuals (tree, config);
-                    if (priv->node_visuals != val)
+                    priv->is_minitree = val;
+                    if (!val)
                     {
-                        priv->node_visuals = val;
                         gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
-                                (GtkTreeModelForeachFunc) reset_node_visuals,
+                                (GtkTreeModelForeachFunc) switch_minitree_off,
                                 data->tree);
+                        g_idle_add ((GSourceFunc) scroll_to_current, data->tree);
                     }
-                }
-                else if (streq (data->option + len, "is_minitree"))
-                {
-                    val = cfg_get_is_minitree (tree, config);
-                    if (priv->is_minitree != val)
-                    {
-                        priv->is_minitree = val;
-                        if (!val)
-                        {
-                            gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
-                                    (GtkTreeModelForeachFunc) switch_minitree_off,
-                                    data->tree);
-                            g_idle_add ((GSourceFunc) scroll_to_current, data->tree);
-                        }
-                    }
-                }
-                else if (streq (data->option + len, "sync_mode"))
-                {
-                    val = cfg_get_sync_mode (tree, config);
-                    if (priv->sync_mode != val)
-                    {
-                        priv->sync_mode = val;
-                        if (priv->sync_with)
-                            sync_with_location_changed_cb ((GObject *) priv->sync_with,
-                                    NULL, data->tree);
-                    }
-                }
-                else if (streq (data->option + len, "sync_with"))
-                {
-                    DonnaTreeView *sw;
-
-                    s = cfg_get_sync_with (tree, config);
-                    sw = donna_app_get_treeview (priv->app, s);
-                    g_free (s);
-                    if (priv->sync_with != sw)
-                    {
-                        if (priv->sync_with)
-                        {
-                            g_signal_handler_disconnect (priv->sync_with,
-                                    priv->sid_sw_location_changed);
-                            g_object_unref (priv->sync_with);
-                        }
-                        priv->sync_with = sw;
-                        priv->sid_sw_location_changed = (sw)
-                            ? g_signal_connect (priv->sync_with,
-                                    "notify::location",
-                                    (GCallback) sync_with_location_changed_cb,
-                                    data->tree)
-                            : 0;
-                    }
-                    else
-                        g_object_unref (sw);
-                }
-                else if (streq (data->option + len, "sync_scroll"))
-                {
-                    val = cfg_get_sync_scroll (tree, config);
-                    if (priv->sync_scroll != val)
-                        priv->sync_scroll = val;
-                }
-                else if (streq (data->option + len, "auto_focus_sync"))
-                {
-                    val = cfg_get_auto_focus_sync (tree, config);
-                    if (priv->auto_focus_sync != val)
-                        priv->auto_focus_sync = val;
                 }
             }
-            else /* list */
+            else if (streq (opt, "sync_mode"))
             {
-                if (streq (data->option + len, "focusing_click"))
+                val = cfg_get_sync_mode (tree, config);
+                if (priv->sync_mode != val)
                 {
-                    val = cfg_get_focusing_click (tree, config);
-                    if (priv->focusing_click != val)
-                        priv->focusing_click = val;
+                    priv->sync_mode = val;
+                    if (priv->sync_with)
+                        sync_with_location_changed_cb ((GObject *) priv->sync_with,
+                                NULL, data->tree);
                 }
+            }
+            else if (streq (opt, "sync_with"))
+            {
+                DonnaTreeView *sw;
+
+                s = cfg_get_sync_with (tree, config);
+                sw = donna_app_get_treeview (priv->app, s);
+                g_free (s);
+                if (priv->sync_with != sw)
+                {
+                    if (priv->sync_with)
+                    {
+                        g_signal_handler_disconnect (priv->sync_with,
+                                priv->sid_sw_location_changed);
+                        g_object_unref (priv->sync_with);
+                    }
+                    priv->sync_with = sw;
+                    priv->sid_sw_location_changed = (sw)
+                        ? g_signal_connect (priv->sync_with,
+                                "notify::location",
+                                (GCallback) sync_with_location_changed_cb,
+                                data->tree)
+                        : 0;
+                }
+                else
+                    g_object_unref (sw);
+            }
+            else if (streq (opt, "sync_scroll"))
+            {
+                val = cfg_get_sync_scroll (tree, config);
+                if (priv->sync_scroll != val)
+                    priv->sync_scroll = val;
+            }
+            else if (streq (opt, "auto_focus_sync"))
+            {
+                val = cfg_get_auto_focus_sync (tree, config);
+                if (priv->auto_focus_sync != val)
+                    priv->auto_focus_sync = val;
+            }
+        }
+        else /* list */
+        {
+            if (streq (opt, "focusing_click"))
+            {
+                val = cfg_get_focusing_click (tree, config);
+                if (priv->focusing_click != val)
+                    priv->focusing_click = val;
             }
         }
     }
+    /* columns option */
     else
     {
-        /* columns option */
-        opt = data->option + 9; /* 9 == strlen ("/columns/") */
-        is_column = TRUE;
-    }
-
-    if (is_column)
-    {
-        gchar *s;
-
         s = strchr (opt, '/');
         if (s)
         {
@@ -1393,34 +1381,65 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
 {
     gchar buf[255], *b = buf;
     gsize len;
-    gboolean match;
+    guint opt = OPT_NONE;
 
-    /* options we care about are ones for the tree (in "/treeviews/<NAME>") or
-     * for one of our columns:
+    /* options we care about are ones for the tree (in "/treeviews/<NAME>" or
+     * "/defaults/treeviews/<MODE>") or for one of our columns:
      * /treeviews/<NAME>/columns/<NAME>
      * /columns/<NAME>
      * This excludes options in the current arrangement, but that's
      * okay/expected: arrangement are loaded/"created" on location change.
      *
-     * Here we can only check if the option starts with "/treeviews/<NAME>" or
-     * "/columns/" and that's it, to loop through our columns we need the GTK
-     * lock, i.e. go in main thread */
+     * Here we can only check if the option starts with "/treeviews/<NAME>",
+     * "/defaults/treeviews/<MODE>" or "/columns/" and that's it, to loop
+     * through our columns we need the GTK lock, i.e. go in main thread */
 
     len = snprintf (buf, 255, "/treeviews/%s/", tree->priv->name);
     if (len >= 255)
         b = g_strdup_printf ("/treeviews/%s/", tree->priv->name);
 
-    match = streqn (option, b, len) || streqn (option, "/columns/", 9);
+    if (streqn (option, b, len))
+    {
+        opt = OPT_TREEVIEW;
+        if (streqn (option + len, "columns/", 8))
+        {
+            opt = OPT_TREEVIEW_COLUMN;
+            len += 8;
+        }
+    }
+    else if (streqn (option, "/columns/", 9))
+    {
+        opt = OPT_COLUMN;
+        len = 9;
+    }
+
     if (b != buf)
         g_free (b);
 
-    if (match)
+    if (opt == OPT_NONE)
+    {
+        len = snprintf (buf, 255, "/defaults/treeviews/%s/",
+                (is_tree (tree)) ? "tree" : "list");
+        if (len >= 255)
+            b = g_strdup_printf ("/defaults/treeviews/%s/",
+                    (is_tree (tree)) ? "tree" : "list");
+        else
+            b = buf;
+        if (streqn (option, b, len))
+            opt = OPT_DEFAULT;
+        if (b != buf)
+            g_free (b);
+    }
+
+    if (opt != OPT_NONE)
     {
         struct option_data *data;
 
         data = g_new (struct option_data, 1);
         data->tree = tree;
         data->option = g_strdup (option);
+        data->opt = opt;
+        data->len = len;
         g_main_context_invoke (NULL, (GSourceFunc) real_option_cb, data);
     }
 }
