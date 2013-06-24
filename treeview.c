@@ -7008,6 +7008,8 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
     }
     else if (rowid->type == DONNA_ARG_TYPE_PATH)
     {
+        GtkTreeView *treev  = (GtkTreeView *) tree;
+        GtkTreeModel *model = (GtkTreeModel *) priv->store;
         gchar *s = rowid->ptr;
 
         if (*s == ':')
@@ -7021,10 +7023,8 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                gtk_tree_view_get_cursor (treev, &path, NULL);
+                if (gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7036,19 +7036,16 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
-                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (!gtk_tree_model_get_iter (model, iter, path))
                     return ROW_ID_INVALID;
 
                 for (;;)
                 {
-                    if (!donna_tree_model_iter_previous ((GtkTreeModel *) priv->store,
-                                iter))
+                    if (!donna_tree_model_iter_previous (model, iter))
                         return ROW_ID_INVALID;
                     if (!is_tree (tree) || is_row_accessible (tree, iter))
                         break;
@@ -7059,19 +7056,16 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
-                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (!gtk_tree_model_get_iter (model, iter, path))
                     return ROW_ID_INVALID;
 
                 for (;;)
                 {
-                    if (!donna_tree_model_iter_next ((GtkTreeModel *) priv->store,
-                                iter))
+                    if (!donna_tree_model_iter_next (model, iter))
                         return ROW_ID_INVALID;
                     if (!is_tree (tree) || is_row_accessible (tree, iter))
                         break;
@@ -7080,11 +7074,9 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             }
             else if (streq ("last", s))
             {
-                GtkTreeModel *model = (GtkTreeModel *) priv->store;
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
@@ -7105,16 +7097,14 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
                 if (!gtk_tree_path_up (path))
                     return ROW_ID_INVALID;
 
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7126,15 +7116,14 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
                 gtk_tree_path_down (path);
 
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path) && is_row_accessible (tree, iter))
+                if (gtk_tree_model_get_iter (model, iter, path)
+                        && is_row_accessible (tree, iter))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7146,12 +7135,10 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                if (!gtk_tree_view_get_visible_range ((GtkTreeView *) tree,
-                            &path, NULL))
+                if (!gtk_tree_view_get_visible_range (treev, &path, NULL))
                     return ROW_ID_INVALID;
 
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7163,12 +7150,10 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                if (!gtk_tree_view_get_visible_range ((GtkTreeView *) tree,
-                            NULL, &path))
+                if (!gtk_tree_view_get_visible_range (treev, NULL, &path))
                     return ROW_ID_INVALID;
 
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7180,16 +7165,14 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
                 if (!gtk_tree_path_prev (path))
                     return ROW_ID_INVALID;
 
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7201,15 +7184,13 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor ((GtkTreeView *) tree,
-                        &path, NULL);
+                gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
                     return ROW_ID_INVALID;
 
                 gtk_tree_path_next (path);
 
-                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                            iter, path))
+                if (gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
@@ -7223,8 +7204,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
         else
         {
             GtkTreePath *path = gtk_tree_path_new_from_string (s);
-            if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                        iter, path))
+            if (gtk_tree_model_get_iter (model, iter, path))
             {
                 gtk_tree_path_free (path);
                 return ROW_ID_ROW;
