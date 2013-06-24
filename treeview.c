@@ -7142,6 +7142,40 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 gtk_tree_path_free (path);
                 return ROW_ID_INVALID;
             }
+            else if (streq ("top", s))
+            {
+                GtkTreePath *path;
+
+                if (!gtk_tree_view_get_visible_range ((GtkTreeView *) tree,
+                            &path, NULL))
+                    return ROW_ID_INVALID;
+
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
+            else if (streq ("bottom", s))
+            {
+                GtkTreePath *path;
+
+                if (!gtk_tree_view_get_visible_range ((GtkTreeView *) tree,
+                            NULL, &path))
+                    return ROW_ID_INVALID;
+
+                if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_ROW;
+                }
+                gtk_tree_path_free (path);
+                return ROW_ID_INVALID;
+            }
             else if (streq ("prev-same-depth", s))
             {
                 GtkTreePath *path;
