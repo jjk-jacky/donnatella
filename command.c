@@ -868,12 +868,11 @@ free_rc_data (struct rc_data *data)
 }
 
 static void
-command_run_cb (DonnaTask *task, gboolean timeout_called, struct rc_data *data)
+command_run_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
 {
     if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        donna_app_show_error (data->app, donna_task_get_error (task),
+        donna_app_show_error (app, donna_task_get_error (task),
                 "Action triggered failed");
-    free_rc_data (data);
 }
 
 struct err
@@ -1014,8 +1013,8 @@ run_command (DonnaTask *task, struct rc_data *data)
 
     cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
     donna_task_set_visibility (cmd_task, data->command->visibility);
-    donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb, data,
-            (GDestroyNotify) free_rc_data);
+    donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb,
+            data->app, NULL);
     if (task || data->blocking)
         /* avoid starting another thread, since we're already in one */
         donna_task_set_can_block (g_object_ref_sink (cmd_task));
