@@ -9985,7 +9985,6 @@ trigger_key (DonnaTreeView *tree, gchar spec)
             g_free (data);
             wrong_key (TRUE);
         }
-        g_free (data->row);
     }
 
     key = gdk_keyval_name (priv->key_val);
@@ -10000,15 +9999,16 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         wrong_key (TRUE);
     }
 
-    gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
-    if (path)
+    if (!data->row)
     {
-        gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &iter, path);
-        gtk_tree_path_free (path);
-        data->row = get_row_for_iter (tree, &iter);
+        gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
+        if (path)
+        {
+            gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &iter, path);
+            gtk_tree_path_free (path);
+            data->row = get_row_for_iter (tree, &iter);
+        }
     }
-    else
-        data->row = NULL;
 
     data->key = IS_KEY_ACTION;
     _donna_command_parse_run (priv->app, FALSE, "olLrnNcms",
@@ -10061,6 +10061,12 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
         if (priv->key_spec_type & SPEC_MOTION)
         {
             gboolean is_motion = FALSE;
+
+            if (priv->key_motion_m == 0 && event->keyval == priv->key_val)
+            {
+                priv->key_spec_type = SPEC_NONE;
+                goto next;
+            }
 
             if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
             {
