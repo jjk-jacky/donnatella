@@ -9176,22 +9176,27 @@ tree_conv_flag (const gchar       c,
                     g_string_append_printf (str, "[%p;%p]",
                             data->row->node, data->row->iter);
             }
-            else if (type & DONNA_ARG_TYPE_ROW_ID)
+            else if (data->row)
             {
-                DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
-                DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
-                rid->type = DONNA_ARG_TYPE_ROW;
-                rid->ptr  = r;
-                r->node = data->row->node;
-                r->iter = data->row->iter;
-                *out = rid;
-            }
-            else if (type & DONNA_ARG_TYPE_ROW)
-            {
-                DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
-                r->node = data->row->node;
-                r->iter = data->row->iter;
-                *out = r;
+                if (type & DONNA_ARG_TYPE_ROW_ID)
+                {
+                    DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                    DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
+                    rid->type = DONNA_ARG_TYPE_ROW;
+                    rid->ptr  = r;
+                    r->node = data->row->node;
+                    r->iter = data->row->iter;
+                    *out = rid;
+                }
+                else if (type & DONNA_ARG_TYPE_ROW)
+                {
+                    DonnaTreeRow *r = g_new (DonnaTreeRow, 1);
+                    r->node = data->row->node;
+                    r->iter = data->row->iter;
+                    *out = r;
+                }
+                else
+                    return FALSE;
             }
             else
                 return FALSE;
