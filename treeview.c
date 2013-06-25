@@ -10040,6 +10040,10 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
     enum key_type type;
     gint i;
 
+    /* ignore modifier or AltGr */
+    if (event->is_modifier || event->keyval == GDK_KEY_ISO_Level3_Shift)
+        return FALSE;
+
     config = donna_app_peek_config (priv->app);
     key = gdk_keyval_name (event->keyval);
     if (!key)
