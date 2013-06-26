@@ -834,9 +834,30 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
 
         if (!_donna_command_get_next_arg (command, i, &start, &end, &err))
         {
-            donna_task_take_error (task, err);
-            _donna_command_free_args (command, arr);
-            return DONNA_TASK_FAILED;
+            if (err->code == COMMAND_ERROR_MISSING_ARG
+                    && command->arg_type[i + 2] & DONNA_ARG_IS_OPTIONAL)
+            {
+                guint j;
+
+                for (j = i + 2; j < command->argc; ++j)
+                    if (!(command->arg_type[j] & DONNA_ARG_IS_OPTIONAL))
+                        break;
+
+                if (j >= command->argc)
+                {
+                    /* allow missing arg(s) if they're optional */
+                    for (i = i + 1; i < command->argc; ++i)
+                        g_ptr_array_add (arr, NULL);
+                    g_clear_error (&err);
+                }
+            }
+
+            if (err)
+            {
+                donna_task_take_error (task, err);
+                _donna_command_free_args (command, arr);
+                return DONNA_TASK_FAILED;
+            }
         }
     }
 
@@ -1072,10 +1093,33 @@ run_command (DonnaTask *task, struct rc_data *data)
         if (!_donna_command_get_next_arg (data->command, data->i,
                     &data->start, &data->end, &err))
         {
-            show_error (data->app, err,
-                    "Cannot trigger node, parsing command failed");
-            free_rc_data (data);
-            return DONNA_TASK_FAILED;
+            if (err->code == COMMAND_ERROR_MISSING_ARG
+                    && data->command->arg_type[data->i + 2] & DONNA_ARG_IS_OPTIONAL)
+            {
+                guint j;
+
+                for (j = data->i + 2; j < data->command->argc; ++j)
+                    if (!(data->command->arg_type[j] & DONNA_ARG_IS_OPTIONAL))
+                        break;
+
+                if (j >= data->command->argc)
+                {
+                    /* allow missing arg(s) if they're optional */
+                    for (data->i = data->i + 1;
+                            data->i < data->command->argc;
+                            ++data->i)
+                        g_ptr_array_add (data->arr, NULL);
+                    g_clear_error (&err);
+                }
+            }
+
+            if (err)
+            {
+                show_error (data->app, err,
+                        "Cannot trigger node, parsing command failed");
+                free_rc_data (data);
+                return DONNA_TASK_FAILED;
+            }
         }
     }
 
