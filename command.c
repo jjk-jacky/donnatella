@@ -23,6 +23,8 @@ static DonnaTaskState   cmd_tree_full_collapse              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_full_expand                (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_get_location               (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_get_visual                 (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_goto_line                  (DonnaTask *task,
@@ -38,6 +40,8 @@ static DonnaTaskState   cmd_tree_selection                  (DonnaTask *task,
 static DonnaTaskState   cmd_tree_set_cursor                 (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_set_focus                  (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_set_location               (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_set_visual                 (DonnaTask *task,
                                                              GPtrArray *args);
@@ -114,6 +118,14 @@ static DonnaCommand commands[] = {
         .cmd_fn         = cmd_tree_full_expand
     },
     {
+        .name           = "tree_get_location",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW },
+        .return_type    = DONNA_ARG_TYPE_NODE,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_get_location
+    },
+    {
         .name           = "tree_get_visual",
         .argc           = 4,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
@@ -180,6 +192,14 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_set_focus
+    },
+    {
+        .name           = "tree_set_location",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_NODE },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_set_location
     },
     {
         .name           = "tree_set_visual",
@@ -1497,6 +1517,23 @@ cmd_tree_full_expand (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
+cmd_tree_get_location (DonnaTask *task, GPtrArray *args)
+{
+    DonnaNode *node;
+    GValue *v;
+
+    node = donna_tree_view_get_location (args->pdata[1]);
+    if (!node)
+        return DONNA_TASK_FAILED;
+
+    v = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (v, DONNA_TYPE_NODE);
+    g_value_take_object (v, node);
+    donna_task_release_return_value (task_for_ret_err ());
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
@@ -1752,6 +1789,20 @@ cmd_tree_set_focus (DonnaTask *task, GPtrArray *args)
     return DONNA_TASK_FAILED;
 #endif
 
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_set_location (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_set_location (args->pdata[1], args->pdata[2], &err))
+    {
+        if (err)
+            donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
     return DONNA_TASK_DONE;
 }
 
