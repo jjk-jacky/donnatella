@@ -7,6 +7,18 @@
 #include "macros.h"
 #include "debug.h"
 
+static DonnaTaskState   cmd_config_get_boolean              (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_config_get_int                  (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_config_get_string               (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_config_set_boolean              (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_config_set_int                  (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_config_set_string               (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
@@ -49,6 +61,54 @@ static DonnaTaskState   cmd_tree_toggle_row                 (DonnaTask *task,
                                                              GPtrArray *args);
 
 static DonnaCommand commands[] = {
+    {
+        .name           = "config_get_boolean",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_INT,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_config_get_boolean
+    },
+    {
+        .name           = "config_get_int",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_INT,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_config_get_int
+    },
+    {
+        .name           = "config_get_string",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_STRING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_config_get_string
+    },
+    {
+        .name           = "config_set_boolean",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_INT },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_config_set_boolean
+    },
+    {
+        .name           = "config_set_int",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_INT },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_config_set_int
+    },
+    {
+        .name           = "config_set_string",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_config_set_string
+    },
     {
         .name           = "node_activate",
         .argc           = 2,
@@ -1200,6 +1260,84 @@ show_err_on_task_failed (DonnaTask  *task,
 
     donna_app_show_error (app, donna_task_get_error (task),
             "Command 'action_node': Failed to trigger node");
+}
+
+static DonnaTaskState
+cmd_config_get_boolean (DonnaTask *task, GPtrArray *args)
+{
+    GValue *v;
+    gboolean val;
+
+    if (!donna_config_get_boolean (donna_app_peek_config (args->pdata[2]), &val,
+                "%s", args->pdata[1]))
+        return DONNA_TASK_FAILED;
+
+    v = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, val);
+    donna_task_release_return_value (task_for_ret_err ());
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_get_int (DonnaTask *task, GPtrArray *args)
+{
+    GValue *v;
+    gint val;
+
+    if (!donna_config_get_int (donna_app_peek_config (args->pdata[2]), &val,
+                "%s", args->pdata[1]))
+        return DONNA_TASK_FAILED;
+
+    v = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (v, G_TYPE_INT);
+    g_value_set_int (v, val);
+    donna_task_release_return_value (task_for_ret_err ());
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_get_string (DonnaTask *task, GPtrArray *args)
+{
+    GValue *v;
+    gchar *val;
+
+    if (!donna_config_get_string (donna_app_peek_config (args->pdata[2]), &val,
+                "%s", args->pdata[1]))
+        return DONNA_TASK_FAILED;
+
+    v = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (v, G_TYPE_STRING);
+    g_value_take_string (v, val);
+    donna_task_release_return_value (task_for_ret_err ());
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_set_boolean (DonnaTask *task, GPtrArray *args)
+{
+    if (!donna_config_set_boolean (donna_app_peek_config (args->pdata[3]),
+                GPOINTER_TO_INT (args->pdata[2]), "%s", args->pdata[1]))
+        return DONNA_TASK_FAILED;
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_set_int (DonnaTask *task, GPtrArray *args)
+{
+    if (!donna_config_set_int (donna_app_peek_config (args->pdata[3]),
+                GPOINTER_TO_INT (args->pdata[2]), "%s", args->pdata[1]))
+        return DONNA_TASK_FAILED;
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_set_string (DonnaTask *task, GPtrArray *args)
+{
+    if (!donna_config_set_string (donna_app_peek_config (args->pdata[3]),
+                args->pdata[2], "%s", args->pdata[1]))
+        return DONNA_TASK_FAILED;
+    return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
