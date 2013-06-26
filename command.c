@@ -390,7 +390,6 @@ get_next_arg (gchar  **arg,
 }
 
 /* shared private API */
-
 DonnaCommand *
 _donna_command_init_parse (gchar     *cmdline,
                            gchar    **first_arg,
@@ -526,6 +525,109 @@ _donna_command_convert_arg (DonnaApp        *app,
                             gpointer        *dst,
                             GError         **error)
 {
+    if (from_string && * (gchar *) sce == '@')
+    {
+        struct _donna_command_run *cr;
+        DonnaCommand *command;
+        gchar *s, *e;
+        DonnaTask *task;
+        const GValue *value;
+
+        g_debug("cmd '%s'", (gchar*)sce + 1);
+        command = _donna_command_init_parse (sce + 1, &s, &e, error);
+        if (!command)
+            return FALSE;
+
+        if (command->return_type == DONNA_ARG_TYPE_NOTHING)
+        {
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    "Command '%s' would not return anything",
+                    (gchar *) sce + 1);
+            return FALSE;
+        }
+
+        if (!((type & DONNA_ARG_TYPE_INT
+                        && command->return_type == DONNA_ARG_TYPE_INT)
+                    || (type & DONNA_ARG_TYPE_TREEVIEW
+                        && command->return_type == DONNA_ARG_TYPE_TREEVIEW)
+                    || (type & DONNA_ARG_TYPE_NODE
+                        && command->return_type == DONNA_ARG_TYPE_NODE)
+                    || (type & DONNA_ARG_TYPE_ROW
+                        && command->return_type == DONNA_ARG_TYPE_ROW)
+                    || (type & DONNA_ARG_TYPE_STRING
+                        && command->return_type == DONNA_ARG_TYPE_STRING)))
+        {
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    "Command '%s' has return type incompatible with argument type",
+                    (gchar *) sce + 1);
+            return FALSE;
+        }
+
+        if (!can_block && !(command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST
+                    || command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI))
+        {
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+                    "Converting argument would required to use a (possibly blocking) task");
+            return FALSE;
+        }
+
+        cr = g_new (struct _donna_command_run, 1);
+        cr->app = app;
+        cr->cmdline = g_strdup (sce + 1);
+
+        task = donna_task_new ((task_fn) _donna_command_run, cr,
+                (GDestroyNotify) _donna_command_free_cr);
+        donna_task_set_can_block (g_object_ref_sink (task));
+        donna_app_run_task (app, task);
+        donna_task_wait_for_it (task);
+
+        if (donna_task_get_state (task) != DONNA_TASK_DONE)
+        {
+            const GError *err;
+
+            err = donna_task_get_error (task);
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    "Command '%s' failed%s%s",
+                    (gchar *) sce + 1,
+                    (err) ? ": " : "",
+                    (err) ? err->message : "");
+            g_object_unref (task);
+            return FALSE;
+        }
+
+        value = donna_task_get_return_value (task);
+        if (!value)
+        {
+            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    "Command '%s' did not return anything",
+                    (gchar *) sce + 1);
+            g_object_unref (task);
+            return FALSE;
+        }
+
+        if (type & DONNA_ARG_TYPE_INT)
+            * (gint *) dst = g_value_get_int (value);
+        else if (type & DONNA_ARG_TYPE_STRING)
+            *dst = g_value_dup_string (value);
+        else if (type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+            *dst = g_value_dup_object (value);
+        else if (type & DONNA_ARG_TYPE_ROW)
+        {
+            DonnaTreeRow *row, *r;
+
+            r = g_value_get_pointer (value);
+
+            row = g_new (DonnaTreeRow, 1);
+            row->node = r->node;
+            row->iter = r->iter;
+
+            *dst = row;
+        }
+
+        g_object_unref (task);
+        return TRUE;
+    }
+
     if (type & DONNA_ARG_TYPE_INT)
     {
         if (from_string)
@@ -782,6 +884,7 @@ _donna_command_free_args (DonnaCommand *command, GPtrArray *arr)
     g_ptr_array_unref (arr);
 }
 
+/* shared private API */
 DonnaTaskState
 _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
 {
@@ -889,6 +992,7 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
     return ret;
 }
 
+/* shared private API */
 void
 _donna_command_free_cr (struct _donna_command_run *cr)
 {
@@ -1148,6 +1252,7 @@ run_command (DonnaTask *task, struct rc_data *data)
     return DONNA_TASK_DONE;
 }
 
+/* shared private API */
 gboolean
 _donna_command_parse_run (DonnaApp       *app,
                           gboolean        blocking,
