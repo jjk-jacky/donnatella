@@ -535,13 +535,10 @@ _donna_command_convert_arg (DonnaApp        *app,
     }
     else if (type & (DONNA_ARG_TYPE_STRING | DONNA_ARG_TYPE_PATH))
     {
-        gchar *s;
         /* PATH is treated as a string, because it will be. The reason we keep
          * it as a string is to allow donna-specific things that we otherwise
          * couldn't convert (w/out the tree), such as ":last" or ":prev" */
-        for (s = sce; *s && isblank (*s); ++s)
-            ;
-        if (!s || *s == '\0')
+        if (!sce || * (gchar *) sce == '\0')
             *dst = NULL;
         else
             *dst = g_strdup (sce);
