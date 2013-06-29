@@ -360,11 +360,11 @@ trim_line (gchar **line)
 }
 
 static gboolean
-is_valid_name (gchar *name, gboolean is_section)
+is_valid_name_len (const gchar *name, gsize len, gboolean is_section)
 {
     gint is_first = 1;
 
-    for ( ; *name != '\0'; ++name)
+    for ( ; *name != '\0' && len != 0; ++name, --len)
     {
         gint  match;
         gchar c;
@@ -408,6 +408,8 @@ is_valid_name (gchar *name, gboolean is_section)
     }
     return TRUE;
 }
+
+#define is_valid_name(name, is_section)  is_valid_name_len (name, -1, is_section)
 
 static struct parsed_data *
 parse_data (gchar **_data)
@@ -957,6 +959,9 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             {
                 /* create category/node */
                 struct option *option;
+
+                if (!is_valid_name_len (name, s - name, TRUE))
+                    return NULL;
 
                 option = g_slice_new0 (struct option);
                 option->name = str_chunk_len (config->priv, name, s - name);
@@ -2548,6 +2553,12 @@ _set_option (DonnaConfig    *config,
         parent = priv->root;
     }
 
+    if (!is_valid_name ((gchar *) s, FALSE))
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        return FALSE;
+    }
+
     node = get_child_node (parent, s, strlen (s));
     if (node)
     {
@@ -2855,9 +2866,23 @@ node_prop_setter (DonnaTask     *task,
             g_value_copy (value, &option->value);
         else
         {
+            gchar *s;
+
             /* rename option */
+
+            s = (gchar *) g_value_get_string (value);
+            if (!is_valid_name (s, option_is_category (option, priv->root)))
+            {
+                donna_task_set_error (task, DONNA_NODE_ERROR,
+                        DONNA_NODE_ERROR_OTHER,
+                        "Cannot rename '%s' to '%s': Invalid name",
+                        location, s);
+                g_free (location);
+                g_rw_lock_writer_unlock (&priv->lock);
+                return DONNA_TASK_FAILED;
+            }
             old = get_option_full_name (priv->root, gnode);
-            option->name = str_chunk (priv, g_value_get_string (value));
+            option->name = str_chunk (priv, s);
         }
         g_rw_lock_writer_unlock (&priv->lock);
 
