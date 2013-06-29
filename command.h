@@ -48,7 +48,6 @@ struct _donna_command_run
 
 DonnaCommand *          _donna_command_init_parse   (gchar           *cmdline,
                                                      gchar          **first_arg,
-                                                     gchar          **end,
                                                      GError         **error);
 DonnaTaskState          _donna_command_run          (DonnaTask       *task,
                                                      struct _donna_command_run *cr);
