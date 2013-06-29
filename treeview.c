@@ -9153,19 +9153,12 @@ enum
     CLICK_ON_EXPANDER,
 };
 
-enum
-{
-    IS_KEY_NOT = 0, /* i.e. a click */
-    IS_KEY_MOTION,
-    IS_KEY_ACTION,
-};
-
 struct conv_data
 {
     DonnaTreeView *tree;
     DonnaTreeRow  *row;
-    struct column *_col;
-    gint           key;
+    gchar         *col_name;
+    guint          key_m;
     gchar          spec;
 };
 
@@ -9173,6 +9166,7 @@ static void
 free_conv_data (struct conv_data *data)
 {
     g_free (data->row);
+    g_free (data->col_name);
     g_free (data);
 }
 
@@ -9245,7 +9239,7 @@ tree_conv_flag (const gchar       c,
 
         case 'R':
             if (type == DONNA_ARG_TYPE_NOTHING)
-                g_string_append (str, data->_col->name);
+                g_string_append (str, data->col_name);
             else
                 return FALSE;
             return TRUE;
@@ -9333,15 +9327,9 @@ tree_conv_flag (const gchar       c,
 
         case 'm':
             if (type == DONNA_ARG_TYPE_NOTHING)
-            {
-                if (data->key == IS_KEY_MOTION)
-                    g_string_append_printf (str, "%d", priv->key_motion_m);
-                else
-                    g_string_append_printf (str, "%d", priv->key_m);
-            }
+                g_string_append_printf (str, "%d", data->key_m);
             else if (type & DONNA_ARG_TYPE_INT)
-                *out = GINT_TO_POINTER ((data->key == IS_KEY_MOTION)
-                        ? priv->key_motion_m : priv->key_m);
+                *out = GINT_TO_POINTER (data->key_m);
             else
                 return FALSE;
             return TRUE;
@@ -9423,14 +9411,14 @@ handle_click (DonnaTreeView     *tree,
     config = donna_app_peek_config (priv->app);
     data = g_new0 (struct conv_data, 1);
     data->tree = tree;
-    data->_col = get_column_by_column (tree, column);
+    data->col_name = g_strdup (get_column_by_column (tree, column)->name);
 
     if (!iter)
     {
         memcpy (buf, "blankrow_", 9 * sizeof (gchar));
         b = buf;
     }
-    else if (!data->_col)
+    else if (!data->col_name)
     {
         memcpy (buf, "blankcol_", 9 * sizeof (gchar));
         b = buf;
@@ -9479,7 +9467,7 @@ handle_click (DonnaTreeView     *tree,
             gtk_tree_view_get_selection ((GtkTreeView *) tree), iter);
 
     fl = _donna_config_get_string_tree_column (config, priv->name,
-            (data->_col) ? data->_col->name : NULL,
+            data->col_name,
             (is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
             (is_tree) ? clicks : priv->arrangement->columns_options,
             (is_tree) ? "treeviews/tree" : "treeviews/list",
@@ -9487,7 +9475,7 @@ handle_click (DonnaTreeView     *tree,
     if (!fl && is_selected)
         /* nothing found under "selected", fallback to regular clicks */
         fl = _donna_config_get_string_tree_column (config, priv->name,
-                (data->_col) ? data->_col->name : NULL,
+                data->col_name,
                 TREE_COL_LIST,
                 priv->arrangement->columns_options,
                 "treeviews/list",
@@ -10073,7 +10061,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
             wrong_key (TRUE);
         }
 
-        data->key = IS_KEY_MOTION;
+        data->key_m = priv->key_motion_m;
         data->row = get_row_for_iter (tree, &iter);
         if (!_donna_command_parse_run (priv->app, TRUE, "olLrnNms",
                 (_conv_flag_fn) tree_conv_flag, data, NULL, s))
@@ -10107,7 +10095,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         }
     }
 
-    data->key = IS_KEY_ACTION;
+    data->key_m = priv->key_m;
     _donna_command_parse_run (priv->app, FALSE, "olLrnNcms",
             (_conv_flag_fn) tree_conv_flag, data,
             (GDestroyNotify) free_conv_data, s);
