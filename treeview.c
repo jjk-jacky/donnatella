@@ -7151,7 +7151,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 gtk_tree_path_free (path);
                 return ROW_ID_INVALID;
             }
-            else if (streq ("top", s) || streq ("top-vis", s))
+            else if (streq ("top", s))
             {
                 GtkTreePath *path;
 
@@ -7160,20 +7160,17 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
 
                 if (gtk_tree_model_get_iter (model, iter, path))
                 {
-                    if (streq ("top-vis", s))
-                    {
-                        GdkRectangle rect;
+                    GdkRectangle rect;
 
-                        gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-                        if (rect.y < -(rect.height / 3))
+                    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+                    if (rect.y < -(rect.height / 3))
+                    {
+                        for (;;)
                         {
-                            for (;;)
-                            {
-                                if (!donna_tree_model_iter_next (model, iter))
-                                    return ROW_ID_INVALID;
-                                if (!is_tree (tree) || is_row_accessible (tree, iter))
-                                    break;
-                            }
+                            if (!donna_tree_model_iter_next (model, iter))
+                                return ROW_ID_INVALID;
+                            if (!is_tree (tree) || is_row_accessible (tree, iter))
+                                break;
                         }
                     }
                     gtk_tree_path_free (path);
@@ -7182,7 +7179,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 gtk_tree_path_free (path);
                 return ROW_ID_INVALID;
             }
-            else if (streq ("bottom", s) || streq ("bottom-vis", s))
+            else if (streq ("bottom", s))
             {
                 GtkTreePath *path;
 
@@ -7191,23 +7188,20 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
 
                 if (gtk_tree_model_get_iter (model, iter, path))
                 {
-                    if (streq ("bottom-vis", s))
+                    GdkRectangle rect_visible;
+                    GdkRectangle rect;
+
+                    gtk_tree_view_get_visible_rect (treev, &rect_visible);
+
+                    gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+                    if (rect.y + 2 * (rect.height / 3) > rect_visible.height)
                     {
-                        GdkRectangle rect_visible;
-                        GdkRectangle rect;
-
-                        gtk_tree_view_get_visible_rect (treev, &rect_visible);
-
-                        gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-                        if (rect.y + 2 * (rect.height / 3) > rect_visible.height)
+                        for (;;)
                         {
-                            for (;;)
-                            {
-                                if (!donna_tree_model_iter_previous (model, iter))
-                                    return ROW_ID_INVALID;
-                                if (!is_tree (tree) || is_row_accessible (tree, iter))
-                                    break;
-                            }
+                            if (!donna_tree_model_iter_previous (model, iter))
+                                return ROW_ID_INVALID;
+                            if (!is_tree (tree) || is_row_accessible (tree, iter))
+                                break;
                         }
                     }
                     gtk_tree_path_free (path);
