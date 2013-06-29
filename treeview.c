@@ -308,6 +308,7 @@ struct _DonnaTreeViewPrivate
     guint                last_event_timeout; /* it was a single-click */
     gboolean             last_event_expired; /* after sgl-clk, could get a slow-dbl */
     /* info to handle the keys */
+    gchar               *key_mode;          /* current key mode */
     gchar               *key_combine_name;  /* combine that was used */
     gchar                key_combine;       /* the spec from the combine */
     enum spec_type       key_spec_type;     /* spec we're waiting for */
@@ -8835,6 +8836,18 @@ donna_tree_view_get_node_at_row (DonnaTreeView  *tree,
     return node;
 }
 
+void
+donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
+{
+    DonnaTreeViewPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+    priv = tree->priv;
+
+    g_free (priv->key_mode);
+    priv->key_mode = g_strdup (key_mode);
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
@@ -9896,13 +9909,22 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
 static inline gchar *
 find_key_config (DonnaTreeView *tree, DonnaConfig *config, gchar *key)
 {
-    if (donna_config_has_category (config, "treeviews/%s/keys/key_%s",
-                tree->priv->name, key))
+    if (donna_config_has_category (config, "treeviews/%s/keys%s%s/key_%s",
+                tree->priv->name,
+                (tree->priv->key_mode) ? "/" : "",
+                (tree->priv->key_mode) ? tree->priv->key_mode : "",
+                key))
         return g_strdup_printf ("treeviews/%s/keys/key_%s", tree->priv->name, key);
-    if (donna_config_has_category (config, "defaults/treeviews/%s/keys/key_%s",
-                (is_tree (tree)) ? "tree" : "list", key))
-        return g_strdup_printf ("defaults/treeviews/%s/keys/key_%s",
-                (is_tree (tree)) ? "tree" : "list", key);
+    if (donna_config_has_category (config, "defaults/treeviews/%s/keys%s%s/key_%s",
+                (is_tree (tree)) ? "tree" : "list",
+                (tree->priv->key_mode) ? "/" : "",
+                (tree->priv->key_mode) ? tree->priv->key_mode : "",
+                key))
+        return g_strdup_printf ("defaults/treeviews/%s/keys%s%s/key_%s",
+                (is_tree (tree)) ? "tree" : "list",
+                (tree->priv->key_mode) ? "/" : "",
+                (tree->priv->key_mode) ? tree->priv->key_mode : "",
+                key);
     return NULL;
 }
 
@@ -10086,6 +10108,13 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
     key = gdk_keyval_name (event->keyval);
     if (!key)
         return FALSE;
+
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        g_free (priv->key_mode);
+        priv->key_mode = NULL;
+        wrong_key (FALSE);
+    }
 
     g_debug("key=%s",key);
 

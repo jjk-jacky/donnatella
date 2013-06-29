@@ -219,6 +219,8 @@ gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
 DonnaNode *     donna_tree_view_get_node_at_row (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
+void            donna_tree_view_set_key_mode    (DonnaTreeView      *tree,
+                                                 const gchar        *key_mode);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

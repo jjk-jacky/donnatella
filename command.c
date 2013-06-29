@@ -57,6 +57,8 @@ static DonnaTaskState   cmd_tree_set_cursor                 (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_set_focus                  (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_set_key_mode               (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_set_location               (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_set_visual                 (DonnaTask *task,
@@ -274,6 +276,14 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_set_focus
+    },
+    {
+        .name           = "tree_set_key_mode",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_set_key_mode
     },
     {
         .name           = "tree_set_location",
@@ -2113,6 +2123,13 @@ cmd_tree_set_focus (DonnaTask *task, GPtrArray *args)
     return DONNA_TASK_FAILED;
 #endif
 
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_set_key_mode (DonnaTask *task, GPtrArray *args)
+{
+    donna_tree_view_set_key_mode (args->pdata[1], args->pdata[2]);
     return DONNA_TASK_DONE;
 }
 
