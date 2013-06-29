@@ -865,7 +865,7 @@ convert:
             rid->type = DONNA_ARG_TYPE_ROW;
             rid->ptr  = row;
         }
-        else if (*s == ':' || (*s >= '0' && *s <= '9'))
+        else if (*s == ':' || *s == '%' || (*s >= '0' && *s <= '9'))
         {
             rid->type = DONNA_ARG_TYPE_PATH;
             if (s == data->start)
