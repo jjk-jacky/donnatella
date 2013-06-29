@@ -23,6 +23,8 @@ static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_repeat                          (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_task_set_state                  (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_task_toggle                     (DonnaTask *task,
@@ -129,6 +131,14 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
         .cmd_fn         = cmd_node_popup_children
+    },
+    {
+        .name           = "repeat",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_INT, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_repeat
     },
     {
         .name           = "task_set_state",
@@ -1632,6 +1642,29 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
     }
     g_object_unref (t);
     return state;
+}
+
+static DonnaTaskState
+cmd_repeat (DonnaTask *task, GPtrArray *args)
+{
+    gint nb;
+
+    nb = GPOINTER_TO_INT (args->pdata[1]);
+    for (nb = MAX (1, nb); nb > 0; --nb)
+    {
+        struct rc_data data;
+
+        memset (&data, 0, sizeof (struct rc_data));
+        data.app          = args->pdata[3];
+        data.blocking     = BLOCK_OK;
+        data.fl           = g_strdup (args->pdata[2]);
+
+        /* run_command() will take care of freeing data as/when needed */
+        if (run_command (task, &data) != DONNA_TASK_DONE)
+            return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
