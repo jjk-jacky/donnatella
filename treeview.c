@@ -7253,6 +7253,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
         else
         {
             GtkTreePath *path;
+            GtkTreeIter iter_top;
             gchar *end;
             gint i;
             enum
@@ -7293,10 +7294,11 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 else
                 {
                     rid.ptr = ":top";
-                    if (convert_row_id_to_iter (tree, &rid, iter) == ROW_ID_INVALID)
+                    if (convert_row_id_to_iter (tree, &rid, &iter_top) == ROW_ID_INVALID)
                         return ROW_ID_INVALID;
-                    path = gtk_tree_model_get_path (model, iter);
-                    top = gtk_tree_path_get_indices (path)[0];
+                    path = gtk_tree_model_get_path (model, &iter_top);
+                    if (!is_tree (tree))
+                        top = gtk_tree_path_get_indices (path)[0];
                 }
                 gtk_tree_view_get_background_area (treev, path, NULL, &rect);
                 gtk_tree_path_free (path);
@@ -7328,11 +7330,32 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 i = (rows * ((gdouble) i / 100.0)) + 1;
                 i = CLAMP (i, 1, rows);
 
-                if (flg == PCTG_VISIBLE)
+                if (flg == PCTG_VISIBLE && !is_tree (tree))
                     i += top;
             }
 
-            path = gtk_tree_path_new_from_indices (i - 1, -1);
+            if (is_tree (tree))
+            {
+                /* we can't just get a path, so we'll go to the first/top row
+                 * and move down */
+                if (flg == PCTG_VISIBLE)
+                    *iter = iter_top;
+                else
+                    if (!gtk_tree_model_iter_children (model, iter, NULL))
+                        return ROW_ID_INVALID;
+
+                while (i > 0)
+                {
+                    if (!donna_tree_model_iter_next (model, iter))
+                        return ROW_ID_INVALID;
+                    if (is_row_accessible (tree, iter))
+                        --i;
+                }
+                path = gtk_tree_model_get_path (model, iter);
+            }
+            else
+                path = gtk_tree_path_new_from_indices (i - 1, -1);
+
             if (gtk_tree_model_get_iter (model, iter, path))
             {
                 gtk_tree_path_free (path);
