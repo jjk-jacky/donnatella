@@ -338,20 +338,22 @@ donna_app_new_int_ref (DonnaApp       *app,
 
 gpointer
 donna_app_get_int_ref (DonnaApp       *app,
-                       const gchar    *intref)
+                       const gchar    *intref,
+                       DonnaArgType    type)
 
 {
     DonnaAppInterface *interface;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (intref != NULL, NULL);
+    g_return_val_if_fail (type != DONNA_ARG_TYPE_NOTHING, NULL);
 
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_int_ref != NULL, NULL);
 
-    return (*interface->get_int_ref) (app, intref);
+    return (*interface->get_int_ref) (app, intref, type);
 }
 
 gboolean

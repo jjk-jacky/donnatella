@@ -150,7 +150,8 @@ static gchar *          donna_donna_new_int_ref     (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
 static gpointer         donna_donna_get_int_ref     (DonnaApp       *app,
-                                                     const gchar    *intref);
+                                                     const gchar    *intref,
+                                                     DonnaArgType    type);
 static gboolean         donna_donna_free_int_ref    (DonnaApp       *app,
                                                      const gchar    *intref);
 static gboolean         donna_donna_show_menu       (DonnaApp       *app,
@@ -1065,22 +1066,25 @@ donna_donna_new_int_ref (DonnaApp       *app,
 
 static gpointer
 donna_donna_get_int_ref (DonnaApp       *app,
-                         const gchar    *intref)
+                         const gchar    *intref,
+                         DonnaArgType    type)
 {
     DonnaDonnaPrivate *priv;
     struct intref *ir;
-    gpointer ptr;
+    gpointer ptr = NULL;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
     priv = ((DonnaDonna *) app)->priv;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     ir = g_hash_table_lookup (priv->intrefs, intref);
-    if (ir)
+    if (ir && ir->type == type)
+    {
         ir->last = g_get_monotonic_time ();
-    ptr = (ir) ? ir->ptr : NULL;
-    if (ir->type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
-        ptr = g_object_ref (ptr);
+        ptr = ir->ptr;
+        if (ir->type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+            ptr = g_object_ref (ptr);
+    }
     g_rec_mutex_unlock (&priv->rec_mutex);
 
     return ptr;

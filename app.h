@@ -48,7 +48,8 @@ struct _DonnaAppInterface
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
     gpointer            (*get_int_ref)              (DonnaApp       *app,
-                                                     const gchar    *intref);
+                                                     const gchar    *intref,
+                                                     DonnaArgType    type);
     gboolean            (*free_int_ref)             (DonnaApp       *app,
                                                      const gchar    *intref);
     gboolean            (*show_menu)                (DonnaApp       *app,
@@ -91,7 +92,8 @@ gchar *             donna_app_new_int_ref           (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
 gpointer            donna_app_get_int_ref           (DonnaApp       *app,
-                                                     const gchar    *intref);
+                                                     const gchar    *intref,
+                                                     DonnaArgType    type);
 gboolean            donna_app_free_int_ref          (DonnaApp       *app,
                                                      const gchar    *intref);
 gboolean            donna_app_show_menu             (DonnaApp       *app,

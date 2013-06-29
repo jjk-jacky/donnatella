@@ -726,7 +726,7 @@ convert:
                         data->command->name, data->i + 1, s);
                 goto error;
             }
-            ptr = donna_app_get_int_ref (data->app, data->start);
+            ptr = donna_app_get_int_ref (data->app, data->start, DONNA_ARG_TYPE_TREEVIEW);
             if (!ptr)
             {
                 g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
@@ -763,7 +763,7 @@ convert:
                         data->command->name, data->i + 1, s);
                 goto error;
             }
-            ptr = donna_app_get_int_ref (data->app, s);
+            ptr = donna_app_get_int_ref (data->app, s, DONNA_ARG_TYPE_NODE);
             if (!ptr)
             {
                 g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
