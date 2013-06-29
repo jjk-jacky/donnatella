@@ -1148,8 +1148,6 @@ menu_conv_flag (const gchar  c,
                     g_string_append (str, s);
                     g_free (s);
                 }
-                else
-                    g_string_append_c (str, '-');
             }
             else
                 return FALSE;
@@ -1168,8 +1166,6 @@ menu_conv_flag (const gchar  c,
                     g_string_append (str, s);
                     g_free (s);
                 }
-                else
-                    g_string_append_c (str, '-');
             }
             else if ((type & DONNA_ARG_TYPE_NODE) && node)
                 *out = g_object_ref (node);
