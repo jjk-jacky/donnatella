@@ -311,9 +311,9 @@ struct _DonnaTreeViewPrivate
     gchar               *key_combine_name;  /* combine that was used */
     gchar                key_combine;       /* the spec from the combine */
     enum spec_type       key_spec_type;     /* spec we're waiting for */
-    guint                key_m;             /* key multiplier */
+    guint                key_m;             /* key modifier */
     guint                key_val;           /* (main) key pressed */
-    guint                key_motion_m;      /* motion multiplier */
+    guint                key_motion_m;      /* motion modifier */
     guint                key_motion;        /* motion's key */
     /* when a renderer goes edit-mode, we need the editing-started signal to get
      * the editable */
@@ -10112,7 +10112,7 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
 
             if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
             {
-                /* multiplier */
+                /* modifier */
                 priv->key_motion_m *= 10;
                 priv->key_motion_m += event->keyval - GDK_KEY_0;
                 return TRUE;
@@ -10168,7 +10168,7 @@ next:
     }
     else if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
     {
-        /* multiplier */
+        /* modifier */
         priv->key_m *= 10;
         priv->key_m += event->keyval - GDK_KEY_0;
     }
@@ -10179,7 +10179,7 @@ next:
         {
             case KEY_COMBINE:
                 if (priv->key_m > 0 || priv->key_combine_name)
-                    /* no COMBINE with a multiplier; only one at a time */
+                    /* no COMBINE with a modifier; only one at a time */
                     wrong_key (TRUE);
                 if (!donna_config_get_string (config, &priv->key_combine_name,
                             "%s/combine", from))
