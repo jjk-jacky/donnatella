@@ -39,6 +39,8 @@ static DonnaTaskState   cmd_tree_full_expand                (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_get_location               (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_get_node_at_row            (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_get_visual                 (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_goto_line                  (DonnaTask *task,
@@ -196,6 +198,14 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NODE,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_get_location
+    },
+    {
+        .name           = "tree_get_node_at_row",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NODE,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_get_node_at_row
     },
     {
         .name           = "tree_get_visual",
@@ -1818,6 +1828,27 @@ cmd_tree_get_location (DonnaTask *task, GPtrArray *args)
     node = donna_tree_view_get_location (args->pdata[1]);
     if (!node)
         return DONNA_TASK_FAILED;
+
+    v = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (v, DONNA_TYPE_NODE);
+    g_value_take_object (v, node);
+    donna_task_release_return_value (task_for_ret_err ());
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_get_node_at_row (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaNode *node;
+    GValue *v;
+
+    node = donna_tree_view_get_node_at_row (args->pdata[1], args->pdata[2], &err);
+    if (!node)
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
 
     v = donna_task_grab_return_value (task_for_ret_err ());
     g_value_init (v, DONNA_TYPE_NODE);

@@ -8804,6 +8804,37 @@ move:
     return TRUE;
 }
 
+DonnaNode *
+donna_tree_view_get_node_at_row (DonnaTreeView  *tree,
+                                 DonnaTreeRowId *rowid,
+                                 GError        **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter   iter;
+    row_id_type   type;
+    DonnaNode    *node;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot get node, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            DONNA_TREE_VIEW_COL_NODE,   &node,
+            -1);
+
+    return node;
+}
+
 /* mode list only */
 GPtrArray *
 donna_tree_view_get_children (DonnaTreeView      *tree,
