@@ -430,9 +430,9 @@ parse_location (const gchar *sce, struct rc_data *data)
         gboolean match;
 
         if (!dereference)
-            match = strchr (data->conv_flags, s[1]) != NULL;
+            match = s[1] != '\0' && strchr (data->conv_flags, s[1]) != NULL;
         else
-            match = strchr (data->conv_flags, s[2]) != NULL;
+            match = s[2] != '\0' && strchr (data->conv_flags, s[2]) != NULL;
         if (match)
         {
             if (!str)
@@ -445,8 +445,16 @@ parse_location (const gchar *sce, struct rc_data *data)
             s += 2;
             sce = (const gchar *) s;
         }
+        else if (s[1] != '\0')
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_len (str, sce, s - sce);
+            sce = (const gchar *) ++s;
+            ++s;
+        }
         else
-            s += 2;
+            break;
     }
 
     if (!str)
