@@ -9244,6 +9244,8 @@ tree_conv_flag (const gchar       c,
                 if (priv->key_combine)
                     g_string_append_c (str, priv->key_combine);
             }
+            else if (type & DONNA_ARG_TYPE_INT)
+                *out = GINT_TO_POINTER (priv->key_combine);
             else
                 return FALSE;
             return TRUE;
@@ -9256,6 +9258,9 @@ tree_conv_flag (const gchar       c,
                 else
                     g_string_append_printf (str, "%d", priv->key_m);
             }
+            else if (type & DONNA_ARG_TYPE_INT)
+                *out = GINT_TO_POINTER ((data->key == IS_KEY_MOTION)
+                        ? priv->key_motion_m : priv->key_m);
             else
                 return FALSE;
             return TRUE;
@@ -9266,6 +9271,8 @@ tree_conv_flag (const gchar       c,
                 if (data->spec)
                     g_string_append_c (str, data->spec);
             }
+            else if (type & DONNA_ARG_TYPE_INT)
+                *out = GINT_TO_POINTER (data->spec);
             else
                 return FALSE;
             return TRUE;
