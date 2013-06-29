@@ -1079,6 +1079,8 @@ donna_donna_get_int_ref (DonnaApp       *app,
     if (ir)
         ir->last = g_get_monotonic_time ();
     ptr = (ir) ? ir->ptr : NULL;
+    if (ir->type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+        ptr = g_object_ref (ptr);
     g_rec_mutex_unlock (&priv->rec_mutex);
 
     return ptr;
