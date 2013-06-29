@@ -1177,9 +1177,9 @@ menu_conv_flag (const gchar  c,
 }
 
 static gboolean
-menuitem_button_press_cb (GtkWidget              *item,
-                          GdkEventButton         *event,
-                          struct menu_click_data *mc)
+menuitem_button_release_cb (GtkWidget              *item,
+                            GdkEventButton         *event,
+                            struct menu_click_data *mc)
 {
     DonnaDonnaPrivate *priv = mc->donna->priv;
     DonnaNode *node;
@@ -1426,9 +1426,9 @@ donna_donna_show_menu (DonnaApp       *app,
         }
 
         g_object_set_data ((GObject *) item, "node", node);
-        gtk_widget_add_events (item, GDK_BUTTON_PRESS_MASK);
-        g_signal_connect (item, "button-press-event",
-                (GCallback) menuitem_button_press_cb, data);
+        gtk_widget_add_events (item, GDK_BUTTON_RELEASE_MASK);
+        g_signal_connect (item, "button-release-event",
+                (GCallback) menuitem_button_release_cb, data);
 
         gtk_widget_show (item);
         gtk_menu_attach ((GtkMenu *) menu, item, 0, 1, i, i + 1);
