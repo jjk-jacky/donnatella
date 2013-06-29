@@ -7252,7 +7252,50 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
         }
         else
         {
-            GtkTreePath *path = gtk_tree_path_new_from_string (s);
+            GtkTreePath *path;
+            gchar *end;
+            gint i;
+
+            i = g_ascii_strtoll (s, &end, 10);
+            if (i < 0)
+                return ROW_ID_INVALID;
+
+            if (end[0] == '%' && end[1] == '\0')
+            {
+                GdkRectangle rect;
+                gint height;
+                gint rows;
+
+                /* locate first row */
+                path = gtk_tree_path_new_from_indices (0, -1);
+                gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+                gtk_tree_path_free (path);
+                height = ABS (rect.y);
+
+                /* locate last row */
+                if (!donna_tree_model_iter_last (model, iter))
+                    return ROW_ID_INVALID;
+
+                path = gtk_tree_model_get_path (model, iter);
+                if (!path)
+                    return ROW_ID_INVALID;
+                gtk_tree_view_get_background_area (treev, path, NULL, &rect);
+                gtk_tree_path_free (path);
+                height += ABS (rect.y) + rect.height;
+
+                /* nb of rows accessible on tree */
+                rows = height / rect.height;
+
+                /* get the one at specified percent */
+                i = (rows * ((gdouble) i / 100.0)) + 1;
+                i = CLAMP (i, 1, rows);
+            }
+            else if (*end == '\0')
+                i = MAX (1, i);
+            else
+                return ROW_ID_INVALID;
+
+            path = gtk_tree_path_new_from_indices (i - 1, -1);
             if (gtk_tree_model_get_iter (model, iter, path))
             {
                 gtk_tree_path_free (path);
