@@ -9156,7 +9156,7 @@ tree_conv_flag (const gchar       c,
                     g_free (s);
                 }
             }
-            else if (type & DONNA_ARG_TYPE_NODE)
+            else if ((type & DONNA_ARG_TYPE_NODE) && priv->location)
                 *out = g_object_ref (priv->location);
             else
                 return FALSE;
@@ -9222,7 +9222,7 @@ tree_conv_flag (const gchar       c,
                 if (data->row)
                 {
                     if (dereferenced)
-                        s = donna_node_get_location (data->row->node);
+                        s = donna_node_get_full_location (data->row->node);
                     else
                         s = donna_app_new_int_ref (app, DONNA_ARG_TYPE_NODE,
                                 g_object_ref (data->row->node));
