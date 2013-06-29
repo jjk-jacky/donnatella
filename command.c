@@ -59,6 +59,8 @@ static DonnaTaskState   cmd_tree_set_visual                 (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_toggle_row                 (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_void                            (DonnaTask *task,
+                                                             GPtrArray *args);
 
 static DonnaCommand commands[] = {
     {
@@ -278,6 +280,21 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_toggle_row
+    },
+    {
+        .name           = "void",
+        .argc           = 8,
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_void
     },
 };
 static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
@@ -2105,5 +2122,11 @@ cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_void (DonnaTask *task, GPtrArray *args)
+{
     return DONNA_TASK_DONE;
 }
