@@ -8616,9 +8616,9 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
     GtkTreeIter   iter;
     row_id_type   type;
     GtkTreePath  *path  = NULL;
-    gboolean      is_tb = FALSE;
     GtkTreeIter   tb_iter;
-    guint         rows = 0;
+    guint         is_tb = 0;
+    guint         rows  = 0;
     guint         max;
     GdkRectangle  rect_visible;
     GdkRectangle  rect;
@@ -8729,12 +8729,9 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
     /* those are special cases, where if the focus is already there, we want to
      * go one up/down more screen */
     if (rowid->type == DONNA_ARG_TYPE_PATH
-            && (streq (rowid->ptr, ":top")
-                || streq (rowid->ptr, ":bottom")
-                || streq (rowid->ptr, ":top-vis")
-                || streq (rowid->ptr, ":bottom-vis")))
+            && (streq (rowid->ptr, ":top") || streq (rowid->ptr, ":bottom")))
     {
-        is_tb = TRUE;
+        is_tb = 1;
         gtk_tree_view_get_cursor (treev, &path, NULL);
         if (!path)
         {
@@ -8761,11 +8758,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
     {
         /* only those make sense to be repeated */
         if (rowid->type != DONNA_ARG_TYPE_PATH
-                || !(is_tb || streq (rowid->ptr, ":top")
-                    || streq (rowid->ptr, ":bottom")
-                    || streq (rowid->ptr, ":top-vis")
-                    || streq (rowid->ptr, ":bottom-vis")
-                    || streq (rowid->ptr, ":prev")
+                || !(is_tb || streq (rowid->ptr, ":prev")
                     || streq (rowid->ptr, ":next")
                     || streq (rowid->ptr, ":up")
                     || streq (rowid->ptr, ":down")
@@ -8778,25 +8771,31 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
 
     for ( ; nb > 0; --nb)
     {
-        if (path)
-            gtk_tree_path_free (path);
-
-        type = convert_row_id_to_iter (tree, rowid, &iter);
-        if (type != ROW_ID_ROW)
+        if (is_tb < 2)
         {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                    "Treeview '%s': Cannot go to line, invalid row-id",
-                    priv->name);
-            return FALSE;
-        }
+            if (path)
+                gtk_tree_path_free (path);
 
-        path = gtk_tree_model_get_path (model, &iter);
+            type = convert_row_id_to_iter (tree, rowid, &iter);
+            if (type != ROW_ID_ROW)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                        "Treeview '%s': Cannot go to line, invalid row-id",
+                        priv->name);
+                return FALSE;
+            }
+
+            path = gtk_tree_model_get_path (model, &iter);
+        }
 
         if (is_tb)
         {
+            if (is_tb == 1 && itereq (&iter, &tb_iter))
+                is_tb = 2;
+
             /* scroll only; or we're already there: let's go beyond */
-            if (set == DONNA_TREE_SET_SCROLL || itereq (&iter, &tb_iter))
+            if (set == DONNA_TREE_SET_SCROLL || is_tb == 2)
             {
                 if (!rows)
                 {
@@ -8855,7 +8854,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                 }
 
             }
-            tb_iter = iter;
+            is_tb = 2;
         }
 move:
         if (set & DONNA_TREE_SET_FOCUS)
