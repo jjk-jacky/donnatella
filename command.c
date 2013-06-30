@@ -220,10 +220,12 @@ static DonnaCommand commands[] = {
     },
     {
         .name           = "tree_goto_line",
-        .argc           = 5,
+        .argc           = 7,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
             DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_goto_line
@@ -1940,9 +1942,13 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
     DonnaTreeGoto nb_type[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
         DONNA_TREE_GOTO_PERCENT };
     DonnaTreeSet set;
+    const gchar *c_action[] = { "select", "unselect", "invert" };
+    DonnaTreeSelAction action[] = { DONNA_TREE_SEL_SELECT, DONNA_TREE_SEL_UNSELECT,
+        DONNA_TREE_SEL_INVERT };
     gchar *s;
     gint c_n;
     gint nb_sets;
+    gint c_a;
 
     nb_sets = sizeof (c_set) / sizeof (c_set[0]);
     s = args->pdata[2];
@@ -2004,8 +2010,12 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
     if (c_n < 0)
         c_n = 0;
 
+    c_a = get_choice_from_arg (c_action, 6);
+
     if (!donna_tree_view_goto_line (args->pdata[1], set, args->pdata[3],
-                GPOINTER_TO_INT (args->pdata[4]), nb_type[c_n], &err))
+                GPOINTER_TO_INT (args->pdata[4]), nb_type[c_n],
+                (c_a < 0) ? 0 : action[c_a], GPOINTER_TO_INT (args->pdata[7]),
+                &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;

@@ -97,7 +97,7 @@ struct _DonnaTreeRow
 
 typedef enum
 {
-    DONNA_TREE_SEL_SELECT,
+    DONNA_TREE_SEL_SELECT = 1,
     DONNA_TREE_SEL_UNSELECT,
     DONNA_TREE_SEL_INVERT,
 } DonnaTreeSelAction;
@@ -215,6 +215,8 @@ gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  guint               nb,
                                                  DonnaTreeGoto       nb_type,
+                                                 DonnaTreeSelAction  action,
+                                                 gboolean            to_focused,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_node_at_row (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,

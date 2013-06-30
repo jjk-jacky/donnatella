@@ -8608,6 +8608,8 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                            DonnaTreeRowId     *rowid,
                            guint               nb,
                            DonnaTreeGoto       nb_type,
+                           DonnaTreeSelAction  action,
+                           gboolean            to_focused,
                            GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -8857,6 +8859,26 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             is_tb = 2;
         }
 move:
+        if (action == DONNA_TREE_SEL_SELECT || action == DONNA_TREE_SEL_UNSELECT
+                || action == DONNA_TREE_SEL_INVERT)
+        {
+            DonnaTreeRowId rid;
+            DonnaTreeRow r;
+            GSList *l;
+
+            rid.type = DONNA_ARG_TYPE_ROW;
+            rid.ptr  = &r;
+
+            gtk_tree_model_get (model, &iter,
+                    DONNA_TREE_VIEW_COL_NODE,   &r.node,
+                    -1);
+            l = g_hash_table_lookup (priv->hashtable, r.node);
+            r.iter = l->data;
+
+            donna_tree_view_selection (tree, action, &rid, to_focused, NULL);
+            g_object_unref (r.node);
+        }
+
         if (set & DONNA_TREE_SET_FOCUS)
             gtk_tree_view_set_focused_row (treev, path);
         else if (set & DONNA_TREE_SET_CURSOR)
