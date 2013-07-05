@@ -9158,6 +9158,8 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
         return;
 
     loc_node = donna_tree_view_get_location (priv->sync_with);
+    if (G_UNLIKELY (!loc_node))
+        return;
     loc_provider = donna_node_peek_provider (loc_node);
     loc_location = donna_node_get_location (loc_node);
     do
@@ -9434,6 +9436,7 @@ handle_click (DonnaTreeView     *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
     struct conv_data *data;
+    struct column *_col;
     gchar *fl;
     gboolean is_tree = is_tree (tree);
     gboolean is_selected;
@@ -9484,7 +9487,9 @@ handle_click (DonnaTreeView     *tree,
     config = donna_app_peek_config (priv->app);
     data = g_new0 (struct conv_data, 1);
     data->tree = tree;
-    data->col_name = g_strdup (get_column_by_column (tree, column)->name);
+    _col = get_column_by_column (tree, column);
+    if (_col)
+        data->col_name = g_strdup (_col->name);
 
     if (!iter)
     {
@@ -9542,7 +9547,8 @@ handle_click (DonnaTreeView     *tree,
     fl = _donna_config_get_string_tree_column (config, priv->name,
             data->col_name,
             (is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
-            (is_tree) ? clicks : priv->arrangement->columns_options,
+            (is_tree) ? clicks
+            : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
             (is_tree) ? "treeviews/tree" : "treeviews/list",
             b, (gchar *) def);
     if (!fl && is_selected)
@@ -9550,7 +9556,7 @@ handle_click (DonnaTreeView     *tree,
         fl = _donna_config_get_string_tree_column (config, priv->name,
                 data->col_name,
                 TREE_COL_LIST,
-                priv->arrangement->columns_options,
+                (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
                 "treeviews/list",
                 b, (gchar *) def);
 
