@@ -158,7 +158,7 @@ content_type_guess (const gchar *filename)
     {
         gint fd;
 
-        fd = open (filename, O_RDONLY);
+        fd = open (filename, O_RDONLY | O_NONBLOCK);
         if (fd > -1)
         {
             guchar data[1024];
