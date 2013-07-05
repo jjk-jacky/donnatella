@@ -5051,6 +5051,7 @@ load_arrangement (DonnaTreeView     *tree,
             b = g_strdup_printf ("columntypes/%s", col_type);
         width = donna_config_get_int_column (config, priv->name, col,
                 arrangement->columns_options, b, "width", 230);
+        gtk_tree_view_column_set_min_width (column, 23);
         gtk_tree_view_column_set_fixed_width (column, width);
         if (b != buf)
         {
