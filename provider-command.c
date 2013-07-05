@@ -180,7 +180,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     gchar *s;
     gint i;
 
-    cmd = _donna_command_init_parse ((gchar *) location, &s, &s, &err);
+    cmd = _donna_command_init_parse ((gchar *) location, &s, &err);
     if (!cmd)
     {
         donna_task_take_error (task, err);
