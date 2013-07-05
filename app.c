@@ -5,7 +5,7 @@
 
 enum
 {
-    ACTIVE_LIST_CHANGED,
+    TREEVIEW_LOADED,
     NB_SIGNALS
 };
 
@@ -14,14 +14,14 @@ static guint donna_app_signals[NB_SIGNALS] = { 0 };
 static void
 donna_app_default_init (DonnaAppInterface *interface)
 {
-    donna_app_signals[ACTIVE_LIST_CHANGED] =
-        g_signal_new ("active-list-changed",
+    donna_app_signals[TREEVIEW_LOADED] =
+        g_signal_new ("treeview-loaded",
             DONNA_TYPE_APP,
             G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET (DonnaAppInterface, active_list_changed),
+            G_STRUCT_OFFSET (DonnaAppInterface, treeview_loaded),
             NULL,
             NULL,
-            g_cclosure_marshal_VOID__BOXED,
+            g_cclosure_marshal_VOID__OBJECT,
             G_TYPE_NONE,
             1,
             DONNA_TYPE_TREE_VIEW);
@@ -43,13 +43,13 @@ G_DEFINE_INTERFACE (DonnaApp, donna_app, G_TYPE_OBJECT)
 /* signals */
 
 void
-donna_app_active_list_changed (DonnaApp      *app,
-                               DonnaTreeView *list)
+donna_app_treeview_loaded (DonnaApp       *app,
+                           DonnaTreeView  *tree)
 {
     g_return_if_fail (DONNA_IS_APP (app));
-    g_return_if_fail (DONNA_IS_TREE_VIEW (list));
+    g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
 
-    g_signal_emit (app, donna_app_signals[ACTIVE_LIST_CHANGED], 0, list);
+    g_signal_emit (app, donna_app_signals[TREEVIEW_LOADED], 0, tree);
 }
 
 

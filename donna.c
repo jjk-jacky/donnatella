@@ -970,7 +970,7 @@ donna_donna_get_task_manager (DonnaApp *app)
     return priv->task_manager;
 }
 
-DonnaTreeView *
+static DonnaTreeView *
 donna_load_treeview (DonnaDonna *donna, const gchar *name)
 {
     DonnaTreeView *tree;
@@ -986,6 +986,7 @@ donna_load_treeview (DonnaDonna *donna, const gchar *name)
                     G_CALLBACK (tree_select_arrangement), donna);
             donna->priv->treeviews = g_slist_prepend (donna->priv->treeviews,
                     g_object_ref (tree));
+            donna_app_treeview_loaded ((DonnaApp *) donna, tree);
         }
     }
     return tree;

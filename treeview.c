@@ -302,6 +302,7 @@ struct _DonnaTreeViewPrivate
     DonnaTreeView       *sync_with;
     gulong               sid_sw_location_changed;
     gulong               sid_active_list_changed;
+    gulong               sid_treeview_loaded;
 
     /* info about last event, used to handle single, double & slow-dbl clicks */
     GdkEventButton      *last_event;
@@ -914,7 +915,9 @@ active_list_changed_cb (GObject         *object,
 
     if (priv->sync_with)
     {
-        g_signal_handler_disconnect (priv->sync_with, priv->sid_sw_location_changed);
+        if (priv->sid_sw_location_changed)
+            g_signal_handler_disconnect (priv->sync_with,
+                    priv->sid_sw_location_changed);
         g_object_unref (priv->sync_with);
     }
     g_object_get (object, "active-list", &priv->sync_with, NULL);
@@ -1282,6 +1285,13 @@ real_option_cb (struct option_data *data)
                                 (GCallback) sync_with_location_changed_cb,
                                 data->tree)
                         : 0;
+
+                    if (priv->sid_treeview_loaded)
+                    {
+                        g_signal_handler_disconnect (priv->app,
+                                priv->sid_treeview_loaded);
+                        priv->sid_treeview_loaded = 0;
+                    }
                 }
                 else
                     g_object_unref (sw);
@@ -1441,6 +1451,25 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
 }
 
 static void
+treeview_loaded_cb (DonnaApp *app, DonnaTreeView *loaded_tree, DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    gchar *s;
+
+    s = cfg_get_sync_with (tree, donna_app_peek_config (priv->app));
+    if (!priv->sync_with && streq (s, loaded_tree->priv->name))
+    {
+        g_signal_handler_disconnect (priv->app, priv->sid_treeview_loaded);
+        priv->sid_treeview_loaded = 0;
+        priv->sync_with = g_object_ref (loaded_tree);
+        priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
+                "notify::location",
+                (GCallback) sync_with_location_changed_cb, tree);
+    }
+    g_free (s);
+}
+
+static void
 load_config (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv;
@@ -1507,6 +1536,10 @@ load_config (DonnaTreeView *tree)
             priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
                     "notify::location",
                     (GCallback) sync_with_location_changed_cb, tree);
+        else if (s)
+            priv->sid_treeview_loaded = g_signal_connect (priv->app,
+                    "treeview_loaded",
+                    (GCallback) treeview_loaded_cb, tree);
 
         val = cfg_get_sync_scroll (tree, config);
         priv->sync_scroll = val;

@@ -24,8 +24,8 @@ struct _DonnaAppInterface
     GTypeInterface parent;
 
     /* signals */
-    void                (*active_list_changed)      (DonnaApp       *app,
-                                                     DonnaTreeView  *list);
+    void                (*treeview_loaded)          (DonnaApp       *app,
+                                                     DonnaTreeView  *tree);
 
     /* virtual table */
     void                (*ensure_focused)           (DonnaApp       *app);
@@ -64,8 +64,8 @@ struct _DonnaAppInterface
 };
 
 /* signals */
-void                donna_app_active_list_changed   (DonnaApp       *app,
-                                                     DonnaTreeView  *list);
+void                donna_app_treeview_loaded       (DonnaApp       *app,
+                                                     DonnaTreeView  *tree);
 
 /* API */
 void                donna_app_ensure_focused        (DonnaApp       *app);
