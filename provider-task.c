@@ -537,11 +537,15 @@ provider_task_new_node (DonnaProviderBase  *_provider,
 
     if (streq (location, "/"))
     {
+        klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+        klass->lock_nodes (_provider);
+        node = klass->get_cached_node (_provider, location);
+        if (node)
+            goto found;
+
         node = donna_node_new ((DonnaProvider *) _provider, location,
                 DONNA_NODE_CONTAINER, NULL, (refresher_fn) gtk_true, NULL,
                 "Task Manager", 0);
-        klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
-        klass->lock_nodes (_provider);
     }
     else
     {

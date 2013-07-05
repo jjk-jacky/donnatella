@@ -625,7 +625,19 @@ new_node (DonnaProviderBase *_provider,
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
     if (need_lock)
+    {
+        DonnaNode *n;
+
         klass->lock_nodes (_provider);
+        /* did someone already add it while we were busy? */
+        n = klass->get_cached_node (_provider, location);
+        if (n)
+        {
+            klass->unlock_nodes (_provider);
+            g_object_unref (node);
+            return n;
+        }
+    }
     /* this adds another reference (from our own) so we send it to the caller */
     klass->add_node_to_cache (_provider, node);
     if (need_lock)

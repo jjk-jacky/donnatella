@@ -173,6 +173,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     DonnaProviderBaseClass *klass;
     DonnaCommand *cmd;
     DonnaNode *node;
+    DonnaNode *n;
     GValue *value;
     GtkWidget *w;
     GdkPixbuf *pixbuf;
@@ -237,7 +238,15 @@ provider_command_new_node (DonnaProviderBase  *_provider,
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
     klass->lock_nodes (_provider);
-    klass->add_node_to_cache (_provider, node);
+    n = klass->get_cached_node (_provider, location);
+    if (n)
+    {
+        /* already one added while we were busy */
+        g_object_unref (node);
+        node = n;
+    }
+    else
+        klass->add_node_to_cache (_provider, node);
     klass->unlock_nodes (_provider);
 
     value = donna_task_grab_return_value (task);
