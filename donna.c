@@ -1,6 +1,8 @@
 
 #include <locale.h>
 #include <gtk/gtk.h>
+#include <stdlib.h>     /* free() */
+#include <ctype.h>      /* isblank() */
 #include "donna.h"
 #include "debug.h"
 #include "app.h"
@@ -83,6 +85,7 @@ struct _DonnaDonnaPrivate
     GSList          *arrangements;
     GThreadPool     *pool;
     DonnaTreeView   *active_list;
+    gulong           sid_active_location;
     /* visuals are under a RW lock so everyone can read them at the same time
      * (e.g. creating nodes, get_children() & the likes). The write operation
      * should be quite rare. */
@@ -1494,145 +1497,10 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
     return NULL;
 }
 
-void
-donna_donna_set_window (DonnaDonna *donna, GtkWindow *win)
-{
-    g_return_if_fail (DONNA_IS_DONNA (donna));
-    donna->priv->window = g_object_ref (win);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#include "treeview.h"
-#include "provider.h"
-#include "task.h"
-
-static DonnaProviderFs *provider_fs;
-static DonnaDonna *d;
-
 static void
 window_destroy_cb (GtkWidget *window, gpointer data)
 {
     gtk_main_quit ();
-}
-
-static void
-tb_fill_tree_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
-{
-    DonnaTask *task;
-    const GValue *value;
-    DonnaNode *node;
-
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
-            "/home/jjacky/donnatella/donna.c", NULL);
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task ((DonnaApp*)d, task);
-    donna_task_wait_for_it (task);
-    value = donna_task_get_return_value (task);
-    node = g_value_dup_object (value);
-    g_object_unref (task);
-    donna_tree_view_set_location (tree, node, NULL);
-
-    return;
-
-    /*******************************/
-
-    DonnaConfig *config = donna_app_peek_config (DONNA_APP (d));
-    gboolean v;
-    if (donna_config_get_boolean (config, &v, "columns/name/sort_natural_order"))
-        donna_config_set_boolean (config, !v, "columns/name/sort_natural_order");
-    else
-        donna_config_set_boolean (config, FALSE, "columns/name/sort_natural_order");
-    return;
-
-    /* FIXME */
-    GtkTreeSortable *sortable;
-    sortable = GTK_TREE_SORTABLE (gtk_tree_model_filter_get_model (
-                GTK_TREE_MODEL_FILTER (gtk_tree_view_get_model (
-                        GTK_TREE_VIEW (tree)))));
-    gtk_tree_sortable_set_sort_column_id (sortable, 0, GTK_SORT_DESCENDING);
-    gtk_tree_sortable_set_sort_column_id (sortable, 0, GTK_SORT_ASCENDING);
-}
-
-static void
-new_root_cb (DonnaTask *task, gboolean timeout_called, gpointer data)
-{
-    DonnaNode       *node;
-    const GValue    *value;
-
-    value = donna_task_get_return_value (task);
-    node = DONNA_NODE (g_value_get_object (value));
-
-    /* FIXME if (!node) */
-    donna_tree_view_add_root (DONNA_TREE_VIEW (data), node);
-}
-
-static void
-tb_new_root_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
-{
-    DonnaTask *task;
-
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
-            "/", NULL);
-    donna_task_set_callback (task, new_root_cb, tree, NULL);
-    donna_app_run_task (DONNA_APP (d), task);
-}
-
-static void
-tb_del_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
-{
-    DonnaNode *node;
-    gchar *s;
-
-    node = donna_tree_view_get_location (tree);
-    if (!node)
-    {
-        g_info ("Tree has no current location");
-        return;
-    }
-
-    s = donna_node_get_location (node);
-    g_info ("Tree's location: %s", s);
-    g_free (s);
-    g_object_unref (node);
-}
-
-static void
-tb_add_node_clicked_cb (GtkToolButton *tb_btn, DonnaTreeView *tree)
-{
-    DonnaTask *task;
-    DonnaNode *node;
-    const GValue *value;
-    GValue val = G_VALUE_INIT;
-    gchar *s;
-
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs),
-            "/tmp/test/foobar", NULL);
-    g_object_ref_sink (task);
-    donna_task_run (task);
-    value = donna_task_get_return_value (task);
-    node = g_value_dup_object (value);
-    g_object_unref (task);
-    s = g_strdup ("name");
-    g_value_init (&val, G_TYPE_STRING);
-    g_value_set_string (&val, "barfoo");
-    donna_tree_view_set_node_property (tree, node, s, &val, NULL);
-    g_value_unset (&val);
-    g_free (s);
-    g_object_unref (node);
 }
 
 static gboolean
@@ -1652,158 +1520,472 @@ focus_in_event_cb (GtkWidget *w, GdkEvent *event, DonnaDonna *donna)
     return FALSE;
 }
 
+static gchar *
+parse_string (DonnaDonna *donna, gchar *fmt)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    GString *str = NULL;
+    gchar *s = fmt;
+    DonnaNode *node;
+    gchar *ss;
+
+    while ((s = strchr (s, '%')))
+    {
+        switch (s[1])
+        {
+            case 'a':
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_len (str, fmt, s - fmt);
+                g_string_append (str, donna_tree_view_get_name (priv->active_list));
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'L':
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_len (str, fmt, s - fmt);
+                node = donna_tree_view_get_location (priv->active_list);
+                if (G_LIKELY (node))
+                {
+                    if (streq ("fs", donna_node_get_domain (node)))
+                        ss = donna_node_get_location (node);
+                    else
+                        ss = donna_node_get_full_location (node);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                    g_object_unref (node);
+                }
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'l':
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_len (str, fmt, s - fmt);
+                node = donna_tree_view_get_location (priv->active_list);
+                if (G_LIKELY (node))
+                {
+                    ss = donna_node_get_full_location (node);
+                    g_string_append (str, ss);
+                    g_free (ss);
+                    g_object_unref (node);
+                }
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'v':
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_len (str, fmt, s - fmt);
+                g_string_append (str, /* FIXME PACKAGE_VERSION */ "0.00");
+                s += 2;
+                fmt = s;
+                break;
+
+            default:
+                s += 2;
+                break;
+        }
+    }
+
+    if (!str)
+        return NULL;
+
+    g_string_append (str, fmt);
+    return g_string_free (str, FALSE);
+}
+
+static void
+refresh_window_title (DonnaDonna *donna)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    gchar *def = "%L - Donnatella";
+    gchar *fmt;
+    gchar *str;
+
+    if (!donna_config_get_string (priv->config, &fmt, "donna/title"))
+        fmt = def;
+
+    str = parse_string (donna, fmt);
+    gtk_window_set_title (priv->window, (str) ? str : fmt);
+    g_free (str);
+    if (fmt != def)
+        g_free (fmt);
+}
+
+static void
+active_location_changed (GObject *object, GParamSpec *spec, DonnaDonna *donna)
+{
+    refresh_window_title (donna);
+}
+
+static inline void
+set_active_list (DonnaDonna *donna, DonnaTreeView *list)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+
+    if (priv->sid_active_location > 0)
+        g_signal_handler_disconnect (priv->active_list, priv->sid_active_location);
+    if (priv->active_list)
+        g_object_unref (priv->active_list);
+    priv->active_list = g_object_ref (list);
+    priv->sid_active_location = g_signal_connect (list, "notify::location",
+            (GCallback) active_location_changed, donna);
+    refresh_window_title (donna);
+    g_object_notify ((GObject *) donna, "active-list");
+}
+
+static void
+window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+
+    if (DONNA_IS_TREE_VIEW (widget)
+            && !donna_tree_view_is_tree ((DonnaTreeView *) widget)
+            && (DonnaTreeView *) widget != priv->active_list)
+    {
+        gboolean skip;
+        if (donna_config_get_boolean (priv->config, &skip,
+                "treeviews/%s/not_active_list",
+                donna_tree_view_get_name ((DonnaTreeView *) widget)) && skip)
+            return;
+
+        set_active_list (donna, (DonnaTreeView *) widget);
+    }
+}
+
+static void
+set_tree_location (DonnaTask *task, gboolean timeout_called, DonnaTreeView *tree)
+{
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+        return;
+    donna_tree_view_set_location (tree,
+            g_value_get_object (donna_task_get_return_value (task)),
+            NULL);
+}
+
+static GtkWidget *
+load_widget (DonnaDonna  *donna,
+             gchar      **def,
+             GSList     **list,
+             gchar      **active_list_name,
+             GtkWidget  **active_list_widget)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    GtkWidget *w;
+    gchar *end;
+    gchar *sep = NULL;
+
+    for ( ; isblank (**def); ++*def)
+        ;
+
+    for (end = *def; end; ++end)
+    {
+        if (*end == '(')
+        {
+            if (end - *def == 4 && (streqn (*def, "boxH", 4)
+                        || streqn (*def, "boxV", 4)))
+            {
+                GtkBox *box;
+
+                box = (GtkBox *) gtk_box_new (((*def)[3] == 'H')
+                        ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL,
+                        0);
+                *def = end + 1;
+                for (;;)
+                {
+                    w = load_widget (donna, def, list,
+                            active_list_name, active_list_widget);
+                    if (!w)
+                    {
+                        g_object_unref (g_object_ref_sink (box));
+                        return NULL;
+                    }
+
+                    gtk_box_pack_start (box, w, TRUE, TRUE, 0);
+
+                    if (**def == ',')
+                        ++*def;
+                    else if (**def != ')')
+                    {
+                        g_debug("expected ',' or ')': %s", *def);
+                        g_object_unref (g_object_ref_sink (box));
+                        return NULL;
+                    }
+                    else
+                        break;
+                }
+                ++*def;
+                return (GtkWidget *) box;
+            }
+            else if (end - *def == 5 && (streqn (*def, "paneH", 5)
+                        || streqn (*def, "paneV", 5)))
+            {
+                GtkPaned *paned;
+                gboolean is_fixed;
+
+                paned = (GtkPaned *) gtk_paned_new (((*def)[4] == 'H')
+                        ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL);
+                *def = end + 1;
+
+                for ( ; isblank (**def); ++*def)
+                    ;
+                is_fixed = (**def == '!');
+                if (is_fixed)
+                    ++*def;
+                w = load_widget (donna, def, list,
+                        active_list_name, active_list_widget);
+                if (!w)
+                {
+                    g_object_unref (g_object_ref_sink (paned));
+                    return NULL;
+                }
+
+                gtk_paned_pack1 (paned, w, !is_fixed, TRUE);
+
+                if (**def == '@')
+                {
+                    gint pos = 0;
+
+                    for (++*def; **def >= '0' && **def <= '9'; ++*def)
+                        pos = pos * 10 + **def - '0';
+                    gtk_paned_set_position (paned, pos);
+                }
+
+                if (**def != ',')
+                {
+                    g_debug("missing second item in pane: %s", *def);
+                    g_object_unref (g_object_ref_sink (paned));
+                    return NULL;
+                }
+
+                ++*def;
+                for ( ; isblank (**def); ++*def)
+                    ;
+                is_fixed = (**def == '!');
+                if (is_fixed)
+                    ++*def;
+                w = load_widget (donna, def, list,
+                        active_list_name, active_list_widget);
+                if (!w)
+                {
+                    g_object_unref (g_object_ref_sink (paned));
+                    return NULL;
+                }
+
+                gtk_paned_pack2 (paned, w, !is_fixed, TRUE);
+
+                if (**def != ')')
+                {
+                    g_debug("only 2 items per pane: %s", *def);
+                    g_object_unref (g_object_ref_sink (paned));
+                    return NULL;
+                }
+                ++*def;
+                return (GtkWidget *) paned;
+            }
+        }
+        else if (*end == ':')
+            sep = end;
+        else if (*end == ',' || *end == '@' || *end == ')' || *end == '\0')
+        {
+            gchar e = *end;
+
+            if (!sep)
+            {
+                g_debug("missing ':' with item name: %s", *def);
+                return NULL;
+            }
+
+            *sep = '\0';
+            if (streq (*def, "treeview"))
+            {
+                DonnaTreeView *tree;
+                DonnaTask *task;
+                gchar *s = NULL;
+
+                *def = sep + 1;
+                *end = '\0';
+
+                w = gtk_scrolled_window_new (NULL, NULL);
+                tree = donna_load_treeview (donna, *def);
+                if (!donna_tree_view_is_tree (tree))
+                {
+                    if (!priv->active_list)
+                    {
+                        gboolean skip;
+                        if (!donna_config_get_boolean (priv->config, &skip,
+                                    "treeviews/%s/not_active_list",
+                                    donna_tree_view_get_name (tree)) || !skip)
+                        {
+                            if (streq (*active_list_name,
+                                        donna_tree_view_get_name (tree)))
+                            {
+                                priv->active_list = tree;
+                                *active_list_widget = (GtkWidget *) tree;
+                            }
+                            else if (!*active_list_widget)
+                                *active_list_widget = (GtkWidget *) tree;
+                        }
+                    }
+                    if (!donna_config_get_string (donna_donna_peek_config (
+                                    (DonnaApp *) donna),
+                                &s, "treeviews/%s/location", *def))
+                    {
+                        gchar *pwd;
+
+                        pwd = getcwd (NULL, 0);
+                        if (pwd)
+                        {
+                            s = g_strdup_printf ("fs:%s", pwd);
+                            free (pwd);
+                        }
+                    }
+                    if (s)
+                    {
+                        task = donna_app_get_node_task ((DonnaApp *) donna, s);
+                        donna_task_set_callback (task,
+                                (task_callback_fn) set_tree_location, tree, NULL);
+                        *list = g_slist_prepend (*list, task);
+                        g_free (s);
+                    }
+                }
+                gtk_container_add ((GtkContainer *) w, (GtkWidget *) tree);
+                *end = e;
+            }
+            else if (streq (*def, "toolbar"))
+                w = gtk_toolbar_new ();
+            else
+            {
+                g_debug("invalid item type: %s", *def);
+                *sep = ':';
+                return NULL;
+            }
+            *sep = ':';
+
+            *def = end;
+            return w;
+        }
+    }
+    return NULL;
+}
+
 int
 main (int argc, char *argv[])
 {
-    GtkWidget       *_window;
-    GtkWindow       *window;
-    GtkWidget       *_box;
-    GtkBox          *box;
-    GtkWidget       *_tb;
-    GtkToolbar      *tb;
-    GtkWidget       *_paned;
-    GtkPaned        *paned;
-    GtkWidget       *_scrolled_window;
-    GtkWidget       *_tree;
-    GtkTreeView     *tree;
-    GtkWidget       *_list;
-    GtkTreeView     *list;
+    DonnaApp            *app;
+    DonnaDonnaPrivate   *priv;
+    GtkCssProvider      *css_provider;
+    GtkWindow           *window;
+    GtkWidget           *active_list_widget = NULL;
+    GtkWidget           *w;
+    gchar               *active_list_name;
+    GSList              *list = NULL;
+    GSList              *l;
+    gchar               *s;
+    gchar               *def;
+    gint                 width;
+    gint                 height;
 
     setlocale (LC_ALL, "");
     gtk_init (&argc, &argv);
-    d = g_object_new (DONNA_TYPE_DONNA, NULL);
+
+    app = g_object_new (DONNA_TYPE_DONNA, NULL);
+    priv = ((DonnaDonna *) app)->priv;
 
     /* CSS */
-    GtkCssProvider *css_provider;
     css_provider = gtk_css_provider_new ();
     gtk_css_provider_load_from_path (css_provider, "donnatella.css", NULL);
     gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
             (GtkStyleProvider *) css_provider,
             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-    provider_fs = (DonnaProviderFs *) donna_app_get_provider ((DonnaApp*) d, "fs");
-
     /* main window */
-    _window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    window = GTK_WINDOW (_window);
-    donna_donna_set_window (d, window);
+    window = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    priv->window = g_object_ref (window);
 
     g_signal_connect (window, "focus-in-event",
-            (GCallback) focus_in_event_cb, d);
-    g_signal_connect (G_OBJECT (window), "destroy",
-            G_CALLBACK (window_destroy_cb), NULL);
+            (GCallback) focus_in_event_cb, app);
+    g_signal_connect (window, "destroy",
+            (GCallback) window_destroy_cb, NULL);
 
-    gtk_window_set_title (window, "Donnatella");
+    if (!donna_config_get_string (priv->config, &s, "donna/layout"))
+    {
+        w = gtk_message_dialog_new (NULL,
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_CLOSE,
+                "Unable to load interface: no layout set");
+        gtk_dialog_run ((GtkDialog *) w);
+        gtk_widget_destroy (w);
+        return 1;
+    }
 
-    _box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-    box = GTK_BOX (_box);
-    gtk_container_add (GTK_CONTAINER (window), _box);
-    gtk_widget_show (_box);
+    if (!donna_config_get_string (priv->config, &active_list_name,
+                "donna/active_list"))
+        active_list_name = NULL;
 
-    /* toolbar */
-    _tb = gtk_toolbar_new ();
-    tb = GTK_TOOLBAR (_tb);
-    gtk_toolbar_set_icon_size (tb, GTK_ICON_SIZE_SMALL_TOOLBAR);
-    gtk_box_pack_start (box, _tb, FALSE, FALSE, 0);
-    gtk_widget_show (_tb);
+    def = s;
+    w = load_widget ((DonnaDonna *) app, &def, &list,
+            &active_list_name, &active_list_widget);
+    g_free (s);
+    if (!w)
+    {
+        w = gtk_message_dialog_new (NULL,
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_CLOSE,
+                "Unable to load interface: invalid layout");
+        gtk_dialog_run ((GtkDialog *) w);
+        gtk_widget_destroy (w);
+        return 2;
+    }
+    gtk_container_add ((GtkContainer *) window, w);
 
-    GtkToolItem *tb_btn;
-    tb_btn = gtk_tool_button_new_from_stock (GTK_STOCK_APPLY);
-    gtk_toolbar_insert (tb, tb_btn, -1);
-    gtk_widget_show (GTK_WIDGET (tb_btn));
+    g_free (active_list_name);
+    if (!priv->active_list)
+    {
+        if (!active_list_widget)
+        {
+            w = gtk_message_dialog_new (NULL,
+                    GTK_DIALOG_MODAL,
+                    GTK_MESSAGE_ERROR,
+                    GTK_BUTTONS_CLOSE,
+                    "Unable to load interface: no active-list found");
+            gtk_message_dialog_format_secondary_text ((GtkMessageDialog *) w,
+                    "You need at least one treeview in mode List to be defined in your layout.");
+            gtk_dialog_run ((GtkDialog *) w);
+            gtk_widget_destroy (w);
+            return 3;
+        }
+    }
+    priv->active_list = NULL;
+    set_active_list ((DonnaDonna *) app, (DonnaTreeView *) active_list_widget);
 
-    GtkToolItem *tb_btn2;
-    tb_btn2 = gtk_tool_button_new_from_stock (GTK_STOCK_REFRESH);
-    gtk_toolbar_insert (tb, tb_btn2, -1);
-    gtk_widget_show (GTK_WIDGET (tb_btn2));
+    if (!donna_config_get_int (priv->config, &width, "donna/width"))
+        width = -1;
+    if (!donna_config_get_int (priv->config, &height, "donna/height"))
+        height = -1;
+    gtk_window_set_default_size (window, width, height);
 
-    GtkToolItem *tb_btn3;
-    tb_btn3 = gtk_tool_button_new_from_stock (GTK_STOCK_REMOVE);
-    gtk_toolbar_insert (tb, tb_btn3, -1);
-    gtk_widget_show (GTK_WIDGET (tb_btn3));
+    refresh_window_title ((DonnaDonna *) app);
+    gtk_widget_show_all ((GtkWidget *) window);
+    gtk_widget_grab_focus (active_list_widget);
+    g_signal_connect (window, "set-focus",
+            (GCallback) window_set_focus_cb, app);
 
-    GtkToolItem *tb_btn4;
-    tb_btn4 = gtk_tool_button_new_from_stock (GTK_STOCK_ADD);
-    gtk_toolbar_insert (tb, tb_btn4, -1);
-    gtk_widget_show (GTK_WIDGET (tb_btn4));
+    /* now that everything is realized, we can trigger task to set tree's
+     * location. Before that could lead to issue as set_location() might get
+     * treeview to wanna refresh, scroll, etc which needs it to be realized to
+     * work */
+    for (l = list; l; l = l->next)
+        donna_donna_run_task (app, l->data);
+    g_slist_free (list);
 
-    /* paned to host tree & list */
-    _paned = gtk_paned_new (GTK_ORIENTATION_HORIZONTAL);
-    paned = GTK_PANED (_paned);
-    gtk_box_pack_start (box, _paned, TRUE, TRUE, 0);
-    gtk_widget_show (_paned);
-
-    /* tree */
-    DonnaConfig *config = donna_app_peek_config (DONNA_APP (d));
-    donna_config_set_uint (config, 1, "treeviews/tree/mode");
-    donna_config_set_string (config, "name", "treeviews/tree/arrangement/sort");
-    _tree = (GtkWidget *) donna_load_treeview (d, "tree");
-    tree = GTK_TREE_VIEW (_tree);
-    /* scrolled window */
-    _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
-    gtk_paned_pack1 (paned, _scrolled_window, FALSE, TRUE);
-    gtk_widget_show (_scrolled_window);
-    /* size */
-    gtk_container_add (GTK_CONTAINER (_scrolled_window), _tree);
-    gtk_widget_show (_tree);
-
-    /* list */
-    donna_config_set_string (config, "name", "treeviews/list/arrangement/sort");
-    _list = (GtkWidget *) donna_load_treeview (d, "list");
-    list = GTK_TREE_VIEW (_list);
-    /* scrolled window */
-    _scrolled_window = gtk_scrolled_window_new (NULL, NULL);
-    gtk_paned_pack2 (paned, _scrolled_window, TRUE, TRUE);
-    gtk_widget_show (_scrolled_window);
-    /* size */
-    gtk_container_add (GTK_CONTAINER (_scrolled_window), _list);
-    gtk_widget_show (_list);
-
-    /* tb signals */
-    GtkTreeModel *model;
-    model = gtk_tree_view_get_model (tree);
-    g_signal_connect (G_OBJECT (tb_btn), "clicked",
-            G_CALLBACK (tb_fill_tree_clicked_cb), list);
-    g_signal_connect (G_OBJECT (tb_btn2), "clicked",
-            G_CALLBACK (tb_new_root_clicked_cb), tree);
-    g_signal_connect (G_OBJECT (tb_btn3), "clicked",
-            G_CALLBACK (tb_del_node_clicked_cb), tree);
-    g_signal_connect (G_OBJECT (tb_btn4), "clicked",
-            G_CALLBACK (tb_add_node_clicked_cb), tree);
-
-    DonnaTask *task;
-    const GValue *value;
-    DonnaNode *node;
-
-    d->priv->active_list = DONNA_TREE_VIEW (list);
-    g_object_notify (G_OBJECT (d), "active-list");
-
-#if 0
-    task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/", NULL);
-    g_object_ref_sink (task);
-    donna_task_run (task);
-    value = donna_task_get_return_value (task);
-    node = g_value_dup_object (value);
-    g_object_unref (task);
-    donna_tree_view_set_location (DONNA_TREE_VIEW (tree), node, NULL);
-    g_object_unref (node);
-#endif
-
-    //task = donna_provider_get_node_task (DONNA_PROVIDER (provider_fs), "/tmp/test", NULL);
-    task = donna_app_get_node_task ((DonnaApp *) d, "fs:/home/jjacky/issue");
-    g_object_ref_sink (task);
-    donna_task_run (task);
-    value = donna_task_get_return_value (task);
-    node = g_value_dup_object (value);
-    g_object_unref (task);
-    donna_tree_view_set_location (DONNA_TREE_VIEW (list), node, NULL);
-    g_object_unref (node);
-
-    /* show everything */
-    gtk_window_set_default_size (window, 1080, 420);
-    gtk_paned_set_position (paned, 230);
-    gtk_widget_show (_window);
     gtk_main ();
-
     return 0;
 }

@@ -10565,6 +10565,13 @@ donna_tree_view_get_name (DonnaTreeView *tree)
     return tree->priv->name;
 }
 
+gboolean
+donna_tree_view_is_tree (DonnaTreeView      *tree)
+{
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    return is_tree (tree);
+}
+
 GtkWidget *
 donna_tree_view_new (DonnaApp    *app,
                      const gchar *name)

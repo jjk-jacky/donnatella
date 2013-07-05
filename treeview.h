@@ -169,6 +169,7 @@ struct _DonnaTreeViewClass
 GtkWidget *     donna_tree_view_new             (DonnaApp           *app,
                                                  const gchar        *name);
 const gchar *   donna_tree_view_get_name        (DonnaTreeView      *tree);
+gboolean        donna_tree_view_is_tree         (DonnaTreeView      *tree);
 void            donna_tree_view_build_arrangement (
                                                  DonnaTreeView      *tree,
                                                  gboolean            force);
