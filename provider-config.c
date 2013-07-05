@@ -1961,6 +1961,21 @@ tree_col:
 
 def:
     g_rw_lock_reader_unlock (&priv->lock);
+    if (tree_col)
+    {
+        option = __get_option (config, type, TRUE, "defaults/%s/columns/%s/%s%s",
+                def_cat,
+                col_name,
+                (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
+                opt_name);
+        if (option)
+        {
+            g_value_copy (&option->value, value);
+            g_rw_lock_reader_unlock (&priv->lock);
+            return TRUE;
+        }
+        g_rw_lock_reader_unlock (&priv->lock);
+    }
     option = __get_option (config, type, TRUE, "defaults/%s/%s%s",
             def_cat,
             (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
