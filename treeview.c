@@ -1260,7 +1260,12 @@ real_option_cb (struct option_data *data)
                 DonnaTreeView *sw;
 
                 s = cfg_get_sync_with (tree, config);
-                sw = donna_app_get_treeview (priv->app, s);
+                if (streq (s, ":active"))
+                    g_object_get (priv->app, "active-list", &sw, NULL);
+                else if (s)
+                    sw = donna_app_get_treeview (priv->app, s);
+                else
+                    sw = NULL;
                 g_free (s);
                 if (priv->sync_with != sw)
                 {
@@ -1488,23 +1493,20 @@ load_config (DonnaTreeView *tree)
         priv->sync_mode = val;
 
         s = cfg_get_sync_with (tree, config);
-        if (s)
+        if (streq (s, ":active"))
         {
-            priv->sync_with = donna_app_get_treeview (priv->app, s);
-            g_free (s);
-            if (priv->sync_with)
-                priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
-                        "notify::location",
-                        (GCallback) sync_with_location_changed_cb, tree);
-        }
-        else
-        {
-            /* active list */
             g_object_get (priv->app, "active-list", &priv->sync_with, NULL);
             priv->sid_active_list_changed = g_signal_connect (priv->app,
                     "notify::active-list",
                     (GCallback) active_list_changed_cb, tree);
         }
+        else if (s)
+            priv->sync_with = donna_app_get_treeview (priv->app, s);
+        g_free (s);
+        if (priv->sync_with)
+            priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
+                    "notify::location",
+                    (GCallback) sync_with_location_changed_cb, tree);
 
         val = cfg_get_sync_scroll (tree, config);
         priv->sync_scroll = val;
