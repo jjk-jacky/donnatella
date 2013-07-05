@@ -922,20 +922,7 @@ active_list_changed_cb (GObject         *object,
             "notify::location",
             G_CALLBACK (sync_with_location_changed_cb), tree);
 
-    g_object_get (priv->sync_with, "location", &node, NULL);
-    if (!node)
-        return;
-
-    if (!donna_tree_view_set_location (tree, node, &err))
-    {
-        gchar *location = donna_node_get_location (node);
-        donna_app_show_error (priv->app, err, "Treeview '%s': Unable to change location to '%s:%s'",
-                priv->name,
-                donna_node_get_domain (node),
-                location);
-        g_free (location);
-    }
-    g_object_unref (node);
+    sync_with_location_changed_cb ((GObject *) priv->sync_with, NULL, tree);
 }
 
 enum
