@@ -4,7 +4,7 @@ SRC = closures.c columntype.c columntype-name.c donna.c node.c provider.c \
 	  columntype-time.c columntype-perms.c columntype-text.c \
 	  filter.c colorfilter.c cellrenderertext.c command.c provider-command.c \
 	  provider-task.c columntype-label.c columntype-progress.c \
-	  columntype-value.c
+	  columntype-value.c statusprovider.c statusbar.c
 OBJ = ${SRC:.c=.o}
 
 GTK_FLAGS := `pkg-config --cflags --libs gtk+-3.0`
