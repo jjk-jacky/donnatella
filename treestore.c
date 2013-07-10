@@ -912,30 +912,30 @@ donna_tree_store_remove (DonnaTreeStore     *store,
                          GtkTreeIter        *iter)
 {
     DonnaTreeStorePrivate *priv;
-    GtkTreeModel *model = GTK_TREE_MODEL (store);
+    GtkTreeModel *model = (GtkTreeModel *) store;
+    GtkTreeModel *_model;
     GtkTreePath *path = NULL;
     GtkTreeIter parent;
+    GtkTreeIter it;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_TREE_STORE (store), FALSE);
     priv = store->priv;
+    _model = (GtkTreeModel *) priv->store;
 
     if (iter_is_visible (iter))
     {
-        GtkTreeModel *_model = GTK_TREE_MODEL (priv->store);
-        GtkTreeIter it;
-
         /* get the parent, for row-has-child-toggled */
         gtk_tree_model_iter_parent (_model, &parent, iter);
         /* get our path now that we can */
         path = tree_store_get_path (model, iter);
-
-        /* remove from hashtable */
-        g_hash_table_remove (priv->hashtable, iter->user_data);
-        /* also remove all children, as they'll be removed from the store */
-        if (gtk_tree_model_iter_children (_model, &it, iter))
-            remove_from_hashtable (priv->hashtable, _model, &it);
     }
+
+    /* remove from hashtable */
+    g_hash_table_remove (priv->hashtable, iter->user_data);
+    /* also remove all children, as they'll be removed from the store */
+    if (gtk_tree_model_iter_children (_model, &it, iter))
+        remove_from_hashtable (priv->hashtable, _model, &it);
 
     /* ret does NOT mean iter was removed, but that iter is still valid and set
      * to the next iter. FIXME: We just assume removal was done */
