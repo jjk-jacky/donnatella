@@ -10809,7 +10809,8 @@ calculate_size (GtkTreeModel    *model,
     gtk_tree_model_get (model, iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
     if (!node)
         return FALSE;
-    if (donna_node_get_size (node, TRUE, &size) == DONNA_NODE_VALUE_SET)
+    if (donna_node_get_node_type (node) == DONNA_NODE_ITEM
+            && donna_node_get_size (node, TRUE, &size) == DONNA_NODE_VALUE_SET)
         *total += size;
     g_object_unref (node);
     return FALSE; /* keep iterating */
