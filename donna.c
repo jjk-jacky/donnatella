@@ -3,6 +3,7 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>     /* free() */
 #include <ctype.h>      /* isblank() */
+#include <string.h>
 #include "donna.h"
 #include "debug.h"
 #include "app.h"
@@ -24,6 +25,7 @@
 #include "filter.h"
 #include "sort.h"
 #include "command.h"
+#include "statusbar.h"
 #include "macros.h"
 
 guint donna_debug_flags = 0;
@@ -74,6 +76,26 @@ struct intref
     gint64       last;
 };
 
+enum
+{
+    ST_SCE_DONNA,
+    ST_SCE_ACTIVE,
+    ST_SCE_FOCUSED,
+};
+
+struct provider
+{
+    DonnaStatusProvider *sp;
+    guint                id;
+};
+
+struct status
+{
+    gchar   *name;
+    guint    source;
+    GArray  *providers;
+};
+
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
@@ -81,11 +103,14 @@ struct _DonnaDonnaPrivate
     gboolean         just_focused;
     DonnaConfig     *config;
     DonnaTaskManager*task_manager;
+    DonnaStatusBar  *sb;
     GSList          *treeviews;
     GSList          *arrangements;
     GThreadPool     *pool;
     DonnaTreeView   *active_list;
+    DonnaTreeView   *focused_tree;
     gulong           sid_active_location;
+    GSList          *statuses;
     /* visuals are under a RW lock so everyone can read them at the same time
      * (e.g. creating nodes, get_children() & the likes). The write operation
      * should be quite rare. */
@@ -1622,6 +1647,69 @@ active_location_changed (GObject *object, GParamSpec *spec, DonnaDonna *donna)
     refresh_window_title (donna);
 }
 
+static void
+switch_statuses_source (DonnaDonna *donna, guint source, DonnaStatusProvider *sp)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    GSList *l;
+
+    for (l = priv->statuses; l; l = l->next)
+    {
+        struct status *status = l->data;
+
+        if (status->source == source)
+        {
+            GError *err = NULL;
+            struct provider *provider;
+            guint i;
+
+            for (i = 0; i < status->providers->len; ++i)
+            {
+                provider = &g_array_index (status->providers, struct provider, i);
+                if (provider->sp == sp)
+                    break;
+            }
+
+            if (i >= status->providers->len)
+            {
+                struct provider p;
+
+                p.sp = sp;
+                p.id = donna_status_provider_create_status (p.sp,
+                        status->name, &err);
+                if (p.id == 0)
+                {
+                    g_warning ("Failed to connect statusbar area '%s' to new active-list: "
+                            "create_status() failed: %s",
+                            status->name, err->message);
+                    g_clear_error (&err);
+                    /* this simply makes sure the area is blank/not connected to
+                     * any provider anymore */
+                    donna_status_bar_update_area (priv->sb, status->name,
+                            NULL, 0, NULL);
+                    continue;
+                }
+                g_array_append_val (status->providers, p);
+                provider = &g_array_index (status->providers, struct provider,
+                        status->providers->len - 1);
+            }
+
+            if (!donna_status_bar_update_area (priv->sb, status->name,
+                        provider->sp, provider->id, &err))
+            {
+                g_warning ("Failed to connect statusbar area '%s' to new active-list: "
+                        "update_area() failed: %s",
+                        status->name, err->message);
+                g_clear_error (&err);
+                /* this simply makes sure the area is blank/not connected to
+                 * any provider anymore */
+                donna_status_bar_update_area (priv->sb, status->name,
+                        NULL, 0, NULL);
+            }
+        }
+    }
+}
+
 static inline void
 set_active_list (DonnaDonna *donna, DonnaTreeView *list)
 {
@@ -1629,11 +1717,12 @@ set_active_list (DonnaDonna *donna, DonnaTreeView *list)
 
     if (priv->sid_active_location > 0)
         g_signal_handler_disconnect (priv->active_list, priv->sid_active_location);
-    if (priv->active_list)
-        g_object_unref (priv->active_list);
-    priv->active_list = g_object_ref (list);
     priv->sid_active_location = g_signal_connect (list, "notify::location",
             (GCallback) active_location_changed, donna);
+
+    switch_statuses_source (donna, ST_SCE_ACTIVE, (DonnaStatusProvider *) list);
+
+    priv->active_list = g_object_ref (list);
     refresh_window_title (donna);
     g_object_notify ((GObject *) donna, "active-list");
 }
@@ -1643,17 +1732,23 @@ window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv = donna->priv;
 
-    if (DONNA_IS_TREE_VIEW (widget)
-            && !donna_tree_view_is_tree ((DonnaTreeView *) widget)
-            && (DonnaTreeView *) widget != priv->active_list)
+    if (DONNA_IS_TREE_VIEW (widget))
     {
-        gboolean skip;
-        if (donna_config_get_boolean (priv->config, &skip,
-                "treeviews/%s/not_active_list",
-                donna_tree_view_get_name ((DonnaTreeView *) widget)) && skip)
-            return;
+        priv->focused_tree = (DonnaTreeView *) widget;
+        switch_statuses_source (donna, ST_SCE_FOCUSED,
+                (DonnaStatusProvider *) widget);
 
-        set_active_list (donna, (DonnaTreeView *) widget);
+        if (!donna_tree_view_is_tree ((DonnaTreeView *) widget)
+                && (DonnaTreeView *) widget != priv->active_list)
+        {
+            gboolean skip;
+            if (donna_config_get_boolean (priv->config, &skip,
+                        "treeviews/%s/not_active_list",
+                        donna_tree_view_get_name ((DonnaTreeView *) widget)) && skip)
+                return;
+
+            set_active_list (donna, (DonnaTreeView *) widget);
+        }
     }
 }
 
@@ -1887,6 +1982,7 @@ main (int argc, char *argv[])
     GSList              *l;
     gchar               *s;
     gchar               *def;
+    gchar               *areas;
     gint                 width;
     gint                 height;
 
@@ -1964,7 +2060,105 @@ main (int argc, char *argv[])
     }
     priv->active_list = NULL;
     set_active_list ((DonnaDonna *) app, (DonnaTreeView *) active_list_widget);
+    priv->focused_tree = (DonnaTreeView *) active_list_widget;
 
+    /* status bar */
+    if (donna_config_get_string (priv->config, &areas, "statusbar/areas"))
+    {
+        GtkWidget *box;
+
+        priv->sb = g_object_new (DONNA_TYPE_STATUS_BAR, NULL);
+        s = areas;
+        for (;;)
+        {
+            GError *err = NULL;
+            struct status *status;
+            struct provider provider;
+            gboolean expand;
+            gchar *sce;
+            gchar *e;
+
+            e = strchr (s, ',');
+            if (e)
+                *e = '\0';
+
+            if (!donna_config_get_string (priv->config, &sce,
+                        "statusbar/%s/source", s))
+            {
+                g_warning ("Unable to load statusbar area '%s', no source specified",
+                        s);
+                goto next;
+            }
+
+            status = g_new0 (struct status, 1);
+            status->name = g_strdup (s);
+            status->providers = g_array_new (FALSE, FALSE, sizeof (struct provider));
+            if (streq (sce, ":active"))
+            {
+                status->source = ST_SCE_ACTIVE;
+                provider.sp = (DonnaStatusProvider *) priv->active_list;
+            }
+            else if (streq (sce, ":focused"))
+            {
+                status->source = ST_SCE_FOCUSED;
+                provider.sp = (DonnaStatusProvider *) priv->focused_tree;
+            }
+#if 0
+            else if (streq (s, "donna"))
+                status->source = ST_SCE_DONNA;
+#endif
+            else
+            {
+                g_free (status->name);
+                g_free (status);
+                g_warning ("Unable to load statusbar area '%s', invalid source: '%s'",
+                        s, sce);
+                g_free (sce);
+                goto next;
+            }
+            g_free (sce);
+
+            provider.id = donna_status_provider_create_status (provider.sp,
+                    status->name, &err);
+            if (provider.id == 0)
+            {
+                g_free (status->name);
+                g_free (status);
+                g_warning ("Unable to load statusbar area '%s', failed to init provider: %s",
+                        s, err->message);
+                g_clear_error (&err);
+                goto next;
+            }
+            g_array_append_val (status->providers, provider);
+
+            if (!donna_config_get_int (priv->config, &width,
+                        "statusbar/%s/width", status->name))
+                width = -1;
+            if (!donna_config_get_boolean (priv->config, &expand,
+                        "statusbar/%s/expand", status->name))
+                expand = TRUE;
+            donna_status_bar_add_area (priv->sb, status->name,
+                    provider.sp, provider.id, width, expand, &err);
+
+            priv->statuses = g_slist_prepend (priv->statuses, status);
+next:
+            if (!e)
+                break;
+            else
+                s = e + 1;
+        }
+        g_free (areas);
+
+        w = g_object_ref (gtk_bin_get_child ((GtkBin *) window));
+        gtk_container_remove ((GtkContainer *) window, w);
+        box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+        gtk_container_add ((GtkContainer *) window, box);
+        gtk_box_pack_start ((GtkBox *) box, w, TRUE, TRUE, 0);
+        g_object_unref (w);
+        gtk_box_pack_end ((GtkBox *) box, (GtkWidget *) priv->sb, FALSE, FALSE, 0);
+    }
+
+    /* sizing */
     if (!donna_config_get_int (priv->config, &width, "donna/width"))
         width = -1;
     if (!donna_config_get_int (priv->config, &height, "donna/height"))
