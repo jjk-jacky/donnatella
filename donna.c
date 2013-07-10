@@ -117,6 +117,9 @@ struct argmt
 static GThread *mt;
 static GLogLevelFlags show_log = G_LOG_LEVEL_DEBUG;
 
+static inline void      set_active_list             (DonnaDonna     *donna,
+                                                     DonnaTreeView  *list);
+
 static void             donna_donna_log_handler     (const gchar    *domain,
                                                      GLogLevelFlags  log_level,
                                                      const gchar    *message,
@@ -376,11 +379,7 @@ donna_donna_set_property (GObject       *object,
     DonnaDonnaPrivate *priv = DONNA_DONNA (object)->priv;
 
     if (prop_id == PROP_ACTIVE_LIST)
-    {
-        if (priv->active_list)
-            g_object_unref (priv->active_list);
-        priv->active_list = g_value_dup_object (value);
-    }
+        set_active_list ((DonnaDonna *) object, g_value_get_object (value));
     else if (prop_id == PROP_JUST_FOCUSED)
         priv->just_focused = g_value_get_boolean (value);
 }
