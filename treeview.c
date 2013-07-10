@@ -8299,7 +8299,11 @@ donna_tree_view_edit_column (DonnaTreeView      *tree,
         return FALSE;
     }
 
+#ifdef GTK_IS_JJK
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
+#else
+    gtk_tree_view_set_cursor ((GtkTreeView *) tree, re_data.path);
+#endif
 
     g_object_unref (node);
     return TRUE;
@@ -8905,9 +8909,11 @@ move:
             g_object_unref (r.node);
         }
 
+#ifdef GTK_IS_JJK
         if (set & DONNA_TREE_SET_FOCUS)
             gtk_tree_view_set_focused_row (treev, path);
-        else if (set & DONNA_TREE_SET_CURSOR)
+#endif
+        if (set & DONNA_TREE_SET_CURSOR)
         {
 #ifdef GTK_IS_JJK
             gtk_tree_view_set_focused_row (treev, path);
