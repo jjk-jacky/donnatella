@@ -15,6 +15,7 @@
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
 #include "cellrenderertext.h"
 #include "colorfilter.h"
+#include "size.h"
 #include "closures.h"
 
 enum
@@ -233,6 +234,9 @@ struct status
     guint            id;
     enum changed_on  changed_on;
     gchar           *fmt;
+    /* size options */
+    gint             digits;
+    gboolean         long_unit;
 };
 
 
@@ -10716,6 +10720,15 @@ status_provider_create_status (DonnaStatusProvider    *sp,
     status.fmt = s;
     status.changed_on = 0;
 
+    if (!donna_config_get_int (config, &status.digits, "statusbar/%s/digits", name))
+        if (!donna_config_get_int (config, &status.digits, "defaults/size/digits"))
+            status.digits = 1;
+    if (!donna_config_get_boolean (config, &status.long_unit,
+                "statusbar/%s/long_unit", name))
+        if (!donna_config_get_boolean (config, &status.long_unit,
+                    "defaults/size/long_unit"))
+            status.long_unit = FALSE;
+
     while ((s = strchr (s, '%')))
     {
         switch (s[1])
@@ -10800,6 +10813,51 @@ calculate_size (GtkTreeModel    *model,
         *total += size;
     g_object_unref (node);
     return FALSE; /* keep iterating */
+}
+
+static void
+st_render_size (DonnaStatusProvider *sp,
+                struct status       *status,
+                GString             *str,
+                gchar                c,
+                gchar               *fmt,
+                GtkTreeSelection   **sel)
+{
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
+    guint64 size = 0;
+    gchar buf[20], *b = buf;
+    gssize len;
+
+    switch (c)
+    {
+        case 'A':
+            donna_tree_store_foreach (priv->store,
+                    (GtkTreeModelForeachFunc) calculate_size, &size);
+            break;
+
+        case 'V':
+            gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
+                    (GtkTreeModelForeachFunc) calculate_size, &size);
+            break;
+
+        case 'S':
+            if (!*sel)
+                *sel = gtk_tree_view_get_selection ((GtkTreeView *) sp);
+            gtk_tree_selection_selected_foreach (*sel,
+                    (GtkTreeSelectionForeachFunc) calculate_size, &size);
+            break;
+    }
+
+    b = buf;
+    len = donna_print_size (b, 20, fmt, size, status->digits, status->long_unit);
+    if (len >= 20)
+    {
+        b = g_new (gchar, ++len);
+        donna_print_size (b, len, fmt, size, status->digits, status->long_unit);
+    }
+    g_string_append (str, b);
+    if (b != buf)
+        g_free (b);
 }
 
 static void
@@ -10913,34 +10971,35 @@ status_provider_render (DonnaStatusProvider    *sp,
                 fmt = s;
                 break;
 
+            /* %{...}X is a syntax supported to have between brackets a format
+             * for the size, when X represents a size (A/V/S) */
+            case '{':
+                ss = strchr (s, '}');
+                if (!ss)
+                {
+                    s += 2;
+                    continue;
+                }
+
+                if (ss[1] == 'A' || ss[1] == 'V' || ss[1] == 'S')
+                {
+                    g_string_append_len (str, fmt, s - fmt);
+                    *ss = '\0';
+                    st_render_size (sp, status, str, ss[1], s + 2, &sel);
+                    *ss = '}';
+                    s = ss + 2;
+                }
+                else
+                    s += 2;
+
+                fmt = s;
+                break;
+
             case 'A':
-                g_string_append_len (str, fmt, s - fmt);
-                size = 0;
-                donna_tree_store_foreach (priv->store,
-                        (GtkTreeModelForeachFunc) calculate_size, &size);
-                g_string_append_printf (str, "%ld", size);
-                s += 2;
-                fmt = s;
-                break;
-
             case 'V':
-                g_string_append_len (str, fmt, s - fmt);
-                size = 0;
-                gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
-                        (GtkTreeModelForeachFunc) calculate_size, &size);
-                g_string_append_printf (str, "%ld", size);
-                s += 2;
-                fmt = s;
-                break;
-
             case 'S':
                 g_string_append_len (str, fmt, s - fmt);
-                if (!sel)
-                    sel = gtk_tree_view_get_selection ((GtkTreeView *) sp);
-                size = 0;
-                gtk_tree_selection_selected_foreach (sel,
-                        (GtkTreeSelectionForeachFunc) calculate_size, &size);
-                g_string_append_printf (str, "%ld", size);
+                st_render_size (sp, status, str, s[1], "%R", &sel);
                 s += 2;
                 fmt = s;
                 break;
