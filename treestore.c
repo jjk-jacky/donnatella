@@ -1076,6 +1076,15 @@ donna_tree_store_iter_parent (DonnaTreeStore     *store,
             iter, child);
 }
 
+void
+donna_tree_store_foreach (DonnaTreeStore         *store,
+                          GtkTreeModelForeachFunc func,
+                          gpointer                data)
+{
+    g_return_if_fail (DONNA_IS_TREE_STORE (store));
+    gtk_tree_model_foreach ((GtkTreeModel *) store->priv->store, func, data);
+}
+
 /* extension to GtkTreeModel, version for *all* iters */
 
 gint

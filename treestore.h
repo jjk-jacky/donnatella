@@ -83,6 +83,9 @@ gboolean        donna_tree_store_iter_nth_child (DonnaTreeStore     *store,
 gboolean        donna_tree_store_iter_parent    (DonnaTreeStore     *store,
                                                  GtkTreeIter        *iter,
                                                  GtkTreeIter        *child);
+void            donna_tree_store_foreach        (DonnaTreeStore     *store,
+                                                 GtkTreeModelForeachFunc func,
+                                                 gpointer            data);
 /* our version of extensions to GtkTreeModel */
 gint            donna_tree_store_get_count      (DonnaTreeStore     *store);
 
