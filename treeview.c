@@ -234,6 +234,12 @@ struct status
     guint            id;
     enum changed_on  changed_on;
     gchar           *fmt;
+    /* keep the name, so we can load keymode_colors options. We don't "preload"
+     * them because we don't know which keymodes exists, so it's simpler that
+     * way */
+    gchar           *name;
+    /* keymode color options */
+    gboolean         keymode_colors;
     /* size options */
     gint             digits;
     gboolean         long_unit;
@@ -625,6 +631,7 @@ static void
 free_status (struct status *status)
 {
     g_free (status->fmt);
+    g_free (status->name);
 }
 
 static void
@@ -10745,6 +10752,18 @@ status_provider_create_status (DonnaStatusProvider    *sp,
                     "defaults/size/long_unit"))
             status.long_unit = FALSE;
 
+    if (!donna_config_get_boolean (config, &status.keymode_colors,
+                "statusbar/%s/keymode_colors", name))
+        status.keymode_colors = FALSE;
+    if (status.keymode_colors)
+    {
+        status.name = g_strdup (name);
+        status.changed_on |= STATUS_CHANGED_ON_KEYMODE;
+    }
+    else
+        /* name only needed to load keymode_colors options */
+        status.name = NULL;
+
     while ((s = strchr (s, '%')))
     {
         switch (s[1])
@@ -11100,6 +11119,70 @@ status_provider_render (DonnaStatusProvider    *sp,
     }
 
     g_string_append (str, fmt);
+    if (status->keymode_colors)
+    {
+        DonnaConfig *config;
+
+        config = donna_app_peek_config (priv->app);
+        if (priv->key_mode)
+        {
+            if (donna_config_get_string (config, &s,
+                        "statusbar/%s/keymode_%s_background",
+                        status->name, priv->key_mode))
+            {
+                g_object_set (renderer,
+                        "background-set",   TRUE,
+                        "background",       s,
+                        NULL);
+                donna_renderer_set (renderer, "background-set", NULL);
+                g_free (s);
+            }
+            else if (donna_config_get_string (config, &s,
+                        "statusbar/%s/keymode_%s_background-rgba",
+                        status->name, priv->key_mode))
+            {
+                GdkRGBA rgba;
+
+                if (gdk_rgba_parse (&rgba, s))
+                {
+                    g_object_set (renderer,
+                            "background-set",   TRUE,
+                            "background-rgba",  &rgba,
+                            NULL);
+                    donna_renderer_set (renderer, "background-set", NULL);
+                }
+                g_free (s);
+            }
+
+            if (donna_config_get_string (config, &s,
+                        "statusbar/%s/keymode_%s_foreground",
+                        status->name, priv->key_mode))
+            {
+                g_object_set (renderer,
+                        "foreground-set",   TRUE,
+                        "foreground",       s,
+                        NULL);
+                donna_renderer_set (renderer, "foreground-set", NULL);
+                g_free (s);
+            }
+            else if (donna_config_get_string (config, &s,
+                        "statusbar/%s/keymode_%s_foreground-rgba",
+                        status->name, priv->key_mode))
+            {
+                GdkRGBA rgba;
+
+                if (gdk_rgba_parse (&rgba, s))
+                {
+                    g_object_set (renderer,
+                            "foreground-set",   TRUE,
+                            "foreground-rgba",  &rgba,
+                            NULL);
+                    donna_renderer_set (renderer, "foreground-set", NULL);
+                }
+                g_free (s);
+            }
+        }
+    }
     g_object_set (renderer, "visible", TRUE, "text", str->str, NULL);
     g_string_free (str, TRUE);
 }
