@@ -7168,6 +7168,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             else if (streq ("prev", s))
             {
                 GtkTreePath *path;
+                GtkTreeIter it;
 
                 gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
@@ -7175,11 +7176,20 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
 
                 if (!gtk_tree_model_get_iter (model, iter, path))
                     return ROW_ID_INVALID;
+                it = *iter;
 
                 for (;;)
                 {
                     if (!donna_tree_model_iter_previous (model, iter))
-                        return ROW_ID_INVALID;
+                    {
+                        /* no previous row, simply return the current one.
+                         * Avoids getting "invalid row-id" error message just
+                         * because you press Up while on the first row, or
+                         * similarly breaking "v3k" when there's only 2 rows
+                         * above, etc */
+                        *iter = it;
+                        return ROW_ID_ROW;
+                    }
                     if (!is_tree (tree) || is_row_accessible (tree, iter))
                         break;
                 }
@@ -7188,6 +7198,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             else if (streq ("next", s))
             {
                 GtkTreePath *path;
+                GtkTreeIter it;
 
                 gtk_tree_view_get_cursor (treev, &path, NULL);
                 if (!path)
@@ -7195,11 +7206,16 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
 
                 if (!gtk_tree_model_get_iter (model, iter, path))
                     return ROW_ID_INVALID;
+                it = *iter;
 
                 for (;;)
                 {
                     if (!donna_tree_model_iter_next (model, iter))
-                        return ROW_ID_INVALID;
+                    {
+                        /* same as prev */
+                        *iter = it;
+                        return ROW_ID_ROW;
+                    }
                     if (!is_tree (tree) || is_row_accessible (tree, iter))
                         break;
                 }
