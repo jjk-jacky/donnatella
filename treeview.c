@@ -8833,6 +8833,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         }
         else
         {
+            GtkTreeIter it;
             guint i;
 
             /* tree, so we'll go to the first and move down */
@@ -8845,18 +8846,21 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                 return FALSE;
             }
 
+            it = iter;
             for (i = 1; i < nb; )
             {
                 if (!donna_tree_model_iter_next (model, &iter))
                 {
-                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                            DONNA_TREE_VIEW_ERROR_OTHER,
-                            "Treeview '%s': Failed going to line %d (going to %d)",
-                            priv->name, i, nb);
-                    return FALSE;
+                    /* row doesn't exist, i.e. number is too high, let's just go
+                     * to the last one */
+                    iter = it;
+                    break;
                 }
                 if (is_row_accessible (tree, &iter))
+                {
+                    it = iter;
                     ++i;
+                }
             }
             path = gtk_tree_model_get_path (model, &iter);
         }
