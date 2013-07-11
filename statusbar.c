@@ -62,13 +62,6 @@ static void         donna_status_bar_size_allocate          (GtkWidget  *widget,
 static gboolean     donna_status_bar_draw                   (GtkWidget  *widget,
                                                              cairo_t    *cr);
 
-#define set_renderers(area, i, r)    do {                               \
-    for (i = 1, r = area->renderers; *r; ++r, ++i)                      \
-        if (area->sp)                                                   \
-            donna_status_provider_render (area->sp, area->id, i, *r);   \
-        else                                                            \
-            g_object_set (*r, "visible", FALSE, NULL);                  \
-} while (0)
 
 G_DEFINE_TYPE (DonnaStatusBar, donna_status_bar, GTK_TYPE_WIDGET);
 
@@ -139,6 +132,40 @@ donna_status_bar_finalize (GObject *object)
 }
 
 static void
+set_renderers (struct area *area)
+{
+    GtkCellRenderer **r;
+    guint i;
+
+    for (i = 1, r = area->renderers; *r; ++r, ++i)
+    {
+        if (area->sp)
+        {
+            GPtrArray *arr;
+            guint j;
+
+            /* reset any properties that was used last time on this renderer.
+             * See donna_renderer_set() @ treeview.c for more */
+            arr = g_object_get_data ((GObject *) *r, "renderer-props");
+            for (j = 0; j < arr->len; )
+            {
+                if (streq (arr->pdata[j], "xalign"))
+                    g_object_set ((GObject *) *r, "xalign", 0.0, NULL);
+                else if (streq (arr->pdata[j], "highlight"))
+                    g_object_set ((GObject *) *r, "highlight", NULL, NULL);
+                else
+                    g_object_set ((GObject *) *r, arr->pdata[j], FALSE, NULL);
+                /* brings the last item to index j, hence no need to increment i */
+                g_ptr_array_remove_index_fast (arr, j);
+            }
+            donna_status_provider_render (area->sp, area->id, i, *r);
+        }
+        else
+            g_object_set (*r, "visible", FALSE, NULL);
+    }
+}
+
+static void
 donna_status_bar_get_preferred_width (GtkWidget      *widget,
                                       gint           *minimum,
                                       gint           *natural)
@@ -150,11 +177,9 @@ donna_status_bar_get_preferred_width (GtkWidget      *widget,
     for (i = 0; i < priv->areas->len; ++i)
     {
         struct area *area = &g_array_index (priv->areas, struct area, i);
-        GtkCellRenderer **r;
-        guint j;
         gint min, nat;
 
-        set_renderers (area, j, r);
+        set_renderers (area);
         gtk_cell_area_get_preferred_width (area->area, area->context, widget,
                 &min, &nat);
         *minimum += min;
@@ -174,11 +199,9 @@ donna_status_bar_get_preferred_height (GtkWidget      *widget,
     for (i = 0; i < priv->areas->len; ++i)
     {
         struct area *area = &g_array_index (priv->areas, struct area, i);
-        GtkCellRenderer **r;
-        guint j;
         gint min, nat;
 
-        set_renderers (area, j, r);
+        set_renderers (area);
         gtk_cell_area_get_preferred_height (area->area, area->context, widget,
                 &min, &nat);
         *minimum = MAX (*minimum, min);
@@ -324,15 +347,13 @@ donna_status_bar_draw (GtkWidget          *widget,
     for (i = 0; i < priv->areas->len; ++i)
     {
         struct area *area = &g_array_index (priv->areas, struct area, i);
-        GtkCellRenderer **r;
-        guint j;
 
         if (area->x + area->width < clip.x)
             continue;
         else if (area->x > clip.x + clip.width)
             break;
 
-        set_renderers (area, j, r);
+        set_renderers (area);
         cell.x = area->x;
         cell.width = area->width;
         gtk_cell_area_render (area->area, area->context, widget, cr,
@@ -358,13 +379,11 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
 
         if (x >= area->x && x <= area->x + area->width)
         {
-            GtkCellRenderer **r;
             GtkCellRenderer *renderer;
             GdkRectangle cell;
             const gchar *rend;
             gchar c;
             guint index;
-            guint j;
 
             if (!area->sp)
                 return FALSE;
@@ -374,7 +393,7 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
             cell.width = area->width;
             cell.height = gtk_widget_get_allocated_height (widget);
 
-            set_renderers (area, j, r);
+            set_renderers (area);
             renderer = gtk_cell_area_get_cell_at_position (area->area, area->context,
                     widget, &cell, x, y, NULL);
             if (!renderer)
@@ -403,14 +422,12 @@ status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
         struct area *area = &g_array_index (priv->areas, struct area, i);
         if (area->sp == sp && area->id == id)
         {
-            GtkCellRenderer **r;
             GtkAllocation alloc;
-            guint j;
             gint nat;
 
             gtk_widget_get_allocation ((GtkWidget *) sb, &alloc);
 
-            set_renderers (area, j, r);
+            set_renderers (area);
             gtk_cell_area_get_preferred_width (area->area, area->context,
                     (GtkWidget *) sb, NULL, &nat);
             if (nat > area->width)
@@ -514,6 +531,14 @@ donna_status_bar_add_area (DonnaStatusBar       *sb,
             *r = g_object_ref (load_renderer ());
             g_object_set_data ((GObject *) *r, "donna-renderer",
                     GINT_TO_POINTER (*rend));
+            /* an array where we'll store properties that have been set by the
+             * sp, so we can reset them before next use.  See
+             * donna_renderer_set() @ treeview.c for more */
+            g_object_set_data_full ((GObject *) *r, "renderer-props",
+                    /* 4: random. There probably won't be more than 4 properties
+                     * per renderer, is a guess */
+                    g_ptr_array_new_full (4, g_free),
+                    (GDestroyNotify) g_ptr_array_unref);
         }
 
         area.renderers[i] = *r;
