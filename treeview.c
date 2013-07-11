@@ -7473,6 +7473,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                     if (!gtk_tree_model_iter_children (model, iter, NULL))
                         return ROW_ID_INVALID;
 
+                --i;
                 while (i > 0)
                 {
                     if (!donna_tree_model_iter_next (model, iter))
