@@ -7232,13 +7232,6 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             {
                 GtkTreePath *path;
 
-                gtk_tree_view_get_cursor (treev, &path, NULL);
-                if (!path)
-                    return ROW_ID_INVALID;
-
-                if (!gtk_tree_model_get_iter (model, iter, path))
-                    return ROW_ID_INVALID;
-
                 if (!donna_tree_model_iter_last (model, iter))
                     return ROW_ID_INVALID;
                 if (is_tree (tree))
