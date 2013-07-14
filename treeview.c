@@ -517,6 +517,9 @@ static gboolean donna_tree_view_key_press_event     (GtkWidget      *widget,
 static void     donna_tree_view_row_activated       (GtkTreeView    *treev,
                                                      GtkTreePath    *path,
                                                      GtkTreeViewColumn *column);
+static gboolean donna_tree_view_test_collapse_row   (GtkTreeView    *treev,
+                                                     GtkTreeIter    *iter,
+                                                     GtkTreePath    *path);
 static gboolean donna_tree_view_test_expand_row     (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
@@ -573,10 +576,11 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     GObjectClass *o_class;
 
     tv_class = GTK_TREE_VIEW_CLASS (klass);
-    tv_class->row_activated = donna_tree_view_row_activated;
-    tv_class->row_expanded  = donna_tree_view_row_expanded;
-    tv_class->row_collapsed = donna_tree_view_row_collapsed;
-    tv_class->test_expand_row = donna_tree_view_test_expand_row;
+    tv_class->row_activated     = donna_tree_view_row_activated;
+    tv_class->row_expanded      = donna_tree_view_row_expanded;
+    tv_class->row_collapsed     = donna_tree_view_row_collapsed;
+    tv_class->test_collapse_row = donna_tree_view_test_collapse_row;
+    tv_class->test_expand_row   = donna_tree_view_test_expand_row;
 
     w_class = GTK_WIDGET_CLASS (klass);
     w_class->draw = donna_tree_view_draw;
@@ -1764,6 +1768,68 @@ clean_tree_visuals (gchar *fl, GSList *list, struct ctv_data *data)
     return list == NULL;
 }
 
+static void
+handle_removing_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean is_focus)
+{
+    GtkTreeModel *model = (GtkTreeModel *) tree->priv->store;
+    GtkTreeIter it = *iter;
+    gboolean found = FALSE;
+
+    /* we will move the focus/selection (current row in tree) to the next item
+     * (or prev if there's no next).
+     * In list, it's a simple next/prev; on tree it's the same (to try to stay
+     * on the same level), then we go up. This is obviously the natural choice,
+     * especially for the current location. */
+
+    if (gtk_tree_model_iter_next (model, &it))
+        found = TRUE;
+    else
+    {
+        it = *iter;
+        if (gtk_tree_model_iter_previous (model, &it))
+            found= TRUE;
+    }
+
+    if (!found && is_tree (tree))
+        found = gtk_tree_model_iter_parent (model, &it, iter);
+
+    if (!is_focus)
+    {
+        if (found)
+            gtk_tree_selection_select_iter (
+                    gtk_tree_view_get_selection ((GtkTreeView *) tree), &it);
+        else
+        {
+            GtkTreePath *path;
+
+            if (donna_tree_model_get_count (model) == 0)
+            {
+                /* if there's no more rows on tree, let's make sure we don't
+                 * have an old (invalid) current location */
+                if (tree->priv->location)
+                {
+                    g_object_unref (tree->priv->location);
+                    tree->priv->location = NULL;
+                    tree->priv->location_iter.stamp = 0;
+                }
+                return;
+            }
+            path = gtk_tree_path_new_from_string ("0");
+            gtk_tree_selection_select_path (
+                    gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
+            gtk_tree_path_free (path);
+        }
+    }
+    else if (found)
+    {
+        GtkTreePath *path;
+
+        path = gtk_tree_model_get_path (model, &it);
+        gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+        gtk_tree_path_free (path);
+    }
+}
+
 /* similar to gtk_tree_store_remove() this will set iter to next row at that
  * level, or invalid it if it pointer to the last one.
  * Returns TRUE if iter is still valid, else FALSE */
@@ -1784,6 +1850,7 @@ remove_row_from_tree (DonnaTreeView *tree,
     guint i;
     GSList *l, *prev = NULL;
     GtkTreeIter parent;
+    GtkTreeIter it;
     gboolean ret;
 
     /* get the node */
@@ -1959,77 +2026,25 @@ remove_row_from_tree (DonnaTreeView *tree,
      * isn't the best of behaviors, so let's see if we can do "better" */
     if (donna_tree_model_get_count (model) > 1)
     {
-        GtkTreeView *treev = (GtkTreeView *) tree;
         GtkTreePath *path_cursor;
 
-        gtk_tree_view_get_cursor (treev, &path_cursor, NULL);
+        gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_cursor, NULL);
         if (path_cursor)
         {
             GtkTreeIter  iter_cursor;
 
             gtk_tree_model_get_iter (model, &iter_cursor, path_cursor);
             if (itereq (iter, &iter_cursor))
-            {
-                GtkTreeIter  it = iter_cursor;
-                gboolean found = FALSE;
-
-                /* we will move the focus to the next item (or prev if there's
-                 * no next). In list, it's a simple next/prev; on tree we use
-                 * our "natural" version.
-                 * This is just a focus move, to keep things right and not
-                 * affect the selection. Of course, on tree removing the current
-                 * location should probably do something,
-                 * - if this is a removal, sync_with will gives us a new
-                 *   location to jump to (list_go_up_cb)
-                 * - if the user removed the node (minitree), then action shall
-                 *   be taken re: the sync_mode -- TODO */
-
-                if (is_tree (tree))
-                {
-                    for (;;)
-                    {
-                        if (!donna_tree_model_iter_next (model, &it))
-                        {
-                            for (it = iter_cursor; ; )
-                            {
-                                if (!donna_tree_model_iter_previous (model, &it))
-                                    break;
-                                else if (is_row_accessible (tree, &it))
-                                {
-                                    found = TRUE;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                        if (is_row_accessible (tree, &it))
-                        {
-                            found = TRUE;
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    if (!gtk_tree_model_iter_next (model, &it))
-                    {
-                        it = iter_cursor;
-                        gtk_tree_model_iter_previous (model, &it);
-                    }
-                    found = TRUE;
-                }
-
-                if (found)
-                {
-                    GtkTreePath *path;
-                    path = gtk_tree_model_get_path (model, &it);
-                    gtk_tree_view_set_focused_row (treev, path);
-                    gtk_tree_path_free (path);
-                }
-            }
+                handle_removing_row (tree, iter, TRUE);
             gtk_tree_path_free (path_cursor);
         }
     }
+
+    /* if removing the current location, let's move it */
+    if (gtk_tree_selection_get_selected (
+                gtk_tree_view_get_selection ((GtkTreeView *) tree), NULL, &it)
+            && itereq (iter, &it))
+        handle_removing_row (tree, &it, FALSE);
 #endif
 
     /* remove all watched_iters to this row */
@@ -2671,6 +2686,47 @@ maxi_collapse_row (DonnaTreeView    *tree,
     }
 
     return ret;
+}
+
+static gboolean
+donna_tree_view_test_collapse_row (GtkTreeView    *treev,
+                                   GtkTreeIter    *iter,
+                                   GtkTreePath    *path)
+{
+    DonnaTreeView *tree = DONNA_TREE_VIEW (treev);
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreePath *p;
+    GtkTreeSelection *sel;
+    GtkTreeIter sel_iter;
+
+    if (!is_tree (tree))
+        /* no collapse */
+        return TRUE;
+
+    /* if the focused row is somewhere down, we need to move it up before the
+     * collapse, to avoid GTK's set_cursor() */
+    gtk_tree_view_get_cursor (treev, &p, NULL);
+    if (gtk_tree_path_is_ancestor (path, p))
+        gtk_tree_view_set_focused_row (treev, path);
+    gtk_tree_path_free (p);
+
+    /* if the current row (i.e. selected path) is somewhere down, let's change
+     * the selection now so we can change the selection, without changing the
+     * focus */
+    sel = gtk_tree_view_get_selection (treev);
+    if (gtk_tree_selection_get_selected (sel, NULL, &sel_iter))
+    {
+        p = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &sel_iter);
+        if (p)
+        {
+            if (gtk_tree_path_is_ancestor (path, p))
+                gtk_tree_selection_select_path (sel, path);
+            gtk_tree_path_free (p);
+        }
+    }
+
+    /* collapse */
+    return FALSE;
 }
 
 static gboolean
@@ -10637,14 +10693,26 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         /* if that happens while in BROWSE, this is most likely a bug or
          * something in GTK, where user could unselect w/out making a new
          * selection.
-         * One way to do this is to move the focus up/outside the branch, then
-         * collapse the parent of the selected node. No more selection!
          * If that happens, we select something to make it our new current
          * location, and we use the focus for that */
 
         gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
         if (!path)
+        {
+            if (donna_tree_model_get_count ((GtkTreeModel *) priv->store) == 0)
+            {
+                /* if there's no more rows on tree, let's make sure we don't
+                 * have an old (invalid) current location */
+                if (priv->location)
+                {
+                    g_object_unref (priv->location);
+                    priv->location = NULL;
+                    priv->location_iter.stamp = 0;
+                }
+                return;
+            }
             path = gtk_tree_path_new_from_string ("0");
+        }
         gtk_tree_selection_select_path (selection, path);
         gtk_tree_path_free (path);
     }
