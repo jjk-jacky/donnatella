@@ -3524,6 +3524,38 @@ row_changed_cb (GtkTreeModel    *model,
         resort_tree (tree);
 }
 
+/* handling of removing rows from tree is done in remove_row_from_tree(). That
+ * is, any row removed from the tree should always be so from there.
+ * There is one special case though, where rows can be "removed" from the tree
+ * without going through/coming form remove_row_from_tree(): when they're not
+ * really removed, just filtered out (i.e. visual filter, or option show_hidden)
+ * Since those are still in the model (just not the view) we shouldn't remove
+ * them from our hashmap and whatnot, but there is one thing we wanna do: handle
+ * the case of the focused row being "removed".
+ * By default, GTK will do a set_cursor(), which isn't the best of behaviors. So
+ * we'll try to make that better by simply doing a set_focused_row().
+ * We need this special signal to do so, because we can then access the model
+ * (where the row hasn't yet been "removed") and the view as well. Trying to do
+ * it in row-deleted would fail because:
+ * - post-GTK: it has already done its set_cursor()
+ * - pre-GTK: the row is gone from the model, so there's no way to go prev/next,
+ *   and adding to the fun the view still has the "old paths" in use, since it
+ *   hasn't processed the row removal yet.
+ */
+static void
+row_fake_deleted_cb (DonnaTreeStore *store,
+                     GtkTreePath    *path,
+                     GtkTreeIter    *iter,
+                     DonnaTreeView  *tree)
+{
+    GtkTreePath *p;
+
+    gtk_tree_view_get_cursor ((GtkTreeView *) tree, &p, NULL);
+    if (gtk_tree_path_compare (path, p) == 0)
+        handle_removing_row (tree, iter, TRUE);
+    gtk_tree_path_free (p);
+}
+
 static void
 node_has_children_cb (DonnaTask                 *task,
                       gboolean                   timeout_called,
@@ -10690,11 +10722,22 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     {
         GtkTreePath *path;
 
-        /* if that happens while in BROWSE, this is most likely a bug or
-         * something in GTK, where user could unselect w/out making a new
-         * selection.
-         * If that happens, we select something to make it our new current
-         * location, and we use the focus for that */
+        /* if that happens while in BROWSE, this is probably a bug or something
+         * in GTK, where user could unselect w/out making a new selection.
+         *
+         * It shouldn't happen, because the two ways we know for this happening
+         * are taken care of :
+         * - Moving the focus up/outside the branch, then collapsing the parent
+         *   of the selected node. No more selection!
+         * - In minitree, removing the row of current location.
+         *
+         * Both of those are dealt with in donna_tree_view_test_collapse_row(),
+         * so this happening would be a "bug" (as in, another way GTK allows to
+         * get the selection removed in BROWSE, which ideally we should then
+         * learn and handle as well; Meanwhile, let's select the focused row. */
+
+        g_warning ("Treeview '%s': the selection was lost in BROWSE mode",
+                priv->name);
 
         gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
         if (!path)
@@ -11339,6 +11382,13 @@ donna_tree_view_new (DonnaApp    *app,
     /* because on property update the refesh does only that, i.e. there's no
      * auto-resort */
     g_signal_connect (model, "row-changed", (GCallback) row_changed_cb, tree);
+#ifdef GTK_IS_JJK
+    /* handle "fake removal" (i.e. filtering out) of focused row, to move it
+     * elsewhere. If not JJK, we can't really do better than GTK's default
+     * set_cursor() (w/out much complications re: selection, etc) */
+    g_signal_connect (model, "row-fake-deleted",
+            (GCallback) row_fake_deleted_cb, tree);
+#endif
     if (is_tree (tree))
         /* because we might have to "undo" this -- see has_child_toggled_cb() */
         priv->row_has_child_toggled_sid = g_signal_connect (model,

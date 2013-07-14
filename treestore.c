@@ -1,6 +1,13 @@
 
 #include <gtk/gtk.h>
 #include "treestore.h"
+#include "closures.h"
+
+enum
+{
+    ROW_FAKE_DELETED,
+    NB_SIGNALS
+};
 
 struct _DonnaTreeStorePrivate
 {
@@ -13,6 +20,8 @@ struct _DonnaTreeStorePrivate
     gpointer             is_visible_data;
     GDestroyNotify       is_visible_destroy;
 };
+
+static guint tree_store_signals[NB_SIGNALS] = { 0 };
 
 /* GtkTreeModel */
 static GtkTreeModelFlags tree_store_get_flags       (GtkTreeModel   *model);
@@ -152,6 +161,19 @@ static void
 donna_tree_store_class_init (DonnaTreeStoreClass *klass)
 {
     GObjectClass *o_class;
+
+    tree_store_signals[ROW_FAKE_DELETED] =
+        g_signal_new ("row-fake-deleted",
+                DONNA_TYPE_TREE_STORE,
+                G_SIGNAL_RUN_LAST,
+                G_STRUCT_OFFSET (DonnaTreeStoreClass, row_fake_deleted),
+                NULL,
+                NULL,
+                g_cclosure_user_marshal_VOID__BOXED_BOXED,
+                G_TYPE_NONE,
+                2,
+                GTK_TYPE_TREE_PATH,
+                GTK_TYPE_TREE_ITER);
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->finalize = donna_tree_store_finalize;
@@ -1207,6 +1229,15 @@ donna_tree_store_refresh_visibility (DonnaTreeStore     *store,
 
             /* get the path before updating, otherwise we couldn't get a path */
             path = tree_store_get_path (model, iter);
+            /* this is to allow DonnaTreeView to move the focus if it is the the
+             * about-to-be-deleted row, to avoid GTK's default behavior of doing
+             * a set_cursor(). This requires access to the model (to move
+             * next/prev) but also the view *before* the row has been removed.
+             * Simply processing row-deleted before isn't possible, because the
+             * view is then in an "invalid" state, since it hasn't yet processed
+             * the row removal, and its paths don't point where they should... */
+            g_signal_emit (store, tree_store_signals[ROW_FAKE_DELETED], 0,
+                    path, iter);
 
             /* update hashtable, as we can now assume all children are not
              * visible as well (no need to emit row-deleted for them) */
@@ -1216,7 +1247,7 @@ donna_tree_store_refresh_visibility (DonnaTreeStore     *store,
                 hide_in_hashtable (priv->hashtable,
                         (GtkTreeModel *) priv->store, &it);
 
-            /* now that the row is "ofifically" gone, emit the signal */
+            /* now that the row is "officially" gone, emit the signal */
             gtk_tree_model_row_deleted (model, path);
             gtk_tree_path_free (path);
 

@@ -29,6 +29,11 @@ struct _DonnaTreeStore
 struct _DonnaTreeStoreClass
 {
     GtkTreeStoreClass parent_class;
+
+    /* signals */
+    void        (*row_fake_deleted)             (DonnaTreeStore     *store,
+                                                 GtkTreePath        *path,
+                                                 GtkTreeIter        *iter);
 };
 
 typedef gboolean    (*store_visible_fn)         (DonnaTreeStore     *store,
