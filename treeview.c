@@ -2257,6 +2257,7 @@ set_children (DonnaTreeView *tree,
 
                 if (refresh
                         && donna_tree_store_iter_is_visible (priv->store, &row))
+                {
                     if (is_tree)
                         may_get_children_refresh (tree, &row);
                     else
@@ -2271,6 +2272,7 @@ set_children (DonnaTreeView *tree,
                                 data, NULL);
                         donna_app_run_task (priv->app, task);
                     }
+                }
 
                 /* remove the iter for that row */
                 l = list;
