@@ -18,6 +18,8 @@ enum
     DONNA_TREE_VIEW_ERROR_CANNOT_ADD_NODE,
     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
     DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
+    DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+    DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
     DONNA_TREE_VIEW_ERROR_OTHER,
 } DonnaTreeViewError;
 
@@ -229,7 +231,8 @@ gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
 gchar *         donna_tree_view_export_tree     (DonnaTreeView      *tree);
 gboolean        donna_tree_view_add_root        (DonnaTreeView      *tree,
-                                                 DonnaNode          *node);
+                                                 DonnaNode          *node,
+                                                 GError            **error);
 gboolean        donna_tree_view_set_visual      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  DonnaTreeVisual     visual,
@@ -248,6 +251,9 @@ gboolean        donna_tree_view_full_expand     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_full_collapse   (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 GError            **error);
+gboolean        donna_tree_view_remove_row      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
 /* Mini-Tree */

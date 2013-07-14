@@ -31,6 +31,8 @@ static DonnaTaskState   cmd_task_toggle                     (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_activate_row               (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_tree_add_root                   (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_tree_edit_column                (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_full_collapse              (DonnaTask *task,
@@ -50,6 +52,8 @@ static DonnaTaskState   cmd_tree_maxi_collapse              (DonnaTask *task,
 static DonnaTaskState   cmd_tree_maxi_expand                (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_refresh                    (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_tree_remove_row                 (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_selection                  (DonnaTask *task,
                                                              GPtrArray *args);
@@ -178,6 +182,14 @@ static DonnaCommand commands[] = {
         .cmd_fn         = cmd_tree_edit_column
     },
     {
+        .name           = "tree_add_root",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_NODE },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_add_root
+    },
+    {
         .name           = "tree_full_collapse",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
@@ -253,6 +265,14 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_refresh
+    },
+    {
+        .name           = "tree_remove_row",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_tree_remove_row
     },
     {
         .name           = "tree_selection",
@@ -1797,6 +1817,19 @@ cmd_tree_activate_row (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
+cmd_tree_add_root (DonnaTask *task, GPtrArray *args)
+{
+    GError *err= NULL;
+
+    if (!donna_tree_view_add_root (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_edit_column (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
@@ -2077,6 +2110,19 @@ cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_remove_row (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_remove_row (args->pdata[1], args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
     return DONNA_TASK_DONE;
 }
 

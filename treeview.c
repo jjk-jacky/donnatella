@@ -4632,12 +4632,19 @@ add_node_to_tree (DonnaTreeView *tree,
 }
 
 gboolean
-donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node)
+donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node, GError **error)
 {
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    g_return_val_if_fail (is_tree (tree), FALSE);
+
+    if (!is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot add root in mode List", tree->priv->name);
+        return FALSE;
+    }
 
     ret = add_node_to_tree (tree, NULL, node, NULL);
     if (!tree->priv->arrangement)
@@ -9199,6 +9206,51 @@ donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
     priv->key_mode = g_strdup (key_mode);
     check_statuses (tree, STATUS_CHANGED_ON_KEYMODE);
 }
+
+gboolean
+donna_tree_view_remove_row (DonnaTreeView   *tree,
+                            DonnaTreeRowId  *rowid,
+                            GError         **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter iter;
+    row_id_type type;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (!is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot remove row in mode List",
+                priv->name);
+        return FALSE;
+    }
+    else if (!priv->is_minitree)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot remove row, option is_minitree not enabled",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot remove row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    remove_row_from_tree (tree, &iter, FALSE);
+    return TRUE;
+}
+
 
 /* mode list only */
 GPtrArray *
