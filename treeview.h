@@ -191,11 +191,9 @@ gboolean        donna_tree_view_selection       (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  gboolean            to_focused,
                                                  GError            **error);
-#ifdef GTK_IS_JJK
 gboolean        donna_tree_view_set_focus       (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
-#endif
 gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);

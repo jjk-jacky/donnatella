@@ -2175,17 +2175,11 @@ cmd_tree_set_focus (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
 
-#ifdef GTK_IS_JJK
     if (!donna_tree_view_set_focus (args->pdata[1], args->pdata[2], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
     }
-#else
-    donna_task_set_error (task_for_ret_err (), COMMAND_ERROR, COMMAND_ERROR_OTHER,
-            "Command 'set_focus' isn't supported with vanilla GTK+");
-    return DONNA_TASK_FAILED;
-#endif
 
     return DONNA_TASK_DONE;
 }

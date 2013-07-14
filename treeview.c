@@ -380,7 +380,7 @@ struct _DonnaTreeViewPrivate
     /* mode Tree */
     guint                is_minitree        : 1;
     guint                sync_mode          : 3;
-    guint                sync_scroll        : 1; /* only used if GTK_IS_JJK */
+    guint                sync_scroll        : 1;
     guint                auto_focus_sync    : 1;
     /* mode List */
     guint                draw_state         : 2;
@@ -553,6 +553,76 @@ static gboolean status_provider_set_tooltip         (DonnaStatusProvider    *sp,
                                                      guint                   id,
                                                      guint                   index,
                                                      GtkTooltip             *tooltip);
+
+#ifndef GTK_IS_JJK
+static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree);
+
+/* this isn't really the same at all, because the patched version in GTK allows
+ * to set the focus without affecting the selection or scroll. Here we have to
+ * use set_cursor() to set the focus, and that can trigger some minimum
+ * scrolling.
+ * We try to "undo" it, but let's be clear: the patched version is obviously
+ * much better. */
+void
+gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
+{
+    GtkTreeSelection *sel;
+    GtkTreePath *p;
+    gint y;
+    gboolean scroll;
+
+    sel = gtk_tree_view_get_selection (treev);
+    scroll = gtk_tree_view_get_path_at_pos (treev, 0, 0, &p, NULL, NULL, &y);
+
+    if (is_tree ((DonnaTreeView *) treev))
+    {
+        GtkSelectionMode mode;
+        GtkTreeIter iter;
+
+        if (gtk_tree_selection_get_selected (sel, NULL, &iter))
+            g_signal_handlers_block_by_func (sel, selection_changed_cb, treev);
+        else
+            iter.stamp == 0;
+
+        mode = gtk_tree_selection_get_mode (sel);
+        gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+        gtk_tree_selection_set_mode (sel, mode);
+        if (iter.stamp != 0)
+        {
+            gtk_tree_selection_select_iter (sel, &iter);
+            g_signal_handlers_unblock_by_func (sel, selection_changed_cb, treev);
+        }
+    }
+    else
+    {
+        GList *list, *l;
+
+        list = gtk_tree_selection_get_selected_rows (sel, NULL);
+        gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
+        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
+        gtk_tree_selection_set_mode (sel, GTK_SELECTION_MULTIPLE);
+        for (l = list; l; l = l->next)
+            gtk_tree_selection_select_path (sel, l->data);
+        g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
+    }
+
+    if (scroll)
+    {
+        gtk_tree_view_scroll_to_cell (treev, p, NULL, TRUE, 0.0, 0.0);
+        if (y != 0)
+        {
+            gint x; /* useless, but we need to send another gint* */
+            gint new_y;
+
+            gtk_tree_view_convert_bin_window_to_tree_coords (treev, 0, 0,
+                    &x, &new_y);
+            gtk_tree_view_scroll_to_point (treev, -1, new_y + y);
+        }
+        gtk_tree_path_free (p);
+    }
+}
+#endif
 
 static void
 donna_tree_view_status_provider_init (DonnaStatusProviderInterface *interface)
@@ -875,48 +945,13 @@ sync_with_location_changed_cb (GObject       *object,
             gtk_tree_path_free (p);
         }
 
-#ifdef GTK_IS_JJK
         /* this beauty will put focus & select the row, without doing any
          * scrolling whatsoever. What a wonderful thing! :) */
+        /* Note: that's true when GTK_IS_JJK; if not we do provide a replacement
+         * for set_focused_row() that should get the same results, though much
+         * less efficiently. */
         gtk_tree_view_set_focused_row (treev, path);
         gtk_tree_selection_select_path (sel, path);
-#else
-        /* Note: set_cursor() will check and do some minimum scrolling if iter
-         * isn't visible. We don't want that, but do our own scrolling (w/
-         * different align values), yet we don't care and just call
-         * scroll_to_iter afterwards.
-         *
-         * This works, because whatever set_cursor did (scrolling wise) isn't
-         * yet reflected on visible_rect (some triggers not having been
-         * processed yet).
-         * Therefore, we will still be basing our calculations of visibility on
-         * the state of things before set_cursor, and will be triggered if it
-         * was, thus overwriting what it did.
-         *
-         * This is why we shall simply call our scroll functions after. One
-         * thing not to do is try and use gtk_main_iteration do get drawing
-         * events to be processed, as that could get task's callbacks to be
-         * processed, thus adding children and doing all sorts of (scrolling)
-         * stuff we don't want (esp. if they rely on us having changed the
-         * current location, which we might not have done yet here).
-         */
-
-        /* Well: turns out this isn't good, and we need correct values because
-         * otherwise we can get the impression that a row is visible even though
-         * it's totally not, which would lead to no scrolling done when it
-         * should have. Grr.... */
-
-        /* Note: this is actually not working quite perfecly, for reasons
-         * unknown. Apparently when rows were expanded below the visible area,
-         * set_cursor will trigger some (invalid) scrolling due to the fact that
-         * all presize/validate_rows trigger haven't yet been processed I would
-         * assume, or something.
-         * In the end, the row gets into view (hopefully), but because of it we
-         * don't do our own scrolling (already in view) and so the alignment
-         * isn't as expected.
-         * Kinda sucks, get the jjk-patch to fix it :) */
-        gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
-#endif
         gtk_tree_path_free (path);
 
         if (priv->sync_scroll)
@@ -964,13 +999,7 @@ sync_with_location_changed_cb (GObject       *object,
                  * into view */
 
                 path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
-#ifdef GTK_IS_JJK
                 gtk_tree_view_set_focused_row (treev, path);
-#else
-                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
-                gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
-                gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
-#endif
                 gtk_tree_path_free (path);
 
                 if (priv->sync_scroll)
@@ -1191,12 +1220,8 @@ config_get_string (DonnaTreeView   *tree,
     CLAMP (config_get_int (t, c, "sync_mode", DONNA_TREE_SYNC_FULL), 0, 4)
 #define cfg_get_sync_with(t,c) \
     config_get_string (t, c, "sync_with", NULL)
-#ifdef GTK_IS_JJK
 #define cfg_get_sync_scroll(t,c) \
     config_get_boolean (t, c, "sync_scroll", TRUE)
-#else
-#define cfg_get_sync_scroll(t,c) TRUE
-#endif
 #define cfg_get_auto_focus_sync(t,c) \
     config_get_boolean (t, c, "auto_focus_sync", TRUE)
 #define cfg_get_focusing_click(t,c) \
@@ -2021,7 +2046,7 @@ remove_row_from_tree (DonnaTreeView *tree,
         if (priv->row_has_child_toggled_sid)
             g_signal_handler_unblock (priv->store, priv->row_has_child_toggled_sid);
     }
-#ifdef GTK_IS_JJK
+
     /* removing the row with the focus will have GTK do a set_cursor(), this
      * isn't the best of behaviors, so let's see if we can do "better" */
     if (donna_tree_model_get_count (model) > 1)
@@ -2045,7 +2070,6 @@ remove_row_from_tree (DonnaTreeView *tree,
                 gtk_tree_view_get_selection ((GtkTreeView *) tree), NULL, &it)
             && itereq (iter, &it))
         handle_removing_row (tree, &it, FALSE);
-#endif
 
     /* remove all watched_iters to this row */
     l = priv->watched_iters;
@@ -6886,13 +6910,7 @@ node_get_children_list_cb (DonnaTask                            *task,
             else
                 gtk_tree_view_scroll_to_cell ((GtkTreeView *) data->tree, path,
                         NULL, FALSE, 0.0, 0.0);
-#ifdef GTK_IS_JJK
             gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
-#else
-            gtk_tree_view_set_cursor ((GtkTreeView *) data->tree, path, NULL, FALSE);
-            gtk_tree_selection_unselect_all (
-                    gtk_tree_view_get_selection ((GtkTreeView *) data->tree));
-#endif
             gtk_tree_path_free (path);
         }
         else
@@ -7751,7 +7769,6 @@ donna_tree_view_selection (DonnaTreeView        *tree,
     }
 }
 
-#ifdef GTK_IS_JJK
 gboolean
 donna_tree_view_set_focus (DonnaTreeView        *tree,
                            DonnaTreeRowId       *rowid,
@@ -7782,7 +7799,6 @@ donna_tree_view_set_focus (DonnaTreeView        *tree,
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
     return TRUE;
 }
-#endif
 
 gboolean
 donna_tree_view_set_cursor (DonnaTreeView        *tree,
@@ -7811,13 +7827,9 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
     /* more about this can be read in sync_with_location_changed_cb() */
 
     path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
-#ifdef GTK_IS_JJK
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
     gtk_tree_selection_select_path (
             gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
-#else
-    gtk_tree_view_set_cursor ((GtkTreeView *) tree, path, NULL, FALSE);
-#endif
     gtk_tree_path_free (path);
     if (is_tree (tree) && priv->sync_scroll)
         scroll_to_iter (tree, &iter);
@@ -8501,11 +8513,7 @@ donna_tree_view_edit_column (DonnaTreeView      *tree,
         return FALSE;
     }
 
-#ifdef GTK_IS_JJK
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
-#else
-    gtk_tree_view_set_cursor ((GtkTreeView *) tree, re_data.path);
-#endif
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
 
     g_object_unref (node);
@@ -9116,19 +9124,14 @@ move:
             g_object_unref (r.node);
         }
 
-#ifdef GTK_IS_JJK
         if (set & DONNA_TREE_SET_FOCUS)
             gtk_tree_view_set_focused_row (treev, path);
-#endif
         if (set & DONNA_TREE_SET_CURSOR)
         {
-#ifdef GTK_IS_JJK
-            gtk_tree_view_set_focused_row (treev, path);
+            if (!(set & DONNA_TREE_SET_FOCUS))
+                    gtk_tree_view_set_focused_row (treev, path);
             gtk_tree_selection_select_path (
                     gtk_tree_view_get_selection (treev), path);
-#else
-            gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
-#endif
         }
     }
 
@@ -9472,29 +9475,12 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
             GtkTreePath *loc_path;
 
             loc_path = gtk_tree_model_get_path (model, &child);
-#ifdef GTK_IS_JJK
             gtk_tree_view_set_focused_row (treev, loc_path);
-#endif
             if (n == loc_node)
             {
-#ifdef GTK_IS_JJK
                 sel = gtk_tree_view_get_selection (treev);
                 gtk_tree_selection_select_path (sel, loc_path);
-#else
-                gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
-#endif
             }
-#ifndef GTK_IS_JJK
-            else
-            {
-                /* ancestor, so we just want to put the cursor on the node, no
-                 * selection */
-                sel = gtk_tree_view_get_selection (treev);
-                gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
-                gtk_tree_view_set_cursor (treev, loc_path, NULL, FALSE);
-                gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
-            }
-#endif
             gtk_tree_path_free (loc_path);
 
             if (priv->sync_scroll)
@@ -11434,13 +11420,11 @@ donna_tree_view_new (DonnaApp    *app,
     /* because on property update the refesh does only that, i.e. there's no
      * auto-resort */
     g_signal_connect (model, "row-changed", (GCallback) row_changed_cb, tree);
-#ifdef GTK_IS_JJK
     /* handle "fake removal" (i.e. filtering out) of focused row, to move it
      * elsewhere. If not JJK, we can't really do better than GTK's default
      * set_cursor() (w/out much complications re: selection, etc) */
     g_signal_connect (model, "row-fake-deleted",
             (GCallback) row_fake_deleted_cb, tree);
-#endif
     if (is_tree (tree))
         /* because we might have to "undo" this -- see has_child_toggled_cb() */
         priv->row_has_child_toggled_sid = g_signal_connect (model,
