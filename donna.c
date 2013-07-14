@@ -1981,6 +1981,7 @@ main (int argc, char *argv[])
     GSList              *list = NULL;
     GSList              *l;
     gchar               *s;
+    gchar               *ss;
     gchar               *def;
     gchar               *areas;
     gint                 width;
@@ -2019,6 +2020,21 @@ main (int argc, char *argv[])
         gtk_widget_destroy (w);
         return 1;
     }
+
+    if (!donna_config_get_string (priv->config, &ss, "layouts/%s", s))
+    {
+        w = gtk_message_dialog_new (NULL,
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_CLOSE,
+                "Unable to load interface: layout '%s' not defined", s);
+        gtk_dialog_run ((GtkDialog *) w);
+        gtk_widget_destroy (w);
+        g_free (s);
+        return 1;
+    }
+    g_free (s);
+    s = ss;
 
     if (!donna_config_get_string (priv->config, &active_list_name,
                 "donna/active_list"))
