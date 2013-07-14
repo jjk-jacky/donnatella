@@ -196,6 +196,7 @@ gboolean        donna_tree_view_set_focus       (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
+                                                 gboolean            no_scroll,
                                                  GError            **error);
 gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,

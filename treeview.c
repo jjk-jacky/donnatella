@@ -7803,9 +7803,11 @@ donna_tree_view_set_focus (DonnaTreeView        *tree,
 gboolean
 donna_tree_view_set_cursor (DonnaTreeView        *tree,
                             DonnaTreeRowId       *rowid,
+                            gboolean              no_scroll,
                             GError              **error)
 {
     DonnaTreeViewPrivate *priv;
+    GtkTreeSelection *sel;
     GtkTreeIter  iter;
     row_id_type  type;
     GtkTreePath *path;
@@ -7828,10 +7830,15 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
 
     path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
-    gtk_tree_selection_select_path (
-            gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
+    sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+    if (!is_tree (tree))
+        gtk_tree_selection_unselect_all (sel);
+    gtk_tree_selection_select_path (sel, path);
     gtk_tree_path_free (path);
-    if (is_tree (tree) && priv->sync_scroll)
+    /* no_scroll instead of scroll so in command (which mimics the params, but
+     * where that one is optional) the default is FALSE, i.e. scroll, but it can
+     * be set to TRUE to disable scrolling. */
+    if (!no_scroll)
         scroll_to_iter (tree, &iter);
     return TRUE;
 }

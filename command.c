@@ -285,8 +285,9 @@ static DonnaCommand commands[] = {
     },
     {
         .name           = "tree_set_cursor",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
+            DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_set_cursor
@@ -2161,7 +2162,8 @@ cmd_tree_set_cursor (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
 
-    if (!donna_tree_view_set_cursor (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_set_cursor (args->pdata[1], args->pdata[2],
+                (gboolean) GPOINTER_TO_INT (args->pdata[3]), &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
