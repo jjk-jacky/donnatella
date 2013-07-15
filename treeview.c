@@ -9568,9 +9568,12 @@ tree_conv_flag (const gchar       c,
         case 'L':
             if (type == DONNA_ARG_TYPE_NOTHING)
             {
-                if (priv->location)
+                if (G_LIKELY (priv->location))
                 {
-                    s = donna_node_get_location (priv->location);
+                    if (streq ("fs", donna_node_get_domain (priv->location)))
+                        s = donna_node_get_location (priv->location);
+                    else
+                        s = donna_node_get_full_location (priv->location);
                     g_string_append (str, s);
                     g_free (s);
                 }
