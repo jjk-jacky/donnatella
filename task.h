@@ -99,6 +99,10 @@ DonnaTask *         donna_task_new_full         (task_fn             func,
                                                  DonnaTaskPriority   priority,
                                                  gboolean            autostart,
                                                  const gchar        *desc);
+gboolean            donna_task_set_worker       (DonnaTask          *task,
+                                                 task_fn             func,
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
 gboolean            donna_task_set_taskui       (DonnaTask          *task,
                                                  DonnaTaskUi        *taskui);
 gboolean            donna_task_set_devices      (DonnaTask          *task,

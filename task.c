@@ -663,6 +663,43 @@ donna_task_new_full (task_fn             func,
 }
 
 /**
+ * donna_task_set_worker:
+ * @task: Task to set the worker for
+ * @func: Function to be run as the task (aka the "worker")
+ * @data: user-data sent as parameter to @func
+ * @destroy: Function called if the task isn't run, to free @data
+ *
+ * This is only needed if you created a #DonnaTask using g_object_new(), which
+ * you really have no reason to do when donna_task_new() exists.
+ *
+ * This function is only intended to be used for object extending #DonnaClass,
+ * so they can still set the worker of the task. It cannot be used to change a
+ * task's worker.
+ *
+ * Returns: Whether or not the worker was set to @task
+ */
+gboolean
+donna_task_set_worker (DonnaTask          *task,
+                       task_fn             func,
+                       gpointer            data,
+                       GDestroyNotify      destroy)
+{
+    DonnaTaskPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (func != NULL, NULL);
+    g_return_val_if_fail (task->priv->task_fn == NULL, NULL);
+
+    priv = task->priv;
+
+    priv->task_fn = func;
+    priv->task_data = data;
+    priv->task_destroy = destroy;
+
+    return TRUE;
+}
+
+/**
  * donna_task_set_taskui:
  * @task: Task to set the ::taskui for
  * @taskui: #DonnaTaskUi to assign to the task
