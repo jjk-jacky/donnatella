@@ -468,6 +468,9 @@ donna_task_finalize (GObject *object)
     if (priv->duplicate_data && priv->duplicate_destroy)
         priv->duplicate_destroy (priv->duplicate_data);
 
+    if (priv->taskui)
+        g_object_unref (priv->taskui);
+
     G_OBJECT_CLASS (donna_task_parent_class)->finalize (object);
 }
 
@@ -650,7 +653,8 @@ donna_task_new_full (task_fn             func,
     priv->task_data = data;
     priv->task_destroy = destroy;
 
-    priv->taskui = taskui;
+    if (taskui)
+        priv->taskui = g_object_ref_sink (taskui);
     priv->devices = g_ptr_array_ref (devices);
     priv->visibility = visibility;
     priv->priority = priority;
@@ -715,7 +719,7 @@ donna_task_set_taskui (DonnaTask *task, DonnaTaskUi *taskui)
     g_return_val_if_fail (DONNA_IS_TASKUI (taskui), FALSE);
     g_return_val_if_fail (task->priv->taskui == NULL, FALSE);
 
-    task->priv->taskui = taskui;
+    task->priv->taskui = g_object_ref_sink (taskui);
     notify_prop (task, PROP_TASKUI);
     return TRUE;
 }
