@@ -1032,15 +1032,18 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
     DonnaProviderTaskPrivate *priv = tm->priv;
     gboolean is_state;
     gboolean is_progress;
+    gboolean is_status;
     gboolean check_refresh = TRUE;
 
     is_state = streq (pspec->name, "state");
     is_progress = !is_state && streq (pspec->name, "progress");
-    if (is_state || is_progress || streq (pspec->name, "status"))
+    is_status = !is_progress && streq (pspec->name, "status");
+    if (is_state || is_progress || is_status || streq (pspec->name, "desc"))
     {
         DonnaProviderBaseClass *klass;
         DonnaProviderBase *pb = (DonnaProviderBase *) tm;
         DonnaNode *node;
+        const gchar *name;
         gchar location[32];
         GValue v = G_VALUE_INIT;
 
@@ -1053,6 +1056,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
         if (!node)
             return;
 
+        name = pspec->name;
         if (is_state)
         {
             g_value_init (&v, G_TYPE_INT);
@@ -1114,7 +1118,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
             g_value_init (&v, G_TYPE_DOUBLE);
             g_value_set_double (&v, progress);
         }
-        else
+        else if (is_status)
         {
             gchar *status;
 
@@ -1122,7 +1126,16 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
             g_value_init (&v, G_TYPE_STRING);
             g_value_take_string (&v, status);
         }
-        donna_node_set_property_value (node, pspec->name, &v);
+        else
+        {
+            gchar *desc;
+
+            name = "name";
+            g_object_get (task, "desc", &desc, NULL);
+            g_value_init (&v, G_TYPE_STRING);
+            g_value_take_string (&v, desc);
+        }
+        donna_node_set_property_value (node, name, &v);
         g_value_unset (&v);
         g_object_unref (node);
 
