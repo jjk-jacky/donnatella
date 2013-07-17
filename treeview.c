@@ -2202,8 +2202,10 @@ set_children (DonnaTreeView *tree,
         }
         else
         {
-            /* clear the list */
+            /* clear the list (see selection_changed_cb() for why filling_list) */
+            priv->filling_list = TRUE;
             donna_tree_store_clear (priv->store);
+            priv->filling_list = FALSE;
             /* also the hashtable (we don't need to unref nodes (keys), as our ref was
              * handled by the store) */
             g_hash_table_remove_all (priv->hashtable);
@@ -6745,8 +6747,10 @@ node_get_children_list_timeout (DonnaTask                           *task,
     else if (priv->future_location != data->child)
         return;
 
-    /* clear the list */
+    /* clear the list (see selection_changed_cb() for why filling_list) */
+    priv->filling_list = TRUE;
     donna_tree_store_clear (priv->store);
+    priv->filling_list = FALSE;
     /* also the hashtable (we don't need to unref nodes (keys), as our ref was
      * handled by the store) */
     g_hash_table_remove_all (priv->hashtable);
@@ -6806,8 +6810,10 @@ node_get_children_list_cb (DonnaTask                            *task,
         goto free;
 
     changed_location = priv->location != priv->future_location;
-    /* clear the list */
+    /* clear the list (see selection_changed_cb() for why filling_list) */
+    priv->filling_list = TRUE;
     donna_tree_store_clear (priv->store);
+    priv->filling_list = FALSE;
     /* also the hashtable (we don't need to unref nodes (keys), as our ref was
      * handled by the store) */
     g_hash_table_remove_all (priv->hashtable);
@@ -10701,7 +10707,12 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeIter iter;
 
-    check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+    /* filling_list is also set when clearing the store, because that has GTK
+     * trigger *a lot* of selection-changed (even when there's no selection)
+     * which in turn would trigger lots of status refresh, which would be a
+     * little slow (when there was lots of items) */
+    if (!priv->filling_list)
+        check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
     if (!is_tree (tree))
         return;
 
