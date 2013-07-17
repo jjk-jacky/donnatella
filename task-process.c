@@ -180,6 +180,9 @@ donna_task_process_set_property (GObject            *object,
         case PROP_CMDLINE:
             g_free (priv->cmdline);
             priv->cmdline = g_value_dup_string (value);
+            if (priv->wait)
+                donna_task_take_desc ((DonnaTask *) object,
+                        g_strdup_printf ("Execute: %s", priv->cmdline));
             break;
 
         default:
@@ -490,8 +493,16 @@ donna_task_process_new (const gchar        *workdir,
     priv->closer_data   = closer_data;
 
     donna_task_set_worker (task, task_worker, NULL, NULL);
-    donna_task_set_visibility (task, (wait)
-            ? DONNA_TASK_VISIBILITY_PULIC : DONNA_TASK_VISIBILITY_INTERNAL);
+    if (wait)
+    {
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_PULIC);
+        if (cmdline)
+            donna_task_take_desc (task, g_strdup_printf ("Execute: %s", cmdline));
+        else
+            donna_task_set_desc (task, "Execute process");
+    }
+    else
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
 
     return task;
 }
@@ -520,6 +531,8 @@ donna_task_process_new_init (task_init_fn        init,
     priv->closer_data   = closer_data;
 
     donna_task_set_worker (task, task_worker, NULL, NULL);
+    if (wait)
+        donna_task_set_desc (task, "Execute process");
     donna_task_set_visibility (task, (wait)
             ? DONNA_TASK_VISIBILITY_PULIC : DONNA_TASK_VISIBILITY_INTERNAL);
 
