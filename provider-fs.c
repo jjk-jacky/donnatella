@@ -10,6 +10,7 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
+#include "task-process.h"
 #include "macros.h"
 
 struct _DonnaProviderFsPrivate
@@ -856,11 +857,24 @@ provider_fs_trigger_node (DonnaProviderBase  *_provider,
     if (g_content_type_can_be_executable (mt)
             && g_file_test (filename, G_FILE_TEST_IS_EXECUTABLE))
     {
-        if (!(g_spawn_command_line_async (filename, &err)))
-        {
-            ret = DONNA_TASK_FAILED;
-            donna_task_take_error (task, err);
-        }
+        DonnaTask *tp;
+        gchar *s;
+
+        tp = donna_task_process_new (NULL, filename, FALSE, NULL, NULL);
+        s = strrchr (filename, '/');
+        *s = '\0';
+        g_object_set (tp, "workdir", filename, NULL);
+
+        /* we don't have app, so we can't use donna_app_run_task() (having made
+         * tp blocking, of course). Luckily this is a simple run & be done, so
+         * we can "abuse" the system and just call (blocking) donna_task_run()
+         * directly. */
+        g_object_ref_sink (tp);
+        donna_task_run (tp);
+        ret = donna_task_get_state (tp);
+        if (ret == DONNA_TASK_FAILED)
+            donna_task_take_error (task, g_error_copy (donna_task_get_error (tp)));
+        g_object_unref (tp);
 
         g_free (mt);
         g_free (filename);
