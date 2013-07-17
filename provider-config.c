@@ -3061,6 +3061,9 @@ ensure_option_has_node (DonnaProviderConfig *config,
         /* have provider emit the new_node signal */
         donna_provider_new_node (DONNA_PROVIDER (config), option->node);
 
+        /* mark node ready */
+        donna_node_mark_ready (option->node);
+
         return TRUE;
     }
     else

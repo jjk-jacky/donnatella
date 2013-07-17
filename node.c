@@ -114,6 +114,10 @@
  *
  * Only the owner of a property should use donna_node_set_property_value() when
  * such a change has effectively been observed on the item it represents.
+ *
+ * Once all properties & their initial values have been set, you must call
+ * donna_node_mark_ready() to make sure further change of values will emit a
+ * signal in the node's provider.
  */
 
 const gchar *node_basic_properties[] =
@@ -177,6 +181,9 @@ static DonnaNodeFlags prop_writable_flags[] =
 
 struct _DonnaNodePrivate
 {
+    /* node is ready, aka all initial values have been set, properties added,
+     * provider is ready. Before that, we don't emit signals and whatnot */
+    gboolean           ready;
     /* internal properties */
     DonnaProvider     *provider;
     gchar             *location;
@@ -2007,6 +2014,21 @@ donna_node_trigger_task (DonnaNode          *node,
 }
 
 /**
+ * donna_node_mark_ready:
+ * @node: The node to mark ready
+ *
+ * This is only meant to be used by @node's provider, once all properties have
+ * been added & initial values set. Only after a node has been marked ready will
+ * signals be emitted on the provider (e.g. node-updated)
+ */
+void
+donna_node_mark_ready (DonnaNode          *node)
+{
+    g_return_if_fail (DONNA_IS_NODE (node));
+    node->priv->ready = TRUE;
+}
+
+/**
  * donna_node_set_property_value:
  * @node: The node
  * @name: Name of the property
@@ -2122,7 +2144,7 @@ donna_node_set_property_value (DonnaNode     *node,
 finish:
     g_rw_lock_writer_unlock (&node->priv->props_lock);
 
-    if (emit)
+    if (emit && node->priv->ready)
         donna_provider_node_updated (node->priv->provider, node, name);
 }
 

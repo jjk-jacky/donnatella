@@ -236,6 +236,9 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
 
     /* emit new-node signal */
     donna_provider_new_node ((DonnaProvider *) provider, node);
+
+    /* mark node ready */
+    donna_node_mark_ready (node);
 }
 
 struct get_node_data
