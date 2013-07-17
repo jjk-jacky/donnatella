@@ -688,7 +688,6 @@ has_get_children (DonnaProviderBase  *_provider,
     gboolean                 is_utf8;
     GDir                    *dir;
     const gchar             *name;
-    gboolean                 is_locked;
     gboolean                 match;
     GValue                  *value;
     GPtrArray               *arr;
@@ -717,7 +716,7 @@ has_get_children (DonnaProviderBase  *_provider,
     }
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
-    is_locked = match = FALSE;
+    match = FALSE;
     while ((name = g_dir_read_name (dir)))
     {
         gchar  buf[1024];
@@ -765,11 +764,7 @@ has_get_children (DonnaProviderBase  *_provider,
                 else
                     location = g_filename_to_utf8 (b, -1, NULL, NULL, NULL);
 
-                if (!is_locked)
-                {
-                    klass->lock_nodes (_provider);
-                    is_locked = TRUE;
-                }
+                klass->lock_nodes (_provider);
                 node = klass->get_cached_node (_provider, location);
                 if (!node)
                     node = new_node (_provider, location, b, FALSE);
@@ -778,6 +773,7 @@ has_get_children (DonnaProviderBase  *_provider,
                 else
                     g_warning ("Provider 'fs': Unable to create a node for '%s'",
                             location);
+                klass->unlock_nodes (_provider);
                 if (location != b)
                     g_free (location);
             }
@@ -793,8 +789,6 @@ has_get_children (DonnaProviderBase  *_provider,
             g_free (b);
     }
     g_dir_close (dir);
-    if (is_locked)
-        klass->unlock_nodes (_provider);
 
     value = donna_task_grab_return_value (task);
     if (get_children)
