@@ -2,6 +2,7 @@
 #include <glib-object.h>
 #include <sys/select.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include <errno.h>
 #include "task-process.h"
 #include "taskui-messages.h"
@@ -402,11 +403,15 @@ task_worker (DonnaTask *task, gpointer data)
 
         if (FD_ISSET (fd_task, &fds))
         {
+            kill (pid, SIGSTOP);
             if (donna_task_is_cancelling (task))
             {
+                kill (pid, SIGABRT);
                 failed = FAILED_CANCELLED;
                 break;
             }
+            else
+                kill (pid, SIGCONT);
         }
 
         if (fd_out >= 0 && FD_ISSET (fd_out, &fds))
