@@ -232,7 +232,7 @@ ct_progress_get_props (DonnaColumnType  *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
 
-    props = g_ptr_array_new_full ((data->property_lbl) ? 2 : 1, g_free);
+    props = g_ptr_array_new_full (2, g_free);
     g_ptr_array_add (props, g_strdup (data->property));
     if (data->property_lbl)
         g_ptr_array_add (props, g_strdup (data->property_lbl));
@@ -261,17 +261,70 @@ ct_progress_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
-    gint progress;
+    gint progress = -1;
     gint pulse;
+    gchar *lbl = NULL;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
 
+    if (data->property_lbl)
+    {
+        donna_node_get (node, FALSE, data->property_lbl, &has, &value, NULL);
+        if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
+        {
+            if (data->property)
+                goto next;
+            else
+            {
+                g_object_set (renderer, "visible", FALSE, NULL);
+                return NULL;
+            }
+        }
+        else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
+        {
+            GPtrArray *arr;
+
+            arr = g_ptr_array_new_full (2, g_free);
+            g_ptr_array_add (arr, g_strdup (data->property_lbl));
+            if (data->property)
+                g_ptr_array_add (arr, g_strdup (data->property));
+
+            g_object_set (renderer, "visible", FALSE, NULL);
+            return arr;
+        }
+        else if (G_VALUE_TYPE (&value) == G_TYPE_STRING)
+        {
+            lbl = g_value_dup_string (&value);
+            g_value_unset (&value);
+        }
+        else
+        {
+            gchar *fl = donna_node_get_full_location (node);
+            g_warning ("ColumnType 'progress': property '%s' for node '%s' isn't of expected type (%s instead of %s)",
+                    data->property_lbl,
+                    fl,
+                    G_VALUE_TYPE_NAME (&value),
+                    g_type_name (G_TYPE_STRING));
+            g_free (fl);
+            g_value_unset (&value);
+            if (!data->property)
+            {
+                g_object_set (renderer, "visible", FALSE, NULL);
+                return NULL;
+            }
+        }
+    }
+
+next:
     donna_node_get (node, FALSE, data->property, &has, &value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
     {
-        g_object_set (renderer, "visible", FALSE, NULL);
-        return NULL;
+        if (!lbl)
+        {
+            g_object_set (renderer, "visible", FALSE, NULL);
+            return NULL;
+        }
     }
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
     {
@@ -291,8 +344,11 @@ ct_progress_render (DonnaColumnType    *ct,
     {
         warn_not_type (node);
         g_value_unset (&value);
-        g_object_set (renderer, "visible", FALSE, NULL);
-        return NULL;
+        if (!lbl)
+        {
+            g_object_set (renderer, "visible", FALSE, NULL);
+            return NULL;
+        }
     }
     g_value_unset (&value);
 
@@ -301,39 +357,43 @@ ct_progress_render (DonnaColumnType    *ct,
     else
         pulse = -1;
 
-    s = strchr (data->label, '%');
-    if (s)
+    if (!lbl)
     {
-        GString *str;
-        gchar *ss;
-
-        *s = '\0';
-        str = g_string_new (data->label);
-        *s = '%';
-        for (;;)
+        s = strchr (data->label, '%');
+        if (s)
         {
-            if (s[1] == 'p')
-                g_string_append_printf (str, "%d", progress);
-            else if (s[1] == 'P')
-                g_string_append_printf (str, "%d%%", progress);
-            else
-                --s;
-            ss = s + 2;
-            s = strchr (ss, '%');
-            if (!s)
-                break;
+            GString *str;
+            gchar *ss;
+
+            *s = '\0';
+            str = g_string_new (data->label);
+            *s = '%';
+            for (;;)
+            {
+                if (s[1] == 'p')
+                    g_string_append_printf (str, "%d", progress);
+                else if (s[1] == 'P')
+                    g_string_append_printf (str, "%d%%", progress);
+                else
+                    --s;
+                ss = s + 2;
+                s = strchr (ss, '%');
+                if (!s)
+                    break;
+            }
+            g_string_append (str, ss);
+            s = g_string_free (str, FALSE);
         }
-        g_string_append (str, ss);
-        s = g_string_free (str, FALSE);
     }
 
     g_object_set (renderer,
             "visible",  TRUE,
             "pulse",    pulse,
             "value",    progress,
-            "text",     (s) ? s : data->label,
+            "text",     (lbl) ? lbl : ((s) ? s : data->label),
             NULL);
     g_free (s);
+    g_free (lbl);
     return NULL;
 }
 
