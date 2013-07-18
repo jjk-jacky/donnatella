@@ -1054,7 +1054,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
         klass->unlock_nodes (pb);
 
         if (!node)
-            return;
+            goto next;
 
         name = pspec->name;
         if (is_state)
@@ -1142,6 +1142,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
         check_refresh = is_state;
     }
 
+next:
     if (check_refresh && (is_state || streq (pspec->name, "priority")
             || streq (pspec->name, "devices")))
     {
