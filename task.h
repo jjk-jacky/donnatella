@@ -65,6 +65,13 @@ typedef enum
             | DONNA_TASK_FAILED),
 } DonnaTaskState;
 
+typedef enum
+{
+    DONNA_TASK_UPDATE_PROGRESS          = (1 << 0),
+    DONNA_TASK_UPDATE_PROGRESS_PULSE    = (1 << 1),
+    DONNA_TASK_UPDATE_STATUS            = (1 << 2),
+} DonnaTaskUpdate;
+
 typedef DonnaTaskState  (*task_fn)              (DonnaTask  *task,
                                                  gpointer    data);
 typedef void            (*task_timeout_fn)      (DonnaTask  *task,
@@ -151,9 +158,8 @@ void                donna_task_cancel           (DonnaTask          *task);
 int                 donna_task_get_fd           (DonnaTask          *task);
 gboolean            donna_task_is_cancelling    (DonnaTask          *task);
 void                donna_task_update           (DonnaTask          *task,
-                                                 gboolean            has_progress,
+                                                 DonnaTaskUpdate     update,
                                                  gdouble             progress,
-                                                 gboolean            has_status,
                                                  const gchar        *status_fmt,
                                                  ...);
 void                donna_task_set_nodes_for_selection (DonnaTask   *task,

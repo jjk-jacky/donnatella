@@ -139,6 +139,8 @@ struct _DonnaTaskPrivate
     gchar               *status;
     /* task progress */
     gdouble              progress;
+    /* pulse value if the progress cannot be known */
+    gint                 pulse;
     /* task "public" state */
     DonnaTaskState       state;
     /* devices involved */
@@ -197,6 +199,7 @@ enum
     PROP_PRIORITY,
     PROP_STATUS,
     PROP_PROGRESS,
+    PROP_PULSE,
     PROP_STATE,
     PROP_DEVICES,
     PROP_TASKUI,
@@ -302,9 +305,23 @@ donna_task_class_init (DonnaTaskClass *klass)
     donna_task_props[PROP_PROGRESS] =
         g_param_spec_double ("progress", "progress",
                 "Current progress of the task",
-                -1.0,    /* minimum */
+                -1.0,   /* minimum */
                 1.0,    /* maximum */
-                -1.0,    /* default */
+                0.0,    /* default */
+                G_PARAM_READABLE);
+    /**
+     * DonnaTask:pulse:
+     *
+     * The current value for the pulsating progress, when ::progress cannot be
+     * used/known. This is meant to be used as property pulse of a
+     * #GtkCellRendererProgress (e.g. #DonnaColumnTypeProgress)
+     */
+    donna_task_props[PROP_PULSE] =
+        g_param_spec_int ("pulse", "pulse",
+                "Current pulse value for progress",
+                -1,         /* minimum */
+                G_MAXINT,   /* maximum */
+                0,          /* default */
                 G_PARAM_READABLE);
     /**
      * DonnaTask:state:
@@ -415,6 +432,7 @@ donna_task_init (DonnaTask *task)
     priv->priority  = DONNA_TASK_PRIORITY_NORMAL;
     priv->status    = NULL;
     priv->progress  = 0.0;
+    priv->pulse     = 0;
     priv->state     = DONNA_TASK_WAITING;
     priv->devices   = NULL;
     priv->fd        = -1;
@@ -498,6 +516,9 @@ donna_task_get_property (GObject        *object,
             break;
         case PROP_PROGRESS:
             g_value_set_double (value, priv->progress);
+            break;
+        case PROP_PULSE:
+            g_value_set_int (value, priv->pulse);
             break;
         case PROP_STATE:
             g_value_set_int (value, priv->state);
@@ -1764,21 +1785,29 @@ donna_task_is_cancelling (DonnaTask *task)
 /**
  * donna_task_update:
  * @task: Task to update
- * @has_progress: whether @progress is set (or to be ignored)
+ * @update: What will be updated
  * @progress: new value for ::progress
- * @has_status: whether @status_fmt is set (or to be ignored)
  * @status_fmt: format for a printf-like new value of ::status
  *
  * This function should only be called by the task's worker, to set a new
- * ::progress and/or ::status on @task. The corresponding ::notify signals will
- * be triggered accordingly.
+ * ::progress/::pulse and/or ::status on @task. The corresponding ::notify
+ * signals will be triggered accordingly.
+ *
+ * If @update has #DONNA_TASK_UPDATE_PROGRESS set then @progress will be the new
+ * value of ::progress; if #DONNA_TASK_UPDATE_PROGRESS_PULSE is set then the
+ * current value of ::pulse will be incremented; if #DONNA_TASK_UPDATE_STATUS is
+ * set then @status_fmt will be used to set the new ::status
+ *
+ * If #DONNA_TASK_UPDATE_PROGRESS is set, ::pulse will not be updated. Else, if
+ * #DONNA_TASK_UPDATE_PROGRESS_PULSE is set and @progress is less than zero,
+ * ::pulse is set to -1, else it is incremented (or reset to 1 if #G_MAXINT
+ * would have been reached) and ::progress is set to -1 (if it isn't already).
  */
 void
-donna_task_update (DonnaTask    *task,
-                   gboolean      has_progress,
-                   gdouble       progress,
-                   gboolean      has_status,
-                   const gchar  *status_fmt,
+donna_task_update (DonnaTask        *task,
+                   DonnaTaskUpdate   update,
+                   gdouble           progress,
+                   const gchar      *status_fmt,
                    ...)
 {
     DonnaTaskPrivate *priv;
@@ -1787,13 +1816,27 @@ donna_task_update (DonnaTask    *task,
 
     priv = task->priv;
 
-    if (has_progress)
+    if (update & DONNA_TASK_UPDATE_PROGRESS)
     {
         priv->progress = progress;
         notify_prop (task, PROP_PROGRESS);
     }
+    else if (update & DONNA_TASK_UPDATE_PROGRESS_PULSE)
+    {
+        if (progress < 0)
+            priv->pulse = -1;
+        else if (++priv->pulse == G_MAXINT)
+            priv->pulse = 1;
+        notify_prop (task, PROP_PULSE);
 
-    if (has_status)
+        if (priv->progress != -1)
+        {
+            priv->progress = -1;
+            notify_prop (task, PROP_PROGRESS);
+        }
+    }
+
+    if (update & DONNA_TASK_UPDATE_STATUS)
     {
         LOCK_TASK (task);
 

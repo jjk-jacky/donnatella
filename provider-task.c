@@ -319,6 +319,13 @@ refresher (DonnaTask    *task,
         g_value_init (&v, G_TYPE_DOUBLE);
         g_value_set_double (&v, progress);
     }
+    else if (streq (name, "pulse"))
+    {
+        gint pulse;
+        g_object_get (t, "pulse", &pulse, NULL);
+        g_value_init (&v, G_TYPE_INT);
+        g_value_set_int (&v, pulse);
+    }
     else if (streq (name, "status"))
     {
         gchar *status;
@@ -409,6 +416,7 @@ new_node (DonnaProviderBase *_provider,
     gchar *status;
     gint state;
     gdouble progress;
+    gint pulse;
     gchar buf[32];
 
     if (!location)
@@ -422,6 +430,7 @@ new_node (DonnaProviderBase *_provider,
             "status",   &status,
             "state",    &state,
             "progress", &progress,
+            "pulse",    &pulse,
             NULL);
 
     if (!desc)
@@ -503,6 +512,20 @@ new_node (DonnaProviderBase *_provider,
     {
         g_prefix_error (error, "Provider 'task': Cannot create new node, "
                 "failed to add property 'progress': ");
+        g_value_unset (&v);
+        g_free (status);
+        g_object_unref (node);
+        return NULL;
+    }
+    g_value_unset (&v);
+
+    g_value_init (&v, G_TYPE_INT);
+    g_value_set_int (&v, pulse);
+    if (!donna_node_add_property (node, "pulse", G_TYPE_INT,
+                &v, refresher, NULL, error))
+    {
+        g_prefix_error (error, "Provider 'task': Cannot create new node, "
+                "failed to add property 'pulse': ");
         g_value_unset (&v);
         g_free (status);
         g_object_unref (node);
@@ -1032,13 +1055,16 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
     DonnaProviderTaskPrivate *priv = tm->priv;
     gboolean is_state;
     gboolean is_progress;
+    gboolean is_pulse;
     gboolean is_status;
     gboolean check_refresh = TRUE;
 
     is_state = streq (pspec->name, "state");
     is_progress = !is_state && streq (pspec->name, "progress");
-    is_status = !is_progress && streq (pspec->name, "status");
-    if (is_state || is_progress || is_status || streq (pspec->name, "desc"))
+    is_pulse = !is_progress && streq (pspec->name, "pulse");
+    is_status = !is_pulse && streq (pspec->name, "status");
+    if (is_state || is_progress || is_pulse || is_status
+            || streq (pspec->name, "desc"))
     {
         DonnaProviderBaseClass *klass;
         DonnaProviderBase *pb = (DonnaProviderBase *) tm;
@@ -1117,6 +1143,14 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
             g_object_get (task, "progress", &progress, NULL);
             g_value_init (&v, G_TYPE_DOUBLE);
             g_value_set_double (&v, progress);
+        }
+        else if (is_pulse)
+        {
+            gint pulse;
+
+            g_object_get (task, "pulse", &pulse, NULL);
+            g_value_init (&v, G_TYPE_INT);
+            g_value_set_int (&v, pulse);
         }
         else if (is_status)
         {
