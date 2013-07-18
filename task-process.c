@@ -181,8 +181,13 @@ donna_task_process_set_property (GObject            *object,
             g_free (priv->cmdline);
             priv->cmdline = g_value_dup_string (value);
             if (priv->wait)
-                donna_task_take_desc ((DonnaTask *) object,
-                        g_strdup_printf ("Execute: %s", priv->cmdline));
+            {
+                gchar *s = g_strdup_printf ("Execute: %s", priv->cmdline);
+                donna_task_take_desc ((DonnaTask *) object, s);
+                if (priv->tuimsg)
+                    donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
+                g_free (s);
+            }
             break;
 
         default:
@@ -468,6 +473,15 @@ again:
         state = priv->closer_fn (task, priv->closer_data,
                 WEXITSTATUS (status), state);
 
+    if (priv->tuimsg)
+    {
+        gchar *s = g_strdup_printf ("%s: %s",
+                (state == DONNA_TASK_DONE) ? "Success" : "Failed",
+                priv->cmdline);
+        donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
+        g_free (s);
+    }
+
     return state;
 }
 
@@ -631,6 +645,14 @@ donna_task_process_set_ui_msg (DonnaTaskProcess   *taskp)
         return FALSE;
     }
     priv->tuimsg = (DonnaTaskUiMessages *) tui;
+    if (priv->cmdline)
+    {
+        gchar *s = g_strdup_printf ("Execute: %s", priv->cmdline);
+        donna_taskui_set_title (tui, s);
+        g_free (s);
+    }
+    else
+        donna_taskui_set_title (tui, "Execute process");
     g_signal_connect (taskp, "pipe-new-line", (GCallback) pipe_new_line_cb, NULL);
 
     return TRUE;
