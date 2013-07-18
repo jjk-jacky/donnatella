@@ -323,6 +323,13 @@ default_closer (DonnaTask          *task,
     return DONNA_TASK_FAILED;
 }
 
+static gboolean
+pulse_cb (DonnaTask *task)
+{
+    donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS_PULSE, 0, NULL);
+    return TRUE;
+}
+
 static DonnaTaskState
 task_worker (DonnaTask *task, gpointer data)
 {
@@ -340,6 +347,7 @@ task_worker (DonnaTask *task, gpointer data)
     gint fd_err;
     gint ret;
     gint failed = FAILED_NOT;
+    guint sid;
 
     if (priv->init_fn)
         priv->init_fn ((DonnaTaskProcess *) task, priv->init_data, &err);
@@ -379,6 +387,9 @@ task_worker (DonnaTask *task, gpointer data)
     if (!priv->wait)
         return DONNA_TASK_DONE;
 
+    /* install a timeout to pulsate our progress */
+    sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
+
     fd_task = donna_task_get_fd (task);
     while (failed == FAILED_NOT && (fd_out >= 0 || fd_err >= 0))
     {
@@ -411,15 +422,20 @@ task_worker (DonnaTask *task, gpointer data)
 
         if (FD_ISSET (fd_task, &fds))
         {
+            g_source_remove (sid);
             kill (pid, SIGSTOP);
             if (donna_task_is_cancelling (task))
             {
+                sid = 0;
                 kill (pid, SIGABRT);
                 failed = FAILED_CANCELLED;
                 break;
             }
             else
+            {
+                sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
                 kill (pid, SIGCONT);
+            }
         }
 
         if (fd_out >= 0 && FD_ISSET (fd_out, &fds))
@@ -481,6 +497,14 @@ again:
         donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
         g_free (s);
     }
+
+    if (state == DONNA_TASK_DONE)
+        donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS, 100, NULL);
+    else
+        donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS_PULSE, -1, NULL);
+
+    if (sid > 0)
+        g_source_remove (sid);
 
     return state;
 }
