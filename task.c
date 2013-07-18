@@ -506,7 +506,7 @@ donna_task_get_property (GObject        *object,
             g_value_set_boxed (value, priv->devices);
             break;
         case PROP_TASKUI:
-            g_value_set_boxed (value, priv->taskui);
+            g_value_set_object (value, priv->taskui);
             break;
         case PROP_NODES_FOR_SELECTION:
             g_value_set_boxed (value, priv->nodes_for_selection);
