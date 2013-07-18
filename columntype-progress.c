@@ -20,6 +20,7 @@ struct tv_col_data
 {
     gchar   *property;
     gchar   *property_lbl;
+    gchar   *property_pulse;
     gchar   *label;
 };
 
@@ -208,6 +209,17 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
+    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
+            NULL, "property_pulse", "pulse");
+    if (!streq (data->property_pulse, s))
+    {
+        g_free (data->property_pulse);
+        data->property_pulse = s;
+        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else
+        g_free (s);
+
     return need;
 }
 
@@ -219,6 +231,7 @@ ct_progress_free_data (DonnaColumnType    *ct,
 
     g_free (data->property);
     g_free (data->property_lbl);
+    g_free (data->property_pulse);
     g_free (data->label);
     g_free (data);
 }
@@ -232,10 +245,12 @@ ct_progress_get_props (DonnaColumnType  *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
 
-    props = g_ptr_array_new_full (2, g_free);
+    props = g_ptr_array_new_full (3, g_free);
     g_ptr_array_add (props, g_strdup (data->property));
     if (data->property_lbl)
         g_ptr_array_add (props, g_strdup (data->property_lbl));
+    if (data->property_pulse)
+        g_ptr_array_add (props, g_strdup (data->property_pulse));
 
     return props;
 }
@@ -352,10 +367,47 @@ next:
     }
     g_value_unset (&value);
 
-    if (progress < 0 || progress > 100)
+    if (progress < 0)
         pulse = 0;
     else
+    {
         pulse = -1;
+        progress = CLAMP (progress, 0, 100);
+    }
+
+    if (pulse == 0 && data->property_pulse)
+    {
+        donna_node_get (node, FALSE, data->property_pulse, &has, &value, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            if (G_VALUE_TYPE (&value) == G_TYPE_INT)
+            {
+                pulse = g_value_get_int (&value);
+                pulse = CLAMP (pulse, 0, G_MAXINT);
+            }
+            else
+            {
+                gchar *fl = donna_node_get_full_location (node);
+                g_warning ("ColumnType 'progress': property '%s' for node '%s' isn't of expected type (%s instead of %s)",
+                        data->property_pulse,
+                        fl,
+                        G_VALUE_TYPE_NAME (&value),
+                        g_type_name (G_TYPE_INT));
+                g_free (fl);
+            }
+            g_value_unset (&value);
+        }
+        else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
+        {
+            GPtrArray *arr;
+
+            arr = g_ptr_array_new_full (1, g_free);
+            g_ptr_array_add (arr, g_strdup (data->property_pulse));
+            g_object_set (renderer, "visible", FALSE, NULL);
+            g_free (lbl);
+            return arr;
+        }
+    }
 
     if (!lbl)
     {
@@ -371,9 +423,15 @@ next:
             for (;;)
             {
                 if (s[1] == 'p')
-                    g_string_append_printf (str, "%d", progress);
+                {
+                    if (pulse == -1)
+                        g_string_append_printf (str, "%d", progress);
+                }
                 else if (s[1] == 'P')
-                    g_string_append_printf (str, "%d%%", progress);
+                {
+                    if (pulse == -1)
+                        g_string_append_printf (str, "%d%%", progress);
+                }
                 else
                     --s;
                 ss = s + 2;
@@ -385,11 +443,13 @@ next:
             s = g_string_free (str, FALSE);
         }
     }
+    else
+        s = NULL;
 
     g_object_set (renderer,
             "visible",  TRUE,
             "pulse",    pulse,
-            "value",    progress,
+            "value",    (pulse == -1) ? progress : 0,
             "text",     (lbl) ? lbl : ((s) ? s : data->label),
             NULL);
     g_free (s);
