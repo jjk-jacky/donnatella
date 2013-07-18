@@ -617,14 +617,36 @@ donna_task_process_set_default_closer (DonnaTaskProcess   *taskp)
     return TRUE;
 }
 
+struct new_line_data
+{
+    DonnaTaskProcess *tp;
+    DonnaPipe pipe;
+    gchar *line;
+};
+
+static gboolean
+real_pipe_new_line_cb (struct new_line_data *data)
+{
+    donna_task_ui_messages_add (data->tp->priv->tuimsg,
+            (data->pipe == DONNA_PIPE_OUTPUT) ? G_LOG_LEVEL_INFO : G_LOG_LEVEL_ERROR,
+            data->line);
+    g_free (data->line);
+    g_free (data);
+    return FALSE;
+}
+
 static void
 pipe_new_line_cb (DonnaTaskProcess   *taskp,
                   DonnaPipe           pipe,
                   gchar              *line)
 {
-    donna_task_ui_messages_add (taskp->priv->tuimsg,
-            (pipe == DONNA_PIPE_OUTPUT) ? G_LOG_LEVEL_INFO : G_LOG_LEVEL_ERROR,
-            line);
+    struct new_line_data *data;
+
+    data = g_new (struct new_line_data, 1);
+    data->tp = taskp;
+    data->pipe = pipe;
+    data->line = g_strdup (line);
+    g_main_context_invoke (NULL, (GSourceFunc) real_pipe_new_line_cb, data);
 }
 
 gboolean
