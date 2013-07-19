@@ -5,6 +5,7 @@
 #include "app.h"
 #include "node.h"
 #include "task.h"
+#include "statusprovider.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -47,6 +48,13 @@ struct task
     guint        own_pause  : 1; /* did we pause it */
 };
 
+/* statusbar */
+struct status
+{
+    guint            id;
+    gchar           *fmt;
+};
+
 struct _DonnaProviderTaskPrivate
 {
     DonnaApp    *app;
@@ -64,6 +72,9 @@ struct _DonnaProviderTaskPrivate
     GArray      *tasks;
     /* thread pool */
     GThreadPool *pool;
+    /* statusbar */
+    GArray      *statuses;
+    guint        last_status_id;
 };
 
 static void             provider_task_get_property  (GObject            *object,
@@ -97,6 +108,19 @@ static DonnaTaskState   provider_task_remove_node   (DonnaProviderBase  *provide
 static DonnaTaskState   provider_task_trigger_node  (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
+/* DonnaStatusProvider */
+static guint            provider_task_create_status (DonnaStatusProvider    *sp,
+                                                     gpointer                config,
+                                                     GError                **error);
+static void             provider_task_free_status   (DonnaStatusProvider    *sp,
+                                                     guint                   id);
+static const gchar *    provider_task_get_renderers (DonnaStatusProvider    *sp,
+                                                     guint                   id);
+static void             provider_task_render        (DonnaStatusProvider    *sp,
+                                                     guint                   id,
+                                                     guint                   index,
+                                                     GtkCellRenderer        *renderer);
+
 
 /* internal -- from task.c */
 inline const gchar *state_name (DonnaTaskState state);
@@ -107,6 +131,16 @@ provider_task_provider_init (DonnaProviderInterface *interface)
     interface->get_domain = provider_task_get_domain;
     interface->get_flags  = provider_task_get_flags;
 }
+
+static void
+provider_task_status_provider_init (DonnaStatusProviderInterface *interface)
+{
+    interface->create_status    = provider_task_create_status;
+    interface->free_status      = provider_task_free_status;
+    interface->get_renderers    = provider_task_get_renderers;
+    interface->render           = provider_task_render;
+}
+
 
 static void
 donna_provider_task_class_init (DonnaProviderTaskClass *klass)
@@ -138,6 +172,12 @@ free_task (struct task *t)
 }
 
 static void
+free_status (struct status *status)
+{
+    g_free (status->fmt);
+}
+
+static void
 donna_provider_task_init (DonnaProviderTask *provider)
 {
     DonnaProviderTaskPrivate *priv;
@@ -152,11 +192,15 @@ donna_provider_task_init (DonnaProviderTask *provider)
     g_array_set_clear_func (priv->tasks, (GDestroyNotify) free_task);
     priv->pool = g_thread_pool_new ((GFunc) donna_task_run, NULL,
             -1, FALSE, NULL);
+    priv->statuses = g_array_new (FALSE, FALSE, sizeof (struct status));
+    g_array_set_clear_func (priv->statuses, (GDestroyNotify) free_status);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderTask, donna_provider_task,
         DONNA_TYPE_PROVIDER_BASE,
         G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_task_provider_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_STATUS_PROVIDER,
+            provider_task_status_provider_init)
         )
 
 static void
@@ -199,6 +243,7 @@ provider_task_finalize (GObject *object)
     g_array_free (priv->tasks, TRUE);
     /* FIXME: stop all running tasks */
     g_thread_pool_free (priv->pool, TRUE, FALSE);
+    g_array_free (priv->statuses, TRUE);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_task_parent_class)->finalize (object);
@@ -800,6 +845,238 @@ provider_task_trigger_node (DonnaProviderBase  *_provider,
 }
 
 
+/* DonnaStatusProvider */
+
+static guint
+provider_task_create_status (DonnaStatusProvider    *sp,
+                             gpointer                _name,
+                             GError                **error)
+{
+    DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) sp)->priv;
+    DonnaConfig *config;
+    struct status status;
+    const gchar *name = _name;
+
+    config = donna_app_peek_config (priv->app);
+    if (!donna_config_get_string (config, &status.fmt, "statusbar/%s/format", name))
+    {
+        g_set_error (error, DONNA_STATUS_PROVIDER_ERROR,
+                DONNA_STATUS_PROVIDER_ERROR_INVALID_CONFIG,
+                "Task Manager: status '%s' has no format defined", name);
+        return 0;
+    }
+
+    status.id  = ++priv->last_status_id;
+
+    g_array_append_val (priv->statuses, status);
+    return status.id;
+}
+
+static void
+provider_task_free_status (DonnaStatusProvider    *sp,
+                           guint                   id)
+{
+    DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) sp)->priv;
+    guint i;
+
+    for (i = 0; i < priv->statuses->len; ++i)
+    {
+        struct status *status = &g_array_index (priv->statuses, struct status, i);
+
+        if (status->id == id)
+        {
+            g_array_remove_index_fast (priv->statuses, i);
+            break;
+        }
+    }
+}
+
+static const gchar *
+provider_task_get_renderers (DonnaStatusProvider    *sp,
+                             guint                   id)
+{
+    DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) sp)->priv;
+    guint i;
+
+    for (i = 0; i < priv->statuses->len; ++i)
+    {
+        struct status *status = &g_array_index (priv->statuses, struct status, i);
+
+        if (status->id == id)
+            return "t";
+    }
+    return NULL;
+}
+
+static guint
+get_tasks_count (DonnaTaskManager *tm, DonnaTaskState state)
+{
+    guint i;
+    guint nb = 0;
+
+    lock_manager (tm, TM_BUSY_READ);
+    for (i = 0; i < tm->priv->tasks->len; ++i)
+    {
+        struct task *t = &g_array_index (tm->priv->tasks, struct task, i);
+
+        if (donna_task_get_state (t->task) & state)
+            ++nb;
+    }
+    unlock_manager (tm, TM_BUSY_READ);
+    return nb;
+}
+
+static void
+process_field (GString *str, gchar **fmt, gchar **s, guint nb, const gchar *desc)
+{
+    g_string_append_len (str, *fmt, *s - *fmt);
+    if (!desc)
+        g_string_append_printf (str, "%d", nb);
+    else if (nb > 0)
+        g_string_append_printf (str, "%d %s", nb, desc);
+    *s += 2;
+    *fmt = *s;
+}
+
+static void
+provider_task_render (DonnaStatusProvider    *sp,
+                      guint                   id,
+                      guint                   index,
+                      GtkCellRenderer        *renderer)
+{
+    DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) sp)->priv;
+    DonnaTaskManager *tm = (DonnaTaskManager *) sp;
+    guint i;
+    struct status *status;
+    GString *str;
+    gchar *fmt;
+    gchar *s;
+    guint nb;
+
+    for (i = 0; i < priv->statuses->len; ++i)
+    {
+        status = &g_array_index (priv->statuses, struct status, i);
+
+        if (status->id == id)
+            break;
+    }
+    if (G_UNLIKELY (i >= priv->statuses->len))
+    {
+        g_warning ("Task Manager: Asked to render unknown status #%d", id);
+        return;
+    }
+
+    s = fmt = status->fmt;
+    str = g_string_new (NULL);
+    while ((s = strchr (s, '%')))
+    {
+        gboolean is_lower = FALSE;
+
+        switch (s[1])
+        {
+            case 't':
+                is_lower = TRUE;
+                /* fall through */
+            case 'T':
+                process_field (str, &fmt, &s,
+                        priv->tasks->len,
+                        (is_lower) ? NULL : "task(s) total");
+                break;
+
+            case 'w':
+                is_lower = TRUE;
+                /* fall through */
+            case 'W':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_WAITING),
+                        (is_lower) ? NULL : "task(s) waiting");
+                break;
+
+            case 'r':
+                is_lower = TRUE;
+                /* fall through */
+            case 'R':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_IN_RUN),
+                        (is_lower) ? NULL : "task(s) running");
+                break;
+
+            case 'p':
+                is_lower = TRUE;
+                /* fall through */
+            case 'P':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_PAUSED),
+                        (is_lower) ? NULL : "task(s) paused");
+                break;
+
+            case 'd':
+                is_lower = TRUE;
+                /* fall through */
+            case 'D':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_DONE),
+                        (is_lower) ? NULL : "task(s) done");
+                break;
+
+            case 'c':
+                is_lower = TRUE;
+                /* fall through */
+            case 'C':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_CANCELLED),
+                        (is_lower) ? NULL : "task(s) cancelled");
+                break;
+
+            case 'f':
+                is_lower = TRUE;
+                /* fall through */
+            case 'F':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_FAILED),
+                        (is_lower) ? NULL : "task(s) failed");
+                break;
+
+            case 'a':
+                is_lower = TRUE;
+                /* fall through */
+            case 'A':
+                process_field (str, &fmt, &s,
+                        get_tasks_count (tm, DONNA_TASK_WAITING
+                            | DONNA_TASK_PAUSED | DONNA_TASK_IN_RUN),
+                        (is_lower) ? NULL : "active task(s)");
+                break;
+
+            default:
+                s += 2;
+                break;
+        }
+    }
+
+    g_string_append (str, fmt);
+    for (s = str->str; isblank (*s); ++s)
+        ;
+    if (*s != '\0')
+        g_object_set (renderer, "visible", TRUE, "text", str->str, NULL);
+    else
+        g_object_set (renderer, "visible", FALSE, NULL);
+    g_string_free (str, TRUE);
+}
+
+static void
+refresh_statuses (DonnaTaskManager *tm)
+{
+    DonnaProviderTaskPrivate *priv = tm->priv;
+    guint i;
+
+    for (i = 0; i < priv->statuses->len; ++i)
+    {
+        struct status *status = &g_array_index (priv->statuses, struct status, i);
+        donna_status_provider_status_changed ((DonnaStatusProvider *) tm, status->id);
+    }
+}
+
+
 /* Task Manager */
 
 static gboolean
@@ -1184,6 +1461,8 @@ next:
         t = donna_task_new ((task_fn) refresh_tm, tm, NULL);
         donna_app_run_task (priv->app, t);
     }
+     if (is_state)
+         refresh_statuses (tm);
 }
 
 gboolean
@@ -1221,6 +1500,7 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
     g_array_append_val (priv->tasks, t);
     unlock_manager (tm, TM_BUSY_WRITE);
 
+    refresh_statuses (tm);
     g_signal_connect (task, "notify", (GCallback) notify_cb, tm);
 
     donna_app_run_task (priv->app,

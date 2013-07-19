@@ -81,6 +81,7 @@ enum
     ST_SCE_DONNA,
     ST_SCE_ACTIVE,
     ST_SCE_FOCUSED,
+    ST_SCE_TASK,
 };
 
 struct provider
@@ -2118,6 +2119,11 @@ main (int argc, char *argv[])
             {
                 status->source = ST_SCE_FOCUSED;
                 provider.sp = (DonnaStatusProvider *) priv->focused_tree;
+            }
+            else if (streq (sce, ":task"))
+            {
+                status->source = ST_SCE_TASK;
+                provider.sp = (DonnaStatusProvider *) priv->task_manager;
             }
 #if 0
             else if (streq (s, "donna"))
