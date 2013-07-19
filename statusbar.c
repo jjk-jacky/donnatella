@@ -428,24 +428,25 @@ status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
             gtk_widget_get_allocation ((GtkWidget *) sb, &alloc);
 
             set_renderers (area);
+            /* reset to allow area to get smaller */
+            gtk_cell_area_context_reset (area->context);
             gtk_cell_area_get_preferred_width (area->area, area->context,
                     (GtkWidget *) sb, NULL, &nat);
-            if (nat > area->width)
-                /* the resize will take care of adjusting sizes for all areas
-                 * (this one getting bigger might reduce an adjacent one in its
-                 * expanded space) as well as queueing a redraw */
-                gtk_widget_queue_resize ((GtkWidget *) sb);
-            else
+            if (nat == area->width)
             {
                 /* simply invalidate this area */
                 alloc.x += area->x;
                 alloc.width = area->width;
 
-                /* resize is needed to adjust the minimum size of sb */
-                gtk_widget_queue_resize_no_redraw ((GtkWidget *) sb);
                 gtk_widget_queue_draw_area ((GtkWidget *) sb,
                         alloc.x, alloc.y, alloc.width, alloc.height);
             }
+            else
+                /* the resize will take care of adjusting sizes for all areas
+                 * (this one getting bigger might reduce an adjacent one in its
+                 * expanded space; it could also get smaller...) as well as
+                 * queueing a redraw */
+                gtk_widget_queue_resize ((GtkWidget *) sb);
 
             return;
         }
