@@ -326,7 +326,7 @@ donna_donna_init (DonnaDonna *donna)
     g_rw_lock_init (&priv->lock);
     g_rec_mutex_init (&priv->rec_mutex);
 
-    priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, NULL);
+    priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", donna, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMNTYPE_NAME;
     priv->column_types[COL_TYPE_SIZE].name = "size";
@@ -659,7 +659,7 @@ donna_donna_get_provider (DonnaApp    *app,
         }
 
     if (streq (domain, "fs"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_FS, NULL);
+        provider = g_object_new (DONNA_TYPE_PROVIDER_FS, "app", app, NULL);
     else if (streq (domain, "command"))
         provider = g_object_new (DONNA_TYPE_PROVIDER_COMMAND, "app", app, NULL);
     else

@@ -17,7 +17,7 @@ enum
 static guint donna_provider_signals[NB_SIGNALS] = { 0 };
 
 static void
-donna_provider_default_init (DonnaProviderInterface *klass)
+donna_provider_default_init (DonnaProviderInterface *interface)
 {
     donna_provider_signals[NEW_NODE] =
         g_signal_new ("new-node",
@@ -78,6 +78,11 @@ donna_provider_default_init (DonnaProviderInterface *klass)
             2,
             DONNA_TYPE_NODE,
             DONNA_TYPE_NODE);
+
+    g_object_interface_install_property (interface,
+            g_param_spec_object ("app", "app", "Application",
+                DONNA_TYPE_APP,
+                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
 
 G_DEFINE_INTERFACE (DonnaProvider, donna_provider, G_TYPE_OBJECT)

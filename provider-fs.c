@@ -851,6 +851,7 @@ provider_fs_trigger_node (DonnaProviderBase  *_provider,
     if (g_content_type_can_be_executable (mt)
             && g_file_test (filename, G_FILE_TEST_IS_EXECUTABLE))
     {
+        DonnaApp *app;
         DonnaTask *tp;
         gchar *s;
 
@@ -859,12 +860,12 @@ provider_fs_trigger_node (DonnaProviderBase  *_provider,
         *s = '\0';
         g_object_set (tp, "workdir", filename, NULL);
 
-        /* we don't have app, so we can't use donna_app_run_task() (having made
-         * tp blocking, of course). Luckily this is a simple run & be done, so
-         * we can "abuse" the system and just call (blocking) donna_task_run()
-         * directly. */
-        g_object_ref_sink (tp);
-        donna_task_run (tp);
+        g_object_get (_provider, "app", &app, NULL);
+        donna_task_set_can_block (g_object_ref_sink (tp));
+        donna_app_run_task (app, tp);
+        g_object_unref (app);
+        donna_task_wait_for_it (tp);
+
         ret = donna_task_get_state (tp);
         if (ret == DONNA_TASK_FAILED)
             donna_task_take_error (task, g_error_copy (donna_task_get_error (tp)));

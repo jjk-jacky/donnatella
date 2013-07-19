@@ -66,8 +66,6 @@ struct _DonnaProviderTaskPrivate
     GThreadPool *pool;
 };
 
-static GParamSpec * provider_task_props[NB_PROPS] = { NULL, };
-
 static void             provider_task_get_property  (GObject            *object,
                                                      guint               prop_id,
                                                      GValue             *value,
@@ -128,11 +126,7 @@ donna_provider_task_class_init (DonnaProviderTaskClass *klass)
     o_class->set_property   = provider_task_set_property;
     o_class->finalize       = provider_task_finalize;
 
-    provider_task_props[PROP_APP] = g_param_spec_object ("app", "app",
-            "App object", DONNA_TYPE_APP,
-            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
-
-    g_object_class_install_properties (o_class, NB_PROPS, provider_task_props);
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaProviderTaskPrivate));
 }
@@ -184,7 +178,11 @@ provider_task_set_property (GObject        *object,
                             GParamSpec     *pspec)
 {
     if (prop_id == PROP_APP)
+    {
         ((DonnaProviderTask *) object)->priv->app = g_value_dup_object (value);
+        G_OBJECT_CLASS (donna_provider_task_parent_class)->set_property (
+                object, prop_id, value, pspec);
+    }
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -195,6 +193,7 @@ provider_task_finalize (GObject *object)
     DonnaProviderTaskPrivate *priv;
 
     priv = DONNA_PROVIDER_TASK (object)->priv;
+    g_object_unref (priv->app);
     g_mutex_clear (&priv->mutex);
     g_cond_clear (&priv->cond);
     g_array_free (priv->tasks, TRUE);

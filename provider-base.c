@@ -9,13 +9,31 @@
 #include "debug.h"
 #include "macros.h"
 
+enum
+{
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
 struct _DonnaProviderBasePrivate
 {
+    DonnaApp    *app;
     GHashTable  *nodes;
     GRecMutex    nodes_mutex;
 };
 
-static void             provider_base_finalize          (GObject*object);
+static void             provider_base_set_property      (GObject        *object,
+                                                         guint           prop_id,
+                                                         const GValue   *value,
+                                                         GParamSpec     *pspec);
+static void             provider_base_get_property      (GObject        *object,
+                                                         guint           prop_id,
+                                                         GValue         *value,
+                                                         GParamSpec     *pspec);
+static void             provider_base_finalize          (GObject        *object);
 
 /* DonnaProviderBase */
 static void             provider_base_lock_nodes (
@@ -79,7 +97,11 @@ donna_provider_base_class_init (DonnaProviderBaseClass *klass)
     klass->add_node_to_cache = provider_base_add_node_to_cache;
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = provider_base_finalize;
+    o_class->set_property   = provider_base_set_property;
+    o_class->get_property   = provider_base_get_property;
+    o_class->finalize       = provider_base_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaProviderBasePrivate));
 }
@@ -111,9 +133,34 @@ provider_base_finalize (GObject *object)
 
     g_hash_table_destroy (priv->nodes);
     g_rec_mutex_clear (&priv->nodes_mutex);
+    g_object_unref (priv->app);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_base_parent_class)->finalize (object);
+}
+
+static void
+provider_base_set_property (GObject        *object,
+                            guint           prop_id,
+                            const GValue   *value,
+                            GParamSpec     *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        ((DonnaProviderBase *) object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+provider_base_get_property (GObject        *object,
+                            guint           prop_id,
+                            GValue         *value,
+                            GParamSpec     *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, ((DonnaProviderBase *) object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
 
 static void

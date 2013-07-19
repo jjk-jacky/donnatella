@@ -22,8 +22,6 @@ struct _DonnaProviderCommandPrivate
     DonnaApp *app;
 };
 
-static GParamSpec * provider_command_props[NB_PROPS] = { NULL, };
-
 static void             provider_command_get_property   (GObject        *object,
                                                          guint           prop_id,
                                                          GValue         *value,
@@ -82,11 +80,7 @@ donna_provider_command_class_init (DonnaProviderCommandClass *klass)
     o_class->set_property   = provider_command_set_property;
     o_class->finalize       = provider_command_finalize;
 
-    provider_command_props[PROP_APP] = g_param_spec_object ("app", "app",
-            "App object", DONNA_TYPE_APP,
-            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
-
-    g_object_class_install_properties (o_class, NB_PROPS, provider_command_props);
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaProviderCommandPrivate));
 }
@@ -125,7 +119,11 @@ provider_command_set_property (GObject        *object,
                                GParamSpec     *pspec)
 {
     if (prop_id == PROP_APP)
+    {
         ((DonnaProviderCommand *) object)->priv->app = g_value_dup_object (value);
+        G_OBJECT_CLASS (donna_provider_command_parent_class)->set_property (
+                object, prop_id, value, pspec);
+    }
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -136,6 +134,7 @@ provider_command_finalize (GObject *object)
     DonnaProviderCommandPrivate *priv;
 
     priv = DONNA_PROVIDER_COMMAND (object)->priv;
+    g_object_unref (priv->app);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_command_parent_class)->finalize (object);

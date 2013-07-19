@@ -16,6 +16,15 @@
 
 enum
 {
+    PROP_0,
+
+    PROP_APP,
+
+    NB_PROPS
+};
+
+enum
+{
     OPTION_SET,
     OPTION_REMOVED,
     NB_SIGNALS
@@ -59,6 +68,7 @@ struct option
 
 struct _DonnaProviderConfigPrivate
 {
+    DonnaApp        *app;
     /* to hold all common strings in config; i.e. option names */
     GStringChunk    *str_chunk;
     /* extra formats of options (list, list-int, etc) */
@@ -78,7 +88,15 @@ struct _DonnaProviderConfigPrivate
 #define str_chunk(priv, string) \
     g_string_chunk_insert_const (priv->str_chunk, string)
 
-static void             provider_config_finalize    (GObject    *object);
+static void             provider_config_set_property(GObject        *object,
+                                                     guint           prop_id,
+                                                     const GValue   *value,
+                                                     GParamSpec     *pspec);
+static void             provider_config_get_property(GObject        *object,
+                                                     guint           prop_id,
+                                                     GValue         *value,
+                                                     GParamSpec     *pspec);
+static void             provider_config_finalize    (GObject        *object);
 
 /* DonnaProvider */
 static const gchar *    provider_config_get_domain (
@@ -159,7 +177,11 @@ donna_provider_config_class_init (DonnaProviderConfigClass *klass)
                 G_TYPE_STRING);
 
     o_class = (GObjectClass *) klass;
-    o_class->finalize = provider_config_finalize;
+    o_class->set_property = provider_config_set_property;
+    o_class->get_property = provider_config_get_property;
+    o_class->finalize       = provider_config_finalize;
+
+    g_object_class_override_property (o_class, PROP_APP, "app");
 
     g_type_class_add_private (klass, sizeof (DonnaProviderConfigPrivate));
 }
@@ -305,6 +327,7 @@ provider_config_finalize (GObject *object)
 
     priv = DONNA_PROVIDER_CONFIG (object)->priv;
 
+    g_object_unref (priv->app);
     g_string_chunk_free (priv->str_chunk);
     g_hash_table_destroy (priv->extras);
     g_node_traverse (priv->root, G_IN_ORDER, G_TRAVERSE_ALL, -1,
@@ -316,6 +339,30 @@ provider_config_finalize (GObject *object)
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_config_parent_class)->finalize (object);
+}
+
+static void
+provider_config_set_property (GObject        *object,
+                              guint           prop_id,
+                              const GValue   *value,
+                              GParamSpec     *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        ((DonnaProviderConfig *) object)->priv->app = g_value_dup_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+provider_config_get_property (GObject        *object,
+                              guint           prop_id,
+                              GValue         *value,
+                              GParamSpec     *pspec)
+{
+    if (G_LIKELY (prop_id == PROP_APP))
+        g_value_set_object (value, ((DonnaProviderConfig *) object)->priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
 
 static gchar *
