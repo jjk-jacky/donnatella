@@ -9,9 +9,20 @@ enum
 
 static guint donna_status_provider_signals[NB_SIGNALS] = { 0 };
 
+static gboolean
+default_set_tooltip (DonnaStatusProvider    *sp,
+                     guint                   id,
+                     guint                   index,
+                     GtkTooltip             *tooltip)
+{
+    return FALSE;
+}
+
 static void
 donna_status_provider_default_init (DonnaStatusProviderInterface *interface)
 {
+    interface->set_tooltip = default_set_tooltip;
+
     donna_status_provider_signals[STATUS_CHANGED] =
         g_signal_new ("status-changed",
                 DONNA_TYPE_STATUS_PROVIDER,
