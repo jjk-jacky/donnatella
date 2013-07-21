@@ -592,47 +592,13 @@ donna_task_process_set_workdir_to_curdir (DonnaTaskProcess   *taskp,
                                           DonnaApp           *app,
                                           GError            **error)
 {
-    DonnaTreeView *tree;
-    DonnaNode *node;
+    gchar *workdir;
 
-    g_return_val_if_fail (DONNA_IS_TASK_PROCESS (taskp), FALSE);
-
-    g_object_get (app, "active-list", &tree, NULL);
-    if (!tree)
-    {
-        g_set_error (error, DONNA_TASK_PROCESS_ERROR,
-                DONNA_TASK_PROCESS_ERROR_OTHER,
-                "Cannot set working directory: failed to get active-list");
+    workdir = donna_app_get_current_dirname (app, error);
+    if (!workdir)
         return FALSE;
-    }
 
-    g_object_get (tree, "location", &node, NULL);
-    if (!node)
-    {
-        g_set_error (error, DONNA_TASK_PROCESS_ERROR,
-                DONNA_TASK_PROCESS_ERROR_OTHER,
-                "Cannot set working directory: failed to get current location from treeview '%s'",
-                donna_tree_view_get_name (tree));
-        g_object_unref (tree);
-        return FALSE;
-    }
-    g_object_unref (tree);
-
-    if (!streq ("fs", donna_node_get_domain (node)))
-    {
-        gchar *fl = donna_node_get_full_location (node);
-        g_set_error (error, DONNA_TASK_PROCESS_ERROR,
-                DONNA_TASK_PROCESS_ERROR_OTHER,
-                "Cannot set working directory: current location (%s) of active-list (treeview '%s') must be in domain 'fs'",
-                fl, donna_tree_view_get_name (tree));
-        g_object_unref (tree);
-        g_object_unref (node);
-        g_free (fl);
-        return FALSE;
-    }
-
-    taskp->priv->workdir = donna_node_get_location (node);
-    g_object_unref (node);
+    taskp->priv->workdir = workdir;
     return TRUE;
 }
 
