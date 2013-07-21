@@ -547,7 +547,7 @@ setter (DonnaTask       *task,
 
 static DonnaNode *
 new_node (DonnaProviderBase *_provider,
-          const gchar       *location,
+          const gchar       *_location,
           const gchar       *filename,
           gboolean           need_lock)
 {
@@ -556,10 +556,18 @@ new_node (DonnaProviderBase *_provider,
     DonnaNodeType    type;
     DonnaNodeFlags   flags;
     const gchar     *name;
+    gchar           *location = (gchar *) _location;
     gboolean         free_filename = FALSE;
 
     if (!filename)
     {
+        gsize len;
+
+        /* no trailing slash (except for "/" ofc) */
+        len = strlen (location);
+        if (len > 1 && location[len - 1] == '/')
+            location = g_strndup (_location, len -1);
+
         /* if filename encoding if UTF8, just use location */
         if (g_get_filename_charsets (NULL))
             filename = location;
@@ -574,6 +582,8 @@ new_node (DonnaProviderBase *_provider,
     {
         if (free_filename)
             g_free ((gchar *) filename);
+        if (location != _location)
+            g_free (location);
         return NULL;
     }
 
@@ -624,6 +634,8 @@ new_node (DonnaProviderBase *_provider,
         {
             klass->unlock_nodes (_provider);
             g_object_unref (node);
+            if (location != _location)
+                g_free (location);
             return n;
         }
     }
@@ -632,6 +644,8 @@ new_node (DonnaProviderBase *_provider,
     if (need_lock)
         klass->unlock_nodes (_provider);
 
+    if (location != _location)
+        g_free (location);
     return node;
 }
 
