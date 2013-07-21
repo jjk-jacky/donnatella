@@ -8533,13 +8533,22 @@ donna_tree_view_edit_column (DonnaTreeView      *tree,
     return TRUE;
 }
 
+struct refresh_list
+{
+    DonnaTreeView *tree;
+    DonnaNode *node;
+};
+
 /* list only */
 static void
-node_get_children_refresh_list_cb (DonnaTask     *task,
-                                   gboolean       timeout_called,
-                                   DonnaTreeView *tree)
+node_get_children_refresh_list_cb (DonnaTask            *task,
+                                   gboolean              timeout_called,
+                                   struct refresh_list  *data)
 {
-    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+
+    if (data->node != priv->location)
+        goto free;
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
@@ -8548,9 +8557,11 @@ node_get_children_refresh_list_cb (DonnaTask     *task,
         return;
     }
 
-    set_children (tree, NULL,
+    set_children (data->tree, NULL,
             g_value_get_boxed (donna_task_get_return_value (task)),
             FALSE, TRUE);
+free:
+    g_free (data);
 }
 
 struct node_children_refresh_data
@@ -8804,12 +8815,18 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         else
         {
             DonnaTask *task;
+            struct refresh_list *data;
 
             task = donna_node_get_children_task (priv->location,
                     priv->node_types, NULL);
+
+            data = g_new (struct refresh_list, 1);
+            data->tree = tree;
+            data->node = priv->location;
+
             donna_task_set_callback (task,
                     (task_callback_fn) node_get_children_refresh_list_cb,
-                    tree, NULL);
+                    data, g_free);
             donna_app_run_task (priv->app, task);
             return TRUE;
         }
