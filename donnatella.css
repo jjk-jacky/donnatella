@@ -8,6 +8,12 @@ DonnaTreeView.domain-config row.focused-row  { background: #ffb450; }
 DonnaTreeView.domain-config row:focused  { background: #ffaa46; }
 DonnaTreeView.domain-config row:selected  { background: @selected_bg_color; }
 
+DonnaTreeView.domain-exec row:nth-child(odd) { background: #96cdff; }
+DonnaTreeView.domain-exec row:nth-child(even) { background: #82c8ff; }
+DonnaTreeView.domain-exec row.focused-row  { background: #50b4ff; }
+DonnaTreeView.domain-exec row:focused  { background: #46aaff; }
+DonnaTreeView.domain-exec row:selected  { background: @selected_bg_color; }
+
 DonnaTreeView row.focused-row  { background: #BBB; }
 DonnaTreeView row:focused  { background: #a0a0a0; }
 DonnaTreeView row:selected  { background: @selected_bg_color; }

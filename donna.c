@@ -12,6 +12,7 @@
 #include "provider-command.h"
 #include "provider-config.h"
 #include "provider-task.h"
+#include "provider-exec.h"
 #include "columntype.h"
 #include "columntype-name.h"
 #include "columntype-size.h"
@@ -663,6 +664,8 @@ donna_donna_get_provider (DonnaApp    *app,
         provider = g_object_new (DONNA_TYPE_PROVIDER_FS, "app", app, NULL);
     else if (streq (domain, "command"))
         provider = g_object_new (DONNA_TYPE_PROVIDER_COMMAND, "app", app, NULL);
+    else if (streq (domain, "exec"))
+        provider = g_object_new (DONNA_TYPE_PROVIDER_EXEC, "app", app, NULL);
     else
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
