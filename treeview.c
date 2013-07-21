@@ -157,6 +157,19 @@ enum changed_on
     STATUS_CHANGED_ON_CONTENT   = (1 << 2),
 };
 
+/* because changing location for List is a multi-step process */
+enum cl
+{
+    /* we're not changing location */
+    CHANGING_LOCATION_NOT = 0,
+    /* the get_children() task has been started */
+    CHANGING_LOCATION_ASKED,
+    /* the timeout was triggered (DRAW_WAIT) */
+    CHANGING_LOCATION_SLOW,
+    /* we've received nodes from new-child signal (e.g. search results) */
+    CHANGING_LOCATION_GOT_CHILD
+};
+
 struct visuals
 {
     /* iter of the root, or an invalid iter (stamp==0) and user_data if the
@@ -302,6 +315,11 @@ struct _DonnaTreeViewPrivate
 
     /* List: future location (task get_children running) */
     DonnaNode           *future_location;
+    /* duplicatable task to get_children -- better than get doing a get_children
+     * for e.g. search results, to keep the same workdir, etc */
+    DonnaTask           *location_task;
+    /* which step are we in the changing of location */
+    enum cl              cl;
 
     /* tree: list of iters for roots, in order */
     GSList              *roots;
@@ -488,6 +506,11 @@ static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          DonnaNode       *node,
                                                          guint           *index,
                                                          gboolean         create);
+static gboolean change_location                         (DonnaTreeView  *tree,
+                                                         enum cl         cl,
+                                                         DonnaNode      *node,
+                                                         gpointer        data,
+                                                         GError        **error);
 static inline void scroll_to_iter                       (DonnaTreeView  *tree,
                                                          GtkTreeIter    *iter);
 static gboolean scroll_to_current                       (DonnaTreeView  *tree);
@@ -4049,8 +4072,31 @@ real_new_child_cb (struct new_child_data *data)
 
     if (!is_tree (data->tree))
     {
-        gboolean was_empty = g_hash_table_size (priv->hashtable) == 0;
-        if (add_node_to_tree (data->tree, NULL, data->child, NULL) && was_empty)
+        gboolean was_empty;
+
+        if (priv->cl == CHANGING_LOCATION_ASKED
+                || priv->cl == CHANGING_LOCATION_SLOW)
+        {
+            if (!change_location (data->tree, CHANGING_LOCATION_GOT_CHILD,
+                    data->node, NULL, NULL))
+                goto free;
+        }
+        else if (priv->cl == CHANGING_LOCATION_GOT_CHILD)
+        {
+            if (priv->future_location != data->node)
+                goto free;
+        }
+        else if (priv->location != data->node)
+            goto free;
+
+        was_empty = g_hash_table_size (priv->hashtable) == 0;
+
+        /* we need to check if it's already there. This could happen on refresh,
+         * where we get children via new-child signals first (e.g. search
+         * results) */
+        if (!g_hash_table_lookup (priv->hashtable, data->child)
+                && add_node_to_tree (data->tree, NULL, data->child, NULL)
+                && was_empty)
         {
             GtkWidget *w;
 
@@ -4090,10 +4136,6 @@ node_new_child_cb (DonnaProvider *provider,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     struct new_child_data *data;
-
-    /* list: unless we're in node, we don't care */
-    if (!is_tree (tree) && priv->location != node)
-        return;
 
     /* if we don't care for this type of nodes, nothing to do */
     if (!(donna_node_get_node_type (child) & priv->node_types))
@@ -6736,28 +6778,12 @@ static void
 node_get_children_list_timeout (DonnaTask                           *task,
                                 struct node_get_children_list_data  *data)
 {
-    DonnaTreeViewPrivate *priv = data->tree->priv;
-
-    /* is this still valid (or did the user click away already) ? */
-    if (data->node)
-    {
-        if (priv->future_location != data->node)
-            return;
-    }
-    else if (priv->future_location != data->child)
-        return;
-
-    /* clear the list (see selection_changed_cb() for why filling_list) */
-    priv->filling_list = TRUE;
-    donna_tree_store_clear (priv->store);
-    priv->filling_list = FALSE;
-    /* also the hashtable (we don't need to unref nodes (keys), as our ref was
-     * handled by the store) */
-    g_hash_table_remove_all (priv->hashtable);
-    /* and show the "please wait" message */
-    priv->draw_state = DRAW_WAIT;
-    gtk_widget_queue_draw (GTK_WIDGET (data->tree));
+    change_location (data->tree, CHANGING_LOCATION_SLOW, NULL, data, NULL);
 }
+
+static void switch_provider (DonnaTreeView *tree,
+                             DonnaProvider *provider_current,
+                             DonnaProvider *provider_future);
 
 /* mode list only */
 static void
@@ -6766,101 +6792,109 @@ node_get_children_list_cb (DonnaTask                            *task,
                            struct node_get_children_list_data   *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
-    GtkStyleContext *context;
-    gchar buf[64];
-    const gchar *domain;
     gboolean changed_location;
     GtkTreeIter iter, *it = &iter;
     const GValue *value;
     GPtrArray *arr;
+    gboolean check_dupes;
     guint i;
-    DonnaProvider *provider;
-    DonnaProvider *provider_location;
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        gchar             *location;
-        const GError      *error;
-
-        error = donna_task_get_error (task);
-        location = donna_node_get_location (data->node);
-        donna_app_show_error (priv->app, error,
-                "Treeview '%s': Failed to get children for node '%s:%s'",
-                priv->name,
-                donna_node_get_domain (data->node),
-                location);
-        g_free (location);
-
         if (priv->future_location == data->node)
         {
-            priv->future_location = NULL;
+            const GError *error;
+            gchar *fl = donna_node_get_full_location (data->node);
 
-            /* since we couldn't go there, make sure our real current location
-             * is known (e.g. when user clicked on tree, it should go back to
-             * where we are, since we failed to change location) */
-            g_object_notify_by_pspec ((GObject *) data->tree,
-                    donna_tree_view_props[PROP_LOCATION]);
+            error = donna_task_get_error (task);
+            donna_app_show_error (priv->app, error,
+                    "Treeview '%s': Failed to get children for node '%s'",
+                    priv->name, fl);
+            g_free (fl);
+
+            if (priv->cl == CHANGING_LOCATION_GOT_CHILD)
+                /* GOT_CHILD means that we've already switch our current
+                 * location, and don't remember what the old one was. It also
+                 * means we got some children listed, so we should stay there
+                 * (e.g. search results but the search failed/got cancelled
+                 * halfway through).
+                 * We keep priv->cl there, so donna_tree_view_get_children()
+                 * will still not send anything (since we only have an
+                 * incomplete list), but we reset priv->future_location */
+                priv->future_location = NULL;
+            else
+            {
+                GError *err = NULL;
+
+                /* go back -- this is needed to maybe switch back providers,
+                 * also we might have gone SLOW/DRAW_WAIT and need to
+                 * re-fill/ask for children again */
+
+                /* first let's make sure any tree sync-ed with us knows where we
+                 * really are (else they could try to get us to change location
+                 * back to where we tried & failed) */
+                g_object_notify_by_pspec ((GObject *) data->tree,
+                        donna_tree_view_props[PROP_LOCATION]);
+
+                /* we hadn't done anything else yet, so all we need is switched
+                 * back to listen to the right provider */
+                if (priv->cl == CHANGING_LOCATION_ASKED)
+                {
+                    switch_provider (data->tree,
+                            donna_node_peek_provider (priv->future_location),
+                            donna_node_peek_provider (priv->location));
+                    priv->cl = CHANGING_LOCATION_NOT;
+                    priv->future_location = NULL;
+                    goto free;
+                }
+
+                /* we actually need to get_children again */
+                if (priv->location_task)
+                {
+                    struct node_get_children_list_data *d;
+                    DonnaTask *task;
+
+                    task = donna_task_get_duplicate (priv->location_task, &err);
+                    if (!task)
+                        goto no_task;
+
+                    d = g_slice_new0 (struct node_get_children_list_data);
+                    d->tree = data->tree;
+                    d->node = g_object_ref (priv->location);
+
+                    donna_task_set_callback (task,
+                            (task_callback_fn) node_get_children_list_cb,
+                            d,
+                            (GDestroyNotify) free_node_get_children_list_data);
+                    donna_app_run_task (priv->app, task);
+                }
+                else if (!change_location (data->tree, CHANGING_LOCATION_ASKED,
+                            priv->location, NULL, &err))
+                    goto no_task;
+
+                check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
+                goto free;
+no_task:
+                fl = donna_node_get_full_location (priv->location);
+                donna_app_show_error (priv->app, err,
+                        "Treeview '%s': Failed to go back to '%s'",
+                        priv->name, fl);
+                g_free (fl);
+                g_clear_error (&err);
+
+                check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
+            }
         }
 
         goto free;
     }
 
-    /* is this still valid (or did the user click away already) ? */
-    if (priv->future_location != data->node)
+    changed_location = priv->location && donna_node_peek_provider (data->node)
+        != donna_node_peek_provider (priv->location);
+    check_dupes = priv->cl == CHANGING_LOCATION_GOT_CHILD;
+
+    if (!change_location (data->tree, CHANGING_LOCATION_NOT, data->node, NULL, NULL))
         goto free;
-
-    changed_location = priv->location != priv->future_location;
-    /* clear the list (see selection_changed_cb() for why filling_list) */
-    priv->filling_list = TRUE;
-    donna_tree_store_clear (priv->store);
-    priv->filling_list = FALSE;
-    /* also the hashtable (we don't need to unref nodes (keys), as our ref was
-     * handled by the store) */
-    g_hash_table_remove_all (priv->hashtable);
-
-    context = gtk_widget_get_style_context ((GtkWidget *) data->tree);
-    /* update current location (now because we need this done to build
-     * arrangement) */
-    if (priv->location)
-    {
-        provider_location = donna_node_get_provider (priv->location);
-        domain = donna_node_get_domain (priv->location);
-        /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
-        if (strlen (domain) <= 56)
-        {
-            strcpy (buf, "domain-");
-            strcpy (buf + 7, domain);
-            gtk_style_context_remove_class (context, buf);
-        }
-        else
-        {
-            gchar *b = g_strdup_printf ("domain-%s", domain);
-            gtk_style_context_remove_class (context, buf);
-            g_free (b);
-        }
-        g_object_unref (priv->location);
-    }
-    else
-        provider_location = NULL;
-    priv->location = g_object_ref (data->node);
-    domain = donna_node_get_domain (priv->location);
-    /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
-    if (strlen (domain) <= 56)
-    {
-        strcpy (buf, "domain-");
-        strcpy (buf + 7, domain);
-        gtk_style_context_add_class (context, buf);
-    }
-    else
-    {
-        gchar *b = g_strdup_printf ("domain-%s", domain);
-        gtk_style_context_add_class (context, buf);
-        g_free (b);
-    }
-    /* we're there */
-    priv->future_location = NULL;
-    /* update arrangement for new location if needed */
-    donna_tree_view_build_arrangement (data->tree, FALSE);
 
     value = donna_task_get_return_value (task);
     arr = g_value_get_boxed (value);
@@ -6884,7 +6918,19 @@ node_get_children_list_cb (DonnaTask                            *task,
         priv->filling_list = TRUE;
         for (i = 0; i < arr->len; ++i)
         {
-            add_node_to_tree (data->tree, NULL, arr->pdata[i], it);
+            if (check_dupes)
+            {
+                GSList *l;
+
+                l = g_hash_table_lookup (priv->hashtable, arr->pdata[i]);
+                if (l)
+                    it = l->data;
+                else
+                    add_node_to_tree (data->tree, NULL, arr->pdata[i], it);
+            }
+            else
+                add_node_to_tree (data->tree, NULL, arr->pdata[i], it);
+
             if (data->child == arr->pdata[i])
                 /* don't change iter no more */
                 it = NULL;
@@ -6937,64 +6983,10 @@ node_get_children_list_cb (DonnaTask                            *task,
         gtk_widget_queue_draw ((GtkWidget *) data->tree);
     }
 
-    /* connect to provider's signals of current location (if needed) */
-    provider = donna_node_peek_provider (priv->location);
-    if (provider != provider_location)
-    {
-        struct provider_signals *ps;
-        gint done = (provider_location) ? 0 : 1;
-        gint found = -1;
-
-        for (i = 0; i < priv->providers->len; ++i)
-        {
-            ps = priv->providers->pdata[i];
-
-            if (ps->provider == provider)
-            {
-                found = i;
-                ps->nb_nodes++;
-                ++done;
-            }
-            else if (ps->provider == provider_location)
-            {
-                if (--ps->nb_nodes == 0)
-                    /* this will disconnect handlers from provider & free memory */
-                    g_ptr_array_remove_index_fast (priv->providers, i--);
-                else
-                {
-                    /* still connected for children listed on list, but not the
-                     * current location. So, we can disconnect from new_child */
-                    g_signal_handler_disconnect (ps->provider,
-                            ps->sid_node_new_child);
-                    ps->sid_node_new_child = 0;
-                }
-                ++done;
-            }
-
-            if (done == 2)
-                break;
-        }
-        if (found < 0)
-        {
-            ps = g_new0 (struct provider_signals, 1);
-            ps->provider = g_object_ref (provider);
-            ps->nb_nodes = 1;
-            ps->sid_node_updated = g_signal_connect (provider, "node-updated",
-                    G_CALLBACK (node_updated_cb), data->tree);
-            ps->sid_node_removed = g_signal_connect (provider, "node-removed",
-                    G_CALLBACK (node_removed_cb), data->tree);
-
-            g_ptr_array_add (priv->providers, ps);
-        }
-        else
-            ps = priv->providers->pdata[found];
-        /* whether or not we created ps, we need to connect to new_child, since
-         * it's only useful for current location */
-        ps->sid_node_new_child = g_signal_connect (provider, "node-new-child",
-                G_CALLBACK (node_new_child_cb), data->tree);
-        if (provider_location)
-            g_object_unref (provider_location);
-    }
+    if (priv->location_task)
+        g_object_unref (priv->location_task);
+    priv->location_task = (donna_task_can_be_duplicated (task))
+        ? g_object_ref (task) : NULL;
 
     /* emit signal */
     g_object_notify_by_pspec ((GObject *) data->tree,
@@ -7016,27 +7008,21 @@ node_get_parent_list_cb (DonnaTask                            *task,
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        gchar             *location;
-        const GError      *error;
-
-        error = donna_task_get_error (task);
-        location = donna_node_get_location (data->child);
-        donna_app_show_error (priv->app, error,
-                "Treeview '%s': Failed to get parent for node '%s:%s'",
-                priv->name,
-                donna_node_get_domain (data->child),
-                location);
-        g_free (location);
-
         if (priv->future_location == data->child)
         {
-            priv->future_location = NULL;
+            const GError *error;
+            gchar *fl = donna_node_get_full_location (data->child);
 
-            /* since we couldn't go there, make sure our real current location
-             * is known (e.g. when user clicked on tree, it should go back to
-             * where we are, since we failed to change location) */
-            g_object_notify_by_pspec (G_OBJECT (data->tree),
-                    donna_tree_view_props[PROP_LOCATION]);
+            error = donna_task_get_error (task);
+            donna_app_show_error (priv->app, error,
+                    "Treeview '%s': Failed to get parent for node '%s'",
+                    priv->name, fl);
+            g_free (fl);
+
+            /* this is needed to maybe switch back providers, also we might have
+             * gone SLOW/DRAW_WAIT and need to re-fill/ask for children */
+            change_location (data->tree, CHANGING_LOCATION_ASKED,
+                    priv->location, NULL, NULL);
         }
 
         free_node_get_children_list_data (data);
@@ -7069,26 +7055,303 @@ node_get_parent_list_cb (DonnaTask                            *task,
     donna_app_run_task (priv->app, task);
 }
 
+/* mode list only */
+static void
+switch_provider (DonnaTreeView *tree,
+                 DonnaProvider *provider_current,
+                 DonnaProvider *provider_future)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+
+    if (provider_current != provider_future)
+    {
+        struct provider_signals *ps;
+        guint i;
+        gint done = (provider_current) ? 0 : 1;
+        gint found = -1;
+
+        for (i = 0; i < priv->providers->len; ++i)
+        {
+            ps = priv->providers->pdata[i];
+
+            if (ps->provider == provider_future)
+            {
+                found = i;
+                ps->nb_nodes++;
+                ++done;
+            }
+            else if (ps->provider == provider_current)
+            {
+                if (--ps->nb_nodes == 0)
+                    /* this will disconnect handlers from provider & free memory */
+                    g_ptr_array_remove_index_fast (priv->providers, i--);
+                else
+                {
+                    /* still connected for children listed on list, but not the
+                     * current location. So, we can disconnect from new_child */
+                    g_signal_handler_disconnect (ps->provider,
+                            ps->sid_node_new_child);
+                    ps->sid_node_new_child = 0;
+                }
+                ++done;
+            }
+
+            if (done == 2)
+                break;
+        }
+        if (found < 0)
+        {
+            ps = g_new0 (struct provider_signals, 1);
+            ps->provider = g_object_ref (provider_future);
+            ps->nb_nodes = 1;
+            ps->sid_node_updated = g_signal_connect (provider_future,
+                    "node-updated", G_CALLBACK (node_updated_cb), tree);
+            ps->sid_node_removed = g_signal_connect (provider_future,
+                    "node-removed", G_CALLBACK (node_removed_cb), tree);
+
+            g_ptr_array_add (priv->providers, ps);
+        }
+        else
+            ps = priv->providers->pdata[found];
+        /* whether or not we created ps, we need to connect to new_child, since
+         * it's only useful for current location */
+        ps->sid_node_new_child = g_signal_connect (provider_future,
+                "node-new-child", G_CALLBACK (node_new_child_cb), tree);
+    }
+}
+
+/* mode list only */
+static gboolean
+change_location (DonnaTreeView *tree,
+                 enum cl        cl,
+                 DonnaNode     *node,
+                 gpointer       _data,
+                 GError       **error)
+{
+    struct node_get_children_list_data *data = _data;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaProvider *provider_current;
+    DonnaProvider *provider_future;
+    guint i;
+
+    if (cl > CHANGING_LOCATION_ASKED && priv->cl > cl)
+        /* this is ignoring e.g. CHANGING_LOCATION_SLOW if we're already at
+         * CHANGING_LOCATION_GOT_CHILD */
+        return FALSE;
+
+    if (cl == CHANGING_LOCATION_ASKED)
+    {
+        DonnaTask *task;
+        struct node_get_children_list_data *data;
+
+        provider_future = donna_node_peek_provider (node);
+
+        if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+        {
+            task = donna_node_get_children_task (node, priv->node_types, error);
+            if (!task)
+                return FALSE;
+
+            data = g_slice_new0 (struct node_get_children_list_data);
+            data->tree = tree;
+            data->node = g_object_ref (node);
+
+            donna_task_set_timeout (task, 800, /* FIXME */
+                    (task_timeout_fn) node_get_children_list_timeout,
+                    data,
+                    NULL);
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_get_children_list_cb,
+                    data,
+                    (GDestroyNotify) free_node_get_children_list_data);
+        }
+        else /* DONNA_NODE_ITEM */
+        {
+            if (donna_provider_get_flags (provider_future) == DONNA_PROVIDER_FLAG_FLAT)
+            {
+                gchar *fl;
+
+                fl = donna_node_get_full_location (node);
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot set node '%s' as current location, provider is flat (i.e. no parent to go to)",
+                        priv->name, fl);
+                g_free (fl);
+                return FALSE;
+            }
+
+            data = g_slice_new0 (struct node_get_children_list_data);
+            data->tree = tree;
+            data->child = g_object_ref (node);
+
+            task = donna_node_get_parent_task (node, NULL);
+            donna_task_set_timeout (task, 800, /* FIXME */
+                    (task_timeout_fn) node_get_children_list_timeout,
+                    data,
+                    NULL);
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_get_parent_list_cb,
+                    data,
+                    (GDestroyNotify) free_node_get_children_list_data);
+        }
+
+        /* if we're not or already switched, current location is as expected */
+        if (priv->cl == CHANGING_LOCATION_NOT
+                || priv->cl == CHANGING_LOCATION_GOT_CHILD)
+        {
+            if (G_LIKELY (priv->location))
+                provider_current = donna_node_peek_provider (priv->location);
+            else
+                provider_current = NULL;
+        }
+        else
+            /* but for ASKED and SLOW we've already switched to future provider,
+             * so we should consider it as our current one */
+            provider_current = donna_node_peek_provider (priv->future_location);
+
+        /* we don't ref this node, since we should only have it for a short
+         * period of time, and will only use it to compare (the pointer) in the
+         * task's timeout/cb, to make sure the new location is still valid */
+        priv->future_location = node;
+
+        /* connect to provider's signals of future location (if needed) */
+        switch_provider (tree, provider_current, provider_future);
+
+        /* update cl now to make sure we don't overwrite the task we're about to
+         * run or something. That is, said task could be an INTERNAL_FAST one
+         * (e.g. in config) and therefore run right now blockingly. And once
+         * done its callback will set priv->cl to NOT, which we would then
+         * overwrite with our ASKED, leading to troubles. */
+        priv->cl = cl;
+
+        /* now that we're ready, let's get those children */
+        donna_app_run_task (priv->app, task);
+
+        /* return now, since we've handled cl already */
+        return TRUE;
+    }
+    else if (cl == CHANGING_LOCATION_SLOW)
+    {
+        /* is this still valid (or did the user click away already) ? */
+        if (data->node)
+        {
+            if (priv->future_location != data->node)
+                return FALSE;
+        }
+        else if (priv->future_location != data->child)
+            return FALSE;
+
+        /* clear the list (see selection_changed_cb() for why filling_list) */
+        priv->filling_list = TRUE;
+        donna_tree_store_clear (priv->store);
+        priv->filling_list = FALSE;
+        /* also the hashtable (we don't need to unref nodes (keys), as our ref was
+         * handled by the store) */
+        g_hash_table_remove_all (priv->hashtable);
+        /* and show the "please wait" message */
+        priv->draw_state = DRAW_WAIT;
+        gtk_widget_queue_draw ((GtkWidget *) tree);
+    }
+    else /* CHANGING_LOCATION_GOT_CHILD || CHANGING_LOCATION_NOT */
+    {
+        if (node != priv->future_location)
+            return FALSE;
+
+        if (priv->cl < CHANGING_LOCATION_GOT_CHILD)
+        {
+            /* clear the list (see selection_changed_cb() for why filling_list) */
+            priv->filling_list = TRUE;
+            donna_tree_store_clear (priv->store);
+            priv->filling_list = FALSE;
+            /* also the hashtable (we don't need to unref nodes (keys), as our ref was
+             * handled by the store) */
+            g_hash_table_remove_all (priv->hashtable);
+            /* no special drawing */
+            priv->draw_state = DRAW_NOTHING;
+        }
+
+        /* GOT_CHILD, or NOT which means finalizing the switch, in which case we
+         * also need to do the switch if it hasn't been done before */
+        if (cl == CHANGING_LOCATION_GOT_CHILD
+                || priv->cl < CHANGING_LOCATION_GOT_CHILD)
+        {
+            DonnaProvider *provider;
+            GtkStyleContext *context;
+            const gchar *domain;
+            gchar buf[64];
+
+            context = gtk_widget_get_style_context ((GtkWidget *) tree);
+            /* update current location (now because we need this done to build
+             * arrangement) */
+            if (priv->location)
+            {
+                provider = donna_node_peek_provider (priv->location);
+                domain = donna_node_get_domain (priv->location);
+                /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
+                if (strlen (domain) <= 56)
+                {
+                    strcpy (buf, "domain-");
+                    strcpy (buf + 7, domain);
+                    gtk_style_context_remove_class (context, buf);
+                }
+                else
+                {
+                    gchar *b = g_strdup_printf ("domain-%s", domain);
+                    gtk_style_context_remove_class (context, buf);
+                    g_free (b);
+                }
+                g_object_unref (priv->location);
+            }
+            priv->location = g_object_ref (node);
+            domain = donna_node_get_domain (priv->location);
+            /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
+            if (strlen (domain) <= 56)
+            {
+                strcpy (buf, "domain-");
+                strcpy (buf + 7, domain);
+                gtk_style_context_add_class (context, buf);
+            }
+            else
+            {
+                gchar *b = g_strdup_printf ("domain-%s", domain);
+                gtk_style_context_add_class (context, buf);
+                g_free (b);
+            }
+            /* update arrangement for new location if needed */
+            donna_tree_view_build_arrangement (tree, FALSE);
+
+            /* emit signal */
+            g_object_notify_by_pspec ((GObject *) tree,
+                    donna_tree_view_props[PROP_LOCATION]);
+            check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+        }
+
+        if (cl == CHANGING_LOCATION_NOT)
+            priv->future_location = NULL;
+    }
+
+    priv->cl = cl;
+    return TRUE;
+}
+
 gboolean
 donna_tree_view_set_location (DonnaTreeView  *tree,
                               DonnaNode      *node,
                               GError        **error)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaNodeType node_type;
     DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
     priv = tree->priv;
-    node_type = donna_node_get_node_type (node);
 
     if (is_tree (tree))
     {
         GtkTreeIter *iter;
 
-        if (!(priv->node_types & node_type))
+        if (!(priv->node_types & donna_node_get_node_type (node)))
         {
             gchar *location = donna_node_get_location (node);
             g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
@@ -7119,67 +7382,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         return !!iter;
     }
     else
-    {
-        DonnaProvider *provider;
-        struct node_get_children_list_data *data;
-
-        provider = donna_node_peek_provider (node);
-
-        if (node_type == DONNA_NODE_CONTAINER)
-        {
-            data = g_slice_new0 (struct node_get_children_list_data);
-            data->tree = tree;
-            data->node = g_object_ref (node);
-
-            task = donna_provider_get_node_children_task (provider, node,
-                    priv->node_types, NULL);
-            donna_task_set_timeout (task, 800, /* FIXME */
-                    (task_timeout_fn) node_get_children_list_timeout,
-                    data,
-                    NULL);
-            donna_task_set_callback (task,
-                    (task_callback_fn) node_get_children_list_cb,
-                    data,
-                    (GDestroyNotify) free_node_get_children_list_data);
-        }
-        else /* DONNA_NODE_ITEM */
-        {
-            if (donna_provider_get_flags (provider) == DONNA_PROVIDER_FLAG_FLAT)
-            {
-                gchar *fl;
-
-                fl = donna_node_get_full_location (node);
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                        DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot set node '%s' as current location, provider is flat (i.e. no parent to go to)",
-                        priv->name, fl);
-                g_free (fl);
-                return FALSE;
-            }
-
-            data = g_slice_new0 (struct node_get_children_list_data);
-            data->tree = tree;
-            data->child = g_object_ref (node);
-
-            task = donna_provider_get_node_parent_task (provider, node, NULL);
-            donna_task_set_timeout (task, 800, /* FIXME */
-                    (task_timeout_fn) node_get_children_list_timeout,
-                    data,
-                    NULL);
-            donna_task_set_callback (task,
-                    (task_callback_fn) node_get_parent_list_cb,
-                    data,
-                    (GDestroyNotify) free_node_get_children_list_data);
-        }
-
-        /* we don't ref this node, since we should only have it for a short
-         * period of time, and will onyl use it to compare (the pointer) in the
-         * task's timeout/cb, to make sure the new location is still valid */
-        priv->future_location = node;
-
-        donna_app_run_task (priv->app, task);
-        return TRUE;
-    }
+        return change_location (tree, CHANGING_LOCATION_ASKED, node, NULL, error);
 }
 
 DonnaNode *
@@ -8817,8 +9020,13 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             DonnaTask *task;
             struct refresh_list *data;
 
-            task = donna_node_get_children_task (priv->location,
-                    priv->node_types, NULL);
+            if (priv->location_task)
+                task = donna_task_get_duplicate (priv->location_task, error);
+            else
+                task = donna_node_get_children_task (priv->location,
+                        priv->node_types, error);
+            if (!task)
+                return FALSE;
 
             data = g_new (struct refresh_list, 1);
             data->tree = tree;
@@ -8839,24 +9047,27 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     }
     else
     {
-        struct node_get_children_list_data *data;
-        DonnaTask *task;
+        if (priv->location_task)
+        {
+            struct node_get_children_list_data *data;
+            DonnaTask *task;
 
-        data = g_slice_new0 (struct node_get_children_list_data);
-        data->tree = tree;
-        data->node = g_object_ref (priv->location);
+            task = donna_task_get_duplicate (priv->location_task, error);
+            if (!task)
+                return FALSE;
 
-        task = donna_node_get_children_task (data->node, priv->node_types, NULL);
-        donna_task_set_timeout (task, 800, /* FIXME */
-                (task_timeout_fn) node_get_children_list_timeout,
-                data,
-                NULL);
-        donna_task_set_callback (task,
-                (task_callback_fn) node_get_children_list_cb,
-                data,
-                (GDestroyNotify) free_node_get_children_list_data);
-        priv->future_location = data->node;
-        donna_app_run_task (priv->app, task);
+            data = g_slice_new0 (struct node_get_children_list_data);
+            data->tree = tree;
+            data->node = g_object_ref (priv->location);
+
+            donna_task_set_callback (task,
+                    (task_callback_fn) node_get_children_list_cb,
+                    data,
+                    (GDestroyNotify) free_node_get_children_list_data);
+        }
+        else
+            return change_location (tree, CHANGING_LOCATION_ASKED, priv->location,
+                    NULL, error);
     }
 
     return TRUE;
@@ -9307,7 +9518,7 @@ donna_tree_view_get_children (DonnaTreeView      *tree,
         return NULL;
 
     /* list changing location, already cleared the children */
-    if (!is_tree (tree) && tree->priv->draw_state == DRAW_WAIT)
+    if (!is_tree (tree) && tree->priv->cl >= CHANGING_LOCATION_SLOW)
         return NULL;
 
     /* get list of nodes we have in tree */
