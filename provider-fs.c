@@ -11,6 +11,7 @@
 #include "node.h"
 #include "task.h"
 #include "task-process.h"
+#include "app.h"
 #include "macros.h"
 
 struct _DonnaProviderFsPrivate
@@ -328,12 +329,10 @@ setter (DonnaTask       *task,
         st = rename (old, new);
         if (st < 0)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Renaming failed: %s", buf);
+                    "Renaming failed: %s", g_strerror (_errno));
             g_free (old);
             g_free (new);
             return DONNA_TASK_FAILED;
@@ -393,12 +392,10 @@ setter (DonnaTask       *task,
         filename = donna_node_get_filename (node);
         if (chmod (filename, mode) < 0)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Failed to change permissions: %s", buf);
+                    "Failed to change permissions: %s", g_strerror (_errno));
             g_free (filename);
             return DONNA_TASK_FAILED;
         }
@@ -422,12 +419,10 @@ setter (DonnaTask       *task,
         filename = donna_node_get_filename (node);
         if (chown (filename, uid, (gid_t) -1) < 0)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Failed to change owner: %s", buf);
+                    "Failed to change owner: %s", g_strerror (_errno));
             g_free (filename);
             return DONNA_TASK_FAILED;
         }
@@ -451,12 +446,10 @@ setter (DonnaTask       *task,
         filename = donna_node_get_filename (node);
         if (chown (filename, (uid_t) -1, gid) < 0)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Failed to change group: %s", buf);
+                    "Failed to change group: %s", g_strerror (_errno));
             g_free (filename);
             return DONNA_TASK_FAILED;
         }
@@ -481,12 +474,10 @@ setter (DonnaTask       *task,
         filename = donna_node_get_filename (node);
         if (lstat (filename, &st) == -1)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Failed to change time, lstat failed: %s", buf);
+                    "Failed to change time, lstat failed: %s", g_strerror (_errno));
             g_free (filename);
             return DONNA_TASK_FAILED;
         }
@@ -505,12 +496,10 @@ setter (DonnaTask       *task,
 
         if (utime (filename, &times) == -1)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Failed to change time: %s", buf);
+                    "Failed to change time: %s", g_strerror (_errno));
             g_free (filename);
             return DONNA_TASK_FAILED;
         }
@@ -518,12 +507,10 @@ setter (DonnaTask       *task,
         /* get the new values (atime could be ignored, ctime was updated) */
         if (lstat (filename, &st) == -1)
         {
-            gchar buf[255];
-            if (strerror_r (errno, buf, 255) != 0)
-                buf[0] = '\0';
+            gint _errno = errno;
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_OTHER,
-                    "Time was set, but post-lstat failed: %s", buf);
+                    "Time was set, but post-lstat failed: %s", g_strerror (_errno));
             g_free (filename);
             return DONNA_TASK_FAILED;
         }
