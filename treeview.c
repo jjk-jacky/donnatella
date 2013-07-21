@@ -2065,8 +2065,8 @@ remove_row_from_tree (DonnaTreeView *tree,
         }
     }
 
-    /* if removing the current location, let's move it */
-    if (gtk_tree_selection_get_selected (
+    /* tree: if removing the current location, let's move it */
+    if (is_tree (tree) && gtk_tree_selection_get_selected (
                 gtk_tree_view_get_selection ((GtkTreeView *) tree), NULL, &it)
             && itereq (iter, &it))
         handle_removing_row (tree, &it, FALSE);
