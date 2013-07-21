@@ -88,6 +88,10 @@ void                donna_app_run_task              (DonnaApp       *app,
 DonnaTaskManager *  donna_app_get_task_manager      (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);
+DonnaNode *         donna_app_get_current_location  (DonnaApp       *app,
+                                                     GError        **error);
+gchar *             donna_app_get_current_dirname   (DonnaApp       *app,
+                                                     GError        **error);
 gchar *             donna_app_new_int_ref           (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);

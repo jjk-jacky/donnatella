@@ -2,6 +2,7 @@
 #include <string.h>
 #include "app.h"
 #include "provider.h"
+#include "macros.h"
 
 enum
 {
@@ -314,6 +315,67 @@ donna_app_get_treeview (DonnaApp    *app,
     g_return_val_if_fail (interface->get_treeview != NULL, NULL);
 
     return (*interface->get_treeview) (app, name);
+}
+
+DonnaNode *
+donna_app_get_current_location (DonnaApp       *app,
+                                GError        **error)
+{
+    DonnaTreeView *tree;
+    DonnaNode *node;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    g_object_get (app, "active-list", &tree, NULL);
+    if (!tree)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Cannot get current location: failed to get active-list");
+        return NULL;
+    }
+
+    g_object_get (tree, "location", &node, NULL);
+    if (!node)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Cannot get current location: failed to get it from treeview '%s'",
+                donna_tree_view_get_name (tree));
+        g_object_unref (tree);
+        return NULL;
+    }
+    g_object_unref (tree);
+
+    return node;
+}
+
+gchar *
+donna_app_get_current_dirname (DonnaApp       *app,
+                               GError        **error)
+{
+    DonnaNode *node;
+    gchar *dirname;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    node = donna_app_get_current_location (app, error);
+    if (!node)
+        return NULL;
+
+    if (!streq ("fs", donna_node_get_domain (node)))
+    {
+        gchar *fl = donna_node_get_full_location (node);
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Cannot get current dirname: "
+                "current location (%s) of active-list is not in domain 'fs'",
+                fl);
+        g_object_unref (node);
+        g_free (fl);
+        return NULL;
+    }
+
+    dirname = donna_node_get_location (node);
+    g_object_unref (node);
+    return dirname;
 }
 
 gchar *
