@@ -227,7 +227,8 @@ refresher (DonnaTask    *task,
     filename = donna_node_get_filename (node);
 
     if (streq (name, "icon"))
-        ret = set_icon (node, filename);
+        ret = (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+            ? TRUE : set_icon (node, filename);
     else if (streq (name, "desc"))
     {
         gchar *mt;
