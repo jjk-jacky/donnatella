@@ -857,7 +857,7 @@ provider_fs_trigger_node (DonnaProviderBase  *_provider,
         DonnaTask *tp;
         gchar *s;
 
-        tp = donna_task_process_new (NULL, filename, FALSE, NULL, NULL);
+        tp = donna_task_process_new (NULL, filename, FALSE, NULL, NULL, NULL);
         s = strrchr (filename, '/');
         *s = '\0';
         g_object_set (tp, "workdir", filename, NULL);

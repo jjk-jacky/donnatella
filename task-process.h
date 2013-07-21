@@ -35,9 +35,9 @@ typedef void            (*task_init_fn)     (DonnaTaskProcess   *taskp,
                                              gpointer            data,
                                              GError            **error);
 typedef DonnaTaskState  (*task_closer_fn)   (DonnaTask          *task,
-                                             gpointer            data,
                                              gint                rc,
-                                             DonnaTaskState      state);
+                                             DonnaTaskState      state,
+                                             gpointer            data);
 
 struct _DonnaTaskProcess
 {
@@ -57,13 +57,15 @@ DonnaTask *         donna_task_process_new          (const gchar        *workdir
                                                      const gchar        *cmdline,
                                                      gboolean            wait,
                                                      task_closer_fn      closer,
-                                                     gpointer            closer_data);
+                                                     gpointer            closer_data,
+                                                     GDestroyNotify      closer_destroy);
 DonnaTask *         donna_task_process_new_init     (task_init_fn        init,
                                                      gpointer            data,
                                                      GDestroyNotify      destroy,
                                                      gboolean            wait,
                                                      task_closer_fn      closer,
-                                                     gpointer            closer_data);
+                                                     gpointer            closer_data,
+                                                     GDestroyNotify      closer_destroy);
 gboolean            donna_task_process_set_default_closer (
                                                      DonnaTaskProcess   *taskp);
 gboolean            donna_task_process_set_workdir_to_curdir (

@@ -41,6 +41,7 @@ struct _DonnaTaskProcessPrivate
 
     task_closer_fn       closer_fn;
     gpointer             closer_data;
+    GDestroyNotify       closer_destroy;
 
     GString             *str_out;
     GString             *str_err;
@@ -128,6 +129,9 @@ donna_task_process_finalize (GObject *object)
     DonnaTaskProcessPrivate *priv;
 
     priv = ((DonnaTaskProcess *) object)->priv;
+
+    if (priv->closer_destroy && priv->closer_data)
+        priv->closer_destroy (priv->closer_data);
 
     if (priv->init_destroy && priv->init_data)
         priv->init_destroy (priv->init_data);
@@ -309,9 +313,9 @@ again:
 
 static DonnaTaskState
 default_closer (DonnaTask          *task,
-                gpointer            data,
                 gint                rc,
-                DonnaTaskState      state)
+                DonnaTaskState      state,
+                gpointer            data)
 {
     if (state != DONNA_TASK_DONE || rc == 0)
         return state;
@@ -486,8 +490,10 @@ again:
         state = DONNA_TASK_FAILED;
 
     if (priv->closer_fn)
-        state = priv->closer_fn (task, priv->closer_data,
-                WEXITSTATUS (status), state);
+        state = priv->closer_fn (task, WEXITSTATUS (status), state,
+                priv->closer_data);
+    /* we don't want to free/destroy data in finalize anymore */
+    priv->closer_destroy = NULL;
 
     if (priv->tuimsg)
     {
@@ -514,7 +520,8 @@ donna_task_process_new (const gchar        *workdir,
                         const gchar        *cmdline,
                         gboolean            wait,
                         task_closer_fn      closer,
-                        gpointer            closer_data)
+                        gpointer            closer_data,
+                        GDestroyNotify      closer_destroy)
 {
     DonnaTask *task;
     DonnaTaskProcessPrivate *priv;
@@ -526,9 +533,10 @@ donna_task_process_new (const gchar        *workdir,
         priv->workdir = g_strdup (workdir);
     if (cmdline)
         priv->cmdline = g_strdup (cmdline);
-    priv->wait          = wait;
-    priv->closer_fn     = closer;
-    priv->closer_data   = closer_data;
+    priv->wait           = wait;
+    priv->closer_fn      = closer;
+    priv->closer_data    = closer_data;
+    priv->closer_destroy = closer_destroy;
 
     donna_task_set_worker (task, task_worker, NULL, NULL);
     if (wait)
@@ -551,7 +559,8 @@ donna_task_process_new_init (task_init_fn        init,
                              GDestroyNotify      destroy,
                              gboolean            wait,
                              task_closer_fn      closer,
-                             gpointer            closer_data)
+                             gpointer            closer_data,
+                             GDestroyNotify      closer_destroy)
 {
     DonnaTask *task;
     DonnaTaskProcessPrivate *priv;
@@ -561,12 +570,13 @@ donna_task_process_new_init (task_init_fn        init,
     task = (DonnaTask *) g_object_new (DONNA_TYPE_TASK_PROCESS, NULL);
     priv = ((DonnaTaskProcess *) task)->priv;
 
-    priv->init_fn       = init;
-    priv->init_data     = data;
-    priv->init_destroy  = destroy;
-    priv->wait          = wait;
-    priv->closer_fn     = closer;
-    priv->closer_data   = closer_data;
+    priv->init_fn        = init;
+    priv->init_data      = data;
+    priv->init_destroy   = destroy;
+    priv->wait           = wait;
+    priv->closer_fn      = closer;
+    priv->closer_data    = closer_data;
+    priv->closer_destroy = closer_destroy;
 
     donna_task_set_worker (task, task_worker, NULL, NULL);
     if (wait)
