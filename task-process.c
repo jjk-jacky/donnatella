@@ -431,7 +431,8 @@ task_worker (DonnaTask *task, gpointer data)
             if (donna_task_is_cancelling (task))
             {
                 sid = 0;
-                kill (pid, SIGABRT);
+                kill (pid, SIGTERM);
+                kill (pid, SIGCONT);
                 failed = FAILED_CANCELLED;
                 break;
             }
