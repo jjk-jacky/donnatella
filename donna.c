@@ -63,6 +63,13 @@ enum types
     TYPE_IGNORE
 };
 
+enum
+{
+    TITLE_DOMAIN_LOCATION,
+    TITLE_DOMAIN_FULL_LOCATION,
+    TITLE_DOMAIN_CUSTOM
+};
+
 struct filter
 {
     DonnaFilter *filter;
@@ -1577,10 +1584,24 @@ parse_string (DonnaDonna *donna, gchar *fmt)
                 node = donna_tree_view_get_location (priv->active_list);
                 if (G_LIKELY (node))
                 {
-                    if (streq ("fs", donna_node_get_domain (node)))
+                    const gchar *domain;
+                    gint type;
+
+                    domain = donna_node_get_domain (node);
+                    if (!donna_config_get_int (priv->config, &type,
+                                "donna/domain_%s", domain))
+                        type = (streq ("fs", domain))
+                            ? TITLE_DOMAIN_LOCATION : TITLE_DOMAIN_FULL_LOCATION;
+
+                    if (type == TITLE_DOMAIN_LOCATION)
                         ss = donna_node_get_location (node);
-                    else
+                    else if (type == TITLE_DOMAIN_FULL_LOCATION)
                         ss = donna_node_get_full_location (node);
+                    else if (type == TITLE_DOMAIN_CUSTOM)
+                        if (!donna_config_get_string (priv->config, &ss,
+                                    "donna/custom_%s", domain))
+                            ss = donna_node_get_name (node);
+
                     g_string_append (str, ss);
                     g_free (ss);
                     g_object_unref (node);
