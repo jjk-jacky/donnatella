@@ -9539,6 +9539,49 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
     return TRUE;
 }
 
+void
+donna_tree_view_reset_keys (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+    priv = tree->priv;
+
+    g_free (priv->key_mode);
+    priv->key_mode = NULL;
+
+    /* wrong_key */
+    g_free (priv->key_combine_name);
+    priv->key_combine_name = NULL;
+    priv->key_combine = 0;
+    priv->key_combine_spec = 0;
+    priv->key_spec_type = SPEC_NONE;
+    priv->key_m = 0;
+    priv->key_val = 0;
+    priv->key_motion_m = 0;
+    priv->key_motion = 0;
+
+    check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEYMODE);
+}
+
+/* mode list only */
+void
+donna_tree_view_abort (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+    priv = tree->priv;
+
+    if (priv->get_children_task)
+    {
+        if (!(donna_task_get_state (priv->get_children_task) & DONNA_TASK_POST_RUN))
+            donna_task_cancel (priv->get_children_task);
+        g_object_unref (priv->get_children_task);
+        priv->get_children_task = NULL;
+    }
+}
+
 
 /* mode list only */
 GPtrArray *
@@ -10786,22 +10829,6 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
     if (!key)
         return FALSE;
 
-    if (event->keyval == GDK_KEY_Escape)
-    {
-        if (priv->get_children_task)
-        {
-            if (!(donna_task_get_state (priv->get_children_task) & DONNA_TASK_POST_RUN))
-                donna_task_cancel (priv->get_children_task);
-            g_object_unref (priv->get_children_task);
-            priv->get_children_task = NULL;
-        }
-
-        g_free (priv->key_mode);
-        priv->key_mode = NULL;
-        wrong_key (FALSE);
-        check_statuses (tree, STATUS_CHANGED_ON_KEYMODE);
-    }
-
     g_debug("key=%s",key);
 
     if (priv->key_spec_type != SPEC_NONE)
@@ -10892,6 +10919,17 @@ next:
     else
     {
         type = find_key_from (tree, config, &key, &alias, &from);
+        if (G_UNLIKELY (type == -1 && event->keyval == GDK_KEY_Escape))
+        {
+            /* special case: GDK_KEY_Escape will always default to
+             * tree_reset_keys if not defined. This is to ensure that if you set
+             * a keymode, you can always get back to normal mode (even if you
+             * forgot to define the key Escape to do so. Of course if you define
+             * it to nothing/something else, it's on you. */
+            donna_tree_view_reset_keys (tree);
+            return TRUE;
+        }
+
         switch (type)
         {
             case KEY_COMBINE:

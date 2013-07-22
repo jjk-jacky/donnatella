@@ -225,6 +225,7 @@ DonnaNode *     donna_tree_view_get_node_at_row (DonnaTreeView      *tree,
                                                  GError            **error);
 void            donna_tree_view_set_key_mode    (DonnaTreeView      *tree,
                                                  const gchar        *key_mode);
+void            donna_tree_view_reset_keys      (DonnaTreeView      *tree);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
@@ -266,6 +267,7 @@ gboolean        donna_tree_view_maxi_collapse   (DonnaTreeView      *tree,
 GPtrArray *     donna_tree_view_get_children    (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  DonnaNodeType       node_types);
+void            donna_tree_view_abort           (DonnaTreeView      *tree);
 
 G_END_DECLS
 
