@@ -990,12 +990,39 @@ error:
 
 /* for parsing/running commands from treeview, menu or toolbar */
 
+struct cmd_run_data
+{
+    gboolean is_heap;
+    /* to show error message on FAILED */
+    DonnaApp *app;
+    /*  needed to free args below */
+    DonnaCommand *command;
+    /* is set, must be free-d */
+    GPtrArray *args;
+};
+
 static void
-command_run_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+free_cmd_run_data (struct cmd_run_data *data)
+{
+    if (data->args)
+        free_command_args (data->command, data->args);
+    if (data->is_heap)
+        g_slice_free (struct cmd_run_data, data);
+}
+
+static void
+command_run_no_free_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
 {
     if (donna_task_get_state (task) == DONNA_TASK_FAILED)
         donna_app_show_error (app, donna_task_get_error (task),
                 "Action triggered failed");
+}
+
+static void
+command_run_cb (DonnaTask *task, gboolean timeout_called, struct cmd_run_data *data)
+{
+    command_run_no_free_cb (task, timeout_called, data->app);
+    free_cmd_run_data (data);
 }
 
 struct err
@@ -1052,6 +1079,8 @@ run_command (DonnaTask *task, struct rc_data *data)
     GError *err = NULL;
     DonnaTask *cmd_task;
     DonnaTaskState state;
+    struct cmd_run_data cmd_run_data = { 0, };
+    struct cmd_run_data *cr_data;
 
     if (!data->command)
     {
@@ -1089,7 +1118,8 @@ run_command (DonnaTask *task, struct rc_data *data)
                 task = donna_task_new ((task_fn) run_command, d,
                         (GDestroyNotify) free_rc_data);
                 donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
-                donna_task_set_callback (task, (task_callback_fn) command_run_cb,
+                donna_task_set_callback (task,
+                        (task_callback_fn) command_run_no_free_cb,
                         data->app, NULL);
                 donna_app_run_task (data->app, task);
                 return DONNA_TASK_DONE;
@@ -1145,9 +1175,29 @@ run_command (DonnaTask *task, struct rc_data *data)
 
     cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
     donna_task_set_visibility (cmd_task, data->command->visibility);
+
     if (!task)
+    {
+        /* !task == we're in thread UI, this is the trigger of an action. If the
+         * command has a visibility GUI or FAST then we know it'll run
+         * blockingly, and we don't need to alloc on heap. */
+        if (data->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI
+                || data->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
+            cr_data = &cmd_run_data;
+        else
+        {
+            cr_data = g_slice_new0 (struct cmd_run_data);
+            cr_data->is_heap = TRUE;
+            cr_data->command = data->command;
+            cr_data->args = data->arr;
+            data->arr = NULL;
+        }
+        cr_data->app = data->app;
+
         donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb,
-                data->app, NULL);
+                cr_data, (GDestroyNotify) free_cmd_run_data);
+    }
+
     if (task || data->blocking == BLOCK_OK)
         /* avoid starting another thread, since we're already in one */
         donna_task_set_can_block (g_object_ref_sink (cmd_task));
