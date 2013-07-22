@@ -384,7 +384,7 @@ free_command_args (DonnaCommand *command, GPtrArray *arr)
      * because the arr sent to the command contains an extra pointer, to
      * DonnaApp in case the command needs it (e.g. to access config, etc).
      * And we start at 1 because pdata[0] is NULL or the "parent task" */
-    for (i = 1; i < arr->len && command->argc ; ++i)
+    for (i = 1; i < arr->len && i <= command->argc; ++i)
     {
         if (!arr->pdata[i])
             /* arg must have been optional & not specified */
@@ -1107,7 +1107,7 @@ run_command (DonnaTask *task, struct rc_data *data)
 
             /* this was the last argument specified, but command has more */
 
-            for (j = data->i + 2; j < data->command->argc; ++j)
+            for (j = data->i + 1; j < data->command->argc; ++j)
                 if (!(data->command->arg_type[j] & DONNA_ARG_IS_OPTIONAL))
                     break;
 
@@ -1246,7 +1246,7 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
 
             /* this was the last argument specified, but command has more */
 
-            for (j = data.i + 2; j < data.command->argc; ++j)
+            for (j = data.i + 1; j < data.command->argc; ++j)
                 if (!(data.command->arg_type[j] & DONNA_ARG_IS_OPTIONAL))
                     break;
 
