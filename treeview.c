@@ -308,11 +308,17 @@ struct _DonnaTreeViewPrivate
 
     /* current location */
     DonnaNode           *location;
+
     /* Tree: iter of current location */
     GtkTreeIter          location_iter;
     /* Tree: iter of futur location, used to ensure it is visible */
     GtkTreeIter          future_location_iter;
 
+    /* List: last get_children task, if we need to cancel it. This is list-only
+     * because in tree we don't abort the last get_children when we start a new
+     * one, plus aborting one would require a lot more (remove any already added
+     * child, reset expand state, etc) */
+    DonnaTask           *get_children_task;
     /* List: future location (task get_children running) */
     DonnaNode           *future_location;
     /* duplicatable task to get_children -- better than get doing a get_children
@@ -1060,6 +1066,19 @@ active_list_changed_cb (GObject         *object,
             G_CALLBACK (sync_with_location_changed_cb), tree);
 
     sync_with_location_changed_cb ((GObject *) priv->sync_with, NULL, tree);
+}
+
+/* mode list only */
+static inline void
+set_get_children_task (DonnaTreeView *tree, DonnaTask *task)
+{
+    if (tree->priv->get_children_task)
+    {
+        if (!(donna_task_get_state (tree->priv->get_children_task) & DONNA_TASK_POST_RUN))
+            donna_task_cancel (tree->priv->get_children_task);
+        g_object_unref (tree->priv->get_children_task);
+    }
+    tree->priv->get_children_task = g_object_ref (task);
 }
 
 enum
@@ -6799,6 +6818,12 @@ node_get_children_list_cb (DonnaTask                            *task,
     gboolean check_dupes;
     guint i;
 
+    if (priv->get_children_task == task)
+    {
+        g_object_unref (priv->get_children_task);
+        priv->get_children_task = NULL;
+    }
+
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
         if (priv->future_location == data->node)
@@ -6857,6 +6882,7 @@ node_get_children_list_cb (DonnaTask                            *task,
                     task = donna_task_get_duplicate (priv->location_task, &err);
                     if (!task)
                         goto no_task;
+                    set_get_children_task (data->tree, task);
 
                     d = g_slice_new0 (struct node_get_children_list_data);
                     d->tree = data->tree;
@@ -7043,6 +7069,7 @@ node_get_parent_list_cb (DonnaTask                            *task,
     priv->future_location = data->node;
 
     task = donna_node_get_children_task (data->node, priv->node_types, NULL);
+    set_get_children_task (data->tree, task);
     if (!timeout_called)
         donna_task_set_timeout (task, 800, /* FIXME */
                 (task_timeout_fn) node_get_children_list_timeout,
@@ -7151,6 +7178,7 @@ change_location (DonnaTreeView *tree,
             task = donna_node_get_children_task (node, priv->node_types, error);
             if (!task)
                 return FALSE;
+            set_get_children_task (tree, task);
 
             data = g_slice_new0 (struct node_get_children_list_data);
             data->tree = tree;
@@ -8750,6 +8778,12 @@ node_get_children_refresh_list_cb (DonnaTask            *task,
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
 
+    if (priv->get_children_task == task)
+    {
+        g_object_unref (priv->get_children_task);
+        priv->get_children_task = NULL;
+    }
+
     if (data->node != priv->location)
         goto free;
 
@@ -9027,6 +9061,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
                         priv->node_types, error);
             if (!task)
                 return FALSE;
+            set_get_children_task (tree, task);
 
             data = g_new (struct refresh_list, 1);
             data->tree = tree;
@@ -9055,6 +9090,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             task = donna_task_get_duplicate (priv->location_task, error);
             if (!task)
                 return FALSE;
+            set_get_children_task (tree, task);
 
             data = g_slice_new0 (struct node_get_children_list_data);
             data->tree = tree;
@@ -10744,6 +10780,14 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
 
     if (event->keyval == GDK_KEY_Escape)
     {
+        if (priv->get_children_task)
+        {
+            if (!(donna_task_get_state (priv->get_children_task) & DONNA_TASK_POST_RUN))
+                donna_task_cancel (priv->get_children_task);
+            g_object_unref (priv->get_children_task);
+            priv->get_children_task = NULL;
+        }
+
         g_free (priv->key_mode);
         priv->key_mode = NULL;
         wrong_key (FALSE);
