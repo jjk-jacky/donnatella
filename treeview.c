@@ -6838,6 +6838,7 @@ node_get_children_list_cb (DonnaTask                            *task,
             g_free (fl);
 
             if (priv->cl == CHANGING_LOCATION_GOT_CHILD)
+            {
                 /* GOT_CHILD means that we've already switch our current
                  * location, and don't remember what the old one was. It also
                  * means we got some children listed, so we should stay there
@@ -6847,6 +6848,13 @@ node_get_children_list_cb (DonnaTask                            *task,
                  * will still not send anything (since we only have an
                  * incomplete list), but we reset priv->future_location */
                 priv->future_location = NULL;
+
+                /* Also update the location_task */
+                if (priv->location_task)
+                    g_object_unref (priv->location_task);
+                priv->location_task = (donna_task_can_be_duplicated (task))
+                    ? g_object_ref (task) : NULL;
+            }
             else
             {
                 GError *err = NULL;
