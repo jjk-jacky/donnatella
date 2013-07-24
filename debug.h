@@ -28,6 +28,33 @@ typedef enum
     }                                            \
 } while (0)
 
+/* shorthand for G_BREAKPOINT() but also takes a boolean, if TRUE it will ungrab
+ * the mouse/keyboard, which allows one to actually switch to GDB and debug even
+ * if say a menu was poped up and had grabbed things */
+#define GDB(ungrab)                                                         \
+    if (ungrab)                                                             \
+    {                                                                       \
+        GdkDeviceManager *devmngr;                                          \
+        GList *list, *l;                                                    \
+                                                                            \
+        devmngr = gdk_display_get_device_manager (                          \
+                gdk_display_get_default ());                                \
+        list = gdk_device_manager_list_devices (devmngr,                    \
+                GDK_DEVICE_TYPE_MASTER);                                    \
+        for (l = list; l; l = l->next)                                      \
+        {                                                                   \
+            GdkDevice *dev = l->data;                                       \
+                                                                            \
+            if (gdk_device_get_source (dev) != GDK_SOURCE_MOUSE             \
+                    && gdk_device_get_source (dev) != GDK_SOURCE_KEYBOARD)  \
+                continue;                                                   \
+                                                                            \
+            gdk_device_ungrab (dev, GDK_CURRENT_TIME);                      \
+        }                                                                   \
+        g_list_free (list);                                                 \
+    }                                                                       \
+    G_BREAKPOINT();
+
 #else
 
 #define DONNA_DEBUG(type, action)
