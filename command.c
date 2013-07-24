@@ -919,6 +919,29 @@ convert:
                 s = NULL;
             }
         }
+        else if (*s == '<')
+        {
+            gpointer ptr;
+            gsize len = strlen (s) - 1;
+
+            if (s[len] != '>')
+            {
+                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                        "Command '%s', argument %d: Invalid node reference: '%s'",
+                        data->command->name, data->i + 1, s);
+                goto error;
+            }
+            ptr = donna_app_get_int_ref (data->app, s, DONNA_ARG_TYPE_NODE);
+            if (!ptr)
+            {
+                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                        "Command '%s', argument %d: Invalid internal reference '%s'",
+                        data->command->name, data->i + 1, s);
+                goto error;
+            }
+            rid->type = DONNA_ARG_TYPE_NODE;
+            rid->ptr  = ptr;
+        }
         else
         {
             DonnaTask *task;
