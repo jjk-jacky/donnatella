@@ -27,6 +27,7 @@
 #include "sort.h"
 #include "command.h"
 #include "statusbar.h"
+#include "imagemenuitem.h"
 #include "macros.h"
 
 guint donna_debug_flags = 0;
@@ -1147,22 +1148,33 @@ donna_donna_free_int_ref (DonnaApp       *app,
     return ret;
 }
 
-struct menu_click_data
+struct menu_click
 {
-    DonnaDonna  *donna;
-    gchar       *name;
-    GPtrArray   *nodes;
+    DonnaDonna      *donna;
+    /* options are loaded, but this is used when processing clicks */
+    gchar           *name;
+    /* this is only used to hold references to the nodes for the menu */
+    GPtrArray       *nodes;
+    /* are containers just items, submenus, or both combined? */
+    guint            submenus           : 2;
+    /* type of nodes to load in submenus */
+    DonnaNodeType    node_type          : 2;
+    /* do we "show" dot files in submenus */
+    guint            show_hidden        : 1;
+    /* sort options */
+    guint            is_sorted          : 1;
+    guint            container_first    : 1;
+    guint            is_locale_based    : 1;
+    DonnaSortOptions options            : 5;
+    guint            sort_special_first : 1;
 };
 
-static gboolean
-menu_unmap_cb (GtkWidget *menu, GdkEvent *event, struct menu_click_data *data)
+static void
+free_menu_click (struct menu_click *mc)
 {
-    gtk_widget_destroy (menu);
-    g_object_unref (menu);
-    g_ptr_array_unref (data->nodes);
-    g_free (data->name);
-    g_free (data);
-    return FALSE;
+    g_ptr_array_unref (mc->nodes);
+    g_free (mc->name);
+    g_slice_free (struct menu_click, mc);
 }
 
 static gboolean
@@ -1215,10 +1227,30 @@ menu_conv_flag (const gchar  c,
     return FALSE;
 }
 
+static gboolean menuitem_button_release_cb (GtkWidget           *item,
+                                            GdkEventButton      *event,
+                                            struct menu_click   *mc);
+
+static void
+menuitem_activate_cb (GtkWidget *item, struct menu_click *mc)
+{
+    GdkEventButton event;
+
+    /* because GTK emit "activate" when selecting an item with a submenu, for
+     * some reason */
+    if (gtk_menu_item_get_submenu (((GtkMenuItem *) item)))
+        return;
+
+    event.state = 0;
+    event.button = 1;
+
+    menuitem_button_release_cb (item, &event, mc);
+}
+
 static gboolean
-menuitem_button_release_cb (GtkWidget              *item,
-                            GdkEventButton         *event,
-                            struct menu_click_data *mc)
+menuitem_button_release_cb (GtkWidget           *item,
+                            GdkEventButton      *event,
+                            struct menu_click   *mc)
 {
     DonnaDonnaPrivate *priv = mc->donna->priv;
     DonnaNode *node;
@@ -1226,6 +1258,14 @@ menuitem_button_release_cb (GtkWidget              *item,
     /* longest possible is "ctrl_shift_middle_click" (len=23) */
     gchar buf[24];
     gchar *b = buf;
+
+    /* we process it now, let's make sure activate isn't triggered; It is there
+     * for when user press Enter */
+    g_signal_handlers_disconnect_by_func (item, menuitem_activate_cb, mc);
+
+    node = g_object_get_data ((GObject *) item, "node");
+    if (!node)
+        return FALSE;
 
     if (event->state & GDK_CONTROL_MASK)
     {
@@ -1270,25 +1310,14 @@ menuitem_button_release_cb (GtkWidget              *item,
             return FALSE;
     }
 
-    node = g_object_get_data ((GObject *) item, "node");
-    if (node)
-        g_object_ref (node);
-
+    g_object_ref (node);
     _donna_command_parse_run ((DonnaApp *) mc->donna, FALSE, "nN",
             (_conv_flag_fn) menu_conv_flag, node, g_object_unref, fl);
     return FALSE;
 }
 
-struct sort_data
-{
-    guint               container_first    : 1;
-    guint               is_locale_based    : 1;
-    DonnaSortOptions    options            : 5;
-    guint               sort_special_first : 1;
-};
-
 static gint
-node_cmp (gconstpointer n1, gconstpointer n2, struct sort_data *sd)
+node_cmp (gconstpointer n1, gconstpointer n2, struct menu_click *mc)
 {
     DonnaNode *node1 = * (DonnaNode **) n1;
     DonnaNode *node2 = * (DonnaNode **) n2;
@@ -1301,7 +1330,7 @@ node_cmp (gconstpointer n1, gconstpointer n2, struct sort_data *sd)
     else if (!node2)
         return 1;
 
-    if (sd->container_first)
+    if (mc->container_first)
     {
         gboolean is_container1;
         gboolean is_container2;
@@ -1321,19 +1350,19 @@ node_cmp (gconstpointer n1, gconstpointer n2, struct sort_data *sd)
     name1 = donna_node_get_name (node1);
     name2 = donna_node_get_name (node2);
 
-    if (sd->is_locale_based)
+    if (mc->is_locale_based)
     {
         gchar *key1;
         gchar *key2;
 
         key1 = donna_sort_get_utf8_collate_key (name1, -1,
-                sd->options & DONNA_SORT_DOT_FIRST,
-                sd->sort_special_first,
-                sd->options & DONNA_SORT_NATURAL_ORDER);
+                mc->options & DONNA_SORT_DOT_FIRST,
+                mc->sort_special_first,
+                mc->options & DONNA_SORT_NATURAL_ORDER);
         key2 = donna_sort_get_utf8_collate_key (name2, -1,
-                sd->options & DONNA_SORT_DOT_FIRST,
-                sd->sort_special_first,
-                sd->options & DONNA_SORT_NATURAL_ORDER);
+                mc->options & DONNA_SORT_DOT_FIRST,
+                mc->sort_special_first,
+                mc->options & DONNA_SORT_NATURAL_ORDER);
 
         ret = strcmp (key1, key2);
 
@@ -1344,11 +1373,262 @@ node_cmp (gconstpointer n1, gconstpointer n2, struct sort_data *sd)
         return ret;
     }
 
-    ret = donna_strcmp (name1, name2, sd->options);
+    ret = donna_strcmp (name1, name2, mc->options);
 
     g_free (name1);
     g_free (name2);
     return ret;
+}
+
+struct load_submenu
+{
+    struct menu_click   *mc;
+    GtkMenuItem         *item;
+    /* get_children task, to cancel on item's destroy */
+    DonnaTask           *task;
+    /* one for item, one for task */
+    guint                ref_count;
+    /* if not, must be free-d. Else it's on stack, also we block the task */
+    gboolean             blocking;
+    /* when item is destroyed, in case task is still running/being cancelled */
+    gboolean             invalid;
+};
+
+static void
+free_load_submenu (struct load_submenu *ls)
+{
+    if (g_atomic_int_dec_and_test (&ls->ref_count) && !ls->blocking)
+        /* if not blocking it was on stack */
+        g_slice_free (struct load_submenu, ls);
+}
+
+static void
+item_destroy_cb (struct load_submenu *ls)
+{
+    ls->invalid = TRUE;
+    if (ls->task)
+        donna_task_cancel (ls->task);
+    free_load_submenu (ls);
+}
+
+static GtkWidget * load_menu (struct menu_click *mc);
+
+static void
+submenu_get_children_cb (DonnaTask           *task,
+                         gboolean             timeout_called,
+                         struct load_submenu *ls)
+{
+    GtkWidget *menu;
+    GPtrArray *arr;
+    struct menu_click *mc;
+    struct load_submenu local_ls;
+    gboolean is_selected;
+
+    if (ls->invalid)
+    {
+        free_load_submenu (ls);
+        return;
+    }
+    ls->task = NULL;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        const GError *error;
+        GtkWidget *w;
+
+        error = donna_task_get_error (task);
+        menu = gtk_menu_new ();
+        w = gtk_image_menu_item_new_with_label (
+                (error) ? error->message : "Failed to load children");
+        gtk_widget_set_sensitive (w, FALSE);
+        gtk_menu_attach ((GtkMenu *) menu, w, 0, 1, 0, 1);
+        gtk_widget_show (w);
+        goto set_menu;
+    }
+
+    arr = g_value_get_boxed (donna_task_get_return_value (task));
+    if (!ls->mc->show_hidden)
+    {
+        guint i;
+
+        for (i = 0; i < arr->len; )
+        {
+            gchar *name;
+
+            name = donna_node_get_name (arr->pdata[i]);
+            if (*name == '.')
+                /* move last item into i; hence no increment */
+                g_ptr_array_remove_index_fast (arr, i);
+            else
+                ++i;
+            g_free (name);
+        }
+    }
+
+    if (arr->len == 0)
+    {
+        gtk_menu_item_set_submenu (ls->item, NULL);
+        if (ls->mc->submenus == TYPE_ENABLED)
+            gtk_widget_set_sensitive ((GtkWidget *) ls->item, FALSE);
+        else if (ls->mc->submenus == TYPE_COMBINE)
+            donna_image_menu_item_set_is_combined ((DonnaImageMenuItem *) ls->item,
+                    FALSE);
+        free_load_submenu (ls);
+        return;
+    }
+
+    mc = g_slice_new0 (struct menu_click);
+    memcpy (mc, ls->mc, sizeof (struct menu_click));
+    mc->name  = g_strdup (ls->mc->name);
+    mc->nodes = g_ptr_array_ref (arr);
+
+    menu = g_object_ref (load_menu (mc));
+
+set_menu:
+    /* see if the item is selected (if we're not TYPE_COMBINE then it can't be,
+     * since thje menu hasn't event been shown yet). If so, we need to unselect
+     * it before we can add/change (if timeout_called) the submenu */
+    is_selected = ls->mc->submenus == TYPE_COMBINE
+        && (GtkWidget *) ls->item == gtk_menu_shell_get_selected_item (
+                (GtkMenuShell *) gtk_widget_get_parent ((GtkWidget *) ls->item));
+
+    if (is_selected)
+        gtk_menu_item_deselect (ls->item);
+    gtk_menu_item_set_submenu (ls->item, menu);
+    if (is_selected)
+        gtk_menu_item_select (ls->item);
+    free_load_submenu (ls);
+}
+
+static void
+submenu_get_children_timeout (DonnaTask *task, struct load_submenu *ls)
+{
+    if (!ls->invalid)
+        donna_image_menu_item_set_loading_submenu (
+                (DonnaImageMenuItem *) ls->item, NULL);
+}
+
+static void
+load_submenu (struct load_submenu *ls)
+{
+    DonnaNode *node;
+    DonnaTask *task;
+
+    if (!ls->blocking)
+        g_signal_handlers_disconnect_by_func (ls->item, load_submenu, ls);
+
+    node = g_object_get_data ((GObject *) ls->item, "node");
+    if (!node)
+        return;
+
+    task = donna_node_get_children_task (node, ls->mc->node_type, NULL);
+
+    donna_task_set_callback (task,
+            (task_callback_fn) submenu_get_children_cb,
+            ls,
+            (ls->blocking) ? NULL : (GDestroyNotify) free_load_submenu);
+    if (ls->blocking)
+        donna_task_set_can_block (g_object_ref_sink (task));
+    else
+        donna_task_set_timeout (task, /*FIXME*/ 800,
+                (task_timeout_fn) submenu_get_children_timeout, ls, NULL);
+
+    g_atomic_int_inc (&ls->ref_count);
+    ls->task = task;
+
+    donna_app_run_task ((DonnaApp *) ls->mc->donna, task);
+    if (ls->blocking)
+    {
+        donna_task_wait_for_it (task);
+        g_object_unref (task);
+    }
+}
+
+static GtkWidget *
+load_menu (struct menu_click *mc)
+{
+    GtkWidget *menu;
+    guint i;
+
+    if (mc->is_sorted)
+        g_ptr_array_sort_with_data (mc->nodes, (GCompareDataFunc) node_cmp, mc);
+
+    menu = gtk_menu_new ();
+    g_signal_connect_swapped (menu, "destroy", (GCallback) free_menu_click, mc);
+
+    for (i = 0; i < mc->nodes->len; ++i)
+    {
+        DonnaNode *node = mc->nodes->pdata[i];
+        GtkWidget *item;
+        GtkWidget *image;
+        GdkPixbuf *icon;
+        gchar *name;
+
+        if (!node)
+            item = gtk_separator_menu_item_new ();
+        else
+        {
+            name = donna_node_get_name (node);
+            item = donna_image_menu_item_new_with_label (name);
+            g_free (name);
+
+            g_object_set_data ((GObject *) item, "node", node);
+
+            if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
+            {
+                image = gtk_image_new_from_pixbuf (icon);
+                g_object_unref (icon);
+            }
+            else if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+                image = gtk_image_new_from_stock (GTK_STOCK_FILE, GTK_ICON_SIZE_MENU);
+            else /* DONNA_NODE_CONTAINER */
+            {
+                image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY, GTK_ICON_SIZE_MENU);
+
+                if (mc->submenus == TYPE_ENABLED)
+                {
+                    struct load_submenu ls = { 0, };
+
+                    ls.blocking = TRUE;
+                    ls.item = (GtkMenuItem *) item;
+                    ls.mc = mc;
+
+                    load_submenu (&ls);
+                }
+                else if (mc->submenus == TYPE_COMBINE)
+                {
+                    struct load_submenu *ls;
+
+                    ls = g_slice_new0 (struct load_submenu);
+                    ls->mc = mc;
+                    ls->item = (GtkMenuItem *) item;
+                    ls->ref_count = 1;
+
+                    donna_image_menu_item_set_is_combined (
+                            (DonnaImageMenuItem *) item, TRUE);
+                    g_signal_connect_swapped (item, "load-submenu",
+                            (GCallback) load_submenu, ls);
+                    g_signal_connect_swapped (item, "destroy",
+                            (GCallback) item_destroy_cb, ls);
+                }
+            }
+
+            gtk_image_menu_item_set_image ((GtkImageMenuItem *) item, image);
+        }
+
+        /* we use button-release because that's what's handled by
+         * DonnaImageMenuItem, as the button-press-event is used by GTK and
+         * couldn't be blocked. */
+        gtk_widget_add_events (item, GDK_BUTTON_RELEASE_MASK);
+        g_signal_connect (item, "button-release-event",
+                (GCallback) menuitem_button_release_cb, mc);
+        g_signal_connect (item, "activate", (GCallback) menuitem_activate_cb, mc);
+
+        gtk_widget_show (item);
+        gtk_menu_attach ((GtkMenu *) menu, item, 0, 1, i, i + 1);
+    }
+
+    return menu;
 }
 
 #define get_boolean(var, option, def_val)   do {            \
@@ -1363,6 +1643,18 @@ node_cmp (gconstpointer n1, gconstpointer n2, struct sort_data *sd)
         }                                                   \
 } while (0)
 
+#define get_int(var, option, def_val)   do {                \
+    if (!donna_config_get_int (priv->config, &var,          \
+                "/menus/%s/" option, name))                 \
+        if (!donna_config_get_int (priv->config, &var,      \
+                    "/defaults/menus/" option))             \
+        {                                                   \
+            var = def_val;                                  \
+            donna_config_set_int (priv->config, var,        \
+                    "/defaults/menus/" option);             \
+        }                                                   \
+} while (0)
+
 static gboolean
 donna_donna_show_menu (DonnaApp       *app,
                        GPtrArray      *nodes,
@@ -1370,110 +1662,86 @@ donna_donna_show_menu (DonnaApp       *app,
                        GError       **error)
 {
     DonnaDonnaPrivate *priv;
-    struct menu_click_data *data;
-    GtkWidget *menu;
-    gboolean sort;
+    struct menu_click *mc;
+    GtkMenu *menu;
+    gboolean b;
     guint i;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
     priv = ((DonnaDonna *) app)->priv;
 
-    get_boolean (sort, "sort", TRUE);
-    if (sort)
+    mc = g_slice_new0 (struct menu_click);
+    mc->donna = (DonnaDonna *) app;
+    mc->name  = g_strdup (name);
+    mc->nodes = nodes;
+
+    get_int (i, "submenus", TYPE_DISABLED);
+    if (i == TYPE_ENABLED || i == TYPE_COMBINE)
     {
-        struct sort_data sd;
-        gboolean b;
+        mc->submenus = i;
 
-        memset (&sd, 0, sizeof (struct sort_data));
+        /* we could have made this option a list-flags, i.e. be exactly the
+         * value we want, but we wanted it to be similar to what's used in
+         * commands, where you say "all" not "item,container" (as would have
+         * been the case using flags) */
+        get_int (i, "children", 0);
+        if (i == 1)
+            mc->node_type = DONNA_NODE_ITEM;
+        else if (i == 2)
+            mc->node_type = DONNA_NODE_CONTAINER;
+        else /* if (i == 0) */
+            mc->node_type = DONNA_NODE_ITEM | DONNA_NODE_CONTAINER;
 
+        get_boolean (b, "children_show_hidden", TRUE);
+        mc->show_hidden = b;
+    }
+
+    get_boolean (b, "sort", TRUE);
+    mc->is_sorted = b;
+    if (mc->is_sorted)
+    {
         get_boolean (b, "container_first", TRUE);
-        sd.container_first = b;
+        mc->container_first = b;
 
         get_boolean (b, "locale_based", FALSE);
-        sd.is_locale_based = b;
+        mc->is_locale_based = b;
 
         get_boolean (b, "natural_order", TRUE);
         if (b)
-            sd.options |= DONNA_SORT_NATURAL_ORDER;
+            mc->options |= DONNA_SORT_NATURAL_ORDER;
 
         get_boolean (b, "dot_first", TRUE);
         if (b)
-            sd.options |= DONNA_SORT_DOT_FIRST;
+            mc->options |= DONNA_SORT_DOT_FIRST;
 
-        if (sd.is_locale_based)
+        if (mc->is_locale_based)
         {
             get_boolean (b, "special_first", TRUE);
-            sd.sort_special_first = b;
+            mc->sort_special_first = b;
         }
         else
         {
             get_boolean (b, "dot_mixed", FALSE);
             if (b)
-                sd.options |= DONNA_SORT_DOT_MIXED;
+                mc->options |= DONNA_SORT_DOT_MIXED;
 
             get_boolean (b, "case_sensitive", FALSE);
             if (!b)
-                sd.options |= DONNA_SORT_CASE_INSENSITIVE;
+                mc->options |= DONNA_SORT_CASE_INSENSITIVE;
 
             get_boolean (b, "ignore_spunct", FALSE);
             if (b)
-                sd.options |= DONNA_SORT_IGNORE_SPUNCT;
+                mc->options |= DONNA_SORT_IGNORE_SPUNCT;
         }
-
-        g_ptr_array_sort_with_data (nodes, (GCompareDataFunc) node_cmp, &sd);
     }
-
-    data = g_new (struct menu_click_data, 1);
-    data->donna = (DonnaDonna *) app;
-    data->name  = g_strdup (name);
-    data->nodes = nodes;
 
     /* menu will not be packed anywhere, so we need to take ownership and handle
-     * it when done, i.e. when unmapped. It's also when we'll release our ref on
-     * the array of nodes. */
-    menu = g_object_ref_sink (gtk_menu_new ());
-    gtk_widget_add_events (menu, GDK_STRUCTURE_MASK);
-    g_signal_connect (menu, "unmap-event", (GCallback) menu_unmap_cb, data);
+     * it when done, i.e. on "deactivate". It will trigger the widget's destroy
+     * which is when we'll free mc */
+    menu = g_object_ref_sink (load_menu (mc));
+    g_signal_connect (menu, "deactivate", (GCallback) g_object_unref, NULL);
 
-    for (i = 0; i < nodes->len; ++i)
-    {
-        DonnaNode *node = nodes->pdata[i];
-        GtkWidget *item;
-        GtkWidget *image;
-        GdkPixbuf *icon;
-        gchar *name;
-
-        if (!node)
-            item = gtk_separator_menu_item_new ();
-        else
-        {
-            name = donna_node_get_name (node);
-            item = gtk_image_menu_item_new_with_label (name);
-            g_free (name);
-
-            if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
-            {
-                image = gtk_image_new_from_pixbuf (icon);
-                g_object_unref (icon);
-            }
-            else if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
-                image = gtk_image_new_from_stock (GTK_STOCK_FILE, GTK_ICON_SIZE_MENU);
-            else /* DONNA_NODE_CONTAINER */
-                image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY, GTK_ICON_SIZE_MENU);
-
-            gtk_image_menu_item_set_image ((GtkImageMenuItem *) item, image);
-        }
-
-        g_object_set_data ((GObject *) item, "node", node);
-        gtk_widget_add_events (item, GDK_BUTTON_RELEASE_MASK);
-        g_signal_connect (item, "button-release-event",
-                (GCallback) menuitem_button_release_cb, data);
-
-        gtk_widget_show (item);
-        gtk_menu_attach ((GtkMenu *) menu, item, 0, 1, i, i + 1);
-    }
-
-    gtk_menu_popup ((GtkMenu *) menu, NULL, NULL, NULL, NULL, 0,
+    gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0,
             gtk_get_current_event_time ());
     return TRUE;
 }
