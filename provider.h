@@ -15,6 +15,7 @@ typedef enum
     DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
     DONNA_PROVIDER_ERROR_WRONG_NODE_TYPE,
     DONNA_PROVIDER_ERROR_INVALID_CALL,
+    DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
     DONNA_PROVIDER_ERROR_OTHER,
 } DonnaProviderError;
 
@@ -23,6 +24,13 @@ typedef enum
     DONNA_PROVIDER_FLAG_INVALID = (1 << 0),
     DONNA_PROVIDER_FLAG_FLAT    = (1 << 1),
 } DonnaProviderFlags;
+
+typedef enum
+{
+    DONNA_IO_COPY,
+    DONNA_IO_MOVE,
+    DONNA_IO_DELETE
+} DonnaIoType;
 
 struct _DonnaProviderInterface
 {
@@ -58,14 +66,17 @@ struct _DonnaProviderInterface
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,
                                                      GError        **error);
-    DonnaTask *         (*remove_node_task)         (DonnaProvider  *provider,
-                                                     DonnaNode      *node,
-                                                     GError        **error);
     DonnaTask *         (*get_node_parent_task)     (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      GError        **error);
     DonnaTask *         (*trigger_node_task)        (DonnaProvider  *provider,
                                                      DonnaNode      *node,
+                                                     GError        **error);
+    DonnaTask *         (*io_task)                  (DonnaProvider  *provider,
+                                                     DonnaIoType     type,
+                                                     gboolean        is_source,
+                                                     GPtrArray      *sources,
+                                                     DonnaNode      *dest,
                                                      GError        **error);
 };
 
@@ -107,6 +118,12 @@ DonnaTask * donna_provider_get_node_parent_task     (DonnaProvider  *provider,
                                                      GError        **error);
 DonnaTask * donna_provider_trigger_node_task        (DonnaProvider  *provider,
                                                      DonnaNode      *node,
+                                                     GError        **error);
+DonnaTask * donna_provider_io_task                  (DonnaProvider  *provider,
+                                                     DonnaIoType     type,
+                                                     gboolean        is_source,
+                                                     GPtrArray      *sources,
+                                                     DonnaNode      *dest,
                                                      GError        **error);
 
 G_END_DECLS

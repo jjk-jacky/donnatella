@@ -248,27 +248,6 @@ donna_provider_get_node_children_task (DonnaProvider  *provider,
 }
 
 DonnaTask *
-donna_provider_remove_node_task (DonnaProvider  *provider,
-                                 DonnaNode      *node,
-                                 GError        **error)
-{
-    DonnaProviderInterface *interface;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    /* make sure the provider is the node's provider */
-    g_return_val_if_fail (donna_node_peek_provider (node) == provider, NULL);
-
-    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
-
-    g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->remove_node_task != NULL, NULL);
-
-    return (*interface->remove_node_task) (provider, node, error);
-}
-
-DonnaTask *
 donna_provider_get_node_parent_task (DonnaProvider  *provider,
                                      DonnaNode      *node,
                                      GError        **error)
@@ -328,4 +307,49 @@ donna_provider_trigger_node_task (DonnaProvider  *provider,
     g_return_val_if_fail (interface->trigger_node_task != NULL, NULL);
 
     return (*interface->trigger_node_task) (provider, node, error);
+}
+
+DonnaTask *
+donna_provider_io_task (DonnaProvider  *provider,
+                        DonnaIoType     type,
+                        gboolean        is_source,
+                        GPtrArray      *sources,
+                        DonnaNode      *dest,
+                        GError        **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (type == DONNA_IO_COPY || type == DONNA_IO_MOVE
+            || type == DONNA_IO_DELETE, NULL);
+    g_return_val_if_fail (sources != NULL, NULL);
+    g_return_val_if_fail (sources->len > 0, NULL);
+    if (type == DONNA_IO_DELETE)
+    {
+        g_return_val_if_fail (is_source == TRUE, NULL);
+        g_return_val_if_fail (dest == NULL, NULL);
+    }
+    else
+        g_return_val_if_fail (DONNA_IS_NODE (dest), NULL);
+
+    if (is_source)
+        /* FIXME should we check all sources are within the same provider? */
+        g_return_val_if_fail (donna_node_peek_provider (sources->pdata[0]) == provider, NULL);
+    else if (type != DONNA_IO_DELETE)
+        g_return_val_if_fail (donna_node_peek_provider (dest) == provider, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->io_task == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
+                "Provider '%s': No support of IO operations",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
+
+    return (*interface->io_task) (provider, type, is_source, sources, dest, error);
 }

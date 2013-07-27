@@ -1954,26 +1954,6 @@ donna_node_get_children_task (DonnaNode          *node,
 }
 
 /**
- * donna_node_remove_task:
- * @node: Node to remove
- * @error: (allow none): Return location of a #GError, or %NULL
- *
- * Returns a task to delete the item represented by @node
- *
- * Note: this is an helper function, that calls
- * donna_provider_remove_node_task() on @node's provider
- *
- * Returns: (transfer floating): The floating #DonnaTask, or %NULL
- */
-DonnaTask *
-donna_node_remove_task (DonnaNode          *node,
-                        GError            **error)
-{
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-    return donna_provider_remove_node_task (node->priv->provider, node, error);
-}
-
-/**
  * donna_node_get_parent_task:
  * @node: Node to get parent node of
  * @error: (allow none): Return location of a #GError, or %NULL

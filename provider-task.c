@@ -102,9 +102,6 @@ static DonnaTaskState   provider_task_get_children  (DonnaProviderBase  *provide
                                                      DonnaTask          *task,
                                                      DonnaNode          *node,
                                                      DonnaNodeType       node_types);
-static DonnaTaskState   provider_task_remove_node   (DonnaProviderBase  *provider,
-                                                     DonnaTask          *task,
-                                                     DonnaNode          *node);
 static DonnaTaskState   provider_task_trigger_node  (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
@@ -152,7 +149,6 @@ donna_provider_task_class_init (DonnaProviderTaskClass *klass)
     pb_class->new_node      = provider_task_new_node;
     pb_class->has_children  = provider_task_has_children;
     pb_class->get_children  = provider_task_get_children;
-    pb_class->remove_node   = provider_task_remove_node;
     pb_class->trigger_node  = provider_task_trigger_node;
 
     o_class = (GObjectClass *) klass;
@@ -754,15 +750,6 @@ provider_task_get_children (DonnaProviderBase  *_provider,
     donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-provider_task_remove_node (DonnaProviderBase  *_provider,
-                           DonnaTask          *task,
-                           DonnaNode          *node)
-{
-    /* TODO */
-    return DONNA_TASK_FAILED;
 }
 
 inline const gchar *

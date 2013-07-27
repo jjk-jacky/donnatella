@@ -29,9 +29,6 @@ static DonnaTaskState   provider_exec_has_children  (DonnaProviderBase  *provide
                                                      DonnaTask          *task,
                                                      DonnaNode          *node,
                                                      DonnaNodeType       node_types);
-static DonnaTaskState   provider_exec_remove_node   (DonnaProviderBase  *provider,
-                                                     DonnaTask          *task,
-                                                     DonnaNode          *node);
 
 static void
 provider_exec_provider_init (DonnaProviderInterface *interface)
@@ -50,7 +47,6 @@ donna_provider_exec_class_init (DonnaProviderExecClass *klass)
     pb_class = (DonnaProviderBaseClass *) klass;
     pb_class->new_node      = provider_exec_new_node;
     pb_class->has_children  = provider_exec_has_children;
-    pb_class->remove_node   = provider_exec_remove_node;
 }
 
 static void
@@ -616,16 +612,5 @@ provider_exec_has_children (DonnaProviderBase  *_provider,
     donna_task_set_error (task, DONNA_PROVIDER_ERROR,
             DONNA_PROVIDER_ERROR_INVALID_CALL,
             "Provider 'exec': has_children() not supported");
-    return DONNA_TASK_FAILED;
-}
-
-static DonnaTaskState
-provider_exec_remove_node (DonnaProviderBase  *_provider,
-                           DonnaTask          *task,
-                           DonnaNode          *node)
-{
-    donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-            DONNA_PROVIDER_ERROR_INVALID_CALL,
-            "Provider 'exec': remove_node() not supported");
     return DONNA_TASK_FAILED;
 }

@@ -51,9 +51,6 @@ static DonnaTaskState   provider_command_get_children   (DonnaProviderBase  *pro
                                                          DonnaTask          *task,
                                                          DonnaNode          *node,
                                                          DonnaNodeType       node_types);
-static DonnaTaskState   provider_command_remove_node    (DonnaProviderBase  *provider,
-                                                         DonnaTask          *task,
-                                                         DonnaNode          *node);
 
 static void
 provider_command_provider_init (DonnaProviderInterface *interface)
@@ -73,7 +70,6 @@ donna_provider_command_class_init (DonnaProviderCommandClass *klass)
     pb_class->new_node      = provider_command_new_node;
     pb_class->has_children  = provider_command_has_children;
     pb_class->get_children  = provider_command_get_children;
-    pb_class->remove_node   = provider_command_remove_node;
 
     o_class = (GObjectClass *) klass;
     o_class->get_property   = provider_command_get_property;
@@ -279,17 +275,6 @@ provider_command_get_children (DonnaProviderBase  *_provider,
     donna_task_set_error (task, DONNA_PROVIDER_ERROR,
             DONNA_PROVIDER_ERROR_INVALID_CALL,
             "Provider 'command': get_children() not supported");
-    return DONNA_TASK_FAILED;
-}
-
-static DonnaTaskState
-provider_command_remove_node (DonnaProviderBase  *_provider,
-                              DonnaTask          *task,
-                              DonnaNode          *node)
-{
-    donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-            DONNA_PROVIDER_ERROR_INVALID_CALL,
-            "Provider 'command': remove_node() not supported");
     return DONNA_TASK_FAILED;
 }
 

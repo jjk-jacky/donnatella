@@ -117,10 +117,6 @@ static DonnaTask *      provider_config_get_node_children_task (
                                             DonnaNode           *node,
                                             DonnaNodeType        node_types,
                                             GError             **error);
-static DonnaTask *      provider_config_remove_node_task (
-                                            DonnaProvider       *provider,
-                                            DonnaNode           *node,
-                                            GError             **error);
 static DonnaTask *      provider_config_get_node_parent_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
@@ -128,6 +124,13 @@ static DonnaTask *      provider_config_get_node_parent_task (
 static DonnaTask *      provider_config_trigger_node_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
+                                            GError             **error);
+static DonnaTask *      provider_config_io_task (
+                                            DonnaProvider       *provider,
+                                            DonnaIoType          type,
+                                            gboolean             is_source,
+                                            GPtrArray           *sources,
+                                            DonnaNode           *dest,
                                             GError             **error);
 
 
@@ -142,9 +145,9 @@ provider_config_provider_init (DonnaProviderInterface *interface)
     interface->get_node_task          = provider_config_get_node_task;
     interface->has_node_children_task = provider_config_has_node_children_task;
     interface->get_node_children_task = provider_config_get_node_children_task;
-    interface->remove_node_task       = provider_config_remove_node_task;
     interface->get_node_parent_task   = provider_config_get_node_parent_task;
     interface->trigger_node_task      = provider_config_trigger_node_task;
+    interface->io_task                = provider_config_io_task;
 }
 
 static void
@@ -3403,47 +3406,64 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
 }
 
 static DonnaTaskState
-node_remove_option (DonnaTask *task, DonnaNode *node)
+node_remove_options (DonnaTask *task, GPtrArray *arr)
 {
-    DonnaProvider *provider;
-    gchar *location;
-    gboolean ret;
+    DonnaProviderConfig *pcfg;
+    gboolean ret = TRUE;
+    guint i;
 
-    provider = donna_node_peek_provider (node);
-    location = donna_node_get_location (node);
-    if (donna_node_get_node_type (node) != DONNA_NODE_CONTAINER)
-        ret = donna_config_remove_option (DONNA_PROVIDER_CONFIG (provider),
-                location);
-    else
-        ret = donna_config_remove_category (DONNA_PROVIDER_CONFIG (provider),
-                location);
-    g_free (location);
-    g_object_unref (node); /* remove task's ref */
+    pcfg = (DonnaProviderConfig *) donna_node_peek_provider (arr->pdata[0]);
 
+    for (i = 0; i < arr->len; ++i)
+    {
+        DonnaNode *node = arr->pdata[i];
+        gchar *location;
+
+        location = donna_node_get_location (node);
+        if (donna_node_get_node_type (node) != DONNA_NODE_CONTAINER)
+        {
+            if (!donna_config_remove_option (pcfg, location))
+                ret = FALSE;
+        }
+        else
+        {
+            if (!donna_config_remove_category (pcfg, location))
+                ret = FALSE;
+        }
+        g_free (location);
+    }
+
+    g_ptr_array_unref (arr);
     return (ret) ? DONNA_TASK_DONE : DONNA_TASK_FAILED;
 }
 
 static DonnaTask *
-provider_config_remove_node_task (DonnaProvider       *provider,
-                                  DonnaNode           *node,
-                                  GError             **error)
+provider_config_io_task (DonnaProvider       *provider,
+                         DonnaIoType          type,
+                         gboolean             is_source,
+                         GPtrArray           *sources,
+                         DonnaNode           *dest,
+                         GError             **error)
 {
     DonnaTask *task;
 
-    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
+    if (type != DONNA_IO_DELETE)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
+                "Provider 'config': Copy/Move operations not supported");
+        return NULL;
+    }
 
-    task = donna_task_new ((task_fn) node_remove_option,
-            g_object_ref (node),
-            g_object_unref);
+    task = donna_task_new ((task_fn) node_remove_options,
+            g_ptr_array_ref (sources),
+            (GDestroyNotify) g_ptr_array_unref);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
     DONNA_DEBUG (TASK,
-            gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf (
-                    "remove_node() for node '%s:%s'",
-                    donna_node_get_domain (node),
-                    location));
-            g_free (location));
+                    "config_io_task() to remove %d option(s)",
+                    sources->len)));
 
     return task;
 }

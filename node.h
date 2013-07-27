@@ -188,8 +188,6 @@ DonnaTask *         donna_node_has_children_task    (DonnaNode          *node,
 DonnaTask *         donna_node_get_children_task    (DonnaNode          *node,
                                                      DonnaNodeType       node_types,
                                                      GError            **error);
-DonnaTask *         donna_node_remove_task          (DonnaNode          *node,
-                                                     GError            **error);
 DonnaTask *         donna_node_get_parent_task      (DonnaNode          *node,
                                                      GError            **error);
 DonnaTask *         donna_node_trigger_task         (DonnaNode          *node,

@@ -23,6 +23,12 @@ static void             provider_fs_finalize        (GObject *object);
 /* DonnaProvider */
 static const gchar *    provider_fs_get_domain      (DonnaProvider      *provider);
 static DonnaProviderFlags provider_fs_get_flags     (DonnaProvider      *provider);
+static DonnaTask *      provider_fs_io_task         (DonnaProvider      *provider,
+                                                     DonnaIoType         type,
+                                                     gboolean            is_source,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     GError            **error);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_fs_new_node        (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
@@ -35,9 +41,6 @@ static DonnaTaskState   provider_fs_get_children    (DonnaProviderBase  *provide
                                                      DonnaTask          *task,
                                                      DonnaNode          *node,
                                                      DonnaNodeType       node_types);
-static DonnaTaskState   provider_fs_remove_node     (DonnaProviderBase  *provider,
-                                                     DonnaTask          *task,
-                                                     DonnaNode          *node);
 static DonnaTaskState   provider_fs_trigger_node    (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
@@ -47,6 +50,7 @@ provider_fs_provider_init (DonnaProviderInterface *interface)
 {
     interface->get_domain = provider_fs_get_domain;
     interface->get_flags  = provider_fs_get_flags;
+    interface->io_task    = provider_fs_io_task;
 }
 
 static void
@@ -59,7 +63,6 @@ donna_provider_fs_class_init (DonnaProviderFsClass *klass)
     pb_class->new_node      = provider_fs_new_node;
     pb_class->has_children  = provider_fs_has_children;
     pb_class->get_children  = provider_fs_get_children;
-    pb_class->remove_node   = provider_fs_remove_node;
     pb_class->trigger_node  = provider_fs_trigger_node;
 
     o_class = (GObjectClass *) klass;
@@ -108,6 +111,142 @@ provider_fs_get_domain (DonnaProvider *provider)
 {
     g_return_val_if_fail (DONNA_IS_PROVIDER_FS (provider), NULL);
     return "fs";
+}
+
+static DonnaTask *
+provider_fs_io_task (DonnaProvider      *provider,
+                     DonnaIoType         type,
+                     gboolean            is_source,
+                     GPtrArray          *sources,
+                     DonnaNode          *dest,
+                     GError            **error)
+{
+    DonnaTask *task;
+    DonnaApp *app;
+    DonnaProvider *pe;
+    DonnaNode *node;
+    GString *str;
+    gchar *cmdline;
+    gchar *fmt;
+    gchar *s;
+
+    if ((!is_source && donna_node_peek_provider (sources->pdata[0]) != provider)
+        || (is_source && type != DONNA_IO_DELETE
+            && donna_node_peek_provider (dest) != provider))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
+                "Provider 'fs': Does not support IO operation outside of 'fs'");
+        return NULL;
+    }
+
+    g_object_get (provider, "app", &app, NULL);
+    if (!donna_config_get_string (donna_app_peek_config (app), &cmdline,
+                "providers/fs/exec_%s",
+                (type == DONNA_IO_DELETE) ? "delete" : (
+                    (type == DONNA_IO_COPY) ? "copy" : "move")))
+        cmdline = g_strdup ((type == DONNA_IO_DELETE) ? ">rm -I -r %s"
+                : (type == DONNA_IO_COPY) ? ">cp -a -t %d %s" : ">mv -t %d %s");
+
+    s = fmt = cmdline;
+    str = g_string_new (NULL);
+    while ((s = strchr (s, '%')))
+    {
+        gchar *ss;
+        gchar *qs;
+        guint i;
+
+        switch (s[1])
+        {
+            case 's':
+                g_string_append_len (str, fmt, s - fmt);
+                for (i = 0; i < sources->len; ++i)
+                {
+                    ss = donna_node_get_location (sources->pdata[i]);
+                    qs = g_shell_quote (ss);
+                    if (i > 0)
+                        g_string_append_c (str, ' ');
+                    g_string_append (str, qs);
+                    g_free (qs);
+                    g_free (ss);
+                }
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'd':
+                g_string_append_len (str, fmt, s - fmt);
+                ss = donna_node_get_location (dest);
+                qs = g_shell_quote (ss);
+                g_string_append (str, qs);
+                g_free (qs);
+                g_free (ss);
+                s += 2;
+                fmt = s;
+                break;
+
+            default:
+                s += 2;
+                break;
+        }
+    }
+    g_string_append (str, fmt);
+    g_free (cmdline);
+
+    pe = donna_app_get_provider (app, "exec");
+    g_object_unref (pe);
+    task = donna_provider_get_node_task (pe, str->str, error);
+    if (G_UNLIKELY (!task))
+    {
+        g_prefix_error (error, "Provider 'fs': Failed to get task to get node 'exec:%s': ",
+                str->str);
+        g_string_free (str, TRUE);
+        g_object_unref (app);
+        return NULL;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (task));
+    donna_app_run_task (app, task);
+    g_object_unref (app);
+    donna_task_wait_for_it (task);
+    if (G_UNLIKELY (donna_task_get_state (task) != DONNA_TASK_DONE))
+    {
+        if (error)
+        {
+            const GError *e = NULL;
+
+            e = donna_task_get_error (task);
+            if (e)
+            {
+                *error = g_error_copy (e);
+                g_prefix_error (error, "Provider 'fs': Failed to get node 'exec:%s': ",
+                        str->str);
+            }
+            else
+                g_set_error (error, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'fs': Failed to get node 'exec:%s'",
+                        str->str);
+        }
+        g_object_unref (task);
+        g_string_free (str, TRUE);
+        return NULL;
+    }
+
+    node = g_value_dup_object (donna_task_get_return_value (task));
+    g_object_unref (task);
+
+    task = donna_node_trigger_task (node, error);
+    if (G_UNLIKELY (!task))
+    {
+        g_prefix_error (error, "Provider 'fs': Failed to get trigger task for 'exec:%s': ",
+                str->str);
+        g_string_free (str, TRUE);
+        return NULL;
+    }
+    g_string_free (str, TRUE);
+
+    return task;
 }
 
 static inline gboolean
@@ -826,15 +965,6 @@ provider_fs_get_children (DonnaProviderBase  *_provider,
                           DonnaNodeType       node_types)
 {
     return has_get_children (_provider, task, node, node_types, TRUE);
-}
-
-static DonnaTaskState
-provider_fs_remove_node (DonnaProviderBase  *_provider,
-                         DonnaTask          *task,
-                         DonnaNode          *node)
-{
-    /* TODO */
-    return DONNA_TASK_FAILED;
 }
 
 static DonnaTaskState

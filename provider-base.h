@@ -49,9 +49,6 @@ struct _DonnaProviderBaseClass
                                              DonnaTask          *task,
                                              DonnaNode          *node,
                                              DonnaNodeType       node_types);
-    DonnaTaskState  (*remove_node)          (DonnaProviderBase  *provider,
-                                             DonnaTask          *task,
-                                             DonnaNode          *node);
     DonnaTaskState  (*trigger_node)         (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaNode          *node);
