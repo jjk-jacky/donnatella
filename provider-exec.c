@@ -377,7 +377,7 @@ get_node_children_task (DonnaProvider      *provider,
                         DonnaNodeType       node_types,
                         GError            **error)
 {
-    DonnaApp *app;
+    DonnaApp *app = NULL;
     DonnaTask *task;
     gchar *location;
     gchar *cmdline;
@@ -395,6 +395,54 @@ get_node_children_task (DonnaProvider      *provider,
     else if (*location == '&')
     {
         cmdline = location + 1;
+        wait = FALSE;
+    }
+    else if (*location == '>')
+    {
+        gchar *terminal = NULL;
+
+        g_object_get (provider, "app", &app, NULL);
+
+        donna_config_get_string (donna_app_peek_config (app), &terminal,
+                    "providers/exec/terminal");
+        if (terminal)
+            cmdline = g_strdup_printf ("%s %s", terminal, location + 1);
+        else
+        {
+            /* try to default to common terminal emulator */
+            terminal = g_find_program_in_path ("urxvt");
+            if (!terminal)
+                terminal = g_find_program_in_path ("rxvt");
+            if (!terminal)
+                terminal = g_find_program_in_path ("xterm");
+            if (!terminal)
+                terminal = g_find_program_in_path ("konsole");
+
+            if (terminal)
+                cmdline = g_strdup_printf ("%s -e %s", terminal, location + 1);
+            else
+            {
+                /* those should be using -x instead of -e */
+                terminal = g_find_program_in_path ("xfce4-terminal");
+                if (!terminal)
+                    terminal = g_find_program_in_path ("gnome-terminal");
+                if (terminal)
+                    cmdline = g_strdup_printf ("%s -x %s", terminal, location + 1);
+                else
+                {
+                    g_set_error (error, DONNA_PROVIDER_ERROR,
+                            DONNA_PROVIDER_ERROR_OTHER,
+                            "Provider 'exec': Unable to find a terminal, you can define the prefix in /providers/exec/terminal");
+                    g_object_unref (app);
+                    g_free (location);
+                    return NULL;
+                }
+            }
+        }
+
+        g_free (terminal);
+        g_free (location);
+        location = cmdline;
         wait = FALSE;
     }
     else if (*location == '<')
@@ -447,7 +495,8 @@ get_node_children_task (DonnaProvider      *provider,
             closer, data, (GDestroyNotify) free_children);
     g_free (location);
 
-    g_object_get (provider, "app", &app, NULL);
+    if (!app)
+        g_object_get (provider, "app", &app, NULL);
     if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task,
                 app, error))
     {
