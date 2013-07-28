@@ -25,13 +25,6 @@ typedef enum
     DONNA_PROVIDER_FLAG_FLAT    = (1 << 1),
 } DonnaProviderFlags;
 
-typedef enum
-{
-    DONNA_IO_COPY,
-    DONNA_IO_MOVE,
-    DONNA_IO_DELETE
-} DonnaIoType;
-
 struct _DonnaProviderInterface
 {
     GTypeInterface parent;

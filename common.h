@@ -6,6 +6,29 @@ G_BEGIN_DECLS
 
 typedef enum
 {
+    /* so for clipboard operations so can default to cut/copy state */
+    DONNA_IO_UNKNOWN = 0,
+    DONNA_IO_COPY,
+    DONNA_IO_MOVE,
+    DONNA_IO_DELETE
+} DonnaIoType;
+
+typedef enum
+{
+    DONNA_REGISTER_UNKNOWN = 0, /* e.g. when getting CLIPBOARD as uri-list */
+    DONNA_REGISTER_CUT,
+    DONNA_REGISTER_COPY
+} DonnaRegisterType;
+
+typedef enum
+{
+    DONNA_DROP_REGISTER_NOT,
+    DONNA_DROP_REGISTER_ALWAYS,
+    DONNA_DROP_REGISTER_ON_CUT,
+} DonnaDropRegister;
+
+typedef enum
+{
     DONNA_CLICK_LEFT        = (1 << 0),
     DONNA_CLICK_MIDDLE      = (1 << 1),
     DONNA_CLICK_RIGHT       = (1 << 2),

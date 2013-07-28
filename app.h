@@ -16,6 +16,8 @@ G_BEGIN_DECLS
 #define DONNA_APP_ERROR         g_quark_from_static_string ("DonnaApp-Error")
 typedef enum
 {
+    DONNA_APP_ERROR_NOT_FOUND,
+    DONNA_APP_ERROR_INVALID_NAME,
     DONNA_APP_ERROR_OTHER,
 } DonnaAppError;
 
@@ -61,6 +63,28 @@ struct _DonnaAppInterface
                                                      const GError   *error);
     gpointer            (*get_ct_data)              (DonnaApp       *app,
                                                      const gchar    *col_name);
+    gboolean            (*drop_register)            (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     GError        **error);
+    gboolean            (*set_register)             (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaRegisterType type,
+                                                     GPtrArray      *nodes,
+                                                     GError        **error);
+    gboolean            (*add_to_register)          (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     GPtrArray      *nodes,
+                                                     GError        **error);
+    gboolean            (*set_register_type)        (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaRegisterType type,
+                                                     GError        **error);
+    gboolean            (*get_register_nodes)       (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaDropRegister drop,
+                                                     DonnaRegisterType *type,
+                                                     GPtrArray     **nodes,
+                                                     GError        **error);
 };
 
 /* signals */
@@ -114,6 +138,29 @@ gboolean            donna_app_filter_nodes          (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *filter,
                                                      GError       **error);
+gboolean            donna_app_drop_register         (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     GError        **error);
+gboolean            donna_app_set_register          (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaRegisterType type,
+                                                     GPtrArray      *nodes,
+                                                     GError        **error);
+gboolean            donna_app_add_to_register       (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     GPtrArray      *nodes,
+                                                     GError        **error);
+gboolean            donna_app_set_register_type     (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaRegisterType type,
+                                                     GError        **error);
+gboolean            donna_app_get_register_nodes    (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaDropRegister drop,
+                                                     DonnaRegisterType *type,
+                                                     GPtrArray     **nodes,
+                                                     GError        **error);
+
 
 G_END_DECLS
 

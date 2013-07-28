@@ -7901,7 +7901,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
                 && action == DONNA_TREE_SEL_SELECT))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_OTHER,
+                DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
                 "Treeview '%s': Cannot update selection, incompatible with mode tree",
                 priv->name);
         return FALSE;
@@ -9580,6 +9580,232 @@ donna_tree_view_abort (DonnaTreeView *tree)
         g_object_unref (priv->get_children_task);
         priv->get_children_task = NULL;
     }
+}
+
+gboolean
+donna_tree_view_to_register (DonnaTreeView      *tree,
+                             DonnaTreeRowId     *rowid,
+                             gboolean            to_focused,
+                             const gchar        *reg_name,
+                             DonnaRegisterType   reg_type,
+                             GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeModel *model;
+    GtkTreeSelection *sel;
+    GtkTreeIter iter_last;
+    GtkTreeIter iter;
+    row_id_type type;
+    GPtrArray *arr;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    g_return_val_if_fail (reg_name != NULL, FALSE);
+    priv  = tree->priv;
+    model = (GtkTreeModel *) priv->store;
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type == ROW_ID_INVALID)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot send to register '%s', invalid row-id",
+                priv->name, reg_name);
+        return FALSE;
+    }
+
+    if (is_tree (tree) && type == ROW_ID_ROW && to_focused)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
+                "Treeview '%s': Cannot send to register with 'to_focused' flag in mode tree",
+                priv->name);
+        return FALSE;
+    }
+
+    if (type == ROW_ID_ROW)
+    {
+        if (to_focused)
+        {
+            GtkTreePath *path_focus;
+            GtkTreePath *path;
+
+            gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_focus, NULL);
+            if (!path_focus)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot send to register '%s', failed to get focused row",
+                        priv->name, reg_name);
+                return FALSE;
+            }
+            path = gtk_tree_model_get_path (model, &iter);
+            if (!path)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot send to register '%s', failed to get path",
+                        priv->name, reg_name);
+                gtk_tree_path_free (path_focus);
+                return FALSE;
+            }
+
+            if (gtk_tree_path_compare (path, path_focus) > 0)
+            {
+                gtk_tree_model_get_iter (model, &iter, path_focus);
+                gtk_tree_model_get_iter (model, &iter_last, path);
+            }
+            else
+                gtk_tree_model_get_iter (model, &iter_last, path_focus);
+
+            gtk_tree_path_free (path_focus);
+            gtk_tree_path_free (path);
+        }
+        else
+            iter_last = iter;
+    }
+    else
+        gtk_tree_model_iter_children (model, &iter, NULL);
+
+    sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+    arr = g_ptr_array_new_with_free_func (g_object_unref);
+    for (;;)
+    {
+        if (type != ROW_ID_SELECTION
+                || gtk_tree_selection_iter_is_selected (sel, &iter))
+        {
+            DonnaNode *node;
+
+            gtk_tree_model_get (model, &iter,
+                    DONNA_TREE_VIEW_COL_NODE,   &node,
+                    -1);
+            if (G_LIKELY (node))
+                g_ptr_array_add (arr, node);
+        }
+
+        if ((type == ROW_ID_ROW && itereq (&iter, &iter_last))
+                || !gtk_tree_model_iter_next (model, &iter))
+            break;
+    }
+
+    if (G_UNLIKELY (arr->len == 0))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Nothing to send to register '%s'",
+                priv->name, reg_name);
+        g_ptr_array_unref (arr);
+        return FALSE;
+    }
+
+    if (reg_type == DONNA_REGISTER_UNKNOWN)
+    {
+        if (!donna_app_add_to_register (priv->app, reg_name, arr, error))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to add to register '%s': ",
+                    priv->name, reg_name);
+            g_ptr_array_unref (arr);
+            return FALSE;
+        }
+    }
+    else
+    {
+        if (!donna_app_set_register (priv->app, reg_name, reg_type, arr, error))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to set register '%s': ",
+                    priv->name, reg_name);
+            g_ptr_array_unref (arr);
+            return FALSE;
+        }
+    }
+    g_ptr_array_unref (arr);
+    return TRUE;
+}
+
+gboolean
+donna_tree_view_from_register (DonnaTreeView      *tree,
+                               const gchar        *reg_name,
+                               DonnaIoType         io_type,
+                               GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaRegisterType reg_type;
+    GPtrArray *nodes;
+    guint i;
+    DonnaProvider *provider;
+    DonnaTask *task;
+    DonnaNode *dest;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (reg_name != NULL, FALSE);
+    priv  = tree->priv;
+
+    if (G_UNLIKELY (io_type != DONNA_IO_DELETE && !priv->location))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot perform operation from register '%s': No current location set",
+                priv->name, reg_name);
+        return FALSE;
+    }
+
+    if (!donna_app_get_register_nodes (priv->app, reg_name,
+                (io_type == DONNA_IO_UNKNOWN) ? DONNA_DROP_REGISTER_ON_CUT
+                : ((io_type == DONNA_IO_COPY) ? DONNA_DROP_REGISTER_NOT
+                    : DONNA_DROP_REGISTER_ALWAYS),
+                &reg_type, &nodes, error))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get from register '%s': ",
+                priv->name, reg_name);
+        return FALSE;
+    }
+
+    if (G_UNLIKELY (nodes->len == 0))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Seems register '%s' was empty",
+                priv->name, reg_name);
+        return FALSE;
+    }
+
+    /* make sure all nodes are from the same provider */
+    provider = donna_node_peek_provider (nodes->pdata[0]);
+    for (i = 1; i < nodes->len; ++i)
+    {
+        if (provider != donna_node_peek_provider (nodes->pdata[i]))
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Cannot use nodes from register '%s', they are not all from the same provider/domain.",
+                    priv->name, reg_name);
+            g_ptr_array_unref (nodes);
+            return FALSE;
+        }
+    }
+
+    if (io_type == DONNA_IO_UNKNOWN)
+        io_type = (reg_type == DONNA_REGISTER_CUT) ? DONNA_IO_MOVE : DONNA_IO_COPY;
+    dest = (io_type == DONNA_IO_DELETE) ? NULL : g_object_ref (priv->location);
+    task = donna_provider_io_task (provider, io_type, TRUE, nodes, dest, error);
+    if (!task && dest && provider != donna_node_peek_provider (dest))
+    {
+        g_clear_error (error);
+        /* maybe the IO can be done by dest's provider */
+        task = donna_provider_io_task (donna_node_peek_provider (dest),
+                io_type, FALSE, nodes, dest, error);
+    }
+
+    if (!task)
+    {
+        g_prefix_error (error, "Treeview '%s': Couldn't to perform IO operation from register '%s': ",
+                priv->name, reg_name);
+        g_ptr_array_unref (nodes);
+        return FALSE;
+    }
+
+    donna_app_run_task (priv->app, task);
+    return TRUE;
 }
 
 

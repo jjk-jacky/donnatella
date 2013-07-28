@@ -85,6 +85,12 @@ struct intref
     gint64       last;
 };
 
+struct reg
+{
+    DonnaRegisterType type;
+    GSList *list; /* list of full locations */
+};
+
 enum
 {
     ST_SCE_DONNA,
@@ -126,9 +132,10 @@ struct _DonnaDonnaPrivate
      * should be quite rare. */
     GRWLock          lock;
     GHashTable      *visuals;
-    /* ct, providers, filters & intrefs are all under the same lock because
-     * there shouldn't be a need to separate them all. We use a recursive mutex
-     * because we need it for filters, to handle correctly the toggle_ref */
+    /* ct, providers, filters, intrefs & registers are all under the same lock
+     * because there shouldn't be a need to separate them all. We use a
+     * recursive mutex because we need it for filters, to handle correctly the
+     * toggle_ref */
     GRecMutex        rec_mutex;
     struct col_type
     {
@@ -141,6 +148,7 @@ struct _DonnaDonnaPrivate
     GHashTable      *filters;
     GHashTable      *intrefs;
     guint            intrefs_timeout;
+    GHashTable      *registers;
 };
 
 struct argmt
@@ -204,6 +212,30 @@ static void             donna_donna_show_error      (DonnaApp       *app,
                                                      const GError   *error);
 static gpointer         donna_donna_get_ct_data     (DonnaApp       *app,
                                                      const gchar    *col_name);
+static gboolean         donna_donna_drop_register   (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     GError        **error);
+static gboolean         donna_donna_set_register    (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaRegisterType type,
+                                                     GPtrArray      *nodes,
+                                                     GError        **error);
+static gboolean         donna_donna_add_to_register (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     GPtrArray      *nodes,
+                                                     GError        **error);
+static gboolean         donna_donna_set_register_type (
+                                                     DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaRegisterType type,
+                                                     GError        **error);
+static gboolean         donna_donna_get_register_nodes (
+                                                     DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     DonnaDropRegister drop,
+                                                     DonnaRegisterType *type,
+                                                     GPtrArray     **nodes,
+                                                     GError        **error);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -224,6 +256,11 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
+    interface->drop_register        = donna_donna_drop_register;
+    interface->set_register         = donna_donna_set_register;
+    interface->add_to_register      = donna_donna_add_to_register;
+    interface->set_register_type    = donna_donna_set_register_type;
+    interface->get_register_nodes   = donna_donna_get_register_nodes;
 }
 
 static void
@@ -322,6 +359,14 @@ free_intref (struct intref *ir)
 }
 
 static void
+free_register (struct reg *reg)
+{
+    if (reg->list)
+        g_slist_free_full (reg->list, g_free);
+    g_free (reg);
+}
+
+static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
@@ -373,6 +418,9 @@ donna_donna_init (DonnaDonna *donna)
 
     priv->intrefs = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_intref);
+
+    priv->registers = g_hash_table_new_full (g_str_hash, g_str_equal,
+            g_free, (GDestroyNotify) free_register);
 
     if (donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
@@ -1798,6 +1846,212 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
     g_rec_mutex_unlock (&priv->rec_mutex);
     g_free (type);
     return NULL;
+}
+
+static inline gboolean
+is_valid_register_name (const gchar *name, GError **error)
+{
+    if ((*name >= 'a' && *name <= 'z') || (*name >= 'A' && *name <= 'Z')
+            || streq (name, "*") || streq (name, "+"))
+        return TRUE;
+
+    g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_INVALID_NAME,
+            "Invalid register name: '%s'", name);
+    return FALSE;
+}
+
+static gboolean
+donna_donna_drop_register (DonnaApp       *app,
+                           const gchar    *name,
+                           GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    gboolean ret;
+
+    if (!is_valid_register_name (name, error))
+        return FALSE;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    ret = g_hash_table_remove (priv->registers, name);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return ret;
+}
+
+static inline void
+add_node_to_reg (struct reg *reg, DonnaNode *node)
+{
+    GSList *l;
+    gchar *fl = donna_node_get_full_location (node);
+
+    for (l = reg->list; l; l = l->next)
+        if (streq (l->data, fl))
+        {
+            g_free (fl);
+            return;
+        }
+    reg->list = g_slist_prepend (reg->list, fl);
+}
+
+static gboolean
+donna_donna_set_register (DonnaApp       *app,
+                          const gchar    *name,
+                          DonnaRegisterType type,
+                          GPtrArray      *nodes,
+                          GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    struct reg *reg;
+    guint i;
+
+    if (!is_valid_register_name (name, error))
+        return FALSE;
+
+    reg = g_new (struct reg, 1);
+    reg->type = type;
+    reg->list = NULL;
+    for (i = 0; i < nodes->len; ++i)
+        add_node_to_reg (reg, nodes->pdata[i]);
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    g_hash_table_insert (priv->registers, g_strdup (name), reg);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return TRUE;
+}
+
+static gboolean
+donna_donna_add_to_register (DonnaApp       *app,
+                             const gchar    *name,
+                             GPtrArray      *nodes,
+                             GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    struct reg *reg;
+    guint i;
+
+    if (!is_valid_register_name (name, error))
+        return FALSE;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    reg = g_hash_table_lookup (priv->registers, name);
+    if (!reg)
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_NOT_FOUND,
+                "Cannot add to register '%s', it doesn't exist.", name);
+        return FALSE;
+    }
+
+    for (i = 0; i < nodes->len; ++i)
+        add_node_to_reg (reg, nodes->pdata[i]);
+
+    g_rec_mutex_unlock (&priv->rec_mutex);
+    return TRUE;
+}
+
+static gboolean
+donna_donna_set_register_type (DonnaApp       *app,
+                               const gchar    *name,
+                               DonnaRegisterType type,
+                               GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    struct reg *reg;
+
+    if (!is_valid_register_name (name, error))
+        return FALSE;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    reg = g_hash_table_lookup (priv->registers, name);
+    if (!reg)
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_NOT_FOUND,
+                "Cannot set type of register '%s', it doesn't exist.", name);
+        return FALSE;
+    }
+
+    reg->type = type;
+
+    g_rec_mutex_unlock (&priv->rec_mutex);
+    return TRUE;
+}
+
+static gboolean
+donna_donna_get_register_nodes (DonnaApp       *app,
+                                const gchar    *name,
+                                DonnaDropRegister drop,
+                                DonnaRegisterType *type,
+                                GPtrArray     **nodes,
+                                GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    struct reg *reg;
+    GSList *l;
+    GString *str = NULL;
+
+    if (!is_valid_register_name (name, error))
+        return FALSE;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    reg = g_hash_table_lookup (priv->registers, name);
+    if (!reg)
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_NOT_FOUND,
+                "Cannot get nodes from register '%s', it doesn't exist.", name);
+        return FALSE;
+    }
+
+    *nodes = g_ptr_array_new_full (g_slist_length (reg->list), g_object_unref);
+    for (l = reg->list; l; l = l->next)
+    {
+        DonnaTask *task;
+
+        task = donna_app_get_node_task (app, l->data);
+        donna_task_set_can_block (g_object_ref_sink (task));
+        donna_donna_run_task (app, task);
+        donna_task_wait_for_it (task);
+
+        if (donna_task_get_state (task) == DONNA_TASK_DONE)
+            g_ptr_array_add (*nodes,
+                    g_value_dup_object (donna_task_get_return_value (task)));
+        else if (error)
+        {
+            const GError *e = donna_task_get_error (task);
+
+            if (!str)
+                str = g_string_new (NULL);
+
+            if (e)
+                g_string_append_printf (str, "\n- Failed to get node for '%s': %s",
+                        l->data, e->message);
+            else
+                g_string_append_printf (str, "\n- Failed to get node for '%s'",
+                        l->data);
+        }
+
+        g_object_unref (task);
+    }
+
+    if (str)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Not all nodes from register '%s' could be loaded:\n%s",
+                name, str->str);
+        g_string_free (str, TRUE);
+    }
+
+    if (type)
+        *type = reg->type;
+
+    if (drop == DONNA_DROP_REGISTER_ALWAYS || (drop == DONNA_DROP_REGISTER_ON_CUT
+                && reg->type == DONNA_REGISTER_CUT))
+        g_hash_table_remove (priv->registers, name);
+
+    g_rec_mutex_unlock (&priv->rec_mutex);
+    return TRUE;
 }
 
 static void
