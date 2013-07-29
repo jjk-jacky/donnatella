@@ -11072,7 +11072,8 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
             if (event->keyval >= GDK_KEY_A && event->keyval <= GDK_KEY_Z)
                 goto next;
         if (priv->key_spec_type & SPEC_DIGITS)
-            if (event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
+            if ((event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
+                    || (event->keyval >= GDK_KEY_KP_0 && event->keyval <= GDK_KEY_KP_9))
                 goto next;
         if (priv->key_spec_type & SPEC_MOTION)
         {
@@ -11089,6 +11090,14 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
                 /* modifier */
                 priv->key_motion_m *= 10;
                 priv->key_motion_m += event->keyval - GDK_KEY_0;
+                check_statuses (tree, STATUS_CHANGED_ON_KEYS);
+                return TRUE;
+            }
+            else if (event->keyval >= GDK_KEY_KP_0 && event->keyval <= GDK_KEY_KP_9)
+            {
+                /* modifier */
+                priv->key_motion_m *= 10;
+                priv->key_motion_m += event->keyval - GDK_KEY_KP_0;
                 check_statuses (tree, STATUS_CHANGED_ON_KEYS);
                 return TRUE;
             }
@@ -11147,6 +11156,12 @@ next:
         /* modifier */
         priv->key_m *= 10;
         priv->key_m += event->keyval - GDK_KEY_0;
+    }
+    else if (event->keyval >= GDK_KEY_KP_0 && event->keyval <= GDK_KEY_KP_9)
+    {
+        /* modifier */
+        priv->key_m *= 10;
+        priv->key_m += event->keyval - GDK_KEY_KP_0;
     }
     else
     {
