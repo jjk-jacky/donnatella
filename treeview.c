@@ -9762,12 +9762,18 @@ donna_tree_view_from_register (DonnaTreeView      *tree,
 
     if (G_UNLIKELY (nodes->len == 0))
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Seems register '%s' was empty",
-                priv->name, reg_name);
+        if (error && *error)
+            g_prefix_error (error, "Treeview '%s': Failed to get nodes from register '%s': ",
+                    priv->name, reg_name);
+        else
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                    "Treeview '%s': Seems register '%s' was empty",
+                    priv->name, reg_name);
         return FALSE;
     }
+    else if (error && *error)
+        g_clear_error (error);
 
     /* make sure all nodes are from the same provider */
     provider = donna_node_peek_provider (nodes->pdata[0]);
