@@ -132,9 +132,13 @@ enum spec_type
     SPEC_UPPER      = (1 << 1),
     /* 0-9 */
     SPEC_DIGITS     = (1 << 2),
-    /* key of type motion */
-    SPEC_MOTION     = (1 << 3),
+    /* anything translating to a character in SPEC_EXTRA_CHARS (below) */
+    SPEC_EXTRA      = (1 << 3),
+
+    /* key of type motion (can obviously not be combined w/ anything else) */
+    SPEC_MOTION     = (1 << 9),
 };
+#define SPEC_EXTRA_CHARS "*+=-[](){}<>'\"|&~@$_"
 
 enum key_type
 {
@@ -11075,6 +11079,9 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
             if ((event->keyval >= GDK_KEY_0 && event->keyval <= GDK_KEY_9)
                     || (event->keyval >= GDK_KEY_KP_0 && event->keyval <= GDK_KEY_KP_9))
                 goto next;
+        if ((priv->key_spec_type & SPEC_EXTRA)
+                && strchr (SPEC_EXTRA_CHARS, gdk_keyval_to_unicode (event->keyval)))
+            goto next;
         if (priv->key_spec_type & SPEC_MOTION)
         {
             gboolean is_motion = FALSE;
@@ -11143,7 +11150,7 @@ next:
                 if (i & SPEC_MOTION)
                     /* a motion can't ask for a motion */
                     wrong_key (TRUE);
-                priv->key_spec_type = CLAMP (i, 1, 15);
+                priv->key_spec_type = CLAMP (i, 1, 512);
             }
             else
                 wrong_key (TRUE);
@@ -11200,7 +11207,7 @@ next:
                     wrong_key (TRUE);
                 }
                 priv->key_combine = (gchar) gdk_keyval_to_unicode (event->keyval);
-                priv->key_spec_type = CLAMP (i, 1, 15);
+                priv->key_spec_type = CLAMP (i, 1, 512);
                 break;
 
             case KEY_DIRECT:
@@ -11216,7 +11223,7 @@ next:
                 if (i & SPEC_MOTION)
                     /* make sure there's no BS like SPEC_LOWER | SPEC_MOTION */
                     i = SPEC_MOTION;
-                priv->key_spec_type = CLAMP (i, 1, 15);
+                priv->key_spec_type = CLAMP (i, 1, 512);
                 break;
 
             case KEY_ALIAS:
