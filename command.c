@@ -547,40 +547,31 @@ parse_arg (struct rc_data   *data,
 
     if (*data->start == '"')
     {
-        gint unesc = 0;
-
-        for (end = ++data->start; ; )
+        guint i = 0;
+        for (end = ++data->start; ; ++end)
         {
-            gint i;
-
-            for ( ; *end != '"' && *end != '\0'; ++end)
-                if (unesc < 0)
-                    end[unesc] = *end;
-            if (unesc < 0)
-                end[unesc] = *end;
-            if (*end == '\0')
+            if (end[i] == '\\')
+            {
+                *end = end[++i];
+                continue;
+            }
+            *end = end[i];
+            if (*end == '"')
+                break;
+            else if (*end == '\0')
             {
                 g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
                         "Command '%s', argument %d: Missing ending quote",
                         data->command->name, data->i + 1);
                 return FALSE;
             }
-            /* check for escaped quotes */
-            for (i = 0;
-                    &end[i + unesc - 1] >= data->start + 1
-                    && end[i + unesc - 1] == '\\';
-                    --i)
-                ;
-            if ((i % 2) == 0)
-                break;
-            end[--unesc] = *end;
-            ++end;
         }
-        if (unesc < 0)
-            end[unesc] = '\0';
-
-        /* end is at the ending quote */
-        ++end;
+        /* turn the ending quote in to NUL, or put it somewhat before if we
+         * did some unescaping */
+        *end = '\0';
+        /* move end to the original ending quote */
+        end += i;
+        /* move to next relevant char */
         skip_blank (end);
     }
     else if (*data->start == '@')

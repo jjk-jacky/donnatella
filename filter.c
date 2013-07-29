@@ -281,51 +281,35 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
 static inline gchar *
 get_quoted_string (gchar **str, gboolean get_string)
 {
-    gchar *ret = *str;
-    gchar *f = *str;
-    gchar *s;
-    gint i;
+    GString *string;
+    gchar *start = *str;
+    gchar *end;
 
-    /* we assume it is quoted, so skip the openning quote */
-    s = f + 1;
-    for (;;)
-    {
-        s = strchr (s, '"');
-        if (!s)
-            return NULL;
-        /* check for escaped quotes within filter */
-        for (i = 0; &s[i - 1] >= f + 1 && s[i - 1] == '\\'; --i)
-            ;
-        if ((i % 2) == 0)
-            break;
-        ++s;
-    }
-    /* no quotes within, just dup */
     if (get_string)
-    {
-        if (i == 0)
-            ret = g_strndup (f + 1, s - f - 1);
-        else
-        {
-            gsize len = s - f - 1;
-            gchar *ss;
+        string = g_string_new (NULL);
 
-            /* we'll have to unescape the quotes */
-            ss = g_new (gchar, len + 1);
-            for (i = 0; (guint) i < len; ++i)
-            {
-                if (f[1 + i] != '\\')
-                    *ss++ = f[1 + i];
-                else if (f[2 + i] == '\\')
-                    *ss++ = f[1 + ++i];
-            }
-            *ss = '\0';
-            ret = ss;
+    for (end = ++start; ; ++end)
+    {
+        if (*end == '\\')
+        {
+            ++end;
+            if (get_string)
+                g_string_append_c (string, *end);
+            continue;
         }
+        if (*end == '"')
+            break;
+        else if (*end == '\0')
+        {
+            if (get_string)
+                g_string_free (string, TRUE);
+            return NULL;
+        }
+        if (get_string)
+            g_string_append_c (string, *end);
     }
-    /* move to the next one (if any) */
-    *str = s + 1;
-    return ret;
+    *str = end;
+    return (get_string) ? g_string_free (string, FALSE) : *str;
 }
 
 static struct block *
