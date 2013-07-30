@@ -19,6 +19,8 @@ static DonnaTaskState   cmd_config_set_int                  (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_config_set_string               (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_menu_popup                      (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
@@ -128,6 +130,15 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
         .cmd_fn         = cmd_config_set_string
+    },
+    {
+        .name           = "menu_popup",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_menu_popup
     },
     {
         .name           = "node_activate",
@@ -1918,6 +1929,22 @@ cmd_config_set_string (DonnaTask *task, GPtrArray *args)
     if (!donna_config_set_string (donna_app_peek_config (args->pdata[3]),
                 args->pdata[2], "%s", args->pdata[1]))
         return DONNA_TASK_FAILED;
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_menu_popup (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    /* we give our ref to show_menu(), but since the command is gonna be done
+     * almost instantly and args free-d, we need to add one */
+    if (!donna_app_show_menu (args->pdata[3], g_ptr_array_ref (args->pdata[1]),
+                args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
     return DONNA_TASK_DONE;
 }
 
