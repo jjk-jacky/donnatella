@@ -2146,6 +2146,32 @@ _donna_config_get_string_tree_column (DonnaConfig   *config,
     return ret;
 }
 
+gboolean
+_donna_config_get_boolean_tree_column (DonnaConfig   *config,
+                                       const gchar   *tv_name,
+                                       const gchar   *col_name,
+                                       guint          tree_col,
+                                       const gchar   *arr_name,
+                                       const gchar   *def_cat,
+                                       const gchar   *opt_name,
+                                       gboolean      *ret)
+{
+    GValue value = G_VALUE_INIT;
+
+    g_return_val_if_fail (def_cat != NULL, NULL);
+
+    g_value_init (&value, G_TYPE_BOOLEAN);
+    if (!_get_option_column (config, G_TYPE_BOOLEAN, &value,
+                tv_name, col_name, arr_name, def_cat, opt_name, tree_col))
+    {
+        g_value_unset (&value);
+        return FALSE;
+    }
+    *ret = g_value_get_boolean (&value);
+    g_value_unset (&value);
+    return TRUE;
+}
+
 
 #define get_node()  do {                                            \
     if (*fmt == '/')                                                \

@@ -363,6 +363,14 @@ struct _DonnaTreeViewPrivate
     GdkEventButton      *last_event;
     guint                last_event_timeout; /* it was a single-click */
     gboolean             last_event_expired; /* after sgl-clk, could get a slow-dbl */
+    /* in case the trigger must happen on button-release instead */
+    DonnaClick           on_release_click;
+    /* used to make sure the release is within distance of the press */
+    gint                 on_release_x;
+    gint                 on_release_y;
+    /* because middle/right click have a delay, and release could happen before
+     * the timeout for the click is triggered */
+    gboolean             on_release_triggered;
     /* info to handle the keys */
     gchar               *key_mode;          /* current key mode */
     gchar               *key_combine_name;  /* combine that was used */
@@ -466,6 +474,15 @@ gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
                                              const gchar   *def_cat,
                                              const gchar   *opt_name,
                                              gchar         *def_val);
+gboolean
+_donna_config_get_boolean_tree_column (DonnaConfig   *config,
+                                       const gchar   *tv_name,
+                                       const gchar   *col_name,
+                                       guint          tree_col,
+                                       const gchar   *arr_name,
+                                       const gchar   *def_cat,
+                                       const gchar   *opt_name,
+                                       gboolean      *ret);
 
 /* internal from app.c */
 gboolean _donna_app_filter_nodes (DonnaApp        *app,
@@ -10288,8 +10305,9 @@ handle_click (DonnaTreeView     *tree,
     gboolean is_tree = is_tree (tree);
     gboolean is_selected;
     gchar *clicks = NULL;
-    /* longest possible is "blankcol_ctrl_shift_middle_double_click" (len=39) */
-    gchar buf[40];
+    /* longest possible is "blankcol_ctrl_shift_middle_double_click_on_rls"
+     * (len=46) */
+    gchar buf[47];
     gchar *b = buf + 9; /* leave space for "blankcol_" prefix */
     const gchar *def = NULL;
 
@@ -10332,18 +10350,14 @@ handle_click (DonnaTreeView     *tree,
     strcpy (b, "click");
 
     config = donna_app_peek_config (priv->app);
-    data = g_new0 (struct conv_data, 1);
-    data->tree = tree;
     _col = get_column_by_column (tree, column);
-    if (_col)
-        data->col_name = g_strdup (_col->name);
 
     if (!iter)
     {
         memcpy (buf, "blankrow_", 9 * sizeof (gchar));
         b = buf;
     }
-    else if (!data->col_name)
+    else if (!_col->name)
     {
         memcpy (buf, "blankcol_", 9 * sizeof (gchar));
         b = buf;
@@ -10360,6 +10374,56 @@ handle_click (DonnaTreeView     *tree,
     }
     else
         b = buf + 9;
+
+
+    if (is_tree && iter)
+        gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
+                DONNA_TREE_COL_CLICKS,  &clicks,
+                -1);
+
+    /* list only: different source when the clicked item is selected */
+    is_selected = !is_tree && iter && gtk_tree_selection_iter_is_selected (
+            gtk_tree_view_get_selection ((GtkTreeView *) tree), iter);
+
+
+    if (event->type == GDK_BUTTON_PRESS && !priv->on_release_triggered)
+    {
+        gboolean on_rls = FALSE;
+        gchar *e;
+
+        e = b + strlen (b);
+        memcpy (e, "_on_rls", 8 * sizeof (gchar)); /* 8 to include NUL */
+
+        /* should we delay the trigger to button-release ? */
+        if (!_donna_config_get_boolean_tree_column (config, priv->name,
+                    _col->name,
+                    (is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
+                    (is_tree) ? clicks
+                    : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    (is_tree) ? "treeviews/tree" : "treeviews/list",
+                    b, &on_rls) && is_selected)
+            /* nothing found under "selected", fallback to regular clicks */
+            _donna_config_get_boolean_tree_column (config, priv->name,
+                    _col->name,
+                    TREE_COL_LIST,
+                    (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
+                    "treeviews/list",
+                    b, &on_rls);
+
+        if (on_rls)
+        {
+            priv->on_release_click  = click;
+            priv->on_release_x      = event->x;
+            priv->on_release_y      = event->y;
+            return;
+        }
+        *e = '\0';
+    }
+
+    data = g_new0 (struct conv_data, 1);
+    data->tree = tree;
+    if (_col)
+        data->col_name = g_strdup (_col->name);
 
     /* a few of those should have valid defaults, just in case */
     if (is_tree)
@@ -10381,15 +10445,6 @@ handle_click (DonnaTreeView     *tree,
         else if (streq (b, "left_double_click"))
             def = "command:tree_activate_row (%o, %r)";
     }
-
-    if (is_tree && iter)
-        gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
-                DONNA_TREE_COL_CLICKS,  &clicks,
-                -1);
-
-    /* list only: different source when the clicked item is selected */
-    is_selected = !is_tree && iter && gtk_tree_selection_iter_is_selected (
-            gtk_tree_view_get_selection ((GtkTreeView *) tree), iter);
 
     fl = _donna_config_get_string_tree_column (config, priv->name,
             data->col_name,
@@ -10442,33 +10497,38 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     else if (event->button == 3)
         click |= DONNA_CLICK_RIGHT;
 
-    /* a click will grab the focus if:
-     * - tree: it's a regular left click (i.e. no Ctrl/Shift held) unless click
-     *   was on expander
-     * - list: it's a left click (event w/ Ctrl/Shift)
-     * and, ofc, focus isn't on treeview already. */
-    if (is_tree (tree))
-        /* might, as we don't know if this was on expander or not yet */
-        tree_might_grab_focus = is_regular_left_click (click, event)
-            && !gtk_widget_is_focus ((GtkWidget *) tree);
-    else if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
-            && !gtk_widget_is_focus ((GtkWidget *) tree))
+    /* the focus thing only matters on the actual click (i.e. on press), so we
+     * ignore it when triggering a click on release */
+    if (event->type == GDK_BUTTON_PRESS)
     {
-        GtkWidget *w = NULL;
+        /* a click will grab the focus if:
+         * - tree: it's a regular left click (i.e. no Ctrl/Shift held) unless
+         *   click was on expander
+         * - list: it's a left click (event w/ Ctrl/Shift)
+         * and, ofc, focus isn't on treeview already. */
+        if (is_tree (tree))
+            /* might, as we don't know if this was on expander or not yet */
+            tree_might_grab_focus = is_regular_left_click (click, event)
+                && !gtk_widget_is_focus ((GtkWidget *) tree);
+        else if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+                == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
+                && !gtk_widget_is_focus ((GtkWidget *) tree))
+        {
+            GtkWidget *w = NULL;
 
-        if (priv->focusing_click)
-            /* get the widget that currently has the focus */
-            w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
-                        (GtkWidget *) tree));
+            if (priv->focusing_click)
+                /* get the widget that currently has the focus */
+                w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
+                            (GtkWidget *) tree));
 
-        gtk_widget_grab_focus ((GtkWidget *) tree);
+            gtk_widget_grab_focus ((GtkWidget *) tree);
 
-        /* we "skip" the click if focusing_click, unless the widget that had the
-         * focus was a children of ours, i.e. a column header */
-        if (priv->focusing_click && w && gtk_widget_get_ancestor (w,
-                    DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
-            return FALSE;
+            /* we "skip" the click if focusing_click, unless the widget that had
+             * the focus was a children of ours, i.e. a column header */
+            if (priv->focusing_click && w && gtk_widget_get_ancestor (w,
+                        DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
+                return FALSE;
+        }
     }
 
     x = (gint) event->x;
@@ -10700,6 +10760,8 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
             return TRUE;
     }
 
+    priv->on_release_triggered = FALSE;
+
     if (!priv->last_event)
         set_up_as_last = TRUE;
     else if (priv->last_event_expired)
@@ -10818,6 +10880,7 @@ static gboolean
 donna_tree_view_button_release_event (GtkWidget      *widget,
                                       GdkEventButton *event)
 {
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) widget)->priv;
     gboolean ret;
     GSList *l;
 
@@ -10841,7 +10904,7 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
      * right) and, if the property expand is TRUE, we set it back to FALSE. We
      * also set the fixed-width to the current width otherwise the column
      * shrinks unexpectedly. */
-    for (l = ((DonnaTreeView *) widget)->priv->columns; l; l = l->next)
+    for (l = priv->columns; l; l = l->next)
     {
         struct column *_col = l->data;
         gboolean expand;
@@ -10853,6 +10916,25 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
                     "fixed-width",  gtk_tree_view_column_get_width (_col->column),
                     NULL);
     }
+
+    if (priv->on_release_click)
+    {
+        gint distance;
+
+        g_object_get (gtk_settings_get_default (),
+                "gtk-double-click-distance",    &distance,
+                NULL);
+
+        /* only validate/trigger the click on release if it's within dbl-click
+         * distance of the press event */
+        if ((ABS (event->x - priv->on_release_x) <= distance)
+                && ABS (event->y - priv->on_release_y) <= distance)
+            trigger_click ((DonnaTreeView *) widget, priv->on_release_click, event);
+
+        priv->on_release_click = 0;
+    }
+    else
+        priv->on_release_triggered = TRUE;
 
     return ret;
 }
