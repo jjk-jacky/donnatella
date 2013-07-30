@@ -358,7 +358,9 @@ free_filter (struct filter *f)
 static void
 free_intref (struct intref *ir)
 {
-    if (ir->type == DONNA_ARG_TYPE_TREEVIEW || ir->type == DONNA_ARG_TYPE_NODE)
+    if (ir->type & DONNA_ARG_IS_ARRAY)
+        g_ptr_array_unref (ir->ptr);
+    else if (ir->type == DONNA_ARG_TYPE_TREEVIEW || ir->type == DONNA_ARG_TYPE_NODE)
         g_object_unref (ir->ptr);
     else
         g_warning ("free_intref(): Invalid type: %d", ir->type);
@@ -1178,7 +1180,9 @@ donna_donna_get_int_ref (DonnaApp       *app,
     {
         ir->last = g_get_monotonic_time ();
         ptr = ir->ptr;
-        if (ir->type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+        if (ir->type & DONNA_ARG_IS_ARRAY)
+            ptr = g_ptr_array_ref (ptr);
+        else if (ir->type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
             ptr = g_object_ref (ptr);
     }
     g_rec_mutex_unlock (&priv->rec_mutex);

@@ -50,6 +50,7 @@ typedef enum
     DONNA_ARG_TYPE_ROW_ID   = (1 << 6),
 
     DONNA_ARG_IS_OPTIONAL   = (1 << 15),
+    DONNA_ARG_IS_ARRAY      = (1 << 16),
 } DonnaArgType;
 
 
