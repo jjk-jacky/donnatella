@@ -1966,8 +1966,6 @@ cmd_tree_from_register (DonnaTask *task, GPtrArray *args)
     const gchar *c_io_type[] = { "auto", "copy", "move", "delete" };
     DonnaIoType io_type[] = { DONNA_IO_UNKNOWN, DONNA_IO_COPY, DONNA_IO_MOVE,
         DONNA_IO_DELETE };
-    gchar *s;
-    GValue *value;
     gint c_io;
 
     c_io = get_choice_from_arg (c_io_type, 3);
@@ -2392,8 +2390,6 @@ cmd_tree_to_register (DonnaTask *task, GPtrArray *args)
     const gchar *c_reg_type[] = { "cut", "copy", "add" };
     DonnaRegisterType reg_type[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY,
         DONNA_REGISTER_UNKNOWN };
-    gchar *s;
-    GValue *value;
     gint c_rt;
 
     c_rt = get_choice_from_arg (c_reg_type, 5);
