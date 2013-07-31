@@ -25,6 +25,18 @@ static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_register_add_nodes              (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_drop                   (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_get_nodes              (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_get_type               (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_set                    (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_set_type               (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_repeat                          (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_task_set_state                  (DonnaTask *task,
@@ -158,6 +170,56 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
         .cmd_fn         = cmd_node_popup_children
+    },
+    {
+        .name           = "register_add_nodes",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_register_add_nodes
+    },
+    {
+        .name           = "register_drop",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_register_drop
+    },
+    {
+        .name           = "register_get_nodes",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
+        .cmd_fn         = cmd_register_get_nodes
+    },
+    {
+        .name           = "register_get_type",
+        .argc           = 1,
+        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_STRING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_register_get_type
+    },
+    {
+        .name           = "register_set",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
+        .cmd_fn         = cmd_register_set
+    },
+    {
+        .name           = "register_set_type",
+        .argc           = 2,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_register_set_type
     },
     {
         .name           = "repeat",
@@ -2118,6 +2180,150 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
     }
     g_object_unref (t);
     return state;
+}
+
+static DonnaTaskState
+cmd_register_add_nodes (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_app_register_add_nodes (args->pdata[3], args->pdata[1],
+                args->pdata[2], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_drop (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+
+    if (!donna_app_register_drop (args->pdata[2], args->pdata[1], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_get_nodes (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_drop[] = { "not", "always", "on-cut" };
+    DonnaDropRegister drop[] = { DONNA_DROP_REGISTER_NOT, DONNA_DROP_REGISTER_ALWAYS,
+        DONNA_DROP_REGISTER_ON_CUT };
+    gint c;
+    GPtrArray *arr;
+    GValue *value;
+
+    c = get_choice_from_arg (c_drop, 2);
+    if (c < 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Invalid drop option: '%s'; Must be 'not', 'always' or 'on-cut'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_register_get_nodes (args->pdata[3], args->pdata[1],
+                drop[c], NULL, &arr, &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (value, G_TYPE_PTR_ARRAY);
+    g_value_take_boxed (value, arr);
+    donna_task_release_return_value (task_for_ret_err ());
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_get_type (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    DonnaRegisterType type;
+    GValue *value;
+    const gchar *s_type[3];
+    s_type[DONNA_REGISTER_UNKNOWN]  = "unknown";
+    s_type[DONNA_REGISTER_CUT]      = "cut";
+    s_type[DONNA_REGISTER_COPY]     = "copy";
+
+    if (!donna_app_register_get_nodes (args->pdata[2], args->pdata[1],
+                DONNA_DROP_REGISTER_NOT, &type, NULL, &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (value, G_TYPE_STRING);
+    g_value_set_static_string (value, s_type[type]);
+    donna_task_release_return_value (task_for_ret_err ());
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_set (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_type[] = { "cut", "copy" };
+    DonnaRegisterType type[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
+    gint c;
+
+    c = get_choice_from_arg (c_type, 2);
+    if (c < 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Invalid register type: '%s'; Must be 'cut' or 'copy'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_register_set (args->pdata[4], args->pdata[1], type[c],
+                args->pdata[3], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_set_type (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_type[] = { "cut", "copy" };
+    DonnaRegisterType type[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
+    gint c;
+
+    c = get_choice_from_arg (c_type, 2);
+    if (c < 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Invalid register type: '%s'; Must be 'cut' or 'copy'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_register_set_type (args->pdata[3], args->pdata[1], type[c], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
