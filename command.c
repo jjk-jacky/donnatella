@@ -178,7 +178,7 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_add_nodes",
         .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING,
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
@@ -187,7 +187,7 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_drop",
         .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
         .cmd_fn         = cmd_register_drop
@@ -195,7 +195,8 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_get_nodes",
         .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING },
         .return_type    = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
         .cmd_fn         = cmd_register_get_nodes
@@ -203,7 +204,7 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_get_type",
         .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING },
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_STRING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
         .cmd_fn         = cmd_register_get_type
@@ -211,7 +212,8 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_load",
         .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING,
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING,
             DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
@@ -220,7 +222,8 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_save",
         .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING,
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING,
             DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
@@ -229,8 +232,8 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_set",
         .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
         .cmd_fn         = cmd_register_set
@@ -238,7 +241,8 @@ static DonnaCommand commands[] = {
     {
         .name           = "register_set_type",
         .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING },
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
         .cmd_fn         = cmd_register_set_type
@@ -2209,7 +2213,8 @@ cmd_register_add_nodes (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
 
-    if (!donna_app_register_add_nodes (args->pdata[3], args->pdata[1],
+    if (!donna_app_register_add_nodes (args->pdata[3],
+                (args->pdata[1]) ? args->pdata[1] : "",
                 args->pdata[2], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
@@ -2223,7 +2228,8 @@ cmd_register_drop (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
 
-    if (!donna_app_register_drop (args->pdata[2], args->pdata[1], &err))
+    if (!donna_app_register_drop (args->pdata[2],
+                (args->pdata[1]) ? args->pdata[1] : "", &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -2252,7 +2258,8 @@ cmd_register_get_nodes (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_register_get_nodes (args->pdata[3], args->pdata[1],
+    if (!donna_app_register_get_nodes (args->pdata[3],
+                (args->pdata[1]) ? args->pdata[1] : "",
                 drop[c], NULL, &arr, &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
@@ -2278,7 +2285,8 @@ cmd_register_get_type (DonnaTask *task, GPtrArray *args)
     s_type[DONNA_REGISTER_CUT]      = "cut";
     s_type[DONNA_REGISTER_COPY]     = "copy";
 
-    if (!donna_app_register_get_nodes (args->pdata[2], args->pdata[1],
+    if (!donna_app_register_get_nodes (args->pdata[2],
+                (args->pdata[1]) ? args->pdata[1] : "",
                 DONNA_DROP_REGISTER_NOT, &type, NULL, &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
@@ -2317,8 +2325,9 @@ cmd_register_load (DonnaTask *task, GPtrArray *args)
     else
         c = 0;
 
-    if (!donna_app_register_load (args->pdata[4], args->pdata[1], args->pdata[2],
-                file_type[c], &err))
+    if (!donna_app_register_load (args->pdata[4],
+                (args->pdata[1]) ? args->pdata[1] : "",
+                args->pdata[2], file_type[c], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -2351,8 +2360,9 @@ cmd_register_save (DonnaTask *task, GPtrArray *args)
     else
         c = 0;
 
-    if (!donna_app_register_save (args->pdata[4], args->pdata[1], args->pdata[2],
-                file_type[c], &err))
+    if (!donna_app_register_save (args->pdata[4],
+                (args->pdata[1]) ? args->pdata[1] : "",
+                args->pdata[2], file_type[c], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -2379,8 +2389,9 @@ cmd_register_set (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_register_set (args->pdata[4], args->pdata[1], type[c],
-                args->pdata[3], &err))
+    if (!donna_app_register_set (args->pdata[4],
+                (args->pdata[1]) ? args->pdata[1] : "",
+                type[c], args->pdata[3], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
@@ -2407,7 +2418,9 @@ cmd_register_set_type (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_register_set_type (args->pdata[3], args->pdata[1], type[c], &err))
+    if (!donna_app_register_set_type (args->pdata[3],
+                (args->pdata[1]) ? args->pdata[1] : "",
+                type[c], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
