@@ -669,3 +669,51 @@ donna_app_register_get_nodes (DonnaApp       *app,
 
     return (*interface->register_get_nodes) (app, name, drop, type, nodes, error);
 }
+
+gboolean
+donna_app_register_load (DonnaApp       *app,
+                         const gchar    *name,
+                         const gchar    *file,
+                         DonnaRegisterFile file_type,
+                         GError        **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+    g_return_val_if_fail (file != NULL, FALSE);
+    g_return_val_if_fail (file_type == DONNA_REGISTER_FILE_NODES
+            || file_type == DONNA_REGISTER_FILE_FILE
+            || file_type == DONNA_REGISTER_FILE_URIS, FALSE);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->register_load != NULL, FALSE);
+
+    return (*interface->register_load) (app, name, file, file_type, error);
+}
+
+gboolean
+donna_app_register_save (DonnaApp       *app,
+                         const gchar    *name,
+                         const gchar    *file,
+                         DonnaRegisterFile file_type,
+                         GError        **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+    g_return_val_if_fail (file != NULL, FALSE);
+    g_return_val_if_fail (file_type == DONNA_REGISTER_FILE_NODES
+            || file_type == DONNA_REGISTER_FILE_FILE
+            || file_type == DONNA_REGISTER_FILE_URIS, FALSE);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->register_save != NULL, FALSE);
+
+    return (*interface->register_save) (app, name, file, file_type, error);
+}

@@ -18,6 +18,7 @@ typedef enum
 {
     DONNA_APP_ERROR_NOT_FOUND,
     DONNA_APP_ERROR_INVALID_NAME,
+    DONNA_APP_ERROR_INVALID_FORMAT,
     DONNA_APP_ERROR_OTHER,
 } DonnaAppError;
 
@@ -85,6 +86,17 @@ struct _DonnaAppInterface
                                                      DonnaRegisterType *type,
                                                      GPtrArray     **nodes,
                                                      GError        **error);
+    gboolean            (*register_load)            (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     const gchar    *file,
+                                                     DonnaRegisterFile file_type,
+                                                     GError        **error);
+    gboolean            (*register_save)            (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     const gchar    *file,
+                                                     DonnaRegisterFile file_type,
+                                                     GError        **error);
+
 };
 
 /* signals */
@@ -160,7 +172,16 @@ gboolean            donna_app_register_get_nodes    (DonnaApp       *app,
                                                      DonnaRegisterType *type,
                                                      GPtrArray     **nodes,
                                                      GError        **error);
-
+gboolean            donna_app_register_load         (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     const gchar    *file,
+                                                     DonnaRegisterFile file_type,
+                                                     GError        **error);
+gboolean            donna_app_register_save         (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     const gchar    *file,
+                                                     DonnaRegisterFile file_type,
+                                                     GError        **error);
 
 G_END_DECLS
 

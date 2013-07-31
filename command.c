@@ -33,6 +33,10 @@ static DonnaTaskState   cmd_register_get_nodes              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_register_get_type               (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_register_load                   (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_save                   (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_register_set                    (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_register_set_type               (DonnaTask *task,
@@ -203,6 +207,24 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_STRING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
         .cmd_fn         = cmd_register_get_type
+    },
+    {
+        .name           = "register_load",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_register_load
+    },
+    {
+        .name           = "register_save",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+        .cmd_fn         = cmd_register_save
     },
     {
         .name           = "register_set",
@@ -2267,6 +2289,74 @@ cmd_register_get_type (DonnaTask *task, GPtrArray *args)
     g_value_init (value, G_TYPE_STRING);
     g_value_set_static_string (value, s_type[type]);
     donna_task_release_return_value (task_for_ret_err ());
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_load (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_file_type[] = { "nodes", "files", "uris" };
+    DonnaRegisterFile file_type[] = { DONNA_REGISTER_FILE_NODES,
+        DONNA_REGISTER_FILE_FILE, DONNA_REGISTER_FILE_URIS };
+    gint c;
+
+    if (args->pdata[3])
+    {
+        c = get_choice_from_arg (c_file_type, 3);
+        if (c < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_SYNTAX,
+                    "Invalid register file type: '%s'; Must be 'nodes', 'files' or 'uris'",
+                    args->pdata[3]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        c = 0;
+
+    if (!donna_app_register_load (args->pdata[4], args->pdata[1], args->pdata[2],
+                file_type[c], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_save (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_file_type[] = { "nodes", "files", "uris" };
+    DonnaRegisterFile file_type[] = { DONNA_REGISTER_FILE_NODES,
+        DONNA_REGISTER_FILE_FILE, DONNA_REGISTER_FILE_URIS };
+    gint c;
+
+    if (args->pdata[3])
+    {
+        c = get_choice_from_arg (c_file_type, 3);
+        if (c < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_SYNTAX,
+                    "Invalid register file type: '%s'; Must be 'nodes', 'files' or 'uris'",
+                    args->pdata[3]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        c = 0;
+
+    if (!donna_app_register_save (args->pdata[4], args->pdata[1], args->pdata[2],
+                file_type[c], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
 
     return DONNA_TASK_DONE;
 }

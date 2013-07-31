@@ -241,6 +241,16 @@ static gboolean         donna_donna_register_get_nodes (
                                                      DonnaRegisterType *type,
                                                      GPtrArray     **nodes,
                                                      GError        **error);
+static gboolean         donna_donna_register_load   (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     const gchar    *file,
+                                                     DonnaRegisterFile file_type,
+                                                     GError        **error);
+static gboolean         donna_donna_register_save   (DonnaApp       *app,
+                                                     const gchar    *name,
+                                                     const gchar    *file,
+                                                     DonnaRegisterFile file_type,
+                                                     GError        **error);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -266,6 +276,8 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->register_add_nodes   = donna_donna_register_add_nodes;
     interface->register_set_type    = donna_donna_register_set_type;
     interface->register_get_nodes   = donna_donna_register_get_nodes;
+    interface->register_load        = donna_donna_register_load;
+    interface->register_save        = donna_donna_register_save;
 }
 
 static void
@@ -2035,6 +2047,8 @@ get_from_clipboard (GSList              **list,
         filename = g_filename_from_uri (b, NULL, &err);
         if (G_UNLIKELY (!filename))
         {
+            if (!str)
+                continue;
             if (!*str)
                 *str = g_string_new (NULL);
 
@@ -2336,6 +2350,17 @@ donna_donna_register_get_nodes (DonnaApp       *app,
             task = donna_provider_get_node_task (pfs, l->data, NULL);
         else
             task = donna_app_get_node_task (app, l->data);
+
+        if (!task)
+        {
+            if (!str)
+                str = g_string_new (NULL);
+
+            g_string_append_printf (str, "\n- Failed to get node for '%s' (couldn't get task)",
+                    (gchar *) l->data);
+            continue;
+        }
+
         donna_task_set_can_block (g_object_ref_sink (task));
         donna_donna_run_task (app, task);
         donna_task_wait_for_it (task);
@@ -2387,6 +2412,213 @@ donna_donna_register_get_nodes (DonnaApp       *app,
                     && reg_type == DONNA_REGISTER_CUT))
             take_clipboard_ownership (app, TRUE);
     }
+
+    return TRUE;
+}
+
+static gboolean
+donna_donna_register_load (DonnaApp       *app,
+                           const gchar    *name,
+                           const gchar    *file,
+                           DonnaRegisterFile file_type,
+                           GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    struct reg *reg;
+    gboolean is_clipboard;
+    gchar *data;
+    gchar *s;
+    gchar *e;
+    guint i;
+
+    if (!is_valid_register_name (&name, error))
+        return FALSE;
+
+    is_clipboard = *name == '+';
+
+    if (!g_file_get_contents (file, &data, NULL, error))
+    {
+        g_prefix_error (error, "Failed to load register '%s' from '%s': ",
+                name, file);
+        return FALSE;
+    }
+
+    reg = g_new (struct reg, 1);
+    reg->list = NULL;
+
+    if (streqn (data, "cut\n", 4))
+    {
+        reg->type = DONNA_REGISTER_CUT;
+        s = data + 4;
+    }
+    else if (streqn (data, "copy\n", 5))
+    {
+        reg->type = DONNA_REGISTER_COPY;
+        s = data + 5;
+    }
+    else
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_INVALID_FORMAT,
+                "Failed to load register '%s' from '%s': invalid file format",
+                name, file);
+        g_free (reg);
+        g_free (data);
+        return FALSE;
+    }
+
+    while ((e = strchr (s, '\n')))
+    {
+        *e = '\0';
+
+        if (file_type == DONNA_REGISTER_FILE_NODES)
+        {
+            if (!is_clipboard)
+                reg->list = g_slist_prepend (reg->list, g_strdup (s));
+            else if (streqn (s, "fs:", 3))
+                reg->list = g_slist_prepend (reg->list, g_strdup (s + 3));
+        }
+        else if (file_type == DONNA_REGISTER_FILE_FILE)
+        {
+            if (!is_clipboard)
+                reg->list = g_slist_prepend (reg->list,
+                        g_strdup_printf ("fs:%s", s));
+            else
+                reg->list = g_slist_prepend (reg->list, g_strdup (s));
+        }
+        else /* DONNA_REGISTER_FILE_URIS */
+        {
+            gchar *f = g_filename_from_uri (s, NULL, NULL);
+            if (f)
+            {
+                if (!is_clipboard)
+                {
+                    reg->list = g_slist_prepend (reg->list,
+                            g_strdup_printf ("fs:%s", f));
+                    g_free (f);
+                }
+                else
+                    reg->list = g_slist_prepend (reg->list, f);
+            }
+        }
+
+        s = e + 1;
+    }
+    g_free (data);
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    g_hash_table_insert (priv->registers, g_strdup (name), reg);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    if (is_clipboard)
+        take_clipboard_ownership (app, FALSE);
+
+    return TRUE;
+}
+
+static gboolean
+donna_donna_register_save (DonnaApp       *app,
+                           const gchar    *name,
+                           const gchar    *file,
+                           DonnaRegisterFile file_type,
+                           GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    struct reg *reg = NULL;
+    DonnaRegisterType reg_type;
+    GSList *list = NULL;
+    GSList *l;
+    GString *str;
+
+    if (!is_valid_register_name (&name, error))
+        return FALSE;
+
+    if (*name == '+')
+    {
+        if (!get_from_clipboard (&list, &reg_type, NULL, error))
+        {
+            g_prefix_error (error, "Failed to save register '%s': ", name);
+            return FALSE;
+        }
+    }
+    else
+    {
+        g_rec_mutex_lock (&priv->rec_mutex);
+        reg = g_hash_table_lookup (priv->registers, name);
+        if (!reg)
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_NOT_FOUND,
+                    "Cannot save register '%s', it doesn't exist.", name);
+            return FALSE;
+        }
+        list = reg->list;
+        reg_type = reg->type;
+    }
+
+    str = g_string_new ((reg_type == DONNA_REGISTER_CUT) ? "cut\n" : "copy\n");
+    for (l = list; l; l = l->next)
+    {
+        if (reg)
+        {
+            if (file_type == DONNA_REGISTER_FILE_NODES)
+            {
+                g_string_append (str, l->data);
+                g_string_append_c (str, '\n');
+            }
+            /* other file_types require nodes to be in fs */
+            else if (streqn (l->data, "fs:", 3))
+            {
+                if (file_type == DONNA_REGISTER_FILE_FILE)
+                    g_string_append (str, l->data + 3);
+                else /* DONNA_REGISTER_FILE_URIS */
+                {
+                    gchar *s;
+
+                    s = g_filename_to_uri (l->data + 3, NULL, NULL);
+                    if (!s)
+                        continue;
+                    g_string_append (str, s);
+                    g_free (s);
+                }
+                g_string_append_c (str, '\n');
+            }
+        }
+        else
+        {
+            if (file_type == DONNA_REGISTER_FILE_NODES)
+            {
+                g_string_append (str, "fs:");
+                g_string_append (str, l->data);
+            }
+            else if (file_type == DONNA_REGISTER_FILE_FILE)
+                g_string_append (str, l->data);
+            else /* DONNA_REGISTER_FILE_URIS */
+            {
+                gchar *s;
+
+                s = g_filename_to_uri (l->data, NULL, NULL);
+                if (!s)
+                    continue;
+                g_string_append (str, s);
+                g_free (s);
+            }
+            g_string_append_c (str, '\n');
+        }
+    }
+
+    if (reg)
+        g_rec_mutex_unlock (&priv->rec_mutex);
+    else
+        g_slist_free_full (list, g_free);
+
+    if (!g_file_set_contents (file, str->str, str->len, error))
+    {
+        g_prefix_error (error, "Failed to save register '%s' to '%s': ",
+                name, file);
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+    g_string_free (str, TRUE);
 
     return TRUE;
 }

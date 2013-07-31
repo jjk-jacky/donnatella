@@ -29,6 +29,13 @@ typedef enum
 
 typedef enum
 {
+    DONNA_REGISTER_FILE_NODES,  /* w/ full locations */
+    DONNA_REGISTER_FILE_FILE,   /* w/ filenames */
+    DONNA_REGISTER_FILE_URIS,   /* w/ uris */
+} DonnaRegisterFile;
+
+typedef enum
+{
     DONNA_CLICK_LEFT        = (1 << 0),
     DONNA_CLICK_MIDDLE      = (1 << 1),
     DONNA_CLICK_RIGHT       = (1 << 2),
