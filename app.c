@@ -567,7 +567,7 @@ donna_app_filter_nodes (DonnaApp       *app,
 }
 
 gboolean
-donna_app_drop_register (DonnaApp       *app,
+donna_app_register_drop (DonnaApp       *app,
                          const gchar    *name,
                          GError        **error)
 {
@@ -579,13 +579,13 @@ donna_app_drop_register (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->drop_register != NULL, FALSE);
+    g_return_val_if_fail (interface->register_drop != NULL, FALSE);
 
-    return (*interface->drop_register) (app, name, error);
+    return (*interface->register_drop) (app, name, error);
 }
 
 gboolean
-donna_app_set_register (DonnaApp       *app,
+donna_app_register_set (DonnaApp       *app,
                         const gchar    *name,
                         DonnaRegisterType type,
                         GPtrArray      *nodes,
@@ -601,16 +601,16 @@ donna_app_set_register (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->set_register != NULL, FALSE);
+    g_return_val_if_fail (interface->register_set != NULL, FALSE);
 
-    return (*interface->set_register) (app, name, type, nodes, error);
+    return (*interface->register_set) (app, name, type, nodes, error);
 }
 
 gboolean
-donna_app_add_to_register (DonnaApp       *app,
-                           const gchar    *name,
-                           GPtrArray      *nodes,
-                           GError        **error)
+donna_app_register_add_nodes (DonnaApp       *app,
+                              const gchar    *name,
+                              GPtrArray      *nodes,
+                              GError        **error)
 {
     DonnaAppInterface *interface;
 
@@ -622,13 +622,13 @@ donna_app_add_to_register (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->add_to_register != NULL, FALSE);
+    g_return_val_if_fail (interface->register_add_nodes != NULL, FALSE);
 
-    return (*interface->add_to_register) (app, name, nodes, error);
+    return (*interface->register_add_nodes) (app, name, nodes, error);
 }
 
 gboolean
-donna_app_set_register_type (DonnaApp       *app,
+donna_app_register_set_type (DonnaApp       *app,
                              const gchar    *name,
                              DonnaRegisterType type,
                              GError        **error)
@@ -641,13 +641,13 @@ donna_app_set_register_type (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->set_register_type != NULL, FALSE);
+    g_return_val_if_fail (interface->register_set_type != NULL, FALSE);
 
-    return (*interface->set_register_type) (app, name, type, error);
+    return (*interface->register_set_type) (app, name, type, error);
 }
 
 gboolean
-donna_app_get_register_nodes (DonnaApp       *app,
+donna_app_register_get_nodes (DonnaApp       *app,
                               const gchar    *name,
                               DonnaDropRegister drop,
                               DonnaRegisterType *type,
@@ -665,7 +665,7 @@ donna_app_get_register_nodes (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->get_register_nodes != NULL, FALSE);
+    g_return_val_if_fail (interface->register_get_nodes != NULL, FALSE);
 
-    return (*interface->get_register_nodes) (app, name, drop, type, nodes, error);
+    return (*interface->register_get_nodes) (app, name, drop, type, nodes, error);
 }

@@ -216,24 +216,25 @@ static void             donna_donna_show_error      (DonnaApp       *app,
                                                      const GError   *error);
 static gpointer         donna_donna_get_ct_data     (DonnaApp       *app,
                                                      const gchar    *col_name);
-static gboolean         donna_donna_drop_register   (DonnaApp       *app,
+static gboolean         donna_donna_register_drop   (DonnaApp       *app,
                                                      const gchar    *name,
                                                      GError        **error);
-static gboolean         donna_donna_set_register    (DonnaApp       *app,
+static gboolean         donna_donna_register_set    (DonnaApp       *app,
                                                      const gchar    *name,
                                                      DonnaRegisterType type,
                                                      GPtrArray      *nodes,
                                                      GError        **error);
-static gboolean         donna_donna_add_to_register (DonnaApp       *app,
+static gboolean         donna_donna_register_add_nodes (
+                                                     DonnaApp       *app,
                                                      const gchar    *name,
                                                      GPtrArray      *nodes,
                                                      GError        **error);
-static gboolean         donna_donna_set_register_type (
+static gboolean         donna_donna_register_set_type (
                                                      DonnaApp       *app,
                                                      const gchar    *name,
                                                      DonnaRegisterType type,
                                                      GError        **error);
-static gboolean         donna_donna_get_register_nodes (
+static gboolean         donna_donna_register_get_nodes (
                                                      DonnaApp       *app,
                                                      const gchar    *name,
                                                      DonnaDropRegister drop,
@@ -260,11 +261,11 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
-    interface->drop_register        = donna_donna_drop_register;
-    interface->set_register         = donna_donna_set_register;
-    interface->add_to_register      = donna_donna_add_to_register;
-    interface->set_register_type    = donna_donna_set_register_type;
-    interface->get_register_nodes   = donna_donna_get_register_nodes;
+    interface->register_drop        = donna_donna_register_drop;
+    interface->register_set         = donna_donna_register_set;
+    interface->register_add_nodes   = donna_donna_register_add_nodes;
+    interface->register_set_type    = donna_donna_register_set_type;
+    interface->register_get_nodes   = donna_donna_register_get_nodes;
 }
 
 static void
@@ -2080,7 +2081,7 @@ is_valid_register_name (const gchar **name, GError **error)
 }
 
 static gboolean
-donna_donna_drop_register (DonnaApp       *app,
+donna_donna_register_drop (DonnaApp       *app,
                            const gchar    *name,
                            GError        **error)
 {
@@ -2124,7 +2125,7 @@ add_node_to_reg (struct reg *reg, DonnaNode *node, gboolean is_clipboard)
 }
 
 static gboolean
-donna_donna_set_register (DonnaApp       *app,
+donna_donna_register_set (DonnaApp       *app,
                           const gchar    *name,
                           DonnaRegisterType type,
                           GPtrArray      *nodes,
@@ -2161,10 +2162,10 @@ donna_donna_set_register (DonnaApp       *app,
 }
 
 static gboolean
-donna_donna_add_to_register (DonnaApp       *app,
-                             const gchar    *name,
-                             GPtrArray      *nodes,
-                             GError        **error)
+donna_donna_register_add_nodes (DonnaApp       *app,
+                                const gchar    *name,
+                                GPtrArray      *nodes,
+                                GError        **error)
 {
     DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
     DonnaProvider *pfs;
@@ -2221,7 +2222,7 @@ donna_donna_add_to_register (DonnaApp       *app,
 }
 
 static gboolean
-donna_donna_set_register_type (DonnaApp       *app,
+donna_donna_register_set_type (DonnaApp       *app,
                                const gchar    *name,
                                DonnaRegisterType type,
                                GError        **error)
@@ -2274,7 +2275,7 @@ donna_donna_set_register_type (DonnaApp       *app,
 }
 
 static gboolean
-donna_donna_get_register_nodes (DonnaApp       *app,
+donna_donna_register_get_nodes (DonnaApp       *app,
                                 const gchar    *name,
                                 DonnaDropRegister drop,
                                 DonnaRegisterType *type,

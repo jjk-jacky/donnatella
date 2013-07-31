@@ -9721,7 +9721,7 @@ donna_tree_view_to_register (DonnaTreeView      *tree,
 
     if (reg_type == DONNA_REGISTER_UNKNOWN)
     {
-        if (!donna_app_add_to_register (priv->app, reg_name, arr, error))
+        if (!donna_app_register_add_nodes (priv->app, reg_name, arr, error))
         {
             g_prefix_error (error, "Treeview '%s': Failed to add to register '%s': ",
                     priv->name, reg_name);
@@ -9731,7 +9731,7 @@ donna_tree_view_to_register (DonnaTreeView      *tree,
     }
     else
     {
-        if (!donna_app_set_register (priv->app, reg_name, reg_type, arr, error))
+        if (!donna_app_register_set (priv->app, reg_name, reg_type, arr, error))
         {
             g_prefix_error (error, "Treeview '%s': Failed to set register '%s': ",
                     priv->name, reg_name);
@@ -9770,7 +9770,7 @@ donna_tree_view_from_register (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    if (!donna_app_get_register_nodes (priv->app, reg_name,
+    if (!donna_app_register_get_nodes (priv->app, reg_name,
                 (io_type == DONNA_IO_UNKNOWN) ? DONNA_DROP_REGISTER_ON_CUT
                 : ((io_type == DONNA_IO_COPY) ? DONNA_DROP_REGISTER_NOT
                     : DONNA_DROP_REGISTER_ALWAYS),
