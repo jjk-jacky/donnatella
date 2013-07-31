@@ -2595,8 +2595,20 @@ cmd_tree_from_register (DonnaTask *task, GPtrArray *args)
         DONNA_IO_DELETE };
     gint c_io;
 
-    c_io = get_choice_from_arg (c_io_type, 3);
-    if (c_io < 0)
+    if (args->pdata[3])
+    {
+        c_io = get_choice_from_arg (c_io_type, 3);
+        if (c_io < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_SYNTAX,
+                    "Invalid type of IO operation: '%s'; "
+                    "Must be 'auto', 'copy', 'move' or 'delete'",
+                    args->pdata[3]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
         /* default to 'auto' */
         c_io = 0;
 
@@ -2805,11 +2817,37 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    c_n = get_choice_from_arg (c_nb_type, 5);
-    if (c_n < 0)
+    if (args->pdata[5])
+    {
+        c_n = get_choice_from_arg (c_nb_type, 5);
+        if (c_n < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_OTHER,
+                    "Cannot goto line, invalid type: '%s'; "
+                    "Must be 'repeat', 'line' or 'percent'",
+                    args->pdata[5]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
         c_n = 0;
 
-    c_a = get_choice_from_arg (c_action, 6);
+    if (args->pdata[6])
+    {
+        c_a = get_choice_from_arg (c_action, 6);
+        if (c_a < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_OTHER,
+                    "Cannot goto line, invalid selection action: '%s'; "
+                    "Must be 'select', 'unselect' or 'invert'",
+                    args->pdata[6]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        c_a = -1;
 
     if (!donna_tree_view_goto_line (args->pdata[1], set, args->pdata[3],
                 GPOINTER_TO_INT (args->pdata[4]), nb_type[c_n],
@@ -3019,8 +3057,20 @@ cmd_tree_to_register (DonnaTask *task, GPtrArray *args)
         DONNA_REGISTER_UNKNOWN };
     gint c_rt;
 
-    c_rt = get_choice_from_arg (c_reg_type, 5);
-    if (c_rt < 0)
+    if (args->pdata[5])
+    {
+        c_rt = get_choice_from_arg (c_reg_type, 5);
+        if (c_rt < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_SYNTAX,
+                    "Cannot toggle row, unknown toggle type '%s'; "
+                    "Must be 'standard', 'full' or 'maxi'",
+                    args->pdata[5]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
         /* default to COPY */
         c_rt = 1;
 
