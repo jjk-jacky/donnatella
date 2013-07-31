@@ -661,7 +661,6 @@ donna_app_get_register_nodes (DonnaApp       *app,
     g_return_val_if_fail (drop == DONNA_DROP_REGISTER_NOT
             || drop == DONNA_DROP_REGISTER_ALWAYS
             || drop == DONNA_DROP_REGISTER_ON_CUT, FALSE);
-    g_return_val_if_fail (nodes != NULL, FALSE);
 
     interface = DONNA_APP_GET_INTERFACE (app);
 

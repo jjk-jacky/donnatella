@@ -2314,6 +2314,18 @@ donna_donna_get_register_nodes (DonnaApp       *app,
         reg_type = reg->type;
     }
 
+    if (type)
+        *type = reg_type;
+
+    if (!nodes)
+    {
+        if (reg)
+            g_rec_mutex_unlock (&priv->rec_mutex);
+        else
+            g_slist_free_full (list, g_free);
+        return TRUE;
+    }
+
     *nodes = g_ptr_array_new_full (g_slist_length (list), g_object_unref);
     for (l = list; l; l = l->next)
     {
@@ -2355,9 +2367,6 @@ donna_donna_get_register_nodes (DonnaApp       *app,
                 name, str->str);
         g_string_free (str, TRUE);
     }
-
-    if (type)
-        *type = reg_type;
 
     if (reg)
     {
