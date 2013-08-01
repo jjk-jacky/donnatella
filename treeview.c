@@ -10613,6 +10613,115 @@ handle_click (DonnaTreeView     *tree,
         return;
     }
 
+#ifdef GTK_IS_JJK
+    if (streq (fl, "rubber-banding"))
+    {
+        GtkTreeView *treev = (GtkTreeView *) tree;
+        GdkModifierType mod;
+        gboolean is_reg = is_regular_left_click (click, event);
+
+        /* here we start a rubber-banding operation. The little extra code is to
+         * try and have a consistent behavior. Here are the things we need to
+         * handle:
+         *
+         * - except for regular click, there's a little delay before we handle
+         *   the click. During that time, the mouse could have been moved; If
+         *   so, we shall make sure the rubber band is visible (it only gets
+         *   triggered by GTK on first motion, so we'll fake one).
+         *
+         * - because we don't let GTK do its set_cursor on click, there's only
+         *   one modifier that matters for us on rubber banding operation:
+         *   CONTROL can be used to not select, but invert.
+         *   However, regardless of whether it's held on not, there's again an
+         *   adjustment that might be required because of the delay:
+         *
+         *   We get the current mouse position, and check if it's the same row
+         *   or not. If so, we shall force selecting/inverting it so the first
+         *   row in the rubber band is always in the same state as other rows.
+         *
+         *   Also, on regular click, we need to select the row since GTK won't
+         *   (it assumes its set_cursor was done on press)
+         *
+         * - rubber banding operations should only be started on press, but we
+         *   also need to ensure that the button is still held. If it has
+         *   already been released, we stop the operation.
+         *
+         *
+         * There is a little bug: when the whole operation took place during our
+         * delay, that is the button was released already by the time we handle
+         * the click right here, when our button-release will be processed by
+         * GTK, it'll use the current mouse position, which might not be the
+         * same as when the actual button-release happened, so that might lead
+         * to more rows than expected be included in the band.
+         * Unfortunate, but not sure how to fix it either...
+         */
+
+        if (!is_reg)
+        {
+            GtkTreePath *path;
+            gboolean upd = FALSE;
+            gint x, y;
+
+            gdk_window_get_device_position (gtk_tree_view_get_bin_window (treev),
+                    gdk_device_manager_get_client_pointer (
+                        gdk_display_get_device_manager (
+                            gtk_widget_get_display ((GtkWidget *) tree))),
+                    &x, &y, &mod);
+
+            if (iter)
+            {
+                if (gtk_tree_view_get_path_at_pos (treev, x, y, &path, NULL, NULL, NULL))
+                {
+                    GtkTreeIter it;
+
+                    gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &it, path);
+                    upd = itereq (iter, &it);
+                    gtk_tree_path_free (path);
+                }
+
+                if (upd)
+                {
+                    GtkTreeSelection *sel;
+
+                    sel = gtk_tree_view_get_selection (treev);
+
+                    if (event->state & GDK_CONTROL_MASK)
+                    {
+                        if (gtk_tree_selection_iter_is_selected (sel, iter))
+                            gtk_tree_selection_unselect_iter (sel, iter);
+                        else
+                            gtk_tree_selection_select_iter (sel, iter);
+                    }
+                    else
+                        gtk_tree_selection_select_iter (sel, iter);
+                }
+            }
+        }
+        else if (iter)
+            gtk_tree_selection_select_iter (gtk_tree_view_get_selection (treev),
+                    iter);
+
+        gtk_tree_view_start_rubber_banding (treev, event);
+
+        if (!is_reg)
+        {
+            if (iter)
+            {
+                GdkEventMotion e = { GDK_MOTION_NOTIFY, event->window, FALSE,
+                    event->time, event->x, event->y, event->axes, event->state,
+                    0, event->device, event->x_root, event->y_root };
+                gtk_widget_event ((GtkWidget *) tree, (GdkEvent *) &e);
+            }
+
+            if (!(mod & (GDK_BUTTON1_MASK | GDK_BUTTON2_MASK | GDK_BUTTON3_MASK)))
+                gtk_tree_view_stop_rubber_banding (treev, FALSE);
+        }
+
+        g_free (data);
+        return;
+    }
+#endif
+
     if (iter)
         data->row = get_row_for_iter (tree, iter);
 
@@ -11026,6 +11135,12 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) widget)->priv;
     gboolean ret;
     GSList *l;
+
+#ifdef GTK_IS_JJK
+    if (gtk_tree_view_is_rubber_banding_active ((GtkTreeView *) widget))
+        /* this ensures stopping rubber banding will not move the focus */
+        gtk_tree_view_stop_rubber_banding ((GtkTreeView *) widget, FALSE);
+#endif
 
     /* Note: this call will have GTK toggle (expand/collapse) a row when it was
      * double-left-clicked on an expander. It would be a PITA to avoid w/out
