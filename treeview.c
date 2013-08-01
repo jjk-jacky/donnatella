@@ -22,6 +22,7 @@ enum
 {
     PROP_0,
 
+    PROP_APP,
     PROP_LOCATION,
 
     NB_PROPS
@@ -421,6 +422,8 @@ struct _DonnaTreeViewPrivate
     /* mode List */
     guint                draw_state         : 2;
     guint                focusing_click     : 1;
+    guint                ln_relative        : 1; /* line column: relative number */
+    guint                ln_relative_focused: 1; /* line column: relative when focused */
     /* from current arrangement */
     guint                second_sort_sticky : 1;
 };
@@ -583,11 +586,16 @@ static void     donna_tree_view_get_property        (GObject        *object,
                                                      guint           prop_id,
                                                      GValue         *value,
                                                      GParamSpec     *pspec);
+static void     donna_tree_view_set_property        (GObject        *object,
+                                                     guint           prop_id,
+                                                     const GValue   *value,
+                                                     GParamSpec     *pspec);
 static gboolean donna_tree_view_draw                (GtkWidget      *widget,
                                                      cairo_t        *cr);
 static void     donna_tree_view_finalize            (GObject        *object);
 
 
+/* DonnaStatusProvider */
 static guint    status_provider_create_status       (DonnaStatusProvider    *sp,
                                                      gpointer                config,
                                                      GError                **error);
@@ -603,6 +611,20 @@ static gboolean status_provider_set_tooltip         (DonnaStatusProvider    *sp,
                                                      guint                   id,
                                                      guint                   index,
                                                      GtkTooltip             *tooltip);
+
+/* DonnaColumnType */
+static const gchar * columntype_get_name            (DonnaColumnType    *ct);
+static const gchar * columntype_get_renderers       (DonnaColumnType    *ct);
+static DonnaColumnTypeNeed columntype_refresh_data  (DonnaColumnType  *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     const gchar        *arr_name,
+                                                     gpointer           *data);
+static void         columntype_free_data            (DonnaColumnType    *ct,
+                                                     gpointer            data);
+static GPtrArray *  columntype_get_props            (DonnaColumnType    *ct,
+                                                     gpointer            data);
+
 
 #ifndef GTK_IS_JJK
 static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree);
@@ -684,9 +706,22 @@ donna_tree_view_status_provider_init (DonnaStatusProviderInterface *interface)
     interface->set_tooltip      = status_provider_set_tooltip;
 }
 
+static void
+donna_tree_view_column_type_init (DonnaColumnTypeInterface *interface)
+{
+    interface->get_name         = columntype_get_name;
+    interface->get_renderers    = columntype_get_renderers;
+    interface->refresh_data     = columntype_refresh_data;
+    interface->free_data        = columntype_free_data;
+    interface->get_props        = columntype_get_props;
+}
+
+
 G_DEFINE_TYPE_WITH_CODE (DonnaTreeView, donna_tree_view, GTK_TYPE_TREE_VIEW,
         G_IMPLEMENT_INTERFACE (DONNA_TYPE_STATUS_PROVIDER,
-            donna_tree_view_status_provider_init));
+            donna_tree_view_status_provider_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE,
+            donna_tree_view_column_type_init));
 
 static void
 donna_tree_view_class_init (DonnaTreeViewClass *klass)
@@ -710,7 +745,14 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->get_property   = donna_tree_view_get_property;
+    o_class->set_property   = donna_tree_view_set_property;
     o_class->finalize       = donna_tree_view_finalize;
+
+    donna_tree_view_props[PROP_APP] =
+        g_param_spec_object ("app", "app",
+                "Application",
+                DONNA_TYPE_APP,
+                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
 
     donna_tree_view_props[PROP_LOCATION] =
         g_param_spec_object ("location", "location",
@@ -838,6 +880,24 @@ donna_tree_view_get_property (GObject        *object,
 
     if (prop_id == PROP_LOCATION)
         g_value_set_object (value, priv->location);
+    else if (prop_id == PROP_APP)
+        g_value_set_object (value, priv->app);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+donna_tree_view_set_property (GObject        *object,
+                              guint           prop_id,
+                              const GValue   *value,
+                              GParamSpec     *pspec)
+{
+    DonnaTreeViewPrivate *priv = DONNA_TREE_VIEW (object)->priv;
+
+    if (prop_id == PROP_APP)
+        priv->app = g_value_get_object (value);
+    else
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
 
 static void
@@ -3359,6 +3419,63 @@ rend_func (GtkTreeViewColumn  *column,
     index -= NB_INTERNAL_RENDERERS - 1; /* -1 to start with index 1 */
 
     _col = get_column_by_column (tree, column);
+    /* special case: in mode list we can be our own ct, for the column showing
+     * the line number. This is obviously has nothing to do w/ nodes, we handle
+     * the rendering here instead of going through the ct interface */
+    if (_col->ct == (DonnaColumnType *) tree)
+    {
+        GtkTreePath *path;
+        gchar buf[10];
+        gint ln = 0;
+        gboolean refresh = FALSE;
+
+        path = gtk_tree_model_get_path (model, iter);
+        if (priv->ln_relative && (!priv->ln_relative_focused
+                    || gtk_widget_has_focus ((GtkWidget *) tree)))
+        {
+            GtkTreePath *path_focus;
+
+            gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_focus, NULL);
+            if (path_focus)
+            {
+                static gint last = 0;
+
+                /* get the focus number, and set refresh if it changed since
+                 * last time, so that the entire column gets refreshed, as all
+                 * relative numbers need to be updated */
+                ln = gtk_tree_path_get_indices (path_focus)[0];
+                refresh = last != ln;
+                last = ln;
+
+                /* calculate the relative number. For current line that falls to
+                 * 0, which will then be turned to the current line number */
+                ln -= gtk_tree_path_get_indices (path)[0];
+                ln = ABS (ln);
+
+                if (ln > 0)
+                {
+                    /* align relative numbers to the right */
+                    g_object_set (renderer, "xalign", 1.0, NULL);
+                    donna_renderer_set (renderer, "xalign", NULL);
+                }
+
+                gtk_tree_path_free (path_focus);
+            }
+        }
+        if (ln == 0)
+            ln = 1 + gtk_tree_path_get_indices (path)[0];
+
+        snprintf (buf, 10, "%d", ln);
+        g_object_set (renderer, "visible", TRUE, "text", buf, NULL);
+        gtk_tree_path_free (path);
+
+        if (refresh)
+            gtk_widget_queue_draw_area ((GtkWidget *) tree, 0, 0,
+                    gtk_tree_view_column_get_width (column),
+                    gtk_widget_get_allocated_height ((GtkWidget*) tree));
+
+        return;
+    }
     gtk_tree_model_get (model, iter, DONNA_TREE_VIEW_COL_NODE, &node, -1);
 
     if (is_tree (tree))
@@ -3472,6 +3589,15 @@ sort_func (GtkTreeModel      *model,
     DonnaNode *node2;
     gint ret;
 
+    tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
+    priv = tree->priv;
+    _col = get_column_by_column (tree, column);
+
+    /* special case: in mode list we can be our own ct, for the column showing
+     * the line number. There's no sorting on that column obviously. */
+    if (_col->ct == (DonnaColumnType *) tree)
+        return 0;
+
     gtk_tree_model_get (model, iter1, DONNA_TREE_COL_NODE, &node1, -1);
     /* one node could be a "fake" one, i.e. node is a NULL pointer */
     if (!node1)
@@ -3483,9 +3609,6 @@ sort_func (GtkTreeModel      *model,
         g_object_unref (node1);
         return 1;
     }
-
-    tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
-    priv = tree->priv;
 
     /* are iters roots? */
     if (is_tree (tree) && donna_tree_store_iter_depth (priv->store, iter1) == 0)
@@ -3531,7 +3654,6 @@ sort_func (GtkTreeModel      *model,
         }
     }
 
-    _col = get_column_by_column (tree, column);
     ret = donna_columntype_node_cmp (_col->ct, _col->ct_data, node1, node2);
 
     /* second sort order */
@@ -5190,47 +5312,58 @@ load_arrangement (DonnaTreeView     *tree,
             col_type = NULL;
         }
 
-        ct = donna_app_get_columntype (priv->app, (col_type) ? col_type : col);
-        if (!ct)
+        /* ct "line-number" is a special one, which is handled by the treeview
+         * itself (only supported in mode list) to show line numbers */
+        if (!is_tree (tree) && streq (col_type, "line-number"))
         {
-            g_critical ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
-                    priv->name, (col_type) ? col_type : col, col);
-            goto next;
+            ct = (DonnaColumnType *) g_object_ref (tree);
+            column = NULL;
         }
-
-        /* look for an existing column of that type */
-        column = NULL;
-        for (l = list; l; l = l->next)
+        else
         {
-            _col = l->data;
-
-            if (_col->ct == ct)
+            ct = donna_app_get_columntype (priv->app, (col_type) ? col_type : col);
+            if (!ct)
             {
-                col_ct = _col->ct;
-                column = _col->column;
+                g_critical ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
+                        priv->name, (col_type) ? col_type : col, col);
+                goto next;
+            }
 
-                /* column has a ref already, we can release ours */
-                g_object_unref (ct);
-                /* update the name if needed */
-                if (!streq (_col->name, col))
+            /* look for an existing column of that type */
+            column = NULL;
+            for (l = list; l; l = l->next)
+            {
+                _col = l->data;
+
+                if (_col->ct == ct)
                 {
-                    g_free (_col->name);
-                    _col->name = g_strdup (col);
-                    donna_columntype_free_data (ct, _col->ct_data);
-                    _col->ct_data = NULL;
-                    donna_columntype_refresh_data (ct, priv->name, col,
-                            arrangement->columns_options, &_col->ct_data);
-                }
-                else if (must_load_columns_options (arrangement, priv->arrangement, force))
-                    /* refresh data to load new options */
-                    donna_columntype_refresh_data (ct, priv->name, col,
-                            arrangement->columns_options, &_col->ct_data);
-                /* move column */
-                gtk_tree_view_move_column_after (treev, column, last_column);
+                    col_ct = _col->ct;
+                    column = _col->column;
 
-                list = g_slist_delete_link (list, l);
-                priv->columns = g_slist_prepend (priv->columns, _col);
-                break;
+                    /* column has a ref already, we can release ours */
+                    g_object_unref (ct);
+                    /* update the name if needed */
+                    if (!streq (_col->name, col))
+                    {
+                        g_free (_col->name);
+                        _col->name = g_strdup (col);
+                        donna_columntype_free_data (ct, _col->ct_data);
+                        _col->ct_data = NULL;
+                        donna_columntype_refresh_data (ct, priv->name, col,
+                                arrangement->columns_options, &_col->ct_data);
+                    }
+                    else if (must_load_columns_options (arrangement,
+                                priv->arrangement, force))
+                        /* refresh data to load new options */
+                        donna_columntype_refresh_data (ct, priv->name, col,
+                                arrangement->columns_options, &_col->ct_data);
+                    /* move column */
+                    gtk_tree_view_move_column_after (treev, column, last_column);
+
+                    list = g_slist_delete_link (list, l);
+                    priv->columns = g_slist_prepend (priv->columns, _col);
+                    break;
+                }
             }
         }
 
@@ -5394,57 +5527,63 @@ load_arrangement (DonnaTreeView     *tree,
         gtk_label_set_text (GTK_LABEL (_col->label), title);
         g_free (title);
 
-        /* props to watch for refresh */
-        props = donna_columntype_get_props (ct, _col->ct_data);
-        if (props)
+        /* for line-number columns, there's no properties to watch, and this
+         * shouldn't trigger a warning, obviously. Sorting also doesn't apply
+         * there. */
+        if (ct != (DonnaColumnType *) tree)
         {
-            guint i;
-
-            for (i = 0; i < props->len; ++i)
+            /* props to watch for refresh */
+            props = donna_columntype_get_props (ct, _col->ct_data);
+            if (props)
             {
-                struct col_prop cp;
+                guint i;
 
-                cp.prop = g_strdup (props->pdata[i]);
-                cp.column = column;
-                g_array_append_val (priv->col_props, cp);
+                for (i = 0; i < props->len; ++i)
+                {
+                    struct col_prop cp;
+
+                    cp.prop = g_strdup (props->pdata[i]);
+                    cp.column = column;
+                    g_array_append_val (priv->col_props, cp);
+                }
+                g_ptr_array_unref (props);
             }
-            g_ptr_array_unref (props);
-        }
-        else
-            g_critical ("Treeview '%s': column '%s' reports no properties to watch for refresh",
-                    priv->name, col);
+            else
+                g_critical ("Treeview '%s': column '%s' reports no properties to watch for refresh",
+                        priv->name, col);
 
-        /* sort -- (see column_button_release_event_cb() for more) */
-        _col->sort_id = sort_id;
-        gtk_tree_sortable_set_sort_func (sortable, sort_id,
-                (GtkTreeIterCompareFunc) sort_func, column, NULL);
-        if (sort_column && streq (sort_column, col))
-        {
-            if (free_sort_column)
+            /* sort -- (see column_button_release_event_cb() for more) */
+            _col->sort_id = sort_id;
+            gtk_tree_sortable_set_sort_func (sortable, sort_id,
+                    (GtkTreeIterCompareFunc) sort_func, column, NULL);
+            if (sort_column && streq (sort_column, col))
             {
-                g_free (sort_column);
-                free_sort_column = FALSE;
+                if (free_sort_column)
+                {
+                    g_free (sort_column);
+                    free_sort_column = FALSE;
+                }
+                sort_column = NULL;
+                set_sort_column (tree, column, sort_order, TRUE);
             }
-            sort_column = NULL;
-            set_sort_column (tree, column, sort_order, TRUE);
-        }
-        ++sort_id;
+            ++sort_id;
 
-        /* second sort order */
-        if (second_sort_column && streq (second_sort_column, col))
-        {
-            if (free_second_sort_column)
+            /* second sort order */
+            if (second_sort_column && streq (second_sort_column, col))
             {
-                g_free (second_sort_column);
-                free_second_sort_column = FALSE;
+                if (free_second_sort_column)
+                {
+                    g_free (second_sort_column);
+                    free_second_sort_column = FALSE;
+                }
+                second_sort_column = NULL;
+
+                if (second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
+                    priv->second_sort_sticky =
+                        second_sort_sticky == DONNA_SECOND_SORT_STICKY_ENABLED;
+
+                set_second_sort_column (tree, column, second_sort_order, TRUE);
             }
-            second_sort_column = NULL;
-
-            if (second_sort_sticky != DONNA_SECOND_SORT_STICKY_UNKNOWN)
-                priv->second_sort_sticky =
-                    second_sort_sticky == DONNA_SECOND_SORT_STICKY_ENABLED;
-
-            set_second_sort_column (tree, column, second_sort_order, TRUE);
         }
 
         last_column = column;
@@ -12019,6 +12158,64 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
 {
     return FALSE;
 }
+
+static const gchar *
+columntype_get_name (DonnaColumnType    *ct)
+{
+    return "line-numbers";
+}
+
+static const gchar *
+columntype_get_renderers (DonnaColumnType    *ct)
+{
+    return "t";
+}
+
+static DonnaColumnTypeNeed
+columntype_refresh_data (DonnaColumnType  *ct,
+                         const gchar        *tv_name,
+                         const gchar        *col_name,
+                         const gchar        *arr_name,
+                         gpointer           *data)
+{
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) ct)->priv;
+    DonnaConfig *config;
+    DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
+
+    config = donna_app_peek_config (priv->app);
+
+    if (priv->ln_relative != donna_config_get_boolean_column (config,
+                tv_name, col_name, arr_name, "line-number", "relative", FALSE))
+    {
+        need |= DONNA_COLUMNTYPE_NEED_REDRAW;
+        priv->ln_relative = !priv->ln_relative;
+    }
+
+    if (priv->ln_relative_focused != donna_config_get_boolean_column (config,
+                tv_name, col_name, arr_name, "line-number", "relative_on_focus", TRUE))
+    {
+        if (priv->ln_relative)
+            need |= DONNA_COLUMNTYPE_NEED_REDRAW;
+        priv->ln_relative_focused = !priv->ln_relative_focused;
+    }
+
+    return need;
+}
+
+static void
+columntype_free_data (DonnaColumnType    *ct,
+                      gpointer            data)
+{
+    /* void */
+}
+
+static GPtrArray *
+columntype_get_props (DonnaColumnType    *ct,
+                      gpointer            data)
+{
+    return NULL;
+}
+
 
 GtkWidget *
 donna_tree_view_new (DonnaApp    *app,
