@@ -10357,7 +10357,7 @@ handle_click (DonnaTreeView     *tree,
         memcpy (buf, "blankrow_", 9 * sizeof (gchar));
         b = buf;
     }
-    else if (!_col->name)
+    else if (!_col)
     {
         memcpy (buf, "blankcol_", 9 * sizeof (gchar));
         b = buf;
@@ -10396,7 +10396,7 @@ handle_click (DonnaTreeView     *tree,
 
         /* should we delay the trigger to button-release ? */
         if (!_donna_config_get_boolean_tree_column (config, priv->name,
-                    _col->name,
+                    (_col) ? _col->name : NULL,
                     (is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
                     (is_tree) ? clicks
                     : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
@@ -10404,7 +10404,7 @@ handle_click (DonnaTreeView     *tree,
                     b, &on_rls) && is_selected)
             /* nothing found under "selected", fallback to regular clicks */
             _donna_config_get_boolean_tree_column (config, priv->name,
-                    _col->name,
+                    (_col) ? _col->name : NULL,
                     TREE_COL_LIST,
                     (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
                     "treeviews/list",
