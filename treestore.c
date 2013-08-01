@@ -81,6 +81,7 @@ static void         tree_store_set_default_sort_func (
                                             GDestroyNotify           destroy);
 static gboolean     tree_store_has_default_sort_func (
                                             GtkTreeSortable         *sortable);
+#ifdef GTK_IS_JJK
 /* GtkTreeBoxable */
 static gint         tree_store_get_box_column (
                                             GtkTreeBoxable          *boxable);
@@ -104,6 +105,7 @@ static gboolean     tree_store_get_main_box_info (
                                             gchar                  **box,
                                             gint                    *depth,
                                             GtkTreeIter             *iter);
+#endif
 
 
 static void     donna_tree_store_finalize           (GObject            *object);
@@ -138,6 +140,7 @@ donna_tree_store_sortable_init (GtkTreeSortableIface *interface)
     interface->has_default_sort_func = tree_store_has_default_sort_func;
 }
 
+#ifdef GTK_IS_JJK
 static void
 donna_tree_store_boxable_init (GtkTreeBoxableInterface *interface)
 {
@@ -147,14 +150,17 @@ donna_tree_store_boxable_init (GtkTreeBoxableInterface *interface)
     interface->get_in_box_info      = tree_store_get_in_box_info;
     interface->get_main_box_info    = tree_store_get_main_box_info;
 }
+#endif
 
 G_DEFINE_TYPE_WITH_CODE (DonnaTreeStore, donna_tree_store, G_TYPE_OBJECT,
         G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_MODEL,
             donna_tree_store_tree_model_init)
         G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_SORTABLE,
             donna_tree_store_sortable_init)
+#ifdef GTK_IS_JJK
         G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_BOXABLE,
             donna_tree_store_boxable_init)
+#endif
         )
 
 static void
@@ -653,6 +659,7 @@ tree_store_has_default_sort_func (GtkTreeSortable         *sortable)
 }
 
 
+#ifdef GTK_IS_JJK
 /* GtkTreeBoxable */
 
 static gint
@@ -705,6 +712,7 @@ tree_store_get_main_box_info (GtkTreeBoxable          *boxable,
             (GtkTreeBoxable *) ((DonnaTreeStore *) boxable)->priv->store,
             iter_box, box, depth, iter);
 }
+#endif
 
 
 /* API */
