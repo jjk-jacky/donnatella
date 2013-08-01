@@ -10127,6 +10127,10 @@ query_tooltip_cb (GtkTreeView   *treev,
                         ;
                 }
             }
+#else
+            /* because (only) in vanilla, we could be there for the blank
+             * column, which isn't in our internal list of columns */
+            if (_col)
 #endif
             ret = donna_columntype_set_tooltip (_col->ct, _col->ct_data,
                     index, node, tooltip);
