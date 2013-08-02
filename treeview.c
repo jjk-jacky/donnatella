@@ -567,6 +567,10 @@ static gboolean donna_tree_view_button_release_event(GtkWidget      *widget,
                                                      GdkEventButton *event);
 static gboolean donna_tree_view_key_press_event     (GtkWidget      *widget,
                                                      GdkEventKey    *event);
+#ifdef GTK_IS_JJK
+static void     donna_tree_view_rubber_banding_active (
+                                                     GtkTreeView    *treev);
+#endif
 static void     donna_tree_view_row_activated       (GtkTreeView    *treev,
                                                      GtkTreePath    *path,
                                                      GtkTreeViewColumn *column);
@@ -731,11 +735,14 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     GObjectClass *o_class;
 
     tv_class = GTK_TREE_VIEW_CLASS (klass);
-    tv_class->row_activated     = donna_tree_view_row_activated;
-    tv_class->row_expanded      = donna_tree_view_row_expanded;
-    tv_class->row_collapsed     = donna_tree_view_row_collapsed;
-    tv_class->test_collapse_row = donna_tree_view_test_collapse_row;
-    tv_class->test_expand_row   = donna_tree_view_test_expand_row;
+#ifdef GTK_IS_JJK
+    tv_class->rubber_banding_active = donna_tree_view_rubber_banding_active;
+#endif
+    tv_class->row_activated         = donna_tree_view_row_activated;
+    tv_class->row_expanded          = donna_tree_view_row_expanded;
+    tv_class->row_collapsed         = donna_tree_view_row_collapsed;
+    tv_class->test_collapse_row     = donna_tree_view_test_collapse_row;
+    tv_class->test_expand_row       = donna_tree_view_test_expand_row;
 
     w_class = GTK_WIDGET_CLASS (klass);
     w_class->draw = donna_tree_view_draw;
@@ -10613,115 +10620,6 @@ handle_click (DonnaTreeView     *tree,
         return;
     }
 
-#ifdef GTK_IS_JJK
-    if (streq (fl, "rubber-banding"))
-    {
-        GtkTreeView *treev = (GtkTreeView *) tree;
-        GdkModifierType mod;
-        gboolean is_reg = is_regular_left_click (click, event);
-
-        /* here we start a rubber-banding operation. The little extra code is to
-         * try and have a consistent behavior. Here are the things we need to
-         * handle:
-         *
-         * - except for regular click, there's a little delay before we handle
-         *   the click. During that time, the mouse could have been moved; If
-         *   so, we shall make sure the rubber band is visible (it only gets
-         *   triggered by GTK on first motion, so we'll fake one).
-         *
-         * - because we don't let GTK do its set_cursor on click, there's only
-         *   one modifier that matters for us on rubber banding operation:
-         *   CONTROL can be used to not select, but invert.
-         *   However, regardless of whether it's held on not, there's again an
-         *   adjustment that might be required because of the delay:
-         *
-         *   We get the current mouse position, and check if it's the same row
-         *   or not. If so, we shall force selecting/inverting it so the first
-         *   row in the rubber band is always in the same state as other rows.
-         *
-         *   Also, on regular click, we need to select the row since GTK won't
-         *   (it assumes its set_cursor was done on press)
-         *
-         * - rubber banding operations should only be started on press, but we
-         *   also need to ensure that the button is still held. If it has
-         *   already been released, we stop the operation.
-         *
-         *
-         * There is a little bug: when the whole operation took place during our
-         * delay, that is the button was released already by the time we handle
-         * the click right here, when our button-release will be processed by
-         * GTK, it'll use the current mouse position, which might not be the
-         * same as when the actual button-release happened, so that might lead
-         * to more rows than expected be included in the band.
-         * Unfortunate, but not sure how to fix it either...
-         */
-
-        if (!is_reg)
-        {
-            GtkTreePath *path;
-            gboolean upd = FALSE;
-            gint x, y;
-
-            gdk_window_get_device_position (gtk_tree_view_get_bin_window (treev),
-                    gdk_device_manager_get_client_pointer (
-                        gdk_display_get_device_manager (
-                            gtk_widget_get_display ((GtkWidget *) tree))),
-                    &x, &y, &mod);
-
-            if (iter)
-            {
-                if (gtk_tree_view_get_path_at_pos (treev, x, y, &path, NULL, NULL, NULL))
-                {
-                    GtkTreeIter it;
-
-                    gtk_tree_model_get_iter ((GtkTreeModel *) priv->store, &it, path);
-                    upd = itereq (iter, &it);
-                    gtk_tree_path_free (path);
-                }
-
-                if (upd)
-                {
-                    GtkTreeSelection *sel;
-
-                    sel = gtk_tree_view_get_selection (treev);
-
-                    if (event->state & GDK_CONTROL_MASK)
-                    {
-                        if (gtk_tree_selection_iter_is_selected (sel, iter))
-                            gtk_tree_selection_unselect_iter (sel, iter);
-                        else
-                            gtk_tree_selection_select_iter (sel, iter);
-                    }
-                    else
-                        gtk_tree_selection_select_iter (sel, iter);
-                }
-            }
-        }
-        else if (iter)
-            gtk_tree_selection_select_iter (gtk_tree_view_get_selection (treev),
-                    iter);
-
-        gtk_tree_view_start_rubber_banding (treev, event);
-
-        if (!is_reg)
-        {
-            if (iter)
-            {
-                GdkEventMotion e = { GDK_MOTION_NOTIFY, event->window, FALSE,
-                    event->time, event->x, event->y, event->axes, event->state,
-                    0, event->device, event->x_root, event->y_root };
-                gtk_widget_event ((GtkWidget *) tree, (GdkEvent *) &e);
-            }
-
-            if (!(mod & (GDK_BUTTON1_MASK | GDK_BUTTON2_MASK | GDK_BUTTON3_MASK)))
-                gtk_tree_view_stop_rubber_banding (treev, FALSE);
-        }
-
-        g_free (data);
-        return;
-    }
-#endif
-
     if (iter)
         data->row = get_row_for_iter (tree, iter);
 
@@ -11012,6 +10910,13 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
             return TRUE;
     }
 
+#ifdef GTK_IS_JJK
+    /* this will only "prepare", the actual operation starts if there's a
+     * drag/motion. If/when that happens, signal rubber-banding-active will be
+     * emitted. Either way, the click will be processed as usual. */
+    gtk_tree_view_start_rubber_banding ((GtkTreeView *) tree, event);
+#endif
+
     priv->on_release_triggered = FALSE;
 
     if (!priv->last_event)
@@ -11196,6 +11101,27 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
 
     return ret;
 }
+
+#ifdef GTK_IS_JJK
+static void
+donna_tree_view_rubber_banding_active (GtkTreeView *treev)
+{
+    /* by default GTK will here toggle the row if Ctrl was held, to undo the
+     * toggle it does when starting the rubebr band, since it assumes there was
+     * one on button-press.
+     * Since that assumption isn't valid for us, we simply do nothing (no chain
+     * up) to not have this behavior.
+     *
+     * Of course, if our click w/ Ctrl did do a toggle, then when it gets
+     * processes it will undo the toggle of the rubber band, thus creating a
+     * "glitch."
+     * TODO: The way we'll deal with this is by having a event of ours, where a
+     * script could run, check if a toggle is needed and if so do it. That might
+     * leave a "visual glitch" since the click is processed after a delay, but
+     * it's only a small thing, and at least we'll get expected results.
+     */
+}
+#endif
 
 static inline gchar *
 find_key_config (DonnaTreeView *tree, DonnaConfig *config, gchar *key)
