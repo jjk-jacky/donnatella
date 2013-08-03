@@ -1923,9 +1923,10 @@ get_arg_from_list (gint nb, const gchar *choices[], const gchar *arg)
     if (!arg)
         return -1;
 
-    matches = g_new (gint, nb);
+    matches = g_new (gint, nb + 1);
     for (i = 0; i < nb; ++i)
         matches[i] = i;
+    matches[nb] = -1;
 
     for (i = 0; arg[i] != '\0'; ++i)
     {
