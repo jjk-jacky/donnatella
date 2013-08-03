@@ -9749,13 +9749,11 @@ donna_tree_view_abort (DonnaTreeView *tree)
     }
 }
 
-gboolean
-donna_tree_view_to_register (DonnaTreeView      *tree,
-                             DonnaTreeRowId     *rowid,
-                             gboolean            to_focused,
-                             const gchar        *reg_name,
-                             DonnaRegisterType   reg_type,
-                             GError            **error)
+GPtrArray *
+donna_tree_view_get_nodes (DonnaTreeView      *tree,
+                           DonnaTreeRowId     *rowid,
+                           gboolean            to_focused,
+                           GError            **error)
 {
     DonnaTreeViewPrivate *priv;
     GtkTreeModel *model;
@@ -9765,9 +9763,8 @@ donna_tree_view_to_register (DonnaTreeView      *tree,
     row_id_type type;
     GPtrArray *arr;
 
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    g_return_val_if_fail (rowid != NULL, FALSE);
-    g_return_val_if_fail (reg_name != NULL, FALSE);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    g_return_val_if_fail (rowid != NULL, NULL);
     priv  = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
@@ -9776,18 +9773,18 @@ donna_tree_view_to_register (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot send to register '%s', invalid row-id",
-                priv->name, reg_name);
-        return FALSE;
+                "Treeview '%s': Cannot get nodes, invalid row-id",
+                priv->name);
+        return NULL;
     }
 
     if (is_tree (tree) && type == ROW_ID_ROW && to_focused)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
-                "Treeview '%s': Cannot send to register with 'to_focused' flag in mode tree",
+                "Treeview '%s': Cannot get nodes using 'to_focused' flag in mode tree",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     if (type == ROW_ID_ROW)
@@ -9802,19 +9799,19 @@ donna_tree_view_to_register (DonnaTreeView      *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot send to register '%s', failed to get focused row",
-                        priv->name, reg_name);
-                return FALSE;
+                        "Treeview '%s': Cannot get nodes, failed to get focused row",
+                        priv->name);
+                return NULL;
             }
             path = gtk_tree_model_get_path (model, &iter);
             if (!path)
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot send to register '%s', failed to get path",
-                        priv->name, reg_name);
+                        "Treeview '%s': Cannot get nodes, failed to get path",
+                        priv->name);
                 gtk_tree_path_free (path_focus);
-                return FALSE;
+                return NULL;
             }
 
             if (gtk_tree_path_compare (path, path_focus) > 0)
@@ -9855,38 +9852,7 @@ donna_tree_view_to_register (DonnaTreeView      *tree,
             break;
     }
 
-    if (G_UNLIKELY (arr->len == 0))
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Nothing to send to register '%s'",
-                priv->name, reg_name);
-        g_ptr_array_unref (arr);
-        return FALSE;
-    }
-
-    if (reg_type == DONNA_REGISTER_UNKNOWN)
-    {
-        if (!donna_app_register_add_nodes (priv->app, reg_name, arr, error))
-        {
-            g_prefix_error (error, "Treeview '%s': Failed to add to register '%s': ",
-                    priv->name, reg_name);
-            g_ptr_array_unref (arr);
-            return FALSE;
-        }
-    }
-    else
-    {
-        if (!donna_app_register_set (priv->app, reg_name, reg_type, arr, error))
-        {
-            g_prefix_error (error, "Treeview '%s': Failed to set register '%s': ",
-                    priv->name, reg_name);
-            g_ptr_array_unref (arr);
-            return FALSE;
-        }
-    }
-    g_ptr_array_unref (arr);
-    return TRUE;
+    return arr;
 }
 
 gboolean

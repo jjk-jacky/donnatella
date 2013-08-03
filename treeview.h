@@ -226,11 +226,9 @@ DonnaNode *     donna_tree_view_get_node_at_row (DonnaTreeView      *tree,
 void            donna_tree_view_set_key_mode    (DonnaTreeView      *tree,
                                                  const gchar        *key_mode);
 void            donna_tree_view_reset_keys      (DonnaTreeView      *tree);
-gboolean        donna_tree_view_to_register     (DonnaTreeView      *tree,
+GPtrArray *     donna_tree_view_get_nodes       (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  gboolean            to_focused,
-                                                 const gchar        *reg_name,
-                                                 DonnaRegisterType   type,
                                                  GError            **error);
 gboolean        donna_tree_view_from_register   (DonnaTreeView      *tree,
                                                  const gchar        *reg_name,
