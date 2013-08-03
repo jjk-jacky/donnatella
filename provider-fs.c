@@ -135,7 +135,7 @@ provider_fs_io_task (DonnaProvider      *provider,
             && donna_node_peek_provider (dest) != provider))
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
                 "Provider 'fs': Does not support IO operation outside of 'fs'");
         return NULL;
     }

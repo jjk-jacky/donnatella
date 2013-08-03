@@ -3476,7 +3476,7 @@ provider_config_io_task (DonnaProvider       *provider,
     if (type != DONNA_IO_DELETE)
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
                 "Provider 'config': Copy/Move operations not supported");
         return NULL;
     }

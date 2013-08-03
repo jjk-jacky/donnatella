@@ -345,7 +345,7 @@ donna_provider_io_task (DonnaProvider  *provider,
     if (interface->io_task == NULL)
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_IO_NOT_SUPPORTED,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
                 "Provider '%s': No support of IO operations",
                 donna_provider_get_domain (provider));
         return NULL;
