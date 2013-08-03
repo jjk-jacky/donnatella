@@ -1976,7 +1976,7 @@ get_from_clipboard (GSList              **list,
     clipboard = gtk_clipboard_get (GDK_SELECTION_CLIPBOARD);
     if (!gtk_clipboard_wait_for_targets (clipboard, &atoms, &nb))
     {
-        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_EMPTY,
                 "No files available on CLIPBOARD");
         return FALSE;
     }
@@ -1993,7 +1993,7 @@ get_from_clipboard (GSList              **list,
     if (i >= nb)
     {
         g_free (atoms);
-        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_EMPTY,
                 "No supported format for files available in CLIPBOARD");
         return FALSE;
     }
