@@ -29,6 +29,8 @@ static DonnaTaskState   cmd_node_new_child                  (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_nodes_io                        (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_register_add_nodes              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_register_drop                   (DonnaTask *task,
@@ -38,6 +40,8 @@ static DonnaTaskState   cmd_register_get_nodes              (DonnaTask *task,
 static DonnaTaskState   cmd_register_get_type               (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_register_load                   (DonnaTask *task,
+                                                             GPtrArray *args);
+static DonnaTaskState   cmd_register_nodes_io               (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_register_save                   (DonnaTask *task,
                                                              GPtrArray *args);
@@ -58,8 +62,6 @@ static DonnaTaskState   cmd_tree_activate_row               (DonnaTask *task,
 static DonnaTaskState   cmd_tree_add_root                   (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_edit_column                (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_from_register              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_tree_full_collapse              (DonnaTask *task,
                                                              GPtrArray *args);
@@ -200,6 +202,15 @@ static DonnaCommand commands[] = {
         .cmd_fn         = cmd_node_popup_children
     },
     {
+        .name           = "nodes_io",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
+            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
+        .cmd_fn         = cmd_nodes_io
+    },
+    {
         .name           = "register_add_nodes",
         .argc           = 2,
         .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
@@ -242,6 +253,16 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
         .cmd_fn         = cmd_register_load
+    },
+    {
+        .name           = "register_nodes_io",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL },
+        .return_type    = DONNA_ARG_TYPE_NOTHING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
+        .cmd_fn         = cmd_register_nodes_io
     },
     {
         .name           = "register_save",
@@ -327,15 +348,6 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_tree_add_root
-    },
-    {
-        .name           = "tree_from_register",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_from_register
     },
     {
         .name           = "tree_full_collapse",
@@ -2356,6 +2368,35 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
+cmd_nodes_io (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_io_type[] = { "copy", "move", "delete" };
+    DonnaIoType io_type[] = { DONNA_IO_COPY, DONNA_IO_MOVE, DONNA_IO_DELETE };
+    gint c_io;
+
+    c_io = get_choice_from_arg (c_io_type, 2);
+    if (c_io < 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Invalid type of IO operation: '%s'; "
+                "Must be 'copy', 'move' or 'delete'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_nodes_io (args->pdata[4], args->pdata[1],
+                io_type[c_io], args->pdata[3], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_register_add_nodes (DonnaTask *task, GPtrArray *args)
 {
     GError *err = NULL;
@@ -2479,6 +2520,72 @@ cmd_register_load (DonnaTask *task, GPtrArray *args)
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;
     }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_register_nodes_io (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const gchar *c_io_type[] = { "auto", "copy", "move", "delete" };
+    DonnaIoType io_type[] = { DONNA_IO_UNKNOWN, DONNA_IO_COPY, DONNA_IO_MOVE,
+        DONNA_IO_DELETE };
+    DonnaDropRegister drop;
+    DonnaRegisterType reg_type;
+    gint c_io;
+    GPtrArray *nodes;
+
+    if (args->pdata[2])
+    {
+        c_io = get_choice_from_arg (c_io_type, 2);
+        if (c_io < 0)
+        {
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_SYNTAX,
+                    "Invalid type of IO operation: '%s'; "
+                    "Must be 'auto', 'copy', 'move' or 'delete'",
+                    args->pdata[2]);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* default to 'auto' */
+        c_io = 0;
+
+    switch (c_io)
+    {
+        case 0:
+            drop = DONNA_DROP_REGISTER_ON_CUT;
+            break;
+        case 1:
+            drop = DONNA_DROP_REGISTER_NOT;
+            break;
+        case 2:
+        case 3:
+            drop = DONNA_DROP_REGISTER_ALWAYS;
+            break;
+    }
+
+    if (!donna_app_register_get_nodes (args->pdata[4],
+                (args->pdata[1]) ? args->pdata[1] : "",
+                drop, &reg_type, &nodes, &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (c_io == 0)
+        c_io = (reg_type == DONNA_REGISTER_CUT) ? 2 : 1;
+
+    if (!donna_app_nodes_io (args->pdata[4], nodes, io_type[c_io],
+                args->pdata[3], &err))
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        g_ptr_array_unref (nodes);
+        return DONNA_TASK_FAILED;
+    }
+    g_ptr_array_unref (nodes);
 
     return DONNA_TASK_DONE;
 }
@@ -2725,42 +2832,6 @@ cmd_tree_edit_column (DonnaTask *task, GPtrArray *args)
 
     if (!donna_tree_view_edit_column (args->pdata[1], args->pdata[2],
                 args->pdata[3], &err))
-    {
-        donna_task_take_error (task_for_ret_err (), err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_tree_from_register (DonnaTask *task, GPtrArray *args)
-{
-    GError *err = NULL;
-    const gchar *c_io_type[] = { "auto", "copy", "move", "delete" };
-    DonnaIoType io_type[] = { DONNA_IO_UNKNOWN, DONNA_IO_COPY, DONNA_IO_MOVE,
-        DONNA_IO_DELETE };
-    gint c_io;
-
-    if (args->pdata[3])
-    {
-        c_io = get_choice_from_arg (c_io_type, 3);
-        if (c_io < 0)
-        {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_SYNTAX,
-                    "Invalid type of IO operation: '%s'; "
-                    "Must be 'auto', 'copy', 'move' or 'delete'",
-                    args->pdata[3]);
-            return DONNA_TASK_FAILED;
-        }
-    }
-    else
-        /* default to 'auto' */
-        c_io = 0;
-
-    if (!donna_tree_view_from_register (args->pdata[1], args->pdata[2],
-                io_type[c_io], &err))
     {
         donna_task_take_error (task_for_ret_err (), err);
         return DONNA_TASK_FAILED;

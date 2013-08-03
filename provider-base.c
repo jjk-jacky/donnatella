@@ -607,7 +607,8 @@ static void
 free_io (struct io *io)
 {
     g_ptr_array_unref (io->sources);
-    g_object_unref (io->dest);
+    if (io->dest)
+        g_object_unref (io->dest);
     g_slice_free (struct io, io);
 }
 
@@ -640,7 +641,7 @@ provider_base_io_task (DonnaProvider       *provider,
     io->type        = type;
     io->is_source   = is_source;
     io->sources     = g_ptr_array_ref (sources);
-    io->dest        = g_object_ref (dest);
+    io->dest        = (dest) ? g_object_ref (dest) : NULL;
 
     task = donna_task_new ((task_fn) perform_io, io, (GDestroyNotify) free_io);
 

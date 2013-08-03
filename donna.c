@@ -217,6 +217,11 @@ static void             donna_donna_show_error      (DonnaApp       *app,
                                                      const GError   *error);
 static gpointer         donna_donna_get_ct_data     (DonnaApp       *app,
                                                      const gchar    *col_name);
+static gboolean         donna_donna_nodes_io        (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     DonnaIoType     io_type,
+                                                     DonnaNode      *dest,
+                                                     GError        **error);
 static gboolean         donna_donna_register_drop   (DonnaApp       *app,
                                                      const gchar    *name,
                                                      GError        **error);
@@ -278,6 +283,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
+    interface->nodes_io             = donna_donna_nodes_io;
     interface->register_drop        = donna_donna_register_drop;
     interface->register_set         = donna_donna_register_set;
     interface->register_add_nodes   = donna_donna_register_add_nodes;
@@ -2100,6 +2106,55 @@ is_valid_register_name (const gchar **name, GError **error)
     g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_INVALID_NAME,
             "Invalid register name: '%s'", *name);
     return FALSE;
+}
+
+static gboolean
+donna_donna_nodes_io (DonnaApp       *app,
+                      GPtrArray      *nodes,
+                      DonnaIoType     io_type,
+                      DonnaNode      *dest,
+                      GError        **error)
+{
+    DonnaProvider *provider;
+    DonnaTask *task;
+    guint i;
+
+    if (G_UNLIKELY (nodes->len == 0))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_EMPTY,
+                "Cannot perform IO: no nodes given");
+        return FALSE;
+    }
+
+    /* make sure all nodes are from the same provider */
+    provider = donna_node_peek_provider (nodes->pdata[0]);
+    for (i = 1; i < nodes->len; ++i)
+    {
+        if (provider != donna_node_peek_provider (nodes->pdata[i]))
+        {
+            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                    "Cannot perform IO: nodes are not all from the same provider/domain.");
+            return FALSE;
+        }
+    }
+
+    task = donna_provider_io_task (provider, io_type, TRUE, nodes, dest, error);
+    if (!task && dest && provider != donna_node_peek_provider (dest))
+    {
+        g_clear_error (error);
+        /* maybe the IO can be done by dest's provider */
+        task = donna_provider_io_task (donna_node_peek_provider (dest),
+                io_type, FALSE, nodes, dest, error);
+    }
+
+    if (!task)
+    {
+        g_prefix_error (error, "Couldn't to perform IO operation: ");
+        return FALSE;
+    }
+
+    donna_app_run_task (app, task);
+    return TRUE;
 }
 
 static gboolean

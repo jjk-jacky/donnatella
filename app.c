@@ -567,6 +567,30 @@ donna_app_filter_nodes (DonnaApp       *app,
 }
 
 gboolean
+donna_app_nodes_io (DonnaApp       *app,
+                    GPtrArray      *nodes,
+                    DonnaIoType     io_type,
+                    DonnaNode      *dest,
+                    GError        **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    g_return_val_if_fail (io_type == DONNA_IO_COPY || io_type == DONNA_IO_MOVE
+            || io_type == DONNA_IO_DELETE, FALSE);
+    if (io_type != DONNA_IO_DELETE)
+        g_return_val_if_fail (DONNA_IS_NODE (dest), FALSE);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->nodes_io != NULL, FALSE);
+
+    return (*interface->nodes_io) (app, nodes, io_type, dest, error);
+}
+
+gboolean
 donna_app_register_drop (DonnaApp       *app,
                          const gchar    *name,
                          GError        **error)

@@ -325,10 +325,7 @@ donna_provider_io_task (DonnaProvider  *provider,
     g_return_val_if_fail (sources != NULL, NULL);
     g_return_val_if_fail (sources->len > 0, NULL);
     if (type == DONNA_IO_DELETE)
-    {
         g_return_val_if_fail (is_source == TRUE, NULL);
-        g_return_val_if_fail (dest == NULL, NULL);
-    }
     else
         g_return_val_if_fail (DONNA_IS_NODE (dest), NULL);
 

@@ -230,10 +230,6 @@ GPtrArray *     donna_tree_view_get_nodes       (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  gboolean            to_focused,
                                                  GError            **error);
-gboolean        donna_tree_view_from_register   (DonnaTreeView      *tree,
-                                                 const gchar        *reg_name,
-                                                 DonnaIoType         type,
-                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
