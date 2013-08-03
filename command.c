@@ -1285,7 +1285,6 @@ convert:
                 g_propagate_prefixed_error (error, err,
                         "Command '%s', argument %d: ",
                         data->command->name, data->i + 1);
-                g_ptr_array_unref (arr);
                 goto error;
             }
             g_ptr_array_add (data->arr, ptr);
