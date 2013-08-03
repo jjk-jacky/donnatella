@@ -1032,7 +1032,8 @@ convert:
     else if (data->command->arg_type[data->i]
                 & (DONNA_ARG_TYPE_STRING | DONNA_ARG_TYPE_PATH))
     {
-        if (data->command->arg_type[data->i]
+        if ((data->command->arg_type[data->i]
+                    & (DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY))
                 == (DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY))
         {
             gpointer ptr;
