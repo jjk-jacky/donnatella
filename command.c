@@ -722,7 +722,7 @@ get_node (DonnaApp *app, const gchar *fl, GError **error)
  * another command to run & get its return value as arg, via @syntax),
  * processing/converting any %n flags, and moving data->start & whatnot where
  * needs be */
-static gboolean
+static DonnaTaskState
 parse_arg (struct rc_data   *data,
            GError          **error)
 {
@@ -750,13 +750,14 @@ parse_arg (struct rc_data   *data,
     {
         g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
                 data->command->name, data->i + 1);
-        return FALSE;
+        return DONNA_TASK_FAILED;
     }
     else if (*data->start == '@')
     {
         struct rc_data d;
         gboolean dereference;
         DonnaTask *task;
+        DonnaTaskState state;
         const GValue *v;
         gchar *start;
 
@@ -767,7 +768,7 @@ parse_arg (struct rc_data   *data,
          * visibility/ensure we can run it */
         d.command = _donna_command_init_parse (start, &s, error);
         if (!d.command)
-            return FALSE;
+            return DONNA_TASK_FAILED;
 
         if (data->blocking != BLOCK_OK
                 && (d.command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
@@ -776,7 +777,7 @@ parse_arg (struct rc_data   *data,
             g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
                     "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
                     data->command->name, data->i + 1);
-            return FALSE;
+            return DONNA_TASK_FAILED;
         }
 
         memset (&d, 0, sizeof (struct rc_data));
@@ -792,7 +793,13 @@ parse_arg (struct rc_data   *data,
         /* create a "fake" task so 1) run_command will run the command
          * blockingly, and 2) it will be used for error/return value */
         task = g_object_ref_sink (donna_task_new ((task_fn) gtk_true, NULL, NULL));
-        if (run_command (task, &d) != DONNA_TASK_DONE)
+        state = run_command (task, &d);
+        if (state == DONNA_TASK_CANCELLED)
+        {
+            g_object_unref (task);
+            return DONNA_TASK_CANCELLED;
+        }
+        else if (state != DONNA_TASK_DONE)
         {
             const GError *err;
 
@@ -815,7 +822,7 @@ parse_arg (struct rc_data   *data,
                         (d.command) ? "' " : "");
 
             g_object_unref (task);
-            return FALSE;
+            return DONNA_TASK_FAILED;
         }
 
         v = donna_task_get_return_value (task);
@@ -834,7 +841,7 @@ parse_arg (struct rc_data   *data,
                         "Command '%s', argument %d: Argument required, and command '%s' didn't return anything",
                         data->command->name, data->i + 1, d.command->name);
                 g_object_unref (task);
-                return FALSE;
+                return DONNA_TASK_FAILED;
             }
         }
 
@@ -970,7 +977,7 @@ parse_arg (struct rc_data   *data,
         g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
                 "Command '%s', argument %d: Unexpected end-of-string",
                 data->command->name, data->i + 1);
-        return FALSE;
+        return DONNA_TASK_FAILED;
     }
 
     if (*end != ')')
@@ -980,14 +987,14 @@ parse_arg (struct rc_data   *data,
             g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
                     "Command '%s', argument %d: Closing parenthesis missing: %s",
                     data->command->name, data->i + 1, end);
-            return FALSE;
+            return DONNA_TASK_FAILED;
         }
         else if (*end != ',')
         {
             g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
                     "Command '%s', argument %d: Unexpected character (expected ',' or ')'): %s",
                     data->command->name, data->i + 1, end);
-            return FALSE;
+            return DONNA_TASK_FAILED;
         }
     }
 
@@ -1003,7 +1010,7 @@ parse_arg (struct rc_data   *data,
             g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MISSING_ARG,
                     "Command '%s', argument %d required",
                     data->command->name, data->i + 1);
-            return FALSE;
+            return DONNA_TASK_FAILED;
         }
     }
 
@@ -1417,13 +1424,13 @@ next:
         data->start = end + 1;
         skip_blank (data->start);
     }
-    return TRUE;
+    return DONNA_TASK_DONE;
 
 error:
     data->start[end - data->start] = c;
     if (s != data->start)
         g_free (s);
-    return FALSE;
+    return DONNA_TASK_FAILED;
 }
 
 /* for parsing/running commands from treeview, menu or toolbar */
@@ -1539,7 +1546,10 @@ run_command (DonnaTask *task, struct rc_data *data)
 
     for ( ; data->i < data->command->argc; ++data->i)
     {
-        if (!parse_arg (data, &err))
+        DonnaTaskState parsed;
+
+        parsed = parse_arg (data, &err);
+        if (parsed == DONNA_TASK_FAILED)
         {
             if (data->blocking == BLOCK_SWITCH
                     && g_error_matches (err, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK))
@@ -1567,6 +1577,11 @@ run_command (DonnaTask *task, struct rc_data *data)
                     data->i + 1);
             free_rc_data (data);
             return DONNA_TASK_FAILED;
+        }
+        else if (parsed == DONNA_TASK_CANCELLED)
+        {
+            free_rc_data (data);
+            return DONNA_TASK_CANCELLED;
         }
 
         if (*data->start == ')' && data->i + 1 < data->command->argc)
@@ -1727,11 +1742,15 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
     g_ptr_array_add (data.arr, task);
     for (data.i = 0; data.i < data.command->argc; ++data.i)
     {
-        if (!parse_arg (&data, &err))
+        DonnaTaskState parsed;
+
+        parsed = parse_arg (&data, &err);
+        if (parsed != DONNA_TASK_DONE)
         {
-            donna_task_take_error (task, err);
+            if (parsed == DONNA_TASK_FAILED)
+                donna_task_take_error (task, err);
             free_command_args (data.command, data.arr);
-            return DONNA_TASK_FAILED;
+            return parsed;
         }
 
         if (*data.start == ')' && data.i + 1 < data.command->argc)
