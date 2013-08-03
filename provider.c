@@ -353,3 +353,35 @@ donna_provider_io_task (DonnaProvider  *provider,
 
     return (*interface->io_task) (provider, type, is_source, sources, dest, error);
 }
+
+DonnaTask *
+donna_provider_new_child_task (DonnaProvider  *provider,
+                               DonnaNode      *parent,
+                               DonnaNodeType   type,
+                               const gchar    *name,
+                               GError        **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (parent), NULL);
+    g_return_val_if_fail (donna_node_peek_provider (parent) == provider, NULL);
+    g_return_val_if_fail (type == DONNA_NODE_CONTAINER
+            || type == DONNA_NODE_ITEM, NULL);
+    g_return_val_if_fail (name != NULL, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->new_child_task == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': No support of node creation",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
+
+    return (*interface->new_child_task) (provider, parent, type, name, error);
+}

@@ -1994,6 +1994,31 @@ donna_node_trigger_task (DonnaNode          *node,
 }
 
 /**
+ * donna_node_new_child_task:
+ * @node: Parent of the child to create
+ * @type: Type of child to create
+ * @name: Name of the new child
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to create a new child in @node
+ *
+ * Note: this is a helper function, that calls donna_provider_new_child_task()
+ * or @node's provider
+ *
+ * Returns: (transfer floating): The floating #DonnaTask, or %NULL
+ */
+DonnaTask *
+donna_node_new_child_task (DonnaNode          *node,
+                           DonnaNodeType       type,
+                           const gchar        *name,
+                           GError            **error)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    return donna_provider_new_child_task (node->priv->provider, node, type,
+            name, error);
+}
+
+/**
  * donna_node_mark_ready:
  * @node: The node to mark ready
  *

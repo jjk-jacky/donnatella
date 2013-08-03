@@ -44,6 +44,11 @@ static DonnaTaskState   provider_fs_get_children    (DonnaProviderBase  *provide
 static DonnaTaskState   provider_fs_trigger_node    (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
+static DonnaTaskState   provider_fs_new_child       (DonnaProviderBase  *provider,
+                                                     DonnaTask          *task,
+                                                     DonnaNode          *parent,
+                                                     DonnaNodeType       type,
+                                                     const gchar        *name);
 
 static void
 provider_fs_provider_init (DonnaProviderInterface *interface)
@@ -64,6 +69,7 @@ donna_provider_fs_class_init (DonnaProviderFsClass *klass)
     pb_class->has_children  = provider_fs_has_children;
     pb_class->get_children  = provider_fs_get_children;
     pb_class->trigger_node  = provider_fs_trigger_node;
+    pb_class->new_child     = provider_fs_new_child;
 
     o_class = (GObjectClass *) klass;
     o_class->finalize = provider_fs_finalize;
@@ -1041,4 +1047,116 @@ provider_fs_trigger_node (DonnaProviderBase  *_provider,
         g_object_unref (gfile);
         return ret;
     }
+}
+
+static DonnaTaskState
+provider_fs_new_child (DonnaProviderBase  *_provider,
+                       DonnaTask          *task,
+                       DonnaNode          *parent,
+                       DonnaNodeType       type,
+                       const gchar        *name)
+{
+    DonnaApp *app;
+    DonnaConfig *config;
+    DonnaNode *node;
+    GValue *v;
+    gchar *location;
+    gchar *filename;
+    gchar *s;
+    gint mode;
+    gint st;
+
+    s = donna_node_get_location (parent);
+    location = g_strdup_printf ("%s/%s", (streq (s, "/")) ? "" : s, name);
+    g_free (s);
+
+    /* if filename encoding if UTF8, just use location */
+    if (g_get_filename_charsets (NULL))
+        filename = location;
+    else
+        filename = g_filename_from_utf8 (location, -1, NULL, NULL, NULL);
+
+    g_object_get (_provider, "app", &app, NULL);
+    config = donna_app_peek_config (app);
+    g_object_unref (app);
+
+    if (type == DONNA_NODE_CONTAINER)
+    {
+        gint i;
+        if (donna_config_get_int (config, &i, "providers/fs/mode_new_folder"))
+        {
+            gchar buf[4];
+
+            snprintf (buf, 4, "%d", i);
+            mode = 00;
+            for (s = buf; *s != '\0'; ++s)
+            {
+                mode *= 8;
+                mode += *s - '0';
+            }
+        }
+        else
+            mode = 0755;
+        st = mkdir (filename, mode);
+    }
+    else /* DONNA_NODE_ITEM */
+    {
+        gint i;
+        if (donna_config_get_int (config, &i, "providers/fs/mode_new_file"))
+        {
+            gchar buf[4];
+
+            snprintf (buf, 4, "%d", i);
+            mode = 00;
+            for (s = buf; *s != '\0'; ++s)
+            {
+                mode *= 8;
+                mode += *s - '0';
+            }
+        }
+        else
+            mode = 0644;
+again:
+        st = open (filename, O_WRONLY | O_CREAT | O_EXCL, mode);
+        if (st >= 0)
+            close (st);
+    }
+
+    if (st < 0)
+    {
+        gint _errno = errno;
+        if (errno == EINTR)
+            goto again;
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Failed to create '%s': %s", location, g_strerror (_errno));
+        g_free (location);
+        if (filename != location)
+            g_free (filename);
+        return DONNA_TASK_FAILED;
+    }
+
+    node = new_node (_provider, location, filename, TRUE);
+    if (G_UNLIKELY (!node))
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Failed to get node for newly-created '%s'", location);
+        return DONNA_TASK_FAILED;
+    }
+
+    /* emit new-child signal */
+    donna_provider_node_new_child ((DonnaProvider *) _provider, parent, node);
+
+    /* set node as return value */
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, DONNA_TYPE_NODE);
+    /* take our ref on node */
+    g_value_take_object (v, node);
+    donna_task_release_return_value (task);
+
+    g_free (location);
+    if (filename != location)
+        g_free (filename);
+    return DONNA_TASK_DONE;
 }

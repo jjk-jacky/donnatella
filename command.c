@@ -23,6 +23,8 @@ static DonnaTaskState   cmd_menu_popup                      (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
                                                              GPtrArray *args);
+static DonnaTaskState   cmd_node_new_child                  (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_register_add_nodes              (DonnaTask *task,
@@ -163,6 +165,15 @@ static DonnaCommand commands[] = {
         .return_type    = DONNA_ARG_TYPE_NOTHING,
         .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
         .cmd_fn         = cmd_node_activate
+    },
+    {
+        .name           = "node_new_child",
+        .argc           = 3,
+        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_STRING },
+        .return_type    = DONNA_ARG_TYPE_NODE,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
+        .cmd_fn         = cmd_node_new_child
     },
     {
         .name           = "node_popup_children",
@@ -2090,6 +2101,69 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
     }
     g_object_unref (tree);
     return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_node_new_child (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    const GValue *v;
+    GValue *value;
+    DonnaTaskState ret;
+    DonnaTask *t;
+    const gchar *choices[] = { "item", "container" };
+    DonnaNodeType type[] = { DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
+    gint c;
+
+    c = get_choice_from_arg (choices, 2);
+    if (c < 0)
+    {
+        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                COMMAND_ERROR_SYNTAX,
+                "Cannot create new child, unknown type '%s'; "
+                "Must be 'item' or 'container'",
+                args->pdata[2]);
+        return DONNA_TASK_FAILED;
+    }
+
+    t = donna_node_new_child_task (args->pdata[1], type[c], args->pdata[3], &err);
+    if (!t)
+    {
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (args->pdata[4], t);
+    donna_task_wait_for_it (t);
+
+    ret = donna_task_get_state (t);
+    if (ret != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+        {
+            err = g_error_copy (err);
+            g_prefix_error (&err, "Command 'node_new_child' failed: ");
+            donna_task_take_error (task_for_ret_err (), err);
+        }
+        else
+            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
+                    COMMAND_ERROR_OTHER,
+                    "Command 'node_new_child' failed: Unable to create new child");
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_get_return_value (t);
+
+    value = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_set_object (value, g_value_dup_object (v));
+    donna_task_release_return_value (task_for_ret_err ());
+
+    g_object_unref (t);
+    return ret;
 }
 
 struct popup_children_data

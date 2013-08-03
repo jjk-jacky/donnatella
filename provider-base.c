@@ -77,6 +77,12 @@ static DonnaTask *      provider_base_io_task (
                                             GPtrArray           *sources,
                                             DonnaNode           *dest,
                                             GError             **error);
+static DonnaTask *      provider_base_new_child_task (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *parent,
+                                            DonnaNodeType        type,
+                                            const gchar         *name,
+                                            GError             **error);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -87,6 +93,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->get_node_parent_task   = provider_base_get_node_parent_task;
     interface->trigger_node_task      = provider_base_trigger_node_task;
     interface->io_task                = provider_base_io_task;
+    interface->new_child_task         = provider_base_new_child_task;
 }
 
 static void
@@ -648,6 +655,63 @@ provider_base_io_task (DonnaProvider       *provider,
                     (is_source) ? "source" : "dest",
                     sources->len,
                     fl));
+            g_free (fl));
+
+    return task;
+}
+
+struct new_child
+{
+    DonnaNode       *parent;
+    DonnaNodeType    type;
+    gchar           *name;
+};
+
+static void
+free_new_child (struct new_child *nc)
+{
+    g_object_unref (nc->parent);
+    g_free (nc->name);
+    g_slice_free (struct new_child, nc);
+}
+
+static DonnaTaskState
+new_child (DonnaTask *task, struct new_child *nc)
+{
+    DonnaProviderBase *provider_base;
+    DonnaTaskState ret;
+
+    provider_base = (DonnaProviderBase *) donna_node_peek_provider (nc->parent);
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->new_child (
+            provider_base, task, nc->parent, nc->type, nc->name);
+    free_new_child (nc);
+    return ret;
+}
+
+static DonnaTask *
+provider_base_new_child_task (DonnaProvider       *provider,
+                              DonnaNode           *parent,
+                              DonnaNodeType        type,
+                              const gchar         *name,
+                              GError             **error)
+{
+    DonnaTask *task;
+    struct new_child *nc;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    nc = g_slice_new (struct new_child);
+    nc->parent  = g_object_ref (parent);
+    nc->type    = type;
+    nc->name    = g_strdup (name);
+
+    task = donna_task_new ((task_fn) new_child, nc, (GDestroyNotify) free_new_child);
+
+    DONNA_DEBUG (TASK,
+            gchar *fl = donna_node_get_full_location (parent);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "new_child() '%s' (%s) on '%s'",
+                    name, (type == DONNA_NODE_ITEM) ? "item" : "container", fl));
             g_free (fl));
 
     return task;

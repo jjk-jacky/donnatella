@@ -71,6 +71,11 @@ struct _DonnaProviderInterface
                                                      GPtrArray      *sources,
                                                      DonnaNode      *dest,
                                                      GError        **error);
+    DonnaTask *         (*new_child_task)           (DonnaProvider  *provider,
+                                                     DonnaNode      *parent,
+                                                     DonnaNodeType   type,
+                                                     const gchar    *name,
+                                                     GError        **error);
 };
 
 /* signals */
@@ -117,6 +122,11 @@ DonnaTask * donna_provider_io_task                  (DonnaProvider  *provider,
                                                      gboolean        is_source,
                                                      GPtrArray      *sources,
                                                      DonnaNode      *dest,
+                                                     GError        **error);
+DonnaTask * donna_provider_new_child_task           (DonnaProvider  *provider,
+                                                     DonnaNode      *parent,
+                                                     DonnaNodeType   type,
+                                                     const gchar    *name,
                                                      GError        **error);
 
 G_END_DECLS
