@@ -1632,6 +1632,12 @@ run_command (DonnaTask *task, struct rc_data *data)
     {
         donna_task_wait_for_it (cmd_task);
         state = donna_task_get_state (cmd_task);
+        if (task && state != DONNA_TASK_DONE)
+        {
+            GError *e = (GError *) donna_task_get_error (cmd_task);
+            if (e)
+                donna_task_take_error (task, g_error_copy (e));
+        }
         g_object_unref (cmd_task);
     }
     else
