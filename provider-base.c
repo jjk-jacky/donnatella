@@ -70,6 +70,13 @@ static DonnaTask *      provider_base_trigger_node_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
                                             GError             **error);
+static DonnaTask *      provider_base_io_task (
+                                            DonnaProvider       *provider,
+                                            DonnaIoType          type,
+                                            gboolean             is_source,
+                                            GPtrArray           *sources,
+                                            DonnaNode           *dest,
+                                            GError             **error);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -79,6 +86,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->get_node_children_task = provider_base_get_node_children_task;
     interface->get_node_parent_task   = provider_base_get_node_parent_task;
     interface->trigger_node_task      = provider_base_trigger_node_task;
+    interface->io_task                = provider_base_io_task;
 }
 
 static void
@@ -574,6 +582,72 @@ provider_base_trigger_node_task (DonnaProvider       *provider,
             gchar *fl = donna_node_get_full_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "trigger_node() for node '%s'", fl));
+            g_free (fl));
+
+    return task;
+}
+
+struct io
+{
+    DonnaProviderBase   *pb;
+    DonnaIoType          type;
+    gboolean             is_source;
+    GPtrArray           *sources;
+    DonnaNode           *dest;
+};
+
+static void
+free_io (struct io *io)
+{
+    g_ptr_array_unref (io->sources);
+    g_object_unref (io->dest);
+    g_slice_free (struct io, io);
+}
+
+static DonnaTaskState
+perform_io (DonnaTask *task, struct io *io)
+{
+    DonnaTaskState ret;
+
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (io->pb)->io (
+            io->pb, task, io->type, io->is_source, io->sources, io->dest);
+    free_io (io);
+    return ret;
+}
+
+static DonnaTask *
+provider_base_io_task (DonnaProvider       *provider,
+                       DonnaIoType          type,
+                       gboolean             is_source,
+                       GPtrArray           *sources,
+                       DonnaNode           *dest,
+                       GError             **error)
+{
+    DonnaTask *task;
+    struct io *io;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    io = g_slice_new (struct io);
+    io->pb          = (DonnaProviderBase *) provider;
+    io->type        = type;
+    io->is_source   = is_source;
+    io->sources     = g_ptr_array_ref (sources);
+    io->dest        = g_object_ref (dest);
+
+    task = donna_task_new ((task_fn) perform_io, io, (GDestroyNotify) free_io);
+
+    DONNA_DEBUG (TASK,
+            gchar *fl = donna_node_get_full_location (dest);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "io() %s (from %s as %s) with %d sources to '%s'",
+                    (type == DONNA_IO_COPY) ? "copy" :
+                    (type == DONNA_IO_MOVE) ? "move" :
+                    (type == DONNA_IO_DELETE) ? "delete" : "unknown",
+                    donna_provider_get_domain (provider),
+                    (is_source) ? "source" : "dest",
+                    sources->len,
+                    fl));
             g_free (fl));
 
     return task;

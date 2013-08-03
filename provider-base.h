@@ -52,6 +52,12 @@ struct _DonnaProviderBaseClass
     DonnaTaskState  (*trigger_node)         (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaNode          *node);
+    DonnaTaskState  (*io)                   (DonnaProviderBase  *provider,
+                                             DonnaTask          *task,
+                                             DonnaIoType         type,
+                                             gboolean            is_source,
+                                             GPtrArray          *sources,
+                                             DonnaNode          *dest);
 };
 
 GType           donna_provider_base_get_type    (void) G_GNUC_CONST;
