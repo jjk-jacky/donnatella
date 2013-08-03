@@ -717,3 +717,25 @@ donna_app_register_save (DonnaApp       *app,
 
     return (*interface->register_save) (app, name, file, file_type, error);
 }
+
+gchar *
+donna_app_ask_text (DonnaApp       *app,
+                    const gchar    *title,
+                    const gchar    *details,
+                    const gchar    *main_default,
+                    const gchar   **other_defaults,
+                    GError        **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (title != NULL, FALSE);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->ask_text != NULL, FALSE);
+
+    return (*interface->ask_text) (app, title, details, main_default,
+            other_defaults, error);
+}

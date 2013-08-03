@@ -7,6 +7,8 @@
 #include "macros.h"
 #include "debug.h"
 
+static DonnaTaskState   cmd_ask_text                        (DonnaTask *task,
+                                                             GPtrArray *args);
 static DonnaTaskState   cmd_config_get_boolean              (DonnaTask *task,
                                                              GPtrArray *args);
 static DonnaTaskState   cmd_config_get_int                  (DonnaTask *task,
@@ -101,6 +103,17 @@ static DonnaTaskState   cmd_void                            (DonnaTask *task,
                                                              GPtrArray *args);
 
 static DonnaCommand commands[] = {
+    {
+        .name           = "ask_text",
+        .argc           = 4,
+        .arg_type       = { DONNA_ARG_TYPE_STRING,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
+            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL | DONNA_ARG_IS_ARRAY },
+        .return_type    = DONNA_ARG_TYPE_STRING,
+        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+        .cmd_fn         = cmd_ask_text
+    },
     {
         .name           = "config_get_boolean",
         .argc           = 1,
@@ -1976,6 +1989,41 @@ show_err_on_task_failed (DonnaTask  *task,
 
     donna_app_show_error (app, donna_task_get_error (task),
             "Command 'action_node': Failed to trigger node");
+}
+
+static DonnaTaskState
+cmd_ask_text (DonnaTask *task, GPtrArray *args)
+{
+    GError *err = NULL;
+    GPtrArray *other;
+    GValue *v;
+    gchar *s;
+
+    other = args->pdata[4];
+    if (other)
+        /* we need to make it NULL-terminated for ask_text() */
+        g_ptr_array_add (other, NULL);
+
+    s = donna_app_ask_text (args->pdata[5], args->pdata[1], args->pdata[2],
+                args->pdata[3], (other) ? (const gchar **) other->pdata : NULL,
+                &err);
+    if (other)
+        g_ptr_array_remove_index_fast (other, other->len - 1);
+    if (!s)
+    {
+        if (!err)
+            return DONNA_TASK_CANCELLED;
+
+        donna_task_take_error (task_for_ret_err (), err);
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_grab_return_value (task_for_ret_err ());
+    g_value_init (v, G_TYPE_STRING);
+    g_value_take_string (v, s);
+    donna_task_release_return_value (task_for_ret_err ());
+
+    return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState

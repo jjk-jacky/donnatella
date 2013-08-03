@@ -28,6 +28,7 @@
 #include "command.h"
 #include "statusbar.h"
 #include "imagemenuitem.h"
+#include "misc.h"
 #include "macros.h"
 
 guint donna_debug_flags = 0;
@@ -251,6 +252,12 @@ static gboolean         donna_donna_register_save   (DonnaApp       *app,
                                                      const gchar    *file,
                                                      DonnaRegisterFile file_type,
                                                      GError        **error);
+static gchar *          donna_donna_ask_text        (DonnaApp       *app,
+                                                     const gchar    *title,
+                                                     const gchar    *details,
+                                                     const gchar    *main_default,
+                                                     const gchar   **other_defaults,
+                                                     GError        **error);
 
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
@@ -278,6 +285,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->register_get_nodes   = donna_donna_register_get_nodes;
     interface->register_load        = donna_donna_register_load;
     interface->register_save        = donna_donna_register_save;
+    interface->ask_text             = donna_donna_ask_text;
 }
 
 static void
@@ -2621,6 +2629,124 @@ donna_donna_register_save (DonnaApp       *app,
     g_string_free (str, TRUE);
 
     return TRUE;
+}
+
+struct ask_text
+{
+    GtkWindow   *win;
+    GtkEntry    *entry;
+    gchar       *s;
+};
+
+static void
+btn_ok_cb (struct ask_text *data)
+{
+    data->s = g_strdup (gtk_entry_get_text (data->entry));
+    gtk_widget_destroy ((GtkWidget *) data->win);
+}
+
+static gboolean
+key_press_cb (struct ask_text *data, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+        gtk_widget_destroy ((GtkWidget *) data->win);
+    return FALSE;
+}
+
+static gchar *
+donna_donna_ask_text (DonnaApp       *app,
+                      const gchar    *title,
+                      const gchar    *details,
+                      const gchar    *main_default,
+                      const gchar   **other_defaults,
+                      GError        **error)
+{
+    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    GtkStyleContext *context;
+    GMainLoop *loop;
+    struct ask_text data = { NULL, };
+    GtkBox *box;
+    GtkBox *btn_box;
+    GtkLabel *lbl;
+    GtkWidget *w;
+    gchar **s;
+
+    data.win = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_widget_set_name ((GtkWidget *) data.win, "ask-text");
+    gtk_window_set_transient_for (data.win, priv->window);
+    gtk_window_set_destroy_with_parent (data.win, TRUE);
+    gtk_window_set_default_size (data.win, 230, -1);
+    gtk_window_set_decorated (data.win, FALSE);
+    gtk_container_set_border_width ((GtkContainer *) data.win, 4);
+
+    box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add ((GtkContainer *) data.win, (GtkWidget *) box);
+
+    w = gtk_label_new (title);
+    lbl = (GtkLabel *) w;
+    gtk_label_set_selectable ((GtkLabel *) w, TRUE);
+    context = gtk_widget_get_style_context (w);
+    gtk_style_context_add_class (context, "title");
+    gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+
+    if (details)
+    {
+        w = gtk_label_new (details);
+        gtk_label_set_selectable ((GtkLabel *) w, TRUE);
+        gtk_misc_set_alignment ((GtkMisc *) w, 0, 0.5);
+        context = gtk_widget_get_style_context (w);
+        gtk_style_context_add_class (context, "details");
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+    }
+
+    if (other_defaults)
+    {
+        w = gtk_combo_box_text_new_with_entry ();
+        data.entry = (GtkEntry *) gtk_bin_get_child ((GtkBin *) w);
+        for ( ; *other_defaults; ++other_defaults)
+            gtk_combo_box_text_append_text ((GtkComboBoxText *) w, *other_defaults);
+    }
+    else
+    {
+        w = gtk_entry_new ();
+        data.entry = (GtkEntry *) w;
+    }
+    g_signal_connect_swapped (data.entry, "activate",
+            (GCallback) btn_ok_cb, &data);
+    g_signal_connect (data.entry, "key-press-event",
+            (GCallback) _key_press_ctrl_a_cb, NULL);
+    g_signal_connect_swapped (data.entry, "key-press-event",
+            (GCallback) key_press_cb, &data);
+
+    if (main_default)
+        gtk_entry_set_text (data.entry, main_default);
+    gtk_box_pack_start (box, w, FALSE, FALSE, 10);
+
+
+    btn_box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_pack_end (box, (GtkWidget *) btn_box, FALSE, FALSE, 4);
+
+    w = gtk_button_new_with_label ("Ok");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
+    g_signal_connect_swapped (w, "clicked", (GCallback) btn_ok_cb, &data);
+    gtk_box_pack_end (btn_box, w, FALSE, FALSE, 2);
+
+    w = gtk_button_new_with_label ("Cancel");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
+    g_signal_connect_swapped (w, "clicked", (GCallback) gtk_widget_destroy, data.win);
+    gtk_box_pack_end (btn_box, w, FALSE, FALSE, 2);
+
+
+    loop = g_main_loop_new (NULL, TRUE);
+    g_signal_connect_swapped (data.win, "destroy", (GCallback) g_main_loop_quit, loop);
+    gtk_widget_show_all ((GtkWidget *) data.win);
+    gtk_widget_grab_focus ((GtkWidget *) data.entry);
+    gtk_label_select_region (lbl, 0, 0);
+    g_main_loop_run (loop);
+
+    return data.s;
 }
 
 static void

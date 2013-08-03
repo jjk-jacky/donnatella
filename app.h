@@ -97,6 +97,12 @@ struct _DonnaAppInterface
                                                      const gchar    *file,
                                                      DonnaRegisterFile file_type,
                                                      GError        **error);
+    gchar *             (*ask_text)                 (DonnaApp       *app,
+                                                     const gchar    *title,
+                                                     const gchar    *details,
+                                                     const gchar    *main_default,
+                                                     const gchar   **other_defaults,
+                                                     GError        **error);
 
 };
 
@@ -182,6 +188,12 @@ gboolean            donna_app_register_save         (DonnaApp       *app,
                                                      const gchar    *name,
                                                      const gchar    *file,
                                                      DonnaRegisterFile file_type,
+                                                     GError        **error);
+gchar *             donna_app_ask_text              (DonnaApp       *app,
+                                                     const gchar    *title,
+                                                     const gchar    *details,
+                                                     const gchar    *main_default,
+                                                     const gchar   **other_defaults,
                                                      GError        **error);
 
 G_END_DECLS
