@@ -9,6 +9,7 @@
 #include "donna.h"
 #include "conf.h"
 #include "sort.h"
+#include "misc.h"
 #include "macros.h"
 
 enum
@@ -348,55 +349,6 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *data)
     g_free (data);
 }
 
-static gboolean
-key_press_event_cb (GtkWidget *w, GdkEventKey *event, struct editing_data *data)
-{
-    if ((event->keyval == GDK_KEY_A || event->keyval == GDK_KEY_a)
-            && (event->state & GDK_CONTROL_MASK))
-    {
-        GtkEditable *editable = (GtkEditable *) w;
-        gint start, end;
-
-        /* special handling of Ctrl+A:
-         * - if no selection, select all;
-         * - if basename (i.e. without .extension) is selcted, select all
-         * - else select basename
-         */
-
-        if (!gtk_editable_get_selection_bounds (editable, &start, &end))
-            /* no selection, select all */
-            gtk_editable_select_region (editable, 0, -1);
-        else
-        {
-            gchar *name;
-            gsize  len;
-            gsize  dot;
-            gchar *s;
-
-            /* locate the dot before the extension */
-            name = donna_node_get_name (data->node);
-            dot = 0;
-            for (len = 1, s = g_utf8_next_char (name);
-                    *s != '\0';
-                    ++len, s = g_utf8_next_char (s))
-            {
-                if (*s == '.')
-                    dot = len;
-            }
-            if (start == 0 && end == dot)
-                /* already selected, toggle back to all */
-                gtk_editable_select_region (editable, 0, -1);
-            else if (dot > 0)
-                /* select only up to the .ext */
-                gtk_editable_select_region ((GtkEditable *) editable, 0, dot);
-            g_free (name);
-        }
-
-        return TRUE;
-    }
-    return FALSE;
-}
-
 static void
 editing_started_cb (GtkCellRenderer     *renderer,
                     GtkCellEditable     *editable,
@@ -414,7 +366,7 @@ editing_started_cb (GtkCellRenderer     *renderer,
     data->editing_done_sid = g_signal_connect (editable, "editing-done",
             (GCallback) editing_done_cb, data);
     data->key_press_event_sid = g_signal_connect (editable, "key-press-event",
-            (GCallback) key_press_event_cb, data);
+            (GCallback) _key_press_ctrl_a_cb, NULL);
 
     /* do not select the whole name */
     g_object_set (gtk_widget_get_settings ((GtkWidget *) editable),
