@@ -8812,6 +8812,7 @@ struct re_data
 {
     DonnaTreeView       *tree;
     GtkTreeViewColumn   *column;
+    GtkTreeIter         *iter;
     GtkTreePath         *path;
 };
 
@@ -8855,6 +8856,12 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
     if (G_UNLIKELY (data->tree->priv->renderer_editable))
         return FALSE;
 
+    /* this is needed to set the renderer to our cell, since it might have been
+     * used for another cell/row and that would cause confusion (e.g. wrong
+     * text used in the entry, etc) */
+    gtk_tree_view_column_cell_set_cell_data (data->column,
+            (GtkTreeModel *) data->tree->priv->store,
+            data->iter, FALSE, FALSE);
     /* get the cell_area (i.e. where editable will be placed */
     gtk_tree_view_get_cell_area ((GtkTreeView *) data->tree,
             data->path, data->column, &cell_area);
@@ -8917,6 +8924,7 @@ donna_tree_view_edit_column (DonnaTreeView      *tree,
     struct re_data re_data = {
         .tree   = tree,
         .column = _col->column,
+        .iter   = &iter,
         .path   = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter),
     };
 
@@ -8935,6 +8943,7 @@ donna_tree_view_edit_column (DonnaTreeView      *tree,
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
 
+    gtk_tree_path_free (re_data.path);
     g_object_unref (node);
     return TRUE;
 }
