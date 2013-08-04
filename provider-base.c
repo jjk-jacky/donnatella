@@ -48,6 +48,10 @@ static void             provider_base_add_node_to_cache (
                                             DonnaNode           *node);
 
 /* DonnaProvider */
+static void             provider_base_node_updated (
+                                            DonnaProvider  *provider,
+                                            DonnaNode      *node,
+                                            const gchar    *name);
 static DonnaTask *      provider_base_get_node_task (
                                             DonnaProvider       *provider,
                                             const gchar         *location,
@@ -87,6 +91,8 @@ static DonnaTask *      provider_base_new_child_task (
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
 {
+    interface->node_updated           = provider_base_node_updated;
+
     interface->get_node_task          = provider_base_get_node_task;
     interface->has_node_children_task = provider_base_has_node_children_task;
     interface->get_node_children_task = provider_base_get_node_children_task;
@@ -268,6 +274,38 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
         donna_node_inc_toggle_count (node);
         g_rec_mutex_unlock (&provider->priv->nodes_mutex);
     }
+}
+
+static void
+provider_base_node_updated (DonnaProvider  *provider,
+                            DonnaNode      *node,
+                            const gchar    *name)
+{
+    DonnaProviderBasePrivate *priv = ((DonnaProviderBase *) provider)->priv;
+    GHashTableIter iter;
+    gpointer key, value;
+
+    if (!streq (name, "location"))
+        return;
+
+    /* should be rare, but nodes can change location (e.g. rename), in which
+     * case we need to find it via value (since the location changed), then we
+     * remove it & re-add it with the new location as key */
+
+    g_rec_mutex_lock (&priv->nodes_mutex);
+    g_hash_table_iter_init (&iter, priv->nodes);
+    while (g_hash_table_iter_next (&iter, &key, &value))
+    {
+        if ((DonnaNode *) value != node)
+            continue;
+
+        /* removing it will unref node, so ref it before */
+        g_object_ref (node);
+        g_hash_table_iter_remove (&iter);
+        g_hash_table_insert (priv->nodes, donna_node_get_location (node), node);
+        break;
+    }
+    g_rec_mutex_unlock (&priv->nodes_mutex);
 }
 
 /* must be called while mutex is locked */
