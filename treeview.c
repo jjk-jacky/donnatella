@@ -8816,51 +8816,146 @@ struct re_data
     GtkTreePath         *path;
 };
 
-static void
-editable_remove_widget_cb (GtkCellEditable *editable, DonnaTreeView *tree)
+enum
 {
-    g_signal_handler_disconnect (editable,
-            tree->priv->renderer_editable_remove_widget_sid);
-    tree->priv->renderer_editable_remove_widget_sid = 0;
-    tree->priv->renderer_editable = NULL;
+    INLINE_EDIT_DONE = 0,
+    INLINE_EDIT_PREV,
+    INLINE_EDIT_NEXT
+};
+
+struct inline_edit
+{
+    DonnaTreeView       *tree;
+    GtkTreeViewColumn   *column;
+    DonnaTreeRow        *row;
+    guint                move;
+};
+
+static gboolean
+move_inline_edit (struct inline_edit *ie)
+{
+    DonnaTreeRowId rid;
+    struct column *_col;
+
+    rid.type = DONNA_ARG_TYPE_ROW;
+    rid.ptr  = ie->row;
+
+    _col = get_column_by_column (ie->tree, ie->column);
+    donna_tree_view_edit_column (ie->tree, &rid, _col->name, NULL);
+    g_object_unref (ie->row->node);
+    g_slice_free (DonnaTreeRow, ie->row);
+    g_slice_free (struct inline_edit, ie);
+    return FALSE;
 }
 
 static void
-editing_started_cb (GtkCellRenderer *renderer,
-                    GtkCellEditable *editable,
-                    gchar           *path,
-                    DonnaTreeView   *tree)
+editable_remove_widget_cb (GtkCellEditable *editable, struct inline_edit *ie)
 {
-    g_signal_handler_disconnect (renderer, tree->priv->renderer_editing_started_sid);
-    tree->priv->renderer_editing_started_sid = 0;
+    DonnaTreeViewPrivate *priv = ie->tree->priv;
 
-    donna_app_ensure_focused (tree->priv->app);
+    g_signal_handler_disconnect (editable,
+            priv->renderer_editable_remove_widget_sid);
+    priv->renderer_editable_remove_widget_sid = 0;
+    priv->renderer_editable = NULL;
+    if (ie->move != INLINE_EDIT_DONE)
+    {
+        DonnaTreeRowId rid;
+        row_id_type type;
+        GtkTreeIter iter;
+
+        /* we need to call move_inline_edit() via an idle source, because
+         * otherwise the entry doesn't get properly destroyed, etc
+         * But, we need to get the prev/next row right now, because after events
+         * have been processed and since there might have been a property
+         * update, the sort order could be affected and it would look odd that
+         * e.g. pressing Up goes to the row above *after* the resort has been
+         * triggered.
+         * This is why we get the iter of the prev/next row now, and store it
+         * (as a DonnaTreeRow) for move_inline_edit() to use */
+
+        rid.type = DONNA_ARG_TYPE_PATH;
+        rid.ptr  = (ie->move == INLINE_EDIT_PREV) ? ":prev" : ":next";
+        type = convert_row_id_to_iter (ie->tree, &rid, &iter);
+        if (type == ROW_ID_ROW)
+        {
+            GSList *list;
+
+            ie->row = g_slice_new (DonnaTreeRow);
+
+            gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                    DONNA_TREE_VIEW_COL_NODE,   &ie->row->node,
+                    -1);
+
+            list = g_hash_table_lookup (priv->hashtable, ie->row->node);
+            for ( ; list; list = list->next)
+                if (itereq (&iter, (GtkTreeIter *) list->data))
+                {
+                    ie->row->iter = list->data;
+                    break;
+                }
+
+            g_idle_add ((GSourceFunc) move_inline_edit, ie);
+            return;
+        }
+    }
+    g_slice_free (struct inline_edit, ie);
+}
+
+static gboolean
+kp_up_down_cb (GtkEntry *entry, GdkEventKey *event, struct inline_edit *ie)
+{
+    if (event->keyval == GDK_KEY_Up)
+        ie->move = INLINE_EDIT_PREV;
+    else if (event->keyval == GDK_KEY_Down)
+        ie->move = INLINE_EDIT_NEXT;
+    return FALSE;
+}
+
+static void
+editing_started_cb (GtkCellRenderer     *renderer,
+                    GtkCellEditable     *editable,
+                    gchar               *path,
+                    struct inline_edit  *ie)
+{
+    DonnaTreeViewPrivate *priv = ie->tree->priv;
+
+    g_signal_handler_disconnect (renderer, priv->renderer_editing_started_sid);
+    priv->renderer_editing_started_sid = 0;
+
+    donna_app_ensure_focused (priv->app);
+
+    if (GTK_IS_ENTRY (editable))
+        /* handle using Up/Down to move the editing to the prev/next row */
+        g_signal_connect (editable, "key-press-event",
+                (GCallback) kp_up_down_cb, ie);
 
     /* in case we need to abort the editing */
-    tree->priv->renderer_editable = editable;
+    priv->renderer_editable = editable;
     /* when the editing will be done */
-    tree->priv->renderer_editable_remove_widget_sid = g_signal_connect (
+    priv->renderer_editable_remove_widget_sid = g_signal_connect (
             editable, "remove-widget",
-            (GCallback) editable_remove_widget_cb, tree);
+            (GCallback) editable_remove_widget_cb, ie);
 }
 
 static gboolean
 renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
 {
+    DonnaTreeViewPrivate *priv = data->tree->priv;
+    struct inline_edit *ie;
     GdkEventAny event = { .type = GDK_NOTHING };
-    GtkTreePath *path;
     GdkRectangle cell_area;
     gint offset;
+    gboolean ret;
 
     /* shouldn't happen, but to be safe */
-    if (G_UNLIKELY (data->tree->priv->renderer_editable))
+    if (G_UNLIKELY (priv->renderer_editable))
         return FALSE;
 
     /* this is needed to set the renderer to our cell, since it might have been
      * used for another cell/row and that would cause confusion (e.g. wrong
      * text used in the entry, etc) */
     gtk_tree_view_column_cell_set_cell_data (data->column,
-            (GtkTreeModel *) data->tree->priv->store,
+            (GtkTreeModel *) priv->store,
             data->iter, FALSE, FALSE);
     /* get the cell_area (i.e. where editable will be placed */
     gtk_tree_view_get_cell_area ((GtkTreeView *) data->tree,
@@ -8870,18 +8965,32 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
             &offset, &cell_area.width))
         cell_area.x += offset;
 
-    /* so we can get the editable to be able to abort if needed */
-    data->tree->priv->renderer_editing_started_sid = g_signal_connect (
-            renderer, "editing-started",
-            (GCallback) editing_started_cb, data->tree);
+    ie = g_slice_new (struct inline_edit);
+    ie->tree = data->tree;
+    ie->column = data->column;
+    ie->move = INLINE_EDIT_DONE;
 
-    return gtk_cell_area_activate_cell (
+    /* so we can get the editable to be able to abort if needed */
+    priv->renderer_editing_started_sid = g_signal_connect (
+            renderer, "editing-started",
+            (GCallback) editing_started_cb, ie);
+
+    ret = gtk_cell_area_activate_cell (
             gtk_cell_layout_get_area ((GtkCellLayout *) data->column),
             (GtkWidget *) data->tree,
             renderer,
             (GdkEvent *) &event,
             &cell_area,
             0);
+
+    if (G_UNLIKELY (!ret))
+    {
+        g_signal_handler_disconnect (renderer, priv->renderer_editing_started_sid);
+        priv->renderer_editing_started_sid = 0;
+        g_slice_free (struct inline_edit, ie);
+    }
+
+    return ret;
 }
 
 gboolean
