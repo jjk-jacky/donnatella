@@ -1653,6 +1653,9 @@ run_command (DonnaTask *task, struct rc_data *data)
     g_ptr_array_add (data->arr, data->app);
 
     cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
+    DONNA_DEBUG (TASK,
+            donna_task_take_desc (cmd_task, g_strdup_printf (
+                    "run command: %s", data->fl)));
     donna_task_set_visibility (cmd_task, data->command->visibility);
 
     if (!task)
