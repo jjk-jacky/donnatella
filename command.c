@@ -1593,6 +1593,8 @@ run_command (DonnaTask *task, struct rc_data *data)
                 donna_task_set_callback (task,
                         (task_callback_fn) command_run_no_free_cb,
                         data->app, NULL);
+                if (data->arr && !data->arr->pdata[0])
+                    data->arr->pdata[0] = task;
                 donna_app_run_task (data->app, task);
                 return DONNA_TASK_DONE;
             }
