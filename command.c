@@ -569,18 +569,10 @@ free_command_args (DonnaCommand *command, GPtrArray *arr)
     g_ptr_array_unref (arr);
 }
 
-enum
-{
-    BLOCK_SWITCH = 0,
-    BLOCK_OK,
-    BLOCK_NEVER
-};
-
 struct rc_data
 {
     DonnaApp        *app;
     gboolean         is_heap;
-    guint            blocking;
     const gchar     *conv_flags;
     _conv_flag_fn    conv_fn;
     gpointer         conv_data;
@@ -588,7 +580,6 @@ struct rc_data
     gchar           *fl;
     DonnaCommand    *command;
     gchar           *start;
-    gchar           *end;
     guint            i;
     GPtrArray       *arr;
 };
@@ -755,20 +746,11 @@ parse_arg (struct rc_data   *data,
     gchar *s;
     gchar c;
 
-    if (data->end)
-        /* unquoting has already been done (before a MIGHT_BLOCK error), just
-         * resume */
-        end = data->end;
-    else if (unquote_string (&data->start, &end, &err))
+    if (unquote_string (&data->start, &end, &err))
     {
         /* move to next relevant char */
         ++end;
         skip_blank (end);
-
-        /* store it. This is used in case we error out due to MIGHT_BLOCK, when
-         * we come back here we need to know how to handle the already unquoted
-         * argument */
-        data->end = end;
     }
     else if (err)
     {
@@ -794,19 +776,8 @@ parse_arg (struct rc_data   *data,
         if (!d.command)
             return DONNA_TASK_FAILED;
 
-        if (data->blocking != BLOCK_OK
-                && (d.command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
-                    && d.command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_GUI))
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK,
-                    "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
-                    data->command->name, data->i + 1);
-            return DONNA_TASK_FAILED;
-        }
-
         memset (&d, 0, sizeof (struct rc_data));
         d.app          = data->app;
-        d.blocking     = (data->blocking == BLOCK_OK) ? BLOCK_OK : BLOCK_NEVER;
         d.conv_flags   = data->conv_flags;
         d.conv_fn      = data->conv_fn;
         d.conv_data    = data->conv_data;
@@ -1247,14 +1218,6 @@ convert:
             goto inner_next;
         }
 
-        if (data->blocking != BLOCK_OK)
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK,
-                    "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
-                    data->command->name, data->i + 1);
-            goto error;
-        }
-
         if (data->command->arg_type[data->i] & DONNA_ARG_IS_ARRAY)
         {
             gchar *start = s;
@@ -1403,14 +1366,6 @@ convert:
         {
             GError *err = NULL;
 
-            if (data->blocking != BLOCK_OK)
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK,
-                        "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
-                        data->command->name, data->i + 1);
-                goto error;
-            }
-
             ptr = get_node (data->app, s, &err);
             if (!ptr)
             {
@@ -1439,8 +1394,6 @@ inner_next:
         g_free (s);
 
 next:
-    data->end = NULL;
-
     if (*end == ')')
         data->start = end;
     else
@@ -1573,41 +1526,14 @@ run_command (DonnaTask *task, struct rc_data *data)
         DonnaTaskState parsed;
 
         parsed = parse_arg (data, &err);
-        if (parsed == DONNA_TASK_FAILED)
+        if (parsed != DONNA_TASK_DONE)
         {
-            if (data->blocking == BLOCK_SWITCH
-                    && g_error_matches (err, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK))
-            {
-                struct rc_data *d;
-
-                /* need to put data on heap */
-                d = g_new (struct rc_data, 1);
-                memcpy (d, data, sizeof (struct rc_data));
-                d->is_heap = TRUE;
-                d->blocking = BLOCK_OK;
-
-                /* and continue parsing in a task/new thread */
-                task = donna_task_new ((task_fn) run_command, d,
-                        (GDestroyNotify) free_rc_data);
-                donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL);
-                donna_task_set_callback (task,
-                        (task_callback_fn) command_run_no_free_cb,
-                        data->app, NULL);
-                if (data->arr && !data->arr->pdata[0])
-                    data->arr->pdata[0] = task;
-                donna_app_run_task (data->app, task);
-                return DONNA_TASK_DONE;
-            }
-            set_error (task, data->app, err,
-                    "Cannot trigger node, parsing argument %d failed",
-                    data->i + 1);
+            if (parsed == DONNA_TASK_FAILED)
+                set_error (task, data->app, err,
+                        "Cannot trigger node, parsing argument %d failed",
+                        data->i + 1);
             free_rc_data (data);
-            return DONNA_TASK_FAILED;
-        }
-        else if (parsed == DONNA_TASK_CANCELLED)
-        {
-            free_rc_data (data);
-            return DONNA_TASK_CANCELLED;
+            return parsed;
         }
 
         if (*data->start == ')' && data->i + 1 < data->command->argc)
@@ -1680,11 +1606,11 @@ run_command (DonnaTask *task, struct rc_data *data)
                 cr_data, (GDestroyNotify) free_cmd_run_data);
     }
 
-    if (task || data->blocking == BLOCK_OK)
+    if (task)
         /* avoid starting another thread, since we're already in one */
         donna_task_set_can_block (g_object_ref_sink (cmd_task));
     donna_app_run_task (data->app, cmd_task);
-    if (task || data->blocking == BLOCK_OK)
+    if (task)
     {
         donna_task_wait_for_it (cmd_task);
         state = donna_task_get_state (cmd_task);
@@ -1752,7 +1678,6 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
 
     memset (&data, 0, sizeof (struct rc_data));
     data.app = cr->app;
-    data.blocking = BLOCK_OK;
 
     data.command = _donna_command_init_parse (cr->cmdline, &data.start, &err);
     if (!data.command)
@@ -1859,7 +1784,6 @@ _donna_command_parse_run (DonnaApp       *app,
 
     memset (&data, 0, sizeof (struct rc_data));
     data.app          = app;
-    data.blocking     = (blocking) ? BLOCK_OK : BLOCK_SWITCH;
     data.conv_flags   = conv_flags;
     data.conv_fn      = conv_fn;
     data.conv_data    = conv_data;
@@ -2692,7 +2616,6 @@ cmd_repeat (DonnaTask *task, GPtrArray *args)
 
         memset (&data, 0, sizeof (struct rc_data));
         data.app          = args->pdata[3];
-        data.blocking     = BLOCK_OK;
         data.fl           = g_strdup (args->pdata[2]);
 
         /* run_command() will take care of freeing data as/when needed */
