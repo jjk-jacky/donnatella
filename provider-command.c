@@ -20,6 +20,8 @@ enum
 struct _DonnaProviderCommandPrivate
 {
     DonnaApp *app;
+    GMutex mutex;
+    GHashTable *commands;
 };
 
 static void             provider_command_get_property   (GObject        *object,
@@ -82,6 +84,16 @@ donna_provider_command_class_init (DonnaProviderCommandClass *klass)
 }
 
 static void
+free_command (DonnaCommand *command)
+{
+    g_free (command->name);
+    g_free (command->arg_type);
+    if (command->destroy && command->data)
+        command->destroy (command->data);
+    g_slice_free (DonnaCommand, command);
+}
+
+static void
 donna_provider_command_init (DonnaProviderCommand *provider)
 {
     DonnaProviderCommandPrivate *priv;
@@ -89,6 +101,9 @@ donna_provider_command_init (DonnaProviderCommand *provider)
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_COMMAND,
             DonnaProviderCommandPrivate);
+    g_mutex_init (&priv->mutex);
+    priv->commands = g_hash_table_new_full (g_str_hash, g_str_equal,
+            NULL, (GDestroyNotify) free_command);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderCommand, donna_provider_command,
@@ -131,6 +146,8 @@ provider_command_finalize (GObject *object)
 
     priv = DONNA_PROVIDER_COMMAND (object)->priv;
     g_object_unref (priv->app);
+    g_hash_table_unref (priv->commands);
+    g_mutex_clear (&priv->mutex);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_command_parent_class)->finalize (object);
@@ -305,4 +322,57 @@ provider_command_trigger_node_task (DonnaProvider      *provider,
             g_free (fl));
 
     return task;
+}
+
+gboolean
+donna_provider_command_add_command (DonnaProviderCommand   *pc,
+                                    const gchar            *name,
+                                    guint                   argc,
+                                    DonnaArgType           *_arg_type,
+                                    DonnaArgType            return_type,
+                                    DonnaTaskVisibility     visibility,
+                                    command_fn              func,
+                                    gpointer                data,
+                                    GDestroyNotify          destroy,
+                                    GError                **error)
+{
+    DonnaProviderCommandPrivate *priv;
+    DonnaCommand *command;
+    DonnaArgType *arg_type;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_COMMAND (pc), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+    g_return_val_if_fail (func != NULL, FALSE);
+    priv = pc->priv;
+
+    g_mutex_lock (&priv->mutex);
+    if (G_UNLIKELY (g_hash_table_lookup (priv->commands, name)))
+    {
+        g_mutex_unlock (&priv->mutex);
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ALREADY_EXISTS,
+                "Cannot add command '%s', already exists", name);
+        return FALSE;
+    }
+
+    if (G_LIKELY (argc > 0))
+    {
+        arg_type = g_new (DonnaArgType, argc);
+        memcpy (arg_type, _arg_type, sizeof (DonnaArgType) * argc);
+    }
+    else
+        arg_type = NULL;
+
+    command = g_slice_new (DonnaCommand);
+    command->name           = g_strdup (name);
+    command->argc           = argc;
+    command->arg_type       = arg_type;
+    command->return_type    = return_type;
+    command->visibility     = visibility;
+    command->func           = func;
+    command->data           = data;
+    command->destroy        = destroy;
+
+    g_hash_table_insert (priv->commands, command->name, command);
+    g_mutex_unlock (&priv->mutex);
+    return TRUE;
 }

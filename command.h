@@ -3,15 +3,12 @@
 #define __DONNA_COMMAND_H__
 
 #include <gtk/gtk.h>
+#include "provider-command.h"
 #include "app.h"
 #include "node.h"
 #include "task.h"
 
 G_BEGIN_DECLS
-
-#define COMMAND_MAX_ARGS        8
-
-typedef DonnaTaskState (*cmd_fn) (DonnaTask *task, GPtrArray *args);
 
 typedef gboolean (*_conv_flag_fn) (const gchar  c,
                                    DonnaArgType type,
@@ -24,11 +21,14 @@ typedef struct
 {
     gchar               *name;
     guint                argc;
-    DonnaArgType         arg_type[COMMAND_MAX_ARGS];
+    DonnaArgType        *arg_type;
     DonnaArgType         return_type;
     DonnaTaskVisibility  visibility;
-    cmd_fn               cmd_fn;
+    command_fn           func;
+    gpointer             data;
+    GDestroyNotify       destroy;
 } DonnaCommand;
+
 
 struct _donna_command_run
 {

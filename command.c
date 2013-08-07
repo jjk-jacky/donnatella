@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "command.h"
-#include "provider-command.h"
 #include "treeview.h"
 #include "task-manager.h"
 #include "macros.h"
