@@ -527,96 +527,32 @@ static DonnaCommand commands[] = {
         .cmd_fn         = cmd_void
     },
 };
-static guint nb_commands = sizeof (commands) / sizeof (commands[0]);
 
-#define skip_blank(s)   for ( ; isblank (*s); ++s) ;
 
 static void
-free_command_args (DonnaCommand *command, GPtrArray *arr)
+_g_string_append_quoted (GString *str, gchar *s)
 {
-    guint i;
-
-    /* we use arr->len because the array might not be fuly filled, in case of
-     * error halfway through parsing/converting; We *also* use command->argc
-     * because the arr sent to the command contains an extra pointer, to
-     * DonnaApp in case the command needs it (e.g. to access config, etc).
-     * And we start at 1 because pdata[0] is NULL or the "parent task" */
-    for (i = 1; i < arr->len && i <= command->argc; ++i)
+    g_string_append_c (str, '"');
+    for ( ; *s != '\0'; ++s)
     {
-        if (!arr->pdata[i])
-            /* arg must have been optional & not specified */
-            continue;
-        else if (command->arg_type[i - 1] & DONNA_ARG_IS_ARRAY)
-            g_ptr_array_unref (arr->pdata[i]);
-        else if (command->arg_type[i - 1] & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
-            g_object_unref (arr->pdata[i]);
-        else if (command->arg_type[i - 1] & (DONNA_ARG_TYPE_STRING
-                    | DONNA_ARG_TYPE_ROW | DONNA_ARG_TYPE_PATH))
-            g_free (arr->pdata[i]);
-        else if (command->arg_type[i - 1] & DONNA_ARG_TYPE_ROW_ID)
-        {
-            DonnaTreeRowId *rowid;
+        if (*s == '"' || *s == '\\')
+            g_string_append_c (str, '\\');
 
-            rowid = arr->pdata[i];
-            if (rowid->type == DONNA_ARG_TYPE_NODE)
-                g_object_unref (rowid->ptr);
-            else
-                g_free (rowid->ptr);
-
-            g_free (rowid);
-        }
+        g_string_append_c (str, *s);
     }
-    g_ptr_array_unref (arr);
+    g_string_append_c (str, '"');
 }
 
-struct rc_data
-{
-    DonnaApp        *app;
-    gboolean         is_heap;
-    const gchar     *conv_flags;
-    _conv_flag_fn    conv_fn;
-    gpointer         conv_data;
-    GDestroyNotify   conv_destroy;
-    gchar           *fl;
-    DonnaCommand    *command;
-    gchar           *start;
-    guint            i;
-    GPtrArray       *arr;
-};
-
-static DonnaTaskState run_command (DonnaTask *task, struct rc_data *data);
-
-static void
-free_rc_data (struct rc_data *data)
-{
-    if (data->conv_data && data->conv_destroy)
-        data->conv_destroy (data->conv_data);
-    g_free (data->fl);
-    if (data->arr)
-        free_command_args (data->command, data->arr);
-    if (data->is_heap)
-        g_free (data);
-}
-
-static inline gboolean
-can_arg_get_direct_conv (const gchar *flags, gchar *arg)
-{
-    if (arg[0] != '%' || !strchr (flags, arg[1]))
-        return FALSE;
-    for (arg += 2; isblank (*arg); ++arg)
-        ;
-    if (*arg == '\0' || *arg == ',' || *arg == ')')
-        return TRUE;
-    return FALSE;
-}
-
-/* replaces the %n flags into a string (e.g. full location, or just one
- * argument), for "actions" (clicks/keys from treeview, menu, toolbar...) */
-static gchar *
-parse_location (const gchar *sce, struct rc_data *data)
+/* helper function to parse FL for actions (clicks/keys from treeview, menu...) */
+gchar *
+_donna_command_parse_fl (DonnaApp       *app,
+                         gchar          *fl,
+                         const gchar    *conv_flags,
+                         _conv_flag_fn   conv_fn,
+                         gpointer        conv_data)
 {
     GString *str = NULL;
-    gchar *s = (gchar *) sce;
+    gchar *s = fl;
 
     while ((s = strchr (s, '%')))
     {
@@ -624,27 +560,106 @@ parse_location (const gchar *sce, struct rc_data *data)
         gboolean match;
 
         if (!dereference)
-            match = s[1] != '\0' && strchr (data->conv_flags, s[1]) != NULL;
+            match = s[1] != '\0' && strchr (conv_flags, s[1]) != NULL;
         else
-            match = s[2] != '\0' && strchr (data->conv_flags, s[2]) != NULL;
+            match = s[2] != '\0' && strchr (conv_flags, s[2]) != NULL;
+
         if (match)
         {
+            DonnaArgType type;
+            gpointer ptr;
+            GDestroyNotify destroy = NULL;
+
             if (!str)
                 str = g_string_new (NULL);
-            g_string_append_len (str, sce, s - sce);
+            g_string_append_len (str, fl, s - fl);
             if (dereference)
                 ++s;
-            data->conv_fn (s[1], DONNA_ARG_TYPE_NOTHING, dereference, data->app,
-                    (gpointer *) &str, data->conv_data);
+
+            if (G_UNLIKELY (!conv_fn (s[1], &type, &ptr, &destroy, conv_data)))
+            {
+                fl = ++s;
+                ++s;
+                continue;
+            }
+
+            /* we don't need to test for all possible types, only those can make
+             * sense. That is, it could be a ROW, but not a ROW_ID (or PATH)
+             * since those only make sense the other way around (or as type of
+             * ROW_ID) */
+
+            if (type & DONNA_ARG_TYPE_TREEVIEW)
+                g_string_append (str, donna_tree_view_get_name ((DonnaTreeView *) ptr));
+            else if (type & DONNA_ARG_TYPE_ROW)
+            {
+                DonnaTreeRow *row = (DonnaTreeRow *) ptr;
+                g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
+            }
+            /* this will do nodes, array of nodes, array of strings */
+            else if (type & (DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY))
+            {
+                if (dereference)
+                {
+                    if (type & DONNA_ARG_IS_ARRAY)
+                    {
+                        GString *str_arr;
+                        GPtrArray *arr = (GPtrArray *) ptr;
+                        guint i;
+
+                        str_arr = g_string_new (NULL);
+                        if (type & DONNA_ARG_TYPE_NODE)
+                            for (i = 0; i < arr->len; ++i)
+                            {
+                                gchar *fl;
+                                fl = donna_node_get_full_location (
+                                        (DonnaNode *) arr->pdata[i]);
+                                _g_string_append_quoted (str_arr, fl);
+                                g_string_append_c (str_arr, ',');
+                                g_free (fl);
+                            }
+                        else
+                            for (i = 0; i < arr->len; ++i)
+                            {
+                                _g_string_append_quoted (str_arr,
+                                        (gchar *) arr->pdata[i]);
+                                g_string_append_c (str_arr, ',');
+                            }
+
+                        /* remove last comma */
+                        g_string_truncate (str_arr, str_arr->len - 1);
+                        /* str_arr is a list of quoted strings/FL, but we also
+                         * need to quote the list itself */
+                        _g_string_append_quoted (str, str_arr->str);
+                        g_string_free (str_arr, TRUE);
+                    }
+                    else
+                    {
+                        gchar *fl;
+                        fl = donna_node_get_full_location ((DonnaNode *) ptr);
+                        _g_string_append_quoted (str, fl);
+                        g_free (fl);
+                    }
+                }
+                else
+                    g_string_append (str, donna_app_new_int_ref (app, type, ptr));
+            }
+            else if (type & DONNA_ARG_TYPE_STRING)
+                _g_string_append_quoted (str, (gchar *) ptr);
+            else if (type & DONNA_ARG_TYPE_INT)
+                g_string_append_printf (str, "%d", * (gint *) ptr);
+
+            if (destroy)
+                destroy (ptr);
+
             s += 2;
-            sce = (const gchar *) s;
+            fl = s;
         }
         else if (s[1] != '\0')
         {
             if (!str)
                 str = g_string_new (NULL);
-            g_string_append_len (str, sce, s - sce);
-            sce = (const gchar *) ++s;
+            g_string_append_len (str, fl, s - fl);
+            fl = ++s;
             ++s;
         }
         else
@@ -652,1198 +667,91 @@ parse_location (const gchar *sce, struct rc_data *data)
     }
 
     if (!str)
-        return NULL;
+        return fl;
 
-    g_string_append (str, sce);
+    g_string_append (str, fl);
+    g_free (fl);
     return g_string_free (str, FALSE);
 }
 
-/* If *start is a quoted string, unquotes it; else return FALSE. Unquoting means
- * moving *start after the opening quote, taking care of unescaping any escaped
- * character and puttin a NUL at the end, which will eiher be the ending quote,
- * or before in case some unescaping was some. *end will always point to the
- * position of the ending quote (which may or may not have been turned into a
- * NUL).
- * Returns TRUE was on sucessfull unquoting, FALSE on error (no ending quote) or
- * if the string wasn't quoted. Either check first, or use error to tell. */
 static gboolean
-unquote_string (gchar **start, gchar **_end, GError **error)
+get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
 {
-    gchar *end;
-    guint i = 0;
+    GError *err = NULL;
+    DonnaNode *node;
+    DonnaTask *t;
 
-    if (**start != '"')
-        return FALSE;
-
-    for (end = ++*start; ; ++end)
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        if (end[i] == '\\')
-        {
-            *end = end[++i];
-            continue;
-        }
-        *end = end[i];
-        if (*end == '"')
-            break;
-        else if (*end == '\0')
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                    "Missing ending quote");
-            return FALSE;
-        }
+        donna_app_show_error (app, donna_task_get_error (task),
+                "Failed to trigger action, couldn't get node");
+        return FALSE;
     }
-    /* turn the ending quote in to NUL, or put it somewhat before if we
-     * did some unescaping */
-    *end = '\0';
-    /* move end to the original ending quote */
-    end += i;
 
-    if (_end)
-        *_end = end;
+    node = g_value_get_object (donna_task_get_return_value (task));
+    t = donna_node_trigger_task (node, &err);
+    if (G_UNLIKELY (!t))
+    {
+        donna_app_show_error (app, err,
+                "Failed to trigger action, couldn't get task");
+        g_clear_error (&err);
+        return FALSE;
+    }
+
+    /* see _donna_command_trigger_fl() for why this is blocking */
+    if (timeout_called)
+        donna_task_set_can_block (g_object_ref_sink (t));
+
+    donna_app_run_task (app, t);
+
+    if (timeout_called)
+    {
+        gboolean ret;
+
+        ret = donna_task_get_state (t) == DONNA_TASK_DONE;
+        g_object_unref (t);
+        return ret;
+    }
 
     return TRUE;
 }
 
-static DonnaNode *
-get_node (DonnaApp *app, const gchar *fl, GError **error)
+/* helper function to trigger FL for actions (clicks/keys from treeview, menu...) */
+gboolean
+_donna_command_trigger_fl (DonnaApp     *app,
+                           const gchar  *fl,
+                           gboolean      blocking)
 {
     DonnaTask *task;
-    DonnaNode *node = NULL;
 
     task = donna_app_get_node_task (app, fl);
-    if (!task)
+    if (G_UNLIKELY (!task))
     {
-        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                "Can't get node for '%s'", fl);
-        return NULL;
+        donna_app_show_error (app, NULL,
+                "Failed to trigger action, couldn't get task get_node()");
+        return FALSE;
     }
-    donna_task_set_can_block (g_object_ref_sink (task));
+    if (blocking)
+        donna_task_set_can_block (g_object_ref_sink (task));
+    else
+        donna_task_set_callback (task, (task_callback_fn) get_node_cb, app, NULL);
+
     donna_app_run_task (app, task);
-    if (donna_task_get_state (task) == DONNA_TASK_DONE)
-        node = g_value_dup_object (donna_task_get_return_value (task));
-    else
+
+    if (blocking)
     {
-        if (error)
-            *error = g_error_copy (donna_task_get_error (task));
-    }
-    g_object_unref (task);
-    return node;
-}
+        gboolean ret;
 
-/* parse the next argument for a command. data must have been properly set &
- * initialized via _donna_command_init_parse() and therefore data->start points
- * to the beginning of the argument data->i (+1).
- * Will handle figuring out where the arg ends (can be quoted, can also be
- * another command to run & get its return value as arg, via @syntax),
- * processing/converting any %n flags, and moving data->start & whatnot where
- * needs be */
-static DonnaTaskState
-parse_arg (struct rc_data   *data,
-           GError          **error)
-{
-    GError *err = NULL;
-    gchar *end;
-    gchar *s;
-    gchar c;
-
-    if (unquote_string (&data->start, &end, &err))
-    {
-        /* move to next relevant char */
-        ++end;
-        skip_blank (end);
-    }
-    else if (err)
-    {
-        g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
-                data->command->name, data->i + 1);
-        return DONNA_TASK_FAILED;
-    }
-    else if (*data->start == '@')
-    {
-        struct rc_data d;
-        gboolean dereference;
-        DonnaTask *task;
-        DonnaTaskState state;
-        const GValue *v;
-        gchar *start;
-
-        dereference = data->start[1] == '*';
-        start = data->start + ((dereference) ? 2 : 1);
-
-        /* do the init_parse to known which command this is, so we can check
-         * visibility/ensure we can run it */
-        d.command = _donna_command_init_parse (start, &s, error);
-        if (!d.command)
-            return DONNA_TASK_FAILED;
-
-        memset (&d, 0, sizeof (struct rc_data));
-        d.app          = data->app;
-        d.conv_flags   = data->conv_flags;
-        d.conv_fn      = data->conv_fn;
-        d.conv_data    = data->conv_data;
-        /* we don't set conv_destroy because we (obviously) don't want it to
-         * free conv_data */
-        d.fl           = g_strdup (start);
-
-        /* create a "fake" task so 1) run_command will run the command
-         * blockingly, and 2) it will be used for error/return value */
-        task = g_object_ref_sink (donna_task_new ((task_fn) gtk_true, NULL, NULL));
-        state = run_command (task, &d);
-        if (state == DONNA_TASK_CANCELLED)
-        {
-            g_object_unref (task);
-            return DONNA_TASK_CANCELLED;
-        }
-        else if (state != DONNA_TASK_DONE)
-        {
-            const GError *err;
-
-            err = donna_task_get_error (task);
-            if (err)
-            {
-                *error = g_error_copy (err);
-                g_prefix_error (error, "Command '%s', argument %d: Command %s%s%s failed: ",
-                        data->command->name, data->i + 1,
-                        (d.command) ? "'" : "",
-                        (d.command) ? d.command->name : "",
-                        (d.command) ? "' " : "");
-            }
-            else
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                        "Command '%s', argument %d: Command %s%s%sfailed (w/out error message)",
-                        data->command->name, data->i + 1,
-                        (d.command) ? "'" : "",
-                        (d.command) ? d.command->name : "",
-                        (d.command) ? "' " : "");
-
-            g_object_unref (task);
-            return DONNA_TASK_FAILED;
-        }
-
-        v = donna_task_get_return_value (task);
-        if (!v)
-        {
-            if (data->command->arg_type[data->i] & DONNA_ARG_IS_OPTIONAL)
-            {
-                g_ptr_array_add (data->arr, NULL);
-                end = start + (d.start - d.fl + 1);
-                g_object_unref (task);
-                goto next;
-            }
-            else
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Argument required, and command '%s' didn't return anything",
-                        data->command->name, data->i + 1, d.command->name);
-                g_object_unref (task);
-                return DONNA_TASK_FAILED;
-            }
-        }
-
-        s = NULL;
-        if (d.command->return_type & DONNA_ARG_IS_ARRAY)
-        {
-            /* is it a matching array? */
-            if ((data->command->arg_type[data->i] & d.command->return_type)
-                    == d.command->return_type)
-                g_ptr_array_add (data->arr, g_value_dup_boxed (v));
-            /* since we're talking about a command's return_type, we expect
-             * thigs to make sense, i.e. we don't check for unsupported array
-             * types */
-            else
-            {
-                GString *str = g_string_new (NULL);
-                GPtrArray *arr = g_value_get_boxed (v);
-                guint i;
-
-                /* turn to string */
-
-                for (i = 0; i < arr->len; ++i)
-                {
-                    gchar *ss;
-
-                    /* only 2 types of arrays are supported: NODE & STRING */
-                    if (d.command->return_type & DONNA_ARG_TYPE_NODE)
-                        s = donna_node_get_full_location (arr->pdata[i]);
-                    else
-                        s = arr->pdata[i];
-
-                    g_string_append_c (str, '"');
-                    for (ss = s; *ss != '\0'; ++ss)
-                    {
-                        if (*ss == '"' || *ss == '\\')
-                            g_string_append_c (str, '\\');
-                        g_string_append_c (str, *ss);
-                    }
-                    g_string_append_c (str, '"');
-
-                    if (d.command->return_type & DONNA_ARG_TYPE_NODE)
-                        g_free (s);
-                    g_string_append_c (str, ',');
-                }
-                /* remove last ',' */
-                g_string_truncate (str, str->len - 1);
-                s = g_string_free (str, FALSE);
-            }
-        }
-        else
-        {
-            switch (d.command->return_type)
-            {
-                case DONNA_ARG_TYPE_INT:
-                    if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_INT)
-                        g_ptr_array_add (data->arr,
-                                GINT_TO_POINTER (g_value_get_int (v)));
-                    else
-                        s = g_strdup_printf ("%d", g_value_get_int (v));
-                    break;
-
-                case DONNA_ARG_TYPE_STRING:
-                    if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_STRING)
-                    {
-                        if (data->command->arg_type[data->i] & DONNA_ARG_IS_ARRAY)
-                        {
-                            GPtrArray *arr;
-
-                            arr = g_ptr_array_new_full (1, g_free);
-                            g_ptr_array_add (arr, g_value_dup_string (v));
-                            g_ptr_array_add (data->arr, arr);
-                        }
-                        else
-                            g_ptr_array_add (data->arr, g_value_dup_string (v));
-                    }
-                    else
-                        s = g_value_dup_string (v);
-                    break;
-
-                case DONNA_ARG_TYPE_TREEVIEW:
-                    if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_TREEVIEW)
-                        g_ptr_array_add (data->arr, g_value_dup_object (v));
-                    else
-                        s = g_strdup (donna_tree_view_get_name (g_value_get_object (v)));
-                    break;
-
-                case DONNA_ARG_TYPE_NODE:
-                    if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_NODE)
-                    {
-                        if (data->command->arg_type[data->i] & DONNA_ARG_IS_ARRAY)
-                        {
-                            GPtrArray *arr;
-
-                            arr = g_ptr_array_new_full (1, g_object_unref);
-                            g_ptr_array_add (arr, g_value_dup_object (v));
-                            g_ptr_array_add (data->arr, arr);
-                        }
-                        else
-                            g_ptr_array_add (data->arr, g_value_dup_object (v));
-                    }
-                    else
-                        s = donna_node_get_full_location (g_value_get_object (v));
-                    break;
-
-                case DONNA_ARG_TYPE_NOTHING:
-                case DONNA_ARG_TYPE_ROW:
-                case DONNA_ARG_TYPE_ROW_ID:
-                case DONNA_ARG_TYPE_PATH:
-                    g_warning ("Command '%s', argument %d: "
-                            "Command '%s' had an unsupported type (%d) of return value",
-                            data->command->name,
-                            data->i + 1,
-                            d.command->name,
-                            d.command->return_type);
-                    break;
-            }
-        }
-
-        end = start + (d.start - d.fl + 1);
-        c = start[end - start];
+        /* we're abusing timeout_called here, since we don't use a timeout it
+         * should always be FALSE. If TRUE, that'll mean be blocking */
+        ret = get_node_cb (task, TRUE, app);
         g_object_unref (task);
-        if (!s)
-            goto next;
-        else
-            goto convert;
-    }
-    else
-        for (end = data->start; *end != ',' && *end != ')' && *end != '\0'; ++end)
-            ;
-
-    if (*end == '\0')
-    {
-        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                "Command '%s', argument %d: Unexpected end-of-string",
-                data->command->name, data->i + 1);
-        return DONNA_TASK_FAILED;
+        return ret;
     }
 
-    if (*end != ')')
-    {
-        if (data->i + 1 == data->command->argc)
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                    "Command '%s', argument %d: Closing parenthesis missing: %s",
-                    data->command->name, data->i + 1, end);
-            return DONNA_TASK_FAILED;
-        }
-        else if (*end != ',')
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                    "Command '%s', argument %d: Unexpected character (expected ',' or ')'): %s",
-                    data->command->name, data->i + 1, end);
-            return DONNA_TASK_FAILED;
-        }
-    }
-
-    if (end == data->start)
-    {
-        if (data->command->arg_type[data->i] & DONNA_ARG_IS_OPTIONAL)
-        {
-            g_ptr_array_add (data->arr, NULL);
-            goto next;
-        }
-        else
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MISSING_ARG,
-                    "Command '%s', argument %d required",
-                    data->command->name, data->i + 1);
-            return DONNA_TASK_FAILED;
-        }
-    }
-
-    c = data->start[end - data->start];
-    data->start[end - data->start] = '\0';
-    if (data->conv_fn && can_arg_get_direct_conv (data->conv_flags, data->start))
-    {
-        gpointer ptr;
-
-        if (data->conv_fn (data->start[1], data->command->arg_type[data->i],
-                    FALSE, NULL, &ptr, data->conv_data))
-        {
-            g_ptr_array_add (data->arr, ptr);
-            data->start[end - data->start] = c;
-            goto next;
-        }
-    }
-
-    s = parse_location (data->start, data);
-    if (!s)
-        s = data->start;
-
-convert:
-    if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_INT)
-        g_ptr_array_add (data->arr, GINT_TO_POINTER (g_ascii_strtoll (s, NULL, 10)));
-    else if (data->command->arg_type[data->i]
-                & (DONNA_ARG_TYPE_STRING | DONNA_ARG_TYPE_PATH))
-    {
-        if ((data->command->arg_type[data->i]
-                    & (DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY))
-                == (DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY))
-        {
-            gpointer ptr;
-
-            if (*s == '<')
-            {
-                gsize len = strlen (s) - 1;
-                if (s[len] != '>')
-                {
-                    g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                            "Command '%s', argument %d: Invalid internal reference: '%s'",
-                            data->command->name, data->i + 1, s);
-                    goto error;
-                }
-                ptr = donna_app_get_int_ref (data->app, data->start,
-                        DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY);
-                if (!ptr)
-                {
-                    g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                            "Command '%s', argument %d: Invalid internal reference '%s'",
-                            data->command->name, data->i + 1, data->start);
-                    goto error;
-                }
-            }
-            else
-            {
-                GError *err = NULL;
-                GPtrArray *arr;
-                gchar *start;
-                gchar *end;
-
-                start = s;
-                arr = g_ptr_array_new_with_free_func (g_free);
-                for (;;)
-                {
-                    if (unquote_string (&start, &end, &err))
-                        g_ptr_array_add (arr, g_strdup (start));
-                    else if (err)
-                    {
-                        g_propagate_prefixed_error (error, err,
-                                "Command '%s', argument %d: ",
-                                data->command->name, data->i + 1);
-                        g_ptr_array_unref (arr);
-                        goto error;
-                    }
-                    else
-                    {
-                        gchar *e;
-
-                        /* not quoted */
-
-                        skip_blank (start);
-                        end = strchr (start, ',');
-                        if (end)
-                        {
-                            *end = '\0';
-                            e = end - 1;
-                        }
-                        else
-                            e = start + strlen (start) - 1;
-                        /* go back, skip_blank() in reverse. Because we aim to trim
-                         * this one (hence the skip_blank(start) above as well) */
-                        for ( ; isblank (*e); --e) ;
-                        *++e = '\0';
-
-                        g_ptr_array_add (arr, g_strdup (start));
-                        if (!end)
-                            break;
-                    }
-
-                    start = end + 1;
-                    skip_blank (start);
-                    if (*start == '\0')
-                        break;
-                }
-                ptr = arr;
-            }
-            g_ptr_array_add (data->arr, ptr);
-        }
-        else
-        {
-            /* PATH is treated as a string, because it will be. The reason we
-             * keep it as a string is to allow donna-specific things that we
-             * otherwise couldn't convert (w/out the tree), such as ":last" or
-             * ":prev" */
-            if (s == data->start)
-                g_ptr_array_add (data->arr, g_strdup (s));
-            else
-            {
-                g_ptr_array_add (data->arr, s);
-                s = NULL;
-            }
-        }
-    }
-    else if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_TREEVIEW)
-    {
-        gpointer ptr;
-
-        if (streq (s, ":active"))
-            g_object_get (data->app, "active-list", &ptr, NULL);
-        else if (*s == '<')
-        {
-            gsize len = strlen (s) - 1;
-            if (s[len] != '>')
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Invalid treeview name/reference: '%s'",
-                        data->command->name, data->i + 1, s);
-                goto error;
-            }
-            ptr = donna_app_get_int_ref (data->app, data->start, DONNA_ARG_TYPE_TREEVIEW);
-            if (!ptr)
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                        "Command '%s', argument %d: Invalid internal reference '%s'",
-                        data->command->name, data->i + 1, data->start);
-                goto error;
-            }
-        }
-        else
-        {
-            ptr = donna_app_get_treeview (data->app, s);
-            if (!ptr)
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
-                        "Command '%s', argument %d: Treeview '%s' not found",
-                        data->command->name, data->i + 1, s);
-                goto error;
-            }
-        }
-        g_ptr_array_add (data->arr, ptr);
-    }
-    else if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_NODE)
-    {
-        GError *err = NULL;
-        GPtrArray *arr = NULL;
-        gpointer ptr;
-
-        if (*s == '<')
-        {
-            gsize len = strlen (s) - 1;
-            if (s[len] != '>')
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Invalid node full location/reference: '%s'",
-                        data->command->name, data->i + 1, s);
-                goto error;
-            }
-
-            /* if an array, try an intref for an array of nodes first */
-            if (data->command->arg_type[data->i] & DONNA_ARG_IS_ARRAY)
-            {
-                ptr = donna_app_get_int_ref (data->app, s,
-                        DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
-                if (ptr)
-                {
-                    g_ptr_array_add (data->arr, ptr);
-                    goto inner_next;
-                }
-            }
-
-            ptr = donna_app_get_int_ref (data->app, s, DONNA_ARG_TYPE_NODE);
-            if (!ptr)
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                        "Command '%s', argument %d: Invalid internal reference '%s'",
-                        data->command->name, data->i + 1, s);
-                goto error;
-            }
-            else if (data->command->arg_type[data->i] & DONNA_ARG_IS_ARRAY)
-            {
-                /* we want an array of nodes, not a node */
-
-                arr = g_ptr_array_new_full (1, g_object_unref);
-                g_ptr_array_add (arr, ptr);
-                ptr = arr;
-            }
-
-            g_ptr_array_add (data->arr, ptr);
-            goto inner_next;
-        }
-
-        if (data->command->arg_type[data->i] & DONNA_ARG_IS_ARRAY)
-        {
-            gchar *start = s;
-
-            arr = g_ptr_array_new_with_free_func (g_object_unref);
-            for (;;)
-            {
-                gchar *end;
-
-                if (!unquote_string (&start, &end, &err))
-                {
-                    gchar *e;
-
-                    if (err)
-                    {
-                        g_propagate_prefixed_error (error, err,
-                                "Command '%s', argument %d: ",
-                                data->command->name, data->i + 1);
-                        g_ptr_array_unref (arr);
-                        goto error;
-                    }
-
-                    /* not quoted */
-
-                    skip_blank (start);
-                    end = strchr (start, ',');
-                    if (end)
-                    {
-                        *end = '\0';
-                        e = end - 1;
-                    }
-                    else
-                        e = start + strlen (start) - 1;
-                    /* go back, skip_blank() in reverse. Because we aim to trim
-                     * this one (hence the skip_blank(start) above as well) */
-                    for ( ; isblank (*e); --e) ;
-                    *++e = '\0';
-                }
-
-                ptr = get_node (data->app, start, &err);
-                if (!ptr)
-                {
-                    g_propagate_prefixed_error (error, err,
-                            "Command '%s', argument %d: ",
-                            data->command->name, data->i + 1);
-                    g_ptr_array_unref (arr);
-                    goto error;
-                }
-                g_ptr_array_add (arr, ptr);
-
-                /* no ',' found in unquoted string */
-                if (!end)
-                    break;
-
-                start = end + 1;
-                skip_blank (start);
-                if (*start == '\0')
-                    break;
-            }
-            g_ptr_array_add (data->arr, arr);
-        }
-        else
-        {
-            /* we shouldn't use unquote_string() here because this arg has
-             * already been unquoted. "Double-quoting" can only happen in case
-             * of arrays, where the list is quoted, and so are each element */
-
-            ptr = get_node (data->app, s, &err);
-            if (!ptr)
-            {
-                g_propagate_prefixed_error (error, err,
-                        "Command '%s', argument %d: ",
-                        data->command->name, data->i + 1);
-                goto error;
-            }
-            g_ptr_array_add (data->arr, ptr);
-        }
-    }
-    else if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_ROW)
-    {
-        DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
-        if (sscanf (s, "[%p;%p]", &row->node, &row->iter) != 2)
-        {
-            g_free (row);
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                    "Command '%s', argument %d: Invalid argument syntax for TREE_ROW",
-                    data->command->name, data->i + 1);
-            goto error;
-        }
-        g_ptr_array_add (data->arr, row);
-    }
-    else if (data->command->arg_type[data->i] & DONNA_ARG_TYPE_ROW_ID)
-    {
-        DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
-        gpointer ptr;
-
-        if (*s == '[')
-        {
-            DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
-            if (sscanf (s, "[%p;%p]", &row->node, &row->iter) != 2)
-            {
-                g_free (row);
-                g_free (rid);
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                        "Command '%s', argument %d: Invalid argument syntax TREE_ROW for TREE_ROW_ID",
-                        data->command->name, data->i + 1);
-                goto error;
-            }
-            rid->type = DONNA_ARG_TYPE_ROW;
-            rid->ptr  = row;
-        }
-        else if (*s == ':' || *s == '%' || (*s >= '0' && *s <= '9'))
-        {
-            rid->type = DONNA_ARG_TYPE_PATH;
-            if (s == data->start)
-                rid->ptr = g_strdup (s);
-            else
-            {
-                rid->ptr = s;
-                s = NULL;
-            }
-        }
-        else if (*s == '<')
-        {
-            gsize len = strlen (s) - 1;
-
-            if (s[len] != '>')
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Invalid node reference: '%s'",
-                        data->command->name, data->i + 1, s);
-                goto error;
-            }
-            ptr = donna_app_get_int_ref (data->app, s, DONNA_ARG_TYPE_NODE);
-            if (!ptr)
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                        "Command '%s', argument %d: Invalid internal reference '%s'",
-                        data->command->name, data->i + 1, s);
-                goto error;
-            }
-            rid->type = DONNA_ARG_TYPE_NODE;
-            rid->ptr  = ptr;
-        }
-        else
-        {
-            GError *err = NULL;
-
-            ptr = get_node (data->app, s, &err);
-            if (!ptr)
-            {
-                g_free (rid);
-                g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
-                        data->command->name, data->i + 1);
-                goto error;
-            }
-            rid->ptr = ptr;
-            rid->type = DONNA_ARG_TYPE_NODE;
-        }
-        g_ptr_array_add (data->arr, rid);
-    }
-    else if (G_UNLIKELY (data->command->arg_type[data->i] == DONNA_ARG_TYPE_NOTHING))
-    {
-        /* NOTHING cannot be used on args */
-        g_warning ("convert_arg() called for DONNA_ARG_TYPE_NOTHING");
-        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                "Command '%s', argument %d: Invalid argument type",
-                data->command->name, data->i + 1);
-        goto error;
-    }
-inner_next:
-    data->start[end - data->start] = c;
-    if (s != data->start && s)
-        g_free (s);
-
-next:
-    if (*end == ')')
-        data->start = end;
-    else
-    {
-        data->start = end + 1;
-        skip_blank (data->start);
-    }
-    return DONNA_TASK_DONE;
-
-error:
-    data->start[end - data->start] = c;
-    if (s != data->start)
-        g_free (s);
-    return DONNA_TASK_FAILED;
-}
-
-/* for parsing/running commands from treeview, menu or toolbar */
-
-struct cmd_run_data
-{
-    gboolean is_heap;
-    /* to show error message on FAILED */
-    DonnaApp *app;
-    /*  needed to free args below */
-    DonnaCommand *command;
-    /* is set, must be free-d */
-    GPtrArray *args;
-};
-
-static void
-free_cmd_run_data (struct cmd_run_data *data)
-{
-    if (data->args)
-        free_command_args (data->command, data->args);
-    if (data->is_heap)
-        g_slice_free (struct cmd_run_data, data);
-}
-
-static void
-command_run_no_free_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
-{
-    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        donna_app_show_error (app, donna_task_get_error (task),
-                "Action triggered failed");
-}
-
-static void
-command_run_cb (DonnaTask *task, gboolean timeout_called, struct cmd_run_data *data)
-{
-    command_run_no_free_cb (task, timeout_called, data->app);
-    free_cmd_run_data (data);
-}
-
-struct err
-{
-    DonnaApp    *app;
-    GError      *err;
-    gchar       *msg;
-};
-
-static gboolean
-real_show_error (struct err *e)
-{
-    donna_app_show_error (e->app, e->err, e->msg);
-    g_clear_error (&e->err);
-    g_free (e->msg);
-    g_free (e);
-    return FALSE;
-}
-
-/* because we might be in a thread */
-static inline void
-show_error (DonnaApp *app, GError *err, const gchar *msg, ...)
-{
-    struct err *e;
-    va_list va_arg;
-
-    e = g_new (struct err, 1);
-    e->app = app;
-    e->err = err;
-    va_start (va_arg, msg);
-    e->msg = g_strdup_vprintf (msg, va_arg);
-    va_end (va_arg);
-    g_main_context_invoke (NULL, (GSourceFunc) real_show_error, e);
-}
-
-#define set_error(task, app, err, ...)    do {  \
-    if (task)                                   \
-    {                                           \
-        if (err)                                \
-            donna_task_take_error (task, err);  \
-        else                                    \
-            donna_task_set_error (task,         \
-                    DONNA_COMMAND_ERROR,              \
-                    DONNA_COMMAND_ERROR_OTHER,        \
-                    __VA_ARGS__);               \
-    }                                           \
-    else                                        \
-        show_error (app, err, __VA_ARGS__);     \
-} while (0)
-
-static DonnaTaskState
-run_command (DonnaTask *task, struct rc_data *data)
-{
-    GError *err = NULL;
-    DonnaTask *cmd_task;
-    DonnaTaskState state;
-    struct cmd_run_data cmd_run_data = { 0, };
-    struct cmd_run_data *cr_data;
-
-    if (!data->command)
-    {
-        data->command = _donna_command_init_parse (
-                (streqn (data->fl, "command:", 8)) ? data->fl + 8 : data->fl,
-                &data->start, &err);
-        if (!data->command)
-        {
-            set_error (task, data->app, err,
-                    "Cannot trigger node, parsing command failed");
-            free_rc_data (data);
-            return DONNA_TASK_FAILED;
-        }
-
-        data->arr = g_ptr_array_sized_new (data->command->argc + 3);
-        g_ptr_array_add (data->arr, task);
-    }
-
-    for ( ; data->i < data->command->argc; ++data->i)
-    {
-        DonnaTaskState parsed;
-
-        parsed = parse_arg (data, &err);
-        if (parsed != DONNA_TASK_DONE)
-        {
-            if (parsed == DONNA_TASK_FAILED)
-                set_error (task, data->app, err,
-                        "Cannot trigger node, parsing argument %d failed",
-                        data->i + 1);
-            free_rc_data (data);
-            return parsed;
-        }
-
-        if (*data->start == ')' && data->i + 1 < data->command->argc)
-        {
-            guint j;
-
-            /* this was the last argument specified, but command has more */
-
-            for (j = data->i + 1; j < data->command->argc; ++j)
-                if (!(data->command->arg_type[j] & DONNA_ARG_IS_OPTIONAL))
-                    break;
-
-            if (j >= data->command->argc)
-            {
-                /* allow missing arg(s) if they're optional */
-                for (data->i = data->i + 1;
-                        data->i < data->command->argc;
-                        ++data->i)
-                    g_ptr_array_add (data->arr, NULL);
-                g_clear_error (&err);
-            }
-            else
-            {
-                set_error (task, data->app, err,
-                        "Cannot trigger node: Command '%s', argument %d required",
-                        data->command->name, j + 1);
-                free_rc_data (data);
-                return DONNA_TASK_FAILED;
-            }
-        }
-    }
-
-    if (*data->start != ')')
-    {
-        set_error (task, data->app, err,
-                "Cannot trigger node: Command '%s': Too many arguments: %s",
-                data->command->name, data->start);
-        free_rc_data (data);
-        return DONNA_TASK_FAILED;
-    }
-
-    /* add DonnaApp* as extra arg for command */
-    g_ptr_array_add (data->arr, data->app);
-
-    cmd_task = donna_task_new ((task_fn) data->command->cmd_fn, data->arr, NULL);
-    DONNA_DEBUG (TASK,
-            donna_task_take_desc (cmd_task, g_strdup_printf (
-                    "run command: %s", data->fl)));
-    donna_task_set_visibility (cmd_task, data->command->visibility);
-
-    if (!task)
-    {
-        /* !task == we're in thread UI, this is the trigger of an action. If the
-         * command has a visibility GUI or FAST then we know it'll run
-         * blockingly, and we don't need to alloc on heap. */
-        if (data->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI
-                || data->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
-            cr_data = &cmd_run_data;
-        else
-        {
-            cr_data = g_slice_new0 (struct cmd_run_data);
-            cr_data->is_heap = TRUE;
-            cr_data->command = data->command;
-            cr_data->args = data->arr;
-            data->arr = NULL;
-        }
-        cr_data->app = data->app;
-
-        donna_task_set_callback (cmd_task, (task_callback_fn) command_run_cb,
-                cr_data, (GDestroyNotify) free_cmd_run_data);
-    }
-
-    if (task)
-        /* avoid starting another thread, since we're already in one */
-        donna_task_set_can_block (g_object_ref_sink (cmd_task));
-    donna_app_run_task (data->app, cmd_task);
-    if (task)
-    {
-        donna_task_wait_for_it (cmd_task);
-        state = donna_task_get_state (cmd_task);
-        g_object_unref (cmd_task);
-    }
-    else
-        state = DONNA_TASK_DONE;
-    free_rc_data (data);
-    return state;
-}
-
-/* shared private API */
-
-DonnaCommand *
-_donna_command_init_parse (gchar     *cmdline,
-                           gchar    **first_arg,
-                           GError   **error)
-{
-    gchar  c;
-    gchar *s;
-    guint  i;
-
-    for (s = cmdline; isalnum (*s) || *s == '_'; ++s)
-        ;
-    c  = *s;
-    *s = '\0';
-    for (i = 0; i < nb_commands; ++i)
-        if (streq (commands[i].name, cmdline))
-            break;
-
-    if (i >= nb_commands)
-    {
-        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
-                "Command '%s' does not exists", cmdline);
-        *s = c;
-        return NULL;
-    }
-    *s = c;
-
-    skip_blank (s);
-    if (*s != '(')
-    {
-        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                "Command '%s': arguments not found, missing '('",
-                commands[i].name);
-        return NULL;
-    }
-
-    ++s;
-    skip_blank (s);
-    if (first_arg)
-        *first_arg = s;
-
-    return &commands[i];
-}
-
-/* used from provider-command */
-DonnaTaskState
-_donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
-{
-    GError *err = NULL;
-    struct rc_data data;
-    DonnaTask *cmd_task;
-    DonnaTaskState ret;
-
-    memset (&data, 0, sizeof (struct rc_data));
-    data.app = cr->app;
-
-    data.command = _donna_command_init_parse (cr->cmdline, &data.start, &err);
-    if (!data.command)
-    {
-        donna_task_take_error (task, err);
-        return DONNA_TASK_FAILED;
-    }
-
-    data.arr = g_ptr_array_sized_new (data.command->argc + 2);
-    g_ptr_array_add (data.arr, task);
-    for (data.i = 0; data.i < data.command->argc; ++data.i)
-    {
-        DonnaTaskState parsed;
-
-        parsed = parse_arg (&data, &err);
-        if (parsed != DONNA_TASK_DONE)
-        {
-            if (parsed == DONNA_TASK_FAILED)
-                donna_task_take_error (task, err);
-            free_command_args (data.command, data.arr);
-            return parsed;
-        }
-
-        if (*data.start == ')' && data.i + 1 < data.command->argc)
-        {
-            guint j;
-
-            /* this was the last argument specified, but command has more */
-
-            for (j = data.i + 1; j < data.command->argc; ++j)
-                if (!(data.command->arg_type[j] & DONNA_ARG_IS_OPTIONAL))
-                    break;
-
-            if (j >= data.command->argc)
-            {
-                /* allow missing arg(s) if they're optional */
-                for (data.i = data.i + 1; data.i < data.command->argc; ++data.i)
-                    g_ptr_array_add (data.arr, NULL);
-                g_clear_error (&err);
-            }
-            else
-            {
-                donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MISSING_ARG,
-                        "Command '%s', argument %d required",
-                        data.command->name, j + 1);
-                free_command_args (data.command, data.arr);
-                return DONNA_TASK_FAILED;
-            }
-        }
-    }
-
-    if (*data.start != ')')
-    {
-        donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                "Command '%s': Too many arguments: %s",
-                data.command->name, data.start);
-        free_command_args (data.command, data.arr);
-        return DONNA_TASK_FAILED;
-    }
-
-    /* add DonnaApp* as extra arg for command */
-    g_ptr_array_add (data.arr, cr->app);
-
-    /* run the command */
-    cmd_task = donna_task_new ((task_fn) data.command->cmd_fn, data.arr, NULL);
-    DONNA_DEBUG (TASK,
-            donna_task_take_desc (cmd_task, g_strdup_printf (
-                    "run command: %s", cr->cmdline)));
-    donna_task_set_visibility (cmd_task, data.command->visibility);
-    donna_task_set_can_block (g_object_ref_sink (cmd_task));
-    donna_app_run_task (cr->app, cmd_task);
-    donna_task_wait_for_it (cmd_task);
-    ret = donna_task_get_state (cmd_task);
-    /* because the "parent task" (task) was given to cmd_task as args[0] (in
-     * arr) it is in that task that any error/return value will have been set */
-    g_object_unref (cmd_task);
-
-    /* free args */
-    free_command_args (data.command, data.arr);
-
-    _donna_command_free_cr (cr);
-    return ret;
-}
-
-void
-_donna_command_free_cr (struct _donna_command_run *cr)
-{
-    g_free (cr->cmdline);
-    g_free (cr);
-}
-
-/* used from actions (clicks/keys on treeview/menu/toolbar/etc) to deal with
- * converting %n flags */
-gboolean
-_donna_command_parse_run (DonnaApp       *app,
-                          gboolean        blocking,
-                          const gchar    *conv_flags,
-                          _conv_flag_fn   conv_fn,
-                          gpointer        conv_data,
-                          GDestroyNotify  conv_destroy,
-                          gchar          *fl)
-{
-    struct rc_data data;
-
-    memset (&data, 0, sizeof (struct rc_data));
-    data.app          = app;
-    data.conv_flags   = conv_flags;
-    data.conv_fn      = conv_fn;
-    data.conv_data    = conv_data;
-    data.conv_destroy = conv_destroy;
-    data.fl           = fl;
-
-    if (streqn (fl, "command:", 8))
-    {
-        /* run_command() will take care of freeing data as/when needed */
-        return run_command (NULL, &data) == DONNA_TASK_DONE;
-    }
-    else
-    {
-        gchar *ss;
-
-        ss = parse_location (fl, &data);
-        if (ss)
-        {
-            g_free (data.fl);
-            data.fl = ss;
-        }
-
-        if (!blocking)
-            donna_app_trigger_node (app, data.fl);
-        else
-        {
-            DonnaTask *task;
-            DonnaNode *node;
-
-            task = donna_app_get_node_task (app, data.fl);
-            donna_task_set_can_block (g_object_ref_sink (task));
-            donna_app_run_task (app, task);
-            donna_task_wait_for_it (task);
-
-            if (donna_task_get_state (task) != DONNA_TASK_DONE)
-            {
-                g_object_unref (task);
-                free_rc_data (&data);
-                return FALSE;
-            }
-            node = g_value_get_object (donna_task_get_return_value (task));
-            g_object_unref (task);
-
-            task = donna_node_trigger_task (node, NULL);
-            donna_task_set_can_block (g_object_ref_sink (task));
-            donna_app_run_task (app, task);
-            donna_task_wait_for_it (task);
-
-            if (donna_task_get_state (task) != DONNA_TASK_DONE)
-            {
-                g_object_unref (task);
-                free_rc_data (&data);
-                return FALSE;
-            }
-            g_object_unref (task);
-        }
-        free_rc_data (&data);
-    }
     return TRUE;
 }
+
 
 /* helpers */
 

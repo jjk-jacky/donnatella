@@ -10,45 +10,21 @@
 
 G_BEGIN_DECLS
 
-typedef gboolean (*_conv_flag_fn) (const gchar  c,
-                                   DonnaArgType type,
-                                   gboolean     dereferenced,
-                                   DonnaApp    *app,
-                                   gpointer    *out,
-                                   gpointer     data);
-
-typedef struct
-{
-    gchar               *name;
-    guint                argc;
-    DonnaArgType        *arg_type;
-    DonnaArgType         return_type;
-    DonnaTaskVisibility  visibility;
-    command_fn           func;
-    gpointer             data;
-    GDestroyNotify       destroy;
-} DonnaCommand;
+typedef gboolean (*_conv_flag_fn) (const gchar     c,
+                                   DonnaArgType   *type,
+                                   gpointer       *ptr,
+                                   GDestroyNotify *destroy,
+                                   gpointer        data);
 
 
-struct _donna_command_run
-{
-    DonnaApp    *app;
-    gchar       *cmdline;
-};
-
-DonnaCommand *          _donna_command_init_parse   (gchar           *cmdline,
-                                                     gchar          **first_arg,
-                                                     GError         **error);
-DonnaTaskState          _donna_command_run          (DonnaTask       *task,
-                                                     struct _donna_command_run *cr);
-void                    _donna_command_free_cr      (struct _donna_command_run *cr);
-gboolean                _donna_command_parse_run    (DonnaApp        *app,
-                                                     gboolean         blocking,
-                                                     const gchar     *conv_flags,
-                                                     _conv_flag_fn    conv_fn,
-                                                     gpointer         conv_data,
-                                                     GDestroyNotify   conv_destroy,
-                                                     gchar           *fl);
+gchar *             _donna_command_parse_fl         (DonnaApp       *app,
+                                                     gchar          *fl,
+                                                     const gchar    *conv_flags,
+                                                     _conv_flag_fn   conv_fn,
+                                                     gpointer        conv_data);
+gboolean            _donna_command_trigger_fl       (DonnaApp     *app,
+                                                     const gchar  *fl,
+                                                     gboolean      blocking);
 
 G_END_DECLS
 
