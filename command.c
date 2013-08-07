@@ -1997,7 +1997,7 @@ show_err_on_task_failed (DonnaTask  *task,
         return;
 
     donna_app_show_error (app, donna_task_get_error (task),
-            "Command 'action_node': Failed to trigger node");
+            "Command 'node_activate': Failed to trigger node");
 }
 
 static DonnaTaskState
