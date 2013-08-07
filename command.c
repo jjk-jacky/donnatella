@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "command.h"
+#include "provider-command.h"
 #include "treeview.h"
 #include "task-manager.h"
 #include "macros.h"
@@ -696,7 +697,7 @@ unquote_string (gchar **start, gchar **_end, GError **error)
             break;
         else if (*end == '\0')
         {
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                     "Missing ending quote");
             return FALSE;
         }
@@ -722,7 +723,7 @@ get_node (DonnaApp *app, const gchar *fl, GError **error)
     task = donna_app_get_node_task (app, fl);
     if (!task)
     {
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                 "Can't get node for '%s'", fl);
         return NULL;
     }
@@ -798,7 +799,7 @@ parse_arg (struct rc_data   *data,
                 && (d.command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
                     && d.command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_GUI))
         {
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK,
                     "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
                     data->command->name, data->i + 1);
             return DONNA_TASK_FAILED;
@@ -838,7 +839,7 @@ parse_arg (struct rc_data   *data,
                         (d.command) ? "' " : "");
             }
             else
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                         "Command '%s', argument %d: Command %s%s%sfailed (w/out error message)",
                         data->command->name, data->i + 1,
                         (d.command) ? "'" : "",
@@ -861,7 +862,7 @@ parse_arg (struct rc_data   *data,
             }
             else
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                         "Command '%s', argument %d: Argument required, and command '%s' didn't return anything",
                         data->command->name, data->i + 1, d.command->name);
                 g_object_unref (task);
@@ -998,7 +999,7 @@ parse_arg (struct rc_data   *data,
 
     if (*end == '\0')
     {
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                 "Command '%s', argument %d: Unexpected end-of-string",
                 data->command->name, data->i + 1);
         return DONNA_TASK_FAILED;
@@ -1008,14 +1009,14 @@ parse_arg (struct rc_data   *data,
     {
         if (data->i + 1 == data->command->argc)
         {
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                     "Command '%s', argument %d: Closing parenthesis missing: %s",
                     data->command->name, data->i + 1, end);
             return DONNA_TASK_FAILED;
         }
         else if (*end != ',')
         {
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                     "Command '%s', argument %d: Unexpected character (expected ',' or ')'): %s",
                     data->command->name, data->i + 1, end);
             return DONNA_TASK_FAILED;
@@ -1031,7 +1032,7 @@ parse_arg (struct rc_data   *data,
         }
         else
         {
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MISSING_ARG,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MISSING_ARG,
                     "Command '%s', argument %d required",
                     data->command->name, data->i + 1);
             return DONNA_TASK_FAILED;
@@ -1074,7 +1075,7 @@ convert:
                 gsize len = strlen (s) - 1;
                 if (s[len] != '>')
                 {
-                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                    g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                             "Command '%s', argument %d: Invalid internal reference: '%s'",
                             data->command->name, data->i + 1, s);
                     goto error;
@@ -1083,7 +1084,7 @@ convert:
                         DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY);
                 if (!ptr)
                 {
-                    g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                    g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                             "Command '%s', argument %d: Invalid internal reference '%s'",
                             data->command->name, data->i + 1, data->start);
                     goto error;
@@ -1170,7 +1171,7 @@ convert:
             gsize len = strlen (s) - 1;
             if (s[len] != '>')
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                         "Command '%s', argument %d: Invalid treeview name/reference: '%s'",
                         data->command->name, data->i + 1, s);
                 goto error;
@@ -1178,7 +1179,7 @@ convert:
             ptr = donna_app_get_int_ref (data->app, data->start, DONNA_ARG_TYPE_TREEVIEW);
             if (!ptr)
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                         "Command '%s', argument %d: Invalid internal reference '%s'",
                         data->command->name, data->i + 1, data->start);
                 goto error;
@@ -1189,7 +1190,7 @@ convert:
             ptr = donna_app_get_treeview (data->app, s);
             if (!ptr)
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_NOT_FOUND,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
                         "Command '%s', argument %d: Treeview '%s' not found",
                         data->command->name, data->i + 1, s);
                 goto error;
@@ -1208,7 +1209,7 @@ convert:
             gsize len = strlen (s) - 1;
             if (s[len] != '>')
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                         "Command '%s', argument %d: Invalid node full location/reference: '%s'",
                         data->command->name, data->i + 1, s);
                 goto error;
@@ -1229,7 +1230,7 @@ convert:
             ptr = donna_app_get_int_ref (data->app, s, DONNA_ARG_TYPE_NODE);
             if (!ptr)
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                         "Command '%s', argument %d: Invalid internal reference '%s'",
                         data->command->name, data->i + 1, s);
                 goto error;
@@ -1249,7 +1250,7 @@ convert:
 
         if (data->blocking != BLOCK_OK)
         {
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK,
                     "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
                     data->command->name, data->i + 1);
             goto error;
@@ -1339,7 +1340,7 @@ convert:
         if (sscanf (s, "[%p;%p]", &row->node, &row->iter) != 2)
         {
             g_free (row);
-            g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                     "Command '%s', argument %d: Invalid argument syntax for TREE_ROW",
                     data->command->name, data->i + 1);
             goto error;
@@ -1358,7 +1359,7 @@ convert:
             {
                 g_free (row);
                 g_free (rid);
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                         "Command '%s', argument %d: Invalid argument syntax TREE_ROW for TREE_ROW_ID",
                         data->command->name, data->i + 1);
                 goto error;
@@ -1383,7 +1384,7 @@ convert:
 
             if (s[len] != '>')
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                         "Command '%s', argument %d: Invalid node reference: '%s'",
                         data->command->name, data->i + 1, s);
                 goto error;
@@ -1391,7 +1392,7 @@ convert:
             ptr = donna_app_get_int_ref (data->app, s, DONNA_ARG_TYPE_NODE);
             if (!ptr)
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                         "Command '%s', argument %d: Invalid internal reference '%s'",
                         data->command->name, data->i + 1, s);
                 goto error;
@@ -1405,7 +1406,7 @@ convert:
 
             if (data->blocking != BLOCK_OK)
             {
-                g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK,
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK,
                         "Command '%s', argument %d: Converting argument requires to use a (possibly blocking) task",
                         data->command->name, data->i + 1);
                 goto error;
@@ -1428,7 +1429,7 @@ convert:
     {
         /* NOTHING cannot be used on args */
         g_warning ("convert_arg() called for DONNA_ARG_TYPE_NOTHING");
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_OTHER,
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
                 "Command '%s', argument %d: Invalid argument type",
                 data->command->name, data->i + 1);
         goto error;
@@ -1534,8 +1535,8 @@ show_error (DonnaApp *app, GError *err, const gchar *msg, ...)
             donna_task_take_error (task, err);  \
         else                                    \
             donna_task_set_error (task,         \
-                    COMMAND_ERROR,              \
-                    COMMAND_ERROR_OTHER,        \
+                    DONNA_COMMAND_ERROR,              \
+                    DONNA_COMMAND_ERROR_OTHER,        \
                     __VA_ARGS__);               \
     }                                           \
     else                                        \
@@ -1576,7 +1577,7 @@ run_command (DonnaTask *task, struct rc_data *data)
         if (parsed == DONNA_TASK_FAILED)
         {
             if (data->blocking == BLOCK_SWITCH
-                    && g_error_matches (err, COMMAND_ERROR, COMMAND_ERROR_MIGHT_BLOCK))
+                    && g_error_matches (err, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MIGHT_BLOCK))
             {
                 struct rc_data *d;
 
@@ -1717,7 +1718,7 @@ _donna_command_init_parse (gchar     *cmdline,
 
     if (i >= nb_commands)
     {
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_NOT_FOUND,
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
                 "Command '%s' does not exists", cmdline);
         *s = c;
         return NULL;
@@ -1727,7 +1728,7 @@ _donna_command_init_parse (gchar     *cmdline,
     skip_blank (s);
     if (*s != '(')
     {
-        g_set_error (error, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                 "Command '%s': arguments not found, missing '('",
                 commands[i].name);
         return NULL;
@@ -1795,7 +1796,7 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
             }
             else
             {
-                donna_task_set_error (task, COMMAND_ERROR, COMMAND_ERROR_MISSING_ARG,
+                donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MISSING_ARG,
                         "Command '%s', argument %d required",
                         data.command->name, j + 1);
                 free_command_args (data.command, data.arr);
@@ -1806,7 +1807,7 @@ _donna_command_run (DonnaTask *task, struct _donna_command_run *cr)
 
     if (*data.start != ')')
     {
-        donna_task_set_error (task, COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                 "Command '%s': Too many arguments: %s",
                 data.command->name, data.start);
         free_command_args (data.command, data.arr);
@@ -2142,8 +2143,8 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
     {
         if (is_alt)
         {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_OTHER,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
                     "action_node (CONTAINER, 1) == popup; not yet implemented");
             return DONNA_TASK_FAILED;
         }
@@ -2197,8 +2198,8 @@ cmd_node_new_child (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (choices, 2);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Cannot create new child, unknown type '%s'; "
                 "Must be 'item' or 'container'",
                 args->pdata[2]);
@@ -2227,8 +2228,8 @@ cmd_node_new_child (DonnaTask *task, GPtrArray *args)
             donna_task_take_error (task_for_ret_err (), err);
         }
         else
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_OTHER,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
                     "Command 'node_new_child' failed: Unable to create new child");
         g_object_unref (t);
         return DONNA_TASK_FAILED;
@@ -2301,8 +2302,8 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (c_children, 2);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid type of node children: '%s'; Must be 'item', 'container' or 'all'",
                 args->pdata[2]);
         return DONNA_TASK_FAILED;
@@ -2332,8 +2333,8 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
         else
         {
             gchar *fl = donna_node_get_full_location (args->pdata[1]);
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_OTHER,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
                     "Command 'node_popup_children' failed: Unable to get children of '%s'",
                     fl);
             g_free (fl);
@@ -2377,8 +2378,8 @@ cmd_nodes_io (DonnaTask *task, GPtrArray *args)
     c_io = get_choice_from_arg (c_io_type, 2);
     if (c_io < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid type of IO operation: '%s'; "
                 "Must be 'copy', 'move' or 'delete'",
                 args->pdata[2]);
@@ -2438,8 +2439,8 @@ cmd_register_get_nodes (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (c_drop, 2);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid drop option: '%s'; Must be 'not', 'always' or 'on-cut'",
                 args->pdata[2]);
         return DONNA_TASK_FAILED;
@@ -2502,8 +2503,8 @@ cmd_register_load (DonnaTask *task, GPtrArray *args)
         c = get_choice_from_arg (c_file_type, 3);
         if (c < 0)
         {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_SYNTAX,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
                     "Invalid register file type: '%s'; Must be 'nodes', 'files' or 'uris'",
                     args->pdata[3]);
             return DONNA_TASK_FAILED;
@@ -2540,8 +2541,8 @@ cmd_register_nodes_io (DonnaTask *task, GPtrArray *args)
         c_io = get_choice_from_arg (c_io_type, 2);
         if (c_io < 0)
         {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_SYNTAX,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
                     "Invalid type of IO operation: '%s'; "
                     "Must be 'auto', 'copy', 'move' or 'delete'",
                     args->pdata[2]);
@@ -2603,8 +2604,8 @@ cmd_register_save (DonnaTask *task, GPtrArray *args)
         c = get_choice_from_arg (c_file_type, 3);
         if (c < 0)
         {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_SYNTAX,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
                     "Invalid register file type: '%s'; Must be 'nodes', 'files' or 'uris'",
                     args->pdata[3]);
             return DONNA_TASK_FAILED;
@@ -2635,8 +2636,8 @@ cmd_register_set (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (c_type, 2);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid register type: '%s'; Must be 'cut' or 'copy'",
                 args->pdata[2]);
         return DONNA_TASK_FAILED;
@@ -2664,8 +2665,8 @@ cmd_register_set_type (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (c_type, 2);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid register type: '%s'; Must be 'cut' or 'copy'",
                 args->pdata[2]);
         return DONNA_TASK_FAILED;
@@ -2717,8 +2718,8 @@ cmd_task_set_state (DonnaTask *task, GPtrArray *args)
     if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
     {
         gchar *fl = donna_node_get_full_location (args->pdata[1]);
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
                 "Command 'task_set_state' cannot be used on '%s', only works on node in domain 'task'",
                 fl);
         g_free (fl);
@@ -2729,8 +2730,8 @@ cmd_task_set_state (DonnaTask *task, GPtrArray *args)
     if (c < 0)
     {
         gchar *d = donna_node_get_name (args->pdata[1]);
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid state for task '%s': '%s' "
                 "Must be 'run', 'pause', 'cancel', 'stop' or 'wait'",
                 d, args->pdata[2]);
@@ -2758,8 +2759,8 @@ cmd_task_toggle (DonnaTask *task, GPtrArray *args)
     if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
     {
         gchar *fl = donna_node_get_full_location (args->pdata[1]);
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
                 "Command 'task_toggle' cannot be used on '%s', only works on node in domain 'task'",
                 fl);
         g_free (fl);
@@ -2946,8 +2947,8 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
     c_v = get_choice_from_arg (c_visual, 3);
     if (c_v < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown type '%s'. "
                 "Must be 'name', 'box', 'highlight' or 'clicks'",
                 args->pdata[3]);
@@ -2957,8 +2958,8 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
     c_s = get_choice_from_arg (c_source, 4);
     if (c_s < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown source '%s'. "
                 "Must be 'tree', 'node', or 'any'",
                 args->pdata[4]);
@@ -3049,8 +3050,8 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
     }
     if (set == 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
                 "Cannot go to line, unknown set type '%s'. "
                 "Must be (a '+'-separated combination of) 'scroll', 'focus' and/or 'cursor'",
                 args->pdata[2]);
@@ -3062,8 +3063,8 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
         c_n = get_choice_from_arg (c_nb_type, 5);
         if (c_n < 0)
         {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_OTHER,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
                     "Cannot goto line, invalid type: '%s'; "
                     "Must be 'repeat', 'line' or 'percent'",
                     args->pdata[5]);
@@ -3078,8 +3079,8 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
         c_a = get_choice_from_arg (c_action, 6);
         if (c_a < 0)
         {
-            donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                    COMMAND_ERROR_OTHER,
+            donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
                     "Cannot goto line, invalid selection action: '%s'; "
                     "Must be 'select', 'unselect' or 'invert'",
                     args->pdata[6]);
@@ -3142,7 +3143,7 @@ cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
     if (c < 0)
     {
         donna_task_set_error (task_for_ret_err (),
-                COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid argument 'mode': '%s', expected 'visible', 'simple', 'normal' or 'reload'",
                 args->pdata[2]);
         return DONNA_TASK_FAILED;
@@ -3190,7 +3191,7 @@ cmd_tree_selection (DonnaTask *task, GPtrArray *args)
     if (c < 0)
     {
         donna_task_set_error (task_for_ret_err (),
-                COMMAND_ERROR, COMMAND_ERROR_SYNTAX,
+                DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid argument 'action': '%s', expected 'select', 'unselect' or 'invert'",
                 args->pdata[2]);
         return DONNA_TASK_FAILED;
@@ -3270,8 +3271,8 @@ cmd_tree_set_visual (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (choices, 3);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_OTHER,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown type '%s'. "
                 "Must be 'name', 'icon', 'box', 'highlight' or 'clicks'",
                 args->pdata[3]);
@@ -3300,8 +3301,8 @@ cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
     c = get_choice_from_arg (choices, 3);
     if (c < 0)
     {
-        donna_task_set_error (task_for_ret_err (), COMMAND_ERROR,
-                COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (task_for_ret_err (), DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Cannot toggle row, unknown toggle type '%s'. Must be 'standard', 'full' or 'maxi'",
                 args->pdata[3]);
         return DONNA_TASK_FAILED;

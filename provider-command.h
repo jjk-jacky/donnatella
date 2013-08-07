@@ -17,6 +17,17 @@ typedef struct _DonnaProviderCommand            DonnaProviderCommand;
 typedef struct _DonnaProviderCommandClass       DonnaProviderCommandClass;
 typedef struct _DonnaProviderCommandPrivate     DonnaProviderCommandPrivate;
 
+#define DONNA_COMMAND_ERROR                     g_quark_from_static_string ("DonnaCommand-Error")
+typedef enum
+{
+    DONNA_COMMAND_ALREADY_EXISTS,
+    DONNA_COMMAND_ERROR_NOT_FOUND,
+    DONNA_COMMAND_ERROR_SYNTAX,
+    DONNA_COMMAND_ERROR_MISSING_ARG,
+    DONNA_COMMAND_ERROR_MIGHT_BLOCK,
+    DONNA_COMMAND_ERROR_OTHER,
+} DonnaCommandError;
+
 struct _DonnaProviderCommand
 {
     DonnaProviderBase parent;

@@ -11,16 +11,6 @@ G_BEGIN_DECLS
 
 #define COMMAND_MAX_ARGS        8
 
-#define COMMAND_ERROR           g_quark_from_static_string ("Donna-Command-Error")
-typedef enum
-{
-    COMMAND_ERROR_NOT_FOUND,
-    COMMAND_ERROR_SYNTAX,
-    COMMAND_ERROR_MISSING_ARG,
-    COMMAND_ERROR_MIGHT_BLOCK,
-    COMMAND_ERROR_OTHER,
-} CommandError;
-
 typedef DonnaTaskState (*cmd_fn) (DonnaTask *task, GPtrArray *args);
 
 typedef gboolean (*_conv_flag_fn) (const gchar  c,
