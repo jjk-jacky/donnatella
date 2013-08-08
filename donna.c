@@ -1175,7 +1175,12 @@ donna_donna_new_int_ref (DonnaApp       *app,
 
     ir = g_new (struct intref, 1);
     ir->type = type;
-    ir->ptr  = ptr;
+    if (type & DONNA_ARG_IS_ARRAY)
+        ir->ptr = g_ptr_array_ref (ptr);
+    else if (type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+        ir->ptr = g_object_ref (ptr);
+    else
+        ir->ptr = ptr;
     ir->last = g_get_monotonic_time ();
 
     s = g_strdup_printf ("<%u%u>", rand (), ir);
