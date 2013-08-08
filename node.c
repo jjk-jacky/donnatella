@@ -267,9 +267,9 @@ donna_node_finalize (GObject *object)
 
     priv = DONNA_NODE (object)->priv;
     DONNA_DEBUG (NODE,
-        g_debug4 ("Finalizing node '%s:%s'",
-            donna_provider_get_domain (priv->provider),
-            priv->location));
+            g_debug ("Finalizing node '%s:%s'",
+                donna_provider_get_domain (priv->provider),
+                priv->location));
     /* it is said that dispose should do the unref-ing, but at the same time
      * the object is supposed to be able to be "revived" from dispose, and we
      * need a ref to provider to survive... */
@@ -371,6 +371,10 @@ donna_node_new (DonnaProvider       *provider,
     if (flags & DONNA_NODE_DESC_EXISTS)
         priv->basic_props[BASIC_PROP_DESC].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
 
+    DONNA_DEBUG (NODE,
+            g_debug ("Created new node '%s:%s'",
+                donna_provider_get_domain (priv->provider),
+                priv->location));
     return node;
 }
 
@@ -464,6 +468,12 @@ donna_node_new_from_node (DonnaProvider     *provider,
     }
     g_rw_lock_reader_unlock (&sce->priv->props_lock);
 
+    DONNA_DEBUG (NODE,
+            gchar *fl_sce = donna_node_get_full_location (sce);
+            g_debug ("Created new node '%s:%s' from node '%s'",
+                donna_provider_get_domain (priv->provider),
+                priv->location, fl_sce);
+            g_free (fl_sce));
     return node;
 }
 
