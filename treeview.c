@@ -10342,6 +10342,7 @@ handle_click (DonnaTreeView     *tree,
     DonnaConfig *config;
     struct conv conv = { NULL, };
     struct column *_col;
+    GPtrArray *intrefs = NULL;
     gchar *fl;
     gboolean is_tree = is_tree (tree);
     gboolean is_selected;
@@ -10510,12 +10511,12 @@ handle_click (DonnaTreeView     *tree,
         conv.row = get_row_for_iter (tree, iter);
 
     fl = _donna_command_parse_fl (priv->app, fl, "olLrRnN",
-            (_conv_flag_fn) tree_conv_flag, &conv);
+            (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
 
     if (iter)
         g_free (conv.row);
 
-    _donna_command_trigger_fl (priv->app, fl, FALSE);
+    _donna_command_trigger_fl (priv->app, fl, intrefs, FALSE);
     g_free (fl);
 }
 
@@ -11117,6 +11118,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     gchar *from  = NULL;
     gchar *fl;
     struct conv conv = { NULL, };
+    GPtrArray *intrefs = NULL;
 
     config = donna_app_peek_config (priv->app);
     conv.tree = tree;
@@ -11141,13 +11143,14 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         conv.row = get_row_for_iter (tree, &iter);
 
         fl = _donna_command_parse_fl (priv->app, fl, "olLrnNms",
-                (_conv_flag_fn) tree_conv_flag, &conv);
-        if (!_donna_command_trigger_fl (priv->app, fl, TRUE))
+                (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+        if (!_donna_command_trigger_fl (priv->app, fl, intrefs, TRUE))
         {
             g_free (fl);
             return TRUE;
         }
         g_free (fl);
+        intrefs = NULL;
     }
 
     key = gdk_keyval_name (priv->key_val);
@@ -11169,9 +11172,9 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     conv.key_m = priv->key_m;
     fl = _donna_command_parse_fl (priv->app, fl, "olLrnNcms",
-            (_conv_flag_fn) tree_conv_flag, &conv);
+            (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
     g_free (conv.row);
-    _donna_command_trigger_fl (priv->app, fl, FALSE);
+    _donna_command_trigger_fl (priv->app, fl, intrefs, FALSE);
     g_free (fl);
 
     g_free (from);

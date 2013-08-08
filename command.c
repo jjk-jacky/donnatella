@@ -546,12 +546,14 @@ _g_string_append_quoted (GString *str, gchar *s)
 /* helper function to parse FL for actions (clicks/keys from treeview, menu...) */
 gchar *
 _donna_command_parse_fl (DonnaApp       *app,
-                         gchar          *fl,
+                         gchar          *_fl,
                          const gchar    *conv_flags,
                          _conv_flag_fn   conv_fn,
-                         gpointer        conv_data)
+                         gpointer        conv_data,
+                         GPtrArray     **intrefs)
 {
     GString *str = NULL;
+    gchar *fl = _fl;
     gchar *s = fl;
 
     while ((s = strchr (s, '%')))
@@ -641,7 +643,13 @@ _donna_command_parse_fl (DonnaApp       *app,
                     }
                 }
                 else
-                    g_string_append (str, donna_app_new_int_ref (app, type, ptr));
+                {
+                    gchar *s = donna_app_new_int_ref (app, type, ptr);
+                    g_string_append (str, s);
+                    if (!*intrefs)
+                        *intrefs = g_ptr_array_new_with_free_func (g_free);
+                    g_ptr_array_add (*intrefs, s);
+                }
             }
             else if (type & DONNA_ARG_TYPE_STRING)
                 _g_string_append_quoted (str, (gchar *) ptr);
@@ -667,17 +675,43 @@ _donna_command_parse_fl (DonnaApp       *app,
     }
 
     if (!str)
-        return fl;
+        return _fl;
 
     g_string_append (str, fl);
-    g_free (fl);
+    g_free (_fl);
     return g_string_free (str, FALSE);
+}
+
+struct fir
+{
+    gboolean is_stack;
+    DonnaApp *app;
+    GPtrArray *intrefs;
+};
+
+static void
+free_fir (struct fir *fir)
+{
+    guint i;
+
+    for (i = 0; i < fir->intrefs->len; ++i)
+        donna_app_free_int_ref (fir->app, fir->intrefs->pdata[i]);
+    g_ptr_array_unref (fir->intrefs);
+    if (!fir->is_stack)
+        g_free (fir);
+}
+
+static gboolean
+trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
+{
+    free_fir (fir);
 }
 
 static gboolean
 get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
 {
     GError *err = NULL;
+    struct fir *fir;
     DonnaNode *node;
     DonnaTask *t;
 
@@ -685,6 +719,9 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
     {
         donna_app_show_error (app, donna_task_get_error (task),
                 "Failed to trigger action, couldn't get node");
+        fir = g_object_get_data ((GObject *) task, "donna-fir");
+        if (fir)
+            free_fir (fir);
         return FALSE;
     }
 
@@ -695,12 +732,21 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
         donna_app_show_error (app, err,
                 "Failed to trigger action, couldn't get task");
         g_clear_error (&err);
+        fir = g_object_get_data ((GObject *) task, "donna-fir");
+        if (fir)
+            free_fir (fir);
         return FALSE;
     }
 
     /* see _donna_command_trigger_fl() for why this is blocking */
     if (timeout_called)
         donna_task_set_can_block (g_object_ref_sink (t));
+    else
+    {
+        fir = g_object_get_data ((GObject *) task, "donna-fir");
+        if (fir)
+            donna_task_set_callback (t, (task_callback_fn) trigger_cb, fir, NULL);
+    }
 
     donna_app_run_task (app, t);
 
@@ -720,6 +766,7 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
 gboolean
 _donna_command_trigger_fl (DonnaApp     *app,
                            const gchar  *fl,
+                           GPtrArray    *intrefs,
                            gboolean      blocking)
 {
     DonnaTask *task;
@@ -734,7 +781,17 @@ _donna_command_trigger_fl (DonnaApp     *app,
     if (blocking)
         donna_task_set_can_block (g_object_ref_sink (task));
     else
+    {
+        if (intrefs)
+        {
+            struct fir *fir;
+            fir = g_new0 (struct fir, 1);
+            fir->app = app;
+            fir->intrefs = intrefs;
+            g_object_set_data ((GObject *) task, "donna-fir", fir);
+        }
         donna_task_set_callback (task, (task_callback_fn) get_node_cb, app, NULL);
+    }
 
     donna_app_run_task (app, task);
 
@@ -746,6 +803,11 @@ _donna_command_trigger_fl (DonnaApp     *app,
          * should always be FALSE. If TRUE, that'll mean be blocking */
         ret = get_node_cb (task, TRUE, app);
         g_object_unref (task);
+        if (intrefs)
+        {
+            struct fir fir = { TRUE, app, intrefs };
+            free_fir (&fir);
+        }
         return ret;
     }
 

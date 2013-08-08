@@ -560,7 +560,7 @@ parse_arg (struct run_command    *rc,
                 e = donna_task_get_error (task);
                 if (e)
                 {
-                    *error = g_error_copy (err);
+                    *error = g_error_copy (e);
                     g_prefix_error (error, "Command '%s', argument %d: "
                             "Command %s%s%s failed: ",
                             rc->command->name, rc->i + 1,
@@ -1121,7 +1121,8 @@ error:
 static DonnaTaskState
 task_run_command (DonnaTask *cmd_task, struct run_command *rc)
 {
-    return rc->command->func (rc->task, rc->pc->priv->app, rc->args, rc->command->data);
+    return rc->command->func (rc->task, rc->pc->priv->app,
+            rc->args->pdata, rc->command->data);
 }
 
 static DonnaTaskState
@@ -1226,9 +1227,9 @@ run_command (DonnaTask *task, struct run_command *rc)
         g_object_unref (cmd_task);
     }
     else
-        ret = rc->command->func (task, app, rc->args, rc->command->data);
+        ret = rc->command->func (task, app, rc->args->pdata, rc->command->data);
 
-    free_rc_data (rc);
+    free_run_command (rc);
     return ret;
 }
 

@@ -21,10 +21,12 @@ gchar *             _donna_command_parse_fl         (DonnaApp       *app,
                                                      gchar          *fl,
                                                      const gchar    *conv_flags,
                                                      _conv_flag_fn   conv_fn,
-                                                     gpointer        conv_data);
-gboolean            _donna_command_trigger_fl       (DonnaApp     *app,
-                                                     const gchar  *fl,
-                                                     gboolean      blocking);
+                                                     gpointer        conv_data,
+                                                     GPtrArray     **intrefs);
+gboolean            _donna_command_trigger_fl       (DonnaApp       *app,
+                                                     const gchar    *fl,
+                                                     GPtrArray      *intrefs,
+                                                     gboolean        blocking);
 
 G_END_DECLS
 
