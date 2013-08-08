@@ -10237,8 +10237,6 @@ struct conv
     DonnaTreeRow  *row;
     gchar         *col_name;
     guint          key_m;
-    gchar          spec;
-    gchar          buf[2];
 };
 
 static gboolean
@@ -10306,23 +10304,9 @@ tree_conv_flag (const gchar      c,
 
         /* keys only */
 
-        case 'c':
-            *type = DONNA_ARG_TYPE_STRING;
-            conv->buf[0] = priv->key_combine_spec;
-            conv->buf[1] = '\0';
-            *ptr = conv->buf;
-            return TRUE;
-
         case 'm':
             *type = DONNA_ARG_TYPE_INT;
             *ptr = &conv->key_m;
-            return TRUE;
-
-        case 's':
-            *type = DONNA_ARG_TYPE_STRING;
-            conv->buf[0] = conv->spec;
-            conv->buf[1] = '\0';
-            *ptr = conv->buf;
             return TRUE;
     }
 
@@ -11106,6 +11090,36 @@ repeat:
     return TRUE;                        \
 } while (0)
 
+/* we parse those two on our own (i.e. not through _donna_command_parse_fl())
+ * because those are single-character, and we don't want them treated as
+ * strings, because that would get them to be quoted (which isn't nice) */
+static inline void
+parse_specs (gchar *str, gchar spec, gchar combine)
+{
+    while ((str = strchr (str, '%')))
+    {
+        gchar *s;
+
+        if (str[1] == 's')
+            *str = (spec == 0) ? ' ' : spec;
+        else if (str[1] == 'c')
+            *str = (combine == 0) ? ' ' : combine;
+        else
+        {
+            str += 2;
+            continue;
+        }
+
+        for (s = str + 1; ; ++s)
+        {
+            *s = s[1];
+            if (*s == '\0')
+                break;
+        }
+        ++str;
+    }
+}
+
 static gboolean
 trigger_key (DonnaTreeView *tree, gchar spec)
 {
@@ -11122,7 +11136,6 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     config = donna_app_peek_config (priv->app);
     conv.tree = tree;
-    conv.spec = spec;
 
     /* is there a motion? */
     if (priv->key_motion)
@@ -11139,10 +11152,11 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         if (!donna_config_get_string (config, &fl, "%s/trigger", from))
             wrong_key (TRUE);
 
+        parse_specs (fl, spec, 0);
         conv.key_m = priv->key_motion_m;
         conv.row = get_row_for_iter (tree, &iter);
 
-        fl = _donna_command_parse_fl (priv->app, fl, "olLrnNms",
+        fl = _donna_command_parse_fl (priv->app, fl, "olLrnNm",
                 (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
         if (!_donna_command_trigger_fl (priv->app, fl, intrefs, TRUE))
         {
@@ -11170,8 +11184,9 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         }
     }
 
+    parse_specs (fl, spec, priv->key_combine_spec);
     conv.key_m = priv->key_m;
-    fl = _donna_command_parse_fl (priv->app, fl, "olLrnNcms",
+    fl = _donna_command_parse_fl (priv->app, fl, "olLrnNm",
             (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
     g_free (conv.row);
     _donna_command_trigger_fl (priv->app, fl, intrefs, FALSE);
