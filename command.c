@@ -173,9 +173,12 @@ free_fir (struct fir *fir)
 {
     guint i;
 
-    for (i = 0; i < fir->intrefs->len; ++i)
-        donna_app_free_int_ref (fir->app, fir->intrefs->pdata[i]);
-    g_ptr_array_unref (fir->intrefs);
+    if (fir->intrefs)
+    {
+        for (i = 0; i < fir->intrefs->len; ++i)
+            donna_app_free_int_ref (fir->app, fir->intrefs->pdata[i]);
+        g_ptr_array_unref (fir->intrefs);
+    }
     if (!fir->is_stack)
         g_free (fir);
 }
@@ -183,24 +186,25 @@ free_fir (struct fir *fir)
 static gboolean
 trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
 {
-    free_fir (fir);
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (fir->app, donna_task_get_error (task),
+                "Action trigger failed");
+    if (fir)
+        free_fir (fir);
 }
 
 static gboolean
-get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+get_node_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
 {
     GError *err = NULL;
-    struct fir *fir;
     DonnaNode *node;
     DonnaTask *t;
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        donna_app_show_error (app, donna_task_get_error (task),
+        donna_app_show_error (fir->app, donna_task_get_error (task),
                 "Failed to trigger action, couldn't get node");
-        fir = g_object_get_data ((GObject *) task, "donna-fir");
-        if (fir)
-            free_fir (fir);
+        free_fir (fir);
         return FALSE;
     }
 
@@ -208,12 +212,10 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
     t = donna_node_trigger_task (node, &err);
     if (G_UNLIKELY (!t))
     {
-        donna_app_show_error (app, err,
+        donna_app_show_error (fir->app, err,
                 "Failed to trigger action, couldn't get task");
         g_clear_error (&err);
-        fir = g_object_get_data ((GObject *) task, "donna-fir");
-        if (fir)
-            free_fir (fir);
+        free_fir (fir);
         return FALSE;
     }
 
@@ -221,13 +223,9 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
     if (timeout_called)
         donna_task_set_can_block (g_object_ref_sink (t));
     else
-    {
-        fir = g_object_get_data ((GObject *) task, "donna-fir");
-        if (fir)
-            donna_task_set_callback (t, (task_callback_fn) trigger_cb, fir, NULL);
-    }
+        donna_task_set_callback (t, (task_callback_fn) trigger_cb, fir, NULL);
 
-    donna_app_run_task (app, t);
+    donna_app_run_task (fir->app, t);
 
     if (timeout_called)
     {
@@ -235,6 +233,7 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
 
         ret = donna_task_get_state (t) == DONNA_TASK_DONE;
         g_object_unref (t);
+        free_fir (fir);
         return ret;
     }
 
@@ -261,32 +260,24 @@ _donna_command_trigger_fl (DonnaApp     *app,
         donna_task_set_can_block (g_object_ref_sink (task));
     else
     {
-        if (intrefs)
-        {
-            struct fir *fir;
-            fir = g_new0 (struct fir, 1);
-            fir->app = app;
-            fir->intrefs = intrefs;
-            g_object_set_data ((GObject *) task, "donna-fir", fir);
-        }
-        donna_task_set_callback (task, (task_callback_fn) get_node_cb, app, NULL);
+        struct fir *fir;
+        fir = g_new0 (struct fir, 1);
+        fir->app = app;
+        fir->intrefs = intrefs;
+        donna_task_set_callback (task, (task_callback_fn) get_node_cb, fir, NULL);
     }
 
     donna_app_run_task (app, task);
 
     if (blocking)
     {
+        struct fir fir = { TRUE, app, intrefs };
         gboolean ret;
 
         /* we're abusing timeout_called here, since we don't use a timeout it
          * should always be FALSE. If TRUE, that'll mean be blocking */
-        ret = get_node_cb (task, TRUE, app);
+        ret = get_node_cb (task, TRUE, &fir);
         g_object_unref (task);
-        if (intrefs)
-        {
-            struct fir fir = { TRUE, app, intrefs };
-            free_fir (&fir);
-        }
         return ret;
     }
 
