@@ -1270,51 +1270,24 @@ free_menu_click (struct menu_click *mc)
 }
 
 static gboolean
-menu_conv_flag (const gchar  c,
-                DonnaArgType type,
-                gboolean     dereference,
-                DonnaApp    *app,
-                gpointer    *out,
-                DonnaNode   *node)
+menu_conv_flag (const gchar      c,
+                DonnaArgType    *type,
+                gpointer        *ptr,
+                GDestroyNotify  *destroy,
+                DonnaNode       *node)
 {
-    GString *str = *out;
-    gchar *s;
-
     switch (c)
     {
         case 'N':
-            if (type == DONNA_ARG_TYPE_NOTHING)
-            {
-                if (node)
-                {
-                    s = donna_node_get_location (node);
-                    g_string_append (str, s);
-                    g_free (s);
-                }
-            }
-            else
-                return FALSE;
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = donna_node_get_location (node);
+            *destroy = g_free;
             return TRUE;
 
         case 'n':
-            if (type == DONNA_ARG_TYPE_NOTHING)
-            {
-                if (node)
-                {
-                    if (dereference)
-                        s = donna_node_get_full_location (node);
-                    else
-                        s = donna_app_new_int_ref (app, DONNA_ARG_TYPE_NODE,
-                                g_object_ref (node));
-                    g_string_append (str, s);
-                    g_free (s);
-                }
-            }
-            else if ((type & DONNA_ARG_TYPE_NODE) && node)
-                *out = g_object_ref (node);
-            else
-                return FALSE;
-            return TRUE;;
+            *type = DONNA_ARG_TYPE_NODE;
+            *ptr = node;
+            return TRUE;
     }
     return FALSE;
 }
@@ -1346,6 +1319,7 @@ menuitem_button_release_cb (GtkWidget           *item,
 {
     DonnaDonnaPrivate *priv = mc->donna->priv;
     DonnaNode *node;
+    GPtrArray *intrefs = NULL;
     gchar *fl = NULL;
     /* longest possible is "ctrl_shift_middle_click" (len=23) */
     gchar buf[24];
@@ -1402,9 +1376,9 @@ menuitem_button_release_cb (GtkWidget           *item,
             return FALSE;
     }
 
-    g_object_ref (node);
-    _donna_command_parse_run ((DonnaApp *) mc->donna, FALSE, "nN",
-            (_conv_flag_fn) menu_conv_flag, node, g_object_unref, fl);
+    fl = _donna_command_parse_fl ((DonnaApp *) mc->donna, fl, "nN",
+            (_conv_flag_fn) menu_conv_flag, node, &intrefs);
+    _donna_command_trigger_fl ((DonnaApp *) mc->donna, fl, intrefs, FALSE);
     return FALSE;
 }
 
