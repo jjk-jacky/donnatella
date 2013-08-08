@@ -10,6 +10,18 @@
 
 G_BEGIN_DECLS
 
+struct command
+{
+    gchar               *name;
+    guint                argc;
+    DonnaArgType        *arg_type;
+    DonnaArgType         return_type;
+    DonnaTaskVisibility  visibility;
+    command_fn           func;
+    gpointer             data;
+    GDestroyNotify       destroy;
+};
+
 typedef gboolean (*_conv_flag_fn) (const gchar     c,
                                    DonnaArgType   *type,
                                    gpointer       *ptr,

@@ -17,18 +17,6 @@ enum
     NB_PROPS
 };
 
-struct command
-{
-    gchar               *name;
-    guint                argc;
-    DonnaArgType        *arg_type;
-    DonnaArgType         return_type;
-    DonnaTaskVisibility  visibility;
-    command_fn           func;
-    gpointer             data;
-    GDestroyNotify       destroy;
-};
-
 struct _DonnaProviderCommandPrivate
 {
     DonnaApp *app;
@@ -65,6 +53,9 @@ static DonnaTaskState   provider_command_get_children   (DonnaProviderBase  *pro
                                                          DonnaTask          *task,
                                                          DonnaNode          *node,
                                                          DonnaNodeType       node_types);
+
+/* internal from command.c */
+void _donna_add_commands (GHashTable *commands);
 
 static void
 provider_command_provider_init (DonnaProviderInterface *interface)
@@ -116,6 +107,8 @@ donna_provider_command_init (DonnaProviderCommand *provider)
     g_mutex_init (&priv->mutex);
     priv->commands = g_hash_table_new_full (g_str_hash, g_str_equal,
             NULL, (GDestroyNotify) free_command);
+    /* load commands, since we're in init there's no need to lock */
+    _donna_add_commands (priv->commands);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderCommand, donna_provider_command,

@@ -7,527 +7,6 @@
 #include "macros.h"
 #include "debug.h"
 
-static DonnaTaskState   cmd_ask_text                        (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_config_get_boolean              (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_config_get_int                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_config_get_string               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_config_set_boolean              (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_config_set_int                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_config_set_string               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_menu_popup                      (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_node_activate                   (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_node_new_child                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_node_popup_children             (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_nodes_io                        (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_add_nodes              (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_drop                   (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_get_nodes              (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_get_type               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_load                   (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_nodes_io               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_save                   (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_set                    (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_register_set_type               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_repeat                          (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_task_set_state                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_task_toggle                     (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_abort                      (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_activate_row               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_add_root                   (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_edit_column                (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_full_collapse              (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_full_expand                (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_get_location               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_get_node_at_row            (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_get_nodes                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_get_visual                 (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_goto_line                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_maxi_collapse              (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_maxi_expand                (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_refresh                    (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_remove_row                 (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_reset_keys                 (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_selection                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_set_cursor                 (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_set_focus                  (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_set_key_mode               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_set_location               (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_set_visual                 (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_tree_toggle_row                 (DonnaTask *task,
-                                                             GPtrArray *args);
-static DonnaTaskState   cmd_void                            (DonnaTask *task,
-                                                             GPtrArray *args);
-
-static DonnaCommand commands[] = {
-    {
-        .name           = "ask_text",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL | DONNA_ARG_IS_ARRAY },
-        .return_type    = DONNA_ARG_TYPE_STRING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_ask_text
-    },
-    {
-        .name           = "config_get_boolean",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_INT,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_config_get_boolean
-    },
-    {
-        .name           = "config_get_int",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_INT,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_config_get_int
-    },
-    {
-        .name           = "config_get_string",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_STRING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_config_get_string
-    },
-    {
-        .name           = "config_set_boolean",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_INT },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_config_set_boolean
-    },
-    {
-        .name           = "config_set_int",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_INT },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_config_set_int
-    },
-    {
-        .name           = "config_set_string",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_config_set_string
-    },
-    {
-        .name           = "menu_popup",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_menu_popup
-    },
-    {
-        .name           = "node_activate",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_INT },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_node_activate
-    },
-    {
-        .name           = "node_new_child",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NODE,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
-        .cmd_fn         = cmd_node_new_child
-    },
-    {
-        .name           = "node_popup_children",
-        .argc           = 5,
-        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
-        .cmd_fn         = cmd_node_popup_children
-    },
-    {
-        .name           = "nodes_io",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
-            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
-        .cmd_fn         = cmd_nodes_io
-    },
-    {
-        .name           = "register_add_nodes",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_register_add_nodes
-    },
-    {
-        .name           = "register_drop",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_register_drop
-    },
-    {
-        .name           = "register_get_nodes",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
-        .cmd_fn         = cmd_register_get_nodes
-    },
-    {
-        .name           = "register_get_type",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_STRING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_register_get_type
-    },
-    {
-        .name           = "register_load",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_register_load
-    },
-    {
-        .name           = "register_nodes_io",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
-        .cmd_fn         = cmd_register_nodes_io
-    },
-    {
-        .name           = "register_save",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_register_save
-    },
-    {
-        .name           = "register_set",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL,
-        .cmd_fn         = cmd_register_set
-    },
-    {
-        .name           = "register_set_type",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_register_set_type
-    },
-    {
-        .name           = "repeat",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_INT, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_repeat
-    },
-    {
-        .name           = "task_set_state",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_NODE, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_task_set_state
-    },
-    {
-        .name           = "task_toggle",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_NODE },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_task_toggle
-    },
-    {
-        .name           = "tree_abort",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_abort
-    },
-    {
-        .name           = "tree_activate_row",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_activate_row
-    },
-    {
-        .name           = "tree_edit_column",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_edit_column
-    },
-    {
-        .name           = "tree_add_root",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_NODE },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_add_root
-    },
-    {
-        .name           = "tree_full_collapse",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_full_collapse
-    },
-    {
-        .name           = "tree_full_expand",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_full_expand
-    },
-    {
-        .name           = "tree_get_location",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW },
-        .return_type    = DONNA_ARG_TYPE_NODE,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_get_location
-    },
-    {
-        .name           = "tree_get_node_at_row",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NODE,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_get_node_at_row
-    },
-    {
-        .name           = "tree_get_nodes",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_get_nodes
-    },
-    {
-        .name           = "tree_get_visual",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_STRING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_get_visual
-    },
-    {
-        .name           = "tree_goto_line",
-        .argc           = 7,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_goto_line
-    },
-    {
-        .name           = "tree_maxi_collapse",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_maxi_collapse
-    },
-    {
-        .name           = "tree_maxi_expand",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_maxi_expand
-    },
-    {
-        .name           = "tree_refresh",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_refresh
-    },
-    {
-        .name           = "tree_remove_row",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_remove_row
-    },
-    {
-        .name           = "tree_reset_keys",
-        .argc           = 1,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_reset_keys
-    },
-    {
-        .name           = "tree_selection",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING,
-            DONNA_ARG_TYPE_ROW_ID, DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_selection
-    },
-    {
-        .name           = "tree_set_cursor",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_set_cursor
-    },
-    {
-        .name           = "tree_set_focus",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_set_focus
-    },
-    {
-        .name           = "tree_set_key_mode",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_set_key_mode
-    },
-    {
-        .name           = "tree_set_location",
-        .argc           = 2,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_NODE },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_set_location
-    },
-    {
-        .name           = "tree_set_visual",
-        .argc           = 4,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_STRING, DONNA_ARG_TYPE_STRING },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_set_visual
-    },
-    {
-        .name           = "tree_toggle_row",
-        .argc           = 3,
-        .arg_type       = { DONNA_ARG_TYPE_TREEVIEW, DONNA_ARG_TYPE_ROW_ID,
-            DONNA_ARG_TYPE_STRING},
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-        .cmd_fn         = cmd_tree_toggle_row
-    },
-    {
-        .name           = "void",
-        .argc           = 8,
-        .arg_type       = { DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL,
-            DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL },
-        .return_type    = DONNA_ARG_TYPE_NOTHING,
-        .visibility     = DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-        .cmd_fn         = cmd_void
-    },
-};
-
 
 static void
 _g_string_append_quoted (GString *str, gchar *s)
@@ -818,13 +297,13 @@ _donna_command_trigger_fl (DonnaApp     *app,
 /* helpers */
 
 static gint
-get_arg_from_list (gint nb, const gchar *choices[], const gchar *arg)
+get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
 {
     gchar to_lower = 'A' - 'a';
     gint *matches;
     gint i;
 
-    if (!arg)
+    if (!sel)
         return -1;
 
     matches = g_new (gint, nb + 1);
@@ -832,12 +311,12 @@ get_arg_from_list (gint nb, const gchar *choices[], const gchar *arg)
         matches[i] = i;
     matches[nb] = -1;
 
-    for (i = 0; arg[i] != '\0'; ++i)
+    for (i = 0; sel[i] != '\0'; ++i)
     {
         gchar a;
         gint *m;
 
-        a = arg[i];
+        a = sel[i];
         if (a >= 'A' && a <= 'Z')
             a -= to_lower;
 
@@ -876,9 +355,8 @@ get_arg_from_list (gint nb, const gchar *choices[], const gchar *arg)
     return i;
 }
 
-#define get_choice_from_arg(choices, index)   \
-    get_arg_from_list (sizeof (choices) / sizeof (choices[0]), choices, \
-            args->pdata[index])
+#define get_choice(choices, sel)   \
+    get_choice_from_list (sizeof (choices) / sizeof (choices[0]), choices, sel)
 
 /* commands */
 
@@ -895,21 +373,23 @@ show_err_on_task_failed (DonnaTask  *task,
 }
 
 static DonnaTaskState
-cmd_ask_text (DonnaTask *task, GPtrArray *args)
+cmd_ask_text (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
-    GPtrArray *other;
+    gchar *title = args[0];
+    gchar *details = args[1]; /* opt */
+    gchar *main_default = args[2]; /* opt */
+    GPtrArray *other = args[3]; /* gchar**, opt */
     GValue *v;
     gchar *s;
 
-    other = args->pdata[4];
     if (other)
         /* we need to make it NULL-terminated for ask_text() */
         g_ptr_array_add (other, NULL);
 
-    s = donna_app_ask_text (args->pdata[5], args->pdata[1], args->pdata[2],
-                args->pdata[3], (other) ? (const gchar **) other->pdata : NULL,
-                &err);
+    s = donna_app_ask_text (app, title, details, main_default,
+            (other) ? (const gchar **) other->pdata : NULL,
+            &err);
     if (other)
         g_ptr_array_remove_index_fast (other, other->len - 1);
     if (!s)
@@ -930,13 +410,13 @@ cmd_ask_text (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_config_get_boolean (DonnaTask *task, GPtrArray *args)
+cmd_config_get_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    gchar *name = args[0];
     GValue *v;
     gboolean val;
 
-    if (!donna_config_get_boolean (donna_app_peek_config (args->pdata[2]), &val,
-                "%s", args->pdata[1]))
+    if (!donna_config_get_boolean (donna_app_peek_config (app), &val, "%s", name))
         return DONNA_TASK_FAILED;
 
     v = donna_task_grab_return_value (task);
@@ -947,13 +427,13 @@ cmd_config_get_boolean (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_config_get_int (DonnaTask *task, GPtrArray *args)
+cmd_config_get_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    gchar *name = args[0];
     GValue *v;
     gint val;
 
-    if (!donna_config_get_int (donna_app_peek_config (args->pdata[2]), &val,
-                "%s", args->pdata[1]))
+    if (!donna_config_get_int (donna_app_peek_config (app), &val, "%s", name))
         return DONNA_TASK_FAILED;
 
     v = donna_task_grab_return_value (task);
@@ -964,13 +444,13 @@ cmd_config_get_int (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_config_get_string (DonnaTask *task, GPtrArray *args)
+cmd_config_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    gchar *name = args[0];
     GValue *v;
     gchar *val;
 
-    if (!donna_config_get_string (donna_app_peek_config (args->pdata[2]), &val,
-                "%s", args->pdata[1]))
+    if (!donna_config_get_string (donna_app_peek_config (app), &val, "%s", name))
         return DONNA_TASK_FAILED;
 
     v = donna_task_grab_return_value (task);
@@ -981,41 +461,48 @@ cmd_config_get_string (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_config_set_boolean (DonnaTask *task, GPtrArray *args)
+cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    if (!donna_config_set_boolean (donna_app_peek_config (args->pdata[3]),
-                GPOINTER_TO_INT (args->pdata[2]), "%s", args->pdata[1]))
+    gchar *name = args[0];
+    gint value = GPOINTER_TO_INT (args[1]);
+
+    if (!donna_config_set_boolean (donna_app_peek_config (app), value, "%s", name))
         return DONNA_TASK_FAILED;
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
-cmd_config_set_int (DonnaTask *task, GPtrArray *args)
+cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    if (!donna_config_set_int (donna_app_peek_config (args->pdata[3]),
-                GPOINTER_TO_INT (args->pdata[2]), "%s", args->pdata[1]))
+    gchar *name = args[0];
+    gint value = GPOINTER_TO_INT (args[1]);
+
+    if (!donna_config_set_int (donna_app_peek_config (app), value, "%s", name))
         return DONNA_TASK_FAILED;
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
-cmd_config_set_string (DonnaTask *task, GPtrArray *args)
+cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    if (!donna_config_set_string (donna_app_peek_config (args->pdata[3]),
-                args->pdata[2], "%s", args->pdata[1]))
+    gchar *name = args[0];
+    gchar *value = args[1];
+
+    if (!donna_config_set_string (donna_app_peek_config (app), value, "%s", name))
         return DONNA_TASK_FAILED;
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
-cmd_menu_popup (DonnaTask *task, GPtrArray *args)
+cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    GPtrArray *nodes = args[0];
+    gchar *menus = args[1]; /* opt */
 
-    /* we give our ref to show_menu(), but since the command is gonna be done
-     * almost instantly and args free-d, we need to add one */
-    if (!donna_app_show_menu (args->pdata[3], g_ptr_array_ref (args->pdata[1]),
-                args->pdata[2], &err))
+    /* since we give our ref to show_menu() but our args get free-d, we need to
+     * add one */
+    if (!donna_app_show_menu (app, g_ptr_array_ref (nodes), menus, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1024,20 +511,23 @@ cmd_menu_popup (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_node_activate (DonnaTask *task, GPtrArray *args)
+cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args);
+
+static DonnaTaskState
+cmd_node_activate (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
-    gboolean is_alt = GPOINTER_TO_INT (args->pdata[2]);
+    DonnaNode *node = args[0];
+    gboolean is_alt = GPOINTER_TO_INT (args[1]);
+
     DonnaTreeView *tree;
 
-    if (donna_node_get_node_type (args->pdata[1]) == DONNA_NODE_CONTAINER)
+    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
     {
         if (is_alt)
         {
-            donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                    DONNA_COMMAND_ERROR_OTHER,
-                    "action_node (CONTAINER, 1) == popup; not yet implemented");
-            return DONNA_TASK_FAILED;
+            gpointer _args[5] = { node, "all", NULL, NULL, NULL };
+            return cmd_node_popup_children (task, app, _args);
         }
     }
     else /* DONNA_NODE_ITEM */
@@ -1046,7 +536,7 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
         {
             DonnaTask *trigger_task;
 
-            trigger_task = donna_node_trigger_task (args->pdata[1], &err);
+            trigger_task = donna_node_trigger_task (node, &err);
             if (!trigger_task)
             {
                 donna_task_take_error (task, err);
@@ -1054,17 +544,16 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
             }
 
             donna_task_set_callback (trigger_task,
-                    (task_callback_fn) show_err_on_task_failed,
-                    args->pdata[3], NULL);
-            donna_app_run_task (args->pdata[3], trigger_task);
+                    (task_callback_fn) show_err_on_task_failed, app, NULL);
+            donna_app_run_task (app, trigger_task);
             return DONNA_TASK_DONE;
         }
     }
 
     /* (CONTAINER && !is_alt) || (ITEM && is_alt) */
 
-    g_object_get (args->pdata[3], "active-list", &tree, NULL);
-    if (!donna_tree_view_set_location (tree, args->pdata[1], &err))
+    g_object_get (app, "active-list", &tree, NULL);
+    if (!donna_tree_view_set_location (tree, node, &err))
     {
         donna_task_take_error (task, err);
         g_object_unref (tree);
@@ -1075,29 +564,33 @@ cmd_node_activate (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_node_new_child (DonnaTask *task, GPtrArray *args)
+cmd_node_new_child (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaNode *node = args[0];
+    gchar *type = args[1];
+    gchar *name = args[2];
+
     const GValue *v;
     GValue *value;
     DonnaTaskState ret;
     DonnaTask *t;
     const gchar *choices[] = { "item", "container" };
-    DonnaNodeType type[] = { DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
+    DonnaNodeType types[] = { DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
     gint c;
 
-    c = get_choice_from_arg (choices, 2);
+    c = get_choice (choices, type);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Cannot create new child, unknown type '%s'; "
                 "Must be 'item' or 'container'",
-                args->pdata[2]);
+                type);
         return DONNA_TASK_FAILED;
     }
 
-    t = donna_node_new_child_task (args->pdata[1], type[c], args->pdata[3], &err);
+    t = donna_node_new_child_task (node, types[c], name, &err);
     if (!t)
     {
         donna_task_take_error (task, err);
@@ -1105,7 +598,7 @@ cmd_node_new_child (DonnaTask *task, GPtrArray *args)
     }
 
     donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (args->pdata[4], t);
+    donna_app_run_task (app, t);
     donna_task_wait_for_it (t);
 
     ret = donna_task_get_state (t);
@@ -1179,28 +672,34 @@ popup_children (DonnaTask *task, struct popup_children_data *data)
 }
 
 static DonnaTaskState
-cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
+cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaNode *node = args[0];
+    gchar *children = args[1];
+    gchar *menus = args[2]; /* opt */
+    gchar *filter = args[3]; /* opt */
+    DonnaTreeView *tree = args[4]; /* opt */
+
     const gchar *c_children[] = { "all", "item", "container" };
-    DonnaNodeType children[]  = { DONNA_NODE_ITEM | DONNA_NODE_CONTAINER,
+    DonnaNodeType childrens[]  = { DONNA_NODE_ITEM | DONNA_NODE_CONTAINER,
         DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
     DonnaTaskState state;
     DonnaTask *t;
     struct popup_children_data data;
     gint c;
 
-    c = get_choice_from_arg (c_children, 2);
+    c = get_choice (c_children, children);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid type of node children: '%s'; Must be 'item', 'container' or 'all'",
-                args->pdata[2]);
+                children);
         return DONNA_TASK_FAILED;
     }
 
-    t = donna_node_get_children_task (args->pdata[1], children[c], &err);
+    t = donna_node_get_children_task (node, childrens[c], &err);
     if (!t)
     {
         donna_task_take_error (task, err);
@@ -1208,7 +707,7 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
     }
 
     donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (args->pdata[6], t);
+    donna_app_run_task (app, t);
     donna_task_wait_for_it (t);
 
     state = donna_task_get_state (t);
@@ -1223,7 +722,7 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
         }
         else
         {
-            gchar *fl = donna_node_get_full_location (args->pdata[1]);
+            gchar *fl = donna_node_get_full_location (node);
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
                     "Command 'node_popup_children' failed: Unable to get children of '%s'",
@@ -1234,10 +733,10 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
         return state;
     }
 
-    data.app    = args->pdata[6];
-    data.tree   = args->pdata[5];
-    data.filter = args->pdata[4];
-    data.menus  = args->pdata[3];
+    data.app    = app;
+    data.tree   = tree;
+    data.filter = filter;
+    data.menus  = menus;
     data.nodes  = g_value_dup_boxed (donna_task_get_return_value (t));
     g_object_unref (t);
 
@@ -1259,26 +758,29 @@ cmd_node_popup_children (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_nodes_io (DonnaTask *task, GPtrArray *args)
+cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    GPtrArray *nodes = args[0];
+    gchar *io_type = args[1];
+    DonnaNode *dest = args[2]; /* opt */
+
     const gchar *c_io_type[] = { "copy", "move", "delete" };
-    DonnaIoType io_type[] = { DONNA_IO_COPY, DONNA_IO_MOVE, DONNA_IO_DELETE };
+    DonnaIoType io_types[] = { DONNA_IO_COPY, DONNA_IO_MOVE, DONNA_IO_DELETE };
     gint c_io;
 
-    c_io = get_choice_from_arg (c_io_type, 2);
+    c_io = get_choice (c_io_type, io_type);
     if (c_io < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid type of IO operation: '%s'; "
                 "Must be 'copy', 'move' or 'delete'",
-                args->pdata[2]);
+                io_type);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_nodes_io (args->pdata[4], args->pdata[1],
-                io_type[c_io], args->pdata[3], &err))
+    if (!donna_app_nodes_io (app, nodes, io_types[c_io], dest, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1288,13 +790,13 @@ cmd_nodes_io (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_add_nodes (DonnaTask *task, GPtrArray *args)
+cmd_register_add_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    GPtrArray *nodes = args[1];
 
-    if (!donna_app_register_add_nodes (args->pdata[3],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                args->pdata[2], &err))
+    if (!donna_app_register_add_nodes (app, (name) ? name : "", nodes, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1303,12 +805,12 @@ cmd_register_add_nodes (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_drop (DonnaTask *task, GPtrArray *args)
+cmd_register_drop (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
 
-    if (!donna_app_register_drop (args->pdata[2],
-                (args->pdata[1]) ? args->pdata[1] : "", &err))
+    if (!donna_app_register_drop (app, (name) ? name : "", &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1317,29 +819,31 @@ cmd_register_drop (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_get_nodes (DonnaTask *task, GPtrArray *args)
+cmd_register_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    gchar *drop = args[1];
+
     const gchar *c_drop[] = { "not", "always", "on-cut" };
-    DonnaDropRegister drop[] = { DONNA_DROP_REGISTER_NOT, DONNA_DROP_REGISTER_ALWAYS,
-        DONNA_DROP_REGISTER_ON_CUT };
+    DonnaDropRegister drops[] = { DONNA_DROP_REGISTER_NOT,
+        DONNA_DROP_REGISTER_ALWAYS, DONNA_DROP_REGISTER_ON_CUT };
     gint c;
     GPtrArray *arr;
     GValue *value;
 
-    c = get_choice_from_arg (c_drop, 2);
+    c = get_choice (c_drop, drop);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid drop option: '%s'; Must be 'not', 'always' or 'on-cut'",
-                args->pdata[2]);
+                drop);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_register_get_nodes (args->pdata[3],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                drop[c], NULL, &arr, &err))
+    if (!donna_app_register_get_nodes (app, (name) ? name : "", drops[c],
+                NULL, &arr, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1354,9 +858,11 @@ cmd_register_get_nodes (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_get_type (DonnaTask *task, GPtrArray *args)
+cmd_register_get_type (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+
     DonnaRegisterType type;
     GValue *value;
     const gchar *s_type[3];
@@ -1364,8 +870,7 @@ cmd_register_get_type (DonnaTask *task, GPtrArray *args)
     s_type[DONNA_REGISTER_CUT]      = "cut";
     s_type[DONNA_REGISTER_COPY]     = "copy";
 
-    if (!donna_app_register_get_nodes (args->pdata[2],
-                (args->pdata[1]) ? args->pdata[1] : "",
+    if (!donna_app_register_get_nodes (app, (name) ? name : "",
                 DONNA_DROP_REGISTER_NOT, &type, NULL, &err))
     {
         donna_task_take_error (task, err);
@@ -1381,32 +886,34 @@ cmd_register_get_type (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_load (DonnaTask *task, GPtrArray *args)
+cmd_register_load (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    gchar *file = args[1];
+    gchar *file_type = args[2]; /* opt */
+
     const gchar *c_file_type[] = { "nodes", "files", "uris" };
-    DonnaRegisterFile file_type[] = { DONNA_REGISTER_FILE_NODES,
+    DonnaRegisterFile file_types[] = { DONNA_REGISTER_FILE_NODES,
         DONNA_REGISTER_FILE_FILE, DONNA_REGISTER_FILE_URIS };
     gint c;
 
-    if (args->pdata[3])
+    if (file_type)
     {
-        c = get_choice_from_arg (c_file_type, 3);
+        c = get_choice (c_file_type, file_type);
         if (c < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_SYNTAX,
                     "Invalid register file type: '%s'; Must be 'nodes', 'files' or 'uris'",
-                    args->pdata[3]);
+                    file_type);
             return DONNA_TASK_FAILED;
         }
     }
     else
         c = 0;
 
-    if (!donna_app_register_load (args->pdata[4],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                args->pdata[2], file_type[c], &err))
+    if (!donna_app_register_load (app, (name) ? name : "", file, file_types[c], &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1416,27 +923,31 @@ cmd_register_load (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_nodes_io (DonnaTask *task, GPtrArray *args)
+cmd_register_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    gchar *io_type = args[1]; /* opt */
+    DonnaNode *dest = args[2]; /* opt */
+
     const gchar *c_io_type[] = { "auto", "copy", "move", "delete" };
-    DonnaIoType io_type[] = { DONNA_IO_UNKNOWN, DONNA_IO_COPY, DONNA_IO_MOVE,
+    DonnaIoType io_types[] = { DONNA_IO_UNKNOWN, DONNA_IO_COPY, DONNA_IO_MOVE,
         DONNA_IO_DELETE };
     DonnaDropRegister drop;
     DonnaRegisterType reg_type;
     gint c_io;
     GPtrArray *nodes;
 
-    if (args->pdata[2])
+    if (io_type)
     {
-        c_io = get_choice_from_arg (c_io_type, 2);
+        c_io = get_choice (c_io_type, io_type);
         if (c_io < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_SYNTAX,
                     "Invalid type of IO operation: '%s'; "
                     "Must be 'auto', 'copy', 'move' or 'delete'",
-                    args->pdata[2]);
+                    io_type);
             return DONNA_TASK_FAILED;
         }
     }
@@ -1458,19 +969,17 @@ cmd_register_nodes_io (DonnaTask *task, GPtrArray *args)
             break;
     }
 
-    if (!donna_app_register_get_nodes (args->pdata[4],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                drop, &reg_type, &nodes, &err))
+    if (!donna_app_register_get_nodes (app, (name) ? name : "", drop,
+                &reg_type, &nodes, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
 
     if (c_io == 0)
-        c_io = (reg_type == DONNA_REGISTER_CUT) ? 2 : 1;
+        c_io = (reg_type == DONNA_REGISTER_CUT) ? 2 /* MOVE */ : 1 /* COPY */;
 
-    if (!donna_app_nodes_io (args->pdata[4], nodes, io_type[c_io],
-                args->pdata[3], &err))
+    if (!donna_app_nodes_io (app, nodes, io_types[c_io], dest, &err))
     {
         donna_task_take_error (task, err);
         g_ptr_array_unref (nodes);
@@ -1482,32 +991,34 @@ cmd_register_nodes_io (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_save (DonnaTask *task, GPtrArray *args)
+cmd_register_save (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    gchar *file = args[1];
+    gchar *file_type = args[2]; /* opt */
+
     const gchar *c_file_type[] = { "nodes", "files", "uris" };
-    DonnaRegisterFile file_type[] = { DONNA_REGISTER_FILE_NODES,
+    DonnaRegisterFile file_types[] = { DONNA_REGISTER_FILE_NODES,
         DONNA_REGISTER_FILE_FILE, DONNA_REGISTER_FILE_URIS };
     gint c;
 
-    if (args->pdata[3])
+    if (file_type)
     {
-        c = get_choice_from_arg (c_file_type, 3);
+        c = get_choice (c_file_type, file_type);
         if (c < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_SYNTAX,
                     "Invalid register file type: '%s'; Must be 'nodes', 'files' or 'uris'",
-                    args->pdata[3]);
+                    file_type);
             return DONNA_TASK_FAILED;
         }
     }
     else
         c = 0;
 
-    if (!donna_app_register_save (args->pdata[4],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                args->pdata[2], file_type[c], &err))
+    if (!donna_app_register_save (app, (name) ? name : "", file, file_types[c], &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1517,26 +1028,28 @@ cmd_register_save (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_set (DonnaTask *task, GPtrArray *args)
+cmd_register_set (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    gchar *type = args[1];
+    GPtrArray *nodes = args[2];
+
     const gchar *c_type[] = { "cut", "copy" };
-    DonnaRegisterType type[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
+    DonnaRegisterType types[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
     gint c;
 
-    c = get_choice_from_arg (c_type, 2);
+    c = get_choice (c_type, type);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid register type: '%s'; Must be 'cut' or 'copy'",
-                args->pdata[2]);
+                type);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_register_set (args->pdata[4],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                type[c], args->pdata[3], &err))
+    if (!donna_app_register_set (app, (name) ? name : "", types[c], nodes, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1546,26 +1059,27 @@ cmd_register_set (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_register_set_type (DonnaTask *task, GPtrArray *args)
+cmd_register_set_type (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    gchar *name = args[0]; /* opt */
+    gchar *type = args[1];
+
     const gchar *c_type[] = { "cut", "copy" };
-    DonnaRegisterType type[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
+    DonnaRegisterType types[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
     gint c;
 
-    c = get_choice_from_arg (c_type, 2);
+    c = get_choice (c_type, type);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid register type: '%s'; Must be 'cut' or 'copy'",
-                args->pdata[2]);
+                type);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_register_set_type (args->pdata[3],
-                (args->pdata[1]) ? args->pdata[1] : "",
-                type[c], &err))
+    if (!donna_app_register_set_type (app, (name) ? name : "", types[c], &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1575,39 +1089,20 @@ cmd_register_set_type (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_repeat (DonnaTask *task, GPtrArray *args)
-{
-    gint nb;
-
-    nb = GPOINTER_TO_INT (args->pdata[1]);
-    for (nb = MAX (1, nb); nb > 0; --nb)
-    {
-        struct rc_data data;
-
-        memset (&data, 0, sizeof (struct rc_data));
-        data.app          = args->pdata[3];
-        data.fl           = g_strdup (args->pdata[2]);
-
-        /* run_command() will take care of freeing data as/when needed */
-        if (run_command (task, &data) != DONNA_TASK_DONE)
-            return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_task_set_state (DonnaTask *task, GPtrArray *args)
+cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaNode *node = args[0];
+    gchar *state = args[1];
+
     const gchar *choices[] = { "run", "pause", "cancel", "stop", "wait" };
-    DonnaTaskState state[] = { DONNA_TASK_RUNNING, DONNA_TASK_PAUSED,
+    DonnaTaskState states[] = { DONNA_TASK_RUNNING, DONNA_TASK_PAUSED,
         DONNA_TASK_CANCELLED, DONNA_TASK_STOPPED, DONNA_TASK_WAITING };
     gint c;
 
-    if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
+    if (!streq (donna_node_get_domain (node), "task"))
     {
-        gchar *fl = donna_node_get_full_location (args->pdata[1]);
+        gchar *fl = donna_node_get_full_location (node);
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Command 'task_set_state' cannot be used on '%s', only works on node in domain 'task'",
@@ -1616,22 +1111,21 @@ cmd_task_set_state (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    c = get_choice_from_arg (choices, 2);
+    c = get_choice (choices, state);
     if (c < 0)
     {
-        gchar *d = donna_node_get_name (args->pdata[1]);
+        gchar *d = donna_node_get_name (node);
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
                 "Invalid state for task '%s': '%s' "
                 "Must be 'run', 'pause', 'cancel', 'stop' or 'wait'",
-                d, args->pdata[2]);
+                d, state);
         g_free (d);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_task_manager_set_state (
-                donna_app_get_task_manager (args->pdata[3]),
-                args->pdata[1], state[c], &err))
+    if (!donna_task_manager_set_state (donna_app_get_task_manager (app), node,
+                states[c], &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1641,14 +1135,16 @@ cmd_task_set_state (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_task_toggle (DonnaTask *task, GPtrArray *args)
+cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaNode *node = args[0];
+
     DonnaTask *t;
 
-    if (!streq (donna_node_get_domain (args->pdata[1]), "task"))
+    if (!streq (donna_node_get_domain (node), "task"))
     {
-        gchar *fl = donna_node_get_full_location (args->pdata[1]);
+        gchar *fl = donna_node_get_full_location (node);
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Command 'task_toggle' cannot be used on '%s', only works on node in domain 'task'",
@@ -1657,7 +1153,7 @@ cmd_task_toggle (DonnaTask *task, GPtrArray *args)
         return DONNA_TASK_FAILED;
     }
 
-    t = donna_node_trigger_task (args->pdata[1], &err);
+    t = donna_node_trigger_task (node, &err);
     if (!t)
     {
         donna_task_take_error (task, err);
@@ -1665,7 +1161,7 @@ cmd_task_toggle (DonnaTask *task, GPtrArray *args)
     }
 
     donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (args->pdata[2], t);
+    donna_app_run_task (app, t);
     donna_task_wait_for_it (t);
 
     if (donna_task_get_state (t) != DONNA_TASK_DONE)
@@ -1682,18 +1178,22 @@ cmd_task_toggle (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_abort (DonnaTask *task, GPtrArray *args)
+cmd_tree_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    donna_tree_view_abort (args->pdata[1]);
+    DonnaTreeView *tree = args[0];
+
+    donna_tree_view_abort (tree);
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
-cmd_tree_activate_row (DonnaTask *task, GPtrArray *args)
+cmd_tree_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
 
-    if (!donna_tree_view_activate_row (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_activate_row (tree, rid, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1703,11 +1203,13 @@ cmd_tree_activate_row (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_add_root (DonnaTask *task, GPtrArray *args)
+cmd_tree_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err= NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaNode *node = args[1];
 
-    if (!donna_tree_view_add_root (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_add_root (tree, node, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1716,12 +1218,14 @@ cmd_tree_add_root (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_edit_column (DonnaTask *task, GPtrArray *args)
+cmd_tree_edit_column (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gchar *col_name = args[2];
 
-    if (!donna_tree_view_edit_column (args->pdata[1], args->pdata[2],
-                args->pdata[3], &err))
+    if (!donna_tree_view_edit_column (tree, rid, col_name, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1731,11 +1235,13 @@ cmd_tree_edit_column (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_full_collapse (DonnaTask *task, GPtrArray *args)
+cmd_tree_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
 
-    if (!donna_tree_view_full_collapse (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_full_collapse (tree, rid, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1745,11 +1251,13 @@ cmd_tree_full_collapse (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_full_expand (DonnaTask *task, GPtrArray *args)
+cmd_tree_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
 
-    if (!donna_tree_view_full_expand (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_full_expand (tree, rid, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1759,12 +1267,14 @@ cmd_tree_full_expand (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_location (DonnaTask *task, GPtrArray *args)
+cmd_tree_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    DonnaTreeView *tree = args[0];
+
     DonnaNode *node;
     GValue *v;
 
-    node = donna_tree_view_get_location (args->pdata[1]);
+    node = donna_tree_view_get_location (tree);
     if (!node)
         return DONNA_TASK_FAILED;
 
@@ -1776,13 +1286,16 @@ cmd_tree_get_location (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_node_at_row (DonnaTask *task, GPtrArray *args)
+cmd_tree_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+
     DonnaNode *node;
     GValue *v;
 
-    node = donna_tree_view_get_node_at_row (args->pdata[1], args->pdata[2], &err);
+    node = donna_tree_view_get_node_at_row (tree, rid, &err);
     if (!node)
     {
         donna_task_take_error (task, err);
@@ -1797,14 +1310,17 @@ cmd_tree_get_node_at_row (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_nodes (DonnaTask *task, GPtrArray *args)
+cmd_tree_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gboolean to_focused = GPOINTER_TO_INT (args[2]); /* opt */
+
     GPtrArray *arr;
     GValue *v;
 
-    arr = donna_tree_view_get_nodes (args->pdata[1], args->pdata[2],
-            (gboolean) GPOINTER_TO_INT (args->pdata[3]), &err);
+    arr = donna_tree_view_get_nodes (tree, rid, to_focused, &err);
     if (!arr)
     {
         donna_task_take_error (task, err);
@@ -1820,44 +1336,48 @@ cmd_tree_get_nodes (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
+cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gchar *visual = args[2];
+    gchar *source = args[3];
+
     const gchar *c_visual[] = { "name", "box", "highlight", "clicks" };
-    DonnaTreeVisual visual[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_BOX,
+    DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_BOX,
         DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
     const gchar *c_source[] = { "any", "tree", "node" };
-    DonnaTreeVisualSource source[] = { DONNA_TREE_VISUAL_SOURCE_ANY,
+    DonnaTreeVisualSource sources[] = { DONNA_TREE_VISUAL_SOURCE_ANY,
         DONNA_TREE_VISUAL_SOURCE_TREE, DONNA_TREE_VISUAL_SOURCE_NODE };
     gchar *s;
     GValue *value;
     gint c_v;
     gint c_s;
 
-    c_v = get_choice_from_arg (c_visual, 3);
+    c_v = get_choice (c_visual, visual);
     if (c_v < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown type '%s'. "
                 "Must be 'name', 'box', 'highlight' or 'clicks'",
-                args->pdata[3]);
+                visual);
         return DONNA_TASK_FAILED;
     }
 
-    c_s = get_choice_from_arg (c_source, 4);
+    c_s = get_choice (c_source, source);
     if (c_s < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown source '%s'. "
                 "Must be 'tree', 'node', or 'any'",
-                args->pdata[4]);
+                source);
         return DONNA_TASK_FAILED;
     }
 
-    s = donna_tree_view_get_visual (args->pdata[1], args->pdata[2], visual[c_v],
-                source[c_s], &err);
+    s = donna_tree_view_get_visual (tree, rid, visuals[c_v], sources[c_s], &err);
     if (!s)
     {
         if (err)
@@ -1874,18 +1394,26 @@ cmd_tree_get_visual (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
+cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *s_set = args[1];
+    DonnaTreeRowId *rid = args[2];
+    gint nb = GPOINTER_TO_INT (args[3]); /* opt */
+    gchar *nb_type = args[4]; /* opt */
+    gchar *action = args[5]; /* opt */
+    gboolean to_focused = GPOINTER_TO_INT (args[6]); /* opt */
+
     const gchar *c_set[] = { "scroll", "focus", "cursor" };
-    DonnaTreeSet _set[] = { DONNA_TREE_SET_SCROLL, DONNA_TREE_SET_FOCUS,
+    DonnaTreeSet sets[] = { DONNA_TREE_SET_SCROLL, DONNA_TREE_SET_FOCUS,
         DONNA_TREE_SET_CURSOR };
     const gchar *c_nb_type[] = { "repeat", "line", "percent" };
-    DonnaTreeGoto nb_type[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
+    DonnaTreeGoto nb_types[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
         DONNA_TREE_GOTO_PERCENT };
     DonnaTreeSet set;
     const gchar *c_action[] = { "select", "unselect", "invert" };
-    DonnaTreeSelAction action[] = { DONNA_TREE_SEL_SELECT, DONNA_TREE_SEL_UNSELECT,
+    DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT, DONNA_TREE_SEL_UNSELECT,
         DONNA_TREE_SEL_INVERT };
     gchar *s;
     gint c_n;
@@ -1893,7 +1421,7 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
     gint c_a;
 
     nb_sets = sizeof (c_set) / sizeof (c_set[0]);
-    s = args->pdata[2];
+    s = s_set;
     set = 0;
     for (;;)
     {
@@ -1918,7 +1446,7 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
             *end = '\0';
         }
 
-        c_s = get_arg_from_list (nb_sets, c_set, start);
+        c_s = get_choice_from_list (nb_sets, c_set, start);
 
         /* "undo trim" */
         if (ss)
@@ -1931,7 +1459,7 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
             set = 0;
             break;
         }
-        set |= _set[c_s];
+        set |= sets[c_s];
 
         if (ss)
             s = ss + 1;
@@ -1944,46 +1472,44 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
                 DONNA_COMMAND_ERROR_OTHER,
                 "Cannot go to line, unknown set type '%s'. "
                 "Must be (a '+'-separated combination of) 'scroll', 'focus' and/or 'cursor'",
-                args->pdata[2]);
+                s_set);
         return DONNA_TASK_FAILED;
     }
 
-    if (args->pdata[5])
+    if (nb_type)
     {
-        c_n = get_choice_from_arg (c_nb_type, 5);
+        c_n = get_choice (c_nb_type, nb_type);
         if (c_n < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
                     "Cannot goto line, invalid type: '%s'; "
                     "Must be 'repeat', 'line' or 'percent'",
-                    args->pdata[5]);
+                    nb_type);
             return DONNA_TASK_FAILED;
         }
     }
     else
         c_n = 0;
 
-    if (args->pdata[6])
+    if (action)
     {
-        c_a = get_choice_from_arg (c_action, 6);
+        c_a = get_choice (c_action, action);
         if (c_a < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
                     "Cannot goto line, invalid selection action: '%s'; "
                     "Must be 'select', 'unselect' or 'invert'",
-                    args->pdata[6]);
+                    action);
             return DONNA_TASK_FAILED;
         }
     }
     else
         c_a = -1;
 
-    if (!donna_tree_view_goto_line (args->pdata[1], set, args->pdata[3],
-                GPOINTER_TO_INT (args->pdata[4]), nb_type[c_n],
-                (c_a < 0) ? 0 : action[c_a], GPOINTER_TO_INT (args->pdata[7]),
-                &err))
+    if (!donna_tree_view_goto_line (tree, set, rid, nb, nb_types[c_n],
+                (c_a < 0) ? 0 : actions[c_a], to_focused, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1992,25 +1518,13 @@ cmd_tree_goto_line (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_maxi_collapse (DonnaTask *task, GPtrArray *args)
+cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
 
-    if (!donna_tree_view_maxi_collapse (args->pdata[1], args->pdata[2], &err))
-    {
-        donna_task_take_error (task, err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_tree_maxi_expand (DonnaTask *task, GPtrArray *args)
-{
-    GError *err = NULL;
-
-    if (!donna_tree_view_maxi_expand (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_maxi_collapse (tree, rid, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2020,26 +1534,46 @@ cmd_tree_maxi_expand (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
+cmd_tree_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+
+    if (!donna_tree_view_maxi_expand (tree, rid, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *mode = args[1];
+
     const gchar *choices[] = { "visible", "simple", "normal", "reload" };
-    DonnaTreeRefreshMode mode[] = { DONNA_TREE_REFRESH_VISIBLE,
+    DonnaTreeRefreshMode modes[] = { DONNA_TREE_REFRESH_VISIBLE,
         DONNA_TREE_REFRESH_SIMPLE, DONNA_TREE_REFRESH_NORMAL,
         DONNA_TREE_REFRESH_RELOAD };
     gint c;
 
-    c = get_choice_from_arg (choices, 2);
+    c = get_choice (choices, mode);
     if (c < 0)
     {
         donna_task_set_error (task,
                 DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                "Invalid argument 'mode': '%s', expected 'visible', 'simple', 'normal' or 'reload'",
-                args->pdata[2]);
+                "Invalid argument 'mode': '%s'; "
+                "Must be 'visible', 'simple', 'normal' or 'reload'",
+                mode);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_refresh (args->pdata[1], mode[c], &err))
+    if (!donna_tree_view_refresh (tree, modes[c], &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2049,11 +1583,13 @@ cmd_tree_refresh (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_remove_row (DonnaTask *task, GPtrArray *args)
+cmd_tree_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
 
-    if (!donna_tree_view_remove_row (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_remove_row (tree, rid, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2062,34 +1598,40 @@ cmd_tree_remove_row (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_reset_keys (DonnaTask *task, GPtrArray *args)
+cmd_tree_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    donna_tree_view_reset_keys (args->pdata[1]);
+    DonnaTreeView *tree = args[0];
+
+    donna_tree_view_reset_keys (tree);
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
-cmd_tree_selection (DonnaTask *task, GPtrArray *args)
+cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    GError              *err = NULL;
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *action = args[1];
+    DonnaTreeRowId *rid = args[2];
+    gboolean to_focused = GPOINTER_TO_INT (args[3]); /* opt */
+
     const gchar *choices[] = { "select", "unselect", "invert" };
-    DonnaTreeSelAction action[] = { DONNA_TREE_SEL_SELECT,
+    DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT,
         DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT };
     gint c;
 
-    c = get_choice_from_arg (choices, 2);
+    c = get_choice (choices, action);
     if (c < 0)
     {
         donna_task_set_error (task,
                 DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                "Invalid argument 'action': '%s', expected 'select', 'unselect' or 'invert'",
-                args->pdata[2]);
+                "Invalid argument 'action': '%s'; "
+                "Must be 'select', 'unselect' or 'invert'",
+                action);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_selection (args->pdata[1], action[c], args->pdata[3],
-                (gboolean) GPOINTER_TO_INT (args->pdata[4]),
-                &err))
+    if (!donna_tree_view_selection (tree, actions[c], rid, to_focused, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2099,12 +1641,14 @@ cmd_tree_selection (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_cursor (DonnaTask *task, GPtrArray *args)
+cmd_tree_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gboolean no_scroll = GPOINTER_TO_INT (args[2]);
 
-    if (!donna_tree_view_set_cursor (args->pdata[1], args->pdata[2],
-                (gboolean) GPOINTER_TO_INT (args->pdata[3]), &err))
+    if (!donna_tree_view_set_cursor (tree, rid, no_scroll, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2114,11 +1658,13 @@ cmd_tree_set_cursor (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_focus (DonnaTask *task, GPtrArray *args)
+cmd_tree_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
 
-    if (!donna_tree_view_set_focus (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_set_focus (tree, rid, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2128,18 +1674,23 @@ cmd_tree_set_focus (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_key_mode (DonnaTask *task, GPtrArray *args)
+cmd_tree_set_key_mode (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    donna_tree_view_set_key_mode (args->pdata[1], args->pdata[2]);
+    DonnaTreeView *tree = args[0];
+    gchar *key_mode = args[1];
+
+    donna_tree_view_set_key_mode (tree, key_mode);
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
-cmd_tree_set_location (DonnaTask *task, GPtrArray *args)
+cmd_tree_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaNode *node = args[1];
 
-    if (!donna_tree_view_set_location (args->pdata[1], args->pdata[2], &err))
+    if (!donna_tree_view_set_location (tree, node, &err))
     {
         if (err)
             donna_task_take_error (task, err);
@@ -2149,28 +1700,32 @@ cmd_tree_set_location (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_visual (DonnaTask *task, GPtrArray *args)
+cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gchar *visual = args[2];
+    gchar *value = args[3];
+
     const gchar *choices[] = { "name", "icon", "box", "highlight", "clicks" };
-    DonnaTreeVisual visual[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+    DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
         DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
         DONNA_TREE_VISUAL_CLICKS };
     gint c;
 
-    c = get_choice_from_arg (choices, 3);
+    c = get_choice (choices, visual);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown type '%s'. "
                 "Must be 'name', 'icon', 'box', 'highlight' or 'clicks'",
-                args->pdata[3]);
+                visual);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_set_visual (args->pdata[1], args->pdata[2], visual[c],
-                args->pdata[4], &err))
+    if (!donna_tree_view_set_visual (tree, rid, visuals[c], value, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2180,25 +1735,30 @@ cmd_tree_set_visual (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
+cmd_tree_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gchar *toggle = args[2];
+
     const gchar *choices[] = { "standard", "full", "maxi" };
-    DonnaTreeToggle toggle[] = { DONNA_TREE_TOGGLE_STANDARD,
+    DonnaTreeToggle toggles[] = { DONNA_TREE_TOGGLE_STANDARD,
         DONNA_TREE_TOGGLE_FULL, DONNA_TREE_TOGGLE_MAXI };
     gint c;
 
-    c = get_choice_from_arg (choices, 3);
+    c = get_choice (choices, toggle);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
-                "Cannot toggle row, unknown toggle type '%s'. Must be 'standard', 'full' or 'maxi'",
-                args->pdata[3]);
+                "Cannot toggle row, unknown toggle type '%s'; "
+                "Must be 'standard', 'full' or 'maxi'",
+                toggle);
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_tree_view_toggle_row (args->pdata[1], args->pdata[2], toggle[c], &err))
+    if (!donna_tree_view_toggle_row (tree, rid, toggles[c], &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2208,7 +1768,336 @@ cmd_tree_toggle_row (DonnaTask *task, GPtrArray *args)
 }
 
 static DonnaTaskState
-cmd_void (DonnaTask *task, GPtrArray *args)
+cmd_void (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     return DONNA_TASK_DONE;
+}
+
+
+
+#define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_type) \
+command.name           = g_strdup (#cmd_name); \
+command.argc           = cmd_argc; \
+command.return_type    = cmd_return_type; \
+command.visibility     = cmd_visibility; \
+command.func           = (command_fn) cmd_##cmd_name; \
+_command = g_slice_new (struct command); \
+memcpy (_command, &command, sizeof (struct command)); \
+_command->arg_type = g_new (DonnaArgType, command.argc); \
+memcpy (_command->arg_type, arg_type, sizeof (DonnaArgType) * command.argc); \
+g_hash_table_insert (commands, command.name, _command);
+
+void
+_donna_add_commands (GHashTable *commands)
+{
+    struct command *_command;
+    struct command command;
+    DonnaArgType arg_type[8];
+    command.arg_type = arg_type;
+    gint i;
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL | DONNA_ARG_IS_ARRAY;
+    add_command (ask_text, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_get_boolean, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_get_int, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_get_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (config_set_boolean, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (config_set_int, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_set_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (menu_popup, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (node_activate, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (node_new_child, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_IS_OPTIONAL;
+    add_command (node_popup_children, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
+    add_command (nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    add_command (register_add_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (register_drop, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (register_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (register_get_type, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (register_load, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
+    add_command (register_nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (register_save, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    add_command (register_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (register_set_type, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (task_set_state, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (task_toggle, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    add_command (tree_abort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_activate_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_edit_column, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (tree_add_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_full_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_full_expand, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    add_command (tree_get_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_get_node_at_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_get_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_goto_line, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_maxi_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_maxi_expand, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_refresh, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_remove_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    add_command (tree_reset_keys, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_selection, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_set_cursor, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    add_command (tree_set_focus, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_set_key_mode, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (tree_set_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_set_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_toggle_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (void, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
 }
