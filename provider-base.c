@@ -20,7 +20,6 @@ enum
 
 struct _DonnaProviderBasePrivate
 {
-    DonnaApp    *app;
     GHashTable  *nodes;
     GRecMutex    nodes_mutex;
 };
@@ -149,7 +148,7 @@ provider_base_finalize (GObject *object)
 
     g_hash_table_destroy (priv->nodes);
     g_rec_mutex_clear (&priv->nodes_mutex);
-    g_object_unref (priv->app);
+    g_object_unref (((DonnaProviderBase *) object)->app);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_base_parent_class)->finalize (object);
@@ -162,7 +161,7 @@ provider_base_set_property (GObject        *object,
                             GParamSpec     *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        ((DonnaProviderBase *) object)->priv->app = g_value_dup_object (value);
+        ((DonnaProviderBase *) object)->app = g_value_dup_object (value);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -174,7 +173,7 @@ provider_base_get_property (GObject        *object,
                             GParamSpec     *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        g_value_set_object (value, ((DonnaProviderBase *) object)->priv->app);
+        g_value_set_object (value, ((DonnaProviderBase *) object)->app);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }

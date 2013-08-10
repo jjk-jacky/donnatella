@@ -23,6 +23,7 @@ struct _DonnaProviderBase
 {
     GObject parent;
 
+    DonnaApp *app;
     DonnaProviderBasePrivate *priv;
 };
 
