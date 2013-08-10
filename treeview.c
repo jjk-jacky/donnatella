@@ -2376,12 +2376,14 @@ set_children (DonnaTreeView *tree,
         {
             GtkTreeIter i;
 
-            donna_tree_store_iter_children (priv->store, &i, iter);
-            do
+            if (donna_tree_store_iter_children (priv->store, &i, iter))
             {
-                list = g_slist_prepend (list, gtk_tree_iter_copy (&i));
-            } while (donna_tree_store_iter_next (priv->store, &i));
-            list = g_slist_reverse (list);
+                do
+                {
+                    list = g_slist_prepend (list, gtk_tree_iter_copy (&i));
+                } while (donna_tree_store_iter_next (priv->store, &i));
+                list = g_slist_reverse (list);
+            }
         }
         else
             es = DONNA_TREE_EXPAND_UNKNOWN;
