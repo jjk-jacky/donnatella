@@ -287,8 +287,8 @@ _donna_command_trigger_fl (DonnaApp     *app,
 
 /* helpers */
 
-static gint
-get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
+gint
+_donna_get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
 {
     gchar to_lower = 'A' - 'a';
     gint *matches;
@@ -345,9 +345,6 @@ get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
     g_free (matches);
     return i;
 }
-
-#define get_choice(choices, sel)   \
-    get_choice_from_list (sizeof (choices) / sizeof (choices[0]), choices, sel)
 
 /* commands */
 
@@ -570,7 +567,7 @@ cmd_node_new_child (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaNodeType types[] = { DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
     gint c;
 
-    c = get_choice (choices, type);
+    c = _get_choice (choices, type);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -680,7 +677,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
     struct popup_children_data data;
     gint c;
 
-    c = get_choice (c_children, children);
+    c = _get_choice (c_children, children);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -760,7 +757,7 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaIoType io_types[] = { DONNA_IO_COPY, DONNA_IO_MOVE, DONNA_IO_DELETE };
     gint c_io;
 
-    c_io = get_choice (c_io_type, io_type);
+    c_io = _get_choice (c_io_type, io_type);
     if (c_io < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -1102,7 +1099,7 @@ cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    c = get_choice (choices, state);
+    c = _get_choice (choices, state);
     if (c < 0)
     {
         gchar *d = donna_node_get_name (node);
@@ -1346,7 +1343,7 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     gint c_v;
     gint c_s;
 
-    c_v = get_choice (c_visual, visual);
+    c_v = _get_choice (c_visual, visual);
     if (c_v < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -1357,7 +1354,7 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    c_s = get_choice (c_source, source);
+    c_s = _get_choice (c_source, source);
     if (c_s < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -1437,7 +1434,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
             *end = '\0';
         }
 
-        c_s = get_choice_from_list (nb_sets, c_set, start);
+        c_s = _donna_get_choice_from_list (nb_sets, c_set, start);
 
         /* "undo trim" */
         if (ss)
@@ -1469,7 +1466,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     if (nb_type)
     {
-        c_n = get_choice (c_nb_type, nb_type);
+        c_n = _get_choice (c_nb_type, nb_type);
         if (c_n < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -1485,7 +1482,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     if (action)
     {
-        c_a = get_choice (c_action, action);
+        c_a = _get_choice (c_action, action);
         if (c_a < 0)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -1553,7 +1550,7 @@ cmd_tree_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
         DONNA_TREE_REFRESH_RELOAD };
     gint c;
 
-    c = get_choice (choices, mode);
+    c = _get_choice (choices, mode);
     if (c < 0)
     {
         donna_task_set_error (task,
@@ -1611,7 +1608,7 @@ cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
         DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT };
     gint c;
 
-    c = get_choice (choices, action);
+    c = _get_choice (choices, action);
     if (c < 0)
     {
         donna_task_set_error (task,
@@ -1705,7 +1702,7 @@ cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
         DONNA_TREE_VISUAL_CLICKS };
     gint c;
 
-    c = get_choice (choices, visual);
+    c = _get_choice (choices, visual);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -1738,7 +1735,7 @@ cmd_tree_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
         DONNA_TREE_TOGGLE_FULL, DONNA_TREE_TOGGLE_MAXI };
     gint c;
 
-    c = get_choice (choices, toggle);
+    c = _get_choice (choices, toggle);
     if (c < 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,

@@ -10,6 +10,9 @@
 
 G_BEGIN_DECLS
 
+#define _get_choice(choices, sel)   \
+    _donna_get_choice_from_list (sizeof (choices) / sizeof (choices[0]), choices, sel)
+
 struct command
 {
     gchar               *name;
@@ -39,6 +42,9 @@ gboolean            _donna_command_trigger_fl       (DonnaApp       *app,
                                                      const gchar    *fl,
                                                      GPtrArray      *intrefs,
                                                      gboolean        blocking);
+gint                _donna_get_choice_from_list     (gint            nb,
+                                                     const gchar    *choices[],
+                                                     const gchar    *sel);
 
 G_END_DECLS
 
