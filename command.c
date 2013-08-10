@@ -509,7 +509,7 @@ cmd_node_activate (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaNode *node = args[0];
-    gboolean is_alt = GPOINTER_TO_INT (args[1]);
+    gboolean is_alt = GPOINTER_TO_INT (args[1]); /* opt */
 
     DonnaTreeView *tree;
 
@@ -1836,7 +1836,7 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
-    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (node_activate, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
