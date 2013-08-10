@@ -2248,6 +2248,9 @@ remove_row_from_tree (DonnaTreeView *tree,
             es = DONNA_TREE_EXPAND_NONE;
         set_es (priv, &parent, es);
     }
+    else if (!is_tree (tree)
+            && (donna_tree_model_get_count ((GtkTreeModel *) priv->store) == 0))
+        priv->draw_state = DRAW_EMPTY;
 
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
     return ret;
@@ -2518,18 +2521,39 @@ set_children (DonnaTreeView *tree,
                 gtk_tree_path_free (path);
             }
         }
-        else if (refresh)
+        else
         {
-            /* we might have to adjust the number we set, because children has
-             * nodes of type we don't care for, because some were not visible,
-             * etc */
-            if (nb_real != children->len)
+            if (children->len > 0)
             {
-                g_mutex_lock (&data->mutex);
-                data->count -= children->len - nb_real;
-                g_mutex_unlock (&data->mutex);
+                if (priv->draw_state == DRAW_EMPTY)
+                {
+                    GtkWidget *w;
+
+                    priv->draw_state = DRAW_NOTHING;
+                    /* we give the treeview the focus, to ensure the focused row
+                     * is set, hence the class focused-row applied */
+                    w = gtk_widget_get_toplevel ((GtkWidget *) tree);
+                    w = gtk_window_get_focus ((GtkWindow *) w);
+                    gtk_widget_grab_focus ((GtkWidget *) tree);
+                    gtk_widget_grab_focus ((w) ? w : (GtkWidget *) tree);
+                }
             }
-            refresh_node_cb (NULL, FALSE, data);
+            else
+                priv->draw_state = DRAW_EMPTY;
+
+            if (refresh)
+            {
+                /* we might have to adjust the number we set, because children has
+                 * nodes of type we don't care for, because some were not visible,
+                 * etc */
+                if (nb_real != children->len)
+                {
+                    g_mutex_lock (&data->mutex);
+                    data->count -= children->len - nb_real;
+                    g_mutex_unlock (&data->mutex);
+                }
+                refresh_node_cb (NULL, FALSE, data);
+            }
         }
     }
 }
