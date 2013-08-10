@@ -396,6 +396,7 @@ provider_base_get_node_task (DonnaProvider    *provider,
     struct get_node_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
+    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->new_node != NULL, NULL);
 
     data = g_slice_new0 (struct get_node_data);
     data->provider_base = g_object_ref (p);
@@ -449,6 +450,7 @@ provider_base_has_node_children_task (DonnaProvider *provider,
     struct node_children_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->has_children != NULL, NULL);
 
     data = g_slice_new0 (struct node_children_data);
     data->provider_base = DONNA_PROVIDER_BASE (provider);
@@ -500,6 +502,7 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
     struct node_children_data *data;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->get_children != NULL, NULL);
 
     data = g_slice_new0 (struct node_children_data);
     data->provider_base = DONNA_PROVIDER_BASE (provider);
@@ -582,6 +585,7 @@ provider_base_get_node_parent_task (DonnaProvider   *provider,
     DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->new_node != NULL, NULL);
 
     task = donna_task_new ((task_fn) get_node_parent, g_object_ref (node),
             g_object_unref);
@@ -618,6 +622,7 @@ provider_base_trigger_node_task (DonnaProvider       *provider,
     DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->trigger_node != NULL, NULL);
 
     task = donna_task_new ((task_fn) trigger_node, g_object_ref (node),
             g_object_unref);
@@ -672,6 +677,15 @@ provider_base_io_task (DonnaProvider       *provider,
     struct io *io;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    if (DONNA_PROVIDER_BASE_GET_CLASS(provider)->io == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': No support of IO operations",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
 
     io = g_slice_new (struct io);
     io->pb          = (DonnaProviderBase *) provider;
@@ -737,6 +751,15 @@ provider_base_new_child_task (DonnaProvider       *provider,
     struct new_child *nc;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    if (DONNA_PROVIDER_BASE_GET_CLASS(provider)->new_child == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': No support of node creation",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
 
     nc = g_slice_new (struct new_child);
     nc->parent  = g_object_ref (parent);
