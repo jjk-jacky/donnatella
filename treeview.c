@@ -11141,20 +11141,31 @@ parse_specs (gchar *str, gchar spec, gchar combine)
     while ((str = strchr (str, '%')))
     {
         gchar *s;
+        gint n = 1;
 
         if (str[1] == 's')
-            *str = (spec == 0) ? ' ' : spec;
+        {
+            if (spec > 0)
+                *str = spec;
+            else
+                ++n;
+        }
         else if (str[1] == 'c')
-            *str = (combine == 0) ? ' ' : combine;
+        {
+            if (combine > 0)
+                *str = combine;
+            else
+                ++n;
+        }
         else
         {
             str += 2;
             continue;
         }
 
-        for (s = str + 1; ; ++s)
+        for (s = str + ((n == 1) ? 1 : 0); ; ++s)
         {
-            *s = s[1];
+            *s = s[n];
             if (*s == '\0')
                 break;
         }
