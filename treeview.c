@@ -5314,6 +5314,8 @@ load_arrangement (DonnaTreeView     *tree,
     priv->columns = NULL;
     priv->main_column = NULL;
 
+    priv->ln_relative = priv->ln_relative_focused = FALSE;
+
     for (;;)
     {
         struct column     *_col;
@@ -7202,6 +7204,12 @@ no_task:
         w = gtk_window_get_focus ((GtkWindow *) w);
         gtk_widget_grab_focus ((GtkWidget *) data->tree);
         gtk_widget_grab_focus ((w) ? w : (GtkWidget *) data->tree);
+
+        /* because when relative number are used and the tree was cleared, there
+         * was no cursor, and so relative number couldn't be calculated (so it
+         * fell back to "regular" line number) */
+        if (priv->ln_relative)
+            gtk_widget_queue_draw ((GtkWidget *) data->tree);
     }
     else
     {
