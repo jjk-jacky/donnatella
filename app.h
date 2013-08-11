@@ -16,10 +16,7 @@ G_BEGIN_DECLS
 #define DONNA_APP_ERROR         g_quark_from_static_string ("DonnaApp-Error")
 typedef enum
 {
-    DONNA_APP_ERROR_NOT_FOUND,
     DONNA_APP_ERROR_EMPTY,
-    DONNA_APP_ERROR_INVALID_NAME,
-    DONNA_APP_ERROR_INVALID_FORMAT,
     DONNA_APP_ERROR_OTHER,
 } DonnaAppError;
 
@@ -69,38 +66,6 @@ struct _DonnaAppInterface
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
-                                                     GError        **error);
-    gboolean            (*register_drop)            (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     GError        **error);
-    gboolean            (*register_set)             (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     DonnaRegisterType type,
-                                                     GPtrArray      *nodes,
-                                                     GError        **error);
-    gboolean            (*register_add_nodes)       (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     GPtrArray      *nodes,
-                                                     GError        **error);
-    gboolean            (*register_set_type)        (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     DonnaRegisterType type,
-                                                     GError        **error);
-    gboolean            (*register_get_nodes)       (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     DonnaDropRegister drop,
-                                                     DonnaRegisterType *type,
-                                                     GPtrArray     **nodes,
-                                                     GError        **error);
-    gboolean            (*register_load)            (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     const gchar    *file,
-                                                     DonnaRegisterFile file_type,
-                                                     GError        **error);
-    gboolean            (*register_save)            (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     const gchar    *file,
-                                                     DonnaRegisterFile file_type,
                                                      GError        **error);
     gchar *             (*ask_text)                 (DonnaApp       *app,
                                                      const gchar    *title,
@@ -166,38 +131,6 @@ gboolean            donna_app_nodes_io              (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
-                                                     GError        **error);
-gboolean            donna_app_register_drop         (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     GError        **error);
-gboolean            donna_app_register_set          (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     DonnaRegisterType type,
-                                                     GPtrArray      *nodes,
-                                                     GError        **error);
-gboolean            donna_app_register_add_nodes    (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     GPtrArray      *nodes,
-                                                     GError        **error);
-gboolean            donna_app_register_set_type     (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     DonnaRegisterType type,
-                                                     GError        **error);
-gboolean            donna_app_register_get_nodes    (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     DonnaDropRegister drop,
-                                                     DonnaRegisterType *type,
-                                                     GPtrArray     **nodes,
-                                                     GError        **error);
-gboolean            donna_app_register_load         (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     const gchar    *file,
-                                                     DonnaRegisterFile file_type,
-                                                     GError        **error);
-gboolean            donna_app_register_save         (DonnaApp       *app,
-                                                     const gchar    *name,
-                                                     const gchar    *file,
-                                                     DonnaRegisterFile file_type,
                                                      GError        **error);
 gchar *             donna_app_ask_text              (DonnaApp       *app,
                                                      const gchar    *title,

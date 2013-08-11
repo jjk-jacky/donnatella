@@ -15,27 +15,6 @@ typedef enum
 
 typedef enum
 {
-    DONNA_REGISTER_UNKNOWN = 0, /* e.g. when getting CLIPBOARD as uri-list */
-    DONNA_REGISTER_CUT,
-    DONNA_REGISTER_COPY
-} DonnaRegisterType;
-
-typedef enum
-{
-    DONNA_DROP_REGISTER_NOT,
-    DONNA_DROP_REGISTER_ALWAYS,
-    DONNA_DROP_REGISTER_ON_CUT,
-} DonnaDropRegister;
-
-typedef enum
-{
-    DONNA_REGISTER_FILE_NODES,  /* w/ full locations */
-    DONNA_REGISTER_FILE_FILE,   /* w/ filenames */
-    DONNA_REGISTER_FILE_URIS,   /* w/ uris */
-} DonnaRegisterFile;
-
-typedef enum
-{
     DONNA_CLICK_LEFT        = (1 << 0),
     DONNA_CLICK_MIDDLE      = (1 << 1),
     DONNA_CLICK_RIGHT       = (1 << 2),
