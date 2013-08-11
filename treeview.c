@@ -10821,10 +10821,18 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     }
 
 #ifdef GTK_IS_JJK
-    /* this will only "prepare", the actual operation starts if there's a
-     * drag/motion. If/when that happens, signal rubber-banding-active will be
-     * emitted. Either way, the click will be processed as usual. */
-    gtk_tree_view_start_rubber_banding ((GtkTreeView *) tree, event);
+    gint x, y;
+
+    /* make sure we're over a row, i.e. not on blank space after the last row,
+     * because that would cause trouble/is unsupported by GTK */
+    gtk_tree_view_convert_bin_window_to_widget_coords ((GtkTreeView *) tree,
+            event->x, event->y, &x, &y);
+    if (gtk_tree_view_get_tooltip_context ((GtkTreeView *) tree, &x, &y, 0,
+                NULL, NULL, NULL))
+        /* this will only "prepare", the actual operation starts if there's a
+         * drag/motion. If/when that happens, signal rubber-banding-active will be
+         * emitted. Either way, the click will be processed as usual. */
+        gtk_tree_view_start_rubber_banding ((GtkTreeView *) tree, event);
 #endif
 
     priv->on_release_triggered = FALSE;
