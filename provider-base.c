@@ -678,7 +678,8 @@ provider_base_io_task (DonnaProvider       *provider,
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
-    if (DONNA_PROVIDER_BASE_GET_CLASS(provider)->io == NULL)
+    if (DONNA_PROVIDER_BASE_GET_CLASS (provider)->support_io == NULL
+            || DONNA_PROVIDER_BASE_GET_CLASS (provider)->io == NULL)
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
@@ -686,6 +687,10 @@ provider_base_io_task (DonnaProvider       *provider,
                 donna_provider_get_domain (provider));
         return NULL;
     }
+
+    if (!DONNA_PROVIDER_BASE_GET_CLASS (provider)->support_io (
+                (DonnaProviderBase *) provider, type, is_source, sources, dest, error))
+        return NULL;
 
     io = g_slice_new (struct io);
     io->pb          = (DonnaProviderBase *) provider;

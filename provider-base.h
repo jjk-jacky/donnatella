@@ -53,6 +53,12 @@ struct _DonnaProviderBaseClass
     DonnaTaskState  (*trigger_node)         (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaNode          *node);
+    gboolean        (*support_io)           (DonnaProviderBase  *provider,
+                                             DonnaIoType         type,
+                                             gboolean            is_source,
+                                             GPtrArray          *sources,
+                                             DonnaNode          *dest,
+                                             GError            **error);
     DonnaTaskState  (*io)                   (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaIoType         type,
