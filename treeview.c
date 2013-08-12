@@ -2363,14 +2363,17 @@ set_children (DonnaTreeView *tree,
                     -1);
         else
         {
-            /* see refresh_node_cb() for more about this */
-            data = g_new (struct refresh_data, 1);
-            data->tree = tree;
-            g_mutex_init (&data->mutex);
-            data->count = children->len;
-            data->done = FALSE;
-            priv->refresh_on_hold = TRUE;
-            nb_real = 0;
+            if (refresh)
+            {
+                /* see refresh_node_cb() for more about this */
+                data = g_new (struct refresh_data, 1);
+                data->tree = tree;
+                g_mutex_init (&data->mutex);
+                data->count = children->len;
+                data->done = FALSE;
+                priv->refresh_on_hold = TRUE;
+                nb_real = 0;
+            }
 
             es = DONNA_TREE_EXPAND_MAXI;
         }
@@ -4199,7 +4202,6 @@ struct node_children_cb_data
     GPtrArray       *children;
 };
 
-/* mode tree only */
 static gboolean
 real_node_children_cb (struct node_children_cb_data *data)
 {
@@ -4212,14 +4214,19 @@ real_node_children_cb (struct node_children_cb_data *data)
     if (!(data->node_types & priv->node_types))
         goto free;
 
-    gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &priv->location_iter,
-            DONNA_TREE_COL_EXPAND_STATE,    &es,
-            -1);
-    if (es == DONNA_TREE_EXPAND_MAXI)
+    if (!is_tree (data->tree))
+        set_children (data->tree, NULL, data->children, FALSE, FALSE);
+    else
     {
-        g_debug ("treeview '%s': updating children for current location",
-                priv->name);
-        set_children (data->tree, &priv->location_iter, data->children, FALSE, FALSE);
+        gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &priv->location_iter,
+                DONNA_TREE_COL_EXPAND_STATE,    &es,
+                -1);
+        if (es == DONNA_TREE_EXPAND_MAXI)
+        {
+            g_debug ("treeview '%s': updating children for current location",
+                    priv->name);
+            set_children (data->tree, &priv->location_iter, data->children, FALSE, FALSE);
+        }
     }
 
 free:
@@ -4239,9 +4246,6 @@ node_children_cb (DonnaProvider  *provider,
                   DonnaTreeView  *tree)
 {
     struct node_children_cb_data *data;
-
-    if (!is_tree (tree))
-        return;
 
     /* we might not be in the main thread, but we need to be */
     data = g_new (struct node_children_cb_data, 1);
@@ -7328,6 +7332,9 @@ switch_provider (DonnaTreeView *tree,
                     g_signal_handler_disconnect (ps->provider,
                             ps->sid_node_new_child);
                     ps->sid_node_new_child = 0;
+                    g_signal_handler_disconnect (ps->provider,
+                            ps->sid_node_children);
+                    ps->sid_node_children = 0;
                 }
                 ++done;
             }
@@ -7353,6 +7360,8 @@ switch_provider (DonnaTreeView *tree,
          * it's only useful for current location */
         ps->sid_node_new_child = g_signal_connect (provider_future,
                 "node-new-child", G_CALLBACK (node_new_child_cb), tree);
+        ps->sid_node_children = g_signal_connect (provider_future,
+                "node-children", (GCallback) node_children_cb, tree);
     }
 }
 
