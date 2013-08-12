@@ -408,6 +408,8 @@ struct _DonnaTreeViewPrivate
     /* when filling list, some things can be disabled; e.g. check_statuses()
      * will not be triggered when adding nodes, etc */
     guint                filling_list       : 1;
+    /* tree is switching selection mode (see selection_changed_cb()) */
+    guint                changing_sel_mode  : 1;
     /* "cached" options */
     guint                mode               : 1;
     guint                node_types         : 2;
@@ -661,9 +663,11 @@ gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
             iter.stamp == 0;
 
         mode = gtk_tree_selection_get_mode (sel);
+        priv->changing_sel_mode = TRUE;
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
         gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
         gtk_tree_selection_set_mode (sel, mode);
+        priv->changing_sel_mode = FALSE;
         if (iter.stamp != 0)
         {
             gtk_tree_selection_select_iter (sel, &iter);
@@ -675,9 +679,11 @@ gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
         GList *list, *l;
 
         list = gtk_tree_selection_get_selected_rows (sel, NULL);
+        priv->changing_sel_mode = TRUE;
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_NONE);
         gtk_tree_view_set_cursor (treev, path, NULL, FALSE);
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_MULTIPLE);
+        priv->changing_sel_mode = FALSE;
         for (l = list; l; l = l->next)
             gtk_tree_selection_select_path (sel, l->data);
         g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
@@ -1094,7 +1100,9 @@ sync_with_location_changed_cb (GObject       *object,
     {
         /* unselect, but allow a new selection to be made (will then switch
          * automatically back to SELECTION_BROWSE) */
+        priv->changing_sel_mode = TRUE;
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+        priv->changing_sel_mode = FALSE;
         gtk_tree_selection_unselect_all (sel);
 
         if (priv->sync_mode == DONNA_TREE_SYNC_NODES
@@ -7389,6 +7397,32 @@ change_location (DonnaTreeView *tree,
         DonnaTask *task;
         struct node_get_children_list_data *data;
 
+        /* if that's already happening, nothing needs to be done. This can
+         * happen sometimes when multiple selection-changed in a tree occur,
+         * thus leading to multiple call to set_location() if they happen before
+         * list completed the change :
+         *
+         * - first selection-changed, call to set_location()
+         * - another selection-changed, list is still changing location, tree
+         *   calls set_location() again. This would cancel the first one, and
+         *   by the time the second one would end the first one has set
+         *   future_location to NULL thus it gets ignored (this is all because
+         *   they both point to the same location).
+         *
+         * Why would multiple selection-changed occur? Besides the fact that it
+         * can happen be design, this would most likely happen because the
+         * selection mode wasn't BROWSE, and setting it to BROWSE (in idle)
+         * might emit the signal again.
+         *
+         * A reproducible way to get this is:
+         * - go to a flat domain, e.g. register:/ [1]
+         * - click on tree, there you go.
+         *
+         * [1] tree gets out of sync; See selection_changed_cb() for more
+         */
+        if (priv->future_location == node)
+            return TRUE;
+
         provider_future = donna_node_peek_provider (node);
 
         if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
@@ -11578,19 +11612,38 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     {
         GtkTreePath *path;
 
-        /* if that happens while in BROWSE, this is probably a bug or something
-         * in GTK, where user could unselect w/out making a new selection.
+        /* ideally this wouldn't happen. There are ways, though, for this to
+         * occur. Known ways are:
          *
-         * It shouldn't happen, because the two ways we know for this happening
-         * are taken care of :
          * - Moving the focus up/outside the branch, then collapsing the parent
          *   of the selected node. No more selection!
-         * - In minitree, removing the row of current location.
+         *   This is handled in donna_tree_view_test_collapse_row()
          *
-         * Both of those are dealt with in donna_tree_view_test_collapse_row(),
-         * so this happening would be a "bug" (as in, another way GTK allows to
-         * get the selection removed in BROWSE, which ideally we should then
-         * learn and handle as well; Meanwhile, let's select the focused row. */
+         * - In minitree, removing the row of current location.
+         *   This is handled in remove_row_from_tree()/handle_removing_row()
+         *
+         * - Then there's the case of the tree going out of sync. When no node
+         *   was found, we switch to SINGLE and then unselect. However, the
+         *   switch to SIGNLE will apparently emit selection-changed 3 times,
+         *   the first one with nothing selected at all, but the mode is still
+         *   BROWSE, thus leading here.
+         *   This is handled via setting priv->changed_location prior, and
+         *   ignoring below when it's set, ignoring the first/problematic
+         *   signal.
+         *
+         *   It should be noted that because multiple signals can still emitted
+         *   in other circustances, and a tree can end up doing multiple
+         *   set_location() to its sync_with (if the change hasn't completed on
+         *   the second signal). Since we can't avoid that, changed_location()
+         *   has a special handling for that (ignoring request to change for the
+         *   same future_location), see changing_sel_mode() for more.
+         *
+         * - There might be other ways GTK allows to get the selection removed
+         *   in BROWSE, which ideally we should then learn and handle as well;
+         *   Meanwhile, let's select the focused row. */
+
+        if (priv->changing_sel_mode)
+            return;
 
         g_warning ("Treeview '%s': the selection was lost in BROWSE mode",
                 priv->name);
