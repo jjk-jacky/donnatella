@@ -2087,6 +2087,14 @@ is_valid_register_name (const gchar **name, GError **error)
     return FALSE;
 }
 
+static void
+task_show_error (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (app, donna_task_get_error (task),
+                "IO operation failed");
+}
+
 static gboolean
 donna_donna_nodes_io (DonnaApp       *app,
                       GPtrArray      *nodes,
@@ -2132,6 +2140,7 @@ donna_donna_nodes_io (DonnaApp       *app,
         return FALSE;
     }
 
+    donna_task_set_callback (task, (task_callback_fn) task_show_error, app, NULL);
     donna_app_run_task (app, task);
     return TRUE;
 }
