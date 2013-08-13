@@ -349,33 +349,18 @@ donna_app_get_current_location (DonnaApp       *app,
 }
 
 gchar *
-donna_app_get_current_dirname (DonnaApp       *app,
-                               GError        **error)
+donna_app_get_current_dirname (DonnaApp       *app)
 {
-    DonnaNode *node;
-    gchar *dirname;
+    DonnaAppInterface *interface;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
 
-    node = donna_app_get_current_location (app, error);
-    if (!node)
-        return NULL;
+    interface = DONNA_APP_GET_INTERFACE (app);
 
-    if (!streq ("fs", donna_node_get_domain (node)))
-    {
-        gchar *fl = donna_node_get_full_location (node);
-        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
-                "Cannot get current dirname: "
-                "current location (%s) of active-list is not in domain 'fs'",
-                fl);
-        g_object_unref (node);
-        g_free (fl);
-        return NULL;
-    }
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_current_dirname != NULL, NULL);
 
-    dirname = donna_node_get_location (node);
-    g_object_unref (node);
-    return dirname;
+    return (*interface->get_current_dirname) (app);
 }
 
 gchar *

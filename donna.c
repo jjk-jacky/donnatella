@@ -123,6 +123,7 @@ struct _DonnaDonnaPrivate
     DonnaTreeView   *focused_tree;
     gulong           sid_active_location;
     GSList          *statuses;
+    gchar           *cur_dirname;
     /* visuals are under a RW lock so everyone can read them at the same time
      * (e.g. creating nodes, get_children() & the likes). The write operation
      * should be quite rare. */
@@ -189,6 +190,8 @@ static void             donna_donna_run_task        (DonnaApp       *app,
 static DonnaTaskManager*donna_donna_get_task_manager(DonnaApp       *app);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
+static gchar *          donna_donna_get_current_dirname (
+                                                     DonnaApp       *app);
 static gchar *          donna_donna_new_int_ref     (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
@@ -231,6 +234,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->run_task             = donna_donna_run_task;
     interface->get_task_manager     = donna_donna_get_task_manager;
     interface->get_treeview         = donna_donna_get_treeview;
+    interface->get_current_dirname  = donna_donna_get_current_dirname;
     interface->new_int_ref          = donna_donna_new_int_ref;
     interface->get_int_ref          = donna_donna_get_int_ref;
     interface->free_int_ref         = donna_donna_free_int_ref;
@@ -1097,6 +1101,13 @@ intrefs_gc (DonnaDonna *donna)
     g_rec_mutex_unlock (&priv->rec_mutex);
 
     return keep_going;
+}
+
+static gchar *
+donna_donna_get_current_dirname (DonnaApp       *app)
+{
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    return g_strdup (((DonnaDonna *) app)->priv->cur_dirname);
 }
 
 static gchar *
@@ -2115,8 +2126,32 @@ refresh_window_title (DonnaDonna *donna)
 }
 
 static void
+update_cur_dirname (DonnaDonna *donna)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaNode *node;
+    gchar *s;
+
+    g_object_get (priv->active_list, "location", &node, NULL);
+    if (G_UNLIKELY (!node))
+        return;
+
+    if (!streq ("fs", donna_node_get_domain (node)))
+    {
+        g_object_unref (node);
+        return;
+    }
+
+    s = priv->cur_dirname;
+    priv->cur_dirname = donna_node_get_location (node);
+    g_free (s);
+    g_object_unref (node);
+}
+
+static void
 active_location_changed (GObject *object, GParamSpec *spec, DonnaDonna *donna)
 {
+    update_cur_dirname (donna);
     refresh_window_title (donna);
 }
 
@@ -2196,6 +2231,7 @@ set_active_list (DonnaDonna *donna, DonnaTreeView *list)
     switch_statuses_source (donna, ST_SCE_ACTIVE, (DonnaStatusProvider *) list);
 
     priv->active_list = g_object_ref (list);
+    update_cur_dirname (donna);
     refresh_window_title (donna);
     g_object_notify ((GObject *) donna, "active-list");
 }
