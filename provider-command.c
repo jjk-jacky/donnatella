@@ -200,7 +200,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     GtkWidget *w;
     GdkPixbuf *pixbuf;
     GValue v = G_VALUE_INIT;
-    gint i;
+    guint i;
 
     cmd = init_parse ((DonnaProviderCommand *) _provider, (gchar *) location,
             NULL, &err);
@@ -370,7 +370,6 @@ init_parse (DonnaProviderCommand    *pc,
     struct command *command;
     gchar  c;
     gchar *s;
-    guint  i;
 
     for (s = cmdline; isalnum (*s) || *s == '_'; ++s)
         ;
