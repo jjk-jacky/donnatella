@@ -1162,11 +1162,22 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
 
             /* extra? */
             s = strchr (parsed->name, ':');
+
+            if (s)
+                *s = '\0';
+            if (get_child_node (parent, parsed->name, strlen (parsed->name)))
+            {
+                g_info ("Option '%s' in '%s' already defined, skipped",
+                        parsed->name, section->name);
+                if (s)
+                    *s = ':';
+                continue;
+            }
+
             if (s)
             {
                 DonnaConfigExtra *extra;
 
-                *s = '\0';
                 extra = g_hash_table_lookup (priv->extras, ++s);
                 if (!extra)
                 {
