@@ -342,10 +342,88 @@ free_intref (struct intref *ir)
 }
 
 static void
+load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
+{
+    GError *err = NULL;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+    gchar *data;
+
+    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf%s",
+                dir, (is_def) ? "-def" : "") >= 255)
+        b = g_strdup_printf ("%s/donnatella/donnatella.conf%s",
+                dir, (is_def) ? "-def" : "");
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Try loading '%s'", b));
+    if (g_file_get_contents ((file) ? file : b, &data, NULL, &err))
+    {
+        if (is_def)
+            donna_config_load_config_def (config, data);
+        else
+            donna_config_load_config (config, data);
+    }
+    else
+    {
+        if (!g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+            g_warning ((is_def)
+                    ? "Unable to load configuration definition from '%s': %s"
+                    : "Unable to load configuration from '%s': %s",
+                    b, err->message);
+        g_clear_error (&err);
+    }
+
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+}
+
+static void
+load_css (const gchar *dir)
+{
+    GtkCssProvider *css_provider;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+
+    if (snprintf (buf, 255, "%s/donnatella/donnatella.css", dir) >= 255)
+        b = g_strdup_printf ("%s/donnatella/donnatella.css", dir);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    if (!g_file_test ((file) ? file : b, G_FILE_TEST_IS_REGULAR))
+    {
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        return;
+    }
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Load '%s'", b));
+    css_provider = gtk_css_provider_new ();
+    gtk_css_provider_load_from_path (css_provider, (file) ? file : b, NULL);
+    gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
+            (GtkStyleProvider *) css_provider,
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+}
+
+static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
     GPtrArray *arr = NULL;
+    const gchar *main_dir;
+    const gchar * const *extra_dirs;
+    const gchar * const *dir;
+    const gchar * const *first;
 
     mt = g_thread_self ();
     g_log_set_default_handler (donna_donna_log_handler, NULL);
@@ -379,8 +457,33 @@ donna_donna_init (DonnaDonna *donna)
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
 
-    /* load the config */
-    /* TODO */
+    /* get config dirs */
+    main_dir = g_get_user_config_dir ();
+    extra_dirs = g_get_system_config_dirs ();
+
+    /* load config definitions */
+    load_conf (priv->config, main_dir, TRUE);
+    for (dir = extra_dirs; *dir; ++dir)
+        load_conf (priv->config, *dir, TRUE);
+
+    /* load config */
+    load_conf (priv->config, main_dir, FALSE);
+    for (dir = extra_dirs; *dir; ++dir)
+        load_conf (priv->config, *dir, FALSE);
+    g_debug ("config:%s", donna_config_export_config (priv->config));
+
+    /* CSS - At same priority, the last one loaded takes precedence, so we need
+     * to load system ones first (in reverse order), then the user one */
+    first = extra_dirs;
+    for (dir = extra_dirs; *dir; ++dir)
+        ;
+    if (dir != first)
+    {
+        for (--dir; dir != first; --dir)
+            load_css (*dir);
+        load_css (*dir);
+    }
+    load_css (main_dir);
 
     /* compile patterns of arrangements' masks */
     priv->arrangements = load_arrangements (priv->config, "arrangements");
@@ -2481,7 +2584,6 @@ main (int argc, char *argv[])
 {
     DonnaApp            *app;
     DonnaDonnaPrivate   *priv;
-    GtkCssProvider      *css_provider;
     GtkWindow           *window;
     GtkWidget           *active_list_widget = NULL;
     GtkWidget           *w;
@@ -2500,13 +2602,6 @@ main (int argc, char *argv[])
 
     app = g_object_new (DONNA_TYPE_DONNA, NULL);
     priv = ((DonnaDonna *) app)->priv;
-
-    /* CSS */
-    css_provider = gtk_css_provider_new ();
-    gtk_css_provider_load_from_path (css_provider, "donnatella.css", NULL);
-    gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
-            (GtkStyleProvider *) css_provider,
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     /* main window */
     window = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
