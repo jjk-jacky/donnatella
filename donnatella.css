@@ -18,7 +18,7 @@ DonnaTreeView row.focused-row  { background: #BBB; }
 DonnaTreeView row:focused  { background: #a0a0a0; }
 DonnaTreeView row:selected  { background: @selected_bg_color; }
 
-DonnaTreeView#list.select-row-underline row:selected { background: blue; }
+DonnaTreeView.select-row-underline row:selected { background: blue; }
 
 .yellow { background: #ffc; }
 boxed.focused-row.yellow { background: #ff6; }
@@ -43,3 +43,6 @@ DonnaTreeView { -DonnaTreeView-highlighted-size: 4; }
 .focused-row.blue:selected { background: @selected_bg_color; color: @selected_fg_color; }
 highlighted.blue:selected { background: blue; }
 highlighted.blue.focused-row:selected { background: blue; }
+
+#ask-text .title { font-size: 12px; font-weight: bold; }
+#ask-text .details { padding-top: 4px; }
