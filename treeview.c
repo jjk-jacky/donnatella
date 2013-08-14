@@ -10581,6 +10581,56 @@ handle_click (DonnaTreeView     *tree,
     g_free (fl);
 }
 
+/* for obvious reason (grabbing the focus happens here) this can only be called
+ * once per click. However, we might call this twice, first checking if a rubber
+ * banding operation can start or not, and then when the trigger_click() occurs.
+ * The way we handle this is that if tree_might_grab_focus is NULL there will be
+ * no focus grabbed, since the rubber banding is list-only and there we don't
+ * care about this (i.e. it's NULL) */
+static gboolean
+skip_focusing_click (DonnaTreeView  *tree,
+                     DonnaClick      click,
+                     GdkEventButton *event,
+                     gboolean       *tree_might_grab_focus)
+{
+    gboolean might_grab_focus = FALSE;
+
+    /* a click will grab the focus if:
+     * - tree: it's a regular left click (i.e. no Ctrl/Shift held) unless
+     *   click was on expander
+     * - list: it's a left click (event w/ Ctrl/Shift)
+     * and, ofc, focus isn't on treeview already. */
+    if (is_tree (tree))
+        /* might, as we don't know if this was on expander or not yet */
+        might_grab_focus = is_regular_left_click (click, event)
+            && !gtk_widget_is_focus ((GtkWidget *) tree);
+    else if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
+            == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
+            && !gtk_widget_is_focus ((GtkWidget *) tree))
+    {
+        GtkWidget *w = NULL;
+
+        if (tree->priv->focusing_click)
+            /* get the widget that currently has the focus */
+            w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
+                        (GtkWidget *) tree));
+
+        /* see notes above for why */
+        if (tree_might_grab_focus)
+            gtk_widget_grab_focus ((GtkWidget *) tree);
+
+        /* we "skip" the click if focusing_click, unless the widget that had
+         * the focus was a children of ours, i.e. a column header */
+        if (tree->priv->focusing_click && w && gtk_widget_get_ancestor (w,
+                    DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
+            return TRUE;
+    }
+
+    if (tree_might_grab_focus)
+        *tree_might_grab_focus = might_grab_focus;
+    return FALSE;
+}
+
 static gboolean
 trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 {
@@ -10591,7 +10641,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     GtkTreeModel *model;
     GtkTreeIter iter;
     gint x, y;
-    gboolean tree_might_grab_focus = FALSE;
+    gboolean tree_might_grab_focus;
 
     if (event->button == 1)
         click |= DONNA_CLICK_LEFT;
@@ -10602,37 +10652,9 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 
     /* the focus thing only matters on the actual click (i.e. on press), so we
      * ignore it when triggering a click on release */
-    if (event->type == GDK_BUTTON_PRESS)
-    {
-        /* a click will grab the focus if:
-         * - tree: it's a regular left click (i.e. no Ctrl/Shift held) unless
-         *   click was on expander
-         * - list: it's a left click (event w/ Ctrl/Shift)
-         * and, ofc, focus isn't on treeview already. */
-        if (is_tree (tree))
-            /* might, as we don't know if this was on expander or not yet */
-            tree_might_grab_focus = is_regular_left_click (click, event)
-                && !gtk_widget_is_focus ((GtkWidget *) tree);
-        else if ((click & (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT))
-                == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)
-                && !gtk_widget_is_focus ((GtkWidget *) tree))
-        {
-            GtkWidget *w = NULL;
-
-            if (priv->focusing_click)
-                /* get the widget that currently has the focus */
-                w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
-                            (GtkWidget *) tree));
-
-            gtk_widget_grab_focus ((GtkWidget *) tree);
-
-            /* we "skip" the click if focusing_click, unless the widget that had
-             * the focus was a children of ours, i.e. a column header */
-            if (priv->focusing_click && w && gtk_widget_get_ancestor (w,
-                        DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
-                return FALSE;
-        }
-    }
+    if (event->type == GDK_BUTTON_PRESS
+            && skip_focusing_click (tree, click, event, &tree_might_grab_focus))
+        return FALSE;
 
     x = (gint) event->x;
     y = (gint) event->y;
@@ -10866,16 +10888,26 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
 #ifdef GTK_IS_JJK
     gint x, y;
 
-    /* make sure we're over a row, i.e. not on blank space after the last row,
-     * because that would cause trouble/is unsupported by GTK */
-    gtk_tree_view_convert_bin_window_to_widget_coords ((GtkTreeView *) tree,
-            event->x, event->y, &x, &y);
-    if (gtk_tree_view_get_tooltip_context ((GtkTreeView *) tree, &x, &y, 0,
-                NULL, NULL, NULL))
-        /* this will only "prepare", the actual operation starts if there's a
-         * drag/motion. If/when that happens, signal rubber-banding-active will be
-         * emitted. Either way, the click will be processed as usual. */
-        gtk_tree_view_start_rubber_banding ((GtkTreeView *) tree, event);
+    /* rubber band only happens on left click */
+    if (event->button == 1)
+    {
+        /* make sure we're over a row, i.e. not on blank space after the last
+         * row, because that would cause trouble/is unsupported by GTK */
+        gtk_tree_view_convert_bin_window_to_widget_coords ((GtkTreeView *) tree,
+                event->x, event->y, &x, &y);
+        if (gtk_tree_view_get_tooltip_context ((GtkTreeView *) tree, &x, &y, 0,
+                    NULL, NULL, NULL)
+                /* don't start if this is a focusing click to be skipped. We
+                 * know it's LEFT, it might not be SINGLE but pretending should
+                 * be fine, since anything else wouldn't be a focusing click */
+                && !is_tree (tree) && !skip_focusing_click (tree,
+                    DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT, event, NULL))
+            /* this will only "prepare", the actual operation starts if there's
+             * a drag/motion. If/when that happens, signal rubber-banding-active
+             * will be emitted. Either way, the click will be processed as
+             * usual. */
+            gtk_tree_view_start_rubber_banding ((GtkTreeView *) tree, event);
+    }
 #endif
 
     priv->on_release_triggered = FALSE;
