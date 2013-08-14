@@ -1,0 +1,66 @@
+[ct]
+title=Column Type
+type=list
+value=name:Name (and Icon)
+value=size:Size
+value=time:Date/Time
+value=perms:Permissions
+value=text:Text
+value=label:Label
+value=value:Value (of config option)
+
+[tm]
+title=Tree Mode
+type=list-int
+value=0:list:List
+value=1:tree:Tree
+
+[visuals]
+title=Tree Visuals
+type=list-flags
+value=1:name:Custom Names
+value=2:icon:Custom Icons
+value=4:box:Boxed Branches
+value=8:highlight:Highlighted Folders
+value=16:click:Custom Click Definitions
+
+[sync]
+title=Synchronization Mode
+type=list-int
+value=0:none:None
+value=1:nodes:Only with accessible nodes
+value=2:known-children:Expand nodes only if children are known
+value=3:children:Expand nodes
+value=4:full:Full
+
+[key]
+title=Key
+type=list-int
+value=0:disabled:Disabled
+value=1:combine:Combine
+value=2:direct:Direct
+value=3:spec:Spec
+value=4:alias:Alias
+
+[spec]
+title=Spec Type
+type=list-flags
+value=1:lower:Lowercase letter (a-z)
+value=2:upper:Uppercase letter (A-Z)
+value=4:digits:Digit (0-9)
+value=8:extra:Extra chars (see doc)
+value=512:motion:Motion Key
+
+[title-domain]
+title=Type of title for a domain
+type=list-int
+value=0:loc:Location
+value=1:full:Full location (i.e. domain included)
+value=2:custom:Custom string
+
+[children]
+title=Type of node
+type=list-int
+value=0:all:All (Item & Container)
+value=1:item:Item
+value=2:container:Container
