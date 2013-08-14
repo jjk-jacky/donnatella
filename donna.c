@@ -32,8 +32,6 @@
 #include "misc.h"
 #include "macros.h"
 
-guint donna_debug_flags = 0;
-
 enum
 {
     PROP_0,
@@ -129,7 +127,7 @@ struct _DonnaDonnaPrivate
      * should be quite rare. */
     GRWLock          lock;
     GHashTable      *visuals;
-    /* ct, providers, filters & intrefs are all under the same lock because
+    /* ct, providers, filters, intrefs, etc are all under the same lock because
      * there shouldn't be a need to separate them all. We use a recursive mutex
      * because we need it for filters, to handle correctly the toggle_ref */
     GRecMutex        rec_mutex;
@@ -154,6 +152,7 @@ struct argmt
 
 static GThread *mt;
 static GLogLevelFlags show_log = G_LOG_LEVEL_DEBUG;
+guint donna_debug_flags = 0;
 
 static inline void      set_active_list             (DonnaDonna     *donna,
                                                      DonnaTreeView  *list);
