@@ -504,7 +504,7 @@ donna_donna_init (DonnaDonna *donna)
     if (donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
     {
-        gint i;
+        guint i;
 
         for (i = 0; i < arr->len; ++i)
         {
@@ -1234,7 +1234,7 @@ donna_donna_new_int_ref (DonnaApp       *app,
         ir->ptr = ptr;
     ir->last = g_get_monotonic_time ();
 
-    s = g_strdup_printf ("<%u%u>", rand (), ir);
+    s = g_strdup_printf ("<%u%u>", rand (), (guint) (gintptr) ir);
     g_rec_mutex_lock (&priv->rec_mutex);
     g_hash_table_insert (priv->intrefs, g_strdup (s), ir);
     if (priv->intrefs_timeout == 0)
@@ -1538,7 +1538,6 @@ submenu_get_children_cb (DonnaTask           *task,
     GtkWidget *menu;
     GPtrArray *arr;
     struct menu_click *mc;
-    struct load_submenu local_ls;
     gboolean is_selected;
 
     if (ls->invalid)
@@ -1782,7 +1781,7 @@ donna_donna_show_menu (DonnaApp       *app,
     struct menu_click *mc;
     GtkMenu *menu;
     gboolean b;
-    guint i;
+    gint i;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
     priv = ((DonnaDonna *) app)->priv;
@@ -2013,7 +2012,6 @@ donna_donna_ask_text (DonnaApp       *app,
     GtkBox *btn_box;
     GtkLabel *lbl;
     GtkWidget *w;
-    gchar **s;
 
     data.win = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
     gtk_widget_set_name ((GtkWidget *) data.win, "ask-text");
