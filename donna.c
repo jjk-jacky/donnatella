@@ -341,13 +341,92 @@ free_intref (struct intref *ir)
     g_free (ir);
 }
 
-static void
+static gboolean
+copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
+{
+    GError *err = NULL;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+    gchar *data;
+
+    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf", sce) >= 255)
+        b = g_strdup_printf ("%s/donnatella/donnatella.conf", sce);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Reading '%s'", b));
+    if (!g_file_get_contents ((file) ? file : b, &data, NULL, &err))
+    {
+        g_warning ("Failed to copy configuration from '%s': %s",
+                sce, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        return FALSE;
+    }
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+
+    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf-ref", dst) >= 255)
+        b = g_strdup_printf ("%s/donnatella/donnatella.conf-ref", dst);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Writing '%s'", b));
+    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+    {
+        g_warning ("Failed to import configuration to '%s': %s",
+                dst, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        g_free (data);
+        return FALSE;
+    }
+
+    /* remove the "-ref" bit */
+    b[strlen (b) - 4] = '\0';
+    if (file)
+        file[strlen (file) - 4] = '\0';
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Writing '%s'", b));
+    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+    {
+        g_warning ("Failed to write new configuration to '%s': %s",
+                dst, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        g_free (data);
+        return FALSE;
+    }
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+
+    /* takes ownership/will free data */
+    donna_config_load_config (config, data);
+    return TRUE;
+}
+
+/* returns TRUE if file existed (even if loading failed), else FALSE */
+static gboolean
 load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
 {
     GError *err = NULL;
     gchar buf[255], *b = buf;
     gchar *file = NULL;
     gchar *data;
+    gboolean file_exists = FALSE;
 
     if (snprintf (buf, 255, "%s/donnatella/donnatella.conf%s",
                 dir, (is_def) ? "-def" : "") >= 255)
@@ -361,6 +440,7 @@ load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
             g_debug3 ("Try loading '%s'", b));
     if (g_file_get_contents ((file) ? file : b, &data, NULL, &err))
     {
+        file_exists = TRUE;
         if (is_def)
             donna_config_load_config_def (config, data);
         else
@@ -368,7 +448,8 @@ load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
     }
     else
     {
-        if (!g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+        file_exists = !g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT);
+        if (file_exists)
             g_warning ((is_def)
                     ? "Unable to load configuration definition from '%s': %s"
                     : "Unable to load configuration from '%s': %s",
@@ -379,6 +460,7 @@ load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
     if (b != buf)
         g_free (b);
     g_free (file);
+    return file_exists;
 }
 
 static void
@@ -461,15 +543,19 @@ donna_donna_init (DonnaDonna *donna)
     main_dir = g_get_user_config_dir ();
     extra_dirs = g_get_system_config_dirs ();
 
-    /* load config definitions */
+    /* load config definitions: merge user & system ones */
     load_conf (priv->config, main_dir, TRUE);
     for (dir = extra_dirs; *dir; ++dir)
         load_conf (priv->config, *dir, TRUE);
 
-    /* load config */
-    load_conf (priv->config, main_dir, FALSE);
-    for (dir = extra_dirs; *dir; ++dir)
-        load_conf (priv->config, *dir, FALSE);
+    /* load config: load user one. If there's none, copy the system one over,
+     * and keep another copy as "reference" for future merging */
+    if (!load_conf (priv->config, main_dir, FALSE))
+    {
+        for (dir = extra_dirs; *dir; ++dir)
+            if (copy_and_load_conf (priv->config, *dir, main_dir))
+                break;
+    }
     g_debug ("config:%s", donna_config_export_config (priv->config));
 
     /* CSS - At same priority, the last one loaded takes precedence, so we need
