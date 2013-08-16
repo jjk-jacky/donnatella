@@ -1971,10 +1971,10 @@ donna_donna_show_menu (DonnaApp       *app,
     }
 
     /* menu will not be packed anywhere, so we need to take ownership and handle
-     * it when done, i.e. on "deactivate". It will trigger the widget's destroy
+     * it when done, i.e. on "unmap-event". It will trigger the widget's destroy
      * which is when we'll free mc */
     menu = g_object_ref_sink (load_menu (mc));
-    g_signal_connect (menu, "deactivate", (GCallback) g_object_unref, NULL);
+    g_signal_connect (menu, "unmap-event", (GCallback) g_object_unref, NULL);
 
     gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0,
             gtk_get_current_event_time ());
