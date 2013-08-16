@@ -14,6 +14,7 @@
 #include "provider-task.h"
 #include "provider-exec.h"
 #include "provider-register.h"
+#include "provider-internal.h"
 #include "columntype.h"
 #include "columntype-name.h"
 #include "columntype-size.h"
@@ -586,6 +587,7 @@ donna_donna_init (DonnaDonna *donna)
     /* preload some required providers */
     g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "command"));
     g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "register"));
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "internal"));
 
     if (donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
@@ -889,6 +891,8 @@ donna_donna_get_provider (DonnaApp    *app,
         provider = g_object_new (DONNA_TYPE_PROVIDER_EXEC, "app", app, NULL);
     else if (streq (domain, "register"))
         provider = g_object_new (DONNA_TYPE_PROVIDER_REGISTER, "app", app, NULL);
+    else if (streq (domain, "internal"))
+        provider = g_object_new (DONNA_TYPE_PROVIDER_INTERNAL, "app", app, NULL);
     else
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
