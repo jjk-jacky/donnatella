@@ -1384,6 +1384,10 @@ struct menu_click
     gchar           *name;
     /* this is only used to hold references to the nodes for the menu */
     GPtrArray       *nodes;
+    /* should icons be features on menuitems? */
+    guint            show_icons         : 1;
+    /* default to file/folder icon based on item/container if no icon set */
+    guint            use_default_icons  : 1;
     /* are containers just items, submenus, or both combined? */
     guint            submenus           : 2;
     /* type of nodes to load in submenus */
@@ -1762,7 +1766,7 @@ load_menu (struct menu_click *mc)
     {
         DonnaNode *node = mc->nodes->pdata[i];
         GtkWidget *item;
-        GtkWidget *image;
+        GtkWidget *image = NULL;
         GdkPixbuf *icon;
         gchar *name;
 
@@ -1770,23 +1774,35 @@ load_menu (struct menu_click *mc)
             item = gtk_separator_menu_item_new ();
         else
         {
+            DonnaNodeType type;
+
+            type = donna_node_get_node_type (node);
             name = donna_node_get_name (node);
             item = donna_image_menu_item_new_with_label (name);
             g_free (name);
 
             g_object_set_data ((GObject *) item, "node", node);
 
-            if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
+            if (mc->show_icons)
             {
-                image = gtk_image_new_from_pixbuf (icon);
-                g_object_unref (icon);
+                if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
+                {
+                    image = gtk_image_new_from_pixbuf (icon);
+                    g_object_unref (icon);
+                }
+                else if (mc->use_default_icons)
+                {
+                    if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+                        image = gtk_image_new_from_stock (GTK_STOCK_FILE, GTK_ICON_SIZE_MENU);
+                    else /* DONNA_NODE_CONTAINER */
+                        image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY, GTK_ICON_SIZE_MENU);
+                }
+                else
+                    image = NULL;
             }
-            else if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
-                image = gtk_image_new_from_stock (GTK_STOCK_FILE, GTK_ICON_SIZE_MENU);
-            else /* DONNA_NODE_CONTAINER */
-            {
-                image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY, GTK_ICON_SIZE_MENU);
 
+            if (type == DONNA_NODE_CONTAINER)
+            {
                 if (mc->submenus == TYPE_ENABLED)
                 {
                     struct load_submenu ls = { 0, };
@@ -1876,6 +1892,12 @@ donna_donna_show_menu (DonnaApp       *app,
     mc->donna = (DonnaDonna *) app;
     mc->name  = g_strdup (name);
     mc->nodes = nodes;
+
+    /* icon options */
+    get_boolean (b, "show_icons", TRUE);
+    mc->show_icons = b;
+    get_boolean (b, "use_default_icons", TRUE);
+    mc->use_default_icons = b;
 
     get_int (i, "submenus", TYPE_DISABLED);
     if (i == TYPE_ENABLED || i == TYPE_COMBINE)
