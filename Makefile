@@ -6,7 +6,7 @@ SRC = closures.c columntype.c columntype-name.c donna.c node.c provider.c \
 	  provider-task.c columntype-label.c columntype-progress.c \
 	  columntype-value.c statusprovider.c statusbar.c task-process.c \
 	  taskui-messages.c provider-exec.c imagemenuitem.c misc.c \
-	  provider-register.c provider-internal.c
+	  provider-register.c provider-internal.c history.c
 OBJ = ${SRC:.c=.o}
 
 GTK_FLAGS := `pkg-config --cflags --libs gtk+-3.0`

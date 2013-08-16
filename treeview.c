@@ -16,6 +16,7 @@
 #include "cellrenderertext.h"
 #include "colorfilter.h"
 #include "size.h"
+#include "provider-internal.h"
 #include "closures.h"
 
 enum
@@ -326,11 +327,17 @@ struct _DonnaTreeViewPrivate
     DonnaTask           *get_children_task;
     /* List: future location (task get_children running) */
     DonnaNode           *future_location;
+    /* List: extra info if the change_location if a move inside our history */
+    DonnaHistoryDirection future_history_direction;
+    guint                 future_history_nb;
     /* duplicatable task to get_children -- better than get doing a get_children
      * for e.g. search results, to keep the same workdir, etc */
     DonnaTask           *location_task;
     /* which step are we in the changing of location */
     enum cl              cl;
+
+    /* List: history */
+    DonnaHistory        *history;
 
     /* tree: list of iters for roots, in order */
     GSList              *roots;
@@ -1364,6 +1371,8 @@ config_get_string (DonnaTreeView   *tree,
     config_get_boolean (t, c, "auto_focus_sync", TRUE)
 #define cfg_get_focusing_click(t,c) \
     config_get_boolean (t, c, "focusing_click", TRUE)
+#define cfg_get_history_max(t,c) \
+    config_get_int (t, c, "history_max", 100)
 
 static gboolean
 real_option_cb (struct option_data *data)
@@ -1562,6 +1571,12 @@ real_option_cb (struct option_data *data)
                 val = cfg_get_focusing_click (tree, config);
                 if (priv->focusing_click != val)
                     priv->focusing_click = val;
+            }
+            else if (streq (opt, "history_max"))
+            {
+                val = cfg_get_history_max (tree, config);
+                if (donna_history_get_max (priv->history) != val)
+                    donna_history_set_max (priv->history, val);
             }
         }
     }
@@ -1797,6 +1812,9 @@ load_config (DonnaTreeView *tree)
     {
         val = cfg_get_focusing_click (tree, config);
         priv->focusing_click = val;
+
+        val = cfg_get_history_max (tree, config);
+        priv->history = donna_history_new (val);
     }
 
     /* listen to config changes */
@@ -7085,6 +7103,8 @@ node_get_children_list_cb (DonnaTask                            *task,
                             donna_node_peek_provider (priv->location));
                     priv->cl = CHANGING_LOCATION_NOT;
                     priv->future_location = NULL;
+                    priv->future_history_direction = 0;
+                    priv->future_history_nb = 0;
                     goto free;
                 }
 
@@ -7288,6 +7308,8 @@ node_get_parent_list_cb (DonnaTask                            *task,
     data->node = g_value_dup_object (value);
     /* update future location (no ref needed) */
     priv->future_location = data->node;
+    priv->future_history_direction = 0;
+    priv->future_history_nb = 0;
 
     task = donna_node_get_children_task (data->node, priv->node_types, NULL);
     set_get_children_task (data->tree, task);
@@ -7373,6 +7395,48 @@ switch_provider (DonnaTreeView *tree,
     }
 }
 
+struct history_move
+{
+    DonnaTreeView *tree;
+    DonnaHistoryDirection direction;
+    guint nb;
+};
+
+static void
+free_history_move (struct history_move *data)
+{
+    g_slice_free (struct history_move, data);
+}
+
+static inline gboolean
+handle_history_move (DonnaTreeView *tree, DonnaNode *node)
+{
+    GValue v = G_VALUE_INIT;
+    DonnaTask *task;
+    DonnaNodeHasValue has;
+
+    if (!streq ("internal", donna_node_get_domain (node)))
+        return FALSE;
+
+    donna_node_get (node, FALSE, "history-tree", &has, &v, NULL);
+    if (has != DONNA_NODE_VALUE_SET)
+        return FALSE;
+
+    if (tree != (DonnaTreeView *) g_value_get_object (&v))
+    {
+        g_value_unset (&v);
+        return FALSE;
+    }
+    g_value_unset (&v);
+
+    task = donna_node_trigger_task (node, NULL);
+    if (!task)
+        return FALSE;
+
+    donna_app_run_task (tree->priv->app, task);
+    return TRUE;
+}
+
 /* mode list only */
 static gboolean
 change_location (DonnaTreeView *tree,
@@ -7381,7 +7445,6 @@ change_location (DonnaTreeView *tree,
                  gpointer       _data,
                  GError       **error)
 {
-    struct node_get_children_list_data *data = _data;
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaProvider *provider_current;
     DonnaProvider *provider_future;
@@ -7451,10 +7514,17 @@ change_location (DonnaTreeView *tree,
             {
                 gchar *fl;
 
+                /* special case: if this is a node from history_get_node() we
+                 * will process it as a move in history. This will allow e.g.
+                 * dynamic marks to move backward/forward/etc */
+                if (handle_history_move (tree, node))
+                    return TRUE;
+
                 fl = donna_node_get_full_location (node);
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot set node '%s' as current location, provider is flat (i.e. no parent to go to)",
+                        "Treeview '%s': Cannot set node '%s' as current location, "
+                        "provider is flat (i.e. no parent to go to)",
                         priv->name, fl);
                 g_free (fl);
                 return FALSE;
@@ -7493,6 +7563,18 @@ change_location (DonnaTreeView *tree,
          * period of time, and will only use it to compare (the pointer) in the
          * task's timeout/cb, to make sure the new location is still valid */
         priv->future_location = node;
+        /* we might have gotten extra info if this is a move in history */
+        if (_data)
+        {
+            struct history_move *hm = _data;
+            priv->future_history_direction = hm->direction;
+            priv->future_history_nb = hm->nb;
+        }
+        else
+        {
+            priv->future_history_direction = 0;
+            priv->future_history_nb = 0;
+        }
 
         /* connect to provider's signals of future location (if needed) */
         switch_provider (tree, provider_current, provider_future);
@@ -7512,6 +7594,8 @@ change_location (DonnaTreeView *tree,
     }
     else if (cl == CHANGING_LOCATION_SLOW)
     {
+        struct node_get_children_list_data *data = _data;
+
         /* is this still valid (or did the user click away already) ? */
         if (data->node)
         {
@@ -7599,6 +7683,51 @@ change_location (DonnaTreeView *tree,
             }
             /* update arrangement for new location if needed */
             donna_tree_view_build_arrangement (tree, FALSE);
+
+            /* update history */
+            if (priv->future_history_direction > 0)
+            {
+                const gchar *h;
+
+                /* this is a move in history */
+                if (G_LIKELY ((h = donna_history_move (priv->history,
+                        priv->future_history_direction,
+                        priv->future_history_nb,
+                        NULL))))
+                {
+                    gchar *fl = donna_node_get_full_location (priv->location);
+
+                    if (G_LIKELY (streq (fl, h)))
+                        g_free (fl);
+                    else
+                    {
+                        /* this means the history changed during the change of
+                         * location, and e.g. change of history_max option
+                         * (could have resulted in he needed items to be lost) */
+                        g_warning ("Treeview '%s': History move couldn't be validated, "
+                                "adding current location as new one instead",
+                                priv->name);
+                        donna_history_take_item (priv->history, fl);
+                    }
+
+                    priv->future_history_direction = 0;
+                    priv->future_history_nb = 0;
+                }
+                else
+                {
+                    /* this means the history changed during the change of
+                     * location, and e.g. was cleared. */
+                    g_warning ("Treeview '%s': History move couldn't be validated, "
+                            "adding current location as new one instead",
+                            priv->name);
+                    donna_history_take_item (priv->history,
+                            donna_node_get_full_location (priv->location));
+                }
+            }
+            else
+                /* add new location to history */
+                donna_history_take_item (priv->history,
+                        donna_node_get_full_location (priv->location));
 
             /* emit signal */
             g_object_notify_by_pspec ((GObject *) tree,
@@ -10048,6 +10177,420 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
     }
 
     return arr;
+}
+
+/* mode list only */
+static DonnaTaskState
+history_goto (DonnaTask *task, DonnaNode *node)
+{
+    GError *err = NULL;
+    GValue v = G_VALUE_INIT;
+    DonnaNodeHasValue has;
+    DonnaTreeView *tree;
+    DonnaHistoryDirection direction;
+    DonnaTaskState ret = DONNA_TASK_DONE;
+
+    donna_node_get (node, FALSE, "history-tree", &has, &v, NULL);
+    if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+        /* current location; nothing to do */
+        return;
+    tree = g_value_get_object (&v);
+    g_value_unset (&v);
+
+    donna_node_get (node, FALSE, "history-direction", &has, &v, NULL);
+    direction = g_value_get_uint (&v);
+    g_value_unset (&v);
+
+    donna_node_get (node, FALSE, "history-pos", &has, &v, NULL);
+
+    if (!donna_tree_view_history_move (tree, direction, g_value_get_uint (&v), &err))
+    {
+        ret = DONNA_TASK_FAILED;
+        donna_task_take_error (task, err);
+    }
+    g_value_unset (&v);
+
+    return ret;
+}
+
+/* mode list only */
+static DonnaNode *
+get_node_for_history (DonnaTreeView         *tree,
+                      DonnaProviderInternal *pi,
+                      const gchar           *name,
+                      DonnaHistoryDirection  direction,
+                      guint                  nb,
+                      GError               **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+    GValue v = G_VALUE_INIT;
+
+    node = donna_provider_internal_new_node (pi, name, NULL, NULL,
+            (internal_worker_fn) history_goto, NULL, NULL, error);
+    if (G_UNLIKELY (!node))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+                "couldn't create node: ",
+                priv->name);
+        return NULL;
+    }
+
+    /* no direction == node for current location */
+    if (direction == 0)
+        return node;
+
+    g_value_init (&v, DONNA_TYPE_TREE_VIEW);
+    g_value_set_object (&v, tree);
+    if (G_UNLIKELY (!donna_node_add_property (node, "history-tree",
+                    DONNA_TYPE_TREE_VIEW, &v,
+                    (refresher_fn) gtk_true, NULL, error)))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+                "couldn't add property 'history-tree': ",
+                priv->name);
+        g_value_unset (&v);
+        g_object_unref (node);
+        return NULL;
+    }
+    g_value_unset (&v);
+
+    g_value_init (&v, G_TYPE_UINT);
+    g_value_set_uint (&v, direction);
+    if (G_UNLIKELY (!donna_node_add_property (node, "history-direction",
+                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+                "couldn't add property 'history-direction': ",
+                priv->name);
+        g_value_unset (&v);
+        g_object_unref (node);
+        return NULL;
+    }
+
+    g_value_set_uint (&v, nb);
+    if (G_UNLIKELY (!donna_node_add_property (node, "history-pos",
+                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+                "couldn't add property 'history-pos': ",
+                priv->name);
+        g_value_unset (&v);
+        g_object_unref (node);
+        return NULL;
+    }
+    g_value_unset (&v);
+
+    return node;
+}
+
+/* mode list only */
+GPtrArray *
+donna_tree_view_history_get (DonnaTreeView          *tree,
+                             DonnaHistoryDirection   direction,
+                             guint                   nb,
+                             GError                **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaProviderInternal *pi;
+    DonnaNode *node;
+    GPtrArray *arr;
+    gchar **items, **s;
+    gchar *name;
+    guint pos;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    priv = tree->priv;
+
+    if (!(direction & (DONNA_HISTORY_BACKWARD | DONNA_HISTORY_FORWARD)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot get history, no valid direction(s) given",
+                priv->name);
+        return NULL;
+    }
+
+    pi = (DonnaProviderInternal *) donna_app_get_provider (priv->app, "internal");
+    if (G_UNLIKELY (!pi))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot get history, failed to get provider 'internal'",
+                priv->name);
+        return NULL;
+    }
+
+    arr = g_ptr_array_new_with_free_func (g_object_unref);
+
+    if (direction & DONNA_HISTORY_BACKWARD)
+    {
+        items = donna_history_get_items (priv->history, DONNA_HISTORY_BACKWARD,
+                nb, error);
+        if (G_UNLIKELY (!items))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to get history: ",
+                    priv->name);
+            g_ptr_array_unref (arr);
+            g_object_unref (pi);
+            return NULL;
+        }
+
+        for (s = items, pos = 0; *s; ++s)
+            ++pos;
+
+        /* we got items from oldest to most recent. This is the order we want to
+         * preserve if we're also showing FORWARD, so it all makes sense.
+         * However, if only showing BACKWARD we shall reverse them, as then the
+         * expectation would be to have the most recent first */
+        if (direction & DONNA_HISTORY_FORWARD)
+            /* reset to first */
+            s = items;
+        else if (s > items)
+            /* back to last (unless first == last == NULL, i.e. no items) */
+            --s;
+
+        while (*s)
+        {
+            if (streqn (*s, "fs:", 3))
+                name = *s + 3;
+            else
+                name = *s;
+
+            node = get_node_for_history (tree, pi, name,
+                    DONNA_HISTORY_BACKWARD, pos--, error);
+            if (G_UNLIKELY (!node))
+            {
+                g_strfreev (items);
+                g_ptr_array_unref (arr);
+                g_object_unref (pi);
+                return NULL;
+            }
+            g_ptr_array_add (arr, node);
+
+            if (direction & DONNA_HISTORY_FORWARD)
+                ++s;
+            /* got back to the first item? */
+            else if (s == items)
+                break;
+            else
+                --s;
+        }
+        g_strfreev (items);
+
+        /* if there's also forward, we add the current location on the list */
+        if (direction & DONNA_HISTORY_FORWARD)
+        {
+            name = (gchar *) donna_history_get_item (priv->history,
+                    DONNA_HISTORY_BACKWARD, 0, error);
+            if (G_UNLIKELY (!name))
+            {
+                g_prefix_error (error, "Treeview '%s': Failed to get history; "
+                        "couldn't get item: ",
+                        priv->name);
+                g_ptr_array_unref (arr);
+                g_object_unref (pi);
+                return NULL;
+            }
+
+            if (streqn (name, "fs:", 3))
+                name += 3;
+
+            node = get_node_for_history (tree, pi, name, 0, 0, error);
+            if (G_UNLIKELY (!node))
+            {
+                g_ptr_array_unref (arr);
+                g_object_unref (pi);
+                return NULL;
+            }
+            g_ptr_array_add (arr, node);
+
+            /* TODO add property menu-sensitive=FALSE so when displayed on menu
+             * it can't be clicked. Also a menu-bold or something would be nice
+             * as well... Also a different icon is needed */
+        }
+    }
+
+    if (direction & DONNA_HISTORY_FORWARD)
+    {
+        items = donna_history_get_items (priv->history, DONNA_HISTORY_FORWARD,
+                nb, error);
+        if (G_UNLIKELY (!items))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to get history: ",
+                    priv->name);
+            g_ptr_array_unref (arr);
+            g_object_unref (pi);
+            return NULL;
+        }
+
+        pos = 0;
+        for (s = items; *s; ++s)
+        {
+            if (streqn (*s, "fs:", 3))
+                name = *s + 3;
+            else
+                name = *s;
+
+            node = get_node_for_history (tree, pi, name,
+                    DONNA_HISTORY_FORWARD, ++pos, error);
+            if (G_UNLIKELY (!node))
+            {
+                g_strfreev (items);
+                g_ptr_array_unref (arr);
+                g_object_unref (pi);
+                return NULL;
+            }
+            g_ptr_array_add (arr, node);
+        }
+        g_strfreev (items);
+    }
+
+    g_object_unref (pi);
+    return arr;
+}
+
+/* mode list only */
+DonnaNode *
+donna_tree_view_history_get_node (DonnaTreeView          *tree,
+                                  DonnaHistoryDirection   direction,
+                                  guint                   nb,
+                                  GError                **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaProviderInternal *pi;
+    DonnaNode *node;
+    const gchar *item;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    priv = tree->priv;
+
+    pi = (DonnaProviderInternal *) donna_app_get_provider (priv->app, "internal");
+    if (G_UNLIKELY (!pi))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Cannot get history node, "
+                "failed to get provider 'internal'",
+                priv->name);
+        return NULL;
+    }
+
+    item = donna_history_get_item (priv->history, direction, nb, error);
+    if (!item)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed getting history node: ",
+                priv->name);
+        g_object_unref (pi);
+        return NULL;
+    }
+
+    node = get_node_for_history (tree, pi,
+            (streqn ("fs:", item, 3)) ? item + 3 : item,
+            direction, nb, error);
+    g_object_unref (pi);
+    return node;
+}
+
+/* mode list only */
+static void
+history_move_get_node_cb (DonnaTask             *task,
+                          gboolean               timeout_called,
+                          struct history_move   *hm)
+{
+    GError *err = NULL;
+    DonnaTreeViewPrivate *priv = hm->tree->priv;
+    DonnaTaskState state;
+
+    state = donna_task_get_state (task);
+    if (state == DONNA_TASK_FAILED)
+    {
+        donna_app_show_error (priv->app, donna_task_get_error (task),
+                "Treeview '%s': Failed to move in history; "
+                "getting destination node failed",
+                priv->name);
+        return;
+    }
+    else if (state == DONNA_TASK_CANCELLED)
+        return;
+
+    if (!change_location (hm->tree, CHANGING_LOCATION_ASKED,
+                g_value_get_object (donna_task_get_return_value (task)), hm, &err))
+        donna_app_show_error (priv->app, err,
+                "Treeview '%s': Failed to move in history",
+                priv->name);
+    free_history_move (hm);
+}
+
+/* mode list only */
+gboolean
+donna_tree_view_history_move (DonnaTreeView         *tree,
+                              DonnaHistoryDirection  direction,
+                              guint                  nb,
+                              GError               **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaTask *task;
+    const gchar *fl;
+    struct history_move *data;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+
+    fl = donna_history_get_item (priv->history, direction, nb, error);
+    if (!fl)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to move in history: ",
+                priv->name);
+        return FALSE;
+    }
+
+    task = donna_app_get_node_task (priv->app, fl);
+    if (G_UNLIKELY (!task))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Canot move in history; "
+                "failed to create task to get node '%s'",
+                priv->name, fl);
+        return FALSE;
+    }
+
+    data = g_slice_new (struct history_move);
+    data->tree = tree;
+    data->direction = direction;
+    data->nb = nb;
+
+    donna_task_set_callback (task,
+            (task_callback_fn) history_move_get_node_cb,
+            data,
+            (GDestroyNotify) free_history_move);
+    donna_app_run_task (priv->app, task);
+    return TRUE;
+}
+
+/* mode list only */
+gboolean
+donna_tree_view_history_clear (DonnaTreeView        *tree,
+                               DonnaHistoryDirection direction,
+                               GError              **error)
+{
+    DonnaTreeViewPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': No history in mode Tree",
+                priv->name);
+        return FALSE;
+    }
+
+    donna_history_clear (priv->history, direction);
+    return TRUE;
 }
 
 

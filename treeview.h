@@ -7,6 +7,7 @@
 #include "columntype.h"
 #include "conf.h"
 #include "node.h"
+#include "history.h"
 
 G_BEGIN_DECLS
 
@@ -272,6 +273,21 @@ GPtrArray *     donna_tree_view_get_children    (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  DonnaNodeType       node_types);
 void            donna_tree_view_abort           (DonnaTreeView      *tree);
+GPtrArray *     donna_tree_view_history_get     (DonnaTreeView      *tree,
+                                                 DonnaHistoryDirection direction,
+                                                 guint               nb,
+                                                 GError            **error);
+DonnaNode *     donna_tree_view_history_get_node(DonnaTreeView      *tree,
+                                                 DonnaHistoryDirection direction,
+                                                 guint               nb,
+                                                 GError            **error);
+gboolean        donna_tree_view_history_move    (DonnaTreeView      *tree,
+                                                 DonnaHistoryDirection direction,
+                                                 guint               nb,
+                                                 GError            **error);
+gboolean        donna_tree_view_history_clear   (DonnaTreeView      *tree,
+                                                 DonnaHistoryDirection direction,
+                                                 GError            **error);
 
 G_END_DECLS
 

@@ -1212,6 +1212,183 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *direction = args[1]; /* opt */
+
+    const gchar *s_directions[] = { "backward", "forward" };
+    DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
+        DONNA_HISTORY_FORWARD };
+    guint dir;
+
+    if (direction)
+    {
+        dir = _get_flags (s_directions, directions, direction);
+        if (dir == 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Invalid argument direction '%s'; "
+                    "Must be (a '+'-separated combination of) 'backward' and/or 'forward'",
+                    direction);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        dir = DONNA_HISTORY_BACKWARD;
+
+    if (!donna_tree_view_history_clear (tree, dir, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *direction = args[1]; /* opt */
+    guint nb = GPOINTER_TO_UINT (args[2]); /* opt */
+
+    const gchar *s_directions[] = { "backward", "forward" };
+    DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
+        DONNA_HISTORY_FORWARD };
+    guint dir;
+
+    GValue *value;
+    GPtrArray *arr;
+
+    if (direction)
+    {
+        dir = _get_flags (s_directions, directions, direction);
+        if (dir == 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Invalid argument direction '%s'; "
+                    "Must be (a '+'-separated combination of) 'backward' and/or 'forward'",
+                    direction);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        dir = DONNA_HISTORY_BACKWARD | DONNA_HISTORY_FORWARD;
+
+    arr = donna_tree_view_history_get (tree, dir, nb, &err);
+    if (!arr)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_PTR_ARRAY);
+    g_value_take_boxed (value, arr);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *direction = args[1]; /* opt */
+    guint nb = GPOINTER_TO_UINT (args[2]); /* opt */
+
+    const gchar *s_directions[] = { "backward", "forward" };
+    DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
+        DONNA_HISTORY_FORWARD };
+    gint dir;
+
+    GValue *value;
+    DonnaNode *node;
+
+    if (direction)
+    {
+        dir = _get_choice (s_directions, direction);
+        if (dir < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Invalid argument direction '%s'; "
+                    "Must be 'backward' or 'forward'",
+                    direction);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        dir = 0;
+
+    if (nb == 0)
+        nb = 1;
+
+    node = donna_tree_view_history_get_node (tree, directions[dir], nb, &err);
+    if (!node)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *direction = args[1]; /* opt */
+    guint nb = GPOINTER_TO_UINT (args[2]); /* opt */
+
+    const gchar *s_directions[] = { "backward", "forward" };
+    DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
+        DONNA_HISTORY_FORWARD };
+    guint dir;
+
+    if (direction)
+    {
+        dir = _get_flags (s_directions, directions, direction);
+        if (dir == 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Invalid argument direction '%s'; "
+                    "Must be (a '+'-separated combination of) 'backward' and/or 'forward'",
+                    direction);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        dir = DONNA_HISTORY_BACKWARD;
+
+    /* since 0 has no sense here, we'll just assume this was not specified, and
+     * default to 1 */
+    if (nb == 0)
+        nb = 1;
+
+    if (!donna_tree_view_history_move (tree, dir, nb, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1648,6 +1825,33 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_goto_line, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_history_clear, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_history_get, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_history_get_node, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_history_move, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
