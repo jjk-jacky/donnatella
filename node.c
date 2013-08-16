@@ -2164,6 +2164,23 @@ finish:
 }
 
 /**
+ * donna_node_get_toggle_count:
+ * @node: The node
+ *
+ * Returns the toggle count for that node. This should only be used by the
+ * node's provider, to handle its toggle reference in multi-threaded
+ * environment.
+ *
+ * Returns: The toggle count
+ */
+int
+donna_node_get_toggle_count (DonnaNode *node)
+{
+    g_return_val_if_fail (DONNA_IS_NODE (node), -1);
+    return node->priv->toggle_count;
+}
+
+/**
  * donna_node_inc_toggle_count:
  * @node: The node
  *

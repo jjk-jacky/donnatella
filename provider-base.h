@@ -42,6 +42,8 @@ struct _DonnaProviderBaseClass
     DonnaTaskState  (*new_node)             (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              const gchar        *location);
+    void            (*unref_node)           (DonnaProviderBase  *provider,
+                                             DonnaNode          *node);
     DonnaTaskState  (*has_children)         (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaNode          *node,

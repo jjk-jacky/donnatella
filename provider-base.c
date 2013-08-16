@@ -209,7 +209,7 @@ provider_base_get_cached_node (DonnaProviderBase *provider,
 }
 
 static void
-node_toggle_ref_cb (DonnaProviderBase   *provider,
+node_toggle_ref_cb (DonnaProviderBase   *_provider,
                     DonnaNode           *node,
                     gboolean             is_last)
 {
@@ -250,7 +250,7 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
      * - unlock RM
      */
 
-    g_rec_mutex_lock (&provider->priv->nodes_mutex);
+    g_rec_mutex_lock (&_provider->priv->nodes_mutex);
     if (is_last)
     {
         gchar *location;
@@ -259,19 +259,31 @@ node_toggle_ref_cb (DonnaProviderBase   *provider,
         c = donna_node_dec_toggle_count (node);
         if (c > 0)
         {
-            g_rec_mutex_unlock (&provider->priv->nodes_mutex);
+            g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
             return;
         }
+
+        /* we call this to let the provider know the node is being
+         * removed/finalized, in case it then needs to go to cleaning as well */
+        if (DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node)
+            DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node (_provider, node);
+        /* sanity check */
+        if (G_UNLIKELY (donna_node_get_toggle_count (node) > 0))
+        {
+            g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
+            return;
+        }
+
         location = donna_node_get_location (node);
         /* this also removes our last ref on node */
-        g_hash_table_remove (provider->priv->nodes, location);
-        g_rec_mutex_unlock (&provider->priv->nodes_mutex);
+        g_hash_table_remove (_provider->priv->nodes, location);
+        g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
         g_free (location);
     }
     else
     {
         donna_node_inc_toggle_count (node);
-        g_rec_mutex_unlock (&provider->priv->nodes_mutex);
+        g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
     }
 }
 
