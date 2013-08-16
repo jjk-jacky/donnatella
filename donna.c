@@ -1873,6 +1873,13 @@ load_menu (struct menu_click *mc)
         }                                                   \
 } while (0)
 
+static void
+free_arr_nodes (DonnaNode *node)
+{
+    if (node)
+        g_object_unref (node);
+}
+
 static gboolean
 donna_donna_show_menu (DonnaApp       *app,
                        GPtrArray      *nodes,
@@ -1892,6 +1899,10 @@ donna_donna_show_menu (DonnaApp       *app,
     mc->donna = (DonnaDonna *) app;
     mc->name  = g_strdup (name);
     mc->nodes = nodes;
+    /* because we allow to have NULL elements to be used as separator, we can't
+     * just use g_object_unref() as GDestroyNotify since that will cause warning
+     * when called on NULL */
+    g_ptr_array_set_free_func (nodes, (GDestroyNotify) free_arr_nodes);
 
     /* icon options */
     get_boolean (b, "show_icons", TRUE);
