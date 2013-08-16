@@ -12,6 +12,8 @@ G_BEGIN_DECLS
 
 #define _get_choice(choices, sel)   \
     _donna_get_choice_from_list (sizeof (choices) / sizeof (choices[0]), choices, sel)
+#define _get_flags(choices, flags, sel) \
+    _donna_get_flags_from_list (sizeof (choices) / sizeof (choices[0]), choices, flags, sel)
 
 struct command
 {
@@ -45,6 +47,10 @@ gboolean            _donna_command_trigger_fl       (DonnaApp       *app,
 gint                _donna_get_choice_from_list     (gint            nb,
                                                      const gchar    *choices[],
                                                      const gchar    *sel);
+guint               _donna_get_flags_from_list      (gint            nb,
+                                                     const gchar    *choices[],
+                                                     guint           flags[],
+                                                     gchar          *sel);
 
 G_END_DECLS
 

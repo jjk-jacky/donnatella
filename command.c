@@ -346,6 +346,58 @@ _donna_get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
     return i;
 }
 
+guint
+_donna_get_flags_from_list (gint             nb,
+                            const gchar     *choices[],
+                            guint            flags[],
+                            gchar           *sel)
+{
+    guint ret = 0;
+
+    for (;;)
+    {
+        gchar *ss;
+        gchar *start, *end, e;
+        gint c;
+
+        ss = strchr (sel, '+');
+        if (ss)
+            *ss = '\0';
+
+        /* since we're allowing separators, we have do "trim" things */
+        for (start = sel; isblank (*start); ++start)
+            ;
+        for (end = start; !isblank (*end) && *end != '\0'; ++end)
+            ;
+        if (*end == '\0')
+            end = NULL;
+        else
+        {
+            e = *end;
+            *end = '\0';
+        }
+
+        c = _donna_get_choice_from_list (nb, choices, start);
+
+        /* "undo trim" */
+        if (ss)
+            *ss = '+';
+        if (end)
+            *end = e;
+
+        if (c < 0)
+            return 0;
+        ret |= flags[c];
+
+        if (ss)
+            sel = ss + 1;
+        else
+            break;
+    }
+
+    return ret;
+}
+
 /* commands */
 
 static void
@@ -1104,57 +1156,10 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *c_action[] = { "select", "unselect", "invert" };
     DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT, DONNA_TREE_SEL_UNSELECT,
         DONNA_TREE_SEL_INVERT };
-    gchar *s;
     gint c_n;
-    gint nb_sets;
     gint c_a;
 
-    nb_sets = sizeof (c_set) / sizeof (c_set[0]);
-    s = s_set;
-    set = 0;
-    for (;;)
-    {
-        gchar *ss;
-        gchar *start, *end, e;
-        gint c_s;
-
-        ss = strchr (s, '+');
-        if (ss)
-            *ss = '\0';
-
-        /* since we're allowing separators, we have do "trim" things */
-        for (start = s; isblank (*start); ++start)
-            ;
-        for (end = start; !isblank (*end) && *end != '\0'; ++end)
-            ;
-        if (*end == '\0')
-            end = NULL;
-        else
-        {
-            e = *end;
-            *end = '\0';
-        }
-
-        c_s = _donna_get_choice_from_list (nb_sets, c_set, start);
-
-        /* "undo trim" */
-        if (ss)
-            *ss = '+';
-        if (end)
-            *end = e;
-
-        if (c_s < 0)
-        {
-            set = 0;
-            break;
-        }
-        set |= sets[c_s];
-
-        if (ss)
-            s = ss + 1;
-        else
-            break;
-    }
+    set = _get_flags (c_set, sets, s_set);
     if (set == 0)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
