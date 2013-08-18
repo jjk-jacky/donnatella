@@ -364,6 +364,28 @@ donna_app_get_current_dirname (DonnaApp       *app)
 }
 
 gchar *
+donna_app_get_conf_filename (DonnaApp       *app,
+                             const gchar    *fmt,
+                             ...)
+{
+    DonnaAppInterface *interface;
+    va_list va_arg;
+    gchar *ret;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->get_conf_filename != NULL, NULL);
+
+    va_start (va_arg, fmt);
+    ret = (*interface->get_conf_filename) (app, fmt, va_arg);
+    va_end (va_arg);
+    return ret;
+}
+
+gchar *
 donna_app_new_int_ref (DonnaApp       *app,
                        DonnaArgType    type,
                        gpointer        ptr)

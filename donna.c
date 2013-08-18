@@ -192,6 +192,10 @@ static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
 static gchar *          donna_donna_get_current_dirname (
                                                      DonnaApp       *app);
+static gchar *          donna_donna_get_conf_filename (
+                                                     DonnaApp       *app,
+                                                     const gchar    *fmt,
+                                                     va_list         va_arg);
 static gchar *          donna_donna_new_int_ref     (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
@@ -235,6 +239,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_task_manager     = donna_donna_get_task_manager;
     interface->get_treeview         = donna_donna_get_treeview;
     interface->get_current_dirname  = donna_donna_get_current_dirname;
+    interface->get_conf_filename    = donna_donna_get_conf_filename;
     interface->new_int_ref          = donna_donna_new_int_ref;
     interface->get_int_ref          = donna_donna_get_int_ref;
     interface->free_int_ref         = donna_donna_free_int_ref;
@@ -1300,6 +1305,30 @@ donna_donna_get_current_dirname (DonnaApp       *app)
 {
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
     return g_strdup (((DonnaDonna *) app)->priv->cur_dirname);
+}
+
+static gchar *
+donna_donna_get_conf_filename (DonnaApp       *app,
+                               const gchar    *fmt,
+                               va_list         va_arg)
+{
+    GString *str;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+
+    str = g_string_new (g_get_user_config_dir ());
+    g_string_append (str, "/donnatella/");
+    g_string_append_vprintf (str, fmt, va_arg);
+
+    if (!g_get_filename_charsets (NULL))
+    {
+        gchar *s;
+        s = g_filename_from_utf8 (str->str, -1, NULL, NULL, NULL);
+        g_string_free (str, TRUE);
+        return s;
+    }
+    else
+        return g_string_free (str, FALSE);
 }
 
 static gchar *

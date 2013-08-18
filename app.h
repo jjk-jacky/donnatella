@@ -46,6 +46,9 @@ struct _DonnaAppInterface
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
                                                      const gchar    *name);
     gchar *             (*get_current_dirname)      (DonnaApp       *app);
+    gchar *             (*get_conf_filename)        (DonnaApp       *app,
+                                                     const gchar    *fmt,
+                                                     va_list         va_arg);
     gchar *             (*new_int_ref)              (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
@@ -105,6 +108,9 @@ DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
 DonnaNode *         donna_app_get_current_location  (DonnaApp       *app,
                                                      GError        **error);
 gchar *             donna_app_get_current_dirname   (DonnaApp       *app);
+gchar *             donna_app_get_conf_filename     (DonnaApp       *app,
+                                                     const gchar    *fmt,
+                                                     ...);
 gchar *             donna_app_new_int_ref           (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
