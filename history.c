@@ -261,7 +261,7 @@ donna_history_get_items (DonnaHistory           *history,
     gchar **r;
     guint i = 0;
     guint from = history->pos + 1;
-    guint to = (history->pos > 0) ? history->pos - 1 : -1;
+    guint to = (history->pos > 0) ? history->pos - 1 : (guint) -1;
 
     g_return_val_if_fail (history != NULL, NULL);
 

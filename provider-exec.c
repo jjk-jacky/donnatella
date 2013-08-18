@@ -144,7 +144,6 @@ static gchar *
 resolve_path (const gchar *curdir, const gchar *path)
 {
     GString *str;
-    const gchar *start = path;
     const gchar *s;
 
     str = g_string_new (NULL);
@@ -556,7 +555,6 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                         DonnaTask          *task,
                         const gchar        *location)
 {
-    GError *err = NULL;
     DonnaProviderBaseClass *klass;
     DonnaNode *node;
     DonnaNode *n;

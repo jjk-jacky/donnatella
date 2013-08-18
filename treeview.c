@@ -1153,8 +1153,6 @@ active_list_changed_cb (GObject         *object,
                         DonnaTreeView   *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaNode *node;
-    GError *err = NULL;
 
     if (priv->sync_with)
     {
@@ -1257,7 +1255,6 @@ switch_minitree_off (GtkTreeModel    *model,
                      GtkTreeIter     *iter,
                      DonnaTreeView   *tree)
 {
-    DonnaTreeViewPrivate *priv = tree->priv;
     enum tree_expand es;
 
     gtk_tree_model_get (model, iter, DONNA_TREE_COL_EXPAND_STATE, &es, -1);
@@ -1479,9 +1476,9 @@ real_option_cb (struct option_data *data)
             if (streq (opt, "node_visuals"))
             {
                 val = cfg_get_node_visuals (tree, config);
-                if (priv->node_visuals != val)
+                if (priv->node_visuals != (guint) val)
                 {
-                    priv->node_visuals = val;
+                    priv->node_visuals = (guint) val;
                     gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
                             (GtkTreeModelForeachFunc) reset_node_visuals,
                             data->tree);
@@ -1575,8 +1572,8 @@ real_option_cb (struct option_data *data)
             else if (streq (opt, "history_max"))
             {
                 val = cfg_get_history_max (tree, config);
-                if (donna_history_get_max (priv->history) != val)
-                    donna_history_set_max (priv->history, val);
+                if (donna_history_get_max (priv->history) != (guint) val)
+                    donna_history_set_max (priv->history, (guint) val);
             }
         }
     }
@@ -3246,7 +3243,6 @@ static gpointer
 get_ct_data (const gchar *col_name, DonnaTreeView *tree)
 {
     struct column *_col;
-    gpointer ctdata;
     GSList *l;
 
     /* since the col_name comes from user input, we could fail to find the
@@ -7448,7 +7444,6 @@ change_location (DonnaTreeView *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaProvider *provider_current;
     DonnaProvider *provider_future;
-    guint i;
 
     if (cl > CHANGING_LOCATION_ASKED && priv->cl > cl)
         /* this is ignoring e.g. CHANGING_LOCATION_SLOW if we're already at
@@ -7639,7 +7634,6 @@ change_location (DonnaTreeView *tree,
         if (cl == CHANGING_LOCATION_GOT_CHILD
                 || priv->cl < CHANGING_LOCATION_GOT_CHILD)
         {
-            DonnaProvider *provider;
             GtkStyleContext *context;
             const gchar *domain;
             gchar buf[64];
@@ -7649,7 +7643,6 @@ change_location (DonnaTreeView *tree,
              * arrangement) */
             if (priv->location)
             {
-                provider = donna_node_peek_provider (priv->location);
                 domain = donna_node_get_domain (priv->location);
                 /* 56 == 64 (buf) - 8 (strlen ("domain-") + NUL) */
                 if (strlen (domain) <= 56)
@@ -7749,7 +7742,6 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
                               GError        **error)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -7963,8 +7955,6 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
             }
             else if (streq ("last", s))
             {
-                GtkTreePath *path;
-
                 if (!donna_tree_model_iter_last (model, iter))
                     return ROW_ID_INVALID;
                 if (is_tree (tree))
@@ -8694,9 +8684,8 @@ donna_tree_view_full_expand (DonnaTreeView      *tree,
                              GError            **error)
 {
     DonnaTreeViewPrivate *priv;
-    GtkTreeView *treev = (GtkTreeView *) tree;
-    GtkTreeIter  iter;
-    row_id_type  type;
+    GtkTreeIter iter;
+    row_id_type type;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (rowid != NULL, FALSE);
@@ -9338,7 +9327,6 @@ may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GError *err = NULL;
-    GtkTreeView  *treev = (GtkTreeView *) tree;
     GtkTreeModel *model = (GtkTreeModel *) priv->store;
     GtkTreePath *path;
     DonnaTask *task;
@@ -12504,7 +12492,6 @@ status_provider_render (DonnaStatusProvider    *sp,
     gchar *fmt;
     gchar *s;
     gchar *ss;
-    guint64 size;
     guint i;
 
     for (i = 0; i < priv->statuses->len; ++i)

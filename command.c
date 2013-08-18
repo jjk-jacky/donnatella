@@ -183,7 +183,7 @@ free_fir (struct fir *fir)
         g_free (fir);
 }
 
-static gboolean
+static void
 trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
 {
     if (donna_task_get_state (task) == DONNA_TASK_FAILED)
