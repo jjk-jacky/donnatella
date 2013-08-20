@@ -64,3 +64,9 @@ type=list-int
 value=0:all:All (Item & Container)
 value=1:item:Item
 value=2:container:Container
+
+[mark-type]
+title=Type of mark
+type=list-int
+value=0:standard:Standard mark
+value=1:dynamic:Dynamic mark

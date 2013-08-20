@@ -197,6 +197,12 @@ refresher (DonnaTask *task, DonnaNode *node, const gchar *name)
         g_value_set_string (&v, mark->value);
         ret = TRUE;
     }
+    else if (streq (name, "mark-type"))
+    {
+        g_value_init (&v, G_TYPE_INT);
+        g_value_set_int (&v, mark->type);
+        ret = TRUE;
+    }
     g_mutex_unlock (&priv->mutex);
 
     if (ret)
@@ -244,6 +250,27 @@ setter (DonnaTask *task, DonnaNode *node, const gchar *name, const GValue *value
         g_free (mark->value);
         mark->value = g_value_dup_string (value);
         ret = DONNA_TASK_DONE;
+    }
+    else if (streq (name, "mark-type"))
+    {
+        DonnaMarkType type;
+
+        type = (DonnaMarkType) g_value_get_int (value);
+        if (type == DONNA_MARK_STANDARD || type == DONNA_MARK_DYNAMIC)
+        {
+            mark->type = type;
+            ret = DONNA_TASK_DONE;
+        }
+        else
+        {
+            g_mutex_unlock (&priv->mutex);
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_INVALID_VALUE,
+                    "Provider 'mark': Cannot set type of mark for '%s', "
+                    "invalid value (%d)",
+                    location, type);
+            return DONNA_TASK_FAILED;
+        }
     }
     g_mutex_unlock (&priv->mutex);
 
@@ -295,6 +322,36 @@ new_node_for_mark (DonnaProviderMark *pm,
                 mark->location);
         return NULL;
     }
+
+    g_value_init (&v, G_TYPE_INT);
+    g_value_set_int (&v, mark->type);
+    if (G_UNLIKELY (!donna_node_add_property (node, "mark-type",
+                    G_TYPE_INT, &v, refresher, setter, error)))
+    {
+        if (!data_is_mark)
+            g_mutex_unlock (&priv->mutex);
+        g_prefix_error (error, "Provider 'mark': Cannot create new node, "
+                "failed to add property 'mark-type': ");
+        g_value_unset (&v);
+        g_object_unref (node);
+        return NULL;
+    }
+    g_value_unset (&v);
+
+    g_value_init (&v, G_TYPE_STRING);
+    g_value_set_string (&v, "mark-type");
+    if (G_UNLIKELY (!donna_node_add_property (node, "mark-type-extra",
+                    G_TYPE_STRING, &v, refresher, NULL, error)))
+    {
+        if (!data_is_mark)
+            g_mutex_unlock (&priv->mutex);
+        g_prefix_error (error, "Provider 'mark': Cannot create new node, "
+                "failed to add property 'mark-type-extra': ");
+        g_value_unset (&v);
+        g_object_unref (node);
+        return NULL;
+    }
+    g_value_unset (&v);
 
     g_value_init (&v, G_TYPE_STRING);
     g_value_set_string (&v, mark->value);
