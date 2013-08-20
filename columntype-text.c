@@ -50,6 +50,14 @@ static void             ct_text_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GPtrArray *      ct_text_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
+static gboolean         ct_text_edit                (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GtkCellRenderer   **renderers,
+                                                     renderer_edit_fn    renderer_edit,
+                                                     gpointer            re_data,
+                                                     DonnaTreeView      *treeview,
+                                                     GError            **error);
 static GPtrArray *      ct_text_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -76,6 +84,7 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
     interface->refresh_data             = ct_text_refresh_data;
     interface->free_data                = ct_text_free_data;
     interface->get_props                = ct_text_get_props;
+    interface->edit                     = ct_text_edit;
     interface->render                   = ct_text_render;
     interface->node_cmp                 = ct_text_node_cmp;
     interface->is_match_filter          = ct_text_is_match_filter;
@@ -251,6 +260,118 @@ ct_text_get_props (DonnaColumnType  *ct,
             g_type_name (G_TYPE_STRING));               \
     g_free (location);                                  \
 } while (0)
+
+struct editing_data
+{
+    DonnaColumnTypeText *cttext;
+    DonnaTreeView *tree;
+    DonnaNode *node;
+    struct tv_col_data *data;
+    guint editing_started_sid;
+    guint editing_done_sid;
+};
+
+static void
+editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
+{
+    GError *err = NULL;
+    GValue v = G_VALUE_INIT;
+    gboolean canceled;
+
+    g_signal_handler_disconnect (editable, ed->editing_done_sid);
+
+    g_object_get (editable, "editing-canceled", &canceled, NULL);
+    if (canceled)
+    {
+        g_free (ed);
+        return;
+    }
+
+    if (G_UNLIKELY (!GTK_IS_ENTRY (editable)))
+    {
+        gchar *fl = donna_node_get_full_location (ed->node);
+        donna_app_show_error (ed->cttext->priv->app, NULL,
+                "ColumnType 'text': Unable to change property '%s' for '%s': "
+                "Editable widget isn't a GtkEntry",
+                ed->data->property, fl);
+        g_free (fl);
+        g_free (ed);
+        return;
+    }
+
+    g_value_init (&v, G_TYPE_STRING);
+    g_value_set_string (&v, gtk_entry_get_text ((GtkEntry *) editable));
+    if (!donna_tree_view_set_node_property (ed->tree, ed->node,
+                ed->data->property, &v, &err))
+    {
+        gchar *fl = donna_node_get_full_location (ed->node);
+        donna_app_show_error (ed->cttext->priv->app, err,
+                "ColumnType 'text': Unable to set property '%s' for '%s' to '%s'",
+                ed->data->property, fl, g_value_get_string (&v));
+        g_free (fl);
+        g_clear_error (&err);
+        g_value_unset (&v);
+        g_free (ed);
+        return;
+    }
+    g_value_unset (&v);
+
+    g_free (ed);
+}
+
+static void
+editing_started_cb (GtkCellRenderer     *renderer,
+                    GtkCellEditable     *editable,
+                    gchar               *path,
+                    struct editing_data *ed)
+{
+    g_signal_handler_disconnect (renderer, ed->editing_started_sid);
+    ed->editing_started_sid = 0;
+
+    ed->editing_done_sid = g_signal_connect (editable, "editing-done",
+            (GCallback) editing_done_cb, ed);
+}
+
+static gboolean
+ct_text_edit (DonnaColumnType    *ct,
+              gpointer            _data,
+              DonnaNode          *node,
+              GtkCellRenderer   **renderers,
+              renderer_edit_fn    renderer_edit,
+              gpointer            re_data,
+              DonnaTreeView      *treeview,
+              GError            **error)
+{
+    struct tv_col_data *data = _data;
+    struct editing_data *ed;
+
+    if (!(donna_node_has_property (node, data->property) & DONNA_NODE_PROP_WRITABLE))
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_WRITABLE,
+                "ColumnType 'text': property '%s' isn't writable",
+                data->property);
+        return FALSE;
+    }
+
+    ed = g_new0 (struct editing_data, 1);
+    ed->cttext  = (DonnaColumnTypeText *) ct;
+    ed->tree    = treeview;
+    ed->node    = node;
+    ed->data    = data,
+    ed->editing_started_sid = g_signal_connect (renderers[0], "editing-started",
+            (GCallback) editing_started_cb, ed);
+
+    g_object_set (renderers[0], "editable", TRUE, NULL);
+    if (!renderer_edit (renderers[0], re_data))
+    {
+        g_signal_handler_disconnect (renderers[0], ed->editing_started_sid);
+        g_free (ed);
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+                "ColumnType 'text': Failed to put renderer in edit mode");
+        return FALSE;
+    }
+    return TRUE;
+}
 
 static GPtrArray *
 ct_text_render (DonnaColumnType    *ct,

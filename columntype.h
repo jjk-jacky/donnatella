@@ -22,6 +22,7 @@ GType           donna_columntype_get_type   (void) G_GNUC_CONST;
 typedef enum
 {
     DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+    DONNA_COLUMNTYPE_ERROR_NOT_WRITABLE,
     DONNA_COLUMNTYPE_ERROR_OTHER,
 } DonnaColumnTypeError;
 
