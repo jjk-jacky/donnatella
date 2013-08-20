@@ -22,6 +22,14 @@ enum
     RND_COMBO
 };
 
+
+struct tv_col_data
+{
+    gchar *prop_value;
+    gchar *prop_extra;
+    gboolean show_type;
+};
+
 struct _DonnaColumnTypeValuePrivate
 {
     DonnaApp    *app;
@@ -104,9 +112,7 @@ donna_column_type_value_class_init (DonnaColumnTypeValueClass *klass)
 static void
 donna_column_type_value_init (DonnaColumnTypeValue *ct)
 {
-    DonnaColumnTypeValuePrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_VALUE,
             DonnaColumnTypeValuePrivate);
 }
@@ -176,42 +182,72 @@ ct_value_refresh_data (DonnaColumnType    *ct,
     DonnaColumnTypeValue *ctv = DONNA_COLUMNTYPE_VALUE (ct);
     DonnaConfig *config;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
-    gboolean *data;
+    struct tv_col_data *data;
+    gchar *s;
 
     config = donna_app_peek_config (ctv->priv->app);
 
     if (!*_data)
-        *_data = g_new0 (gboolean, 1);
-    data = * (gboolean **) _data;
+        *_data = g_new0 (struct tv_col_data, 1);
+    data = *_data;
 
-    if (*data != donna_config_get_boolean_column (config,
+    if (data->show_type != donna_config_get_boolean_column (config,
                 tv_name, col_name, arr_name, NULL, "show_type", FALSE))
     {
         need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
-        *data = !*data;
+        data->show_type = !data->show_type;
     }
+
+    s = donna_config_get_string_column (config,
+            tv_name, col_name, arr_name, NULL, "property_value", "option-value");
+    if (!streq (s, data->prop_value))
+    {
+        g_free (data->prop_value);
+        data->prop_value = s;
+
+        need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else
+        g_free (s);
+
+    s = donna_config_get_string_column (config,
+            tv_name, col_name, arr_name, NULL, "property_extra", "option-extra");
+    if (!streq (s, data->prop_extra))
+    {
+        g_free (data->prop_extra);
+        data->prop_extra = s;
+
+        need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else
+        g_free (s);
 
     return need;
 }
 
 static void
 ct_value_free_data (DonnaColumnType    *ct,
-                    gpointer            data)
+                    gpointer            _data)
 {
+    struct tv_col_data *data = _data;
+
+    g_free (data->prop_value);
+    g_free (data->prop_extra);
     g_free (data);
 }
 
 static GPtrArray *
 ct_value_get_props (DonnaColumnType  *ct,
-                    gpointer          data)
+                    gpointer          _data)
 {
+    struct tv_col_data *data = _data;
     GPtrArray *props;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
 
     props = g_ptr_array_new_full (2, g_free);
-    g_ptr_array_add (props, g_strdup ("option-value"));
-    g_ptr_array_add (props, g_strdup ("option-extra"));
+    g_ptr_array_add (props, g_strdup (data->prop_value));
+    g_ptr_array_add (props, g_strdup (data->prop_extra));
 
     return props;
 }
@@ -228,6 +264,7 @@ struct editing_data
     DonnaColumnTypeValue    *ctv;
     DonnaTreeView           *tree;
     DonnaNode               *node;
+    struct tv_col_data      *data;
     /* most stuff -- combo (menu) or text (entry) */
     GtkCellRenderer         *rnd_combo;
     guint                    key_limit;
@@ -269,7 +306,7 @@ changed_cb (GtkCellRendererCombo    *renderer,
     }
 
     if (!donna_tree_view_set_node_property (ed->tree, ed->node,
-                "option-value", &value, &err))
+                ed->data->prop_value, &value, &err))
     {
         gchar *fl = donna_node_get_full_location (ed->node);
         donna_app_show_error (ed->ctv->priv->app, err,
@@ -336,7 +373,7 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
         }
 
         if (!donna_tree_view_set_node_property (ed->tree, ed->node,
-                "option-value", &value, &err))
+                ed->data->prop_value, &value, &err))
         {
             gchar *fl = donna_node_get_full_location (ed->node);
             donna_app_show_error (ed->ctv->priv->app, err,
@@ -422,7 +459,7 @@ apply_cb (GtkButton *button, struct editing_data *ed)
     g_value_init (&value, G_TYPE_INT);
     g_value_set_int (&value, val);
     if (!donna_tree_view_set_node_property (ed->tree, ed->node,
-                "option-value", &value, &err))
+                ed->data->prop_value, &value, &err))
     {
         gchar *fl = donna_node_get_full_location (ed->node);
         donna_app_show_error (ed->ctv->priv->app, err,
@@ -439,7 +476,7 @@ apply_cb (GtkButton *button, struct editing_data *ed)
 
 static gboolean
 ct_value_edit (DonnaColumnType    *ct,
-               gpointer            data,
+               gpointer            _data,
                DonnaNode          *node,
                GtkCellRenderer   **renderers,
                renderer_edit_fn    renderer_edit,
@@ -448,6 +485,7 @@ ct_value_edit (DonnaColumnType    *ct,
                GError            **error)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
+    struct tv_col_data *data = _data;
     struct editing_data *ed;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
@@ -455,14 +493,22 @@ ct_value_edit (DonnaColumnType    *ct,
     GType type;
     gint rnd;
 
-    if (* (gboolean *) data)
+    if (data->show_type)
     {
         g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
                 "ColumnType 'value': Cannot change the type of an option");
         return FALSE;
     }
 
-    donna_node_get (node, TRUE, "option-value", &has, &value, NULL);
+    if (!(donna_node_has_property (node, data->prop_value) & DONNA_NODE_PROP_WRITABLE))
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_WRITABLE,
+                "ColumnType 'value': property '%s' isn't writable",
+                data->prop_value);
+        return FALSE;
+    }
+
+    donna_node_get (node, TRUE, data->prop_value, &has, &value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
     {
         gchar *fl = donna_node_get_full_location (node);
@@ -474,10 +520,10 @@ ct_value_edit (DonnaColumnType    *ct,
     /* DONNA_NODE_VALUE_SET */
     type = G_VALUE_TYPE (&value);
 
-    donna_node_get (node, FALSE, "option-extra", &has, &extra, NULL);
+    donna_node_get (node, FALSE, data->prop_extra, &has, &extra, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR
             || has == DONNA_NODE_VALUE_NEED_REFRESH)
-        /* really, extra will always be set (in config at least) if it exists,
+        /* really, extra should always be set (and will in config) if it exists,
          * hence why we just treat NEED_REFRESH that way */
         has = DONNA_NODE_VALUE_NONE;
 
@@ -494,7 +540,7 @@ ct_value_edit (DonnaColumnType    *ct,
         {
             gchar *fl = donna_node_get_full_location (node);
             g_prefix_error (error,
-                    "ColumnType 'value': Failed to get labels for value of '%s'",
+                    "ColumnType 'value': Failed to get labels for value of '%s': ",
                     fl);
             g_free (fl);
             return FALSE;
@@ -533,9 +579,10 @@ ct_value_edit (DonnaColumnType    *ct,
             gint cur = g_value_get_int (&value);
 
             ed = g_new0 (struct editing_data, 1);
-            ed->ctv       = (DonnaColumnTypeValue *) ct;
-            ed->tree      = treeview;
-            ed->node      = node;
+            ed->ctv  = (DonnaColumnTypeValue *) ct;
+            ed->tree = treeview;
+            ed->node = node;
+            ed->data = data;
 
             win = donna_columntype_new_floating_window (treeview, FALSE);
             ed->window = w = (GtkWidget *) win;
@@ -601,7 +648,7 @@ ct_value_edit (DonnaColumnType    *ct,
         g_value_init (&v, G_TYPE_BOOLEAN);
         g_value_set_boolean (&v, !g_value_get_boolean (&value));
         ret = donna_tree_view_set_node_property (treeview, node,
-                "option-value", &v, error);
+                data->prop_value, &v, error);
         g_value_unset (&v);
         return ret;
     }
@@ -618,6 +665,7 @@ ct_value_edit (DonnaColumnType    *ct,
     ed->ctv       = (DonnaColumnTypeValue *) ct;
     ed->tree      = treeview;
     ed->node      = node;
+    ed->data      = data;
     ed->rnd_combo = (has == DONNA_NODE_VALUE_SET) ? renderers[rnd] : NULL;
     ed->key_limit = (type == G_TYPE_DOUBLE) ? KEY_LIMIT_DOUBLE
         : ((type == G_TYPE_INT) ? KEY_LIMIT_INT : KEY_LIMIT_NONE);
@@ -638,12 +686,13 @@ ct_value_edit (DonnaColumnType    *ct,
 }
 
 static GPtrArray *
-get_text_for_type (DonnaColumnType  *ct,
-                   guint             index,
-                   DonnaNode        *node,
-                   GValue           *value,
-                   gchar           **text,
-                   gchar           **free)
+get_text_for_type (DonnaColumnType      *ct,
+                   struct tv_col_data   *data,
+                   guint                 index,
+                   DonnaNode            *node,
+                   GValue               *value,
+                   gchar               **text,
+                   gchar               **free)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
     DonnaNodeHasValue has;
@@ -653,7 +702,7 @@ get_text_for_type (DonnaColumnType  *ct,
     if (index == RND_COMBO)
         return NULL;
 
-    donna_node_get (node, FALSE, "option-value", &has, value, NULL);
+    donna_node_get (node, FALSE, data->prop_value, &has, value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
         return NULL;
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
@@ -661,14 +710,14 @@ get_text_for_type (DonnaColumnType  *ct,
         GPtrArray *arr;
 
         arr = g_ptr_array_new_full (2, g_free);
-        g_ptr_array_add (arr, g_strdup ("option-value"));
-        g_ptr_array_add (arr, g_strdup ("option-extra"));
+        g_ptr_array_add (arr, g_strdup (data->prop_value));
+        g_ptr_array_add (arr, g_strdup (data->prop_extra));
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
     type = G_VALUE_TYPE (value);
 
-    donna_node_get (node, FALSE, "option-extra", &has, &extra, NULL);
+    donna_node_get (node, FALSE, data->prop_extra, &has, &extra, NULL);
     if (has == DONNA_NODE_VALUE_SET)
     {
         const DonnaConfigExtra *extras;
@@ -699,19 +748,20 @@ get_text_for_type (DonnaColumnType  *ct,
 }
 
 static GPtrArray *
-get_text_for_value (DonnaColumnType *ct,
-                    guint            index,
-                    DonnaNode       *node,
-                    GValue          *value,
-                    gchar          **text,
-                    gchar          **free)
+get_text_for_value (DonnaColumnType     *ct,
+                    struct tv_col_data  *data,
+                    guint                index,
+                    DonnaNode           *node,
+                    GValue              *value,
+                    gchar              **text,
+                    gchar              **free)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
     DonnaNodeHasValue has;
     GValue extra = G_VALUE_INIT;
     GType type;
 
-    donna_node_get (node, FALSE, "option-value", &has, value, NULL);
+    donna_node_get (node, FALSE, data->prop_value, &has, value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
         return NULL;
     else if (has == DONNA_NODE_VALUE_NEED_REFRESH)
@@ -719,14 +769,14 @@ get_text_for_value (DonnaColumnType *ct,
         GPtrArray *arr;
 
         arr = g_ptr_array_new_full (2, g_free);
-        g_ptr_array_add (arr, g_strdup ("option-value"));
-        g_ptr_array_add (arr, g_strdup ("option-extra"));
+        g_ptr_array_add (arr, g_strdup (data->prop_value));
+        g_ptr_array_add (arr, g_strdup (data->prop_extra));
         return arr;
     }
     /* DONNA_NODE_VALUE_SET */
     type = G_VALUE_TYPE (value);
 
-    donna_node_get (node, FALSE, "option-extra", &has, &extra, NULL);
+    donna_node_get (node, FALSE, data->prop_extra, &has, &extra, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR
             || has == DONNA_NODE_VALUE_NEED_REFRESH)
         /* really, extra will always be set (in config at least) if it exists,
@@ -828,11 +878,12 @@ get_text_for_value (DonnaColumnType *ct,
 
 static GPtrArray *
 ct_value_render (DonnaColumnType    *ct,
-                 gpointer            data,
+                 gpointer            _data,
                  guint               index,
                  DonnaNode          *node,
                  GtkCellRenderer    *renderer)
 {
+    struct tv_col_data *data = _data;
     GValue value = G_VALUE_INIT;
     gchar *text = NULL;
     gchar *free = NULL;
@@ -840,10 +891,10 @@ ct_value_render (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
 
-    if (* (gboolean *) data)
-        arr = get_text_for_type (ct, index, node, &value, &text, &free);
+    if (data->show_type)
+        arr = get_text_for_type (ct, data, index, node, &value, &text, &free);
     else
-        arr = get_text_for_value (ct, index, node, &value, &text, &free);
+        arr = get_text_for_value (ct, data, index, node, &value, &text, &free);
 
     if (text)
         g_object_set (renderer,
@@ -863,11 +914,12 @@ ct_value_render (DonnaColumnType    *ct,
 
 static gboolean
 ct_value_set_tooltip (DonnaColumnType    *ct,
-                      gpointer            data,
+                      gpointer            _data,
                       guint               index,
                       DonnaNode          *node,
                       GtkTooltip         *tooltip)
 {
+    struct tv_col_data *data = _data;
     GValue value = G_VALUE_INIT;
     gchar *text = NULL;
     gchar *free = NULL;
@@ -875,10 +927,10 @@ ct_value_set_tooltip (DonnaColumnType    *ct,
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
 
-    if (* (gboolean *) data)
-        arr = get_text_for_type (ct, index, node, &value, &text, &free);
+    if (data->show_type)
+        arr = get_text_for_type (ct, data, index, node, &value, &text, &free);
     else
-        arr = get_text_for_value (ct, index, node, &value, &text, &free);
+        arr = get_text_for_value (ct, data, index, node, &value, &text, &free);
 
     if (arr)
         g_ptr_array_unref (arr);
@@ -899,18 +951,22 @@ union val
 };
 
 static GType
-load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
+load_val (struct tv_col_data *data,
+          DonnaConfig        *config,
+          DonnaNode          *node,
+          GValue             *value,
+          union val          *val)
 {
     DonnaNodeHasValue has;
     GType type;
 
-    donna_node_get (node, TRUE, "option-value", &has, value, NULL);
+    donna_node_get (node, TRUE, data->prop_value, &has, value, NULL);
     if (has == DONNA_NODE_VALUE_SET)
     {
         GValue extra = G_VALUE_INIT;
 
         type = G_VALUE_TYPE (value);
-        donna_node_get (node, TRUE, "option-extra", &has, &extra, NULL);
+        donna_node_get (node, TRUE, data->prop_extra, &has, &extra, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
             const DonnaConfigExtra *extras;
@@ -996,12 +1052,13 @@ load_val (DonnaConfig *config, DonnaNode *node, GValue *value, union val *val)
 #define free_and_return(r)  { ret = r; goto done; }
 static gint
 ct_value_node_cmp (DonnaColumnType    *ct,
-                   gpointer            data,
+                   gpointer            _data,
                    DonnaNode          *node1,
                    DonnaNode          *node2)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
     DonnaConfig *config = donna_app_peek_config (priv->app);
+    struct tv_col_data *data = _data;
     GType type1;
     GType type2;
     GValue value1 = G_VALUE_INIT;
@@ -1016,7 +1073,7 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         const gchar *t1;
         const gchar *t2;
 
-        donna_node_get (node1, TRUE, "option-extra", &has, &value1, NULL);
+        donna_node_get (node1, TRUE, data->prop_extra, &has, &value1, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
             const DonnaConfigExtra *extras;
@@ -1028,7 +1085,7 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         }
         else
         {
-            donna_node_get (node1, TRUE, "option-value", &has, &value1, NULL);
+            donna_node_get (node1, TRUE, data->prop_value, &has, &value1, NULL);
             if (has == DONNA_NODE_VALUE_SET)
             {
                 type1 = G_VALUE_TYPE (&value1);
@@ -1045,7 +1102,7 @@ ct_value_node_cmp (DonnaColumnType    *ct,
                 t1 = "<unknown>";
         }
 
-        donna_node_get (node2, TRUE, "option-extra", &has, &value2, NULL);
+        donna_node_get (node2, TRUE, data->prop_extra, &has, &value2, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
             const DonnaConfigExtra *extras;
@@ -1057,7 +1114,7 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         }
         else
         {
-            donna_node_get (node2, TRUE, "option-value", &has, &value2, NULL);
+            donna_node_get (node2, TRUE, data->prop_value, &has, &value2, NULL);
             if (has == DONNA_NODE_VALUE_SET)
             {
                 type2 = G_VALUE_TYPE (&value2);
@@ -1080,8 +1137,8 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         return ret;
     }
 
-    type1 = load_val (config, node1, &value1, &val1);
-    type2 = load_val (config, node2, &value2, &val2);
+    type1 = load_val (data, config, node1, &value1, &val1);
+    type2 = load_val (data, config, node2, &value2, &val2);
 
     if (type1 != type2)
     {
