@@ -216,6 +216,13 @@ static gboolean         donna_donna_trigger_fl      (DonnaApp       *app,
                                                      GPtrArray      *intrefs,
                                                      gboolean        blocking,
                                                      GError        **error);
+static gboolean         donna_donna_emit_event      (DonnaApp       *app,
+                                                     const gchar    *event,
+                                                     const gchar    *fmt_source,
+                                                     va_list         va_arg,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data);
 static gboolean         donna_donna_show_menu       (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
@@ -257,6 +264,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->free_int_ref         = donna_donna_free_int_ref;
     interface->parse_fl             = donna_donna_parse_fl;
     interface->trigger_fl           = donna_donna_trigger_fl;
+    interface->emit_event           = donna_donna_emit_event;
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
@@ -1622,6 +1630,74 @@ donna_donna_trigger_fl (DonnaApp     *app,
         g_object_unref (task);
         return ret;
     }
+
+    return TRUE;
+}
+
+static gint
+arr_str_cmp (gconstpointer a, gconstpointer b)
+{
+    return strcmp (* (const gchar **) a, * (const gchar **) b);
+}
+
+static void
+trigger_event (DonnaDonna   *donna,
+               const gchar  *event,
+               const gchar  *source,
+               const gchar  *conv_flags,
+               conv_flag_fn  conv_fn,
+               gpointer      conv_data)
+{
+    GPtrArray *arr = NULL;
+    guint i;
+
+    if (!donna_config_list_options (donna->priv->config, &arr,
+                DONNA_CONFIG_OPTION_TYPE_OPTION, "%s/events/%s", source, event))
+        return;
+
+    g_ptr_array_sort (arr, arr_str_cmp);
+    for (i = 0; i < arr->len; ++i)
+    {
+        GPtrArray *intrefs = NULL;
+        gchar *fl;
+
+        if (donna_config_get_string (donna->priv->config, &fl, "%s/events/%s/%s",
+                    source, event, arr->pdata[i]))
+        {
+            fl = donna_donna_parse_fl ((DonnaApp *) donna, fl,
+                    conv_flags, conv_fn, conv_data, &intrefs);
+            donna_donna_trigger_fl ((DonnaApp *) donna, fl, intrefs, FALSE, NULL);
+            g_free (fl);
+        }
+    }
+
+    g_ptr_array_unref (arr);
+}
+
+static gboolean
+donna_donna_emit_event (DonnaApp        *app,
+                        const gchar     *event,
+                        const gchar     *fmt_source,
+                        va_list          va_arg,
+                        const gchar     *conv_flags,
+                        conv_flag_fn     conv_fn,
+                        gpointer         conv_data)
+{
+    DonnaDonnaPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
+    priv = ((DonnaDonna *) app)->priv;
+
+    if (fmt_source)
+    {
+        gchar *s = g_strdup_vprintf (fmt_source, va_arg);
+        trigger_event ((DonnaDonna *) app, event, s,
+                conv_flags, conv_fn, conv_data);
+        g_free (s);
+    }
+
+    trigger_event ((DonnaDonna *) app, event, "",
+            conv_flags, conv_fn, conv_data);
 
     return TRUE;
 }

@@ -485,6 +485,34 @@ donna_app_trigger_fl (DonnaApp       *app,
 }
 
 gboolean
+donna_app_emit_event (DonnaApp       *app,
+                      const gchar    *event,
+                      const gchar    *conv_flags,
+                      conv_flag_fn    conv_fn,
+                      gpointer        conv_data,
+                      const gchar    *fmt_source,
+                      ...)
+{
+    DonnaAppInterface *interface;
+    va_list va_arg;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (event != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->emit_event != NULL, NULL);
+
+    va_start (va_arg, fmt_source);
+    ret = (*interface->emit_event) (app, event, fmt_source, va_arg,
+            conv_flags, conv_fn, conv_data);
+    va_end (va_arg);
+    return ret;
+}
+
+gboolean
 donna_app_show_menu (DonnaApp       *app,
                      GPtrArray      *nodes,
                      const gchar    *menu,

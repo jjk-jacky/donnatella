@@ -74,6 +74,13 @@ struct _DonnaAppInterface
                                                      GPtrArray      *intrefs,
                                                      gboolean        blocking,
                                                      GError        **error);
+    gboolean            (*emit_event)               (DonnaApp       *app,
+                                                     const gchar    *event,
+                                                     const gchar    *fmt_source,
+                                                     va_list         va_arg,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data);
     gboolean            (*show_menu)                (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
@@ -147,6 +154,13 @@ gboolean            donna_app_trigger_fl            (DonnaApp       *app,
                                                      GPtrArray      *intrefs,
                                                      gboolean        blocking,
                                                      GError        **error);
+gboolean            donna_app_emit_event            (DonnaApp       *app,
+                                                     const gchar    *event,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data,
+                                                     const gchar    *fmt_source,
+                                                     ...);
 gboolean            donna_app_show_menu             (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
