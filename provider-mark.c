@@ -826,7 +826,8 @@ cmd_mark_set (DonnaTask         *task,
     DonnaNode *node;
     enum {
         UPD_NAME    = (1 << 0),
-        UPD_VALUE   = (1 << 1),
+        UPD_TYPE    = (1 << 1),
+        UPD_VALUE   = (1 << 2),
     } updated = 0;
 
     if (type)
@@ -857,7 +858,10 @@ cmd_mark_set (DonnaTask         *task,
             updated |= UPD_NAME;
         }
         if (type && mark->type != m_type)
+        {
             mark->type = m_type;
+            updated |= UPD_TYPE;
+        }
         if (value && !streq (mark->value, value))
         {
             g_free (mark->value);
@@ -876,6 +880,14 @@ cmd_mark_set (DonnaTask         *task,
                 g_value_init (&v, G_TYPE_STRING);
                 g_value_set_string (&v, name);
                 donna_node_set_property_value (node, "name", &v);
+                g_value_unset (&v);
+            }
+
+            if (updated & UPD_TYPE)
+            {
+                g_value_init (&v, G_TYPE_INT);
+                g_value_set_int (&v, (gint) m_type);
+                donna_node_set_property_value (node, "mark-type", &v);
                 g_value_unset (&v);
             }
 
