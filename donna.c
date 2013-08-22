@@ -3324,6 +3324,8 @@ next:
         donna_donna_run_task (app, l->data);
     g_slist_free (list);
 
+    donna_app_emit_event (app, "start", NULL, NULL, NULL, NULL);
+
     gtk_main ();
     return 0;
 }

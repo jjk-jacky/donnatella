@@ -929,31 +929,156 @@ cmd_mark_set (DonnaTask         *task,
     return DONNA_TASK_DONE;
 }
 
+struct upd
+{
+    DonnaNode *node;
+    gchar *name;
+    guint type;
+    gchar *value;
+};
 
-/* load/save */
+static void
+free_upd (struct upd *upd)
+{
+    g_object_unref (upd->node);
+    g_free (upd->name);
+    g_free (upd->value);
+    g_free (upd);
+}
 
-/* assume lock */
-static inline void
-load_marks (DonnaProviderMark *pm)
+static void
+set_mark (DonnaProviderMark *pm,
+          struct mark       *m,
+          gboolean           might_replace,
+          GPtrArray         *nodes_new,
+          GPtrArray         *nodes_upd)
 {
     GError *err = NULL;
-    DonnaApp *app = ((DonnaProviderBase *) pm)->app;
+    DonnaProviderMarkPrivate *priv = pm->priv;
+    struct mark *mark = NULL;
+
+    if (might_replace)
+        mark = g_hash_table_lookup (priv->marks, m->location);
+
+    if (mark)
+    {
+        struct upd *upd;
+
+        upd = g_new0 (struct upd, 1);
+        upd->type = (guint) -1;
+
+        if (!streq (m->name, mark->name))
+        {
+            g_free (mark->name);
+            mark->name = g_strdup (m->name);
+            upd->name = g_strdup (mark->name);
+        }
+        if (m->type != mark->type)
+        {
+            mark->type = m->type;
+            upd->type = mark->type;
+        }
+        if (!streq (m->value, mark->value))
+        {
+            g_free (mark->value);
+            mark->value = g_strdup (m->value);
+            upd->value = g_strdup (mark->value);
+        }
+
+        if (upd->name || upd->type != (guint) -1 || upd->value)
+        {
+            upd->node = get_node_for (pm, GET_IF_IN_CACHE, mark, NULL);
+            if (upd->node)
+                g_ptr_array_add (nodes_upd, upd);
+            else
+                free_upd (upd);
+        }
+    }
+    else if (!new_mark (pm, m->location, m->name, m->type, m->value, &err))
+    {
+        g_warning ("Provider 'mark': Failed to load mark '%s': %s",
+                m->location, err->message);
+        g_clear_error (&err);
+    }
+    else if (nodes_new)
+        g_ptr_array_add (nodes_new,
+                get_node_for (pm, GET_CREATE_FROM_MARK, m, NULL));
+}
+
+static DonnaTaskState
+cmd_mark_load (DonnaTask         *task,
+               DonnaApp          *app,
+               gpointer          *args,
+               DonnaProviderMark *pm)
+{
+    GError *err = NULL;
+    DonnaProviderMarkPrivate *priv = pm->priv;
+
+    const gchar *filename = args[0]; /* opt */
+    gboolean ignore_no_file = GPOINTER_TO_INT (args[1]); /* opt */
+    gboolean reset = GPOINTER_TO_INT (args[2]); /* opt */
+
+    GPtrArray *nodes_del = NULL;
+    GPtrArray *nodes_new = NULL;
+    GPtrArray *nodes_upd = NULL;
+    DonnaNode *node_root;
     struct mark m;
     gboolean in_mark = FALSE;
     gchar *file;
     gchar *data;
     gchar *s, *e;
+    guint i;
 
-    file = donna_app_get_conf_filename (app, "marks.conf");
+    if (filename && *filename == '/')
+        file = (gchar *) filename;
+    else
+        file = donna_app_get_conf_filename (app, (filename) ? filename : "marks.conf");
+
     if (!g_file_get_contents (file, &data, NULL, &err))
     {
-        if (!g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
-            g_warning ("Unable to load marks from '%s': %s", file, err->message);
-        g_clear_error (&err);
-        g_free (file);
-        return;
+        if (file != filename)
+            g_free (file);
+        if (ignore_no_file && g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+        {
+            g_clear_error (&err);
+            return DONNA_TASK_DONE;
+        }
+        else
+        {
+            g_prefix_error (&err, "Command 'mark_load': Failed to load marks from '%s': ",
+                    (filename) ? filename : "marks.conf");
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
     }
-    g_free (file);
+    if (file != filename)
+        g_free (file);
+
+    g_mutex_lock (&priv->mutex);
+    if (reset && g_hash_table_size (priv->marks) > 0)
+    {
+        GHashTableIter iter;
+        struct mark *mark;
+
+        nodes_del = g_ptr_array_new_full (g_hash_table_size (priv->marks),
+                g_object_unref);
+        g_hash_table_iter_init (&iter, priv->marks);
+        while (g_hash_table_iter_next (&iter, NULL, (gpointer) &mark))
+        {
+            DonnaNode *node;
+
+            node = get_node_for (pm, GET_IF_IN_CACHE, mark->location, NULL);
+            if (node)
+                g_ptr_array_add (nodes_del, node);
+        }
+        g_hash_table_remove_all (priv->marks);
+    }
+
+    node_root = get_node_for (pm, GET_IF_IN_CACHE, "/", NULL);
+    if (node_root)
+        nodes_new = g_ptr_array_new_with_free_func (g_object_unref);
+    if (!reset)
+        nodes_upd = g_ptr_array_new_with_free_func ((GDestroyNotify) free_upd);
 
     s = data;
     for (;;)
@@ -964,14 +1089,7 @@ load_marks (DonnaProviderMark *pm)
         if (streqn (s, "mark=", 5))
         {
             if (in_mark)
-            {
-                if (!new_mark (pm, m.location, m.name, m.type, m.value, &err))
-                {
-                    g_warning ("Provider 'mark': Failed to load mark '%s': %s",
-                            m.location, err->message);
-                    g_clear_error (&err);
-                }
-            }
+                set_mark (pm, &m, !reset, nodes_new, nodes_upd);
             else
                 in_mark = TRUE;
             memset (&m, 0, sizeof (struct mark));
@@ -999,16 +1117,62 @@ load_marks (DonnaProviderMark *pm)
     }
 
     if (in_mark)
+        set_mark (pm, &m, !reset, nodes_new, nodes_upd);
+    g_mutex_unlock (&priv->mutex);
+
+    if (nodes_del)
     {
-        if (!new_mark (pm, m.location, m.name, m.type, m.value, &err))
+        for (i = 0; i < nodes_del->len; ++i)
+            donna_provider_node_removed ((DonnaProvider *) pm, nodes_del->pdata[i]);
+        g_ptr_array_unref (nodes_del);
+    }
+
+    if (nodes_upd)
+    {
+        for (i = 0; i < nodes_upd->len; ++i)
         {
-            g_warning ("Provider 'mark': Failed to load mark '%s': %s",
-                    m.location, err->message);
-            g_clear_error (&err);
+            GValue v = G_VALUE_INIT;
+            struct upd *upd = nodes_upd->pdata[i];
+
+            if (upd->name)
+            {
+                g_value_init (&v, G_TYPE_STRING);
+                g_value_take_string (&v, upd->name);
+                donna_node_set_property_value (upd->node, "name", &v);
+                g_value_unset (&v);
+                upd->name = NULL;
+            }
+
+            if (upd->type != (guint) -1)
+            {
+                g_value_init (&v, G_TYPE_INT);
+                g_value_set_int (&v, upd->type);
+                donna_node_set_property_value (upd->node, "mark-type", &v);
+                g_value_unset (&v);
+            }
+
+            if (upd->value)
+            {
+                g_value_init (&v, G_TYPE_STRING);
+                g_value_take_string (&v, upd->value);
+                donna_node_set_property_value (upd->node, "value", &v);
+                g_value_unset (&v);
+                upd->value = NULL;
+            }
         }
+        g_ptr_array_unref (nodes_upd);
+    }
+
+    if (nodes_new)
+    {
+        for (i = 0; i < nodes_new->len; ++i)
+            donna_provider_node_new_child ((DonnaProvider *) pm, node_root,
+                    nodes_new->pdata[i]);
+        g_ptr_array_unref (nodes_new);
     }
 
     g_free (data);
+    return DONNA_TASK_DONE;
 }
 
 
@@ -1031,8 +1195,6 @@ provider_mark_contructed (GObject *object)
 
     G_OBJECT_CLASS (donna_provider_mark_parent_class)->constructed (object);
 
-    load_marks ((DonnaProviderMark *) object);
-
     pc = (DonnaProviderCommand *) donna_app_get_provider (
             ((DonnaProviderBase *) object)->app, "command");
     if (G_UNLIKELY (!pc))
@@ -1053,6 +1215,13 @@ provider_mark_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (mark_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (mark_load, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
     g_object_unref (pc);
