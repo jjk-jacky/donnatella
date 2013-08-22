@@ -442,6 +442,48 @@ donna_app_free_int_ref (DonnaApp       *app,
     return (*interface->free_int_ref) (app, intref);
 }
 
+gchar *
+donna_app_parse_fl (DonnaApp       *app,
+                    gchar          *fl,
+                    const gchar    *conv_flags,
+                    conv_flag_fn    conv_fn,
+                    gpointer        conv_data,
+                    GPtrArray     **intrefs)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (fl != NULL, NULL);
+    g_return_val_if_fail (intrefs != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->parse_fl != NULL, NULL);
+
+    return (*interface->parse_fl) (app, fl, conv_flags, conv_fn, conv_data, intrefs);
+}
+
+gboolean
+donna_app_trigger_fl (DonnaApp       *app,
+                      const gchar    *fl,
+                      GPtrArray      *intrefs,
+                      gboolean        blocking,
+                      GError        **error)
+{
+    DonnaAppInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (fl != NULL, NULL);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+    g_return_val_if_fail (interface->trigger_fl != NULL, NULL);
+
+    return (*interface->trigger_fl) (app, fl, intrefs, blocking, error);
+}
+
 gboolean
 donna_app_show_menu (DonnaApp       *app,
                      GPtrArray      *nodes,

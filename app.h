@@ -20,6 +20,12 @@ typedef enum
     DONNA_APP_ERROR_OTHER,
 } DonnaAppError;
 
+typedef gboolean (*conv_flag_fn) (const gchar     c,
+                                  DonnaArgType   *type,
+                                  gpointer       *ptr,
+                                  GDestroyNotify *destroy,
+                                  gpointer        data);
+
 struct _DonnaAppInterface
 {
     GTypeInterface parent;
@@ -57,6 +63,17 @@ struct _DonnaAppInterface
                                                      DonnaArgType    type);
     gboolean            (*free_int_ref)             (DonnaApp       *app,
                                                      const gchar    *intref);
+    gchar *             (*parse_fl)                 (DonnaApp       *app,
+                                                     gchar          *fl,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data,
+                                                     GPtrArray     **intrefs);
+    gboolean            (*trigger_fl)               (DonnaApp       *app,
+                                                     const gchar    *fl,
+                                                     GPtrArray      *intrefs,
+                                                     gboolean        blocking,
+                                                     GError        **error);
     gboolean            (*show_menu)                (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
@@ -119,6 +136,17 @@ gpointer            donna_app_get_int_ref           (DonnaApp       *app,
                                                      DonnaArgType    type);
 gboolean            donna_app_free_int_ref          (DonnaApp       *app,
                                                      const gchar    *intref);
+gchar *             donna_app_parse_fl              (DonnaApp       *app,
+                                                     gchar          *fl,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data,
+                                                     GPtrArray     **intrefs);
+gboolean            donna_app_trigger_fl            (DonnaApp       *app,
+                                                     const gchar    *fl,
+                                                     GPtrArray      *intrefs,
+                                                     gboolean        blocking,
+                                                     GError        **error);
 gboolean            donna_app_show_menu             (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,

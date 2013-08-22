@@ -8,7 +8,6 @@
 #include "provider.h"
 #include "node.h"
 #include "task.h"
-#include "command.h"
 #include "statusprovider.h"
 #include "macros.h"
 #include "renderer.h"
@@ -11102,13 +11101,13 @@ handle_click (DonnaTreeView     *tree,
     if (iter)
         conv.row = get_row_for_iter (tree, iter);
 
-    fl = _donna_command_parse_fl (priv->app, fl, "olLrRnN",
-            (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+    fl = donna_app_parse_fl (priv->app, fl, "olLrRnN",
+            (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
 
     if (iter)
         g_free (conv.row);
 
-    _donna_command_trigger_fl (priv->app, fl, intrefs, FALSE);
+    donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
     g_free (fl);
 }
 
@@ -11738,7 +11737,7 @@ repeat:
     return TRUE;                        \
 } while (0)
 
-/* we parse those two on our own (i.e. not through _donna_command_parse_fl())
+/* we parse those two on our own (i.e. not through donna_app_parse_fl())
  * because those are single-character, and we don't want them treated as
  * strings, because that would get them to be quoted (which isn't nice) */
 static inline void
@@ -11815,9 +11814,9 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         conv.key_m = priv->key_motion_m;
         conv.row = get_row_for_iter (tree, &iter);
 
-        fl = _donna_command_parse_fl (priv->app, fl, "olLrnNm",
-                (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
-        if (!_donna_command_trigger_fl (priv->app, fl, intrefs, TRUE))
+        fl = donna_app_parse_fl (priv->app, fl, "olLrnNm",
+                (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+        if (!donna_app_trigger_fl (priv->app, fl, intrefs, TRUE, NULL))
         {
             g_free (fl);
             return TRUE;
@@ -11845,10 +11844,10 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     parse_specs (fl, spec, priv->key_combine_spec);
     conv.key_m = priv->key_m;
-    fl = _donna_command_parse_fl (priv->app, fl, "olLrnNm",
-            (_conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+    fl = donna_app_parse_fl (priv->app, fl, "olLrnNm",
+            (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
     g_free (conv.row);
-    _donna_command_trigger_fl (priv->app, fl, intrefs, FALSE);
+    donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
     g_free (fl);
 
     g_free (from);

@@ -205,6 +205,17 @@ static gpointer         donna_donna_get_int_ref     (DonnaApp       *app,
                                                      DonnaArgType    type);
 static gboolean         donna_donna_free_int_ref    (DonnaApp       *app,
                                                      const gchar    *intref);
+static gchar *          donna_donna_parse_fl        (DonnaApp       *app,
+                                                     gchar          *fl,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data,
+                                                     GPtrArray     **intrefs);
+static gboolean         donna_donna_trigger_fl      (DonnaApp       *app,
+                                                     const gchar    *fl,
+                                                     GPtrArray      *intrefs,
+                                                     gboolean        blocking,
+                                                     GError        **error);
 static gboolean         donna_donna_show_menu       (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,
@@ -244,6 +255,8 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->new_int_ref          = donna_donna_new_int_ref;
     interface->get_int_ref          = donna_donna_get_int_ref;
     interface->free_int_ref         = donna_donna_free_int_ref;
+    interface->parse_fl             = donna_donna_parse_fl;
+    interface->trigger_fl           = donna_donna_trigger_fl;
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
@@ -1335,6 +1348,284 @@ donna_donna_get_conf_filename (DonnaApp       *app,
         return g_string_free (str, FALSE);
 }
 
+static void
+_g_string_append_quoted (GString *str, gchar *s)
+{
+    g_string_append_c (str, '"');
+    for ( ; *s != '\0'; ++s)
+    {
+        if (*s == '"' || *s == '\\')
+            g_string_append_c (str, '\\');
+
+        g_string_append_c (str, *s);
+    }
+    g_string_append_c (str, '"');
+}
+
+static gchar *
+donna_donna_parse_fl (DonnaApp       *app,
+                      gchar          *_fl,
+                      const gchar    *conv_flags,
+                      conv_flag_fn    conv_fn,
+                      gpointer        conv_data,
+                      GPtrArray     **intrefs)
+{
+    GString *str = NULL;
+    gchar *fl = _fl;
+    gchar *s = fl;
+
+    if (G_UNLIKELY (!conv_flags || !conv_fn))
+        return _fl;
+
+    while ((s = strchr (s, '%')))
+    {
+        gboolean dereference = s[1] == '*';
+        gboolean match;
+
+        if (!dereference)
+            match = s[1] != '\0' && strchr (conv_flags, s[1]) != NULL;
+        else
+            match = s[2] != '\0' && strchr (conv_flags, s[2]) != NULL;
+
+        if (match)
+        {
+            DonnaArgType type;
+            gpointer ptr;
+            GDestroyNotify destroy = NULL;
+
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_len (str, fl, s - fl);
+            if (dereference)
+                ++s;
+
+            if (G_UNLIKELY (!conv_fn (s[1], &type, &ptr, &destroy, conv_data)))
+            {
+                fl = ++s;
+                ++s;
+                continue;
+            }
+
+            /* we don't need to test for all possible types, only those can make
+             * sense. That is, it could be a ROW, but not a ROW_ID (or PATH)
+             * since those only make sense the other way around (or as type of
+             * ROW_ID) */
+
+            if (type & DONNA_ARG_TYPE_TREEVIEW)
+                g_string_append (str, donna_tree_view_get_name ((DonnaTreeView *) ptr));
+            else if (type & DONNA_ARG_TYPE_ROW)
+            {
+                DonnaTreeRow *row = (DonnaTreeRow *) ptr;
+                g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
+            }
+            /* this will do nodes, array of nodes, array of strings */
+            else if (type & (DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY))
+            {
+                if (dereference)
+                {
+                    if (type & DONNA_ARG_IS_ARRAY)
+                    {
+                        GString *str_arr;
+                        GPtrArray *arr = (GPtrArray *) ptr;
+                        guint i;
+
+                        str_arr = g_string_new (NULL);
+                        if (type & DONNA_ARG_TYPE_NODE)
+                            for (i = 0; i < arr->len; ++i)
+                            {
+                                gchar *fl;
+                                fl = donna_node_get_full_location (
+                                        (DonnaNode *) arr->pdata[i]);
+                                _g_string_append_quoted (str_arr, fl);
+                                g_string_append_c (str_arr, ',');
+                                g_free (fl);
+                            }
+                        else
+                            for (i = 0; i < arr->len; ++i)
+                            {
+                                _g_string_append_quoted (str_arr,
+                                        (gchar *) arr->pdata[i]);
+                                g_string_append_c (str_arr, ',');
+                            }
+
+                        /* remove last comma */
+                        g_string_truncate (str_arr, str_arr->len - 1);
+                        /* str_arr is a list of quoted strings/FL, but we also
+                         * need to quote the list itself */
+                        _g_string_append_quoted (str, str_arr->str);
+                        g_string_free (str_arr, TRUE);
+                    }
+                    else
+                    {
+                        gchar *fl;
+                        fl = donna_node_get_full_location ((DonnaNode *) ptr);
+                        _g_string_append_quoted (str, fl);
+                        g_free (fl);
+                    }
+                }
+                else
+                {
+                    gchar *s = donna_app_new_int_ref (app, type, ptr);
+                    g_string_append (str, s);
+                    if (!*intrefs)
+                        *intrefs = g_ptr_array_new_with_free_func (g_free);
+                    g_ptr_array_add (*intrefs, s);
+                }
+            }
+            else if (type & DONNA_ARG_TYPE_STRING)
+                _g_string_append_quoted (str, (gchar *) ptr);
+            else if (type & DONNA_ARG_TYPE_INT)
+                g_string_append_printf (str, "%d", * (gint *) ptr);
+
+            if (destroy)
+                destroy (ptr);
+
+            s += 2;
+            fl = s;
+        }
+        else if (s[1] != '\0')
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_len (str, fl, s - fl);
+            fl = ++s;
+            ++s;
+        }
+        else
+            break;
+    }
+
+    if (!str)
+        return _fl;
+
+    g_string_append (str, fl);
+    g_free (_fl);
+    return g_string_free (str, FALSE);
+}
+
+struct fir
+{
+    gboolean is_stack;
+    DonnaApp *app;
+    GPtrArray *intrefs;
+};
+
+static void
+free_fir (struct fir *fir)
+{
+    guint i;
+
+    if (fir->intrefs)
+    {
+        for (i = 0; i < fir->intrefs->len; ++i)
+            donna_app_free_int_ref (fir->app, fir->intrefs->pdata[i]);
+        g_ptr_array_unref (fir->intrefs);
+    }
+    if (!fir->is_stack)
+        g_free (fir);
+}
+
+static void
+trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (fir->app, donna_task_get_error (task),
+                "Action trigger failed");
+    if (fir)
+        free_fir (fir);
+}
+
+static gboolean
+get_node_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
+{
+    GError *err = NULL;
+    DonnaNode *node;
+    DonnaTask *t;
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        donna_app_show_error (fir->app, donna_task_get_error (task),
+                "Failed to trigger action, couldn't get node");
+        free_fir (fir);
+        return FALSE;
+    }
+
+    node = g_value_get_object (donna_task_get_return_value (task));
+    t = donna_node_trigger_task (node, &err);
+    if (G_UNLIKELY (!t))
+    {
+        donna_app_show_error (fir->app, err,
+                "Failed to trigger action, couldn't get task");
+        g_clear_error (&err);
+        free_fir (fir);
+        return FALSE;
+    }
+
+    /* see _donna_command_trigger_fl() for why this is blocking */
+    if (timeout_called)
+        donna_task_set_can_block (g_object_ref_sink (t));
+    else
+        donna_task_set_callback (t, (task_callback_fn) trigger_cb, fir, NULL);
+
+    donna_app_run_task (fir->app, t);
+
+    if (timeout_called)
+    {
+        gboolean ret;
+
+        ret = donna_task_get_state (t) == DONNA_TASK_DONE;
+        g_object_unref (t);
+        free_fir (fir);
+        return ret;
+    }
+
+    return TRUE;
+}
+
+static gboolean
+donna_donna_trigger_fl (DonnaApp     *app,
+                        const gchar  *fl,
+                        GPtrArray    *intrefs,
+                        gboolean      blocking,
+                        GError      **error)
+{
+    DonnaTask *task;
+
+    task = donna_app_get_node_task (app, fl);
+    if (G_UNLIKELY (!task))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to trigger action, couldn't get task get_node()");
+        return FALSE;
+    }
+    if (blocking)
+        donna_task_set_can_block (g_object_ref_sink (task));
+    else
+    {
+        struct fir *fir;
+        fir = g_new0 (struct fir, 1);
+        fir->app = app;
+        fir->intrefs = intrefs;
+        donna_task_set_callback (task, (task_callback_fn) get_node_cb, fir, NULL);
+    }
+
+    donna_app_run_task (app, task);
+
+    if (blocking)
+    {
+        struct fir fir = { TRUE, app, intrefs };
+        gboolean ret;
+
+        /* we're abusing timeout_called here, since we don't use a timeout it
+         * should always be FALSE. If TRUE, that'll mean be blocking */
+        ret = get_node_cb (task, TRUE, &fir);
+        g_object_unref (task);
+        return ret;
+    }
+
+    return TRUE;
+}
+
 static gchar *
 donna_donna_new_int_ref (DonnaApp       *app,
                          DonnaArgType    type,
@@ -1554,9 +1845,9 @@ menuitem_button_release_cb (GtkWidget           *item,
             return FALSE;
     }
 
-    fl = _donna_command_parse_fl ((DonnaApp *) mc->donna, fl, "nN",
-            (_conv_flag_fn) menu_conv_flag, node, &intrefs);
-    _donna_command_trigger_fl ((DonnaApp *) mc->donna, fl, intrefs, FALSE);
+    fl = donna_app_parse_fl ((DonnaApp *) mc->donna, fl, "nN",
+            (conv_flag_fn) menu_conv_flag, node, &intrefs);
+    donna_app_trigger_fl ((DonnaApp *) mc->donna, fl, intrefs, FALSE, NULL);
     return FALSE;
 }
 

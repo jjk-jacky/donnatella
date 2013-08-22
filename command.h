@@ -27,23 +27,6 @@ struct command
     GDestroyNotify       destroy;
 };
 
-typedef gboolean (*_conv_flag_fn) (const gchar     c,
-                                   DonnaArgType   *type,
-                                   gpointer       *ptr,
-                                   GDestroyNotify *destroy,
-                                   gpointer        data);
-
-
-gchar *             _donna_command_parse_fl         (DonnaApp       *app,
-                                                     gchar          *fl,
-                                                     const gchar    *conv_flags,
-                                                     _conv_flag_fn   conv_fn,
-                                                     gpointer        conv_data,
-                                                     GPtrArray     **intrefs);
-gboolean            _donna_command_trigger_fl       (DonnaApp       *app,
-                                                     const gchar    *fl,
-                                                     GPtrArray      *intrefs,
-                                                     gboolean        blocking);
 gint                _donna_get_choice_from_list     (gint            nb,
                                                      const gchar    *choices[],
                                                      const gchar    *sel);
