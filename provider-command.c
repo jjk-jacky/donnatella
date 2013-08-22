@@ -173,14 +173,6 @@ provider_command_get_domain (DonnaProvider *provider)
     return "command";
 }
 
-static gboolean
-refresher (DonnaTask    *task,
-           DonnaNode    *node,
-           const gchar  *name)
-{
-    return TRUE;
-}
-
 struct command *init_parse (DonnaProviderCommand    *pc,
                             gchar                   *cmdline,
                             gchar                  **first_arg,
@@ -202,6 +194,8 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     GValue v = G_VALUE_INIT;
     guint i;
 
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+
     cmd = init_parse ((DonnaProviderCommand *) _provider, (gchar *) location,
             NULL, &err);
     if (!cmd)
@@ -211,7 +205,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     }
 
     node = donna_node_new ((DonnaProvider *) _provider, location,
-            DONNA_NODE_ITEM, NULL, refresher, NULL, cmd->name,
+            DONNA_NODE_ITEM, NULL, (refresher_fn) gtk_true, NULL, cmd->name,
             DONNA_NODE_ICON_EXISTS);
     if (!node)
     {
@@ -220,14 +214,8 @@ provider_command_new_node (DonnaProviderBase  *_provider,
                 "Provider 'command': Unable to create a new node");
         return DONNA_TASK_FAILED;
     }
-    g_value_init (&v, G_TYPE_OBJECT);
-    w = g_object_ref_sink (gtk_label_new (NULL));
-    pixbuf = gtk_widget_render_icon_pixbuf (w, GTK_STOCK_EXECUTE,
-            GTK_ICON_SIZE_MENU);
-    g_value_take_object (&v, pixbuf);
-    donna_node_set_property_value (node, "icon", &v);
-    g_value_unset (&v);
-    g_object_unref (w);
+
+    klass->set_property_icon (_provider, node, "icon", "applications-system", NULL);
 
     /* "preload" the type of visibility neede for the task trigger_node */
     g_value_init (&v, G_TYPE_UINT);
@@ -246,7 +234,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
             }
         }
     if (!donna_node_add_property (node, "trigger-visibility", G_TYPE_UINT, &v,
-            refresher, NULL, &err))
+            (refresher_fn) gtk_true, NULL, &err))
     {
         g_prefix_error (&err, "Provider 'command': Cannot create new node, "
                 "failed to add property 'trigger-visibility': ");
@@ -257,7 +245,6 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     }
     g_value_unset (&v);
 
-    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
     klass->lock_nodes (_provider);
     n = klass->get_cached_node (_provider, location);
     if (n)

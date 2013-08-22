@@ -134,6 +134,13 @@ static DonnaTask *      provider_config_io_task (
                                             GError             **error);
 
 
+/* internal from provider-base.c */
+gboolean _provider_base_set_property_icon (DonnaApp      *app,
+                                           DonnaNode     *node,
+                                           const gchar   *property,
+                                           const gchar   *icon,
+                                           GError       **error);
+
 static gchar *get_option_full_name (GNode *root, GNode *gnode);
 static void free_extra  (DonnaConfigExtra  *extra);
 
@@ -3069,7 +3076,7 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
     g_rw_lock_reader_unlock (&config->priv->lock);
 }
 
-/* assumes a lock on nodes_mutex */
+/* assumes a reader lock on config; will lock/unlock nodes_mutex as needed */
 static gboolean
 ensure_option_has_node (DonnaProviderConfig *config,
                         gchar               *location,
@@ -3077,6 +3084,7 @@ ensure_option_has_node (DonnaProviderConfig *config,
 {
     DonnaProviderConfigPrivate *priv = config->priv;
 
+    g_rec_mutex_lock (&priv->nodes_mutex);
     if (!option->node)
     {
         /* we need to create the node */
@@ -3119,31 +3127,21 @@ ensure_option_has_node (DonnaProviderConfig *config,
                     NULL);
         }
 
-        /* set icon */
-        if (option->extra != priv->root
-                || (location[0] == '/' && location [1] == '\0'))
-        {
-            GValue val = G_VALUE_INIT;
-            GtkWidget *w;
-            GdkPixbuf *pixbuf;
-
-            g_value_init (&val, G_TYPE_OBJECT);
-            w = g_object_ref_sink (gtk_label_new (NULL));
-            pixbuf = gtk_widget_render_icon_pixbuf (w,
-                    (option->extra != priv->root)
-                     ? GTK_STOCK_PROPERTIES : GTK_STOCK_PREFERENCES,
-                    GTK_ICON_SIZE_MENU);
-            g_value_take_object (&val, pixbuf);
-            donna_node_set_property_value (option->node, "icon", &val);
-            g_value_unset (&val);
-            g_object_unref (w);
-        }
-
         /* add a toggleref, so when we have the last reference on the node, we
          * can let it go (Note: this adds a (strong) reference to node) */
         g_object_add_toggle_ref (G_OBJECT (option->node),
                 (GToggleNotify) node_toggle_ref_cb,
                 config);
+
+        g_rec_mutex_unlock (&priv->nodes_mutex);
+
+        /* set icon */
+        if (option->extra != priv->root
+                || (location[0] == '/' && location [1] == '\0'))
+            /* takes care of handling GTK in the main/UI thread */
+            _provider_base_set_property_icon (priv->app, option->node, "icon",
+                    (option->extra != priv->root)
+                    ? "document-properties" : "preferences-desktop", NULL);
 
         /* have provider emit the new_node signal */
         donna_provider_new_node (DONNA_PROVIDER (config), option->node);
@@ -3154,7 +3152,11 @@ ensure_option_has_node (DonnaProviderConfig *config,
         return TRUE;
     }
     else
+    {
+        g_object_ref (option->node);
+        g_rec_mutex_unlock (&priv->nodes_mutex);
         return FALSE;
+    }
 }
 
 static DonnaTaskState
@@ -3164,7 +3166,6 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
     GNode *gnode;
     struct option *option;
     GValue *value;
-    gboolean node_created = FALSE;
 
     priv = data->config->priv;
 
@@ -3185,19 +3186,14 @@ return_option_node (DonnaTask *task, struct get_node_data *data)
     if (gnode == priv->root && !option->name)
         option->name = g_strdup ("Configuration");
 
-    g_rec_mutex_lock (&priv->nodes_mutex);
-    node_created = ensure_option_has_node (data->config, data->location, option);
-    g_rec_mutex_unlock (&priv->nodes_mutex);
+    ensure_option_has_node (data->config, data->location, option);
 
     /* set node as return value */
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
-    if (node_created)
-        /* if the node was just created, adding the toggle_ref took a strong
-         * reference on it, so we just send this extra ref to the task */
-        g_value_take_object (value, option->node);
-    else
-        g_value_set_object (value, option->node);
+    /* either the node was just created, and adding the toggle_ref took a strong
+     * reference on it, or we added one -- either way, just send it to the task */
+    g_value_take_object (value, option->node);
     donna_task_release_return_value (task);
 
     g_rw_lock_reader_unlock (&priv->lock);
@@ -3332,12 +3328,8 @@ node_children (DonnaTask *task, struct node_children_data *data)
                     sprintf (s, "%s/%s", (is_root) ? "" : location, option->name);
                 }
 
-                g_rec_mutex_lock (&priv->nodes_mutex);
-                /* if node wasn't just created, we need to take a ref on it */
-                if (!ensure_option_has_node (data->config, s, option))
-                    g_object_ref (option->node);
+                ensure_option_has_node (data->config, s, option);
                 g_ptr_array_add (data->children, option->node);
-                g_rec_mutex_unlock (&priv->nodes_mutex);
 
                 if (s != buf)
                     g_free (s);
@@ -3515,7 +3507,6 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     GNode *gnode;
     struct option *option;
     gchar *opt_loc;
-    gboolean node_created;
     GValue *value;
 
     provider = donna_node_peek_provider (node);
@@ -3558,9 +3549,7 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     option = gnode->data;
     opt_loc = get_option_full_name (priv->root, gnode);
 
-    g_rec_mutex_lock (&priv->nodes_mutex);
-    node_created = ensure_option_has_node (config, opt_loc, option);
-    g_rec_mutex_unlock (&priv->nodes_mutex);
+    ensure_option_has_node (config, opt_loc, option);
 
     g_rw_lock_reader_unlock (&priv->lock);
     g_free (opt_loc);
@@ -3568,12 +3557,7 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     /* set node as return value */
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
-    if (node_created)
-        /* if the node was just created, adding the toggle_ref took a strong
-         * reference on it, so we just send this extra ref to the task */
-        g_value_take_object (value, option->node);
-    else
-        g_value_set_object (value, option->node);
+    g_value_take_object (value, option->node);
     donna_task_release_return_value (task);
 
     g_free (location);

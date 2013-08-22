@@ -450,6 +450,7 @@ new_node (DonnaProviderBase *_provider,
 {
     DonnaTaskManager *tm = (DonnaTaskManager *) _provider;
     DonnaProviderTaskPrivate *priv = tm->priv;
+    DonnaProviderBaseClass *klass;
     DonnaNode *node;
     GValue v = G_VALUE_INIT;
     gchar *desc;
@@ -478,8 +479,11 @@ new_node (DonnaProviderBase *_provider,
 
     node = donna_node_new ((DonnaProvider *) _provider, location,
             DONNA_NODE_ITEM, NULL, refresher, NULL,
-            desc, 0);
+            desc, DONNA_NODE_ICON_EXISTS);
     g_free (desc);
+
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    klass->set_property_icon (_provider, node, "icon", "system-run", NULL);
 
     g_value_init (&v, G_TYPE_INT);
     switch (state)

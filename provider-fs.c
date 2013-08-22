@@ -323,23 +323,27 @@ content_type_guess (const gchar *filename)
     return mt;
 }
 
-static inline gboolean
-set_icon (DonnaNode *node, const gchar *filename)
+static DonnaTaskState
+set_icon_worker (DonnaTask *task, gpointer _data)
 {
+    struct {
+        DonnaNode *node;
+        const gchar *filename;
+    } *data = _data;
     gchar *mt;
     GIcon *icon;
     GtkIconInfo *ii;
     GValue value = G_VALUE_INIT;
 
-    mt = content_type_guess (filename);
+    mt = content_type_guess (data->filename);
     if (!mt)
-        return FALSE;
+        return DONNA_TASK_FAILED;
 
     icon = g_content_type_get_icon (mt);
     if (!icon)
     {
         g_free (mt);
-        return FALSE;
+        return DONNA_TASK_FAILED;
     }
     ii = gtk_icon_theme_lookup_by_gicon (gtk_icon_theme_get_default (),
             icon,/* FIXME: get it from somewhere? */ 16, 0);
@@ -347,18 +351,38 @@ set_icon (DonnaNode *node, const gchar *filename)
     {
         g_object_unref (icon);
         g_free (mt);
-        return FALSE;
+        return DONNA_TASK_FAILED;
     }
 
     g_value_init (&value, G_TYPE_OBJECT);
     g_value_take_object (&value, gtk_icon_info_load_icon (ii, NULL));
-    donna_node_set_property_value (node, "icon", &value);
+    donna_node_set_property_value (data->node, "icon", &value);
     g_value_unset (&value);
 
     g_object_unref (ii);
     g_object_unref (icon);
     g_free (mt);
-    return TRUE;
+    return DONNA_TASK_DONE;
+}
+
+static inline gboolean
+set_icon (DonnaApp *app, DonnaNode *node, const gchar *filename)
+{
+    DonnaTask *task;
+    struct {
+        DonnaNode *node;
+        const gchar *filename;
+    } data = { node, filename };
+    gboolean ret;
+
+    task = donna_task_new (set_icon_worker, &data, NULL);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
+    donna_task_set_can_block (g_object_ref_sink (task));
+    donna_app_run_task (app, task);
+    donna_task_wait_for_it (task);
+    ret = donna_task_get_state (task) == DONNA_TASK_DONE;
+    g_object_unref (task);
+    return ret;
 }
 
 static gboolean
@@ -372,8 +396,17 @@ refresher (DonnaTask    *task,
     filename = donna_node_get_filename (node);
 
     if (streq (name, "icon"))
-        ret = (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
-            ? TRUE : set_icon (node, filename);
+    {
+        if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+            ret = TRUE;
+        else
+        {
+            DonnaProvider *provider;
+
+            provider = donna_node_peek_provider (node);
+            ret = set_icon (((DonnaProviderBase *) provider)->app, node, filename);
+        }
+    }
     else if (streq (name, "desc"))
     {
         gchar *mt;
@@ -693,10 +726,10 @@ setter (DonnaTask       *task,
 static DonnaNode *
 new_node (DonnaProviderBase *_provider,
           const gchar       *_location,
-          const gchar       *filename,
-          gboolean           need_lock)
+          const gchar       *filename)
 {
     DonnaProviderBaseClass *klass;
+    DonnaNode       *n;
     DonnaNode       *node;
     DonnaNodeType    type;
     DonnaNodeFlags   flags;
@@ -762,32 +795,27 @@ new_node (DonnaProviderBase *_provider,
     stat_node (node, filename);
     /* files only: icon is very likely to be used, so let's load it up */
     if (type == DONNA_NODE_ITEM)
-        set_icon (node, filename);
+        set_icon (_provider->app, node, filename);
 
     if (free_filename)
         g_free ((gchar *) filename);
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
-    if (need_lock)
-    {
-        DonnaNode *n;
 
-        klass->lock_nodes (_provider);
-        /* did someone already add it while we were busy? */
-        n = klass->get_cached_node (_provider, location);
-        if (n)
-        {
-            klass->unlock_nodes (_provider);
-            g_object_unref (node);
-            if (location != _location)
-                g_free (location);
-            return n;
-        }
+    klass->lock_nodes (_provider);
+    /* did someone already add it while we were busy? */
+    n = klass->get_cached_node (_provider, location);
+    if (G_UNLIKELY (n))
+    {
+        klass->unlock_nodes (_provider);
+        g_object_unref (node);
+        if (location != _location)
+            g_free (location);
+        return n;
     }
     /* this adds another reference (from our own) so we send it to the caller */
     klass->add_node_to_cache (_provider, node);
-    if (need_lock)
-        klass->unlock_nodes (_provider);
+    klass->unlock_nodes (_provider);
 
     if (location != _location)
         g_free (location);
@@ -802,7 +830,7 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
     DonnaNode *node;
     GValue    *value;
 
-    node = new_node (_provider, location, NULL, TRUE);
+    node = new_node (_provider, location, NULL);
     if (!node)
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
@@ -913,14 +941,14 @@ has_get_children (DonnaProviderBase  *_provider,
 
                 klass->lock_nodes (_provider);
                 node = klass->get_cached_node (_provider, location);
+                klass->unlock_nodes (_provider);
                 if (!node)
-                    node = new_node (_provider, location, b, FALSE);
+                    node = new_node (_provider, location, b);
                 if (node)
                     g_ptr_array_add (arr, node);
                 else
                     g_warning ("Provider 'fs': Unable to create a node for '%s'",
                             location);
-                klass->unlock_nodes (_provider);
                 if (location != b)
                     g_free (location);
             }
@@ -1136,7 +1164,7 @@ again:
         return DONNA_TASK_FAILED;
     }
 
-    node = new_node (_provider, location, filename, TRUE);
+    node = new_node (_provider, location, filename);
     if (G_UNLIKELY (!node))
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,

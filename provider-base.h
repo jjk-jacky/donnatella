@@ -38,6 +38,11 @@ struct _DonnaProviderBaseClass
                                              const gchar        *location);
     void            (*add_node_to_cache)    (DonnaProviderBase  *provider,
                                              DonnaNode          *node);
+    gboolean        (*set_property_icon)    (DonnaProviderBase  *provider,
+                                             DonnaNode          *node,
+                                             const gchar        *property,
+                                             const gchar        *icon,
+                                             GError            **error);
 
     DonnaTaskState  (*new_node)             (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
