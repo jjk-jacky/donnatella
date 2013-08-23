@@ -1683,10 +1683,7 @@ donna_donna_emit_event (DonnaApp        *app,
                         conv_flag_fn     conv_fn,
                         gpointer         conv_data)
 {
-    DonnaDonnaPrivate *priv;
-
     g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
-    priv = ((DonnaDonna *) app)->priv;
 
     if (fmt_source)
     {
