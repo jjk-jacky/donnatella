@@ -1585,6 +1585,7 @@ trigger_event (DonnaDonna   *donna,
     g_ptr_array_sort (arr, arr_str_cmp);
     for (i = 0; i < arr->len; ++i)
     {
+        GError *err = NULL;
         GPtrArray *intrefs = NULL;
         gchar *fl;
 
@@ -1593,7 +1594,17 @@ trigger_event (DonnaDonna   *donna,
         {
             fl = donna_donna_parse_fl ((DonnaApp *) donna, fl,
                     conv_flags, conv_fn, conv_data, &intrefs);
-            donna_donna_trigger_fl ((DonnaApp *) donna, fl, intrefs, FALSE, NULL);
+            if (!donna_donna_trigger_fl ((DonnaApp *) donna, fl, intrefs,
+                        FALSE, &err))
+            {
+                donna_app_show_error ((DonnaApp *) donna, err,
+                        "Event '%s': Failed to trigger '%s'%s%s%s",
+                        event, arr->pdata[i],
+                        (*source != '\0') ? " from '" : "",
+                        (*source != '\0') ? source : "",
+                        (*source != '\0') ? "'" : "");
+                g_clear_error (&err);
+            }
             g_free (fl);
         }
     }
