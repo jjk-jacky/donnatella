@@ -113,6 +113,7 @@ struct _DonnaDonnaPrivate
     GtkWindow       *window;
     GtkWidget       *floating_window;
     gboolean         just_focused;
+    gboolean         exiting;
     DonnaConfig     *config;
     DonnaTaskManager*task_manager;
     DonnaStatusBar  *sb;
@@ -2341,7 +2342,7 @@ donna_donna_show_error (DonnaApp       *app,
     priv = DONNA_DONNA (app)->priv;
 
     w = gtk_message_dialog_new (priv->window,
-            GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_DIALOG_DESTROY_WITH_PARENT | ((priv->exiting) ? GTK_DIALOG_MODAL : 0),
             GTK_MESSAGE_ERROR,
             GTK_BUTTONS_CLOSE,
             title);
@@ -2349,6 +2350,11 @@ donna_donna_show_error (DonnaApp       *app,
             (error) ? error->message : "");
     g_signal_connect_swapped (w, "response", (GCallback) gtk_widget_destroy, w);
     gtk_widget_show_all (w);
+    if (G_UNLIKELY (priv->exiting))
+        /* if this happens while exiting (i.e. after main window was closed
+         * (hidden), e.g. during a task from event "exit") then we make sure the
+         * user gets to see/read the error, by blocking until he's closed it */
+        gtk_dialog_run ((GtkDialog *) w);
 }
 
 static gpointer
@@ -2663,10 +2669,12 @@ donna_donna_ask_text (DonnaApp       *app,
     return data.s;
 }
 
-static void
-window_destroy_cb (GtkWidget *window, gpointer data)
+static gboolean
+window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaDonna *donna)
 {
+    gtk_widget_hide (window);
     gtk_main_quit ();
+    return TRUE;
 }
 
 static gboolean
@@ -3129,8 +3137,8 @@ create_gui (DonnaDonna *donna)
 
     g_signal_connect (window, "focus-in-event",
             (GCallback) focus_in_event_cb, app);
-    g_signal_connect (window, "destroy",
-            (GCallback) window_destroy_cb, NULL);
+    g_signal_connect (window, "delete-event",
+            (GCallback) window_delete_event_cb, donna);
 
     if (!donna_config_get_string (priv->config, &s, "donna/layout"))
     {
@@ -3416,6 +3424,20 @@ run_donna (struct run *run)
     if (G_LIKELY (gtk_widget_get_realized ((GtkWidget *) priv->window)))
         gtk_main ();
 
+    priv->exiting = TRUE;
+    donna_app_emit_event ((DonnaApp *) run->donna, "exit", NULL, NULL, NULL, NULL);
+
+    /* let's make sure all (internal) tasks (e.g. triggered from event "exit")
+     * are done before we die */
+    g_thread_pool_stop_unused_threads ();
+    while (g_thread_pool_get_num_threads (priv->pool) > 0)
+    {
+        if (gtk_events_pending ())
+            gtk_main_iteration ();
+        g_thread_pool_stop_unused_threads ();
+    }
+    gtk_widget_destroy ((GtkWidget *) priv->window);
+
     gtk_main_quit ();
     return FALSE;
 }
@@ -3448,5 +3470,6 @@ main (int argc, char *argv[])
 
     gtk_main ();
 
+    g_object_unref (run.donna);
     return run.rc;
 }
