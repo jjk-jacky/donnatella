@@ -136,6 +136,38 @@ show_err_on_task_failed (DonnaTask  *task,
 }
 
 static DonnaTaskState
+cmd_ask (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *er = NULL;
+    gchar *title = args[0];
+    gchar *details = args[1]; /* opt */
+    gchar *btn1_icon = args[2]; /* opt */
+    gchar *btn1_label= args[3]; /* opt */
+    gchar *btn2_icon = args[4]; /* opt */
+    gchar *btn2_label= args[5]; /* opt */
+    gchar *btn3_icon = args[6]; /* opt */
+    gchar *btn3_label= args[7]; /* opt */
+    gchar *btn4_icon = args[8]; /* opt */
+    gchar *btn4_label= args[9]; /* opt */
+    gchar *btn5_icon = args[10]; /* opt */
+    gchar *btn5_label= args[11]; /* opt */
+
+    gint r;
+    GValue *value;
+
+    r = donna_app_ask (app, title, details, btn1_icon, btn1_label,
+            btn2_icon, btn2_label, btn3_icon, btn3_label,
+            btn4_icon, btn4_label, btn5_icon, btn5_label, NULL);
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, r);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_ask_text (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1386,9 +1418,25 @@ _donna_add_commands (GHashTable *commands)
 {
     struct command *_command;
     struct command command;
-    DonnaArgType arg_type[8];
+    DonnaArgType arg_type[12];
     command.arg_type = arg_type;
     gint i;
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (ask, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;

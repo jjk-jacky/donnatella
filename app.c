@@ -667,6 +667,35 @@ donna_app_nodes_io (DonnaApp       *app,
     return (*interface->nodes_io) (app, nodes, io_type, dest, error);
 }
 
+gint
+donna_app_ask (DonnaApp       *app,
+               const gchar    *title,
+               const gchar    *details,
+               const gchar    *btn1_icon,
+               const gchar    *btn1_label,
+               const gchar    *btn2_icon,
+               const gchar    *btn2_label,
+               ...)
+{
+    DonnaAppInterface *interface;
+    va_list va_args;
+    gint ret;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), 0);
+    g_return_val_if_fail (title != NULL, 0);
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_val_if_fail (interface != NULL, 0);
+    g_return_val_if_fail (interface->ask != NULL, 0);
+
+    va_start (va_args, details);
+    ret = (*interface->ask) (app, title, details,
+            btn1_icon, btn1_label, btn2_icon, btn2_label, va_args);
+    va_end (va_args);
+    return ret;
+}
+
 gchar *
 donna_app_ask_text (DonnaApp       *app,
                     const gchar    *title,

@@ -237,6 +237,14 @@ static gboolean         donna_donna_nodes_io        (DonnaApp       *app,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
                                                      GError        **error);
+static gint             donna_donna_ask             (DonnaApp       *app,
+                                                     const gchar    *title,
+                                                     const gchar    *details,
+                                                     const gchar    *btn1_icon,
+                                                     const gchar    *btn1_label,
+                                                     const gchar    *btn2_icon,
+                                                     const gchar    *btn2_label,
+                                                     va_list         va_args);
 static gchar *          donna_donna_ask_text        (DonnaApp       *app,
                                                      const gchar    *title,
                                                      const gchar    *details,
@@ -269,6 +277,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
     interface->nodes_io             = donna_donna_nodes_io;
+    interface->ask                  = donna_donna_ask;
     interface->ask_text             = donna_donna_ask_text;
 }
 
@@ -2430,6 +2439,111 @@ donna_donna_nodes_io (DonnaApp       *app,
     donna_task_set_callback (task, (task_callback_fn) task_show_error, app, NULL);
     donna_app_run_task (app, task);
     return TRUE;
+}
+
+struct ask
+{
+    GMainLoop *loop;
+    GtkWidget *win;
+    gint response;
+};
+
+static void
+btn_clicked (GObject *btn, struct ask *ask)
+{
+    ask->response = GPOINTER_TO_INT (g_object_get_data (btn, "response"));
+    gtk_widget_destroy (ask->win);
+}
+
+static gint
+donna_donna_ask (DonnaApp       *app,
+                 const gchar    *title,
+                 const gchar    *details,
+                 const gchar    *btn1_icon,
+                 const gchar    *btn1_label,
+                 const gchar    *btn2_icon,
+                 const gchar    *btn2_label,
+                 va_list         va_args)
+{
+    DonnaDonnaPrivate *priv;
+    struct ask ask = { NULL, };
+    GtkWidget *area;
+    GtkBox *box;
+    GtkWidget *btn;
+    GtkWidget *w;
+    gint i = 0;
+
+    g_return_val_if_fail (DONNA_IS_DONNA (app), 0);
+    priv = ((DonnaDonna *) app)->priv;
+
+    ask.win = gtk_message_dialog_new (priv->window,
+            GTK_DIALOG_DESTROY_WITH_PARENT,
+            GTK_MESSAGE_QUESTION,
+            GTK_BUTTONS_NONE,
+            title);
+
+    if (details)
+    {
+        if (streqn (details, "markup:", 7))
+            gtk_message_dialog_format_secondary_markup ((GtkMessageDialog *) ask.win,
+                    "%s", details + 7);
+        else
+            gtk_message_dialog_format_secondary_text ((GtkMessageDialog *) ask.win,
+                    "%s", details);
+    }
+
+    area = gtk_dialog_get_action_area ((GtkDialog *) ask.win);
+    box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 4);
+    gtk_box_set_homogeneous (box, TRUE);
+    gtk_container_add ((GtkContainer *) area, (GtkWidget *) box);
+
+    btn = gtk_button_new_with_label ((btn1_label) ? btn1_label : "Yes");
+    w = gtk_image_new_from_icon_name ((btn1_icon) ? btn1_icon : "gtk-yes",
+            GTK_ICON_SIZE_MENU);
+    if (w)
+        gtk_button_set_image ((GtkButton *) btn, w);
+    g_object_set_data ((GObject *) btn, "response", GINT_TO_POINTER (++i));
+    g_signal_connect (btn, "clicked", (GCallback) btn_clicked, &ask);
+    gtk_box_pack_end (box, btn, FALSE, TRUE, 0);
+
+    btn = gtk_button_new_with_label ((btn2_label) ? btn2_label : "No");
+    w = gtk_image_new_from_icon_name ((btn2_icon) ? btn2_icon : "gtk-no",
+            GTK_ICON_SIZE_MENU);
+    if (w)
+        gtk_button_set_image ((GtkButton *) btn, w);
+    g_object_set_data ((GObject *) btn, "response", GINT_TO_POINTER (++i));
+    g_signal_connect (btn, "clicked", (GCallback) btn_clicked, &ask);
+    gtk_box_pack_end (box, btn, FALSE, TRUE, 0);
+
+    for (;;)
+    {
+        const gchar *s;
+
+        s = va_arg (va_args, const gchar *);
+        if (!s)
+            break;
+        btn = gtk_button_new_with_label (s);
+
+        s = va_arg (va_args, const gchar *);
+        if (s)
+        {
+            w = gtk_image_new_from_icon_name (s, GTK_ICON_SIZE_MENU);
+            if (w)
+                gtk_button_set_image ((GtkButton *) btn, w);
+        }
+
+        g_object_set_data ((GObject *) btn, "response", GINT_TO_POINTER (++i));
+        g_signal_connect (btn, "clicked", (GCallback) btn_clicked, &ask);
+        gtk_box_pack_end (box, btn, FALSE, TRUE, 0);
+    }
+
+    ask.loop = g_main_loop_new (NULL, TRUE);
+    g_signal_connect_swapped (ask.win, "destroy",
+            (GCallback) g_main_loop_quit, ask.loop);
+    gtk_widget_show_all (ask.win);
+    g_main_loop_run (ask.loop);
+
+    return ask.response;
 }
 
 struct ask_text
