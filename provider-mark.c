@@ -1051,6 +1051,58 @@ cmd_mark_load (DonnaTask         *task,
 }
 
 static DonnaTaskState
+cmd_mark_save (DonnaTask        *task,
+              DonnaApp          *app,
+              gpointer          *args,
+              DonnaProviderMark *pm)
+{
+    GError *err = NULL;
+    DonnaProviderMarkPrivate *priv = pm->priv;
+
+    const gchar *filename = args[0]; /* opt */
+
+    struct mark *mark;
+    gchar *file;
+    GString *str;
+    GHashTableIter iter;
+
+    if (filename && *filename == '/')
+        file = (gchar *) filename;
+    else
+        file = donna_app_get_conf_filename (app, (filename) ? filename : "marks.conf");
+
+    str = g_string_new (NULL);
+    g_mutex_lock (&priv->mutex);
+    g_hash_table_iter_init (&iter, priv->marks);
+    while ((g_hash_table_iter_next (&iter, NULL, (gpointer) &mark)))
+    {
+        g_string_append_printf (str, "mark=%s\n", mark->location);
+        if (mark->type != DONNA_MARK_STANDARD)
+            g_string_append_printf (str, "type=%d\n", mark->type);
+        if (!streq (mark->location, mark->name))
+            g_string_append_printf (str, "name=%s\n", mark->name);
+        g_string_append_printf (str, "value=%s\n", mark->value);
+    }
+    g_mutex_unlock (&priv->mutex);
+
+    if (!g_file_set_contents (file, str->str, str->len, &err))
+    {
+        g_prefix_error (&err, "Command 'mark_save': Failed to save marks to '%s': ",
+                (filename) ? filename : "marks.conf");
+        donna_task_take_error (task, err);
+        if (file != filename)
+            g_free (file);
+        g_string_free (str, TRUE);
+        return DONNA_TASK_FAILED;
+    }
+
+    g_string_free (str, TRUE);
+    if (file != filename)
+        g_free (file);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_mark_set (DonnaTask         *task,
               DonnaApp          *app,
               gpointer          *args,
@@ -1214,6 +1266,11 @@ provider_mark_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (mark_load, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (mark_save, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
