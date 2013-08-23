@@ -369,7 +369,7 @@ donna_app_get_conf_filename (DonnaApp       *app,
                              ...)
 {
     DonnaAppInterface *interface;
-    va_list va_arg;
+    va_list va_args;
     gchar *ret;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
@@ -379,9 +379,9 @@ donna_app_get_conf_filename (DonnaApp       *app,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_conf_filename != NULL, NULL);
 
-    va_start (va_arg, fmt);
-    ret = (*interface->get_conf_filename) (app, fmt, va_arg);
-    va_end (va_arg);
+    va_start (va_args, fmt);
+    ret = (*interface->get_conf_filename) (app, fmt, va_args);
+    va_end (va_args);
     return ret;
 }
 
@@ -494,7 +494,7 @@ donna_app_emit_event (DonnaApp       *app,
                       ...)
 {
     DonnaAppInterface *interface;
-    va_list va_arg;
+    va_list va_args;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
@@ -505,10 +505,10 @@ donna_app_emit_event (DonnaApp       *app,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->emit_event != NULL, NULL);
 
-    va_start (va_arg, fmt_source);
-    ret = (*interface->emit_event) (app, event, fmt_source, va_arg,
+    va_start (va_args, fmt_source);
+    ret = (*interface->emit_event) (app, event, fmt_source, va_args,
             conv_flags, conv_fn, conv_data);
-    va_end (va_arg);
+    va_end (va_args);
     return ret;
 }
 
@@ -547,7 +547,7 @@ donna_app_show_error (DonnaApp       *app,
 {
     DonnaAppInterface *interface;
     gchar *title;
-    va_list va_arg;
+    va_list va_args;
 
     g_return_if_fail (DONNA_IS_APP (app));
     g_return_if_fail (fmt != NULL);
@@ -557,9 +557,9 @@ donna_app_show_error (DonnaApp       *app,
     g_return_if_fail (interface != NULL);
     g_return_if_fail (interface->show_error != NULL);
 
-    va_start (va_arg, fmt);
-    title = g_strdup_vprintf (fmt, va_arg);
-    va_end (va_arg);
+    va_start (va_args, fmt);
+    title = g_strdup_vprintf (fmt, va_args);
+    va_end (va_args);
 
     (*interface->show_error) (app, title, error);
     g_free (title);

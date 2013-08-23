@@ -196,7 +196,7 @@ static gchar *          donna_donna_get_current_dirname (
 static gchar *          donna_donna_get_conf_filename (
                                                      DonnaApp       *app,
                                                      const gchar    *fmt,
-                                                     va_list         va_arg);
+                                                     va_list         va_args);
 static gchar *          donna_donna_new_int_ref     (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
@@ -219,7 +219,7 @@ static gboolean         donna_donna_trigger_fl      (DonnaApp       *app,
 static gboolean         donna_donna_emit_event      (DonnaApp       *app,
                                                      const gchar    *event,
                                                      const gchar    *fmt_source,
-                                                     va_list         va_arg,
+                                                     va_list         va_args,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data);
@@ -1335,7 +1335,7 @@ donna_donna_get_current_dirname (DonnaApp       *app)
 static gchar *
 donna_donna_get_conf_filename (DonnaApp       *app,
                                const gchar    *fmt,
-                               va_list         va_arg)
+                               va_list         va_args)
 {
     GString *str;
 
@@ -1343,7 +1343,7 @@ donna_donna_get_conf_filename (DonnaApp       *app,
 
     str = g_string_new (g_get_user_config_dir ());
     g_string_append (str, "/donnatella/");
-    g_string_append_vprintf (str, fmt, va_arg);
+    g_string_append_vprintf (str, fmt, va_args);
 
     if (!g_get_filename_charsets (NULL))
     {
@@ -1678,7 +1678,7 @@ static gboolean
 donna_donna_emit_event (DonnaApp        *app,
                         const gchar     *event,
                         const gchar     *fmt_source,
-                        va_list          va_arg,
+                        va_list          va_args,
                         const gchar     *conv_flags,
                         conv_flag_fn     conv_fn,
                         gpointer         conv_data)
@@ -1690,7 +1690,7 @@ donna_donna_emit_event (DonnaApp        *app,
 
     if (fmt_source)
     {
-        gchar *s = g_strdup_vprintf (fmt_source, va_arg);
+        gchar *s = g_strdup_vprintf (fmt_source, va_args);
         trigger_event ((DonnaDonna *) app, event, s,
                 conv_flags, conv_fn, conv_data);
         g_free (s);

@@ -54,7 +54,7 @@ struct _DonnaAppInterface
     gchar *             (*get_current_dirname)      (DonnaApp       *app);
     gchar *             (*get_conf_filename)        (DonnaApp       *app,
                                                      const gchar    *fmt,
-                                                     va_list         va_arg);
+                                                     va_list         va_args);
     gchar *             (*new_int_ref)              (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);
@@ -77,7 +77,7 @@ struct _DonnaAppInterface
     gboolean            (*emit_event)               (DonnaApp       *app,
                                                      const gchar    *event,
                                                      const gchar    *fmt_source,
-                                                     va_list         va_arg,
+                                                     va_list         va_args,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data);
