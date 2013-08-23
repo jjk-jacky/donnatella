@@ -804,131 +804,6 @@ cmd_mark_get_node (DonnaTask         *task,
     return DONNA_TASK_DONE;
 }
 
-static DonnaTaskState
-cmd_mark_set (DonnaTask         *task,
-              DonnaApp          *app,
-              gpointer          *args,
-              DonnaProviderMark *pm)
-{
-    GError *err = NULL;
-    DonnaProviderMarkPrivate *priv = pm->priv;
-
-    const gchar *location = args[0];
-    const gchar *name = args[1]; /*opt */
-    const gchar *type = args[2]; /* opt */
-    const gchar *value = args[3]; /*opt */
-
-    struct mark *mark;
-    const gchar *s_types[] = { "standard", "dynamic" };
-    DonnaMarkType m_types[] = { DONNA_MARK_STANDARD, DONNA_MARK_DYNAMIC };
-    DonnaMarkType m_type;
-    gint t = -1;
-    DonnaNode *node;
-    enum {
-        UPD_NAME    = (1 << 0),
-        UPD_TYPE    = (1 << 1),
-        UPD_VALUE   = (1 << 2),
-    } updated = 0;
-
-    if (type)
-    {
-        t = _get_choice (s_types, type);
-        if (t < 0)
-        {
-            donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                    DONNA_COMMAND_ERROR_SYNTAX,
-                    "Command 'mark_set': Cannot set mark '%s', invalid type '%s'; "
-                    "Must be 'standard' or 'dynamic'",
-                    location, type);
-            return DONNA_TASK_FAILED;
-        }
-        m_type = m_types[t];
-    }
-    else
-        m_type = DONNA_MARK_STANDARD;
-
-    g_mutex_lock (&priv->mutex);
-    mark = g_hash_table_lookup (priv->marks, location);
-    if (mark)
-    {
-        if (name && !streq (mark->name, name))
-        {
-            g_free (mark->name);
-            mark->name = g_strdup (name);
-            updated |= UPD_NAME;
-        }
-        if (type && mark->type != m_type)
-        {
-            mark->type = m_type;
-            updated |= UPD_TYPE;
-        }
-        if (value && !streq (mark->value, value))
-        {
-            g_free (mark->value);
-            mark->value = g_strdup (value);
-            updated |= UPD_VALUE;
-        }
-        g_mutex_unlock (&priv->mutex);
-
-        node = get_node_for (pm, GET_IF_IN_CACHE, (gpointer) location, NULL);
-        if (node)
-        {
-            GValue v = G_VALUE_INIT;
-
-            if (updated & UPD_NAME)
-            {
-                g_value_init (&v, G_TYPE_STRING);
-                g_value_set_string (&v, name);
-                donna_node_set_property_value (node, "name", &v);
-                g_value_unset (&v);
-            }
-
-            if (updated & UPD_TYPE)
-            {
-                g_value_init (&v, G_TYPE_INT);
-                g_value_set_int (&v, (gint) m_type);
-                donna_node_set_property_value (node, "mark-type", &v);
-                g_value_unset (&v);
-            }
-
-            if (updated & UPD_VALUE)
-            {
-                g_value_init (&v, G_TYPE_STRING);
-                g_value_set_string (&v, value);
-                donna_node_set_property_value (node, "value", &v);
-                g_value_unset (&v);
-            }
-
-            g_object_unref (node);
-        }
-    }
-    else
-    {
-        DonnaNode *node_root;
-
-        mark = new_mark (pm, location, name, m_type, value, &err);
-        if (!mark)
-        {
-            g_mutex_unlock (&priv->mutex);
-            donna_task_take_error (task, err);
-            return DONNA_TASK_FAILED;
-        }
-
-        node_root = get_node_for (pm, GET_IF_IN_CACHE, "/", NULL);
-        if (node_root)
-        {
-            node = get_node_for (pm, GET_CREATE_FROM_MARK, mark, NULL);
-            g_mutex_unlock (&priv->mutex);
-
-            donna_provider_node_new_child ((DonnaProvider *) pm, node_root, node);
-            g_object_unref (node);
-            g_object_unref (node_root);
-        }
-    }
-
-    return DONNA_TASK_DONE;
-}
-
 struct upd
 {
     DonnaNode *node;
@@ -1175,6 +1050,131 @@ cmd_mark_load (DonnaTask         *task,
     return DONNA_TASK_DONE;
 }
 
+static DonnaTaskState
+cmd_mark_set (DonnaTask         *task,
+              DonnaApp          *app,
+              gpointer          *args,
+              DonnaProviderMark *pm)
+{
+    GError *err = NULL;
+    DonnaProviderMarkPrivate *priv = pm->priv;
+
+    const gchar *location = args[0];
+    const gchar *name = args[1]; /*opt */
+    const gchar *type = args[2]; /* opt */
+    const gchar *value = args[3]; /*opt */
+
+    struct mark *mark;
+    const gchar *s_types[] = { "standard", "dynamic" };
+    DonnaMarkType m_types[] = { DONNA_MARK_STANDARD, DONNA_MARK_DYNAMIC };
+    DonnaMarkType m_type;
+    gint t = -1;
+    DonnaNode *node;
+    enum {
+        UPD_NAME    = (1 << 0),
+        UPD_TYPE    = (1 << 1),
+        UPD_VALUE   = (1 << 2),
+    } updated = 0;
+
+    if (type)
+    {
+        t = _get_choice (s_types, type);
+        if (t < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
+                    "Command 'mark_set': Cannot set mark '%s', invalid type '%s'; "
+                    "Must be 'standard' or 'dynamic'",
+                    location, type);
+            return DONNA_TASK_FAILED;
+        }
+        m_type = m_types[t];
+    }
+    else
+        m_type = DONNA_MARK_STANDARD;
+
+    g_mutex_lock (&priv->mutex);
+    mark = g_hash_table_lookup (priv->marks, location);
+    if (mark)
+    {
+        if (name && !streq (mark->name, name))
+        {
+            g_free (mark->name);
+            mark->name = g_strdup (name);
+            updated |= UPD_NAME;
+        }
+        if (type && mark->type != m_type)
+        {
+            mark->type = m_type;
+            updated |= UPD_TYPE;
+        }
+        if (value && !streq (mark->value, value))
+        {
+            g_free (mark->value);
+            mark->value = g_strdup (value);
+            updated |= UPD_VALUE;
+        }
+        g_mutex_unlock (&priv->mutex);
+
+        node = get_node_for (pm, GET_IF_IN_CACHE, (gpointer) location, NULL);
+        if (node)
+        {
+            GValue v = G_VALUE_INIT;
+
+            if (updated & UPD_NAME)
+            {
+                g_value_init (&v, G_TYPE_STRING);
+                g_value_set_string (&v, name);
+                donna_node_set_property_value (node, "name", &v);
+                g_value_unset (&v);
+            }
+
+            if (updated & UPD_TYPE)
+            {
+                g_value_init (&v, G_TYPE_INT);
+                g_value_set_int (&v, (gint) m_type);
+                donna_node_set_property_value (node, "mark-type", &v);
+                g_value_unset (&v);
+            }
+
+            if (updated & UPD_VALUE)
+            {
+                g_value_init (&v, G_TYPE_STRING);
+                g_value_set_string (&v, value);
+                donna_node_set_property_value (node, "value", &v);
+                g_value_unset (&v);
+            }
+
+            g_object_unref (node);
+        }
+    }
+    else
+    {
+        DonnaNode *node_root;
+
+        mark = new_mark (pm, location, name, m_type, value, &err);
+        if (!mark)
+        {
+            g_mutex_unlock (&priv->mutex);
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+
+        node_root = get_node_for (pm, GET_IF_IN_CACHE, "/", NULL);
+        if (node_root)
+        {
+            node = get_node_for (pm, GET_CREATE_FROM_MARK, mark, NULL);
+            g_mutex_unlock (&priv->mutex);
+
+            donna_provider_node_new_child ((DonnaProvider *) pm, node_root, node);
+            g_object_unref (node);
+            g_object_unref (node_root);
+        }
+    }
+
+    return DONNA_TASK_DONE;
+}
+
 
 #define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_value) \
 if (G_UNLIKELY (!donna_provider_command_add_command (pc, #cmd_name, cmd_argc, \
@@ -1210,18 +1210,18 @@ provider_mark_contructed (GObject *object)
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (mark_load, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (mark_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            DONNA_ARG_TYPE_NOTHING);
-
-    i = -1;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (mark_load, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
     g_object_unref (pc);
