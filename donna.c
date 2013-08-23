@@ -529,11 +529,6 @@ static void
 donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
-    GPtrArray *arr = NULL;
-    const gchar *main_dir;
-    const gchar * const *extra_dirs;
-    const gchar * const *dir;
-    const gchar * const *first;
 
     mt = g_thread_self ();
     g_log_set_default_handler (donna_donna_log_handler, NULL);
@@ -567,41 +562,6 @@ donna_donna_init (DonnaDonna *donna)
     priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
             5, FALSE, NULL);
 
-    /* get config dirs */
-    main_dir = g_get_user_config_dir ();
-    extra_dirs = g_get_system_config_dirs ();
-
-    /* load config definitions: merge user & system ones */
-    load_conf (priv->config, main_dir, TRUE);
-    for (dir = extra_dirs; *dir; ++dir)
-        load_conf (priv->config, *dir, TRUE);
-
-    /* load config: load user one. If there's none, copy the system one over,
-     * and keep another copy as "reference" for future merging */
-    if (!load_conf (priv->config, main_dir, FALSE))
-    {
-        for (dir = extra_dirs; *dir; ++dir)
-            if (copy_and_load_conf (priv->config, *dir, main_dir))
-                break;
-    }
-    g_debug ("config:%s", donna_config_export_config (priv->config));
-
-    /* CSS - At same priority, the last one loaded takes precedence, so we need
-     * to load system ones first (in reverse order), then the user one */
-    first = extra_dirs;
-    for (dir = extra_dirs; *dir; ++dir)
-        ;
-    if (dir != first)
-    {
-        for (--dir; dir != first; --dir)
-            load_css (*dir);
-        load_css (*dir);
-    }
-    load_css (main_dir);
-
-    /* compile patterns of arrangements' masks */
-    priv->arrangements = load_arrangements (priv->config, "arrangements");
-
     priv->filters = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_filter);
 
@@ -610,39 +570,6 @@ donna_donna_init (DonnaDonna *donna)
 
     priv->intrefs = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_intref);
-
-    /* preload some required providers */
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "command"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "register"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "internal"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "mark"));
-
-    if (donna_config_list_options (priv->config, &arr,
-                DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
-    {
-        guint i;
-
-        for (i = 0; i < arr->len; ++i)
-        {
-            struct visuals *visuals;
-            gchar *s;
-
-            if (!donna_config_get_string (priv->config, &s, "visuals/%s/node",
-                    arr->pdata[i]))
-                continue;
-
-            visuals = g_slice_new0 (struct visuals);
-            donna_config_get_string (priv->config, &visuals->name,
-                    "visuals/%s/name", arr->pdata[i]);
-            donna_config_get_string (priv->config, &visuals->icon,
-                    "visuals/%s/icon", arr->pdata[i]);
-            donna_config_get_string (priv->config, &visuals->box,
-                    "visuals/%s/box", arr->pdata[i]);
-            donna_config_get_string (priv->config, &visuals->highlight,
-                    "visuals/%s/highlight", arr->pdata[i]);
-            g_hash_table_insert (priv->visuals, s, visuals);
-        }
-    }
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
@@ -2881,20 +2808,9 @@ window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
     }
 }
 
-static void
-set_tree_location (DonnaTask *task, gboolean timeout_called, DonnaTreeView *tree)
-{
-    if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        return;
-    donna_tree_view_set_location (tree,
-            g_value_get_object (donna_task_get_return_value (task)),
-            NULL);
-}
-
 static GtkWidget *
 load_widget (DonnaDonna  *donna,
              gchar      **def,
-             GSList     **list,
              gchar      **active_list_name,
              GtkWidget  **active_list_widget)
 {
@@ -2903,8 +2819,7 @@ load_widget (DonnaDonna  *donna,
     gchar *end;
     gchar *sep = NULL;
 
-    for ( ; isblank (**def); ++*def)
-        ;
+    skip_blank (*def);
 
     for (end = *def; end; ++end)
     {
@@ -2921,8 +2836,7 @@ load_widget (DonnaDonna  *donna,
                 *def = end + 1;
                 for (;;)
                 {
-                    w = load_widget (donna, def, list,
-                            active_list_name, active_list_widget);
+                    w = load_widget (donna, def, active_list_name, active_list_widget);
                     if (!w)
                     {
                         g_object_unref (g_object_ref_sink (box));
@@ -2960,8 +2874,7 @@ load_widget (DonnaDonna  *donna,
                 is_fixed = (**def == '!');
                 if (is_fixed)
                     ++*def;
-                w = load_widget (donna, def, list,
-                        active_list_name, active_list_widget);
+                w = load_widget (donna, def, active_list_name, active_list_widget);
                 if (!w)
                 {
                     g_object_unref (g_object_ref_sink (paned));
@@ -2992,8 +2905,7 @@ load_widget (DonnaDonna  *donna,
                 is_fixed = (**def == '!');
                 if (is_fixed)
                     ++*def;
-                w = load_widget (donna, def, list,
-                        active_list_name, active_list_widget);
+                w = load_widget (donna, def, active_list_name, active_list_widget);
                 if (!w)
                 {
                     g_object_unref (g_object_ref_sink (paned));
@@ -3028,53 +2940,27 @@ load_widget (DonnaDonna  *donna,
             if (streq (*def, "treeview"))
             {
                 DonnaTreeView *tree;
-                DonnaTask *task;
-                gchar *s = NULL;
 
                 *def = sep + 1;
                 *end = '\0';
 
                 w = gtk_scrolled_window_new (NULL, NULL);
                 tree = donna_load_treeview (donna, *def);
-                if (!donna_tree_view_is_tree (tree))
+                if (!donna_tree_view_is_tree (tree) && !priv->active_list)
                 {
-                    if (!priv->active_list)
+                    gboolean skip;
+                    if (!donna_config_get_boolean (priv->config, &skip,
+                                "treeviews/%s/not_active_list",
+                                donna_tree_view_get_name (tree)) || !skip)
                     {
-                        gboolean skip;
-                        if (!donna_config_get_boolean (priv->config, &skip,
-                                    "treeviews/%s/not_active_list",
-                                    donna_tree_view_get_name (tree)) || !skip)
+                        if (streq (*active_list_name,
+                                    donna_tree_view_get_name (tree)))
                         {
-                            if (streq (*active_list_name,
-                                        donna_tree_view_get_name (tree)))
-                            {
-                                priv->active_list = tree;
-                                *active_list_widget = (GtkWidget *) tree;
-                            }
-                            else if (!*active_list_widget)
-                                *active_list_widget = (GtkWidget *) tree;
+                            priv->active_list = tree;
+                            *active_list_widget = (GtkWidget *) tree;
                         }
-                    }
-                    if (!donna_config_get_string (donna_donna_peek_config (
-                                    (DonnaApp *) donna),
-                                &s, "treeviews/%s/location", *def))
-                    {
-                        gchar *pwd;
-
-                        pwd = getcwd (NULL, 0);
-                        if (pwd)
-                        {
-                            s = g_strdup_printf ("fs:%s", pwd);
-                            free (pwd);
-                        }
-                    }
-                    if (s)
-                    {
-                        task = donna_app_get_node_task ((DonnaApp *) donna, s);
-                        donna_task_set_callback (task,
-                                (task_callback_fn) set_tree_location, tree, NULL);
-                        *list = g_slist_prepend (*list, task);
-                        g_free (s);
+                        else if (!*active_list_widget)
+                            *active_list_widget = (GtkWidget *) tree;
                     }
                 }
                 gtk_container_add ((GtkContainer *) w, (GtkWidget *) tree);
@@ -3097,17 +2983,15 @@ load_widget (DonnaDonna  *donna,
     return NULL;
 }
 
-int
-main (int argc, char *argv[])
+static inline gint
+create_gui (DonnaDonna *donna)
 {
-    DonnaApp            *app;
-    DonnaDonnaPrivate   *priv;
+    DonnaApp            *app = (DonnaApp *) donna;
+    DonnaDonnaPrivate   *priv = donna->priv;
     GtkWindow           *window;
     GtkWidget           *active_list_widget = NULL;
     GtkWidget           *w;
     gchar               *active_list_name;
-    GSList              *list = NULL;
-    GSList              *l;
     gchar               *s;
     gchar               *ss;
     gchar               *def;
@@ -3115,13 +2999,6 @@ main (int argc, char *argv[])
     gint                 width;
     gint                 height;
 
-    setlocale (LC_ALL, "");
-    gtk_init (&argc, &argv);
-
-    app = g_object_new (DONNA_TYPE_DONNA, NULL);
-    priv = ((DonnaDonna *) app)->priv;
-
-    /* main window */
     window = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
     priv->window = g_object_ref (window);
 
@@ -3162,8 +3039,7 @@ main (int argc, char *argv[])
         active_list_name = NULL;
 
     def = s;
-    w = load_widget ((DonnaDonna *) app, &def, &list,
-            &active_list_name, &active_list_widget);
+    w = load_widget ((DonnaDonna *) app, &def, &active_list_name, &active_list_widget);
     g_free (s);
     if (!w)
     {
@@ -3313,16 +3189,139 @@ next:
     g_signal_connect (window, "set-focus",
             (GCallback) window_set_focus_cb, app);
 
-    /* now that everything is realized, we can trigger task to set tree's
-     * location. Before that could lead to issue as set_location() might get
-     * treeview to wanna refresh, scroll, etc which needs it to be realized to
-     * work */
-    for (l = list; l; l = l->next)
-        donna_donna_run_task (app, l->data);
-    g_slist_free (list);
+    return 0;
+}
 
-    donna_app_emit_event (app, "start", NULL, NULL, NULL, NULL);
+static inline void
+init_donna (DonnaDonna *donna)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    GPtrArray *arr = NULL;
+    const gchar *main_dir;
+    const gchar * const *extra_dirs;
+    const gchar * const *dir;
+    const gchar * const *first;
+
+    /* get config dirs */
+    main_dir = g_get_user_config_dir ();
+    extra_dirs = g_get_system_config_dirs ();
+
+    /* load config definitions: merge user & system ones */
+    load_conf (priv->config, main_dir, TRUE);
+    for (dir = extra_dirs; *dir; ++dir)
+        load_conf (priv->config, *dir, TRUE);
+
+    /* load config: load user one. If there's none, copy the system one over,
+     * and keep another copy as "reference" for future merging */
+    if (!load_conf (priv->config, main_dir, FALSE))
+    {
+        for (dir = extra_dirs; *dir; ++dir)
+            if (copy_and_load_conf (priv->config, *dir, main_dir))
+                break;
+    }
+    g_debug ("config:%s", donna_config_export_config (priv->config));
+
+    /* CSS - At same priority, the last one loaded takes precedence, so we need
+     * to load system ones first (in reverse order), then the user one */
+    first = extra_dirs;
+    for (dir = extra_dirs; *dir; ++dir)
+        ;
+    if (dir != first)
+    {
+        for (--dir; dir != first; --dir)
+            load_css (*dir);
+        load_css (*dir);
+    }
+    load_css (main_dir);
+
+    /* compile patterns of arrangements' masks */
+    priv->arrangements = load_arrangements (priv->config, "arrangements");
+
+    /* preload some required providers */
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "command"));
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "register"));
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "internal"));
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "mark"));
+
+    if (donna_config_list_options (priv->config, &arr,
+                DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
+    {
+        guint i;
+
+        for (i = 0; i < arr->len; ++i)
+        {
+            struct visuals *visuals;
+            gchar *s;
+
+            if (!donna_config_get_string (priv->config, &s, "visuals/%s/node",
+                    arr->pdata[i]))
+                continue;
+
+            visuals = g_slice_new0 (struct visuals);
+            donna_config_get_string (priv->config, &visuals->name,
+                    "visuals/%s/name", arr->pdata[i]);
+            donna_config_get_string (priv->config, &visuals->icon,
+                    "visuals/%s/icon", arr->pdata[i]);
+            donna_config_get_string (priv->config, &visuals->box,
+                    "visuals/%s/box", arr->pdata[i]);
+            donna_config_get_string (priv->config, &visuals->highlight,
+                    "visuals/%s/highlight", arr->pdata[i]);
+            g_hash_table_insert (priv->visuals, s, visuals);
+        }
+    }
+}
+
+struct run
+{
+    DonnaDonna *donna;
+    gint rc;
+};
+
+static gboolean
+run_donna (struct run *run)
+{
+    DonnaDonnaPrivate   *priv = run->donna->priv;
+
+    donna_app_emit_event ((DonnaApp *) run->donna, "start", NULL, NULL, NULL, NULL);
+
+    /* in the off-chance something before already led to closing the app (could
+     * happen e.g. if something had started its own mainloop (e.g. in event
+     * "start" there was a command that does, like ask_text) and the user then
+     * closed the main window */
+    if (G_LIKELY (gtk_widget_get_realized ((GtkWidget *) priv->window)))
+        gtk_main ();
+
+    gtk_main_quit ();
+    return FALSE;
+}
+
+int
+main (int argc, char *argv[])
+{
+    struct run run = { NULL, };
+
+    setlocale (LC_ALL, "");
+    gtk_init (&argc, &argv);
+
+    run.donna = g_object_new (DONNA_TYPE_DONNA, NULL);
+
+    /* load config, css arrangements, required providers, etc */
+    init_donna (run.donna);
+    /* create & show the main window */
+    run.rc = create_gui (run.donna);
+    if (G_UNLIKELY (run.rc != 0))
+        return run.rc;
+
+    /* we use an idle source because we want to make sure we own the main
+     * context now. Otherwise, if a task was ever started with visibility GUI,
+     * it would grab it and start using GTK while we also might, leading to the
+     * usual troubles.
+     * This guarantees that such task will wait/create an idle source, and that
+     * GTK stuff are only done from the main thread (or, you, under the main
+     * context). */
+    g_idle_add ((GSourceFunc) run_donna, &run);
 
     gtk_main ();
-    return 0;
+
+    return run.rc;
 }
