@@ -2041,7 +2041,8 @@ cmd_register_load_all (DonnaTask                *task,
     DonnaProviderRegisterPrivate *priv = pr->priv;
 
     const gchar *file = args[0]; /* opt */
-    gboolean reset = GPOINTER_TO_INT (args[1]); /* opt */
+    gboolean ignore_no_file = GPOINTER_TO_INT (args[1]); /* opt */
+    gboolean reset = GPOINTER_TO_INT (args[2]); /* opt */
 
     DonnaTaskState ret = DONNA_TASK_FAILED;
     gchar *filename;
@@ -2059,11 +2060,19 @@ cmd_register_load_all (DonnaTask                *task,
 
     if (!g_file_get_contents (filename, &data, NULL, &err))
     {
-        g_prefix_error (&err, "Command 'register_load_all': Failed to load registers: ");
-        donna_task_take_error (task, err);
         if (filename != file)
             g_free (filename);
-        return DONNA_TASK_FAILED;
+        if (ignore_no_file && g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+        {
+            g_clear_error (&err);
+            return DONNA_TASK_DONE;
+        }
+        else
+        {
+            g_prefix_error (&err, "Command 'register_load_all': Failed to load registers: ");
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
     }
     if (filename != file)
         g_free (filename);
@@ -2521,6 +2530,7 @@ provider_register_contructed (GObject *object)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (register_load_all, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
