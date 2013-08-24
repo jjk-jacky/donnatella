@@ -1163,6 +1163,16 @@ register_load (DonnaProviderRegister    *pr,
 {
     gchar *data;
     gchar *filename;
+    gchar *s = NULL;
+
+    if (*file != '/')
+    {
+        s = donna_app_get_current_dirname (((DonnaProviderBase *) pr)->app);
+        filename = g_strdup_printf ("%s/%s", s, file);
+        g_free (s);
+        s = filename;
+        file = (const gchar *) s;
+    }
 
     filename = get_filename (file);
     if (!g_file_get_contents (filename, &data, NULL, error))
@@ -1171,6 +1181,7 @@ register_load (DonnaProviderRegister    *pr,
                 name, file);
         if (filename != file)
             g_free (filename);
+        g_free (s);
         return FALSE;
     }
     if (filename != file)
@@ -1179,10 +1190,12 @@ register_load (DonnaProviderRegister    *pr,
     if (!register_import (pr, name, data, file_type, el, error))
     {
         g_free (data);
+        g_free (s);
         return FALSE;
     }
 
     g_free (data);
+    g_free (s);
     return TRUE;
 }
 
@@ -1311,6 +1324,7 @@ register_save (DonnaProviderRegister    *pr,
     DonnaProviderRegisterPrivate *priv = pr->priv;
     GString *str;
     gchar *filename;
+    gchar *s = NULL;
 
     str = g_string_new (NULL);
     g_rec_mutex_lock (&priv->rec_mutex);
@@ -1321,6 +1335,15 @@ register_save (DonnaProviderRegister    *pr,
         return FALSE;
     }
 
+    if (*file != '/')
+    {
+        s = donna_app_get_current_dirname (((DonnaProviderBase *) pr)->app);
+        filename = g_strdup_printf ("%s/%s", s, file);
+        g_free (s);
+        s = filename;
+        file = (const gchar *) s;
+    }
+
     filename = get_filename (file);
     if (!g_file_set_contents (filename, str->str, str->len, error))
     {
@@ -1329,12 +1352,14 @@ register_save (DonnaProviderRegister    *pr,
         g_string_free (str, TRUE);
         if (filename != file)
             g_free (filename);
+        g_free (s);
         return FALSE;
     }
     g_string_free (str, TRUE);
     if (filename != file)
         g_free (filename);
 
+    g_free (s);
     return TRUE;
 }
 
