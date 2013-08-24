@@ -1008,6 +1008,57 @@ get_filename (const gchar *file)
         return (gchar *) file;
 }
 
+static void
+emit_node_children_from_arr (DonnaProviderRegister  *pr,
+                             DonnaNode              *parent,
+                             GPtrArray              *arr)
+{
+    DonnaApp *app = ((DonnaProviderBase *) pr)->app;
+    GPtrArray *children;
+    guint i;
+
+    children = g_ptr_array_new_full (arr->len, g_object_unref);
+    for (i = 0; i < arr->len; ++i)
+    {
+        DonnaTask *task;
+
+        task = donna_app_get_node_task (app, arr->pdata[i]);
+        if (G_UNLIKELY (!task))
+        {
+            gchar *fl = donna_node_get_full_location (parent);
+            g_warning ("Provider 'register': Failed to get get_node task for '%s' "
+                    "(children of '%s')",
+                    (gchar *) arr->pdata[i],
+                    fl);
+            g_free (fl);
+            continue;
+        }
+
+        donna_task_set_can_block (g_object_ref_sink (task));
+        donna_app_run_task (app, task);
+        donna_task_wait_for_it (task);
+
+        if (donna_task_get_state (task) != DONNA_TASK_DONE)
+        {
+            const GError *err = donna_task_get_error (task);
+            gchar *fl = donna_node_get_full_location (parent);
+            g_warning ("Provider 'register': Failed to get node for '%s' "
+                    "(children of '%s'): %s",
+                    (gchar *) arr->pdata[i],
+                    fl,
+                    (err) ? err->message : "<no error message>");
+            g_free (fl);
+            g_object_unref (task);
+            continue;
+        }
+
+        g_ptr_array_add (children, g_value_dup_object (donna_task_get_return_value (task)));
+    }
+    donna_provider_node_children ((DonnaProvider *) pr, parent,
+            DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, children);
+    g_ptr_array_unref (children);
+}
+
 struct emit_load
 {
     DonnaNode   *node_root;
@@ -1057,14 +1108,16 @@ register_import (DonnaProviderRegister  *pr,
         return FALSE;
     }
 
-    arr = g_ptr_array_new ();
+    arr = g_ptr_array_new_with_free_func (g_free);
     while ((e = strchr (data, '\n')))
     {
         gchar *new = NULL;
+        gchar *fl  = NULL;
         *e = '\0';
 
         if (file_type == DONNA_REGISTER_FILE_NODES)
         {
+            fl = g_strdup (data);
             if (!is_clipboard)
                 new = g_strdup (data);
             else if (streqn (data, "fs:", 3))
@@ -1072,6 +1125,7 @@ register_import (DonnaProviderRegister  *pr,
         }
         else if (file_type == DONNA_REGISTER_FILE_FILE)
         {
+            fl = g_strdup_printf ("fs:%s", data);
             if (!is_clipboard)
                 new =  g_strdup_printf ("fs:%s", data);
             else
@@ -1082,6 +1136,7 @@ register_import (DonnaProviderRegister  *pr,
             gchar *f = g_filename_from_uri (data, NULL, NULL);
             if (f)
             {
+                fl = g_strdup_printf ("fs:%s", f);
                 if (!is_clipboard)
                 {
                     new = g_strdup_printf ("fs:%s", f);
@@ -1093,10 +1148,9 @@ register_import (DonnaProviderRegister  *pr,
         }
 
         if (new)
-        {
             g_hash_table_add (new_reg->hashtable, new);
-            g_ptr_array_add (arr, new);
-        }
+        if (fl)
+            g_ptr_array_add (arr, fl);
 
         data = e + 1;
     }
@@ -1130,8 +1184,7 @@ register_import (DonnaProviderRegister  *pr,
         {
             if (reg_type != (guint) -1)
                 update_node_type ((DonnaProvider *) pr, node, reg_type);
-            donna_provider_node_children ((DonnaProvider *) pr, node,
-                    DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, arr);
+            emit_node_children_from_arr (pr, node, arr);
             g_object_unref (node);
         }
         g_ptr_array_unref (arr);
@@ -2173,8 +2226,7 @@ finish:
             {
                 if (el->reg_type != (guint) -1)
                     update_node_type ((DonnaProvider *) pr, el->node, el->reg_type);
-                donna_provider_node_children ((DonnaProvider *) pr, el->node,
-                        DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, el->arr);
+                emit_node_children_from_arr (pr, el->node, el->arr);
                 g_object_unref (el->node);
             }
             g_ptr_array_unref (el->arr);
