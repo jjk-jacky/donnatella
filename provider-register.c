@@ -21,7 +21,11 @@ struct reg
 
 struct _DonnaProviderRegisterPrivate
 {
-    GMutex mutex;
+    /* we need a recursive mutex because you can put registers inside registers,
+     * and then getting the nodes from that register could require to create the
+     * node for it, but since we've locked the provider as we're iterating over
+     * a register's content, we'd deadlock. */
+    GRecMutex rec_mutex;
     GSList *registers;
 };
 
@@ -120,7 +124,7 @@ donna_provider_register_init (DonnaProviderRegister *provider)
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_REGISTER,
             DonnaProviderRegisterPrivate);
-    g_mutex_init (&priv->mutex);
+    g_rec_mutex_init (&priv->rec_mutex);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderRegister, donna_provider_register,
@@ -178,7 +182,7 @@ drop_register (DonnaProviderRegister *pr, const gchar *name, gboolean lock)
     gboolean ret = FALSE;
 
     if (lock)
-        g_mutex_lock (&priv->mutex);
+        g_rec_mutex_lock (&priv->rec_mutex);
     l = priv->registers;
     prev = NULL;
     while (l)
@@ -201,7 +205,7 @@ drop_register (DonnaProviderRegister *pr, const gchar *name, gboolean lock)
         l = l->next;
     }
     if (lock)
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (ret)
     {
@@ -239,11 +243,11 @@ clipboard_get (GtkClipboard             *clipboard,
     GHashTableIter iter;
     gpointer key;
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, reg_clipboard);
     if (G_UNLIKELY (!reg))
     {
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
         g_warning ("Provider 'register': clipboard_get() for CLIPBOARD triggered while register '+' doesn't exist");
         return;
     }
@@ -273,7 +277,7 @@ clipboard_get (GtkClipboard             *clipboard,
             g_free (s);
         }
     }
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     gtk_selection_data_set (sd, (info == 1) ? atom_gnome
             : ((info == 2) ? atom_kde : atom_uris), 8, str->str, str->len);
@@ -626,7 +630,7 @@ register_set (DonnaProviderRegister *pr,
     if (is_clipboard)
         pfs = donna_app_get_provider (((DonnaProviderBase *) pr)->app, "fs");
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
 
     if (!reg)
@@ -648,7 +652,7 @@ register_set (DonnaProviderRegister *pr,
             if (add_node_to_reg (reg, nodes->pdata[i], is_clipboard))
                 g_ptr_array_add (arr, nodes->pdata[i]);
 
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (is_clipboard)
     {
@@ -695,7 +699,7 @@ register_add_nodes (DonnaProviderRegister   *pr,
     if (is_clipboard)
         pfs = donna_app_get_provider (((DonnaProviderBase *) pr)->app, "fs");
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
 
     if (!reg)
@@ -707,7 +711,7 @@ register_add_nodes (DonnaProviderRegister   *pr,
 
             if (!get_from_clipboard (app, &reg->hashtable, &reg->type, &str, error))
             {
-                g_mutex_unlock (&priv->mutex);
+                g_rec_mutex_unlock (&priv->rec_mutex);
                 g_prefix_error (error, "Couldn't append files to CLIPBOARD: ");
                 free_register (reg);
                 return FALSE;
@@ -728,7 +732,7 @@ register_add_nodes (DonnaProviderRegister   *pr,
             if (add_node_to_reg (reg, nodes->pdata[i], is_clipboard))
                 g_ptr_array_add (arr, nodes->pdata[i]);
 
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (is_clipboard)
         g_object_unref (pfs);
@@ -764,7 +768,7 @@ register_set_type (DonnaProviderRegister    *pr,
     DonnaNode *node;
 
     is_clipboard = *name == *reg_clipboard;
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
     if (!reg)
     {
@@ -782,7 +786,7 @@ register_set_type (DonnaProviderRegister    *pr,
             reg = new_register (reg_clipboard, DONNA_REGISTER_UNKNOWN);
             if (!get_from_clipboard (app, &reg->hashtable, &reg->type, &str, error))
             {
-                g_mutex_unlock (&priv->mutex);
+                g_rec_mutex_unlock (&priv->rec_mutex);
                 g_prefix_error (error, "Couldn't set register type of CLIPBOARD: ");
                 free_register (reg);
                 return FALSE;
@@ -797,7 +801,7 @@ register_set_type (DonnaProviderRegister    *pr,
         }
         else
         {
-            g_mutex_unlock (&priv->mutex);
+            g_rec_mutex_unlock (&priv->rec_mutex);
             g_set_error (error, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
                     "Cannot set type of register '%s', it doesn't exist.", name);
@@ -806,7 +810,7 @@ register_set_type (DonnaProviderRegister    *pr,
     }
 
     reg->type = type;
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (node_root)
     {
@@ -844,14 +848,14 @@ register_get_nodes (DonnaProviderRegister   *pr,
     gboolean do_drop;
 
     is_clipboard = *name == *reg_clipboard;
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
     if (!reg)
     {
         /* reg_default must always exists */
         if (*name == *reg_default)
         {
-            g_mutex_unlock (&priv->mutex);
+            g_rec_mutex_unlock (&priv->rec_mutex);
             if (type)
                 *type = DONNA_REGISTER_UNKNOWN;
             if (nodes)
@@ -867,7 +871,7 @@ register_get_nodes (DonnaProviderRegister   *pr,
         {
             if (is_clipboard)
                 g_hash_table_unref (hashtable);
-            g_mutex_unlock (&priv->mutex);
+            g_rec_mutex_unlock (&priv->rec_mutex);
             if (*error)
                 g_prefix_error (error, "Cannot get nodes from register '%s': ",
                         name);
@@ -895,7 +899,7 @@ register_get_nodes (DonnaProviderRegister   *pr,
 
     if (!nodes)
     {
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
         if (!reg)
             g_hash_table_unref (hashtable);
         return TRUE;
@@ -967,11 +971,11 @@ register_get_nodes (DonnaProviderRegister   *pr,
     {
         if (do_drop)
             drop_register (pr, name, FALSE);
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
     }
     else
     {
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
         g_hash_table_unref (hashtable);
 
         if (do_drop)
@@ -1074,7 +1078,7 @@ register_load (DonnaProviderRegister    *pr,
     }
     g_free (data);
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
     if (!reg)
         add_reg_to_registers (pr, new_reg, FALSE, &node_root, &node, NULL);
@@ -1087,7 +1091,7 @@ register_load (DonnaProviderRegister    *pr,
         priv->registers = g_slist_prepend (priv->registers, new_reg);
     }
 
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (node_root)
     {
@@ -1130,14 +1134,14 @@ register_save (DonnaProviderRegister    *pr,
 
     is_clipboard = *name == *reg_clipboard;
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
     if (!reg)
     {
         /* reg_default must always exists */
         if (*name == *reg_default)
         {
-            g_mutex_unlock (&priv->mutex);
+            g_rec_mutex_unlock (&priv->rec_mutex);
             str = g_string_new ("copy\n");
             goto write;
         }
@@ -1149,7 +1153,7 @@ register_save (DonnaProviderRegister    *pr,
         {
             if (is_clipboard)
                 g_hash_table_unref (hashtable);
-            g_mutex_unlock (&priv->mutex);
+            g_rec_mutex_unlock (&priv->rec_mutex);
             if (*error)
                 g_prefix_error (error, "Cannot save register '%s': ", name);
             else
@@ -1222,7 +1226,7 @@ register_save (DonnaProviderRegister    *pr,
         }
     }
 
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
     if (!reg)
         g_hash_table_unref (hashtable);
 
@@ -1348,7 +1352,7 @@ provider_register_new_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, location);
     if (!reg)
     {
@@ -1367,7 +1371,7 @@ provider_register_new_node (DonnaProviderBase  *_provider,
         }
         else
         {
-            g_mutex_unlock (&priv->mutex);
+            g_rec_mutex_unlock (&priv->rec_mutex);
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
                     "Register '%s' doesn't exist", location);
@@ -1378,11 +1382,11 @@ provider_register_new_node (DonnaProviderBase  *_provider,
     node = new_node_for_reg ((DonnaProvider *) _provider, reg, &err);
     if (G_UNLIKELY (!node))
     {
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
 cache_and_return:
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
@@ -1456,7 +1460,7 @@ provider_register_get_children (DonnaProviderBase  *_provider,
         klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
         nodes = g_ptr_array_new_with_free_func (g_object_unref);
 
-        g_mutex_lock (&priv->mutex);
+        g_rec_mutex_lock (&priv->rec_mutex);
         klass->lock_nodes (_provider);
         for (l = priv->registers; l; l = l->next)
         {
@@ -1474,7 +1478,7 @@ provider_register_get_children (DonnaProviderBase  *_provider,
                 if (G_UNLIKELY (!n))
                 {
                     klass->unlock_nodes (_provider);
-                    g_mutex_unlock (&priv->mutex);
+                    g_rec_mutex_unlock (&priv->rec_mutex);
                     donna_task_take_error (task, err);
                     g_ptr_array_unref (nodes);
                     return DONNA_TASK_FAILED;
@@ -1496,7 +1500,7 @@ provider_register_get_children (DonnaProviderBase  *_provider,
             if (G_UNLIKELY (!n))
             {
                 klass->unlock_nodes (_provider);
-                g_mutex_unlock (&priv->mutex);
+                g_rec_mutex_unlock (&priv->rec_mutex);
                 donna_task_take_error (task, err);
                 g_ptr_array_unref (nodes);
                 return DONNA_TASK_FAILED;
@@ -1514,7 +1518,7 @@ provider_register_get_children (DonnaProviderBase  *_provider,
             if (G_UNLIKELY (!n))
             {
                 klass->unlock_nodes (_provider);
-                g_mutex_unlock (&priv->mutex);
+                g_rec_mutex_unlock (&priv->rec_mutex);
                 donna_task_take_error (task, err);
                 g_ptr_array_unref (nodes);
                 return DONNA_TASK_FAILED;
@@ -1524,7 +1528,7 @@ provider_register_get_children (DonnaProviderBase  *_provider,
         }
 
         klass->unlock_nodes (_provider);
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
         goto done;
     }
 
@@ -1689,11 +1693,11 @@ provider_register_new_child (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    g_mutex_lock (&priv->mutex);
+    g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, name);
     if (reg)
     {
-        g_mutex_unlock (&priv->mutex);
+        g_rec_mutex_unlock (&priv->rec_mutex);
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_ALREADY_EXIST,
                 "Provider 'register': Cannot create register '%s'; it already exists",
@@ -1704,7 +1708,7 @@ provider_register_new_child (DonnaProviderBase  *_provider,
     reg = new_register (name, DONNA_REGISTER_UNKNOWN);
     add_reg_to_registers ((DonnaProviderRegister *) _provider, reg, TRUE,
             &node_root, &node, &err);
-    g_mutex_unlock (&priv->mutex);
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (G_UNLIKELY (!node))
     {
