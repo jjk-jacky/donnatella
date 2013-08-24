@@ -20,7 +20,6 @@ typedef struct _DonnaProviderRegisterPrivate    DonnaProviderRegisterPrivate;
 #define DONNA_PROVIDER_REGISTER_ERROR           g_quark_from_static_string ("DonnaProviderRegister-Error")
 typedef enum
 {
-    DONNA_PROVIDER_REGISTER_ERROR_EMPTY,
     DONNA_PROVIDER_REGISTER_ERROR_INVALID_NAME,
     DONNA_PROVIDER_REGISTER_ERROR_INVALID_FORMAT,
     DONNA_PROVIDER_REGISTER_ERROR_OTHER,

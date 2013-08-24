@@ -359,10 +359,8 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
     clipboard = gtk_clipboard_get (GDK_SELECTION_CLIPBOARD);
     if (!gtk_clipboard_wait_for_targets (clipboard, &atoms, &nb))
     {
-        g_set_error (data->error, DONNA_PROVIDER_REGISTER_ERROR,
-                DONNA_PROVIDER_REGISTER_ERROR_EMPTY,
-                "No files available on CLIPBOARD");
-        return DONNA_TASK_FAILED;
+        *data->type = DONNA_REGISTER_UNKNOWN;
+        return DONNA_TASK_DONE;
     }
 
     for (i = 0; i < nb; ++i)
@@ -377,10 +375,8 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
     if (i >= nb)
     {
         g_free (atoms);
-        g_set_error (data->error, DONNA_PROVIDER_REGISTER_ERROR,
-                DONNA_PROVIDER_REGISTER_ERROR_EMPTY,
-                "No supported format for files available in CLIPBOARD");
-        return DONNA_TASK_FAILED;
+        *data->type = DONNA_REGISTER_UNKNOWN;
+        return DONNA_TASK_DONE;
     }
 
     sd = gtk_clipboard_wait_for_contents (clipboard, atom);
