@@ -1286,11 +1286,14 @@ donna_donna_get_conf_filename (DonnaApp       *app,
     {
         gchar *s;
         s = g_filename_from_utf8 (str->str, -1, NULL, NULL, NULL);
-        g_string_free (str, TRUE);
-        return s;
+        if (s)
+        {
+            g_string_free (str, TRUE);
+            return s;
+        }
     }
-    else
-        return g_string_free (str, FALSE);
+
+    return g_string_free (str, FALSE);
 }
 
 static void

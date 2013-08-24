@@ -981,6 +981,19 @@ register_get_nodes (DonnaProviderRegister   *pr,
     return TRUE;
 }
 
+static inline gchar *
+get_filename (const gchar *file)
+{
+    if (!g_get_filename_charsets (NULL))
+    {
+        gchar *s;
+        s = g_filename_from_utf8 (file, -1, NULL, NULL, NULL);
+        return (s) ? s : (gchar *) file;
+    }
+    else
+        return (gchar *) file;
+}
+
 static gboolean
 register_load (DonnaProviderRegister    *pr,
                const gchar              *name,
@@ -999,15 +1012,21 @@ register_load (DonnaProviderRegister    *pr,
     gchar *data;
     gchar *s;
     gchar *e;
+    gchar *filename;
 
     is_clipboard = *name == *reg_clipboard;
 
-    if (!g_file_get_contents (file, &data, NULL, error))
+    filename = get_filename (file);
+    if (!g_file_get_contents (filename, &data, NULL, error))
     {
         g_prefix_error (error, "Failed to load register '%s' from '%s': ",
                 name, file);
+        if (filename != file)
+            g_free (filename);
         return FALSE;
     }
+    if (filename != file)
+        g_free (filename);
 
     new_reg = new_register (name, DONNA_REGISTER_UNKNOWN);
 
@@ -1127,6 +1146,7 @@ register_save (DonnaProviderRegister    *pr,
     GHashTableIter iter;
     gpointer key;
     GString *str;
+    gchar *filename;
 
     is_clipboard = *name == *reg_clipboard;
 
@@ -1227,14 +1247,19 @@ register_save (DonnaProviderRegister    *pr,
         g_hash_table_unref (hashtable);
 
 write:
-    if (!g_file_set_contents (file, str->str, str->len, error))
+    filename = get_filename (file);
+    if (!g_file_set_contents (filename, str->str, str->len, error))
     {
         g_prefix_error (error, "Failed to save register '%s' to '%s': ",
                 name, file);
         g_string_free (str, TRUE);
+        if (filename != file)
+            g_free (filename);
         return FALSE;
     }
     g_string_free (str, TRUE);
+    if (filename != file)
+        g_free (filename);
 
     return TRUE;
 }
