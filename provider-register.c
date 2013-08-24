@@ -1387,6 +1387,7 @@ register_save (DonnaProviderRegister    *pr,
         g_string_free (str, TRUE);
         return FALSE;
     }
+    g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (*file != '/')
     {
