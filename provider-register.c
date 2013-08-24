@@ -171,17 +171,32 @@ new_register (const gchar *name, DonnaRegisterType type)
     return reg;
 }
 
+static inline void
+emit_drop (DonnaProviderRegister *pr, DonnaNode *node, gboolean still_exists)
+{
+    if (still_exists)
+    {
+        GPtrArray *arr = g_ptr_array_new ();
+        donna_provider_node_children ((DonnaProvider *) pr, node,
+                DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, arr);
+        g_ptr_array_unref (arr);
+    }
+    else
+        donna_provider_node_removed ((DonnaProvider *) pr, node);
+    g_object_unref (node);
+}
+
 static gboolean
-drop_register (DonnaProviderRegister *pr, const gchar *name, gboolean lock)
+drop_register (DonnaProviderRegister *pr, const gchar *name, DonnaNode **node)
 {
     DonnaProviderRegisterPrivate *priv = pr->priv;
-    DonnaNode *node;
+    DonnaNode *n;
     struct reg *reg;
     GSList *l;
     GSList *prev;
     gboolean ret = FALSE;
 
-    if (lock)
+    if (!node)
         g_rec_mutex_lock (&priv->rec_mutex);
     l = priv->registers;
     prev = NULL;
@@ -204,27 +219,20 @@ drop_register (DonnaProviderRegister *pr, const gchar *name, gboolean lock)
         prev = l;
         l = l->next;
     }
-    if (lock)
+    if (!node)
         g_rec_mutex_unlock (&priv->rec_mutex);
 
     if (ret)
     {
-        if ((node = get_node_for (pr, name)))
-        {
-            /* default/clipboard should always exists */
-            if (reg->name == reg_default || reg->name == reg_clipboard)
-            {
-                GPtrArray *arr = g_ptr_array_new ();
-                donna_provider_node_children ((DonnaProvider *) pr, node,
-                        DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, arr);
-                g_ptr_array_unref (arr);
-            }
-            else
-                donna_provider_node_removed ((DonnaProvider *) pr, node);
-            g_object_unref (node);
-        }
+        n = get_node_for (pr, name);
+        if (node)
+            *node = n;
+        else if (n)
+            emit_drop (pr, n, reg->name == reg_default || reg->name == reg_clipboard);
         free_register (reg);
     }
+    else if (node)
+        *node = NULL;
 
     return ret;
 }
@@ -287,7 +295,7 @@ clipboard_get (GtkClipboard             *clipboard,
 static void
 clipboard_clear (GtkClipboard *clipboard, DonnaProviderRegister *pr)
 {
-    drop_register (pr, reg_clipboard, TRUE);
+    drop_register (pr, reg_clipboard, NULL);
 }
 
 static DonnaTaskState
@@ -536,7 +544,7 @@ register_drop (DonnaProviderRegister *pr,
     if (*name == *reg_clipboard)
         ret = take_clipboard_ownership (pr, TRUE);
     else
-        ret = drop_register (pr, name, TRUE);
+        ret = drop_register (pr, name, NULL);
 
     return ret;
 }
@@ -965,9 +973,13 @@ register_get_nodes (DonnaProviderRegister   *pr,
 
     if (reg)
     {
+        DonnaNode *node = NULL;
+
         if (do_drop)
-            drop_register (pr, name, FALSE);
+            drop_register (pr, name, &node);
         g_rec_mutex_unlock (&priv->rec_mutex);
+        if (node)
+            emit_drop (pr, node, *name == *reg_default || is_clipboard);
     }
     else
     {
