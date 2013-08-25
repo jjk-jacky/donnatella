@@ -83,6 +83,10 @@ static DonnaTaskState   provider_register_new_child     (DonnaProviderBase  *pro
                                                          DonnaNode          *parent,
                                                          DonnaNodeType       type,
                                                          const gchar        *name);
+static DonnaTaskState   provider_register_remove_from   (DonnaProviderBase  *provider,
+                                                         DonnaTask          *task,
+                                                         GPtrArray          *nodes,
+                                                         DonnaNode          *source);
 
 static void
 provider_register_provider_init (DonnaProviderInterface *interface)
@@ -108,6 +112,7 @@ donna_provider_register_class_init (DonnaProviderRegisterClass *klass)
     pb_class->support_io    = provider_register_support_io;
     pb_class->io            = provider_register_io;
     pb_class->new_child     = provider_register_new_child;
+    pb_class->remove_from   = provider_register_remove_from;
 
     g_type_class_add_private (klass, sizeof (DonnaProviderRegisterPrivate));
 
@@ -1901,6 +1906,176 @@ provider_register_new_child (DonnaProviderBase  *_provider,
     g_value_take_object (value, node);
     donna_task_release_return_value (task);
 
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+provider_register_remove_from (DonnaProviderBase  *_provider,
+                               DonnaTask          *task,
+                               GPtrArray          *nodes,
+                               DonnaNode          *source)
+{
+    GError *err = NULL;
+    DonnaProviderRegisterPrivate *priv = ((DonnaProviderRegister *) _provider)->priv;
+    DonnaNode *node;
+    GString *str = NULL;
+    gchar *location;
+    gchar *fl;
+    guint i;
+
+    location = donna_node_get_location (source);
+    if (streq ("/", location))
+    {
+        /* IOW this shall be about deleting registers */
+
+        for (i = 0; i < nodes->len; ++i)
+        {
+            node = nodes->pdata[i];
+            fl = donna_node_get_full_location (node);
+
+            if (G_UNLIKELY (donna_node_peek_provider (node) != (DonnaProvider *) _provider))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Cannot remove '%s': "
+                        "node isn't in 'register:/'",
+                        fl);
+                g_free (fl);
+                continue;
+            }
+
+            /* 9 == strlen ("register:"); IOW: fl + 9 == location */
+            if (G_UNLIKELY (!drop_register ((DonnaProviderRegister *) _provider,
+                        fl + 9, NULL)))
+            {
+                if (!streq (fl + 9, reg_default) && !streq (fl + 9, reg_clipboard))
+                {
+                    if (!str)
+                        str = g_string_new (NULL);
+                    g_string_append_printf (str, "\n- Failed to drop register '%s', "
+                            "it doesn't exist",
+                            fl + 9);
+                }
+                g_free (fl);
+                continue;
+            }
+
+            g_free (fl);
+        }
+    }
+    else
+    {
+        GPtrArray *nodes_removed_from;
+        struct reg *reg;
+
+        nodes_removed_from = g_ptr_array_sized_new (nodes->len);
+        g_rec_mutex_lock (&priv->rec_mutex);
+        reg = get_register (priv->registers, location);
+        if (G_UNLIKELY (!reg))
+        {
+            /* reg_default must always exists */
+            if (*location == *reg_default)
+            {
+                g_rec_mutex_unlock (&priv->rec_mutex);
+                donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                        "Provider 'register': Cannot remove nodes from 'register:%s', "
+                        "register is empty",
+                        location);
+                g_ptr_array_unref (nodes_removed_from);
+                g_free (location);
+                return DONNA_TASK_FAILED;
+            }
+            /* same with reg_clipboard, except we import */
+            else if (*location == *reg_clipboard)
+            {
+                DonnaNode *nr, *n;
+                GString *str = NULL;
+
+                reg = new_register (reg_clipboard, DONNA_REGISTER_UNKNOWN);
+                if (!get_from_clipboard (_provider->app, &reg->hashtable,
+                            &reg->type, &str, &err))
+                {
+                    g_rec_mutex_unlock (&priv->rec_mutex);
+                    g_prefix_error (&err, "Provider 'register': "
+                            "Cannot remove nodes from 'register:%s', "
+                            "failed to get CLIPBOARD content: ",
+                            location);
+                    donna_task_take_error (task, err);
+                    free_register (reg);
+                    g_ptr_array_unref (nodes_removed_from);
+                    g_free (location);
+                    return DONNA_TASK_FAILED;;
+                }
+                else if (str)
+                {
+                    g_warning ("Failed to get some files from CLIPBOARD: %s", str->str);
+                    g_string_free (str, TRUE);
+                }
+                take_clipboard_ownership ((DonnaProviderRegister *) _provider, FALSE);
+                add_reg_to_registers ((DonnaProviderRegister *) _provider, reg,
+                        FALSE, &nr, &n, NULL);
+                g_object_unref (nr);
+                g_object_unref (n);
+            }
+            else
+            {
+                g_rec_mutex_unlock (&priv->rec_mutex);
+                donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                        "Provider 'register': Cannot remove nodes from 'register:%s', "
+                        "register doesn't exist",
+                        location);
+                g_ptr_array_unref (nodes_removed_from);
+                g_free (location);
+                return DONNA_TASK_FAILED;
+            }
+        }
+
+        for (i = 0; i < nodes->len; ++i)
+        {
+            gchar *s;
+
+            node = nodes->pdata[i];
+            if (reg->name == reg_clipboard)
+                s = donna_node_get_location (node);
+            else
+                s = donna_node_get_full_location (node);
+
+            if (!g_hash_table_remove (reg->hashtable, s))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Cannot remove '%s' from register '%s', "
+                        "it's not in there",
+                        s, location);
+                g_free (s);
+                continue;
+            }
+
+            g_ptr_array_add (nodes_removed_from, node);
+            g_free (s);
+        }
+        g_rec_mutex_unlock (&priv->rec_mutex);
+
+        for (i = 0; i < nodes_removed_from->len; ++i)
+            donna_provider_node_removed_from ((DonnaProvider *) _provider,
+                    nodes_removed_from->pdata[i], source);
+        g_ptr_array_unref (nodes_removed_from);
+    }
+
+    if (str)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'register': Couldn't remove all nodes from 'register:%s':\n%s",
+                location, str->str);
+        g_string_free (str, TRUE);
+        g_free (location);
+        return DONNA_TASK_FAILED;
+    }
+
+    g_free (location);
     return DONNA_TASK_DONE;
 }
 
