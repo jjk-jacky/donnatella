@@ -38,7 +38,7 @@ struct _DonnaProviderInterface
     void                (*node_updated)             (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      const gchar    *name);
-    void                (*node_removed)             (DonnaProvider  *provider,
+    void                (*node_deleted)             (DonnaProvider  *provider,
                                                      DonnaNode      *node);
     void                (*node_children)            (DonnaProvider  *provider,
                                                      DonnaNode      *node,
@@ -87,7 +87,7 @@ void    donna_provider_new_node                     (DonnaProvider  *provider,
 void    donna_provider_node_updated                 (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      const gchar    *name);
-void    donna_provider_node_removed                 (DonnaProvider  *provider,
+void    donna_provider_node_deleted                 (DonnaProvider  *provider,
                                                      DonnaNode      *node);
 void    donna_provider_node_children                (DonnaProvider  *provider,
                                                      DonnaNode      *node,

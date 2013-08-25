@@ -85,7 +85,7 @@ struct _DonnaProviderConfigClass
     /* signals -- config manager */
     void            (*option_set)               (DonnaConfig            *config,
                                                  const gchar            *name);
-    void            (*option_removed)           (DonnaConfig            *config,
+    void            (*option_deleted)           (DonnaConfig            *config,
                                                  const gchar            *name);
 };
 

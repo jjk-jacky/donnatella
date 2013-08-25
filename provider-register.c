@@ -182,7 +182,7 @@ emit_drop (DonnaProviderRegister *pr, DonnaNode *node, gboolean still_exists)
         g_ptr_array_unref (arr);
     }
     else
-        donna_provider_node_removed ((DonnaProvider *) pr, node);
+        donna_provider_node_deleted ((DonnaProvider *) pr, node);
     g_object_unref (node);
 }
 

@@ -264,8 +264,8 @@ stat_node (DonnaNode *node, const gchar *filename)
     if (lstat (filename, &st) == -1)
     {
         if (errno == ENOENT)
-            /* seems the file has been removed */
-            donna_provider_node_removed (donna_node_peek_provider (node), node);
+            /* seems the file has been deleted */
+            donna_provider_node_deleted (donna_node_peek_provider (node), node);
         return FALSE;
     }
 

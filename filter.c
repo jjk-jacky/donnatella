@@ -53,7 +53,7 @@ struct _DonnaFilterPrivate
     gchar           *filter;
     DonnaApp        *app;
     gulong           option_set_sid;
-    gulong           option_removed_sid;
+    gulong           option_deleted_sid;
     struct element  *element;
 };
 
@@ -197,8 +197,8 @@ donna_filter_finalize (GObject *object)
     config = donna_app_peek_config (priv->app);
     if (priv->option_set_sid > 0)
         g_signal_handler_disconnect (config, priv->option_set_sid);
-    if (priv->option_removed_sid > 0)
-        g_signal_handler_disconnect (config, priv->option_removed_sid);
+    if (priv->option_deleted_sid > 0)
+        g_signal_handler_disconnect (config, priv->option_deleted_sid);
     g_object_unref (priv->app);
     g_free (priv->filter);
     free_element (priv->element);
@@ -262,8 +262,8 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
     if (priv->option_set_sid == 0)
         priv->option_set_sid = g_signal_connect (config, "option-set",
                 (GCallback) option_cb, filter);
-    if (priv->option_removed_sid == 0)
-        priv->option_removed_sid = g_signal_connect (config, "option-removed",
+    if (priv->option_deleted_sid == 0)
+        priv->option_deleted_sid = g_signal_connect (config, "option-deleted",
                 (GCallback) option_cb, filter);
 
     if (donna_config_get_string (config, &type, "columns/%s/type", col_name))

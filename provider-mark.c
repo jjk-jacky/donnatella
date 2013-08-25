@@ -998,7 +998,7 @@ cmd_mark_load (DonnaTask         *task,
     if (nodes_del)
     {
         for (i = 0; i < nodes_del->len; ++i)
-            donna_provider_node_removed ((DonnaProvider *) pm, nodes_del->pdata[i]);
+            donna_provider_node_deleted ((DonnaProvider *) pm, nodes_del->pdata[i]);
         g_ptr_array_unref (nodes_del);
     }
 

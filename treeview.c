@@ -212,7 +212,7 @@ struct provider_signals
     DonnaProvider   *provider;
     guint            nb_nodes;
     gulong           sid_node_updated;
-    gulong           sid_node_removed;
+    gulong           sid_node_deleted;
     gulong           sid_node_children;
     gulong           sid_node_new_child;
 };
@@ -268,7 +268,7 @@ struct _DonnaTreeViewPrivate
 {
     DonnaApp            *app;
     gulong               option_set_sid;
-    gulong               option_removed_sid;
+    gulong               option_deleted_sid;
 
     /* tree name */
     gchar               *name;
@@ -853,8 +853,8 @@ free_provider_signals (struct provider_signals *ps)
 {
     if (ps->sid_node_updated)
         g_signal_handler_disconnect (ps->provider, ps->sid_node_updated);
-    if (ps->sid_node_removed)
-        g_signal_handler_disconnect (ps->provider, ps->sid_node_removed);
+    if (ps->sid_node_deleted)
+        g_signal_handler_disconnect (ps->provider, ps->sid_node_deleted);
     if (ps->sid_node_children)
         g_signal_handler_disconnect (ps->provider, ps->sid_node_children);
     if (ps->sid_node_new_child)
@@ -1735,7 +1735,7 @@ load_config (DonnaTreeView *tree)
 
     /* we load/cache some options, because usually we can't just get those when
      * needed, but they need to trigger some refresh or something. So we need to
-     * listen on the option_{set,removed} signals of the config manager anyways.
+     * listen on the option_{set,deleted} signals of the config manager anyways.
      * Might as well save a few function calls... */
 
     priv = tree->priv;
@@ -1816,7 +1816,7 @@ load_config (DonnaTreeView *tree)
     /* listen to config changes */
     priv->option_set_sid = g_signal_connect (config, "option-set",
             (GCallback) option_cb, tree);
-    priv->option_removed_sid = g_signal_connect (config, "option-removed",
+    priv->option_deleted_sid = g_signal_connect (config, "option-deleted",
             (GCallback) option_cb, tree);
 }
 
@@ -4078,7 +4078,7 @@ node_updated_cb (DonnaProvider  *provider,
     g_main_context_invoke (NULL, (GSourceFunc) real_node_updated_cb, data);
 }
 
-struct node_removed_data
+struct node_deleted_data
 {
     DonnaTreeView   *tree;
     DonnaNode       *node;
@@ -4086,7 +4086,7 @@ struct node_removed_data
 };
 
 static void
-free_node_removed_data (struct node_removed_data *data)
+free_node_deleted_data (struct node_deleted_data *data)
 {
     g_object_unref (data->node);
     g_free (data->location);
@@ -4096,7 +4096,7 @@ free_node_removed_data (struct node_removed_data *data)
 static void
 list_go_up_cb (DonnaTask                *task,
                gboolean                  timeout_called,
-               struct node_removed_data *data)
+               struct node_deleted_data *data)
 {
     GError *err = NULL;
     DonnaTask *t;
@@ -4117,7 +4117,7 @@ list_go_up_cb (DonnaTask                *task,
                     data->tree->priv->name, data->location, fl);
             g_free (fl);
         }
-        free_node_removed_data (data);
+        free_node_deleted_data (data);
         return;
     }
 
@@ -4128,11 +4128,11 @@ list_go_up_cb (DonnaTask                *task,
                 "Treeview '%s': Failed to go to any parent of '%s'",
                 data->tree->priv->name, fl);
         g_free (fl);
-        free_node_removed_data (data);
+        free_node_deleted_data (data);
         return;
     }
 
-    /* location can't be "/" since root can't be removed */
+    /* location can't be "/" since root can't be deleted */
     s = strrchr (data->location, '/');
     if (s == data->location)
         ++s;
@@ -4147,16 +4147,16 @@ list_go_up_cb (DonnaTask                *task,
                 "Treeview '%s': Failed to go to a parent of '%s'",
                 data->tree->priv->name, fl);
         g_free (fl);
-        free_node_removed_data (data);
+        free_node_deleted_data (data);
         return;
     }
     donna_task_set_callback (t, (task_callback_fn) list_go_up_cb, data,
-            (GDestroyNotify) free_node_removed_data);
+            (GDestroyNotify) free_node_deleted_data);
     donna_app_run_task (data->tree->priv->app, t);
 }
 
 static gboolean
-real_node_removed_cb (struct node_removed_data *data)
+real_node_deleted_cb (struct node_deleted_data *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
     GSList *list;
@@ -4169,7 +4169,7 @@ real_node_removed_cb (struct node_removed_data *data)
         {
             gchar *fl = donna_node_get_full_location (data->node);
             donna_app_show_error (priv->app, NULL,
-                    "Treeview '%s': Current location (%s) has been removed",
+                    "Treeview '%s': Current location (%s) has been deleted",
                     priv->name, fl);
             g_free (fl);
             goto free;
@@ -4196,23 +4196,23 @@ real_node_removed_cb (struct node_removed_data *data)
     }
 
 free:
-    free_node_removed_data (data);
+    free_node_deleted_data (data);
     /* don't repeat */
     return FALSE;
 }
 
 static void
-node_removed_cb (DonnaProvider  *provider,
+node_deleted_cb (DonnaProvider  *provider,
                  DonnaNode      *node,
                  DonnaTreeView  *tree)
 {
-    struct node_removed_data *data;
+    struct node_deleted_data *data;
 
     /* we might not be in the main thread, but we need to be */
-    data = g_new0 (struct node_removed_data, 1);
+    data = g_new0 (struct node_deleted_data, 1);
     data->tree       = tree;
     data->node       = g_object_ref (node);
-    g_main_context_invoke (NULL, (GSourceFunc) real_node_removed_cb, data);
+    g_main_context_invoke (NULL, (GSourceFunc) real_node_deleted_cb, data);
 }
 
 struct node_children_cb_data
@@ -4717,8 +4717,8 @@ add_node_to_tree (DonnaTreeView *tree,
             ps->nb_nodes = 1;
             ps->sid_node_updated = g_signal_connect (provider, "node-updated",
                     G_CALLBACK (node_updated_cb), tree);
-            ps->sid_node_removed = g_signal_connect (provider, "node-removed",
-                    G_CALLBACK (node_removed_cb), tree);
+            ps->sid_node_deleted = g_signal_connect (provider, "node-deleted",
+                    G_CALLBACK (node_deleted_cb), tree);
 
             g_ptr_array_add (priv->providers, ps);
         }
@@ -4846,8 +4846,8 @@ add_node_to_tree (DonnaTreeView *tree,
         ps->nb_nodes = 1;
         ps->sid_node_updated = g_signal_connect (provider, "node-updated",
                 G_CALLBACK (node_updated_cb), tree);
-        ps->sid_node_removed = g_signal_connect (provider, "node-removed",
-                G_CALLBACK (node_removed_cb), tree);
+        ps->sid_node_deleted = g_signal_connect (provider, "node-deleted",
+                G_CALLBACK (node_deleted_cb), tree);
         if (node_type != DONNA_NODE_ITEM)
         {
             ps->sid_node_children = g_signal_connect (provider, "node-children",
@@ -7374,8 +7374,8 @@ switch_provider (DonnaTreeView *tree,
             ps->nb_nodes = 1;
             ps->sid_node_updated = g_signal_connect (provider_future,
                     "node-updated", G_CALLBACK (node_updated_cb), tree);
-            ps->sid_node_removed = g_signal_connect (provider_future,
-                    "node-removed", G_CALLBACK (node_removed_cb), tree);
+            ps->sid_node_deleted = g_signal_connect (provider_future,
+                    "node-deleted", G_CALLBACK (node_deleted_cb), tree);
 
             g_ptr_array_add (priv->providers, ps);
         }

@@ -26,7 +26,7 @@ enum
 enum
 {
     OPTION_SET,
-    OPTION_REMOVED,
+    OPTION_DELETED,
     NB_SIGNALS
 };
 
@@ -174,11 +174,11 @@ donna_provider_config_class_init (DonnaProviderConfigClass *klass)
                 G_TYPE_NONE,
                 1,
                 G_TYPE_STRING);
-    donna_config_signals[OPTION_REMOVED] =
-        g_signal_new ("option-removed",
+    donna_config_signals[OPTION_DELETED] =
+        g_signal_new ("option-deleted",
                 DONNA_TYPE_PROVIDER_CONFIG,
                 G_SIGNAL_DETAILED | G_SIGNAL_RUN_LAST,
-                G_STRUCT_OFFSET (DonnaProviderConfigClass, option_removed),
+                G_STRUCT_OFFSET (DonnaProviderConfigClass, option_deleted),
                 NULL,
                 NULL,
                 g_cclosure_marshal_VOID__STRING,
@@ -236,12 +236,12 @@ config_option_set (DonnaConfig *config, const gchar *name)
 }
 
 static inline void
-config_option_removed (DonnaConfig *config, const gchar *name)
+config_option_deleted (DonnaConfig *config, const gchar *name)
 {
     g_return_if_fail (DONNA_IS_CONFIG (config));
     g_return_if_fail (name != NULL);
 
-    g_signal_emit (config, donna_config_signals[OPTION_REMOVED],
+    g_signal_emit (config, donna_config_signals[OPTION_DELETED],
             g_quark_from_string (name), name);
 }
 
@@ -1878,7 +1878,7 @@ donna_config_list_options (DonnaConfig               *config,
                     *options = g_ptr_array_new ();
                 /* we can add option->name because it is in the GStringChunk,
                  * and therefore isn't going anywhere (even if the option is
-                 * renamed or removed) */
+                 * renamed or deleted) */
                 g_ptr_array_add (*options, ((struct option *) node->data)->name);
             }
         }
@@ -2820,12 +2820,12 @@ _remove_option (DonnaProviderConfig *config,
 
     /* signals after releasing the lock, to avoid dead locks */
     /* config: we oly send one signal, e.g. only the category (no children) */
-    config_option_removed (DONNA_CONFIG (config), name);
+    config_option_deleted (DONNA_CONFIG (config), name);
     /* for provider: we must do it for all existing nodes, as it also serves as
      * a "destroy" i.e. to mean unref it, the node doesn't exist anymore */
     for (i = 0; i < data.nodes->len; ++i)
     {
-        donna_provider_node_removed (DONNA_PROVIDER (config),
+        donna_provider_node_deleted (DONNA_PROVIDER (config),
                 data.nodes->pdata[i]);
         /* we should be the only ref left, and can let it go now */
         g_object_unref (data.nodes->pdata[1]);
@@ -2997,7 +2997,7 @@ node_prop_setter (DonnaTask     *task,
 
         if (!is_set_value)
         {
-            config_option_removed ((DonnaConfig *) provider, old);
+            config_option_deleted ((DonnaConfig *) provider, old);
             g_free (old);
         }
         fl = get_option_full_name (priv->root, gnode);

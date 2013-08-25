@@ -8,7 +8,7 @@ enum
 {
     NEW_NODE,
     NODE_UPDATED,
-    NODE_REMOVED,
+    NODE_DELETED,
     NODE_CHILDREN,
     NODE_NEW_CHILD,
     NB_SIGNALS
@@ -42,11 +42,11 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             2,
             DONNA_TYPE_NODE,
             G_TYPE_STRING);
-    donna_provider_signals[NODE_REMOVED] =
-        g_signal_new ("node-removed",
+    donna_provider_signals[NODE_DELETED] =
+        g_signal_new ("node-deleted",
             DONNA_TYPE_PROVIDER,
             G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET (DonnaProviderInterface, node_removed),
+            G_STRUCT_OFFSET (DonnaProviderInterface, node_deleted),
             NULL,
             NULL,
             g_cclosure_marshal_VOID__BOXED,
@@ -114,13 +114,13 @@ donna_provider_node_updated (DonnaProvider  *provider,
 }
 
 void
-donna_provider_node_removed (DonnaProvider  *provider,
+donna_provider_node_deleted (DonnaProvider  *provider,
                              DonnaNode      *node)
 {
     g_return_if_fail (DONNA_IS_PROVIDER (provider));
     g_return_if_fail (DONNA_IS_NODE (node));
 
-    g_signal_emit (provider, donna_provider_signals[NODE_REMOVED], 0, node);
+    g_signal_emit (provider, donna_provider_signals[NODE_DELETED], 0, node);
 }
 
 void

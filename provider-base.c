@@ -270,8 +270,8 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
             return;
         }
 
-        /* we call this to let the provider know the node is being
-         * removed/finalized, in case it then needs to go to cleaning as well */
+        /* we call this to let the provider know the node is being finalized, in
+         * case it then needs to go to cleaning as well */
         if (DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node)
             DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node (_provider, node);
         /* sanity check */
