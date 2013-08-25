@@ -111,9 +111,6 @@ DonnaTask * donna_provider_get_node_children_task   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,
                                                      GError        **error);
-DonnaTask * donna_provider_remove_node_task         (DonnaProvider  *provider,
-                                                     DonnaNode      *node,
-                                                     GError        **error);
 DonnaTask * donna_provider_get_node_parent_task     (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      GError        **error);
