@@ -10182,7 +10182,7 @@ history_goto (DonnaTask *task, DonnaNode *node)
     donna_node_get (node, FALSE, "history-tree", &has, &v, NULL);
     if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
         /* current location; nothing to do */
-        return;
+        return DONNA_TASK_DONE;
     tree = g_value_get_object (&v);
     g_value_unset (&v);
 
@@ -11996,7 +11996,7 @@ next:
     else
     {
         type = find_key_from (tree, config, &key, &alias, &from);
-        if (G_UNLIKELY (type == -1 && event->keyval == GDK_KEY_Escape))
+        if (G_UNLIKELY ((gint) type == -1 && event->keyval == GDK_KEY_Escape))
         {
             /* special case: GDK_KEY_Escape will always default to
              * tree_reset_keys if not defined. This is to ensure that if you set
