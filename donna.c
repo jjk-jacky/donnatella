@@ -3407,72 +3407,49 @@ init_donna (DonnaDonna *donna)
     }
 }
 
-struct run
+int
+main (int argc, char *argv[])
 {
     DonnaDonna *donna;
     gint rc;
-};
 
-static gboolean
-run_donna (struct run *run)
-{
-    DonnaDonnaPrivate   *priv = run->donna->priv;
+    setlocale (LC_ALL, "");
+    gtk_init (&argc, &argv);
 
-    donna_app_emit_event ((DonnaApp *) run->donna, "start", NULL, NULL, NULL, NULL);
+    g_main_context_acquire (g_main_context_default ());
+    donna = g_object_new (DONNA_TYPE_DONNA, NULL);
+
+    /* load config, css arrangements, required providers, etc */
+    init_donna (donna);
+    /* create & show the main window */
+    rc = create_gui (donna);
+    if (G_UNLIKELY (rc != 0))
+        return rc;
+
+    donna_app_emit_event ((DonnaApp *) donna, "start", NULL, NULL, NULL, NULL);
 
     /* in the off-chance something before already led to closing the app (could
      * happen e.g. if something had started its own mainloop (e.g. in event
      * "start" there was a command that does, like ask_text) and the user then
      * closed the main window */
-    if (G_LIKELY (gtk_widget_get_realized ((GtkWidget *) priv->window)))
+    if (G_LIKELY (gtk_widget_get_realized ((GtkWidget *) donna->priv->window)))
         gtk_main ();
 
-    priv->exiting = TRUE;
-    donna_app_emit_event ((DonnaApp *) run->donna, "exit", NULL, NULL, NULL, NULL);
+    donna->priv->exiting = TRUE;
+    donna_app_emit_event ((DonnaApp *) donna, "exit", NULL, NULL, NULL, NULL);
 
     /* let's make sure all (internal) tasks (e.g. triggered from event "exit")
      * are done before we die */
     g_thread_pool_stop_unused_threads ();
-    while (g_thread_pool_get_num_threads (priv->pool) > 0)
+    while (g_thread_pool_get_num_threads (donna->priv->pool) > 0)
     {
         if (gtk_events_pending ())
             gtk_main_iteration ();
         g_thread_pool_stop_unused_threads ();
     }
-    gtk_widget_destroy ((GtkWidget *) priv->window);
+    gtk_widget_destroy ((GtkWidget *) donna->priv->window);
+    g_main_context_release (g_main_context_default ());
 
-    gtk_main_quit ();
-    return FALSE;
-}
-
-int
-main (int argc, char *argv[])
-{
-    struct run run = { NULL, };
-
-    setlocale (LC_ALL, "");
-    gtk_init (&argc, &argv);
-
-    run.donna = g_object_new (DONNA_TYPE_DONNA, NULL);
-
-    /* load config, css arrangements, required providers, etc */
-    init_donna (run.donna);
-    /* create & show the main window */
-    run.rc = create_gui (run.donna);
-    if (G_UNLIKELY (run.rc != 0))
-        return run.rc;
-
-    /* we use an idle source because we want to make sure we own the main
-     * context now. Otherwise, if a task was ever started with visibility GUI,
-     * it would grab it and start using GTK while we also might, leading to the
-     * usual troubles.
-     * This guarantees that such task will wait/create an idle source, and that
-     * GTK stuff are only done from the main thread (or, you, under the main
-     * context). */
-    g_idle_add ((GSourceFunc) run_donna, &run);
-
-    gtk_main ();
-
-    g_object_unref (run.donna);
-    return run.rc;
+    g_object_unref (donna);
+    return rc;
 }
