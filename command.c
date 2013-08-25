@@ -4,6 +4,7 @@
 #include "command.h"
 #include "treeview.h"
 #include "task-manager.h"
+#include "provider.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -580,6 +581,55 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    GPtrArray *nodes = args[0];
+    DonnaNode *source = args[1];
+
+    DonnaProvider *provider;
+    DonnaTask *t;
+
+    provider = donna_node_peek_provider (source);
+    t = donna_provider_remove_from_task (provider, nodes, source, &err);
+    if (!t)
+    {
+        g_prefix_error (&err, "Command 'nodes_remove_from': Failed to get task: ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (app, t);
+    donna_task_wait_for_it (t);
+
+    if (donna_task_get_state (t) != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+        {
+            err = g_error_copy (err);
+            g_prefix_error (&err, "Command 'nodes_remove_from' failed: ");
+            donna_task_take_error (task, err);
+        }
+        else
+        {
+            gchar *fl = donna_node_get_full_location (source);
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'nodes_remove_from' failed: Unable to remove nodes from '%s'",
+                    fl);
+            g_free (fl);
+        }
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
+    g_object_unref (t);
 
     return DONNA_TASK_DONE;
 }
@@ -1512,6 +1562,12 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
     add_command (nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (nodes_remove_from, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

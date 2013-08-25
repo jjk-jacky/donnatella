@@ -3,6 +3,7 @@
 #include "provider.h"
 #include "node.h"
 #include "closures.h"
+#include "macros.h"
 
 enum
 {
@@ -11,6 +12,7 @@ enum
     NODE_DELETED,
     NODE_CHILDREN,
     NODE_NEW_CHILD,
+    NODE_REMOVED_FROM,
     NB_SIGNALS
 };
 
@@ -71,6 +73,18 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             DONNA_TYPE_PROVIDER,
             G_SIGNAL_RUN_LAST,
             G_STRUCT_OFFSET (DonnaProviderInterface, node_new_child),
+            NULL,
+            NULL,
+            g_cclosure_user_marshal_VOID__BOXED_BOXED,
+            G_TYPE_NONE,
+            2,
+            DONNA_TYPE_NODE,
+            DONNA_TYPE_NODE);
+    donna_provider_signals[NODE_REMOVED_FROM] =
+        g_signal_new ("node-removed-from",
+            DONNA_TYPE_PROVIDER,
+            G_SIGNAL_RUN_LAST,
+            G_STRUCT_OFFSET (DonnaProviderInterface, node_removed_from),
             NULL,
             NULL,
             g_cclosure_user_marshal_VOID__BOXED_BOXED,
@@ -148,6 +162,19 @@ donna_provider_node_new_child (DonnaProvider  *provider,
 
     g_signal_emit (provider, donna_provider_signals[NODE_NEW_CHILD], 0,
             node, child);
+}
+
+void
+donna_provider_node_removed_from (DonnaProvider  *provider,
+                                  DonnaNode      *node,
+                                  DonnaNode      *source)
+{
+    g_return_if_fail (DONNA_IS_PROVIDER (provider));
+    g_return_if_fail (DONNA_IS_NODE (node));
+    g_return_if_fail (DONNA_IS_NODE (source));
+
+    g_signal_emit (provider, donna_provider_signals[NODE_REMOVED_FROM], 0,
+            node, source);
 }
 
 
@@ -323,7 +350,6 @@ donna_provider_io_task (DonnaProvider  *provider,
     g_return_val_if_fail (type == DONNA_IO_COPY || type == DONNA_IO_MOVE
             || type == DONNA_IO_DELETE, NULL);
     g_return_val_if_fail (sources != NULL, NULL);
-    g_return_val_if_fail (sources->len > 0, NULL);
     if (type == DONNA_IO_DELETE)
         g_return_val_if_fail (is_source == TRUE, NULL);
     else
@@ -334,6 +360,15 @@ donna_provider_io_task (DonnaProvider  *provider,
         g_return_val_if_fail (donna_node_peek_provider (sources->pdata[0]) == provider, NULL);
     else if (type != DONNA_IO_DELETE)
         g_return_val_if_fail (donna_node_peek_provider (dest) == provider, NULL);
+
+    if (G_UNLIKELY (sources->len <= 0))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOTHING_TO_DO,
+                "Provider '%s': Cannot perform IO operation, no nodes given",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
@@ -381,4 +416,89 @@ donna_provider_new_child_task (DonnaProvider  *provider,
     }
 
     return (*interface->new_child_task) (provider, parent, type, name, error);
+}
+
+DonnaTask *
+donna_provider_remove_from_task (DonnaProvider  *provider,
+                                 GPtrArray      *nodes,
+                                 DonnaNode      *source,
+                                 GError        **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (nodes != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (source), NULL);
+    g_return_val_if_fail (donna_node_get_node_type (source) == DONNA_NODE_CONTAINER, NULL);
+    g_return_val_if_fail (donna_node_peek_provider (source) == provider, NULL);
+
+    if (G_UNLIKELY (nodes->len <= 0))
+    {
+        gchar *fl = donna_node_get_full_location (source);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOTHING_TO_DO,
+                "Provider '%s': Cannot remove nodes from '%s', no nodes given",
+                donna_provider_get_domain (provider), fl);
+        g_free (fl);
+        return NULL;
+    }
+
+    if (!(donna_provider_get_flags (provider) & DONNA_PROVIDER_FLAG_FLAT))
+    {
+        gchar *location = donna_node_get_location (source);
+        gsize len = strlen (location);
+        guint i;
+        gboolean can_convert = TRUE;
+
+        for (i = 0; i < nodes->len; ++i)
+        {
+            DonnaNode *node = nodes->pdata[i];
+            gchar *s;
+
+            if (donna_node_peek_provider (node) != provider)
+            {
+                can_convert = FALSE;
+                break;
+            }
+
+            s = donna_node_get_location (node);
+            if (!streqn (location, s, len) || s[len] != '/')
+            {
+                can_convert = FALSE;
+                g_free (s);
+                break;
+            }
+
+            g_free (s);
+        }
+        g_free (location);
+
+        if (!can_convert)
+        {
+            g_set_error (error, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                    "Provider '%s': Provider isn't flat, cannot remove nodes. "
+                    "You might wanna use an IO_DELETE operation instead.",
+                    donna_provider_get_domain (provider));
+            return NULL;
+        }
+
+        return donna_provider_io_task (provider, DONNA_IO_DELETE, TRUE,
+                nodes, NULL, error);
+    }
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->remove_from_task == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': No support of node removal",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
+
+    return (*interface->remove_from_task) (provider, nodes, source, error);
 }

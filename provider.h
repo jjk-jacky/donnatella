@@ -19,6 +19,7 @@ typedef enum
     DONNA_PROVIDER_ERROR_INVALID_VALUE,
     DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
     DONNA_PROVIDER_ERROR_ALREADY_EXIST,
+    DONNA_PROVIDER_ERROR_NOTHING_TO_DO,
     DONNA_PROVIDER_ERROR_OTHER,
 } DonnaProviderError;
 
@@ -47,6 +48,9 @@ struct _DonnaProviderInterface
     void                (*node_new_child)           (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNode      *child);
+    void                (*node_removed_from)        (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNode      *source);
 
     /* virtual table */
     const gchar *       (*get_domain)               (DonnaProvider  *provider);
@@ -79,6 +83,10 @@ struct _DonnaProviderInterface
                                                      DonnaNodeType   type,
                                                      const gchar    *name,
                                                      GError        **error);
+    DonnaTask *         (*remove_from_task)         (DonnaProvider  *provider,
+                                                     GPtrArray      *nodes,
+                                                     DonnaNode      *source,
+                                                     GError        **error);
 };
 
 /* signals */
@@ -96,6 +104,9 @@ void    donna_provider_node_children                (DonnaProvider  *provider,
 void    donna_provider_node_new_child               (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNode      *child);
+void    donna_provider_node_removed_from            (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaNode      *source);
 
 /* API */
 const gchar * donna_provider_get_domain             (DonnaProvider  *provider);
@@ -127,6 +138,10 @@ DonnaTask * donna_provider_new_child_task           (DonnaProvider  *provider,
                                                      DonnaNode      *parent,
                                                      DonnaNodeType   type,
                                                      const gchar    *name,
+                                                     GError        **error);
+DonnaTask * donna_provider_remove_from_task         (DonnaProvider  *provider,
+                                                     GPtrArray      *nodes,
+                                                     DonnaNode      *source,
                                                      GError        **error);
 
 G_END_DECLS

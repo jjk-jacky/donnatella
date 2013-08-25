@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "provider-base.h"
 #include "provider.h"
+#include "app.h"
 #include "node.h"
 #include "task.h"
 #include "debug.h"
@@ -92,6 +93,11 @@ static DonnaTask *      provider_base_new_child_task (
                                             DonnaNodeType        type,
                                             const gchar         *name,
                                             GError             **error);
+static DonnaTask *      provider_base_remove_from_task (
+                                            DonnaProvider  *provider,
+                                            GPtrArray      *nodes,
+                                            DonnaNode      *source,
+                                            GError        **error);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -105,6 +111,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->trigger_node_task      = provider_base_trigger_node_task;
     interface->io_task                = provider_base_io_task;
     interface->new_child_task         = provider_base_new_child_task;
+    interface->remove_from_task       = provider_base_remove_from_task;
 }
 
 static void
@@ -861,6 +868,70 @@ provider_base_new_child_task (DonnaProvider       *provider,
             donna_task_take_desc (task, g_strdup_printf (
                     "new_child() '%s' (%s) on '%s'",
                     name, (type == DONNA_NODE_ITEM) ? "item" : "container", fl));
+            g_free (fl));
+
+    return task;
+}
+
+struct remove_from
+{
+    GPtrArray *nodes;
+    DonnaNode *source;
+};
+
+static void
+free_remove_from (struct remove_from *rf)
+{
+    g_ptr_array_unref (rf->nodes);
+    g_object_unref (rf->source);
+    g_slice_free (struct remove_from, rf);
+}
+
+static DonnaTaskState
+remove_from (DonnaTask *task, struct remove_from *rf)
+{
+    DonnaProviderBase *provider_base;
+    DonnaTaskState ret;
+
+    provider_base = (DonnaProviderBase *) donna_node_peek_provider (rf->source);
+    ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->remove_from (
+            provider_base, task, rf->nodes, rf->source);
+    free_remove_from (rf);
+    return ret;
+}
+
+static DonnaTask *
+provider_base_remove_from_task (DonnaProvider  *provider,
+                                GPtrArray      *nodes,
+                                DonnaNode      *source,
+                                GError        **error)
+{
+    DonnaTask *task;
+    struct remove_from *rf;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
+
+    if (DONNA_PROVIDER_BASE_GET_CLASS(provider)->remove_from == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': No support of node removal",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
+
+    rf = g_slice_new (struct remove_from);
+    rf->nodes   = g_ptr_array_ref (nodes);
+    rf->source  = g_object_ref (source);
+
+    task = donna_task_new ((task_fn) remove_from, rf,
+            (GDestroyNotify) free_remove_from);
+
+    DONNA_DEBUG (TASK,
+            gchar *fl = donna_node_get_full_location (source);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "remove_from() %d node(s) from '%s'",
+                    nodes->len, fl));
             g_free (fl));
 
     return task;

@@ -77,6 +77,10 @@ struct _DonnaProviderBaseClass
                                              DonnaNode          *parent,
                                              DonnaNodeType       type,
                                              const gchar        *name);
+    DonnaTaskState  (*remove_from)          (DonnaProviderBase  *provider,
+                                             DonnaTask          *task,
+                                             GPtrArray          *nodes,
+                                             DonnaNode          *source);
 };
 
 GType           donna_provider_base_get_type    (void) G_GNUC_CONST;
