@@ -51,6 +51,10 @@ static DonnaTaskState   provider_mark_new_child         (DonnaProviderBase  *pro
                                                          DonnaNode          *parent,
                                                          DonnaNodeType       type,
                                                          const gchar        *name);
+static DonnaTaskState   provider_mark_remove_from       (DonnaProviderBase  *provider,
+                                                         DonnaTask          *task,
+                                                         GPtrArray          *nodes,
+                                                         DonnaNode          *source);
 
 static void
 provider_mark_provider_init (DonnaProviderInterface *interface)
@@ -66,15 +70,16 @@ donna_provider_mark_class_init (DonnaProviderMarkClass *klass)
     GObjectClass *o_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->constructed    = provider_mark_contructed;
-    o_class->finalize       = provider_mark_finalize;
+    o_class->constructed        = provider_mark_contructed;
+    o_class->finalize           = provider_mark_finalize;
 
     pb_class = (DonnaProviderBaseClass *) klass;
-    pb_class->new_node      = provider_mark_new_node;
-    pb_class->has_children  = provider_mark_has_children;
-    pb_class->get_children  = provider_mark_get_children;
-    pb_class->trigger_node  = provider_mark_trigger_node;
-    pb_class->new_child     = provider_mark_new_child;
+    pb_class->new_node          = provider_mark_new_node;
+    pb_class->has_children      = provider_mark_has_children;
+    pb_class->get_children      = provider_mark_get_children;
+    pb_class->trigger_node      = provider_mark_trigger_node;
+    pb_class->new_child         = provider_mark_new_child;
+    pb_class->remove_from       = provider_mark_remove_from;
 
     g_type_class_add_private (klass, sizeof (DonnaProviderMarkPrivate));
 }
@@ -525,6 +530,39 @@ get_mark_node (DonnaTask            *task,
     return state;
 }
 
+static gboolean
+delete_mark (DonnaProviderMark *pm, const gchar *location, GError **error)
+{
+    DonnaProviderMarkPrivate *priv = pm->priv;
+    struct mark *mark;
+    DonnaNode *node;
+
+    g_mutex_lock (&priv->mutex);
+    mark = g_hash_table_lookup (priv->marks, location);
+    if (G_UNLIKELY (!mark))
+    {
+        g_mutex_unlock (&priv->mutex);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Provider 'mark': Cannot delete mark '%s', it doesn't exist",
+                location);
+        return FALSE;
+    }
+
+    node = get_node_for (pm, GET_IF_IN_CACHE, (gpointer) location, NULL);
+
+    g_hash_table_remove (priv->marks, location);
+    g_mutex_unlock (&priv->mutex);
+
+    if (node)
+    {
+        donna_provider_node_deleted ((DonnaProvider *) pm, node);
+        g_object_unref (node);
+    }
+
+    return TRUE;
+}
+
 
 /* DonnaProvider */
 
@@ -778,7 +816,82 @@ provider_mark_new_child (DonnaProviderBase  *_provider,
     return DONNA_TASK_DONE;
 }
 
+static DonnaTaskState
+provider_mark_remove_from (DonnaProviderBase  *_provider,
+                           DonnaTask          *task,
+                           GPtrArray          *nodes,
+                           DonnaNode          *source)
+{
+    GError *err = NULL;
+    DonnaProviderMarkPrivate *priv = ((DonnaProviderMark *) _provider)->priv;
+    GString *str = NULL;
+    guint i;
+
+    /* since we can only ever have one container, our "root" (only ever
+     * containing marks), this can only be about deleting marks */
+    for (i = 0; i < nodes->len; ++i)
+    {
+        DonnaNode *node = nodes->pdata[i];
+        gchar *fl = donna_node_get_full_location (node);
+
+        if (G_UNLIKELY (donna_node_peek_provider (node) != (DonnaProvider *) _provider))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Cannot remove '%s': node isn't in 'mark:/'",
+                    fl);
+            g_free (fl);
+            continue;
+        }
+
+        /* 5 == strlen ("mark:"); IOW: fl + 5 == location */
+        if (G_UNLIKELY (!delete_mark ((DonnaProviderMark *) _provider, fl + 5, &err)))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to remove '%s' from 'mark:/': %s",
+                    fl, err->message);
+            g_clear_error (&err);
+            g_free (fl);
+            continue;
+        }
+
+        g_free (fl);
+    }
+
+    if (str)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'mark': Couldn't remove all nodes from 'mark:/':\n%s",
+                str->str);
+        g_string_free (str, TRUE);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
 /* commands */
+
+static DonnaTaskState
+cmd_mark_delete (DonnaTask         *task,
+                 DonnaApp          *app,
+                 gpointer          *args,
+                 DonnaProviderMark *pm)
+{
+    GError *err = NULL;
+    const gchar *location = args[0];
+
+    if (!delete_mark (pm, location, &err))
+    {
+        g_prefix_error (&err, "Command 'mark_delete': ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
 
 static DonnaTaskState
 cmd_mark_get_node (DonnaTask         *task,
@@ -1257,6 +1370,11 @@ provider_mark_contructed (GObject *object)
                 "couldn't get provider 'command'");
         return;
     }
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (mark_delete, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
