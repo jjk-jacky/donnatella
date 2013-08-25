@@ -10140,7 +10140,9 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
             iter_last = iter;
     }
     else
-        gtk_tree_model_iter_children (model, &iter, NULL);
+        if (!gtk_tree_model_iter_children (model, &iter, NULL))
+            /* empty tree, let's just return "nothing" then */
+            return g_ptr_array_new ();
 
     sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
     arr = g_ptr_array_new_with_free_func (g_object_unref);
