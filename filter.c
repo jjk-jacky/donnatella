@@ -276,8 +276,6 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
     return ct;
 }
 
-#define skip_blank(s)    for ( ; isblank (*s); ++s) ;
-
 static inline gchar *
 get_quoted_string (gchar **str, gboolean get_string)
 {
