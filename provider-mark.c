@@ -1222,6 +1222,8 @@ cmd_mark_set (DonnaTask         *task,
             g_object_unref (node);
             g_object_unref (node_root);
         }
+        else
+            g_mutex_unlock (&priv->mutex);
     }
 
     return DONNA_TASK_DONE;
