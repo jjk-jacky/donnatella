@@ -213,6 +213,7 @@ struct provider_signals
     guint            nb_nodes;
     gulong           sid_node_updated;
     gulong           sid_node_deleted;
+    gulong           sid_node_removed_from;
     gulong           sid_node_children;
     gulong           sid_node_new_child;
 };
@@ -855,6 +856,8 @@ free_provider_signals (struct provider_signals *ps)
         g_signal_handler_disconnect (ps->provider, ps->sid_node_updated);
     if (ps->sid_node_deleted)
         g_signal_handler_disconnect (ps->provider, ps->sid_node_deleted);
+    if (ps->sid_node_removed_from)
+        g_signal_handler_disconnect (ps->provider, ps->sid_node_removed_from);
     if (ps->sid_node_children)
         g_signal_handler_disconnect (ps->provider, ps->sid_node_children);
     if (ps->sid_node_new_child)
@@ -4215,6 +4218,84 @@ node_deleted_cb (DonnaProvider  *provider,
     g_main_context_invoke (NULL, (GSourceFunc) real_node_deleted_cb, data);
 }
 
+struct node_removed_from
+{
+    DonnaTreeView *tree;
+    DonnaNode *node;
+    DonnaNode *parent;
+};
+
+static gboolean
+real_node_removed_from_cb (struct node_removed_from *nrf)
+{
+    DonnaTreeViewPrivate *priv = nrf->tree->priv;
+    GSList *list;
+    GSList *next;
+    gboolean is_tree = is_tree (nrf->tree);
+
+    if (!is_tree && priv->location != nrf->parent)
+        goto finish;
+
+    list = g_hash_table_lookup (priv->hashtable, nrf->node);
+    if (!list)
+        goto finish;
+
+    for ( ; list; list = next)
+    {
+        GtkTreeIter it;
+
+        next = list->next;
+        it = * (GtkTreeIter *) list->data;
+
+        /* for list we've already checked that current location == parent. For
+         * tree however, we should only remove nodes of the parent matches */
+        if (is_tree)
+        {
+            GtkTreeIter parent;
+            DonnaNode *node;
+
+            if (!gtk_tree_model_iter_parent ((GtkTreeModel *) priv->store,
+                        &parent, &it))
+                continue;
+
+            gtk_tree_model_get ((GtkTreeModel *) priv->store, &parent,
+                    DONNA_TREE_VIEW_COL_NODE,   &node,
+                    -1);
+            g_object_unref (node);
+            if (node != nrf->parent)
+                continue;
+        }
+
+        /* this will remove the row from the list in hashtable. IOW, it will
+         * remove the current list element (list); which is why we took the next
+         * element ahead of time. Because it also assumes we own iter (to set it
+         * to the next children) we need to use a local one */
+        remove_row_from_tree (nrf->tree, &it, TRUE);
+    }
+
+finish:
+    g_object_unref (nrf->node);
+    g_object_unref (nrf->parent);
+    g_free (nrf);
+    return FALSE;
+}
+
+static void
+node_removed_from_cb (DonnaProvider *provider,
+                      DonnaNode     *node,
+                      DonnaNode     *parent,
+                      DonnaTreeView *tree)
+{
+    struct node_removed_from *nrf;
+
+    /* we might not be in the main thread, but we need to be */
+    nrf = g_new0 (struct node_removed_from, 1);
+    nrf->tree   = tree;
+    nrf->node   = g_object_ref (node);
+    nrf->parent = g_object_ref (parent);
+    g_main_context_invoke (NULL, (GSourceFunc) real_node_removed_from_cb, nrf);
+}
+
 struct node_children_cb_data
 {
     DonnaTreeView   *tree;
@@ -4719,6 +4800,8 @@ add_node_to_tree (DonnaTreeView *tree,
                     G_CALLBACK (node_updated_cb), tree);
             ps->sid_node_deleted = g_signal_connect (provider, "node-deleted",
                     G_CALLBACK (node_deleted_cb), tree);
+            ps->sid_node_removed_from = g_signal_connect (provider, "node-removed-from",
+                    G_CALLBACK (node_removed_from_cb), tree);
 
             g_ptr_array_add (priv->providers, ps);
         }
@@ -4848,6 +4931,8 @@ add_node_to_tree (DonnaTreeView *tree,
                 G_CALLBACK (node_updated_cb), tree);
         ps->sid_node_deleted = g_signal_connect (provider, "node-deleted",
                 G_CALLBACK (node_deleted_cb), tree);
+        ps->sid_node_removed_from = g_signal_connect (provider, "node-removed-from",
+                G_CALLBACK (node_removed_from_cb), tree);
         if (node_type != DONNA_NODE_ITEM)
         {
             ps->sid_node_children = g_signal_connect (provider, "node-children",
@@ -7376,6 +7461,8 @@ switch_provider (DonnaTreeView *tree,
                     "node-updated", G_CALLBACK (node_updated_cb), tree);
             ps->sid_node_deleted = g_signal_connect (provider_future,
                     "node-deleted", G_CALLBACK (node_deleted_cb), tree);
+            ps->sid_node_removed_from = g_signal_connect (provider_future,
+                    "node-removed-from", G_CALLBACK (node_removed_from_cb), tree);
 
             g_ptr_array_add (priv->providers, ps);
         }
