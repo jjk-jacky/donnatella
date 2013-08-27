@@ -6,6 +6,7 @@ G_BEGIN_DECLS
 
 #include <glib.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>      /* isblank() */
 
 /* somehow this one is missing in GLib */
@@ -29,6 +30,10 @@ G_BEGIN_DECLS
         : ((s1) == NULL || (s2) == NULL) ? 0 : strcmp  ((s1), (s2)) == 0)
 #define streqn(s1, s2, n)       (((s1) == NULL || (s2) == NULL) ? 0 \
         : strncmp ((s1), (s2), (n)) == 0)
+#define strcaseeq(s1, s2)       (((s1) == NULL && (s2) == NULL) ? 1 \
+        : ((s1) == NULL || (s2) == NULL) ? 0 : strcasecmp  ((s1), (s2)) == 0)
+#define strcaseeqn(s1, s2, n)       (((s1) == NULL || (s2) == NULL) ? 0 \
+        : strncasecmp ((s1), (s2), (n)) == 0)
 
 #define skip_blank(s)   for ( ; isblank (*(s)); ++(s)) ;
 
