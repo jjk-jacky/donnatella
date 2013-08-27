@@ -1624,15 +1624,15 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
-    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_edit_column, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (tree_add_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
-    arg_type[++i] = DONNA_ARG_TYPE_NODE;
-    add_command (tree_add_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_edit_column, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
