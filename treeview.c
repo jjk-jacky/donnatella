@@ -7603,7 +7603,7 @@ change_location (DonnaTreeView *tree,
 
                 fl = donna_node_get_full_location (node);
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
                         "Treeview '%s': Cannot set node '%s' as current location, "
                         "provider is flat (i.e. no parent to go to)",
                         priv->name, fl);
