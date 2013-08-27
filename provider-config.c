@@ -1869,11 +1869,19 @@ donna_config_list_options (DonnaConfig               *config,
         for (node = node->children; node; node = node->next)
         {
             if ((type & DONNA_CONFIG_OPTION_TYPE_BOTH) == DONNA_CONFIG_OPTION_TYPE_BOTH
-                    || (type & DONNA_CONFIG_OPTION_TYPE_CATEGORY
+                    || ((type & (DONNA_CONFIG_OPTION_TYPE_CATEGORY
+                            | DONNA_CONFIG_OPTION_TYPE_NUMBERED))
                         && option_is_category (node->data, priv->root))
                     || (type & DONNA_CONFIG_OPTION_TYPE_OPTION
                         && !option_is_category (node->data, priv->root)))
             {
+                if (type & DONNA_CONFIG_OPTION_TYPE_NUMBERED)
+                {
+                    const gchar *s = ((struct option *) node->data)->name;
+                    if (*s < '0' || *s > '9')
+                        continue;
+                }
+
                 if (!*options)
                     *options = g_ptr_array_new ();
                 /* we can add option->name because it is in the GStringChunk,

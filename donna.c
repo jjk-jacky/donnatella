@@ -314,7 +314,7 @@ load_arrangements (DonnaConfig *config, const gchar *sce)
     guint        i;
 
     if (!donna_config_list_options (config, &arr,
-                DONNA_CONFIG_OPTION_TYPE_CATEGORY, sce))
+                DONNA_CONFIG_OPTION_TYPE_NUMBERED, sce))
         return NULL;
 
     for (i = 0; i < arr->len; ++i)
@@ -3380,7 +3380,7 @@ init_donna (DonnaDonna *donna)
     g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "mark"));
 
     if (donna_config_list_options (priv->config, &arr,
-                DONNA_CONFIG_OPTION_TYPE_CATEGORY, "visuals"))
+                DONNA_CONFIG_OPTION_TYPE_NUMBERED, "visuals"))
     {
         guint i;
 
