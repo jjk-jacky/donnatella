@@ -95,7 +95,9 @@ add_item (DonnaHistory *history, const gchar *item, gboolean need_dup)
 
     g_ptr_array_add (history->items, (need_dup) ? g_strdup (item) : (gpointer) item);
     /* if len==1 we've added the first item, pos stays at 0 */
-    if (G_LIKELY (history->items->len > 1))
+    if (G_LIKELY (history->items->len > 1)
+            /* if history is full, pos stays as last item */
+            && history->pos < history->items->len - 1)
         ++history->pos;
 }
 
