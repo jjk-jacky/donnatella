@@ -1380,7 +1380,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
                 {
                     gchar *fn = get_option_full_name (priv->root, child);
                     g_warning ("Failed to export option '%s': extra '%s' not found",
-                            fn, option->extra);
+                            fn, (gchar *) option->extra);
                     g_free (fn);
                     continue;
                 }
@@ -1397,8 +1397,8 @@ export_config (DonnaProviderConfigPrivate   *priv,
                     if (G_UNLIKELY (!v))
                     {
                         gchar *fn = get_option_full_name (priv->root, child);
-                        g_warning ("Failed to export option '%s': value %d not found for extra '%s'",
-                                fn, cur, option->extra);
+                        g_warning ("Failed to export option '%s': value '%s' not found for extra '%s'",
+                                fn, cur, (gchar *) option->extra);
                         g_free (fn);
                     }
                     else
@@ -1430,7 +1430,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
                     {
                         gchar *fn = get_option_full_name (priv->root, child);
                         g_warning ("Failed to export option '%s': value %d not found for extra '%s'",
-                                fn, cur, option->extra);
+                                fn, cur, (gchar *) option->extra);
                         g_free (fn);
                     }
                     else
