@@ -10669,6 +10669,203 @@ donna_tree_view_history_clear (DonnaTreeView        *tree,
     return TRUE;
 }
 
+static void
+set_location (DonnaTask *task, gboolean timeout_called, DonnaTreeView *tree)
+{
+    GError *err = NULL;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaTaskState state = donna_task_get_state (task);
+
+    if (state != DONNA_TASK_DONE)
+    {
+        if (state == DONNA_TASK_FAILED)
+            donna_app_show_error (priv->app, donna_task_get_error (task),
+                    "Treeview '%s': Failed to get node to go up/down", priv->name);
+        return;
+    }
+
+    if (!donna_tree_view_set_location (tree,
+            g_value_get_object (donna_task_get_return_value (task)), &err))
+    {
+        donna_app_show_error (priv->app, err,
+                "Treeview '%s': Failed to go up/down", priv->name);
+        g_clear_error (&err);
+    }
+}
+
+gboolean
+donna_tree_view_go_up (DonnaTreeView      *tree,
+                       GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaTask *task;
+    gchar *fl;
+    gchar *s;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!priv->location))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Can't go up, no current location set",
+                priv->name);
+        return FALSE;
+    }
+
+    if (donna_provider_get_flags (donna_node_peek_provider (priv->location))
+            & DONNA_PROVIDER_FLAG_FLAT)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
+                "Treeview '%s': Can't go up, current location is in flat provider",
+                priv->name);
+        return FALSE;
+    }
+
+    /* if we're on root, trying to go up is a no-op, not an error */
+    fl = donna_node_get_full_location (priv->location);
+    if (streq (strchr (fl, ':') + 1, "/"))
+    {
+        g_free (fl);
+        return TRUE;
+    }
+
+    /* turn into the parent location */
+    s = strrchr (fl, '/');
+    if (s[-1] == ':')
+        /* last '/' in a first container would miss the '/' for root */
+        ++s;
+    *s = '\0';
+
+    task = donna_app_get_node_task (priv->app, fl);
+    g_free (fl);
+    if (G_UNLIKELY (!task))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Can't get node to go up", priv->name);
+        return FALSE;
+    }
+
+    donna_task_set_callback (task, (task_callback_fn) set_location, tree, NULL);
+    donna_app_run_task (priv->app, task);
+    return TRUE;
+}
+
+gboolean
+donna_tree_view_go_down (DonnaTreeView      *tree,
+                         GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaHistoryDirection direction;
+    gchar **items;
+    gchar **item;
+    gchar *fl;
+    gsize len;
+    gint is_root;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!priv->location))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Can't go down, no current location set",
+                priv->name);
+        return FALSE;
+    }
+
+    if (donna_provider_get_flags (donna_node_peek_provider (priv->location))
+            & DONNA_PROVIDER_FLAG_FLAT)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
+                "Treeview '%s': Can't go down, current location is in flat provider",
+                priv->name);
+        return FALSE;
+    }
+
+    fl = donna_node_get_full_location (priv->location);
+    len = strlen (fl);
+    if (*(strchr (fl, '/') + 1) == '\0')
+        is_root = 1;
+    else
+        is_root = 0;
+
+    direction = DONNA_HISTORY_FORWARD;
+    for (;;)
+    {
+        items = donna_history_get_items (priv->history, direction, 0, error);
+        if (!items)
+        {
+            g_prefix_error (error, "Treevies '%s': Can't go down: ", priv->name);
+            g_free (fl);
+            return FALSE;
+        }
+
+        if (direction == DONNA_HISTORY_BACKWARD)
+        {
+            /* go to last item, since we want to process them from most recent
+             * to oldest, i.e. in reverse order */
+            for (item = items; *item; ++item)
+                ;
+        }
+        else /* DONNA_HISTORY_FORWARD */
+            item = items - 1;
+
+        for (;;)
+        {
+            if (direction == DONNA_HISTORY_BACKWARD)
+            {
+                if (--item < items)
+                    break;
+            }
+            else /* DONNA_HISTORY_FORWARD */
+                if (!*++item)
+                    break;
+
+            if (streqn (fl, *item, len) && (*item)[len - is_root] == '/')
+            {
+                DonnaTask *task;
+                gchar *s;
+
+                /* make sure we only go down one level */
+                s = strchr (*item + len + 1 - is_root, '/');
+                if (s)
+                    *s = '\0';
+
+                task = donna_app_get_node_task (priv->app, *item);
+                g_strfreev (items);
+                g_free (fl);
+                if (G_UNLIKELY (!task))
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "Treeview '%s': Can't get node to go down", priv->name);
+                    return FALSE;
+                }
+
+                donna_task_set_callback (task, (task_callback_fn) set_location, tree, NULL);
+                donna_app_run_task (priv->app, task);
+                return TRUE;
+            }
+        }
+        g_strfreev (items);
+
+        if (direction == DONNA_HISTORY_FORWARD)
+            direction = DONNA_HISTORY_BACKWARD;
+        else
+            break;
+    }
+
+    g_free (fl);
+    /* even though there's no location to go down to, this is a no-op, not an error */
+    return TRUE;
+}
+
 
 /* mode list only */
 GPtrArray *
