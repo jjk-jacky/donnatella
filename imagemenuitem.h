@@ -38,6 +38,9 @@ GtkWidget * donna_image_menu_item_new_with_label    (const gchar        *label);
 void        donna_image_menu_item_set_is_combined   (DonnaImageMenuItem *item,
                                                      gboolean            combined);
 gboolean    donna_image_menu_item_get_is_combined   (DonnaImageMenuItem *item);
+void        donna_image_menu_item_set_label_bold    (DonnaImageMenuItem *item,
+                                                     gboolean            is_bold);
+gboolean    donna_image_menu_item_get_label_bold    (DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_loading_submenu (
                                                      DonnaImageMenuItem   *item,
                                                      const gchar          *label);

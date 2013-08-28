@@ -7,6 +7,7 @@ enum
     PROP_0,
 
     PROP_IS_COMBINED,
+    PROP_IS_LABEL_BOLD,
 
     NB_PROPS
 };
@@ -20,6 +21,7 @@ enum
 struct _DonnaImageMenuItemPrivate
 {
     gboolean is_combined;
+    gboolean is_label_bold;
     gint item_width;
     guint sid_button_release;
     guint sid_parent_button_release;
@@ -79,6 +81,12 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
                 FALSE,   /* default */
                 G_PARAM_READWRITE);
 
+    donna_image_menu_item_props[PROP_IS_LABEL_BOLD] =
+        g_param_spec_boolean ("is-label-bold", "is-label-bold",
+                "Whether or not the label if shown in bold",
+                FALSE,  /* default */
+                G_PARAM_READWRITE);
+
     g_object_class_install_properties (o_class, NB_PROPS,
             donna_image_menu_item_props);
 
@@ -129,8 +137,10 @@ donna_image_menu_item_get_property (GObject        *object,
                                     GValue         *value,
                                     GParamSpec     *pspec)
 {
-    if (G_LIKELY (prop_id == PROP_IS_COMBINED))
+    if (prop_id == PROP_IS_COMBINED)
         g_value_set_boolean (value, ((DonnaImageMenuItem *) object)->priv->is_combined);
+    else if (prop_id == PROP_IS_LABEL_BOLD)
+        g_value_set_boolean (value, ((DonnaImageMenuItem *) object)->priv->is_label_bold);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -141,8 +151,11 @@ donna_image_menu_item_set_property (GObject        *object,
                                     const GValue   *value,
                                     GParamSpec     *pspec)
 {
-    if (G_LIKELY (prop_id == PROP_IS_COMBINED))
+    if (prop_id == PROP_IS_COMBINED)
         donna_image_menu_item_set_is_combined ((DonnaImageMenuItem *) object,
+                g_value_get_boolean (value));
+    if (prop_id == PROP_IS_LABEL_BOLD)
+        donna_image_menu_item_set_label_bold ((DonnaImageMenuItem *) object,
                 g_value_get_boolean (value));
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -513,6 +526,45 @@ donna_image_menu_item_get_is_combined (DonnaImageMenuItem *item)
 {
     g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
     return item->priv->is_combined;
+}
+
+void
+donna_image_menu_item_set_label_bold (DonnaImageMenuItem *item,
+                                      gboolean            is_bold)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->is_label_bold != is_bold)
+    {
+        GtkWidget *child;
+
+        priv->is_label_bold = is_bold;
+        child = gtk_bin_get_child ((GtkBin *) item);
+        if (GTK_IS_LABEL (child))
+        {
+            PangoAttrList *attrs;
+
+            attrs = pango_attr_list_new ();
+            if (is_bold)
+                pango_attr_list_insert (attrs, pango_attr_weight_new (PANGO_WEIGHT_BOLD));
+            gtk_label_set_attributes ((GtkLabel *) child, attrs);
+            pango_attr_list_unref (attrs);
+        }
+        else
+            g_warning ("ImageMenuItem: Cannot set label bold, child isn't a GtkLabel");
+
+        g_object_notify ((GObject *) item, "is-label-bold");
+    }
+}
+
+gboolean
+donna_image_menu_item_get_label_bold (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
+    return item->priv->is_label_bold;
 }
 
 void
