@@ -2156,9 +2156,11 @@ load_menu (struct menu_click *mc)
                 else if (mc->use_default_icons)
                 {
                     if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
-                        image = gtk_image_new_from_stock (GTK_STOCK_FILE, GTK_ICON_SIZE_MENU);
+                        image = gtk_image_new_from_stock (GTK_STOCK_FILE,
+                                GTK_ICON_SIZE_MENU);
                     else /* DONNA_NODE_CONTAINER */
-                        image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY, GTK_ICON_SIZE_MENU);
+                        image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY,
+                                GTK_ICON_SIZE_MENU);
                 }
                 else
                     image = NULL;
@@ -3366,7 +3368,6 @@ init_donna (DonnaDonna *donna)
             if (copy_and_load_conf (priv->config, *dir, main_dir))
                 break;
     }
-    g_debug ("config:%s", donna_config_export_config (priv->config));
 
     /* CSS - At same priority, the last one loaded takes precedence, so we need
      * to load system ones first (in reverse order), then the user one */
