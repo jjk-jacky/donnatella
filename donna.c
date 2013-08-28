@@ -2135,6 +2135,14 @@ load_menu (struct menu_click *mc)
             item = donna_image_menu_item_new_with_label (name);
             g_free (name);
 
+            donna_node_get (node, TRUE, "menu-is-sensitive", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN && !g_value_get_boolean (&v))
+                    gtk_widget_set_sensitive (item, FALSE);
+                g_value_unset (&v);
+            }
+
             donna_node_get (node, TRUE, "menu-is-label-bold", &has, &v, NULL);
             if (has == DONNA_NODE_VALUE_SET)
             {
