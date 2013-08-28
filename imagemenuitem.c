@@ -26,11 +26,17 @@ struct _DonnaImageMenuItemPrivate
     guint sid_button_release;
     guint sid_parent_button_release;
     guint sid_timeout;
+    GtkWidget *image_org;
+    GtkWidget *image_sel;
+    guint sid_notify_image;
 };
 
 static GParamSpec * donna_image_menu_item_props[NB_PROPS] = { NULL, };
 static guint        donna_image_menu_item_signals[NB_SIGNALS] = { 0, };
 
+static void menu_item_notify_image_cb           (GObject                *object,
+                                                 GParamSpec             *pspec,
+                                                 DonnaImageMenuItem     *item);
 static gboolean menu_item_release_cb            (GtkWidget             *widget,
                                                  GdkEventButton        *event,
                                                  DonnaImageMenuItem    *item);
@@ -114,6 +120,8 @@ donna_image_menu_item_init (DonnaImageMenuItem *item)
     /* this will be the first handler called, so we can block everything else */
     item->priv->sid_button_release = g_signal_connect (item,
             "button-release-event", (GCallback) menu_item_release_cb, item);
+    item->priv->sid_notify_image = g_signal_connect (item, "notify::image",
+            (GCallback) menu_item_notify_image_cb, item);
 }
 
 static void
@@ -127,6 +135,10 @@ donna_image_menu_item_finalize (GObject *object)
         g_signal_handler_disconnect (
                 gtk_widget_get_parent ((GtkWidget *) object),
                 priv->sid_parent_button_release);
+    if (priv->image_org)
+        g_object_unref (priv->image_org);
+    if (priv->image_sel)
+        g_object_unref (priv->image_sel);
 
     ((GObjectClass *) donna_image_menu_item_parent_class)->finalize (object);
 }
@@ -159,6 +171,18 @@ donna_image_menu_item_set_property (GObject        *object,
                 g_value_get_boolean (value));
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+}
+
+static void
+menu_item_notify_image_cb (GObject                *object,
+                           GParamSpec             *pspec,
+                           DonnaImageMenuItem     *item)
+{
+    DonnaImageMenuItemPrivate *priv = item->priv;
+
+    if (priv->image_org)
+        g_object_unref (priv->image_org);
+    g_object_get (item, "image", &priv->image_org, NULL);
 }
 
 static void
@@ -286,6 +310,13 @@ donna_image_menu_item_select (GtkMenuItem        *menuitem)
 {
     DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) menuitem)->priv;
 
+    if (priv->image_sel)
+    {
+        g_signal_handler_block (menuitem, priv->sid_notify_image);
+        gtk_image_menu_item_set_image ((GtkImageMenuItem *) menuitem, priv->image_sel);
+        g_signal_handler_unblock (menuitem, priv->sid_notify_image);
+    }
+
     if (!priv->is_combined || gtk_menu_item_get_submenu (menuitem))
         goto chain;
 
@@ -313,6 +344,13 @@ static void
 donna_image_menu_item_deselect (GtkMenuItem          *menuitem)
 {
     DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) menuitem)->priv;
+
+    if (priv->image_sel)
+    {
+        g_signal_handler_block (menuitem, priv->sid_notify_image);
+        gtk_image_menu_item_set_image ((GtkImageMenuItem *) menuitem, priv->image_org);
+        g_signal_handler_unblock (menuitem, priv->sid_notify_image);
+    }
 
     if (priv->sid_timeout)
     {
@@ -565,6 +603,27 @@ donna_image_menu_item_get_label_bold (DonnaImageMenuItem *item)
 {
     g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
     return item->priv->is_label_bold;
+}
+
+void
+donna_image_menu_item_set_image_selected (DonnaImageMenuItem *item,
+                                          GtkWidget          *image)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->image_sel)
+        g_object_unref (priv->image_sel);
+    priv->image_sel = g_object_ref_sink (image);
+}
+
+GtkWidget *
+donna_image_menu_item_get_image_selected (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
+    return item->priv->image_sel;
 }
 
 void
