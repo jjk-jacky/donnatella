@@ -2152,6 +2152,20 @@ load_menu (struct menu_click *mc)
                 g_value_unset (&v);
             }
 
+            donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
+                {
+                    GtkWidget *image;
+
+                    image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
+                    donna_image_menu_item_set_image_selected ((DonnaImageMenuItem *) item,
+                            image);
+                }
+                g_value_unset (&v);
+            }
+
             g_object_set_data ((GObject *) item, "node", node);
 
             if (mc->show_icons)
