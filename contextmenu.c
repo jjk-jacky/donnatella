@@ -437,6 +437,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             gchar *fl = NULL;
             struct node_trigger *nt;
             DonnaNode *node;
+            GValue v = G_VALUE_INIT;
+            gboolean b;
 
             item = arr->pdata[i];
 
@@ -588,6 +590,23 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             g_free (name);
             if (icon)
                 g_object_unref (icon);
+
+            if (donna_config_get_boolean (config, &b,
+                        "context_menus/%s/%s/%s/menu_is_label_bold",
+                        source, section, item) && b)
+            {
+                g_value_init (&v, G_TYPE_BOOLEAN);
+                g_value_set_boolean (&v, TRUE);
+                if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-label-bold",
+                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set label bold for item "
+                            "'context_menus/%s/%s/%s': %s",
+                            source, section, item, err->message);
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+            }
 
             if (!is_sensitive)
             {
