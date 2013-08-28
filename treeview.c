@@ -10267,13 +10267,16 @@ history_goto (DonnaTask *task, DonnaNode *node)
     DonnaTaskState ret = DONNA_TASK_DONE;
 
     donna_node_get (node, FALSE, "history-tree", &has, &v, NULL);
-    if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
-        /* current location; nothing to do */
-        return DONNA_TASK_DONE;
     tree = g_value_get_object (&v);
     g_value_unset (&v);
 
     donna_node_get (node, FALSE, "history-direction", &has, &v, NULL);
+    if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+    {
+        /* current location: refresh */
+        donna_tree_view_refresh (tree, DONNA_TREE_REFRESH_NORMAL, NULL);
+        return DONNA_TASK_DONE;
+    }
     direction = g_value_get_uint (&v);
     g_value_unset (&v);
 
@@ -10312,10 +10315,6 @@ get_node_for_history (DonnaTreeView         *tree,
         return NULL;
     }
 
-    /* no direction == node for current location */
-    if (direction == 0)
-        return node;
-
     g_value_init (&v, DONNA_TYPE_TREE_VIEW);
     g_value_set_object (&v, tree);
     if (G_UNLIKELY (!donna_node_add_property (node, "history-tree",
@@ -10330,6 +10329,10 @@ get_node_for_history (DonnaTreeView         *tree,
         return NULL;
     }
     g_value_unset (&v);
+    
+    /* no direction == node for current location */
+    if (direction == 0)
+        return node;
 
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, direction);
