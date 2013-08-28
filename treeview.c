@@ -10304,6 +10304,7 @@ get_node_for_history (DonnaTreeView         *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaNode *node;
     GValue v = G_VALUE_INIT;
+    GdkPixbuf *pb;
 
     node = donna_provider_internal_new_node (pi, name, NULL, NULL,
             (internal_worker_fn) history_goto, NULL, NULL, error);
@@ -10329,10 +10330,29 @@ get_node_for_history (DonnaTreeView         *tree,
         return NULL;
     }
     g_value_unset (&v);
-    
+
     /* no direction == node for current location */
     if (direction == 0)
+    {
+        pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (), "view-refresh",
+                /*FIXME*/16, 0, NULL);
+        if (G_LIKELY (pb))
+        {
+            g_value_init (&v, GDK_TYPE_PIXBUF);
+            g_value_take_object (&v, pb);
+            donna_node_add_property (node, "menu-image-selected",
+                    GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, error);
+            g_value_unset (&v);
+        }
+
+        g_value_init (&v, G_TYPE_BOOLEAN);
+        g_value_set_boolean (&v, TRUE);
+        donna_node_add_property (node, "menu-is-label-bold",
+                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, error);
+        g_value_unset (&v);
+
         return node;
+    }
 
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, direction);
@@ -10359,6 +10379,18 @@ get_node_for_history (DonnaTreeView         *tree,
         return NULL;
     }
     g_value_unset (&v);
+
+    pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
+            (direction == DONNA_HISTORY_BACKWARD) ? "go-previous" : "go-next",
+            /*FIXME*/16, 0, NULL);
+    if (G_LIKELY (pb))
+    {
+        g_value_init (&v, GDK_TYPE_PIXBUF);
+        g_value_take_object (&v, pb);
+        donna_node_add_property (node, "menu-image-selected",
+                GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, error);
+        g_value_unset (&v);
+    }
 
     return node;
 }
@@ -10483,10 +10515,6 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
                 return NULL;
             }
             g_ptr_array_add (arr, node);
-
-            /* TODO add property menu-sensitive=FALSE so when displayed on menu
-             * it can't be clicked. Also a menu-bold or something would be nice
-             * as well... Also a different icon is needed */
         }
     }
 
