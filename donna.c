@@ -2304,7 +2304,7 @@ donna_donna_show_menu (DonnaApp       *app,
         mc->show_hidden = b;
     }
 
-    get_boolean (b, "sort", TRUE);
+    get_boolean (b, "sort", FALSE);
     mc->is_sorted = b;
     if (mc->is_sorted)
     {
