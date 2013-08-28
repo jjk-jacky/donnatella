@@ -2127,11 +2127,22 @@ load_menu (struct menu_click *mc)
         else
         {
             DonnaNodeType type;
+            DonnaNodeHasValue has;
+            GValue v = G_VALUE_INIT;
 
             type = donna_node_get_node_type (node);
             name = donna_node_get_name (node);
             item = donna_image_menu_item_new_with_label (name);
             g_free (name);
+
+            donna_node_get (node, TRUE, "menu-is-label-bold", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
+                    donna_image_menu_item_set_label_bold ((DonnaImageMenuItem *) item,
+                            g_value_get_boolean (&v));
+                g_value_unset (&v);
+            }
 
             g_object_set_data ((GObject *) item, "node", node);
 
