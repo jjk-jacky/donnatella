@@ -610,7 +610,17 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
 
             if (!is_sensitive)
             {
-                /* TODO */
+                g_value_init (&v, G_TYPE_BOOLEAN);
+                g_value_set_boolean (&v, FALSE);
+                if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
+                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to disable sensitivity for item "
+                            "'context_menus/%s/%s/%s': %s",
+                            source, section, item, err->message);
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
             }
 
             g_ptr_array_add (nodes, node);
