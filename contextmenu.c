@@ -6,6 +6,13 @@
 #include "macros.h"
 #include "debug.h"
 
+enum type
+{
+    TYPE_STANDARD = 0,
+    TYPE_TRIGGER,
+    NB_TYPES
+};
+
 enum expr
 {
     EXPR_INVALID,
@@ -465,6 +472,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         {
             GPtrArray *triggers = NULL;
             const gchar *item;
+            enum type type;
             gchar *name;
             GdkPixbuf *icon = NULL;
             gchar *fl = NULL;
@@ -566,6 +574,26 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             {
                 g_warning ("Context-menu: No trigger found for 'context_menus/%s/%s/%s', "
                         "skipping item", source, section, item);
+                continue;
+            }
+
+            /* type of item */
+            if (donna_config_get_int (config, (gint *) &type,
+                        "context_menus/%s/%s/%s/type", source, section, item))
+                type = CLAMP (type, TYPE_STANDARD, NB_TYPES - 1);
+            else
+                type = TYPE_STANDARD;
+
+            if (type == TYPE_TRIGGER)
+            {
+                node = get_node_trigger (app, fl);
+                g_free (fl);
+                if (!node)
+                    g_warning ("Context-menu: Failed to get node for item "
+                            "'context_menus/%s/%s/%s' -- Skipping",
+                            source, section, item);
+                else
+                    g_ptr_array_add (nodes, node);
                 continue;
             }
 
