@@ -716,6 +716,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 if (icon)
                     g_object_unref (icon);
                 free_node_internal (ni);
+                if (node_trigger)
+                    g_object_unref (node_trigger);
                 continue;
             }
             g_free (name);
