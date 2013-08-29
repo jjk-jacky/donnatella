@@ -464,6 +464,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                             "for item 'context_menus/%s/%s/%s': %s -- Ignoring",
                             source, section, item, err->message);
                     g_clear_error (&err);
+                    g_free (s);
                 }
                 else if (expr == EXPR_FALSE)
                 {
