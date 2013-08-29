@@ -10,6 +10,7 @@ enum type
 {
     TYPE_STANDARD = 0,
     TYPE_TRIGGER,
+    TYPE_CONTAINER,
     NB_TYPES
 };
 
@@ -185,9 +186,10 @@ free_arr_nodes (DonnaNode *node)
 
 struct node_internal
 {
-    DonnaApp *app;
-    GPtrArray *intrefs;
-    gchar *fl;
+    DonnaApp    *app;
+    DonnaNode   *node_trigger;
+    GPtrArray   *intrefs;
+    gchar       *fl;
 };
 
 static inline void
@@ -206,6 +208,8 @@ free_intrefs (DonnaApp *app, GPtrArray *intrefs)
 static void
 free_node_internal (struct node_internal *ni)
 {
+    if (ni->node_trigger)
+        g_object_unref (ni->node_trigger);
     free_intrefs (ni->app, ni->intrefs);
     g_free (ni->fl);
 
@@ -246,6 +250,58 @@ node_internal_cb (DonnaTask *task, DonnaNode *node, struct node_internal *ni)
         ni->intrefs = NULL;
 
     free_node_internal (ni);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+node_children_cb (DonnaTask             *task,
+                  DonnaNode             *node,
+                  DonnaNodeType          node_types,
+                  gboolean               get_children,
+                  struct node_internal  *ni)
+{
+    GError *err = NULL;
+    DonnaTask *t;
+    DonnaTaskState state;
+    GValue *value;
+
+    if (get_children)
+        t = donna_node_get_children_task (ni->node_trigger, node_types, &err);
+    else
+        t = donna_node_has_children_task (ni->node_trigger, node_types, &err);
+    if (G_UNLIKELY (!t))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (ni->app, t);
+    donna_task_wait_for_it (t);
+
+    state = donna_task_get_state (t);
+    if (state != DONNA_TASK_DONE)
+    {
+        if (state == DONNA_TASK_FAILED)
+            donna_task_take_error (task, g_error_copy (donna_task_get_error (t)));
+        g_object_unref (t);
+        return state;
+    }
+
+    value = donna_task_grab_return_value (task);
+    if (get_children)
+    {
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        g_value_set_boxed (value, g_value_get_boxed (donna_task_get_return_value (t)));
+    }
+    else
+    {
+        g_value_init (value, G_TYPE_BOOLEAN);
+        g_value_set_boolean (value, g_value_get_boolean (donna_task_get_return_value (t)));
+    }
+    donna_task_release_return_value (task);
+
+    g_object_unref (t);
     return DONNA_TASK_DONE;
 }
 
@@ -697,14 +753,54 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 }
             }
 
+            if (type == TYPE_CONTAINER)
+            {
+                if (!node_trigger)
+                    node_trigger = get_node_trigger (app, fl);
+                if (!node_trigger)
+                {
+                    g_warning ("Context-menu: Failed to get node for item '%s' "
+                            "('context_menus/%s/%s/%s') -- Skipping",
+                            name, source, section, item);
+                    g_free (fl);
+                    free_intrefs (app, intrefs);
+                    g_free (name);
+                    if (icon)
+                        g_object_unref (icon);
+                    continue;
+                }
+                else if (donna_node_get_node_type (node_trigger) != DONNA_NODE_CONTAINER)
+                {
+                    g_warning ("Context-menu: Node for item '%s' "
+                            "('context_menus/%s/%s/%s') isn't a container -- Skipping",
+                            name, source, section, item);
+                    g_free (fl);
+                    free_intrefs (app, intrefs);
+                    g_free (name);
+                    if (icon)
+                        g_object_unref (icon);
+                    g_object_unref (node_trigger);
+                    continue;
+                }
+                g_free (fl);
+                fl = NULL;
+            }
+
             /* let's create the node */
             ni = g_slice_new (struct node_internal);
             ni->app = app;
             ni->intrefs = intrefs;
+            if (type == TYPE_CONTAINER)
+                ni->node_trigger = g_object_ref (node_trigger);
+            else
+                ni->node_trigger = NULL;
             ni->fl = fl;
 
             node = donna_provider_internal_new_node (pi, name, icon, NULL,
-                    DONNA_NODE_ITEM, (internal_fn) node_internal_cb, ni,
+                    (type == TYPE_CONTAINER) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+                    (type == TYPE_CONTAINER)
+                    ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
+                    ni,
                     (GDestroyNotify) free_node_internal, &err);
             if (G_UNLIKELY (!node))
             {
