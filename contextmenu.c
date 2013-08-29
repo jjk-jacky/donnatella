@@ -305,6 +305,70 @@ node_children_cb (DonnaTask             *task,
     return DONNA_TASK_DONE;
 }
 
+static DonnaTaskState
+container_children_cb (DonnaTask    *task,
+                       DonnaNode    *node,
+                       DonnaNodeType node_types,
+                       gboolean      get_children,
+                       GPtrArray    *children)
+{
+    GValue *value;
+    gboolean has_children = FALSE;
+    GPtrArray *arr;
+    guint i;
+
+    if (children->len == 0
+            || ((node_types & (DONNA_NODE_ITEM | DONNA_NODE_CONTAINER))
+                == (DONNA_NODE_ITEM | DONNA_NODE_CONTAINER)))
+    {
+        value = donna_task_grab_return_value (task);
+        if (get_children)
+        {
+            g_value_init (value, G_TYPE_PTR_ARRAY);
+            g_value_set_boxed (value, children);
+        }
+        else
+        {
+            g_value_init (value, G_TYPE_BOOLEAN);
+            g_value_set_boolean (value, children->len > 0);
+        }
+        donna_task_release_return_value (task);
+
+        return DONNA_TASK_DONE;
+    }
+
+    if (get_children)
+        arr = g_ptr_array_new_with_free_func (g_object_unref);
+    for (i = 0; i < children->len; ++i)
+    {
+        if (donna_node_get_node_type (children->pdata[i]) & node_types)
+        {
+            if (get_children)
+            {
+                has_children = TRUE;
+                break;
+            }
+            else
+                g_ptr_array_add (arr, g_object_ref (children->pdata[i]));
+        }
+    }
+
+    value = donna_task_grab_return_value (task);
+    if (get_children)
+    {
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        g_value_set_boxed (value, arr);
+    }
+    else
+    {
+        g_value_init (value, G_TYPE_BOOLEAN);
+        g_value_set_boolean (value, has_children);
+    }
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
 static DonnaNode *
 get_node_trigger (DonnaApp *app, const gchar *fl)
 {
@@ -420,10 +484,12 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
     for (;;)
     {
         GPtrArray *arr = NULL;
+        GPtrArray *children = NULL;
         guint i;
         gchar *s;
         gchar *end, *e;
         gboolean is_sensitive = TRUE;
+        gboolean b;
 
         skip_blank (section);
         end = strchr (section, ',');
@@ -526,6 +592,11 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             g_free (s);
         }
 
+        /* should this section be a container? */
+        if (donna_config_get_boolean (config, &b, "context_menus/%s/%s/is_container",
+                    source, section) && b)
+            children = g_ptr_array_new_with_free_func (g_object_unref);
+
         /* process items */
         if (!donna_config_list_options (config, &arr, DONNA_CONFIG_OPTION_TYPE_NUMBERED,
                     "context_menus/%s/%s", source, section))
@@ -546,7 +617,6 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             struct node_internal *ni;
             DonnaNode *node;
             GValue v = G_VALUE_INIT;
-            gboolean b;
 
             item = arr->pdata[i];
 
@@ -670,7 +740,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                      * (e.g. not a command) so there were no intrefs. If for
                      * some reason there was, they'll just be free-d
                      * automatically by the donna's GC after a while... */
-                    g_ptr_array_add (nodes, node);
+                    g_ptr_array_add ((children) ? children : nodes, node);
 
                 continue;
             }
@@ -872,7 +942,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
-            g_ptr_array_add (nodes, node);
+            g_ptr_array_add ((children) ? children : nodes, node);
 
             if (node_trigger)
                 g_object_unref (node_trigger);
@@ -880,6 +950,40 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
 
         g_ptr_array_unref (arr);
 
+        if (children)
+        {
+            DonnaNode *node;
+            gchar *name;
+            GdkPixbuf *icon = NULL;
+
+            if (!donna_config_get_string (config, &name, "context_menus/%s/%s/name",
+                        source, section))
+                name = g_strdup (section);
+
+            if (donna_config_get_string (config, &s, "context_menus/%s/%s/icon",
+                        source, section))
+            {
+                icon = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
+                        s, /*FIXME*/16, 0, NULL);
+                g_free (s);
+            }
+
+            node = donna_provider_internal_new_node (pi, name, icon, NULL,
+                    DONNA_NODE_CONTAINER,
+                    (internal_fn) container_children_cb,
+                    children,
+                    (GDestroyNotify) g_ptr_array_unref, &err);
+            if (G_UNLIKELY (!node))
+            {
+                g_warning ("Context-menu: Failed to create node "
+                        "for 'context_menus/%s/%s': %s",
+                        source, section, err->message);
+                g_clear_error (&err);
+                g_ptr_array_unref (children);
+            }
+            else
+                g_ptr_array_add (nodes, node);
+        }
 
 next:
         if (e)
