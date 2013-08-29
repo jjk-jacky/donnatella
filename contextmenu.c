@@ -176,7 +176,7 @@ free_arr_nodes (DonnaNode *node)
         g_object_unref (node);
 }
 
-struct node_trigger
+struct node_internal
 {
     DonnaApp *app;
     GPtrArray *intrefs;
@@ -184,18 +184,18 @@ struct node_trigger
 };
 
 static void
-free_nt (struct node_trigger *nt)
+free_node_internal (struct node_internal *ni)
 {
-    if (nt->intrefs)
+    if (ni->intrefs)
     {
         guint i;
 
-        for (i = 0; i < nt->intrefs->len; ++i)
-            donna_app_free_int_ref (nt->app, nt->intrefs->pdata[i]);
-        g_ptr_array_unref (nt->intrefs);
+        for (i = 0; i < ni->intrefs->len; ++i)
+            donna_app_free_int_ref (ni->app, ni->intrefs->pdata[i]);
+        g_ptr_array_unref (ni->intrefs);
     }
-    g_free (nt->fl);
-    g_slice_free (struct node_trigger, nt);
+    g_free (ni->fl);
+    g_slice_free (struct node_internal, ni);
 }
 
 struct err
@@ -214,27 +214,60 @@ show_error (struct err *e)
 }
 
 static DonnaTaskState
-node_trigger_cb (DonnaTask *task, DonnaNode *node, struct node_trigger *nt)
+node_internal_cb (DonnaTask *task, DonnaNode *node, struct node_internal *ni)
 {
     GError *err = NULL;
 
-    if (!donna_app_trigger_fl (nt->app, nt->fl, nt->intrefs, FALSE, &err))
+    if (!donna_app_trigger_fl (ni->app, ni->fl, ni->intrefs, FALSE, &err))
     {
         struct err *e;
 
         e = g_new (struct err, 1);
-        e->app = nt->app;
+        e->app = ni->app;
         e->err = err;
         g_main_context_invoke (NULL, (GSourceFunc) show_error, e);
     }
     else
         /* because trigger_fl handled them for us */
-        nt->intrefs = NULL;
+        ni->intrefs = NULL;
 
-    free_nt (nt);
+    free_node_internal (ni);
     return DONNA_TASK_DONE;
 }
 
+static DonnaNode *
+get_node_trigger (DonnaApp *app, const gchar *fl)
+{
+    DonnaTask *task;
+    DonnaNode *node;
+
+    task = donna_app_get_node_task (app, fl);
+    if (G_UNLIKELY (!task))
+        return NULL;
+    donna_task_set_can_block (g_object_ref_sink (task));
+    donna_app_run_task (app, task);
+    donna_task_wait_for_it (task);
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        g_object_unref (task);
+        return NULL;
+    }
+    node = g_value_dup_object (donna_task_get_return_value (task));
+    g_object_unref (task);
+    return node;
+}
+
+#define ensure_node_trigger()   do {                                        \
+    if (!node_trigger)                                                      \
+        node_trigger = get_node_trigger (app, fl);                          \
+    if (!node_trigger)                                                      \
+    {                                                                       \
+        g_warning ("Context-menu: Cannot import options from node trigger " \
+                "for item 'context_menus/%s/%s/%s': Failed to get node",    \
+                source, section, item);                                     \
+        import_from_trigger = FALSE;                                        \
+    }                                                                       \
+} while (0)
 GPtrArray *
 donna_context_menu_get_nodes_v (DonnaApp               *app,
                                 GError                **error,
@@ -435,7 +468,10 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             gchar *name;
             GdkPixbuf *icon = NULL;
             gchar *fl = NULL;
-            struct node_trigger *nt;
+            gboolean import_from_trigger = FALSE;
+            DonnaNode *node_trigger = NULL;
+            DonnaNodeHasValue has;
+            struct node_internal *ni;
             DonnaNode *node;
             GValue v = G_VALUE_INIT;
             gboolean b;
@@ -533,6 +569,10 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 continue;
             }
 
+            /* shall we import non-specified stuff from node trigger? */
+            donna_config_get_boolean (config, &import_from_trigger,
+                    "context_menus/%s/%s/%s/import_from_trigger", source, section, item);
+
             /* item-specific "is_sensitive" */
             if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_sensitive",
                         source, section, item))
@@ -552,10 +592,38 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_free (s);
             }
 
+            /* is_sensitive is a bit special, in that we only import from
+             * trigger if TRUE (since if FALSE, that takes precedence, but if
+             * TRUE the value from trigger does) */
+            if (is_sensitive && import_from_trigger)
+            {
+                ensure_node_trigger ();
+                if (import_from_trigger)
+                {
+                    donna_node_get (node_trigger, FALSE, "menu-is-sensitive",
+                            &has, &v, NULL);
+                    if (has == DONNA_NODE_VALUE_SET)
+                    {
+                        if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
+                            is_sensitive = g_value_get_boolean (&v);
+                        g_value_unset (&v);
+                    }
+                }
+            }
+
             /* name */
             if (!donna_config_get_string (config, &name, "context_menus/%s/%s/%s/name",
                         source, section, item))
-                name = g_strdup (fl);
+            {
+                if (import_from_trigger)
+                {
+                    ensure_node_trigger ();
+                    if (import_from_trigger)
+                        name = donna_node_get_name (node_trigger);
+                }
+                else
+                    name = g_strdup (fl);
+            }
 
             /* icon */
             if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/icon",
@@ -565,17 +633,30 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                         s, /*FIXME*/16, 0, NULL);
                 g_free (s);
             }
+            if (!icon && import_from_trigger)
+            {
+                ensure_node_trigger ();
+                if (import_from_trigger)
+                {
+                    donna_node_get (node_trigger, FALSE, "icon", &has, &v, NULL);
+                    if (has == DONNA_NODE_VALUE_SET)
+                    {
+                        icon = g_value_dup_object (&v);
+                        g_value_unset (&v);
+                    }
+                }
+            }
 
             /* let's create the node */
-            nt = g_slice_new (struct node_trigger);
-            nt->app = app;
-            nt->intrefs = NULL;
-            nt->fl = donna_app_parse_fl (app, fl, conv_flags, conv_fn, conv_data,
-                    &nt->intrefs);
+            ni = g_slice_new (struct node_internal);
+            ni->app = app;
+            ni->intrefs = NULL;
+            ni->fl = donna_app_parse_fl (app, fl, conv_flags, conv_fn, conv_data,
+                    &ni->intrefs);
 
             node = donna_provider_internal_new_node (pi, name, icon, NULL,
-                    (internal_worker_fn) node_trigger_cb, nt,
-                    (GDestroyNotify) free_nt, &err);
+                    (internal_worker_fn) node_internal_cb, ni,
+                    (GDestroyNotify) free_node_internal, &err);
             if (G_UNLIKELY (!node))
             {
                 g_warning ("Context-menu: Failed to create node "
@@ -585,16 +666,36 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_free (name);
                 if (icon)
                     g_object_unref (icon);
-                free_nt (nt);
+                free_node_internal (ni);
                 continue;
             }
             g_free (name);
             if (icon)
                 g_object_unref (icon);
 
-            if (donna_config_get_boolean (config, &b,
+            if (!donna_config_get_boolean (config, &b,
                         "context_menus/%s/%s/%s/menu_is_label_bold",
-                        source, section, item) && b)
+                        source, section, item))
+            {
+                if (import_from_trigger)
+                {
+                    ensure_node_trigger ();
+                    if (import_from_trigger)
+                    {
+                        donna_node_get (node_trigger, FALSE, "menu-is-label-bold",
+                                &has, &v, NULL);
+                        if (has == DONNA_NODE_VALUE_SET)
+                        {
+                            b = g_value_get_boolean (&v);
+                            g_value_unset (&v);
+                        }
+                    }
+                }
+                else
+                    b = FALSE;
+            }
+
+            if (b)
             {
                 g_value_init (&v, G_TYPE_BOOLEAN);
                 g_value_set_boolean (&v, TRUE);
@@ -625,6 +726,9 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             }
 
             g_ptr_array_add (nodes, node);
+
+            if (node_trigger)
+                g_object_unref (node_trigger);
         }
 
         g_ptr_array_unref (arr);
@@ -645,6 +749,7 @@ next:
     g_free (root);
     return nodes;
 }
+#undef ensure_node_trigger
 
 GPtrArray *
 donna_context_menu_get_nodes (DonnaApp               *app,
