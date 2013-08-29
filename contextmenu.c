@@ -704,7 +704,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             ni->fl = fl;
 
             node = donna_provider_internal_new_node (pi, name, icon, NULL,
-                    (internal_worker_fn) node_internal_cb, ni,
+                    DONNA_NODE_ITEM, (internal_fn) node_internal_cb, ni,
                     (GDestroyNotify) free_node_internal, &err);
             if (G_UNLIKELY (!node))
             {

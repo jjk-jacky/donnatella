@@ -23,9 +23,15 @@ typedef enum
     DONNA_PROVIDER_INTERNAL_ERROR_OTHER,
 } DonnaProviderInternalError;
 
-typedef DonnaTaskState (*internal_worker_fn)    (DonnaTask *task,
-                                                 DonnaNode *node,
-                                                 gpointer   data);
+typedef void (*internal_fn)                     (void);
+typedef DonnaTaskState (*internal_worker_fn)    (DonnaTask      *task,
+                                                 DonnaNode      *node,
+                                                 gpointer        data);
+typedef DonnaTaskState (*internal_children_fn)  (DonnaTask      *task,
+                                                 DonnaNode      *node,
+                                                 DonnaNodeType   node_types,
+                                                 gboolean        get_children,
+                                                 gpointer        data);
 
 struct _DonnaProviderInternal
 {
@@ -45,7 +51,8 @@ DonnaNode * donna_provider_internal_new_node    (DonnaProviderInternal  *pi,
                                                  const gchar            *name,
                                                  const GdkPixbuf        *icon,
                                                  const gchar            *desc,
-                                                 internal_worker_fn      worker,
+                                                 DonnaNodeType           node_type,
+                                                 internal_fn             fn,
                                                  gpointer                data,
                                                  GDestroyNotify          destroy,
                                                  GError                **error);
