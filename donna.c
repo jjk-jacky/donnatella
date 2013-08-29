@@ -2123,7 +2123,15 @@ load_menu (struct menu_click *mc)
         gchar *name;
 
         if (!node)
-            item = gtk_separator_menu_item_new ();
+        {
+            /* no separator as first or last item.. */
+            if (G_LIKELY (i > 0 && i < mc->nodes->len - 1
+                        /* ..and no separator after a separator */
+                        && mc->nodes->pdata[i - 1]))
+                item = gtk_separator_menu_item_new ();
+            else
+                continue;
+        }
         else
         {
             DonnaNodeType type;
