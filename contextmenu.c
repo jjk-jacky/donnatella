@@ -190,18 +190,25 @@ struct node_internal
     gchar *fl;
 };
 
-static void
-free_node_internal (struct node_internal *ni)
+static inline void
+free_intrefs (DonnaApp *app, GPtrArray *intrefs)
 {
-    if (ni->intrefs)
+    if (intrefs)
     {
         guint i;
 
-        for (i = 0; i < ni->intrefs->len; ++i)
-            donna_app_free_int_ref (ni->app, ni->intrefs->pdata[i]);
-        g_ptr_array_unref (ni->intrefs);
+        for (i = 0; i < intrefs->len; ++i)
+            donna_app_free_int_ref (app, intrefs->pdata[i]);
+        g_ptr_array_unref (intrefs);
     }
+}
+
+static void
+free_node_internal (struct node_internal *ni)
+{
+    free_intrefs (ni->app, ni->intrefs);
     g_free (ni->fl);
+
     g_slice_free (struct node_internal, ni);
 }
 
@@ -476,6 +483,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             gchar *name;
             GdkPixbuf *icon = NULL;
             gchar *fl = NULL;
+            GPtrArray *intrefs = NULL;
             gboolean import_from_trigger = FALSE;
             DonnaNode *node_trigger = NULL;
             DonnaNodeHasValue has;
@@ -577,6 +585,10 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 continue;
             }
 
+            /* parse the FL -- it doesn't have to be a command, but it can
+             * always include variables */
+            fl = donna_app_parse_fl (app, fl, conv_flags, conv_fn, conv_data, &intrefs);
+
             /* type of item */
             if (donna_config_get_int (config, (gint *) &type,
                         "context_menus/%s/%s/%s/type", source, section, item))
@@ -589,11 +601,21 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 node = get_node_trigger (app, fl);
                 g_free (fl);
                 if (!node)
+                {
+                    free_intrefs (app, intrefs);
                     g_warning ("Context-menu: Failed to get node for item "
                             "'context_menus/%s/%s/%s' -- Skipping",
                             source, section, item);
+                }
                 else
+                    /* add the node trigger into the menu. It means the intrefs
+                     * aren't free-d in this case. Usually it's ok, because if
+                     * we put the node trigger directly, it's an actual node
+                     * (e.g. not a command) so there were no intrefs. If for
+                     * some reason there was, they'll just be free-d
+                     * automatically by the donna's GC after a while... */
                     g_ptr_array_add (nodes, node);
+
                 continue;
             }
 
@@ -678,9 +700,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             /* let's create the node */
             ni = g_slice_new (struct node_internal);
             ni->app = app;
-            ni->intrefs = NULL;
-            ni->fl = donna_app_parse_fl (app, fl, conv_flags, conv_fn, conv_data,
-                    &ni->intrefs);
+            ni->intrefs = intrefs;
+            ni->fl = fl;
 
             node = donna_provider_internal_new_node (pi, name, icon, NULL,
                     (internal_worker_fn) node_internal_cb, ni,
