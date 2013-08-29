@@ -442,16 +442,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
 
             item = arr->pdata[i];
 
-            /* item name */
-            if (!donna_config_get_string (config, &name, "context_menus/%s/%s/%s/name",
-                        source, section, item))
-            {
-                g_warning ("Context-menu: Item in 'context_menus/%s/%s/%s' "
-                        "doesn't have a name, skipping",
-                        source, section, item);
-                continue;
-            }
-
+            /* make sure it is visible */
             if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_visible",
                         source, section, item))
             {
@@ -475,9 +466,10 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                     g_free (s);
             }
 
-            /* find a matching trigger */
-            if (donna_config_list_options (config, &triggers, DONNA_CONFIG_OPTION_TYPE_OPTION,
-                        "context_menus/%s/%s/%s", source, section, item))
+            /* find the (matching) trigger */
+            if (donna_config_list_options (config, &triggers,
+                        DONNA_CONFIG_OPTION_TYPE_OPTION, "context_menus/%s/%s/%s",
+                        source, section, item))
             {
                 guint j;
 
@@ -532,15 +524,16 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_ptr_array_unref (triggers);
             }
 
+            /* last chance: the default "trigger" */
             if (!fl && !donna_config_get_string (config, &fl,
                         "context_menus/%s/%s/%s/trigger", source, section, item))
             {
                 g_warning ("Context-menu: No trigger found for 'context_menus/%s/%s/%s', "
                         "skipping item", source, section, item);
-                g_free (name);
                 continue;
             }
 
+            /* item-specific "is_sensitive" */
             if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_sensitive",
                         source, section, item))
             {
@@ -559,6 +552,12 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_free (s);
             }
 
+            /* name */
+            if (!donna_config_get_string (config, &name, "context_menus/%s/%s/%s/name",
+                        source, section, item))
+                name = g_strdup (fl);
+
+            /* icon */
             if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/icon",
                         source, section, item))
             {
@@ -567,6 +566,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_free (s);
             }
 
+            /* let's create the node */
             nt = g_slice_new (struct node_trigger);
             nt->app = app;
             nt->intrefs = NULL;
