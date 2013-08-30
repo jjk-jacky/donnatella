@@ -233,8 +233,10 @@ GPtrArray *     donna_tree_view_get_nodes       (DonnaTreeView      *tree,
                                                  gboolean            to_focused,
                                                  GError            **error);
 gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
+                                                 gint                level,
                                                  GError            **error);
 gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
+                                                 gint                level,
                                                  GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,

@@ -10726,11 +10726,13 @@ set_location (DonnaTask *task, gboolean timeout_called, DonnaTreeView *tree)
 
 gboolean
 donna_tree_view_go_up (DonnaTreeView      *tree,
+                       gint                level,
                        GError            **error)
 {
     DonnaTreeViewPrivate *priv;
     DonnaTask *task;
-    gchar *fl;
+    gchar *fl = NULL;
+    gchar *location;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
@@ -10757,18 +10759,39 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
 
     /* if we're on root, trying to go up is a no-op, not an error */
     fl = donna_node_get_full_location (priv->location);
-    if (streq (strchr (fl, ':') + 1, "/"))
+    location = strchr (fl, ':') + 1;
+    if (streq (location, "/"))
     {
         g_free (fl);
         return TRUE;
     }
 
-    /* turn into the parent location */
-    s = strrchr (fl, '/');
-    if (s[-1] == ':')
-        /* last '/' in a first container would miss the '/' for root */
-        ++s;
-    *s = '\0';
+    if (level > 0)
+    {
+        gint nb;
+
+        /* turn into the parent location */
+        for (s = location + 1, nb = 1; *s != '\0'; ++s)
+            if (*s == '/')
+                ++nb;
+        if (level >= nb)
+            /* go to root */
+            *++location = '\0';
+        else
+        {
+            for ( ; s > location; --s)
+            {
+                if (*s == '/' && --level <= 0)
+                {
+                    *s = '\0';
+                    break;
+                }
+            }
+        }
+    }
+    else
+        /* go to root */
+        *++location = '\0';
 
     task = donna_app_get_node_task (priv->app, fl);
     g_free (fl);
@@ -10787,15 +10810,20 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_go_down (DonnaTreeView      *tree,
+                         gint                level,
                          GError            **error)
 {
     DonnaTreeViewPrivate *priv;
     DonnaHistoryDirection direction;
+    gchar **items_f = NULL;
     gchar **items;
     gchar **item;
     gchar *fl;
     gsize len;
     gint is_root;
+    gchar *best = NULL;
+    gint lvl = 0;
+    DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     priv = tree->priv;
@@ -10832,8 +10860,9 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
         items = donna_history_get_items (priv->history, direction, 0, error);
         if (!items)
         {
-            g_prefix_error (error, "Treevies '%s': Can't go down: ", priv->name);
+            g_prefix_error (error, "Treeview '%s': Can't go down: ", priv->name);
             g_free (fl);
+            g_strfreev (items_f);
             return FALSE;
         }
 
@@ -10858,40 +10887,74 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
                 if (!*++item)
                     break;
 
-            if (streqn (fl, *item, len) && (*item)[len - is_root] == '/')
+            /* item starts list current location */
+            if (streqn (*item, fl, len)
+                    /* if we're root, make sure it is not (i.e. is a child) */
+                    && ((is_root && (*items)[len] != '\0')
+                        /* if we're not, we sure it is a child */
+                        || (!is_root && (*item)[len] == '/')))
             {
-                DonnaTask *task;
                 gchar *s;
+                gint i = 0;
 
-                /* make sure we only go down one level */
-                s = strchr (*item + len + 1 - is_root, '/');
+                /* the '/' in item that's after our location */
+                s = *item + len - is_root;
+                for (;;)
+                {
+                    s = strchr (s + 1, '/');
+                    if (++i >= level || !s)
+                        break;
+                }
                 if (s)
                     *s = '\0';
 
-                task = donna_app_get_node_task (priv->app, *item);
-                g_strfreev (items);
-                g_free (fl);
-                if (G_UNLIKELY (!task))
+                if (i > lvl)
                 {
-                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                            DONNA_TREE_VIEW_ERROR_OTHER,
-                            "Treeview '%s': Can't get node to go down", priv->name);
-                    return FALSE;
+                    lvl = i;
+                    best = *item;
                 }
 
-                donna_task_set_callback (task, (task_callback_fn) set_location, tree, NULL);
-                donna_app_run_task (priv->app, task);
-                return TRUE;
+                if (lvl >= level)
+                    goto found;
             }
         }
-        g_strfreev (items);
 
         if (direction == DONNA_HISTORY_FORWARD)
+        {
+            if (best)
+                items_f = items;
+            else
+                g_strfreev (items);
             direction = DONNA_HISTORY_BACKWARD;
+        }
         else
             break;
     }
 
+    if (best)
+    {
+found:
+        task = donna_app_get_node_task (priv->app, best);
+        g_strfreev (items);
+        g_strfreev (items_f);
+        g_free (fl);
+        if (G_UNLIKELY (!task))
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Can't get node to go down",
+                    priv->name);
+            return FALSE;
+        }
+
+        donna_task_set_callback (task,
+                (task_callback_fn) set_location, tree, NULL);
+        donna_app_run_task (priv->app, task);
+        return TRUE;
+    }
+
+    g_strfreev (items);
+    g_strfreev (items_f);
     g_free (fl);
     /* even though there's no location to go down to, this is a no-op, not an error */
     return TRUE;
