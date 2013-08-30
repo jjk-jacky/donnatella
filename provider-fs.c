@@ -725,7 +725,7 @@ setter (DonnaTask       *task,
 
 static DonnaNode *
 new_node (DonnaProviderBase *_provider,
-          const gchar       *_location,
+          const gchar       *location,
           const gchar       *filename)
 {
     DonnaProviderBaseClass *klass;
@@ -734,17 +734,11 @@ new_node (DonnaProviderBase *_provider,
     DonnaNodeType    type;
     DonnaNodeFlags   flags;
     const gchar     *name;
-    gchar           *location = (gchar *) _location;
     gboolean         free_filename = FALSE;
 
     if (!filename)
     {
         gsize len;
-
-        /* no trailing slash (except for "/" ofc) */
-        len = strlen (location);
-        if (len > 1 && location[len - 1] == '/')
-            location = g_strndup (_location, len -1);
 
         /* if filename encoding if UTF8, just use location */
         if (g_get_filename_charsets (NULL))
@@ -760,8 +754,6 @@ new_node (DonnaProviderBase *_provider,
     {
         if (free_filename)
             g_free ((gchar *) filename);
-        if (location != _location)
-            g_free (location);
         return NULL;
     }
 
@@ -809,16 +801,12 @@ new_node (DonnaProviderBase *_provider,
     {
         klass->unlock_nodes (_provider);
         g_object_unref (node);
-        if (location != _location)
-            g_free (location);
         return n;
     }
     /* this adds another reference (from our own) so we send it to the caller */
     klass->add_node_to_cache (_provider, node);
     klass->unlock_nodes (_provider);
 
-    if (location != _location)
-        g_free (location);
     return node;
 }
 
@@ -827,17 +815,50 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
                       DonnaTask          *task,
                       const gchar        *location)
 {
-    DonnaNode *node;
-    GValue    *value;
+    DonnaNode   *node;
+    GString     *str = NULL;
+    const gchar *s;
+    GValue      *value;
 
-    node = new_node (_provider, location, NULL);
-    if (!node)
+    /* must start with a '/' */
+    if (*location != '/')
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_OTHER,
                 "Cannot create node, file doesn't exist: %s", location);
         return DONNA_TASK_FAILED;
     }
+
+    /* convert e.g. "///tmp///" into "/tmp" as is expected */
+    for (s = location + 1; *s != '\0'; ++s)
+    {
+        if (*s == '/' && s[-1] == '/')
+        {
+            if (!str)
+            {
+                str = g_string_sized_new (strlen (location) - 1);
+                g_string_append_len (str, location, s - location);
+            }
+        }
+        else if (str)
+            g_string_append_c (str, *s);
+    }
+    if (str && str->str[str->len - 1] == '/')
+        g_string_truncate (str, str->len - 1);
+
+    s = (str) ? str->str : location;
+    node = new_node (_provider, s, NULL);
+    if (!node)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Cannot create node, file doesn't exist: %s", s);
+        if (str)
+            g_string_free (str, TRUE);
+        return DONNA_TASK_FAILED;
+    }
+    if (str)
+        g_string_free (str, TRUE);
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
