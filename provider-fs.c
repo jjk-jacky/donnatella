@@ -1115,6 +1115,14 @@ provider_fs_new_child (DonnaProviderBase  *_provider,
     gint mode;
     gint st;
 
+    if (strchr (name, '/'))
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_INVALID_NAME,
+                "Invalid filename, cannot contain '/': '%s'", name);
+        return DONNA_TASK_FAILED;
+    }
+
     s = donna_node_get_location (parent);
     location = g_strdup_printf ("%s/%s", (streq (s, "/")) ? "" : s, name);
     g_free (s);
