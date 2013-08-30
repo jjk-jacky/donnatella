@@ -1676,14 +1676,18 @@ provider_register_get_children (DonnaProviderBase  *_provider,
                 .name = (gchar *) reg_default,
                 .type = DONNA_REGISTER_UNKNOWN,
             };
-            n = new_node_for_reg ((DonnaProvider *) _provider, &r, &err);
-            if (G_UNLIKELY (!n))
+            n = klass->get_cached_node (_provider, r.name);
+            if (!n)
             {
-                klass->unlock_nodes (_provider);
-                g_rec_mutex_unlock (&priv->rec_mutex);
-                donna_task_take_error (task, err);
-                g_ptr_array_unref (nodes);
-                return DONNA_TASK_FAILED;
+                n = new_node_for_reg ((DonnaProvider *) _provider, &r, &err);
+                if (G_UNLIKELY (!n))
+                {
+                    klass->unlock_nodes (_provider);
+                    g_rec_mutex_unlock (&priv->rec_mutex);
+                    donna_task_take_error (task, err);
+                    g_ptr_array_unref (nodes);
+                    return DONNA_TASK_FAILED;
+                }
             }
             klass->add_node_to_cache (_provider, n);
             g_ptr_array_add (nodes, n);
@@ -1694,14 +1698,18 @@ provider_register_get_children (DonnaProviderBase  *_provider,
                 .name = (gchar *) reg_clipboard,
                 .type = DONNA_REGISTER_UNKNOWN,
             };
-            n = new_node_for_reg ((DonnaProvider *) _provider, &r, &err);
-            if (G_UNLIKELY (!n))
+            n = klass->get_cached_node (_provider, r.name);
+            if (!n)
             {
-                klass->unlock_nodes (_provider);
-                g_rec_mutex_unlock (&priv->rec_mutex);
-                donna_task_take_error (task, err);
-                g_ptr_array_unref (nodes);
-                return DONNA_TASK_FAILED;
+                n = new_node_for_reg ((DonnaProvider *) _provider, &r, &err);
+                if (G_UNLIKELY (!n))
+                {
+                    klass->unlock_nodes (_provider);
+                    g_rec_mutex_unlock (&priv->rec_mutex);
+                    donna_task_take_error (task, err);
+                    g_ptr_array_unref (nodes);
+                    return DONNA_TASK_FAILED;
+                }
             }
             klass->add_node_to_cache (_provider, n);
             g_ptr_array_add (nodes, n);
