@@ -391,6 +391,38 @@ get_node_trigger (DonnaApp *app, const gchar *fl)
     return node;
 }
 
+static gchar *
+parse_Cc (gchar *_sce, gchar *s_C, gchar *s_c)
+{
+    GString *str = NULL;
+    gchar *sce = _sce;
+    gchar *s = sce;
+
+    while ((s = strchr (s, '%')))
+    {
+        if (s[1] == 'C' || s[1] == 'c')
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_len (str, sce, s - sce);
+
+            g_string_append (str, (s[1] == 'C') ? s_C : s_c);
+
+            s += 2;
+            sce = s;
+        }
+        else
+            ++s;
+    }
+
+    if (!str)
+        return sce;
+
+    g_string_append (str, sce);
+    g_free (_sce);
+    return g_string_free (str, FALSE);
+}
+
 #define ensure_node_trigger()   do {                                        \
     if (!node_trigger)                                                      \
         node_trigger = get_node_trigger (app, fl);                          \
@@ -486,6 +518,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         GPtrArray *arr = NULL;
         GPtrArray *children = NULL;
         guint i;
+        gchar *s_c = NULL;
+        gchar *s_C = NULL;
         gchar *s;
         gchar *end, *e;
         gboolean is_sensitive = TRUE;
@@ -543,6 +577,20 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         }
 
         /* user section */
+
+        /* there can be a var=name specified after a ':' */
+        s = strchr (section, ':');
+        if (s)
+        {
+            *s = '\0';
+            s_C = s + 1;
+            s = strchr (s_C, '=');
+            if (s)
+            {
+                *s = '\0';
+                s_c = s + 1;
+            }
+        }
 
         if (!donna_config_has_category (config, "context_menus/%s/%s",
                     source, section))
@@ -711,6 +759,9 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 continue;
             }
 
+            /* parse %C/%c in the trigger */
+            fl = parse_Cc (fl, s_C, s_c);
+
             /* parse the FL -- it doesn't have to be a command, but it can
              * always include variables */
             fl = donna_app_parse_fl (app, fl, conv_flags, conv_fn, conv_data, &intrefs);
@@ -800,6 +851,9 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 else
                     name = g_strdup (fl);
             }
+
+            /* parse %C/%c in the name */
+            name = parse_Cc (name, s_C, s_c);
 
             /* icon */
             if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/icon",
