@@ -1503,7 +1503,7 @@ provider_register_new_node (DonnaProviderBase  *_provider,
     DonnaProviderRegisterPrivate *priv = ((DonnaProviderRegister *) _provider)->priv;
     DonnaProviderBaseClass *klass;
     GError *err = NULL;
-    struct reg *reg;
+    struct reg *reg = NULL;
     struct reg r = { .type = DONNA_REGISTER_UNKNOWN };
     DonnaNode *node;
     DonnaNode *n;
@@ -1565,7 +1565,6 @@ provider_register_new_node (DonnaProviderBase  *_provider,
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
 
 cache_and_return:
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
@@ -1580,6 +1579,8 @@ cache_and_return:
     else
         klass->add_node_to_cache (_provider, node);
     klass->unlock_nodes (_provider);
+    if (reg)
+        g_rec_mutex_unlock (&priv->rec_mutex);
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, DONNA_TYPE_NODE);
