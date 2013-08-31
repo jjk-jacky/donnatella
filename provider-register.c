@@ -518,7 +518,8 @@ is_valid_register_name (const gchar **name, GError **error)
             || streq (*name, reg_default) || streq (*name, reg_clipboard))
         /* valid if there are no '/' in the name. That way we'll be able to have
          * special nodes like "<register>/cut" that can be triggered... */
-        return strchr (*name, '/') == NULL;
+        if (strchr (*name, '/') == NULL)
+            return TRUE;
 
     g_set_error (error, DONNA_PROVIDER_ERROR,
             DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
