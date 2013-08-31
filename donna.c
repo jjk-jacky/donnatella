@@ -2369,6 +2369,7 @@ donna_donna_show_menu (DonnaApp       *app,
      * it when done, i.e. on "unmap-event". It will trigger the widget's destroy
      * which is when we'll free mc */
     menu = g_object_ref_sink (load_menu (mc));
+    gtk_widget_add_events ((GtkWidget *) menu, GDK_STRUCTURE_MASK);
     g_signal_connect (menu, "unmap-event", (GCallback) g_object_unref, NULL);
 
     gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0,
