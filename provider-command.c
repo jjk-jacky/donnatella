@@ -964,6 +964,18 @@ convert:
                 skip_blank (start);
                 if (*start == '\0')
                     break;
+                else if (*start != ',')
+                {
+                    g_set_error (error, DONNA_COMMAND_ERROR,
+                            DONNA_COMMAND_ERROR_SYNTAX,
+                            "Command '%s', argument %d: "
+                            "Invalid list, expected ',' or EOL",
+                            rc->command->name, rc->i + 1);
+                    g_ptr_array_unref (arr);
+                    goto error;
+                }
+                else
+                    ++start;
             }
             g_ptr_array_add (rc->args, arr);
         }
@@ -1060,6 +1072,18 @@ convert:
                     skip_blank (start);
                     if (*start == '\0')
                         break;
+                    else if (*start != ',')
+                    {
+                        g_set_error (error, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_SYNTAX,
+                                "Command '%s', argument %d: "
+                                "Invalid list, expected ',' or EOL",
+                                rc->command->name, rc->i + 1);
+                        g_ptr_array_unref (arr);
+                        goto error;
+                    }
+                    else
+                        ++start;
                 }
                 ptr = arr;
             }
