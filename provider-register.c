@@ -38,6 +38,14 @@ static GdkAtom atom_gnome;
 static GdkAtom atom_kde;
 static GdkAtom atom_uris;
 
+/* internal from provider-base.c */
+gboolean _provider_base_set_property_icon (DonnaApp      *app,
+                                           DonnaNode     *node,
+                                           const gchar   *property,
+                                           const gchar   *icon,
+                                           GError       **error);
+
+
 static inline DonnaNode *   get_node_for            (DonnaProviderRegister  *pr,
                                                      const gchar            *name);
 static DonnaNode *          new_node_for_reg        (DonnaProvider          *provider,
@@ -175,6 +183,36 @@ new_register (const gchar *name, DonnaRegisterType type)
     reg->hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
     return reg;
+}
+
+static void
+update_special_nodes (DonnaProviderRegister *pr, const gchar *name, gboolean exists)
+{
+    DonnaNode *node;
+    gchar buf[48], *b = buf;
+    GValue v = G_VALUE_INIT;
+    const gchar *suffix[] = { "", "_copy", "_move", "_new_folder" };
+    gint i;
+
+    for (i = (sizeof (suffix) / sizeof (*suffix)) - 1; i >= 0; --i)
+    {
+        if (snprintf (buf, 48, "%s/paste%s", name, suffix[i]) >= 48)
+            b = g_strdup_printf ("%s/paste%s", name, suffix[i]);
+        node = get_node_for (pr, b);
+        if (node)
+        {
+            g_value_init (&v, G_TYPE_BOOLEAN);
+            g_value_set_boolean (&v, exists);
+            donna_node_set_property_value (node, "menu-is-sensitive", &v);
+            g_value_unset (&v);
+            g_object_unref (node);
+        }
+        if (b != buf)
+        {
+            g_free (b);
+            b = buf;
+        }
+    }
 }
 
 static inline void
@@ -555,6 +593,9 @@ register_drop (DonnaProviderRegister *pr,
     else
         ret = drop_register (pr, name, NULL);
 
+    if (ret)
+        update_special_nodes (pr, name, FALSE);
+
     return ret;
 }
 
@@ -689,6 +730,8 @@ register_set (DonnaProviderRegister *pr,
     }
     g_ptr_array_unref (arr);
 
+    update_special_nodes (pr, name, nodes->len > 0);
+
     return TRUE;
 }
 
@@ -706,6 +749,7 @@ register_add_nodes (DonnaProviderRegister   *pr,
     GPtrArray *arr;
     struct reg *reg;
     gboolean is_clipboard;
+    gboolean has_items;
     guint i;
 
     is_clipboard = *name == *reg_clipboard;
@@ -739,6 +783,7 @@ register_add_nodes (DonnaProviderRegister   *pr,
         add_reg_to_registers (pr, reg, FALSE, &node_root, &node, NULL);
     }
 
+    has_items = g_hash_table_size (reg->hashtable) > 0;
     arr = g_ptr_array_sized_new (nodes->len);
     for (i = 0; i < nodes->len; ++i)
         if (!is_clipboard || donna_node_peek_provider (nodes->pdata[i]) == pfs)
@@ -763,6 +808,8 @@ register_add_nodes (DonnaProviderRegister   *pr,
         g_object_unref (node);
     }
     g_ptr_array_unref (arr);
+
+    update_special_nodes (pr, name, has_items || nodes->len > 0);
 
     return TRUE;
 }
@@ -999,6 +1046,9 @@ register_get_nodes (DonnaProviderRegister   *pr,
             take_clipboard_ownership (pr, TRUE);
     }
 
+    if (do_drop)
+        update_special_nodes (pr, name, FALSE);
+
     return TRUE;
 }
 
@@ -1194,6 +1244,7 @@ register_import (DonnaProviderRegister  *pr,
             emit_node_children_from_arr (pr, node, arr);
             g_object_unref (node);
         }
+        update_special_nodes (pr, name, arr->len > 0);
         g_ptr_array_unref (arr);
     }
     else
@@ -1497,6 +1548,171 @@ update_node_type (DonnaProvider *provider, DonnaNode *node, guint type)
     g_value_unset (&v);
 }
 
+static DonnaNode *
+new_action_node (DonnaProviderRegister  *pr,
+                 const gchar            *location,
+                 const gchar            *name,
+                 const gchar            *action,
+                 GError                **error)
+{
+    DonnaProviderRegisterPrivate *priv = pr->priv;
+    DonnaNode *node;
+    struct reg *reg;
+    GValue v = G_VALUE_INIT;
+    gchar buf[32], *b = buf;
+    const gchar *lbl;
+    const gchar *icon;
+    enum {
+        SENSITIVE_IF_REG = 0,   /* can be empty, that is default/clipboard */
+        SENSITIVE_YES,
+        SENSITIVE_NO,
+        SENSITIVE_IF_REG_NOT_EMPTY
+    } sensitive;
+
+    if (streq (action, "cut"))
+    {
+        if (*name == *reg_default)
+            lbl = "Cut to register";
+        else if (*name == *reg_clipboard)
+            lbl = "Cut";
+        else
+            lbl = "Cut to '%s'";
+        icon = "edit-cut";
+        sensitive = SENSITIVE_YES;
+    }
+    else if (streq (action, "copy"))
+    {
+        if (*name == *reg_default)
+            lbl = "Copy to register";
+        else if (*name == *reg_clipboard)
+            lbl = "Copy";
+        else
+            lbl = "Copy to '%s'";
+        icon = "edit-copy";
+        sensitive = SENSITIVE_YES;
+    }
+    else if (streq (action, "append"))
+    {
+        if (*name == *reg_default)
+            lbl = "Append to register";
+        else if (*name == *reg_clipboard)
+            lbl = "Append";
+        else
+            lbl = "Append to '%s'";
+        icon = "edit-copy";
+        sensitive = SENSITIVE_IF_REG;
+    }
+    else if (streq (action, "paste"))
+    {
+        if (*name == *reg_default)
+            lbl = "Paste from register";
+        else if (*name == *reg_clipboard)
+            lbl = "Paste";
+        else
+            lbl = "Paste from '%s'";
+        icon = "edit-paste";
+        sensitive = SENSITIVE_IF_REG_NOT_EMPTY;
+    }
+    else if (streq (action, "paste_copy"))
+    {
+        if (*name == *reg_default)
+            lbl = "Paste (Copy) from register";
+        else if (*name == *reg_clipboard)
+            lbl = "Paste (Copy)";
+        else
+            lbl = "Paste (Copy) from '%s'";
+        icon = "edit-paste";
+        sensitive = SENSITIVE_IF_REG_NOT_EMPTY;
+    }
+    else if (streq (action, "paste_move"))
+    {
+        if (*name == *reg_default)
+            lbl = "Paste (Move) from register";
+        else if (*name == *reg_clipboard)
+            lbl = "Paste (Move)";
+        else
+            lbl = "Paste (Move) from '%s'";
+        icon = "edit-paste";
+        sensitive = SENSITIVE_IF_REG_NOT_EMPTY;
+    }
+    else if (streq (action, "paste_new_folder"))
+    {
+        if (*name == *reg_default)
+            lbl = "Paste Into New Folder from register";
+        else if (*name == *reg_clipboard)
+            lbl = "Paste Into New Folder";
+        else
+            lbl = "Paste Into New Folder from '%s'";
+        icon = "edit-paste";
+        sensitive = SENSITIVE_IF_REG_NOT_EMPTY;
+    }
+    else
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Provider 'register': Invalid action '%s' for register '%s'; "
+                "Supported actions are: 'cut', 'copy', 'append', 'paste', "
+                "'paste_copy', 'paste_move', and 'paste_new_folder'",
+                action, name);
+        return NULL;
+    }
+
+    if (snprintf (buf, 32, lbl, name) >= 32)
+        b = g_strdup_printf (lbl, name);
+
+    if (sensitive == SENSITIVE_IF_REG || sensitive == SENSITIVE_IF_REG_NOT_EMPTY)
+    {
+        if (sensitive == SENSITIVE_IF_REG
+                && (*name == *reg_default || *name == *reg_clipboard))
+            sensitive = SENSITIVE_YES;
+        else
+        {
+            g_rec_mutex_lock (&priv->rec_mutex);
+            reg = get_register (priv->registers, name);
+            if (reg && (sensitive == SENSITIVE_IF_REG
+                        || g_hash_table_size (reg->hashtable) > 0))
+                sensitive = SENSITIVE_YES;
+            else
+                sensitive = SENSITIVE_NO;
+            g_rec_mutex_unlock (&priv->rec_mutex);
+        }
+    }
+
+    node = donna_node_new ((DonnaProvider *) pr, location,
+            DONNA_NODE_ITEM, NULL, (refresher_fn) gtk_true, NULL,
+            b, DONNA_NODE_ICON_EXISTS);
+    if (G_UNLIKELY (!node))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'register': Unable to create a new node");
+        if (b != buf)
+            g_free (b);
+        return NULL;
+    }
+
+    _provider_base_set_property_icon (((DonnaProviderBase *) pr)->app, node,
+            "icon", icon, NULL);
+
+    g_value_init (&v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (&v, sensitive == SENSITIVE_YES);
+    if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
+                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, error)))
+    {
+        g_prefix_error (error, "Provider 'register': Cannot create new node, "
+                "failed to add property 'menu-is-sensitive': ");
+        g_value_unset (&v);
+        g_object_unref (node);
+        if (b != buf)
+            g_free (b);
+        return NULL;
+    }
+
+    if (b != buf)
+        g_free (b);
+    return node;
+}
+
 static DonnaTaskState
 provider_register_new_node (DonnaProviderBase  *_provider,
                             DonnaTask          *task,
@@ -1510,6 +1726,7 @@ provider_register_new_node (DonnaProviderBase  *_provider,
     DonnaNode *node;
     DonnaNode *n;
     GValue *value;
+    gchar *s;
 
     if (streq (location, "/"))
     {
@@ -1524,6 +1741,43 @@ provider_register_new_node (DonnaProviderBase  *_provider,
             return DONNA_TASK_FAILED;
         }
 
+        goto cache_and_return;
+    }
+
+    s = strchr (location, '/');
+    if (s)
+    {
+        gchar buf[32];
+        gchar *name = buf;
+
+        if (s - location < 32)
+            sprintf (buf, "%.*s", s - location, location);
+        else
+            name = g_strdup_printf ("%.*s", s - location, location);
+        ++s;
+
+        if (!is_valid_register_name ((const gchar **) &name, &err))
+        {
+            g_prefix_error (&err, "Provider 'register': Cannot create node for '%s': ",
+                    location);
+            donna_task_take_error (task, err);
+            if (name != buf)
+                g_free (name);
+            return DONNA_TASK_FAILED;
+        }
+
+        node = new_action_node ((DonnaProviderRegister *) _provider, location,
+                name, s, &err);
+        if (!node)
+        {
+            donna_task_take_error (task, err);
+            if (name != buf)
+                g_free (name);
+            return DONNA_TASK_FAILED;
+        }
+
+        if (name != buf)
+            g_free (name);
         goto cache_and_return;
     }
 
@@ -1757,19 +2011,90 @@ done:
 }
 
 static DonnaTaskState
-provider_register_trigger_node (DonnaProviderBase  *provider,
+provider_register_trigger_node (DonnaProviderBase  *_provider,
                                 DonnaTask          *task,
                                 DonnaNode          *node)
 {
-    /* this should never be called, since all our nodes are CONTAINERs and thus
-     * cannot get triggered */
-    donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-            DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-            "Provider 'register': trigger_node() not supported");
-    gchar *fl = donna_node_get_full_location (node);
-    g_warning ("Provider 'register': trigger_node() was called on '%s'", fl);
-    g_free (fl);
-    return DONNA_TASK_FAILED;
+    DonnaTask *t;
+    gchar *location;
+    gchar *name;
+    gchar *action;
+    gchar *s;
+
+    location = donna_node_get_location (node);
+    s = strchr (location + 1, '/');
+    if (!s)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_INVALID_CALL,
+                "Provider 'register': Cannot trigger node 'register:%s'",
+                location);
+        g_free (location);
+        return DONNA_TASK_FAILED;
+    }
+
+    *s = '\0';
+    action = s + 1;
+
+    /* in the off chance it needs quoting */
+    if (strchr (location, ',') || strchr (location, '"'))
+    {
+        GString *str;
+
+        str = g_string_new (NULL);
+        donna_g_string_append_quoted (str, location);
+        name = g_string_free (str, FALSE);
+    }
+    else
+        name = location;
+
+    if (streq (action, "cut") || streq (action, "copy"))
+        s = g_strdup_printf (
+                "command:register_set (%s, %s, @tree_get_nodes (:active, :selected))",
+                name, action);
+    else if (streq (action, "append"))
+        s = g_strdup_printf (
+                "command:register_add_nodes (%s, @tree_get_nodes (:active, :selected))",
+                name);
+    else if (streq (action, "paste") || streq (action, "paste_copy")
+            || streq (action, "paste_move") || streq (action, "paste_new_folder"))
+        s = g_strdup_printf (
+                "command:register_nodes_io (%s, %s, @tree_get_location (:active), %d)",
+                name,
+                (streq (action, "paste_copy")) ? "copy"
+                 : (streq (action, "paste_move")) ? "move" : "auto",
+                 (streq (action, "paste_new_folder")) ? 1 : 0);
+    else
+    {
+        *s = '/';
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_INVALID_CALL,
+                "Provider 'register': Cannot trigger node 'register:%s': Invalid action",
+                location);
+        g_free (location);
+        if (name != location)
+            g_free (name);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_trigger_node (_provider->app, s))
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'register': Failed to trigger node 'register:%s'",
+                location);
+        g_free (s);
+        g_free (location);
+        if (name != location)
+            g_free (name);
+        return DONNA_TASK_FAILED;
+    }
+
+    g_free (s);
+    g_free (location);
+    if (name != location)
+        g_free (name);
+    return DONNA_TASK_DONE;
 }
 
 static gboolean
@@ -1971,6 +2296,7 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
                 continue;
             }
 
+            update_special_nodes ((DonnaProviderRegister *) _provider, fl + 9, FALSE);
             g_free (fl);
         }
     }
@@ -1978,6 +2304,7 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
     {
         GPtrArray *nodes_removed_from;
         struct reg *reg;
+        gboolean has_items;
 
         nodes_removed_from = g_ptr_array_sized_new (nodes->len);
         g_rec_mutex_lock (&priv->rec_mutex);
@@ -2067,12 +2394,14 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
             g_ptr_array_add (nodes_removed_from, node);
             g_free (s);
         }
+        has_items = g_hash_table_size (reg->hashtable) > 0;
         g_rec_mutex_unlock (&priv->rec_mutex);
 
         for (i = 0; i < nodes_removed_from->len; ++i)
             donna_provider_node_removed_from ((DonnaProvider *) _provider,
                     nodes_removed_from->pdata[i], source);
         g_ptr_array_unref (nodes_removed_from);
+        update_special_nodes ((DonnaProviderRegister *) _provider, location, has_items);
     }
 
     if (str)
@@ -2389,6 +2718,7 @@ finish:
             gchar *s = donna_node_get_location (nodes_drop->pdata[i]);
             emit_drop (pr, nodes_drop->pdata[i],
                     *s == *reg_default || *s == *reg_clipboard);
+            update_special_nodes (pr, s, FALSE);
             g_free (s);
         }
         g_ptr_array_unref (nodes_drop);
@@ -2401,6 +2731,13 @@ finish:
         for (i = 0; i < emit_load->len; ++i)
         {
             struct emit_load *el = emit_load->pdata[i];
+
+            if (el->node)
+            {
+                gchar *s = donna_node_get_location (el->node);
+                update_special_nodes (pr, s, el->arr->len > 0);
+                g_free (s);
+            }
 
             if (el->node_root)
             {
