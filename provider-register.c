@@ -6,6 +6,7 @@
 #include "node.h"
 #include "app.h"
 #include "command.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -2434,6 +2435,7 @@ cmd_register_nodes_io (DonnaTask               *task,
     const gchar *name = args[0]; /* opt */
     gchar *io_type = args[1]; /* opt */
     DonnaNode *dest = args[2]; /* opt */
+    gboolean in_new_folder = GPOINTER_TO_INT (args[3]); /* opt */
 
     const gchar *c_io_type[] = { "auto", "copy", "move", "delete" };
     DonnaIoType io_types[] = { DONNA_IO_UNKNOWN, DONNA_IO_COPY, DONNA_IO_MOVE,
@@ -2480,10 +2482,175 @@ cmd_register_nodes_io (DonnaTask               *task,
             break;
     }
 
+    if (in_new_folder && io_types[c_io] == DONNA_IO_DELETE)
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Command 'register_nodes_io': Cannot use option 'in_new_folder' "
+                "with IO 'delete'");
+        return DONNA_TASK_FAILED;
+    }
+
     if (!register_get_nodes (pr, name, drop, &reg_type, &nodes, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
+
+    if (in_new_folder && nodes->len > 0)
+    {
+        DonnaTask *t;
+        DonnaTaskState state;
+        DonnaNode *n;
+        GString *str;
+        GString *str_defs;
+        gchar *name;
+        guint i;
+
+        /* create command ask_text() to ask user the name of the new folder */
+        str = g_string_new ("command:ask_text (");
+        donna_g_string_append_quoted (str, "Paste Into New Folder");
+        g_string_append_c (str, ',');
+        donna_g_string_append_quoted (str,
+                "Please enter the name of the new folder to paste into");
+        g_string_append_c (str, ',');
+
+        /* other defaults: name & name w/out extension, for first 3 items */
+        str_defs = g_string_new (NULL);
+        for (i = 0; i < 3 && i < nodes->len; ++i)
+        {
+            gchar *s;
+
+            if (i > 0)
+                g_string_append_c (str_defs, ',');
+            name = donna_node_get_name (nodes->pdata[i]);
+            donna_g_string_append_quoted (str_defs, name);
+
+            s = strrchr (name, '.');
+            if (s)
+            {
+                *s = '\0';
+                g_string_append_c (str_defs, ',');
+                donna_g_string_append_quoted (str_defs, name);
+            }
+            /* main default */
+            if (i == 0)
+            {
+                donna_g_string_append_quoted (str, name);
+                g_string_append_c (str, ',');
+            }
+
+            g_free (name);
+        }
+
+        if (str_defs->len > 0)
+            donna_g_string_append_quoted (str, str_defs->str);
+        g_string_free (str_defs, TRUE);
+
+        g_string_append_c (str, ')');
+
+        /* get the node for ask_text() */
+        t = donna_app_get_node_task (app, str->str);
+        g_string_free (str, TRUE);
+        if (G_UNLIKELY (!t))
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'register_nodes_io': "
+                    "Failed to create task for ask_text command");
+            g_ptr_array_unref (nodes);
+            return DONNA_TASK_FAILED;
+        }
+
+        donna_task_set_can_block (g_object_ref_sink (t));
+        donna_app_run_task (app, t);
+        donna_task_wait_for_it (t);
+
+        state = donna_task_get_state (t);
+        if (state != DONNA_TASK_DONE)
+        {
+            if (state == DONNA_TASK_FAILED)
+            {
+                err = g_error_copy (donna_task_get_error (t));
+                g_prefix_error (&err, "Command 'register_nodes_io': "
+                        "Failed to get node for ask_text command: ");
+                donna_task_take_error (task, err);
+            }
+            g_ptr_array_unref (nodes);
+            return state;
+        }
+
+        n = g_value_dup_object (donna_task_get_return_value (t));
+        g_object_unref (t);
+
+        /* trigger ask_text() */
+        t = donna_node_trigger_task (n, &err);
+        g_object_unref (n);
+        if (!t)
+        {
+            g_prefix_error (&err, "Command 'register_nodes_io': "
+                    "Failed to get task to trigger ask_text: ");
+            donna_task_take_error (task, err);
+            g_ptr_array_unref (nodes);
+            return DONNA_TASK_FAILED;
+        }
+
+        donna_task_set_can_block (g_object_ref_sink (t));
+        donna_app_run_task (app, t);
+        donna_task_wait_for_it (t);
+
+        state = donna_task_get_state (t);
+        if (state != DONNA_TASK_DONE)
+        {
+            if (state == DONNA_TASK_FAILED)
+            {
+                err = g_error_copy (donna_task_get_error (t));
+                g_prefix_error (&err, "Command 'register_nodes_io': "
+                        "Failed during command ask_text: ");
+                donna_task_take_error (task, err);
+            }
+            g_ptr_array_unref (nodes);
+            return state;
+        }
+
+        /* get name of new folder to create & paste into */
+        name = g_value_dup_string (donna_task_get_return_value (t));
+        g_object_unref (t);
+
+        t = donna_node_new_child_task (dest, DONNA_NODE_CONTAINER, name, &err);
+        if (G_UNLIKELY (!t))
+        {
+            g_prefix_error (&err, "Command 'register_nodes_io': "
+                    "Failed to create new folder '%s': ", name);
+            donna_task_take_error (task, err);
+            g_ptr_array_unref (nodes);
+            g_free (name);
+            return DONNA_TASK_FAILED;
+        }
+        g_free (name);
+
+        donna_task_set_can_block (g_object_ref_sink (t));
+        donna_app_run_task (app, t);
+        donna_task_wait_for_it (t);
+
+        state = donna_task_get_state (t);
+        if (state != DONNA_TASK_DONE)
+        {
+            if (state == DONNA_TASK_FAILED)
+            {
+                err = g_error_copy (donna_task_get_error (t));
+                g_prefix_error (&err, "Command 'register_nodes_io': "
+                        "Failed creating new folder: ");
+                donna_task_take_error (task, err);
+            }
+            g_ptr_array_unref (nodes);
+            return state;
+        }
+
+        /* switch dest to the newly created folder */
+        g_object_unref (dest);
+        dest = g_value_dup_object (donna_task_get_return_value (t));
+        g_object_unref (t);
     }
 
     if (c_io == 0)
@@ -2777,6 +2944,7 @@ provider_register_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (register_nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
