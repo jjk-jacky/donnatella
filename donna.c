@@ -32,6 +32,7 @@
 #include "statusbar.h"
 #include "imagemenuitem.h"
 #include "misc.h"
+#include "util.h"
 #include "macros.h"
 
 enum
@@ -1296,20 +1297,6 @@ donna_donna_get_conf_filename (DonnaApp       *app,
     return g_string_free (str, FALSE);
 }
 
-static void
-_g_string_append_quoted (GString *str, gchar *s)
-{
-    g_string_append_c (str, '"');
-    for ( ; *s != '\0'; ++s)
-    {
-        if (*s == '"' || *s == '\\')
-            g_string_append_c (str, '\\');
-
-        g_string_append_c (str, *s);
-    }
-    g_string_append_c (str, '"');
-}
-
 static gchar *
 donna_donna_parse_fl (DonnaApp       *app,
                       gchar          *_fl,
@@ -1384,14 +1371,14 @@ donna_donna_parse_fl (DonnaApp       *app,
                                 gchar *fl;
                                 fl = donna_node_get_full_location (
                                         (DonnaNode *) arr->pdata[i]);
-                                _g_string_append_quoted (str_arr, fl);
+                                donna_g_string_append_quoted (str_arr, fl);
                                 g_string_append_c (str_arr, ',');
                                 g_free (fl);
                             }
                         else
                             for (i = 0; i < arr->len; ++i)
                             {
-                                _g_string_append_quoted (str_arr,
+                                donna_g_string_append_quoted (str_arr,
                                         (gchar *) arr->pdata[i]);
                                 g_string_append_c (str_arr, ',');
                             }
@@ -1400,14 +1387,14 @@ donna_donna_parse_fl (DonnaApp       *app,
                         g_string_truncate (str_arr, str_arr->len - 1);
                         /* str_arr is a list of quoted strings/FL, but we also
                          * need to quote the list itself */
-                        _g_string_append_quoted (str, str_arr->str);
+                        donna_g_string_append_quoted (str, str_arr->str);
                         g_string_free (str_arr, TRUE);
                     }
                     else
                     {
                         gchar *fl;
                         fl = donna_node_get_full_location ((DonnaNode *) ptr);
-                        _g_string_append_quoted (str, fl);
+                        donna_g_string_append_quoted (str, fl);
                         g_free (fl);
                     }
                 }
@@ -1421,7 +1408,7 @@ donna_donna_parse_fl (DonnaApp       *app,
                 }
             }
             else if (type & DONNA_ARG_TYPE_STRING)
-                _g_string_append_quoted (str, (gchar *) ptr);
+                donna_g_string_append_quoted (str, (gchar *) ptr);
             else if (type & DONNA_ARG_TYPE_INT)
                 g_string_append_printf (str, "%d", * (gint *) ptr);
 

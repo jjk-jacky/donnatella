@@ -13,10 +13,12 @@ typedef struct
     const gchar *age_fallback_fmt;
 } DonnaTimeOptions;
 
-gchar *         donna_print_time            (guint64             ts,
-                                             const gchar        *fmt,
-                                             DonnaTimeOptions   *options);
-GValue *        duplicate_gvalue            (const GValue *src);
+gchar *         donna_print_time                (guint64             ts,
+                                                 const gchar        *fmt,
+                                                 DonnaTimeOptions   *options);
+GValue *        duplicate_gvalue                (const GValue       *src);
+void            donna_g_string_append_quoted    (GString            *str,
+                                                 const gchar        *s);
 
 G_END_DECLS
 

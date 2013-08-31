@@ -272,3 +272,17 @@ duplicate_gvalue (const GValue *src)
 
     return dst;
 }
+
+void
+donna_g_string_append_quoted (GString *str, const gchar *s)
+{
+    g_string_append_c (str, '"');
+    for ( ; *s != '\0'; ++s)
+    {
+        if (*s == '"' || *s == '\\')
+            g_string_append_c (str, '\\');
+
+        g_string_append_c (str, *s);
+    }
+    g_string_append_c (str, '"');
+}
