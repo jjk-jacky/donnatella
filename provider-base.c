@@ -23,6 +23,7 @@ struct _DonnaProviderBasePrivate
 {
     GHashTable  *nodes;
     GRecMutex    nodes_mutex;
+    DonnaTaskVisibility visibility[_DONNA_PROVIDER_BASE_TASK_NB];
 };
 
 static void             provider_base_set_property      (GObject        *object,
@@ -52,6 +53,10 @@ static gboolean         provider_base_set_property_icon (
                                              const gchar        *property,
                                              const gchar        *icon,
                                              GError            **error);
+static void             provider_base_set_task_visibility (
+                                             DonnaProviderBase      *provider,
+                                             DonnaProviderBaseTask   task,
+                                             DonnaTaskVisibility     visibility);
 
 /* DonnaProvider */
 static void             provider_base_node_updated (
@@ -119,11 +124,12 @@ donna_provider_base_class_init (DonnaProviderBaseClass *klass)
 {
     GObjectClass *o_class;
 
-    klass->lock_nodes        = provider_base_lock_nodes;
-    klass->unlock_nodes      = provider_base_unlock_nodes;
-    klass->get_cached_node   = provider_base_get_cached_node;
-    klass->add_node_to_cache = provider_base_add_node_to_cache;
-    klass->set_property_icon = provider_base_set_property_icon;
+    klass->lock_nodes           = provider_base_lock_nodes;
+    klass->unlock_nodes         = provider_base_unlock_nodes;
+    klass->get_cached_node      = provider_base_get_cached_node;
+    klass->add_node_to_cache    = provider_base_add_node_to_cache;
+    klass->set_property_icon    = provider_base_set_property_icon;
+    klass->set_task_visibility  = provider_base_set_task_visibility;
 
     o_class = (GObjectClass *) klass;
     o_class->set_property   = provider_base_set_property;
@@ -139,6 +145,7 @@ static void
 donna_provider_base_init (DonnaProviderBase *provider)
 {
     DonnaProviderBasePrivate *priv;
+    guint i;
 
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_BASE,
@@ -146,6 +153,8 @@ donna_provider_base_init (DonnaProviderBase *provider)
     priv->nodes = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, g_object_unref);
     g_rec_mutex_init (&priv->nodes_mutex);
+    for (i = 0; i < _DONNA_PROVIDER_BASE_TASK_NB; ++i)
+        priv->visibility[i] = DONNA_TASK_VISIBILITY_INTERNAL;
 }
 
 G_DEFINE_ABSTRACT_TYPE_WITH_CODE (DonnaProviderBase, donna_provider_base,
@@ -425,6 +434,16 @@ provider_base_set_property_icon (DonnaProviderBase  *provider,
     _provider_base_set_property_icon (provider->app, node, property, icon, error);
 }
 
+static void
+provider_base_set_task_visibility (DonnaProviderBase      *provider,
+                                   DonnaProviderBaseTask   task,
+                                   DonnaTaskVisibility     visibility)
+{
+    g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
+    g_return_if_fail (task >= _DONNA_PROVIDER_BASE_TASK_NB);
+    provider->priv->visibility[task] = visibility;
+}
+
 struct get_node_data
 {
     DonnaProviderBase   *provider_base;
@@ -493,6 +512,8 @@ provider_base_get_node_task (DonnaProvider    *provider,
     data->location = g_strdup (location);
     task = donna_task_new ((task_fn) get_node, data,
             (GDestroyNotify) free_get_node_data);
+    donna_task_set_visibility (task,
+            p->priv->visibility[DONNA_PROVIDER_BASE_TASK_NEW_NODE]);
 
     DONNA_DEBUG (TASK,
             donna_task_take_desc (task, g_strdup_printf ("get_node() for '%s:%s'",
@@ -548,6 +569,8 @@ provider_base_has_node_children_task (DonnaProvider *provider,
     data->node_types    = node_types;
     task = donna_task_new ((task_fn) has_children, data,
             (GDestroyNotify) free_node_children_data);
+    donna_task_set_visibility (task,
+            data->provider_base->priv->visibility[DONNA_PROVIDER_BASE_TASK_HAS_CHILDREN]);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);
@@ -600,6 +623,8 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
     data->node_types    = node_types;
     task = donna_task_new ((task_fn) get_children, data,
             (GDestroyNotify) free_node_children_data);
+    donna_task_set_visibility (task,
+            data->provider_base->priv->visibility[DONNA_PROVIDER_BASE_TASK_GET_CHILDREN]);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);
@@ -679,6 +704,9 @@ provider_base_get_node_parent_task (DonnaProvider   *provider,
 
     task = donna_task_new ((task_fn) get_node_parent, g_object_ref (node),
             g_object_unref);
+    donna_task_set_visibility (task,
+            /* because if we can't get it from the cache, we'll call new_node */
+            ((DonnaProviderBase *) provider)->priv->visibility[DONNA_PROVIDER_BASE_TASK_NEW_NODE]);
 
     DONNA_DEBUG (TASK,
             gchar *location = donna_node_get_location (node);
@@ -716,6 +744,8 @@ provider_base_trigger_node_task (DonnaProvider       *provider,
 
     task = donna_task_new ((task_fn) trigger_node, g_object_ref (node),
             g_object_unref);
+    donna_task_set_visibility (task,
+            ((DonnaProviderBase *) provider)->priv->visibility[DONNA_PROVIDER_BASE_TASK_TRIGGER_NODE]);
 
     DONNA_DEBUG (TASK,
             gchar *fl = donna_node_get_full_location (node);
@@ -790,6 +820,8 @@ provider_base_io_task (DonnaProvider       *provider,
     io->dest        = (dest) ? g_object_ref (dest) : NULL;
 
     task = donna_task_new ((task_fn) perform_io, io, (GDestroyNotify) free_io);
+    donna_task_set_visibility (task,
+            io->pb->priv->visibility[DONNA_PROVIDER_BASE_TASK_IO]);
 
     DONNA_DEBUG (TASK,
             gchar *fl = donna_node_get_full_location (dest);
@@ -847,7 +879,7 @@ provider_base_new_child_task (DonnaProvider       *provider,
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
 
-    if (DONNA_PROVIDER_BASE_GET_CLASS(provider)->new_child == NULL)
+    if (DONNA_PROVIDER_BASE_GET_CLASS (provider)->new_child == NULL)
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
@@ -862,6 +894,8 @@ provider_base_new_child_task (DonnaProvider       *provider,
     nc->name    = g_strdup (name);
 
     task = donna_task_new ((task_fn) new_child, nc, (GDestroyNotify) free_new_child);
+    donna_task_set_visibility (task,
+            ((DonnaProviderBase *) provider)->priv->visibility[DONNA_PROVIDER_BASE_TASK_NEW_CHILD]);
 
     DONNA_DEBUG (TASK,
             gchar *fl = donna_node_get_full_location (parent);
@@ -926,6 +960,8 @@ provider_base_remove_from_task (DonnaProvider  *provider,
 
     task = donna_task_new ((task_fn) remove_from, rf,
             (GDestroyNotify) free_remove_from);
+    donna_task_set_visibility (task,
+            ((DonnaProviderBase *) provider)->priv->visibility[DONNA_PROVIDER_BASE_TASK_REMOVE_FROM]);
 
     DONNA_DEBUG (TASK,
             gchar *fl = donna_node_get_full_location (source);

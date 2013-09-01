@@ -19,6 +19,18 @@ typedef struct _DonnaProviderBase           DonnaProviderBase;
 typedef struct _DonnaProviderBaseClass      DonnaProviderBaseClass;
 typedef struct _DonnaProviderBasePrivate    DonnaProviderBasePrivate;
 
+typedef enum
+{
+    DONNA_PROVIDER_BASE_TASK_NEW_NODE,
+    DONNA_PROVIDER_BASE_TASK_HAS_CHILDREN,
+    DONNA_PROVIDER_BASE_TASK_GET_CHILDREN,
+    DONNA_PROVIDER_BASE_TASK_TRIGGER_NODE,
+    DONNA_PROVIDER_BASE_TASK_IO,
+    DONNA_PROVIDER_BASE_TASK_NEW_CHILD,
+    DONNA_PROVIDER_BASE_TASK_REMOVE_FROM,
+    _DONNA_PROVIDER_BASE_TASK_NB
+} DonnaProviderBaseTask;
+
 struct _DonnaProviderBase
 {
     GObject parent;
@@ -43,6 +55,9 @@ struct _DonnaProviderBaseClass
                                              const gchar        *property,
                                              const gchar        *icon,
                                              GError            **error);
+    void            (*set_task_visibility)  (DonnaProviderBase      *provider,
+                                             DonnaProviderBaseTask   task,
+                                             DonnaTaskVisibility     visibility);
 
     DonnaTaskState  (*new_node)             (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
