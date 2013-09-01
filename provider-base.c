@@ -431,7 +431,8 @@ provider_base_set_property_icon (DonnaProviderBase  *provider,
                                  GError            **error)
 {
     g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
-    _provider_base_set_property_icon (provider->app, node, property, icon, error);
+    return _provider_base_set_property_icon (provider->app, node,
+            property, icon, error);
 }
 
 static void
