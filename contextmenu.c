@@ -392,7 +392,7 @@ get_node_trigger (DonnaApp *app, const gchar *fl)
 }
 
 static gchar *
-parse_Cc (gchar *_sce, gchar *s_C, gchar *s_c)
+parse_Cc (gchar *_sce, const gchar *s_C, const gchar *s_c)
 {
     GString *str = NULL;
     gchar *sce = _sce;
@@ -518,8 +518,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         GPtrArray *arr = NULL;
         GPtrArray *children = NULL;
         guint i;
-        gchar *s_c = NULL;
-        gchar *s_C = NULL;
+        const gchar *s_c = "";
+        const gchar *s_C = "";
         gchar *s;
         gchar *end, *e;
         gboolean is_sensitive = TRUE;
