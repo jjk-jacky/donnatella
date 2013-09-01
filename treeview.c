@@ -2916,9 +2916,10 @@ donna_tree_view_test_collapse_row (GtkTreeView    *treev,
     /* if the focused row is somewhere down, we need to move it up before the
      * collapse, to avoid GTK's set_cursor() */
     gtk_tree_view_get_cursor (treev, &p, NULL);
-    if (gtk_tree_path_is_ancestor (path, p))
+    if (p && gtk_tree_path_is_ancestor (path, p))
         gtk_tree_view_set_focused_row (treev, path);
-    gtk_tree_path_free (p);
+    if (p)
+        gtk_tree_path_free (p);
 
     /* if the current row (i.e. selected path) is somewhere down, let's change
      * the selection now so we can change the selection, without changing the
@@ -3822,9 +3823,10 @@ row_fake_deleted_cb (DonnaTreeStore *store,
     GtkTreePath *p;
 
     gtk_tree_view_get_cursor ((GtkTreeView *) tree, &p, NULL);
-    if (gtk_tree_path_compare (path, p) == 0)
+    if (p && gtk_tree_path_compare (path, p) == 0)
         handle_removing_row (tree, iter, TRUE);
-    gtk_tree_path_free (p);
+    if (p)
+        gtk_tree_path_free (p);
 }
 
 static void
@@ -7895,14 +7897,15 @@ init_getting_nodes (GtkTreeView    *treev,
      * user to have the ability to set some order/which item is the first, which
      * could be useful when those nodes are then used. */
     gtk_tree_view_get_cursor (treev, &path, NULL);
-    if (gtk_tree_model_get_iter (model, iter_focus, path))
+    if (path && gtk_tree_model_get_iter (model, iter_focus, path))
     {
         gtk_tree_path_free (path);
         *iter = *iter_focus;
     }
     else
     {
-        gtk_tree_path_free (path);
+        if (path)
+            gtk_tree_path_free (path);
         if (!gtk_tree_model_iter_children (model, iter, NULL))
             /* no (first) row, no selection */
             return FALSE;
@@ -8032,12 +8035,13 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 GtkTreePath *path;
 
                 gtk_tree_view_get_cursor (treev, &path, NULL);
-                if (gtk_tree_model_get_iter (model, iter, path))
+                if (path && gtk_tree_model_get_iter (model, iter, path))
                 {
                     gtk_tree_path_free (path);
                     return ROW_ID_ROW;
                 }
-                gtk_tree_path_free (path);
+                if (path)
+                    gtk_tree_path_free (path);
                 return ROW_ID_INVALID;
             }
             else if (streq ("prev", s))
