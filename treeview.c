@@ -10439,14 +10439,14 @@ get_node_for_history (DonnaTreeView         *tree,
             g_value_init (&v, GDK_TYPE_PIXBUF);
             g_value_take_object (&v, pb);
             donna_node_add_property (node, "menu-image-selected",
-                    GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, error);
+                    GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, NULL);
             g_value_unset (&v);
         }
 
         g_value_init (&v, G_TYPE_BOOLEAN);
         g_value_set_boolean (&v, TRUE);
         donna_node_add_property (node, "menu-is-label-bold",
-                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, error);
+                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL);
         g_value_unset (&v);
 
         return node;
@@ -10486,7 +10486,7 @@ get_node_for_history (DonnaTreeView         *tree,
         g_value_init (&v, GDK_TYPE_PIXBUF);
         g_value_take_object (&v, pb);
         donna_node_add_property (node, "menu-image-selected",
-                GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, error);
+                GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, NULL);
         g_value_unset (&v);
     }
 
