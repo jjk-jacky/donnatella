@@ -980,7 +980,7 @@ ct_time_edit (DonnaColumnType    *ct,
     gchar *ss;
 
     /* get selected nodes (if any) */
-    arr = donna_tree_view_get_selected_nodes (treeview);
+    arr = donna_tree_view_get_selected_nodes (treeview, NULL);
 
     ed = g_new0 (struct editing_data, 1);
     ed->data = data;

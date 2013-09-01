@@ -7883,38 +7883,95 @@ donna_tree_view_get_location (DonnaTreeView      *tree)
         return NULL;
 }
 
+static inline gboolean
+init_getting_nodes (GtkTreeView    *treev,
+                    GtkTreeModel   *model,
+                    GtkTreeIter    *iter_focus,
+                    GtkTreeIter    *iter)
+{
+    GtkTreePath *path;
+
+    /* we start on the focused row, then loop back from start to it. This allows
+     * user to have the ability to set some order/which item is the first, which
+     * could be useful when those nodes are then used. */
+    gtk_tree_view_get_cursor (treev, &path, NULL);
+    if (gtk_tree_model_get_iter (model, iter_focus, path))
+    {
+        gtk_tree_path_free (path);
+        *iter = *iter_focus;
+    }
+    else
+    {
+        gtk_tree_path_free (path);
+        if (!gtk_tree_model_iter_children (model, iter, NULL))
+            /* no (first) row, no selection */
+            return FALSE;
+        iter_focus->stamp = 0;
+    }
+    return TRUE;
+}
+
+/* Note: Returns NULL on error or no selection. Check error to know */
 GPtrArray *
-donna_tree_view_get_selected_nodes (DonnaTreeView   *tree)
+donna_tree_view_get_selected_nodes (DonnaTreeView   *tree,
+                                    GError         **error)
 {
     DonnaTreeViewPrivate *priv;
     GtkTreeModel *model;
+    GtkTreePath *path;
+    GtkTreeIter iter_focus;
+    GtkTreeIter iter;
     GtkTreeSelection *sel;
-    GList *list, *l;
-    GPtrArray *arr;
+    GPtrArray *arr = NULL;
+    gboolean second_pass = FALSE;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv  = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
-    sel  = gtk_tree_view_get_selection ((GtkTreeView *) tree);
-    list = gtk_tree_selection_get_selected_rows (sel, NULL);
-    if (!list)
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': No selection support in mode Tree"
+                " (use get_location() to get the current/selected node)",
+                priv->name);
+        return NULL;
+    }
+
+    sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+    if (!init_getting_nodes ((GtkTreeView *) tree, model, &iter_focus, &iter))
         return NULL;
 
-    arr = g_ptr_array_new_full (gtk_tree_selection_count_selected_rows (sel),
-            g_object_unref);
-    for (l = list; l; l = l->next)
+again:
+    do
     {
-        GtkTreeIter iter;
-        DonnaNode *node;
+        if (second_pass && itereq (&iter, &iter_focus))
+        {
+            iter_focus.stamp = 0;
+            break;
+        }
+        else if (gtk_tree_selection_iter_is_selected (sel, &iter))
+        {
+            DonnaNode *node;
 
-        gtk_tree_model_get_iter (model, &iter, l->data);
-        gtk_tree_model_get (model, &iter,
-                DONNA_TREE_VIEW_COL_NODE,   &node,
-                -1);
-        g_ptr_array_add (arr, node);
+            gtk_tree_model_get (model, &iter,
+                    DONNA_TREE_VIEW_COL_NODE,   &node,
+                    -1);
+            if (G_UNLIKELY (!arr))
+                arr = g_ptr_array_new_with_free_func (g_object_unref);
+            g_ptr_array_add (arr, node);
+        }
+    } while (gtk_tree_model_iter_next (model, &iter));
+
+    /* if we started at focus, let's start back from top to focus */
+    if (iter_focus.stamp != 0)
+    {
+        gtk_tree_model_iter_children (model, &iter, NULL);
+        second_pass = TRUE;
+        goto again;
     }
-    g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
+
     return arr;
 }
 
@@ -8545,8 +8602,10 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
     DonnaTreeViewPrivate *priv;
     GtkTreeSelection *sel;
     GtkTreeModel *model;
+    GtkTreeIter iter_focus;
     GtkTreeIter iter;
     row_id_type type;
+    gboolean second_pass = FALSE;
     gboolean ret = TRUE;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
@@ -8570,14 +8629,23 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
         /* for SELECTION we'll also iter through each row, and check whether or
          * not they're selected. Might not seem like the best of choices, but
          * this is what gtk_tree_selection_get_selected_rows() actually does,
-         * so this makes this code simpler (and avoids GList "overhead") */
-        if (!gtk_tree_model_iter_children (model, &iter, NULL))
+         * so this makes this code simpler (and avoids GList "overhead").
+         * Also, we don't loop from top to bottom, but focus to bottom & then
+         * top to focus, to allow user to set "order"/the first item. */
+        if (!init_getting_nodes ((GtkTreeView *) tree, model, &iter_focus, &iter))
             /* empty tree. I consider this a success */
             return TRUE;
 
+again:
     for (;;)
     {
-        DonnaNode   *node;
+        DonnaNode *node;
+
+        if (second_pass && itereq (&iter, &iter_focus))
+        {
+            iter_focus.stamp = 0;
+            break;
+        }
 
         if (type == ROW_ID_SELECTION
                 && !gtk_tree_selection_iter_is_selected (sel, &iter))
@@ -8619,6 +8687,15 @@ next:
         if (type == ROW_ID_ROW || !donna_tree_model_iter_next (model, &iter))
             break;
     }
+
+    /* if we started at focus, let's start back from top to focus */
+    if (type != ROW_ID_ROW && iter_focus.stamp != 0)
+    {
+        gtk_tree_model_iter_children (model, &iter, NULL);
+        second_pass = TRUE;
+        goto again;
+    }
+
     return ret;
 }
 
@@ -10156,10 +10233,12 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
     DonnaTreeViewPrivate *priv;
     GtkTreeModel *model;
     GtkTreeSelection *sel;
+    GtkTreeIter iter_focus;
     GtkTreeIter iter_last;
     GtkTreeIter iter;
     row_id_type type;
     GPtrArray *arr;
+    gboolean second_pass = FALSE;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     g_return_val_if_fail (rowid != NULL, NULL);
@@ -10227,15 +10306,21 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
             iter_last = iter;
     }
     else
-        if (!gtk_tree_model_iter_children (model, &iter, NULL))
+        if (!init_getting_nodes ((GtkTreeView *) tree, model, &iter_focus, &iter))
             /* empty tree, let's just return "nothing" then */
             return g_ptr_array_new ();
 
     sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
     arr = g_ptr_array_new_with_free_func (g_object_unref);
+again:
     for (;;)
     {
-        if (type != ROW_ID_SELECTION
+        if (second_pass && itereq (&iter, &iter_focus))
+        {
+            iter_focus.stamp = 0;
+            break;
+        }
+        else if (type != ROW_ID_SELECTION
                 || gtk_tree_selection_iter_is_selected (sel, &iter))
         {
             DonnaNode *node;
@@ -10250,6 +10335,14 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
         if ((type == ROW_ID_ROW && itereq (&iter, &iter_last))
                 || !gtk_tree_model_iter_next (model, &iter))
             break;
+    }
+
+    /* if we started at focus, let's start back from top to focus */
+    if (type != ROW_ID_ROW && iter_focus.stamp != 0)
+    {
+        gtk_tree_model_iter_children (model, &iter, NULL);
+        second_pass = TRUE;
+        goto again;
     }
 
     return arr;

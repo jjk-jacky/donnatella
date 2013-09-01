@@ -710,7 +710,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     has = donna_node_get_uid (node, TRUE, &uid);
     has = donna_node_get_gid (node, TRUE, &gid);
     /* get selected nodes (if any) */
-    arr = donna_tree_view_get_selected_nodes (treeview);
+    arr = donna_tree_view_get_selected_nodes (treeview, NULL);
 
     ed = g_new0 (struct editing_data, 1);
     ed->app  = ((DonnaColumnTypePerms *) ct)->priv->app;

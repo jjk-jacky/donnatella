@@ -187,7 +187,6 @@ gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
-GPtrArray *     donna_tree_view_get_selected_nodes (DonnaTreeView   *tree);
 gboolean        donna_tree_view_selection       (DonnaTreeView      *tree,
                                                  DonnaTreeSelAction  action,
                                                  DonnaTreeRowId     *rowid,
@@ -276,6 +275,9 @@ gboolean        donna_tree_view_maxi_collapse   (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
 /* Mode List */
+GPtrArray *     donna_tree_view_get_selected_nodes (
+                                                 DonnaTreeView      *tree,
+                                                 GError            **error);
 GPtrArray *     donna_tree_view_get_children    (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  DonnaNodeType       node_types);
