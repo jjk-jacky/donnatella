@@ -16,6 +16,7 @@
 #include "colorfilter.h"
 #include "size.h"
 #include "provider-internal.h"
+#include "contextmenu.h"
 #include "closures.h"
 
 enum
@@ -262,6 +263,15 @@ struct status
     /* size options */
     gint             digits;
     gboolean         long_unit;
+};
+
+/* for conv_flag_fn() used in actions/context menus */
+struct conv
+{
+    DonnaTreeView *tree;
+    DonnaTreeRow  *row;
+    gchar         *col_name;
+    guint          key_m;
 };
 
 
@@ -565,6 +575,11 @@ static gboolean select_arrangement_accumulator      (GSignalInvocationHint  *hin
                                                      const GValue           *return_handler,
                                                      gpointer                data);
 static void check_statuses (DonnaTreeView *tree, enum changed_on changed);
+static gboolean tree_conv_flag                          (const gchar      c,
+                                                         DonnaArgType    *type,
+                                                         gpointer        *ptr,
+                                                         GDestroyNotify  *destroy,
+                                                         struct conv     *conv);
 
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
@@ -11058,6 +11073,297 @@ found:
     return TRUE;
 }
 
+enum ctxt_go
+{
+    CTXT_GO_UP,
+    CTXT_GO_DOWN,
+};
+
+struct context_go
+{
+    DonnaTreeView *tree;
+    enum ctxt_go go;
+};
+
+static void
+free_context_go (struct context_go *cgo)
+{
+    g_slice_free (struct context_go, cgo);
+}
+
+static DonnaTaskState
+context_go (DonnaTask           *task,
+            DonnaNode           *node,
+            struct context_go   *cgo)
+{
+    GError *err = NULL;
+
+    if (cgo->go == CTXT_GO_UP)
+    {
+        if (!donna_tree_view_go_up (cgo->tree, 1, &err))
+        {
+            donna_app_show_error (cgo->tree->priv->app, NULL, err->message);
+            g_clear_error (&err);
+        }
+    }
+    else /* CTXT_GO_DOWN */
+    {
+        if (!donna_tree_view_go_down (cgo->tree, 1, &err))
+        {
+            donna_app_show_error (cgo->tree->priv->app, NULL, err->message);
+            g_clear_error (&err);
+        }
+    }
+    free_context_go (cgo);
+}
+
+static inline GPtrArray *
+context_get_section_go (DonnaTreeView           *tree,
+                        DonnaProviderInternal   *pi,
+                        const gchar             *extra,
+                        DonnaContextReference    reference,
+                        struct conv             *conv,
+                        GError                 **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GPtrArray *nodes;
+    gchar *e;
+
+    if (!extra)
+        extra = "up;down";
+
+    nodes = g_ptr_array_new ();
+    for (;;)
+    {
+        gsize len;
+        const gchar *name;
+        const gchar *icon;
+        enum ctxt_go go;
+        gboolean is_sensitive = TRUE;
+        DonnaNode *node;
+        struct context_go *cgo;
+
+        e = strchr (extra, ';');
+        if (e)
+            len = e - extra;
+        else
+            len = strlen (extra);
+
+        if (len == 2 && streqn (extra, "up", 2))
+        {
+            gchar *s;
+
+            /* no location or flat provider means no going up */
+            if (!priv->location || (donna_provider_get_flags (
+                            donna_node_peek_provider (priv->location))
+                        & DONNA_PROVIDER_FLAG_FLAT))
+                goto next;
+
+            s = donna_node_get_location (priv->location);
+            is_sensitive = !streq (s, "/");
+            g_free (s);
+
+            name = "Go Up";
+            icon = "go-up";
+            go = CTXT_GO_UP;
+        }
+        else if (len == 4 && streqn (extra, "down", 4))
+        {
+            /* no location or flat provider means no going down */
+            if (!priv->location || (donna_provider_get_flags (
+                            donna_node_peek_provider (priv->location))
+                        & DONNA_PROVIDER_FLAG_FLAT))
+                goto next;
+
+            name = "Go Down";
+            icon = "go-down";
+            go = CTXT_GO_DOWN;
+        }
+        else if (len == 1 && *extra == '-')
+        {
+            g_ptr_array_add (nodes, NULL);
+            goto next;
+        }
+        else
+        {
+            g_prefix_error (error, "Treeview '%s': "
+                    "Failed to get context section 'go'; invalid item '%.*s' "
+                    "-- Supported items are 'up', 'down' and '-'",
+                    priv->name, len, extra);
+            g_ptr_array_unref (nodes);
+            return NULL;
+        }
+
+        cgo = g_slice_new (struct context_go);
+        cgo->tree = tree;
+        cgo->go = go;
+
+        node = donna_provider_internal_new_node (pi, name, FALSE, icon, NULL,
+                DONNA_NODE_ITEM, is_sensitive, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+                (internal_fn) context_go, cgo, (GDestroyNotify) free_context_go,
+                error);
+        if (G_UNLIKELY (!node))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to get context section 'go'; "
+                    "couldn't create node: ",
+                    priv->name);
+            g_ptr_array_unref (nodes);
+            return NULL;
+        }
+
+        g_ptr_array_add (nodes, node);
+next:
+        if (e)
+            extra = e + 1;
+        else
+            break;
+    }
+
+    return nodes;
+}
+
+static GPtrArray *
+tree_context_get_nodes (const gchar             *section,
+                        const gchar             *extra,
+                        DonnaContextReference    reference,
+                        struct conv             *conv,
+                        GError                 **error)
+{
+    DonnaTreeView *tree = conv->tree;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaProviderInternal *pi;
+    GPtrArray *nodes;
+
+    pi = (DonnaProviderInternal *) donna_app_get_provider (priv->app, "internal");
+    if (G_UNLIKELY (!pi))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get context section '%s': "
+                "couldn't get provider 'internal'",
+                priv->name, section);
+        return NULL;
+    }
+
+    if (streq (section, "go"))
+        nodes = context_get_section_go (tree, pi, extra, reference, conv, error);
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
+                "Treeview '%s': No such section: '%s'",
+                priv->name, section);
+        g_object_unref (pi);
+        return NULL;
+    }
+
+    g_object_unref (pi);
+    return nodes;
+}
+
+GPtrArray *
+donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
+                                   DonnaTreeRowId     *rowid,
+                                   gchar              *sections,
+                                   GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaContextReference reference = 0;
+    struct conv conv = { NULL, };
+    GtkTreeSelection *sel;
+    GPtrArray *nodes;
+    row_id_type type;
+    GtkTreeIter iter;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    priv = tree->priv;
+
+    sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+    conv.tree = tree;
+
+    if (rowid)
+    {
+        type = convert_row_id_to_iter (tree, rowid, &iter);
+        if (type != ROW_ID_ROW)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                    "Treeview '%s': Cannot get context nodes, invalid reference row-id",
+                    priv->name);
+            return NULL;
+        }
+        conv.row = get_row_for_iter (tree, &iter);
+        if (gtk_tree_selection_iter_is_selected (sel, &iter))
+            reference |= DONNA_CONTEXT_REF_SELECTED;
+        else
+            reference |= DONNA_CONTEXT_REF_NOT_SELECTED;
+    }
+
+    if ((reference & DONNA_CONTEXT_REF_SELECTED)
+            || gtk_tree_selection_count_selected_rows (sel))
+        reference |= DONNA_CONTEXT_HAS_SELECTION;
+
+    nodes = donna_context_menu_get_nodes (priv->app, error, sections, reference,
+                "treeviews", (get_section_nodes_fn) tree_context_get_nodes,
+                "olLrnN", (conv_flag_fn) tree_conv_flag, &conv, (is_tree (tree))
+                ? "defaults/treeviews/tree" : "defaults/treeviews/list",
+                "treeviews/%s", priv->name);
+    if (!nodes)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get context nodes: ",
+                priv->name);
+        return NULL;
+    }
+
+    return nodes;
+}
+
+gboolean
+donna_tree_view_context_popup (DonnaTreeView      *tree,
+                               DonnaTreeRowId     *rowid,
+                               gchar              *sections,
+                               const gchar        *_menus,
+                               gboolean            no_focus_grab,
+                               GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaConfig *config;
+    GPtrArray *nodes;
+    gchar *menus;
+
+    nodes = donna_tree_view_context_get_nodes (tree, rowid, sections, error);
+    if (!nodes)
+        return FALSE;
+
+    priv = tree->priv;
+    config = donna_app_peek_config (priv->app);
+
+    if (_menus)
+        menus = (gchar *) _menus;
+    else
+    {
+        if (!donna_config_get_string (config, &menus, "treeviews/%s/context_menu_menus",
+                    priv->name))
+            donna_config_get_string (config, &menus,
+                    "defaults/treeviews/%s/context_menu_menus",
+                    (is_tree (tree)) ? "tree" : "list");
+    }
+
+    if (!no_focus_grab)
+        gtk_widget_grab_focus ((GtkWidget *) tree);
+
+    if (!donna_app_show_menu (priv->app, nodes, menus, error))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to show context menu: ",
+                priv->name);
+        if (menus != _menus)
+            g_free (menus);
+        return FALSE;
+    }
+
+    if (menus != _menus)
+        g_free (menus);
+    return TRUE;
+}
+
 
 /* mode list only */
 GPtrArray *
@@ -11314,14 +11620,6 @@ enum
     CLICK_REGULAR = 0,
     CLICK_ON_BLANK,
     CLICK_ON_EXPANDER,
-};
-
-struct conv
-{
-    DonnaTreeView *tree;
-    DonnaTreeRow  *row;
-    gchar         *col_name;
-    guint          key_m;
 };
 
 static gboolean

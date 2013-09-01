@@ -237,6 +237,17 @@ gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
 gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
                                                  gint                level,
                                                  GError            **error);
+GPtrArray *     donna_tree_view_context_get_nodes (
+                                                 DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 gchar              *sections,
+                                                 GError            **error);
+gboolean        donna_tree_view_context_popup   (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 gchar              *sections,
+                                                 const gchar        *menus,
+                                                 gboolean            no_focus_grab,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);
