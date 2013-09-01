@@ -1847,17 +1847,31 @@ cache_and_return:
 }
 
 static DonnaTaskState
-provider_register_has_children (DonnaProviderBase  *provider,
+provider_register_has_children (DonnaProviderBase  *_provider,
                                 DonnaTask          *task,
                                 DonnaNode          *node,
                                 DonnaNodeType       node_types)
 {
+    DonnaProviderRegisterPrivate *priv = ((DonnaProviderRegister *) _provider)->priv;
+    struct reg *reg;
+    gchar *location;
     GValue *value;
 
+    location = donna_node_get_location (node);
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_BOOLEAN);
-    g_value_set_boolean (value, TRUE);
+    if (streq (location, "/"))
+        /* because default & clipboard alwas exist */
+        g_value_set_boolean (value, TRUE);
+    else
+    {
+        g_rec_mutex_lock (&priv->rec_mutex);
+        reg = get_register (priv->registers, location);
+        g_value_set_boolean (value, reg && g_hash_table_size (reg->hashtable) > 0);
+        g_rec_mutex_unlock (&priv->rec_mutex);
+    }
     donna_task_release_return_value (task);
+    g_free (location);
 
     return DONNA_TASK_DONE;
 }
