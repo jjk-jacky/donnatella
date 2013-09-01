@@ -565,7 +565,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             {
                 guint pos = nodes->len;
                 g_ptr_array_set_size (nodes, nodes->len + arr->len);
-                memcpy (nodes->pdata[pos], arr->pdata[0], sizeof (gpointer) * arr->len);
+                memcpy (&nodes->pdata[pos], &arr->pdata[0], sizeof (gpointer) * arr->len);
             }
             g_ptr_array_unref (arr);
             goto next;
