@@ -17,7 +17,9 @@ struct reg
 {
     gchar *name;
     DonnaRegisterType type;
-    GHashTable *hashtable; /* hashmap of full locations (keys == values) */
+    GHashTable *hashtable; /* hashmap of full locations (value == GList*) */
+    GList *list; /* to preserve order */
+    GList *last; /* so we can append w/out traversing the whole list */
 };
 
 struct _DonnaProviderRegisterPrivate
@@ -154,6 +156,7 @@ free_register (struct reg *reg)
     if (reg->name != reg_default && reg->name != reg_clipboard)
         g_free (reg->name);
     g_hash_table_unref (reg->hashtable);
+    g_list_free (reg->list);
     g_free (reg);
 }
 
@@ -181,6 +184,8 @@ new_register (const gchar *name, DonnaRegisterType type)
         reg->name = g_strdup (name);
     reg->type = type;
     reg->hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+    reg->list = NULL;
+    reg->last = NULL;
 
     return reg;
 }
@@ -292,8 +297,7 @@ clipboard_get (GtkClipboard             *clipboard,
     DonnaProviderRegisterPrivate *priv = pr->priv;
     struct reg *reg;
     GString *str;
-    GHashTableIter iter;
-    gpointer key;
+    GList *l;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, reg_clipboard);
@@ -309,17 +313,16 @@ clipboard_get (GtkClipboard             *clipboard,
         g_string_append_printf (str, "%s\n",
                 (reg->type == DONNA_REGISTER_CUT) ? "cut" : "copy");
 
-    g_hash_table_iter_init (&iter, reg->hashtable);
-    while (g_hash_table_iter_next (&iter, &key, NULL))
+    for (l = reg->list; l; l = l->next)
     {
         GError *err = NULL;
         gchar *s;
 
-        s = g_filename_to_uri ((gchar *) key, NULL, &err);
+        s = g_filename_to_uri ((gchar *) l->data, NULL, &err);
         if (G_UNLIKELY (!s))
         {
             g_warning ("Provider 'register': clipboard_get() for CLIPBOARD: Failed to convert '%s' to URI: %s",
-                    (gchar *) key, err->message);
+                    (gchar *) l->data, err->message);
             g_clear_error (&err);
         }
         else
@@ -397,6 +400,8 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
 {
     struct {
         GHashTable **hashtable;
+        GList **list;
+        GList **last;
         DonnaRegisterType *type;
         GString **str;
         GError **error;
@@ -500,7 +505,14 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
         if (b != buf)
             g_free (b);
 
-        g_hash_table_add (*data->hashtable, filename);
+        if (*data->list)
+        {
+            g_list_append (*data->last, filename);
+            *data->last = (*data->last)->next;
+        }
+        else
+            *data->list = *data->last = g_list_append (*data->list, filename);
+        g_hash_table_add (*data->hashtable, *data->last);
         s = e + 1;
     }
     gtk_selection_data_free (sd);
@@ -510,6 +522,8 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
 static gboolean
 get_from_clipboard (DonnaApp             *app,
                     GHashTable          **hashtable,
+                    GList               **list,
+                    GList               **last,
                     DonnaRegisterType    *type,
                     GString             **str,
                     GError              **error)
@@ -517,10 +531,12 @@ get_from_clipboard (DonnaApp             *app,
     DonnaTask *task;
     struct {
         GHashTable **hashtable;
+        GList **list;
+        GList **last;
         DonnaRegisterType *type;
         GString **str;
         GError **error;
-    } data = { hashtable, type, str, error };
+    } data = { hashtable, list, last, type, str, error };
     gboolean ret;
 
     g_assert (hashtable != NULL && *hashtable != NULL);
@@ -612,8 +628,19 @@ add_node_to_reg (struct reg *reg, DonnaNode *node, gboolean is_clipboard)
         s = donna_node_get_full_location (node);
 
     added = !g_hash_table_contains (reg->hashtable, s);
-    /* if already in there, replaces old key with s & frees the old key */
-    g_hash_table_add (reg->hashtable, s);
+    if (added)
+    {
+        if (reg->list)
+        {
+            /* append to last item directly */
+            g_list_append (reg->last, s);
+            reg->last = reg->last->next;
+        }
+        else
+            /* create first item */
+            reg->list = reg->last = g_list_append (reg->list, s);
+        g_hash_table_insert (reg->hashtable, s, reg->last);
+    }
     return added;
 }
 
@@ -698,6 +725,8 @@ register_set (DonnaProviderRegister *pr,
             reg_type = type;
         reg->type = type;
         g_hash_table_remove_all (reg->hashtable);
+        g_list_free (reg->list);
+        reg->list = reg->last = NULL;
     }
 
     arr = g_ptr_array_sized_new (nodes->len);
@@ -766,7 +795,8 @@ register_add_nodes (DonnaProviderRegister   *pr,
         {
             GString *str = NULL;
 
-            if (!get_from_clipboard (app, &reg->hashtable, &reg->type, &str, error))
+            if (!get_from_clipboard (app, &reg->hashtable, &reg->list, &reg->last,
+                        &reg->type, &str, error))
             {
                 g_rec_mutex_unlock (&priv->rec_mutex);
                 g_prefix_error (error, "Couldn't append files to CLIPBOARD: ");
@@ -844,7 +874,8 @@ register_set_type (DonnaProviderRegister    *pr,
             GString *str = NULL;
 
             reg = new_register (reg_clipboard, DONNA_REGISTER_UNKNOWN);
-            if (!get_from_clipboard (app, &reg->hashtable, &reg->type, &str, error))
+            if (!get_from_clipboard (app, &reg->hashtable, &reg->list, &reg->last,
+                        &reg->type, &str, error))
             {
                 g_rec_mutex_unlock (&priv->rec_mutex);
                 g_prefix_error (error, "Couldn't set register type of CLIPBOARD: ");
@@ -902,8 +933,8 @@ register_get_nodes (DonnaProviderRegister   *pr,
     struct reg *reg = NULL;
     DonnaRegisterType reg_type;
     GHashTable *hashtable;
-    GHashTableIter iter;
-    gpointer key;
+    GList *list;
+    GList *l;
     GString *str = NULL;
     gboolean do_drop;
 
@@ -927,10 +958,14 @@ register_get_nodes (DonnaProviderRegister   *pr,
         if (is_clipboard)
             hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
         if (!is_clipboard
-                || !get_from_clipboard (app, &hashtable, &reg_type, &str, error))
+                || !get_from_clipboard (app, &hashtable, &list, &l,
+                    &reg_type, &str, error))
         {
             if (is_clipboard)
+            {
                 g_hash_table_unref (hashtable);
+                g_list_free (list);
+            }
             g_rec_mutex_unlock (&priv->rec_mutex);
             if (*error)
                 g_prefix_error (error, "Cannot get nodes from register '%s': ",
@@ -951,6 +986,7 @@ register_get_nodes (DonnaProviderRegister   *pr,
     else
     {
         hashtable = reg->hashtable;
+        list = reg->list;
         reg_type = reg->type;
     }
 
@@ -961,7 +997,10 @@ register_get_nodes (DonnaProviderRegister   *pr,
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
         if (!reg)
+        {
             g_hash_table_unref (hashtable);
+            g_list_free (list);
+        }
         return TRUE;
     }
 
@@ -969,16 +1008,15 @@ register_get_nodes (DonnaProviderRegister   *pr,
         pfs = donna_app_get_provider (((DonnaProviderBase *) pr)->app, "fs");
 
     *nodes = g_ptr_array_new_full (g_hash_table_size (hashtable), g_object_unref);
-    g_hash_table_iter_init (&iter, hashtable);
-    while (g_hash_table_iter_next (&iter, &key, NULL))
+    for (l = list; l; l = l->next)
     {
         DonnaTask *task;
 
         if (pfs)
-            task = donna_provider_get_node_task (pfs, (gchar *) key, NULL);
+            task = donna_provider_get_node_task (pfs, (gchar *) l->data, NULL);
         else
             task = donna_app_get_node_task (((DonnaProviderBase *) pr)->app,
-                    (gchar *) key);
+                    (gchar *) l->data);
 
         if (!task)
         {
@@ -986,7 +1024,7 @@ register_get_nodes (DonnaProviderRegister   *pr,
                 str = g_string_new (NULL);
 
             g_string_append_printf (str, "\n- Failed to get node for '%s' (couldn't get task)",
-                    (gchar *) key);
+                    (gchar *) l->data);
             continue;
         }
 
@@ -1006,10 +1044,10 @@ register_get_nodes (DonnaProviderRegister   *pr,
 
             if (e)
                 g_string_append_printf (str, "\n- Failed to get node for '%s': %s",
-                        (gchar *) key, e->message);
+                        (gchar *) l->data, e->message);
             else
                 g_string_append_printf (str, "\n- Failed to get node for '%s'",
-                        (gchar *) key);
+                        (gchar *) l->data);
         }
 
         g_object_unref (task);
@@ -1041,6 +1079,7 @@ register_get_nodes (DonnaProviderRegister   *pr,
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
         g_hash_table_unref (hashtable);
+        g_list_free (list);
 
         if (do_drop)
             take_clipboard_ownership (pr, TRUE);
@@ -1205,7 +1244,16 @@ register_import (DonnaProviderRegister  *pr,
         }
 
         if (new)
-            g_hash_table_add (new_reg->hashtable, new);
+        {
+            if (new_reg->list)
+            {
+                g_list_append (new_reg->last, new);
+                new_reg->last = new_reg->last->next;
+            }
+            else
+                new_reg->list = new_reg->last = g_list_append (new_reg->list, new);
+            g_hash_table_insert (new_reg->hashtable, new, new_reg->last);
+        }
         if (fl)
             g_ptr_array_add (arr, fl);
 
@@ -1324,9 +1372,9 @@ register_export (DonnaProviderRegister  *pr,
     gboolean is_clipboard;
     DonnaRegisterType reg_type;
     GHashTable *hashtable;
-    GHashTableIter iter;
+    GList *list;
+    GList *l;
     GString *str_err = NULL;
-    gpointer key;
 
     is_clipboard = *name == *reg_clipboard;
 
@@ -1343,7 +1391,8 @@ register_export (DonnaProviderRegister  *pr,
         else if (is_clipboard)
             hashtable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
         if (!is_clipboard
-                || !get_from_clipboard (app, &hashtable, &reg_type, &str_err, error))
+                || !get_from_clipboard (app, &hashtable, &list, &l,
+                    &reg_type, &str_err, error))
         {
             if (is_clipboard)
                 g_hash_table_unref (hashtable);
@@ -1364,30 +1413,30 @@ register_export (DonnaProviderRegister  *pr,
     else
     {
         hashtable = reg->hashtable;
+        list = reg->list;
         reg_type = reg->type;
     }
 
     g_string_append (str, (reg_type == DONNA_REGISTER_CUT) ? "cut\n" : "copy\n");
-    g_hash_table_iter_init (&iter, hashtable);
-    while (g_hash_table_iter_next (&iter, &key, NULL))
+    for (l = list; l; l = l->next)
     {
         if (reg)
         {
             if (file_type == DONNA_REGISTER_FILE_NODES)
             {
-                g_string_append (str, (gchar *) key);
+                g_string_append (str, (gchar *) l->data);
                 g_string_append_c (str, '\n');
             }
             /* other file_types require nodes to be in fs */
-            else if (streqn ((gchar *) key, "fs:", 3))
+            else if (streqn ((gchar *) l->data, "fs:", 3))
             {
                 if (file_type == DONNA_REGISTER_FILE_FILE)
-                    g_string_append (str, (gchar *) key + 3);
+                    g_string_append (str, (gchar *) l->data + 3);
                 else /* DONNA_REGISTER_FILE_URIS */
                 {
                     gchar *s;
 
-                    s = g_filename_to_uri ((gchar *) key + 3, NULL, NULL);
+                    s = g_filename_to_uri ((gchar *) l->data + 3, NULL, NULL);
                     if (!s)
                         continue;
                     g_string_append (str, s);
@@ -1401,15 +1450,15 @@ register_export (DonnaProviderRegister  *pr,
             if (file_type == DONNA_REGISTER_FILE_NODES)
             {
                 g_string_append (str, "fs:");
-                g_string_append (str, (gchar *) key);
+                g_string_append (str, (gchar *) l->data);
             }
             else if (file_type == DONNA_REGISTER_FILE_FILE)
-                g_string_append (str, (gchar *) key);
+                g_string_append (str, (gchar *) l->data);
             else /* DONNA_REGISTER_FILE_URIS */
             {
                 gchar *s;
 
-                s = g_filename_to_uri ((gchar *) key, NULL, NULL);
+                s = g_filename_to_uri ((gchar *) l->data, NULL, NULL);
                 if (!s)
                     continue;
                 g_string_append (str, s);
@@ -1420,7 +1469,10 @@ register_export (DonnaProviderRegister  *pr,
     }
 
     if (!reg)
+    {
         g_hash_table_unref (hashtable);
+        g_list_free (list);
+    }
 
     return TRUE;
 }
@@ -2346,7 +2398,7 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
 
                 reg = new_register (reg_clipboard, DONNA_REGISTER_UNKNOWN);
                 if (!get_from_clipboard (_provider->app, &reg->hashtable,
-                            &reg->type, &str, &err))
+                            &reg->list, &reg->last, &reg->type, &str, &err))
                 {
                     g_rec_mutex_unlock (&priv->rec_mutex);
                     g_prefix_error (&err, "Provider 'register': "
@@ -2386,6 +2438,7 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
 
         for (i = 0; i < nodes->len; ++i)
         {
+            GList *l;
             gchar *s;
 
             node = nodes->pdata[i];
@@ -2394,7 +2447,15 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
             else
                 s = donna_node_get_full_location (node);
 
-            if (!g_hash_table_remove (reg->hashtable, s))
+            l = g_hash_table_lookup (reg->hashtable, s);
+            if (l)
+            {
+                if (l == reg->last)
+                    reg->last = reg->last->prev;
+                reg->list = g_list_delete_link (reg->list, l);
+                g_hash_table_remove (reg->hashtable, s);
+            }
+            else
             {
                 if (!str)
                     str = g_string_new (NULL);
