@@ -11618,18 +11618,24 @@ skip_focusing_click (DonnaTreeView  *tree,
         GtkWidget *w = NULL;
 
         if (tree->priv->focusing_click)
+        {
             /* get the widget that currently has the focus */
             w = gtk_window_get_focus ((GtkWindow *) gtk_widget_get_toplevel (
                         (GtkWidget *) tree));
+            /* We'll "skip" the click if focusing_click is set, unless the
+             * widget is a child of ours, e.g. a column header.
+             * Call this now because the call to gtk_widget_grab_focus() below
+             * could get this widget finalized */
+            if (w && gtk_widget_get_ancestor (w, DONNA_TYPE_TREE_VIEW)
+                    == (GtkWidget *) tree)
+                w = NULL;
+        }
 
         /* see notes above for why */
         if (tree_might_grab_focus)
             gtk_widget_grab_focus ((GtkWidget *) tree);
 
-        /* we "skip" the click if focusing_click, unless the widget that had
-         * the focus was a children of ours, i.e. a column header */
-        if (tree->priv->focusing_click && w && gtk_widget_get_ancestor (w,
-                    DONNA_TYPE_TREE_VIEW) != (GtkWidget *) tree)
+        if (tree->priv->focusing_click && w)
             return TRUE;
     }
 
