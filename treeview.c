@@ -10403,8 +10403,9 @@ get_node_for_history (DonnaTreeView         *tree,
     GValue v = G_VALUE_INIT;
     GdkPixbuf *pb;
 
-    node = donna_provider_internal_new_node (pi, name, NULL, NULL,
-            DONNA_NODE_ITEM, (internal_fn) history_goto, NULL, NULL, error);
+    node = donna_provider_internal_new_node (pi, name, FALSE, NULL, NULL,
+            DONNA_NODE_ITEM, TRUE, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            (internal_fn) history_goto, NULL, NULL, error);
     if (G_UNLIKELY (!node))
     {
         g_prefix_error (error, "Treeview '%s': Failed to get history; "

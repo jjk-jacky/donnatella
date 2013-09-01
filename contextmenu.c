@@ -656,7 +656,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             const gchar *item;
             enum type type;
             gchar *name;
-            GdkPixbuf *icon = NULL;
+            gchar *icon = NULL;
+            GdkPixbuf *pixbuf = NULL;
             gchar *fl = NULL;
             GPtrArray *intrefs = NULL;
             gboolean import_from_trigger = FALSE;
@@ -856,13 +857,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             name = parse_Cc (name, s_C, s_c);
 
             /* icon */
-            if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/icon",
-                        source, section, item))
-            {
-                icon = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                        s, /*FIXME*/16, 0, NULL);
-                g_free (s);
-            }
+            donna_config_get_string (config, &icon, "context_menus/%s/%s/%s/icon",
+                        source, section, item);
             if (!icon && import_from_trigger)
             {
                 ensure_node_trigger ();
@@ -871,7 +867,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                     donna_node_get (node_trigger, FALSE, "icon", &has, &v, NULL);
                     if (has == DONNA_NODE_VALUE_SET)
                     {
-                        icon = g_value_dup_object (&v);
+                        pixbuf = g_value_dup_object (&v);
                         g_value_unset (&v);
                     }
                 }
@@ -889,8 +885,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                     g_free (fl);
                     free_intrefs (app, intrefs);
                     g_free (name);
-                    if (icon)
-                        g_object_unref (icon);
+                    if (pixbuf)
+                        g_object_unref (pixbuf);
                     continue;
                 }
                 else if (donna_node_get_node_type (node_trigger) != DONNA_NODE_CONTAINER)
@@ -901,8 +897,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                     g_free (fl);
                     free_intrefs (app, intrefs);
                     g_free (name);
-                    if (icon)
-                        g_object_unref (icon);
+                    if (pixbuf)
+                        g_object_unref (pixbuf);
                     g_object_unref (node_trigger);
                     continue;
                 }
@@ -920,8 +916,14 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 ni->node_trigger = NULL;
             ni->fl = fl;
 
-            node = donna_provider_internal_new_node (pi, name, icon, NULL,
+            node = donna_provider_internal_new_node (pi, name,
+                    pixbuf != NULL, (pixbuf) ? pixbuf : (gconstpointer) icon, NULL,
                     (type == TYPE_CONTAINER) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+                    is_sensitive,
+                    (type == TYPE_CONTAINER)
+                    /* children_cb is internal, starts a subtask.
+                     * node_internal_cb in fast, it only triggers another task */
+                    ? DONNA_TASK_VISIBILITY_INTERNAL : DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     (type == TYPE_CONTAINER)
                     ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
                     ni,
@@ -933,16 +935,18 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                         source, section, item, err->message);
                 g_clear_error (&err);
                 g_free (name);
-                if (icon)
-                    g_object_unref (icon);
+                g_free (icon);
+                if (pixbuf)
+                    g_object_unref (pixbuf);
                 free_node_internal (ni);
                 if (node_trigger)
                     g_object_unref (node_trigger);
                 continue;
             }
             g_free (name);
-            if (icon)
-                g_object_unref (icon);
+            g_free (icon);
+            if (pixbuf)
+                g_object_unref (pixbuf);
 
             if (!donna_config_get_boolean (config, &b,
                         "context_menus/%s/%s/%s/menu_is_label_bold",
@@ -981,21 +985,6 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
-            if (!is_sensitive)
-            {
-                g_value_init (&v, G_TYPE_BOOLEAN);
-                g_value_set_boolean (&v, FALSE);
-                if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
-                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to disable sensitivity for item "
-                            "'context_menus/%s/%s/%s': %s",
-                            source, section, item, err->message);
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
-
             g_ptr_array_add ((children) ? children : nodes, node);
 
             if (node_trigger)
@@ -1008,22 +997,17 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         {
             DonnaNode *node;
             gchar *name;
-            GdkPixbuf *icon = NULL;
+            gchar *icon = NULL;
 
             if (!donna_config_get_string (config, &name, "context_menus/%s/%s/name",
                         source, section))
                 name = g_strdup (section);
 
-            if (donna_config_get_string (config, &s, "context_menus/%s/%s/icon",
-                        source, section))
-            {
-                icon = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                        s, /*FIXME*/16, 0, NULL);
-                g_free (s);
-            }
+            donna_config_get_string (config, &icon, "context_menus/%s/%s/icon",
+                        source, section);
 
-            node = donna_provider_internal_new_node (pi, name, icon, NULL,
-                    DONNA_NODE_CONTAINER,
+            node = donna_provider_internal_new_node (pi, name, FALSE, icon, NULL,
+                    DONNA_NODE_CONTAINER, TRUE, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     (internal_fn) container_children_cb,
                     children,
                     (GDestroyNotify) g_ptr_array_unref, &err);
@@ -1037,6 +1021,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             }
             else
                 g_ptr_array_add (nodes, node);
+            g_free (name);
+            g_free (icon);
         }
 
 next:

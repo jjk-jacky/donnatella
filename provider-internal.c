@@ -17,29 +17,35 @@ struct _DonnaProviderInternalPrivate
 /* DonnaProvider */
 static const gchar *    provider_internal_get_domain    (DonnaProvider      *provider);
 static DonnaProviderFlags provider_internal_get_flags   (DonnaProvider      *provider);
+static DonnaTask *      provider_internal_has_node_children_task (
+                                                         DonnaProvider       *provider,
+                                                         DonnaNode           *node,
+                                                         DonnaNodeType        node_types,
+                                                         GError             **error);
+static DonnaTask *      provider_internal_get_node_children_task (
+                                                         DonnaProvider       *provider,
+                                                         DonnaNode           *node,
+                                                         DonnaNodeType        node_types,
+                                                         GError             **error);
+static DonnaTask *      provider_internal_trigger_node_task (
+                                                         DonnaProvider       *provider,
+                                                         DonnaNode           *node,
+                                                         GError             **error);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_internal_new_node      (DonnaProviderBase  *provider,
                                                          DonnaTask          *task,
                                                          const gchar        *location);
 static void             provider_internal_unref_node    (DonnaProviderBase  *provider,
                                                          DonnaNode          *node);
-static DonnaTaskState   provider_internal_trigger_node  (DonnaProviderBase  *provider,
-                                                         DonnaTask          *task,
-                                                         DonnaNode          *node);
-static DonnaTaskState   provider_internal_has_children  (DonnaProviderBase  *provider,
-                                                         DonnaTask          *task,
-                                                         DonnaNode          *node,
-                                                         DonnaNodeType       node_types);
-static DonnaTaskState   provider_internal_get_children  (DonnaProviderBase  *provider,
-                                                         DonnaTask          *task,
-                                                         DonnaNode          *node,
-                                                         DonnaNodeType       node_types);
 
 static void
 provider_internal_provider_init (DonnaProviderInterface *interface)
 {
-    interface->get_domain   = provider_internal_get_domain;
-    interface->get_flags    = provider_internal_get_flags;
+    interface->get_domain               = provider_internal_get_domain;
+    interface->get_flags                = provider_internal_get_flags;
+    interface->has_node_children_task   = provider_internal_has_node_children_task;
+    interface->get_node_children_task   = provider_internal_get_node_children_task;
+    interface->trigger_node_task        = provider_internal_trigger_node_task;
 }
 
 static void
@@ -50,9 +56,6 @@ donna_provider_internal_class_init (DonnaProviderInternalClass *klass)
     pb_class = (DonnaProviderBaseClass *) klass;
     pb_class->new_node      = provider_internal_new_node;
     pb_class->unref_node    = provider_internal_unref_node;
-    pb_class->trigger_node  = provider_internal_trigger_node;
-    pb_class->has_children  = provider_internal_has_children;
-    pb_class->get_children  = provider_internal_get_children;
 
     g_type_class_add_private (klass, sizeof (DonnaProviderInternalPrivate));
 }
@@ -125,9 +128,7 @@ provider_internal_unref_node (DonnaProviderBase  *_provider,
 }
 
 static DonnaTaskState
-provider_internal_trigger_node (DonnaProviderBase  *provider,
-                                DonnaTask          *task,
-                                DonnaNode          *node)
+trigger_node (DonnaTask *task, DonnaNode *node)
 {
     GValue v_worker = G_VALUE_INIT;
     GValue v_data = G_VALUE_INIT;
@@ -166,11 +167,46 @@ provider_internal_trigger_node (DonnaProviderBase  *provider,
     return ret;
 }
 
+static DonnaTask *
+provider_internal_trigger_node_task (DonnaProvider       *provider,
+                                     DonnaNode           *node,
+                                     GError             **error)
+{
+    DonnaTask *task;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+
+    task = donna_task_new ((task_fn) trigger_node, g_object_ref (node),
+            g_object_unref);
+    donna_node_get (node, FALSE, "_internal_visibility", &has, &v, NULL);
+    donna_task_set_visibility (task, g_value_get_uint (&v));
+    g_value_unset (&v);
+
+    DONNA_DEBUG (TASK,
+            gchar *fl = donna_node_get_full_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "trigger_node() for node '%s'", fl));
+            g_free (fl));
+
+    return task;
+}
+
+struct children
+{
+    DonnaNode *node;
+    DonnaNodeType node_types;
+    gboolean get_children;
+};
+
+static void
+free_children (struct children *c)
+{
+    g_object_unref (c->node);
+    g_free (c);
+}
+
 static DonnaTaskState
-has_get_children (DonnaTask     *task,
-                  DonnaNode     *node,
-                  DonnaNodeType  node_types,
-                  gboolean       get_children)
+has_get_children (DonnaTask *task, struct children *c)
 {
     GValue v_worker = G_VALUE_INIT;
     GValue v_data = G_VALUE_INIT;
@@ -178,7 +214,7 @@ has_get_children (DonnaTask     *task,
     internal_children_fn worker;
     DonnaTaskState ret;
 
-    donna_node_get (node, FALSE,
+    donna_node_get (c->node, FALSE,
             "_internal_worker",  &has, &v_worker,
             "_internal_data",    &has, &v_data,
             NULL);
@@ -186,36 +222,75 @@ has_get_children (DonnaTask     *task,
     worker = g_value_get_pointer (&v_worker);
     g_value_unset (&v_worker);
 
-    ret = worker (task, node, node_types, get_children, g_value_get_pointer (&v_data));
+    ret = worker (task, c->node, c->node_types, c->get_children,
+            g_value_get_pointer (&v_data));
 
     g_value_unset (&v_data);
+    free_children (c);
     return ret;
 }
 
-static DonnaTaskState
-provider_internal_has_children (DonnaProviderBase  *provider,
-                                DonnaTask          *task,
-                                DonnaNode          *node,
-                                DonnaNodeType       node_types)
+static DonnaTask *
+has_get_children_task (DonnaProvider    *provider,
+                       DonnaNode        *node,
+                       DonnaNodeType     node_types,
+                       gboolean          get_children,
+                       GError          **error)
 {
-    return has_get_children (task, node, node_types, FALSE);
+    DonnaTask *task;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+    struct children *c;
+
+    c = g_new (struct children, 1);
+    c->node = g_object_ref (node);
+    c->node_types = node_types;
+    c->get_children = get_children;
+
+    task = donna_task_new ((task_fn) has_get_children, c,
+            (GDestroyNotify) free_children);
+    donna_node_get (node, FALSE, "_internal_visibility", &has, &v, NULL);
+    donna_task_set_visibility (task, g_value_get_uint (&v));
+    g_value_unset (&v);
+
+    DONNA_DEBUG (TASK,
+            gchar *fl = donna_node_get_full_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "%s_children() for node '%s'",
+                    (get_children) ? "get" : "has", fl));
+            g_free (fl));
+
+    return task;
 }
 
-static DonnaTaskState
-provider_internal_get_children (DonnaProviderBase  *provider,
-                                DonnaTask          *task,
-                                DonnaNode          *node,
-                                DonnaNodeType       node_types)
+static DonnaTask *
+provider_internal_has_node_children_task (DonnaProvider       *provider,
+                                          DonnaNode           *node,
+                                          DonnaNodeType        node_types,
+                                          GError             **error)
 {
-    return has_get_children (task, node, node_types, TRUE);
+    return has_get_children_task (provider, node, node_types, FALSE, error);
+}
+
+static DonnaTask *
+provider_internal_get_node_children_task (DonnaProvider       *provider,
+                                          DonnaNode           *node,
+                                          DonnaNodeType        node_types,
+                                          GError             **error)
+
+{
+    return has_get_children_task (provider, node, node_types, TRUE, error);
 }
 
 DonnaNode *
 donna_provider_internal_new_node (DonnaProviderInternal  *pi,
                                   const gchar            *name,
-                                  const GdkPixbuf        *icon,
+                                  gboolean                icon_is_pixbuf,
+                                  gconstpointer           _icon,
                                   const gchar            *desc,
                                   DonnaNodeType           node_type,
+                                  gboolean                sensitive,
+                                  DonnaTaskVisibility     visibility,
                                   internal_fn             fn,
                                   gpointer                data,
                                   GDestroyNotify          destroy,
@@ -225,14 +300,21 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
     DonnaProviderBase *pb;
     DonnaNodeFlags flags = 0;
     DonnaNode *node;
+    GdkPixbuf *pixbuf = NULL;
     gchar location[64];
     GValue v = G_VALUE_INIT;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_INTERNAL (pi), NULL);
     g_return_val_if_fail (fn != NULL, NULL);
+    pb = (DonnaProviderBase *) pi;
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (pb);
 
-    if (icon)
+    if (_icon)
+    {
+        if (icon_is_pixbuf)
+            pixbuf = (GdkPixbuf *) _icon;
         flags |= DONNA_NODE_ICON_EXISTS;
+    }
     if (desc)
         flags |= DONNA_NODE_DESC_EXISTS;
     snprintf (location, 64, "%u", (guint) g_atomic_int_add (&pi->priv->last, 1) + 1);
@@ -246,10 +328,10 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
         return NULL;
     }
 
-    if (icon)
+    if (pixbuf)
     {
         g_value_init (&v, GDK_TYPE_PIXBUF);
-        g_value_set_object (&v, (GObject *) icon);
+        g_value_set_object (&v, (GObject *) pixbuf);
         donna_node_set_property_value (node, "icon", &v);
         g_value_unset (&v);
     }
@@ -297,8 +379,46 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
     }
     g_value_unset (&v);
 
-    pb = (DonnaProviderBase *) pi;
-    klass = DONNA_PROVIDER_BASE_GET_CLASS (pb);
+    g_value_init (&v, G_TYPE_UINT);
+    g_value_set_uint (&v, visibility);
+    if (G_UNLIKELY (!donna_node_add_property (node, "_internal_visibility",
+                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
+    {
+        g_prefix_error (error, "Provider 'internal': Cannot create new node, "
+                "failed to add property '_internal_visibility': ");
+        g_value_unset (&v);
+        g_object_unref (node);
+        return NULL;
+    }
+    g_value_unset (&v);
+
+    if ((flags & DONNA_NODE_ICON_EXISTS) && !pixbuf)
+    {
+        if (!klass->set_property_icon (pb, node, "icon", _icon, error))
+        {
+            g_prefix_error (error, "Provider 'internal': Cannot create new node, "
+                    "failed to set icon: ");
+            g_object_unref (node);
+            return NULL;
+        }
+    }
+
+    if (!sensitive)
+    {
+        g_value_init (&v, G_TYPE_BOOLEAN);
+        g_value_set_boolean (&v, FALSE);
+        if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
+                        G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, error)))
+        {
+            g_prefix_error (error, "Provider 'internal': Cannot create new node, "
+                    "failed to add property 'menu-is-sensitive': ");
+            g_value_unset (&v);
+            g_object_unref (node);
+            return NULL;
+        }
+        g_value_unset (&v);
+    }
+
     klass->lock_nodes (pb);
     klass->add_node_to_cache (pb, node);
     klass->unlock_nodes (pb);
