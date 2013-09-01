@@ -479,8 +479,6 @@ enum
     JOKER_USE
 };
 
-#define skip_blank(s)   for ( ; isblank (*s); ++s) ;
-
 #define syntax_error()  do {                        \
     g_set_error (error, DONNA_COLUMNTYPE_ERROR,     \
             DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,  \
