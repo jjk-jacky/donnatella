@@ -552,7 +552,11 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 goto next;
             }
 
-            arr = get_section_nodes (section, reference, conv_data, &err);
+            s = strchr (section, ':');
+            if (s)
+                *s++ = '\0';
+
+            arr = get_section_nodes (section, s, reference, conv_data, &err);
             if (!arr)
             {
                 g_warning ("Context-menu: Invalid section ':%s': %s",

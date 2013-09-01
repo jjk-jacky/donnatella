@@ -28,6 +28,7 @@ typedef enum
 } DonnaContextReference;
 
 typedef GPtrArray * (*get_section_nodes_fn) (const gchar            *section,
+                                             const gchar            *extra,
                                              DonnaContextReference   reference,
                                              gpointer                conv_data,
                                              GError                **error);
