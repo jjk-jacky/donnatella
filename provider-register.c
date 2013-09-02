@@ -1652,7 +1652,7 @@ new_action_node (DonnaProviderRegister  *pr,
         else
             lbl = "Append to '%s'";
         icon = "edit-copy";
-        sensitive = SENSITIVE_IF_REG;
+        sensitive = SENSITIVE_YES;
     }
     else if (streq (action, "paste"))
     {
