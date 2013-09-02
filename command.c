@@ -307,59 +307,6 @@ cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args);
-
-static DonnaTaskState
-cmd_node_activate (DonnaTask *task, DonnaApp *app, gpointer *args)
-{
-    GError *err = NULL;
-    DonnaNode *node = args[0];
-    gboolean is_alt = GPOINTER_TO_INT (args[1]); /* opt */
-
-    DonnaTreeView *tree;
-
-    if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
-    {
-        if (is_alt)
-        {
-            gpointer _args[5] = { node, "all", NULL, NULL, NULL };
-            return cmd_node_popup_children (task, app, _args);
-        }
-    }
-    else /* DONNA_NODE_ITEM */
-    {
-        if (!is_alt)
-        {
-            DonnaTask *trigger_task;
-
-            trigger_task = donna_node_trigger_task (node, &err);
-            if (!trigger_task)
-            {
-                donna_task_take_error (task, err);
-                return DONNA_TASK_FAILED;
-            }
-
-            donna_task_set_callback (trigger_task,
-                    (task_callback_fn) show_err_on_task_failed, app, NULL);
-            donna_app_run_task (app, trigger_task);
-            return DONNA_TASK_DONE;
-        }
-    }
-
-    /* (CONTAINER && !is_alt) || (ITEM && is_alt) */
-
-    g_object_get (app, "active-list", &tree, NULL);
-    if (!donna_tree_view_set_location (tree, node, &err))
-    {
-        donna_task_take_error (task, err);
-        g_object_unref (tree);
-        return DONNA_TASK_FAILED;
-    }
-    g_object_unref (tree);
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
 cmd_node_new_child (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -551,6 +498,131 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
     }
     g_object_unref (t);
     return state;
+}
+
+static DonnaTaskState
+cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaNode *node = args[0];
+    gchar *on_item = args[1]; /* opt */
+    gchar *on_container = args[2]; /* opt */
+
+    const gchar *s_item[] = { "trigger", "goto" };
+    const gchar *s_container[] = { "trigger", "goto", "popup" };
+    enum trg {
+        TRG_TRIGGER    = (1 << 0),
+        TRG_GOTO       = (1 << 1),
+        TRG_POPUP      = (1 << 2)
+    };
+    enum trg trigger[] = { TRG_TRIGGER, TRG_GOTO, TRG_POPUP };
+    gint c_item;
+    guint trg_container;
+
+    DonnaTreeView *tree;
+
+    if (on_item)
+    {
+        c_item = _get_choice (s_item, on_item);
+        if (c_item < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
+                    "Invalid trigger mode for item: '%s'; "
+                    "Must be 'trigger' or 'goto'",
+                    on_item);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        c_item = 0; /* TRG_TRIGGER */
+
+    if (on_container)
+    {
+        trg_container = _get_flags (s_container, trigger, on_container);
+        if (trg_container == 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Invalid trigger mode for container: '%s'; "
+                    "Must be 'trigger', 'goto', 'popup', "
+                    "or a '+'-separated combination of 'trigger' and another one.",
+                    on_container);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        trg_container = TRG_GOTO;
+
+    if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+    {
+        if (trigger[c_item] == TRG_TRIGGER)
+        {
+            DonnaTask *trigger_task;
+
+            trigger_task = donna_node_trigger_task (node, &err);
+            if (!trigger_task)
+            {
+                donna_task_take_error (task, err);
+                return DONNA_TASK_FAILED;
+            }
+
+            donna_task_set_callback (trigger_task,
+                    (task_callback_fn) show_err_on_task_failed, app, NULL);
+            donna_app_run_task (app, trigger_task);
+            return DONNA_TASK_DONE;
+        }
+        /* fallthrough for GOTO */
+    }
+    else /* DONNA_NODE_CONTAINER */
+    {
+        if (trg_container & TRG_TRIGGER)
+        {
+            DonnaNodeHasValue has;
+            GValue v = G_VALUE_INIT;
+
+            donna_node_get (node, TRUE, "container-trigger", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_LIKELY (G_VALUE_TYPE (&v) == G_TYPE_STRING))
+                {
+                    if (!donna_app_trigger_node (app, g_value_get_string (&v)))
+                    {
+                        gchar *fl = donna_node_get_full_location (node);
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command 'node_trigger': Failed to trigger container '%s'; "
+                                "Trigger was '%s'",
+                                fl, g_value_get_string (&v));
+                        g_free (fl);
+                        g_value_unset (&v);
+                        return DONNA_TASK_FAILED;
+                    }
+                    g_value_unset (&v);
+                    return DONNA_TASK_DONE;
+                }
+                g_value_unset (&v);
+            }
+        }
+
+        if (trg_container & TRG_POPUP)
+        {
+            gpointer _args[5] = { node, "all", NULL, NULL, NULL };
+            return cmd_node_popup_children (task, app, _args);
+        }
+        else if (!(trg_container & TRG_GOTO))
+            return DONNA_TASK_DONE;
+    }
+
+    g_object_get (app, "active-list", &tree, NULL);
+    if (!donna_tree_view_set_location (tree, node, &err))
+    {
+        donna_task_take_error (task, err);
+        g_object_unref (tree);
+        return DONNA_TASK_FAILED;
+    }
+    g_object_unref (tree);
+    return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
@@ -1624,12 +1696,6 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
-    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (node_activate, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-            DONNA_ARG_TYPE_NOTHING);
-
-    i = -1;
-    arg_type[++i] = DONNA_ARG_TYPE_NODE;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (node_new_child, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
@@ -1642,6 +1708,13 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_IS_OPTIONAL;
     add_command (node_popup_children, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (node_trigger, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

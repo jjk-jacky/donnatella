@@ -1851,7 +1851,7 @@ menuitem_button_release_cb (GtkWidget           *item,
     {
         if (streq (buf, "left_click"))
             /* hard-coded default for sanity */
-            fl = g_strdup ("command:node_activate (%n,0)");
+            fl = g_strdup ("command:node_trigger (%n)");
         else
             return FALSE;
     }
