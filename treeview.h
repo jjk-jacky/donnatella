@@ -234,9 +234,6 @@ GPtrArray *     donna_tree_view_get_nodes       (DonnaTreeView      *tree,
 gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
                                                  gint                level,
                                                  GError            **error);
-gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
-                                                 gint                level,
-                                                 GError            **error);
 GPtrArray *     donna_tree_view_context_get_nodes (
                                                  DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
@@ -307,6 +304,9 @@ gboolean        donna_tree_view_history_move    (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_history_clear   (DonnaTreeView      *tree,
                                                  DonnaHistoryDirection direction,
+                                                 GError            **error);
+gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
+                                                 gint                level,
                                                  GError            **error);
 
 G_END_DECLS

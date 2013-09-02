@@ -10526,6 +10526,15 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
 
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': No history in mode Tree",
+                priv->name);
+        return FALSE;
+    }
+
     if (!(direction & (DONNA_HISTORY_BACKWARD | DONNA_HISTORY_FORWARD)))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
@@ -10685,6 +10694,15 @@ donna_tree_view_history_get_node (DonnaTreeView          *tree,
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
 
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': No history in mode Tree",
+                priv->name);
+        return FALSE;
+    }
+
     pi = (DonnaProviderInternal *) donna_app_get_provider (priv->app, "internal");
     if (G_UNLIKELY (!pi))
     {
@@ -10756,6 +10774,15 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     priv = tree->priv;
+
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': No history in mode Tree",
+                priv->name);
+        return FALSE;
+    }
 
     fl = donna_history_get_item (priv->history, direction, nb, error);
     if (!fl)
@@ -10921,6 +10948,7 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/* mode list only (history based) */
 gboolean
 donna_tree_view_go_down (DonnaTreeView      *tree,
                          gint                level,
@@ -10940,6 +10968,15 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     priv = tree->priv;
+
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Can't go down in mode Tree (requires history)",
+                priv->name);
+        return FALSE;
+    }
 
     if (G_UNLIKELY (!priv->location))
     {
@@ -11170,7 +11207,8 @@ context_get_section_go (DonnaTreeView           *tree,
         else if (len == 4 && streqn (extra, "down", 4))
         {
             /* no location or flat provider means no going down */
-            if (!priv->location || (donna_provider_get_flags (
+            if (is_tree (tree) || !priv->location
+                    || (donna_provider_get_flags (
                             donna_node_peek_provider (priv->location))
                         & DONNA_PROVIDER_FLAG_FLAT))
                 goto next;
