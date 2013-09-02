@@ -11114,6 +11114,8 @@ enum ctxt_go
 {
     CTXT_GO_UP,
     CTXT_GO_DOWN,
+    CTXT_GO_BACK,
+    CTXT_GO_FORWARD
 };
 
 struct context_go
@@ -11136,20 +11138,23 @@ context_go (DonnaTask           *task,
     GError *err = NULL;
 
     if (cgo->go == CTXT_GO_UP)
+        donna_tree_view_go_up (cgo->tree, 1, &err);
+    else if (cgo->go == CTXT_GO_DOWN)
+        donna_tree_view_go_down (cgo->tree, 1, &err);
+    else if (cgo->go == CTXT_GO_BACK)
+        donna_tree_view_history_move (cgo->tree, DONNA_HISTORY_BACKWARD, 1, &err);
+    else if (cgo->go == CTXT_GO_FORWARD)
+        donna_tree_view_history_move (cgo->tree, DONNA_HISTORY_FORWARD, 1, &err);
+    else
+        /* should never happen */
+        g_set_error (&err, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Invalid call to context_go(%d) -- How did you do that!?",
+                cgo->tree->priv->name, cgo->go);
+
+    if (err)
     {
-        if (!donna_tree_view_go_up (cgo->tree, 1, &err))
-        {
-            donna_app_show_error (cgo->tree->priv->app, NULL, err->message);
-            g_clear_error (&err);
-        }
-    }
-    else /* CTXT_GO_DOWN */
-    {
-        if (!donna_tree_view_go_down (cgo->tree, 1, &err))
-        {
-            donna_app_show_error (cgo->tree->priv->app, NULL, err->message);
-            g_clear_error (&err);
-        }
+        donna_app_show_error (cgo->tree->priv->app, NULL, err->message);
+        g_clear_error (&err);
     }
     free_context_go (cgo);
 }
@@ -11167,7 +11172,7 @@ context_get_section_go (DonnaTreeView           *tree,
     gchar *e;
 
     if (!extra)
-        extra = "up;down";
+        extra = "up;back;forward;down";
 
     nodes = g_ptr_array_new ();
     for (;;)
@@ -11217,6 +11222,30 @@ context_get_section_go (DonnaTreeView           *tree,
             icon = "go-down";
             go = CTXT_GO_DOWN;
         }
+        else if (len == 4 && streqn (extra, "back", 4))
+        {
+            if (is_tree (tree))
+                goto next;
+
+            name = "Go Back";
+            icon = "go-previous";
+            go = CTXT_GO_BACK;
+
+            is_sensitive = donna_history_get_item (priv->history,
+                    DONNA_HISTORY_BACKWARD, 1, NULL) != NULL;
+        }
+        else if (len == 7 && streqn (extra, "forward", 7))
+        {
+            if (is_tree (tree))
+                goto next;
+
+            name = "Go Forward";
+            icon = "go-next";
+            go = CTXT_GO_FORWARD;
+
+            is_sensitive = donna_history_get_item (priv->history,
+                    DONNA_HISTORY_FORWARD, 1, NULL) != NULL;
+        }
         else if (len == 1 && *extra == '-')
         {
             g_ptr_array_add (nodes, NULL);
@@ -11224,9 +11253,11 @@ context_get_section_go (DonnaTreeView           *tree,
         }
         else
         {
-            g_prefix_error (error, "Treeview '%s': "
-                    "Failed to get context section 'go'; invalid item '%.*s' "
-                    "-- Supported items are 'up', 'down' and '-'",
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
+                    "Treeview '%s': Failed to get context section 'go'; "
+                    "invalid item '%.*s' -- Supported items are 'up', 'down', "
+                    "'back', 'forward', 'root' and '-'",
                     priv->name, len, extra);
             g_ptr_array_unref (nodes);
             return NULL;
