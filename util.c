@@ -286,3 +286,10 @@ donna_g_string_append_quoted (GString *str, const gchar *s)
     }
     g_string_append_c (str, '"');
 }
+
+void
+donna_g_object_unref (gpointer object)
+{
+    if (object)
+        g_object_unref (object);
+}

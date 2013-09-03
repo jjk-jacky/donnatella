@@ -3,6 +3,7 @@
 #include "conf.h"
 #include "provider-internal.h"
 #include "node.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -175,13 +176,6 @@ evaluate (DonnaContextReference reference, gchar *expr, GError **error)
             return EXPR_INVALID;
         }
     }
-}
-
-static void
-free_arr_nodes (DonnaNode *node)
-{
-    if (node)
-        g_object_unref (node);
 }
 
 struct node_internal
@@ -511,7 +505,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
     }
 
     /* because there might be NULL as separators */
-    nodes = g_ptr_array_new_with_free_func ((GDestroyNotify) free_arr_nodes);
+    nodes = g_ptr_array_new_with_free_func ((GDestroyNotify) donna_g_object_unref);
     section = sections;
     for (;;)
     {
