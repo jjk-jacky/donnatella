@@ -11257,7 +11257,7 @@ context_get_section_go (DonnaTreeView           *tree,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
                     "Treeview '%s': Failed to get context section 'go'; "
                     "invalid item '%.*s' -- Supported items are 'up', 'down', "
-                    "'back', 'forward', 'root' and '-'",
+                    "'back', 'forward' and '-'",
                     priv->name, len, extra);
             g_ptr_array_unref (nodes);
             return NULL;

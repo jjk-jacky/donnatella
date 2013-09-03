@@ -920,7 +920,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                     is_sensitive,
                     (type == TYPE_CONTAINER)
                     /* children_cb is internal, starts a subtask.
-                     * node_internal_cb in fast, it only triggers another task */
+                     * node_internal_cb is fast, it only triggers another task */
                     ? DONNA_TASK_VISIBILITY_INTERNAL : DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     (type == TYPE_CONTAINER)
                     ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
