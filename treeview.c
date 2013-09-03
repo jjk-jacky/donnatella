@@ -11291,6 +11291,128 @@ next:
     return nodes;
 }
 
+struct context_refresh
+{
+    DonnaTreeView *tree;
+    DonnaTreeRefreshMode mode;
+};
+
+static void
+free_crefresh (struct context_refresh *crefresh)
+{
+    g_slice_free (struct context_refresh, crefresh);
+}
+
+static DonnaTaskState
+context_refresh (DonnaTask              *task,
+                 DonnaNode              *node,
+                 struct context_refresh *crefresh)
+{
+    GError *err = NULL;
+
+    if (!donna_tree_view_refresh (crefresh->tree, crefresh->mode, &err))
+    {
+        donna_app_show_error (crefresh->tree->priv->app, NULL, err->message);
+        g_clear_error (&err);
+    }
+    free_crefresh (crefresh);
+}
+
+static inline GPtrArray *
+context_get_section_refresh (DonnaTreeView           *tree,
+                             DonnaProviderInternal   *pi,
+                             const gchar             *extra,
+                             DonnaContextReference    reference,
+                             struct conv             *conv,
+                             GError                 **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GPtrArray *nodes;
+    gchar *e;
+
+    if (!extra)
+        extra = "visible;normal;reload";
+
+    nodes = g_ptr_array_new ();
+    for (;;)
+    {
+        gsize len;
+        const gchar *name;
+        DonnaTreeRefreshMode mode;
+        DonnaNode *node;
+        struct context_refresh *crefresh;
+
+        e = strchr (extra, ';');
+        if (e)
+            len = e - extra;
+        else
+            len = strlen (extra);
+
+        if (len == 7 && streqn (extra, "visible", 7))
+        {
+            name = "Refresh (Visible)";
+            mode = DONNA_TREE_REFRESH_VISIBLE;
+        }
+        else if (len == 6 && streqn (extra, "simple", 6))
+        {
+            name = "Refresh (Simple)";
+            mode = DONNA_TREE_REFRESH_SIMPLE;
+        }
+        else if (len == 6 && streqn (extra, "normal", 6))
+        {
+            name = "Refresh";
+            mode = DONNA_TREE_REFRESH_NORMAL;
+        }
+        else if (len == 6 && streqn (extra, "reload", 6))
+        {
+            name = "Refresh (Reload)";
+            mode = DONNA_TREE_REFRESH_RELOAD;
+        }
+        else if (len == 1 && *extra == '-')
+        {
+            g_ptr_array_add (nodes, NULL);
+            goto next;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
+                    "Treeview '%s': Failed to get context section 'refresh'; "
+                    "invalid item '%.*s' -- Supported items are 'visible', "
+                    "'simple', 'normal', 'reload' and '-'",
+                    priv->name, len, extra);
+            g_ptr_array_unref (nodes);
+            return NULL;
+        }
+
+        crefresh = g_slice_new (struct context_refresh);
+        crefresh->tree = tree;
+        crefresh->mode = mode;
+
+        node = donna_provider_internal_new_node (pi, name, FALSE, "view-refresh", NULL,
+                DONNA_NODE_ITEM, TRUE, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+                (internal_fn) context_refresh, crefresh, (GDestroyNotify) free_crefresh,
+                error);
+        if (G_UNLIKELY (!node))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to get context section 'refresh'; "
+                    "couldn't create node: ",
+                    priv->name);
+            g_ptr_array_unref (nodes);
+            return NULL;
+        }
+
+        g_ptr_array_add (nodes, node);
+next:
+        if (e)
+            extra = e + 1;
+        else
+            break;
+    }
+
+    return nodes;
+}
+
 static GPtrArray *
 tree_context_get_nodes (const gchar             *section,
                         const gchar             *extra,
@@ -11314,6 +11436,8 @@ tree_context_get_nodes (const gchar             *section,
 
     if (streq (section, "go"))
         nodes = context_get_section_go (tree, pi, extra, reference, conv, error);
+    else if (streq (section, "refresh"))
+        nodes = context_get_section_refresh (tree, pi, extra, reference, conv, error);
     else
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
