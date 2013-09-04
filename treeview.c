@@ -11205,48 +11205,55 @@ tree_context_get_item_info (const gchar             *section,
 
     if (streq (section, "go"))
     {
-        info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         if (streq (item, "up"))
         {
             gchar *s;
 
             /* no location or flat provider means no going up */
-            if (!priv->location || (donna_provider_get_flags (
+            info->is_visible = (priv->location && !(donna_provider_get_flags (
                             donna_node_peek_provider (priv->location))
-                        & DONNA_PROVIDER_FLAG_FLAT))
-                return TRUE;
+                        & DONNA_PROVIDER_FLAG_FLAT));
 
-            s = donna_node_get_location (priv->location);
-            info->is_sensitive = !streq (s, "/");
-            g_free (s);
+            if (priv->location)
+            {
+                s = donna_node_get_location (priv->location);
+                info->is_sensitive = !streq (s, "/");
+                g_free (s);
+            }
 
             info->name = "Go Up";
             info->icon_name = "go-up";
-            info->trigger = g_strdup_printf ("command:tree_go_up (%s)",
-                    priv->name);
-            info->free_trigger = TRUE;
+            if (info->is_visible)
+            {
+                info->trigger = g_strdup_printf ("command:tree_go_up (%s)",
+                        priv->name);
+                info->free_trigger = TRUE;
+            }
         }
         else if (streq (item, "down"))
         {
             /* no location or flat provider means no going down */
-            if (is_tree (tree) || !priv->location
-                    || (donna_provider_get_flags (
+            info->is_visible = (!is_tree (tree) && priv->location
+                    && !(donna_provider_get_flags (
                             donna_node_peek_provider (priv->location))
-                        & DONNA_PROVIDER_FLAG_FLAT))
-                return TRUE;
+                        & DONNA_PROVIDER_FLAG_FLAT));
 
             info->name = "Go Down";
             info->icon_name = "go-down";
-            info->trigger = g_strdup_printf ("command:tree_go_down (%s)",
-                    priv->name);
-            info->free_trigger = TRUE;
+            if (info->is_visible)
+            {
+                info->trigger = g_strdup_printf ("command:tree_go_down (%s)",
+                        priv->name);
+                info->free_trigger = TRUE;
+            }
         }
         else if (streq (item, "back"))
         {
             if (is_tree (tree))
                 return TRUE;
 
+            info->is_visible = TRUE;
             info->name = "Go Back";
             info->icon_name = "go-previous";
             info->is_sensitive = donna_history_get_item (priv->history,
@@ -11261,6 +11268,7 @@ tree_context_get_item_info (const gchar             *section,
             if (is_tree (tree))
                 return TRUE;
 
+            info->is_visible = TRUE;
             info->name = "Go Forward";
             info->icon_name = "go-next";
             info->is_sensitive = donna_history_get_item (priv->history,
@@ -11289,7 +11297,7 @@ tree_context_get_item_info (const gchar             *section,
     }
     else if (streq (section, "refresh"))
     {
-        info->is_visible = TRUE;
+        info->is_visible = G_LIKELY (priv->location != NULL);
         info->is_sensitive = TRUE;
         info->icon_name = "view-refresh";
         if (streq (item, "visible"))
