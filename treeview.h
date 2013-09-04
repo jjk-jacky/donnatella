@@ -104,6 +104,7 @@ typedef enum
     DONNA_TREE_SEL_SELECT = 1,
     DONNA_TREE_SEL_UNSELECT,
     DONNA_TREE_SEL_INVERT,
+    DONNA_TREE_SEL_DEFINE,      /* basically unselect all + select */
 } DonnaTreeSelAction;
 
 typedef enum

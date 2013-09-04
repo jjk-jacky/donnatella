@@ -1166,9 +1166,9 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeGoto nb_types[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
         DONNA_TREE_GOTO_PERCENT };
     DonnaTreeSet set;
-    const gchar *c_action[] = { "select", "unselect", "invert" };
+    const gchar *c_action[] = { "select", "unselect", "invert", "define" };
     DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT, DONNA_TREE_SEL_UNSELECT,
-        DONNA_TREE_SEL_INVERT };
+        DONNA_TREE_SEL_INVERT, DONNA_TREE_SEL_DEFINE };
     gint c_n;
     gint c_a;
 
@@ -1499,9 +1499,9 @@ cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeRowId *rid = args[2];
     gboolean to_focused = GPOINTER_TO_INT (args[3]); /* opt */
 
-    const gchar *choices[] = { "select", "unselect", "invert" };
+    const gchar *choices[] = { "select", "unselect", "invert", "define" };
     DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT,
-        DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT };
+        DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT, DONNA_TREE_SEL_DEFINE };
     gint c;
 
     c = _get_choice (choices, action);
@@ -1532,9 +1532,9 @@ cmd_tree_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *action = args[1];
     GPtrArray *nodes = args[2];
 
-    const gchar *choices[] = { "select", "unselect", "invert" };
+    const gchar *choices[] = { "select", "unselect", "invert", "define" };
     DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT,
-        DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT };
+        DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT, DONNA_TREE_SEL_DEFINE };
     gint c;
 
     c = _get_choice (choices, action);
