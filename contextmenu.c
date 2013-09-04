@@ -554,7 +554,7 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             if (!arr)
             {
                 g_warning ("Context-menu: Invalid section ':%s': %s",
-                        section, err->message);
+                        section, (err) ? err->message: "(no error message)");
                 g_clear_error (&err);
                 goto next;
             }
@@ -612,7 +612,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             else if (expr == EXPR_INVALID)
             {
                 g_warning ("Context-menu: Failed to evaluate 'is_visible' for section '%s': "
-                        "%s -- Skipping", section, err->message);
+                        "%s -- Skipping", section,
+                        (err) ? err->message : "(no error message)");
                 g_clear_error (&err);
                 g_free (s);
                 goto next;
@@ -630,7 +631,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             if (expr == EXPR_INVALID)
             {
                 g_warning ("Context-menu: Failed to evaluate 'is_sensitive' for section '%s': "
-                        "%s -- Ignoring", section, err->message);
+                        "%s -- Ignoring", section,
+                        (err) ? err->message : "(no error message)");
                 g_clear_error (&err);
             }
             else
@@ -678,7 +680,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 {
                     g_warning ("Context-menu: Failed to evaluate 'is_visible' "
                             "for item 'context_menus/%s/%s/%s': %s -- Ignoring",
-                            source, section, item, err->message);
+                            source, section, item,
+                            (err) ? err->message : "(no error message)");
                     g_clear_error (&err);
                     g_free (s);
                 }
@@ -721,7 +724,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                         {
                             g_warning ("Context-menu: skipping trigger declaration, "
                                     "invalid expression in 'context_menus/%s/%s/%s/%s': %s",
-                                    source, section, item, t, err->message);
+                                    source, section, item, t,
+                                    (err) ? err->message : "(no error message)");
                             g_clear_error (&err);
                             g_free (s);
                             continue;
@@ -810,7 +814,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 {
                     g_warning ("Context-menu: Failed to evaluate 'is_sensitive' "
                             "for item 'context_menus/%s/%s/%s': %s -- Ignoring",
-                            source, section, item, err->message);
+                            source, section, item,
+                            (err) ? err->message : "(no error message)");
                     g_clear_error (&err);
                 }
                 else
@@ -930,7 +935,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             {
                 g_warning ("Context-menu: Failed to create node "
                         "for 'context_menus/%s/%s/%s': %s",
-                        source, section, item, err->message);
+                        source, section, item,
+                        (err) ? err->message : "(no error message)");
                 g_clear_error (&err);
                 g_free (name);
                 g_free (icon);
@@ -977,7 +983,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                 {
                     g_warning ("Context-menu: Failed to set label bold for item "
                             "'context_menus/%s/%s/%s': %s",
-                            source, section, item, err->message);
+                            source, section, item,
+                            (err) ? err->message : "(no error message)");
                     g_clear_error (&err);
                 }
                 g_value_unset (&v);
@@ -1012,8 +1019,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             if (G_UNLIKELY (!node))
             {
                 g_warning ("Context-menu: Failed to create node "
-                        "for 'context_menus/%s/%s': %s",
-                        source, section, err->message);
+                        "for 'context_menus/%s/%s': %s", source, section,
+                        (err) ? err->message : "(no error message)");
                 g_clear_error (&err);
                 g_ptr_array_unref (children);
             }
