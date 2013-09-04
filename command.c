@@ -626,6 +626,55 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    GPtrArray *nodes = args[0];
+    const gchar *filter = args[1];
+    DonnaTreeView *tree = args[2]; /* opt */
+    gboolean dup_arr = GPOINTER_TO_INT (args[3]); /* opt */
+
+    GPtrArray *arr;
+    gboolean done;
+    GValue *value;
+
+    if (dup_arr)
+    {
+        guint i;
+
+        arr = g_ptr_array_new_full (nodes->len, g_object_unref);
+        for (i = 0; i < nodes->len; ++i)
+            g_ptr_array_add (arr, g_object_ref (nodes->pdata[i]));
+    }
+    else
+        arr = nodes;
+
+    if (tree)
+        done = donna_tree_view_filter_nodes (tree, arr, filter, &err);
+    else
+        done = donna_app_filter_nodes (app, arr, filter, &err);
+
+    if (!done)
+    {
+        g_prefix_error (&err, "Command 'nodes_filter': ");
+        donna_task_take_error (task, err);
+        if (dup_arr)
+            g_ptr_array_unref (arr);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_PTR_ARRAY);
+    if (dup_arr)
+        g_value_take_boxed (value, arr);
+    else
+        g_value_set_boxed (value, arr);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1716,6 +1765,14 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (node_trigger, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (nodes_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
