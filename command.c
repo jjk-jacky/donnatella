@@ -1525,6 +1525,39 @@ cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gchar *action = args[1];
+    GPtrArray *nodes = args[2];
+
+    const gchar *choices[] = { "select", "unselect", "invert" };
+    DonnaTreeSelAction actions[] = { DONNA_TREE_SEL_SELECT,
+        DONNA_TREE_SEL_UNSELECT, DONNA_TREE_SEL_INVERT };
+    gint c;
+
+    c = _get_choice (choices, action);
+    if (c < 0)
+    {
+        donna_task_set_error (task,
+                DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
+                "Invalid argument 'action': '%s'; "
+                "Must be 'select', 'unselect' or 'invert'",
+                action);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_tree_view_selection_nodes (tree, actions[c], nodes, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1961,6 +1994,13 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_selection, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    add_command (tree_selection_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

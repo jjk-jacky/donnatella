@@ -283,6 +283,10 @@ gboolean        donna_tree_view_maxi_collapse   (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
 /* Mode List */
+gboolean        donna_tree_view_selection_nodes (DonnaTreeView      *tree,
+                                                 DonnaTreeSelAction  action,
+                                                 GPtrArray          *nodes,
+                                                 GError            **error);
 GPtrArray *     donna_tree_view_get_selected_nodes (
                                                  DonnaTreeView      *tree,
                                                  GError            **error);

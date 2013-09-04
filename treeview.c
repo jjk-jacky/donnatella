@@ -8539,6 +8539,68 @@ donna_tree_view_selection (DonnaTreeView        *tree,
     }
 }
 
+/* mode list only */
+gboolean
+donna_tree_view_selection_nodes (DonnaTreeView      *tree,
+                                 DonnaTreeSelAction  action,
+                                 GPtrArray          *nodes,
+                                 GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeSelection *sel;
+    GtkTreeIter iter;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (action == DONNA_TREE_SEL_SELECT
+            || action == DONNA_TREE_SEL_UNSELECT
+            || action == DONNA_TREE_SEL_INVERT, FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+
+    if (G_UNLIKELY (nodes->len == 0))
+        return TRUE;
+
+    priv = tree->priv;
+    sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+
+    /* tree is limited in its selection capabilities */
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
+                "Treeview '%s': Cannot update selection, incompatible with mode tree",
+                priv->name);
+        return FALSE;
+    }
+
+    for (i = 0; i < nodes->len; ++i)
+    {
+        DonnaNode *node = nodes->pdata[i];
+        GSList *list, *l;
+
+        list = g_hash_table_lookup (priv->hashtable, node);
+        if (!list)
+            continue;
+
+        for (l = list; l; l = l->next)
+        {
+            if (action == DONNA_TREE_SEL_SELECT)
+                gtk_tree_selection_select_iter (sel, l->data);
+            else if (action == DONNA_TREE_SEL_UNSELECT)
+                gtk_tree_selection_unselect_iter (sel, l->data);
+            else /* DONNA_TREE_SEL_INVERT */
+            {
+                if (gtk_tree_selection_iter_is_selected (sel, l->data))
+                    gtk_tree_selection_unselect_iter (sel, l->data);
+                else
+                    gtk_tree_selection_select_iter (sel, l->data);
+            }
+        }
+    }
+
+    return TRUE;
+}
+
 gboolean
 donna_tree_view_set_focus (DonnaTreeView        *tree,
                            DonnaTreeRowId       *rowid,
