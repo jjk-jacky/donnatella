@@ -29,6 +29,283 @@ enum op
     OP_NOT  = (1 << 2),
 };
 
+struct node_internal
+{
+    DonnaApp    *app;
+    DonnaNode   *node_trigger;
+    GPtrArray   *intrefs;
+    gchar       *fl;
+    gboolean     free_fl;
+};
+
+static inline void
+free_intrefs (DonnaApp *app, GPtrArray *intrefs)
+{
+    if (intrefs)
+    {
+        guint i;
+
+        for (i = 0; i < intrefs->len; ++i)
+            donna_app_free_int_ref (app, intrefs->pdata[i]);
+        g_ptr_array_unref (intrefs);
+    }
+}
+
+static void
+free_node_internal (struct node_internal *ni)
+{
+    if (ni->node_trigger)
+        g_object_unref (ni->node_trigger);
+    free_intrefs (ni->app, ni->intrefs);
+    if (ni->free_fl)
+        g_free (ni->fl);
+
+    g_slice_free (struct node_internal, ni);
+}
+
+
+
+/* helper to parse "extra" field of a section */
+
+static void
+free_context_info (DonnaContextInfo *info)
+{
+    if (info->free_name)
+        g_free (info->name);
+    if (info->free_icon)
+    {
+        if (info->icon_is_pixbuf)
+            g_object_unref (info->pixbuf);
+        else
+            g_free (info->icon_name);
+    }
+    if (info->free_desc)
+        g_free (info->desc);
+    if (info->free_trigger)
+        g_free (info->trigger);
+}
+
+static DonnaTaskState
+node_internal_cb (DonnaTask *task, DonnaNode *node, struct node_internal *ni);
+
+static DonnaTaskState
+container_children_cb (DonnaTask    *task,
+                       DonnaNode    *node,
+                       DonnaNodeType node_types,
+                       gboolean      get_children,
+                       GPtrArray    *children);
+
+GPtrArray *
+donna_context_parse_extra (DonnaApp               *app,
+                           const gchar            *section,
+                           const gchar            *extra,
+                           get_item_info_fn        get_item_info,
+                           DonnaContextReference   reference,
+                           gpointer                conv_data,
+                           gpointer                section_data,
+                           GError                **error)
+{
+    DonnaProviderInternal *pi;
+    GPtrArray *nodes;
+    GPtrArray *children;
+    const gchar *e;
+    const gchar *cont_s;
+    gint cont_len;
+    gboolean in_container = FALSE;
+
+    pi = (DonnaProviderInternal *) donna_app_get_provider (app, "internal");
+    if (G_UNLIKELY (!pi))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Failed to parse extra: Couldn't get provider 'internal'");
+        return NULL;
+    }
+
+    nodes = g_ptr_array_new_with_free_func (donna_g_object_unref);
+    for (e = extra; ; ++e)
+    {
+        if (*e == ';' || *e == '\0' || (in_container && *e == '>'))
+        {
+            gchar buf[32], *b = buf;
+            DonnaContextInfo info = { 0, };
+            DonnaNode *node;
+            struct node_internal *ni;
+
+            if (e - extra == 1 && *extra == '-')
+            {
+                g_ptr_array_add ((in_container) ? children : nodes, NULL);
+                goto next;
+            }
+            else if (e == extra)
+                break;
+
+            if (snprintf (buf, 32, "%.*s", (gint) (e - extra), extra) >= 32)
+                b = g_strdup_printf ("%.*s", (gint) (e - extra), extra);
+
+            if (!get_item_info (section, b, reference, conv_data, section_data,
+                        &info, error))
+            {
+                if (b != buf)
+                    g_free (b);
+                if (in_container)
+                    g_ptr_array_unref (children);
+                g_ptr_array_unref (nodes);
+                g_object_unref (pi);
+                return NULL;
+            }
+
+            ni = g_slice_new0 (struct node_internal);
+            ni->app = app;
+            ni->fl = info.trigger;
+            ni->free_fl = info.free_trigger;
+            info.free_trigger = FALSE;
+
+            node = donna_provider_internal_new_node (pi, info.name,
+                    info.icon_is_pixbuf, (info.icon_is_pixbuf)
+                    ? (gconstpointer) info.pixbuf : info.icon_name,
+                    info.desc,
+                    DONNA_NODE_ITEM, info.is_sensitive,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (internal_fn) node_internal_cb, ni,
+                    (GDestroyNotify) free_node_internal,
+                    error);
+            if (G_UNLIKELY (!node))
+            {
+                g_prefix_error (error, "Error in section '%s' for item '%s': "
+                        "couldn't create node: ", section, b);
+                free_context_info (&info);
+                free_node_internal (ni);
+                if (b != buf)
+                    g_free (b);
+                if (in_container)
+                    g_ptr_array_unref (children);
+                g_ptr_array_unref (nodes);
+                g_object_unref (pi);
+                return NULL;
+            }
+
+            free_context_info (&info);
+
+            g_ptr_array_add ((in_container) ? children : nodes, node);
+
+            if (b != buf)
+                g_free (b);
+
+next:
+            extra = e + 1;
+            if (*e == '\0')
+                break;
+            else if (*e == '>') /* implies in_container */
+            {
+                gchar buf[32], *b = buf;
+                DonnaContextInfo info = { 0, };
+                DonnaNode *node;
+                GValue v = G_VALUE_INIT;
+
+                in_container = FALSE;
+
+                if (snprintf (buf, 32, "%.*s", cont_len, cont_s) >= 32)
+                    b = g_strdup_printf ("%.*s", cont_len, cont_s);
+
+                if (!get_item_info (section, b, reference, conv_data, section_data,
+                            &info, error))
+                {
+                    if (b != buf)
+                        g_free (b);
+                    g_ptr_array_unref (children);
+                    g_ptr_array_unref (nodes);
+                    g_object_unref (pi);
+                    return NULL;
+                }
+
+                node = donna_provider_internal_new_node (pi, info.name,
+                        info.icon_is_pixbuf, (info.icon_is_pixbuf)
+                        ? (gconstpointer) info.pixbuf : info.icon_name,
+                        info.desc,
+                        DONNA_NODE_CONTAINER,
+                        /* ignore info.is_sensitive otherwise we couldn't get the
+                         * submenu! */
+                        TRUE,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (internal_fn) container_children_cb, children,
+                        (GDestroyNotify) g_ptr_array_unref,
+                        error);
+                if (G_UNLIKELY (!node))
+                {
+                    g_prefix_error (error, "Error in section '%s' for item '%s': "
+                            "couldn't create node: ", section, b);
+                    free_context_info (&info);
+                    if (b != buf)
+                        g_free (b);
+                    g_ptr_array_unref (children);
+                    g_ptr_array_unref (nodes);
+                    g_object_unref (pi);
+                    return NULL;
+                }
+
+                if (info.trigger)
+                {
+                    g_value_init (&v, G_TYPE_STRING);
+                    if (info.free_trigger)
+                        g_value_take_string (&v, info.trigger);
+                    else
+                        g_value_set_static_string (&v, info.trigger);
+                    info.free_trigger = FALSE;
+
+                    if (G_UNLIKELY (!donna_node_add_property (node, "container-trigger",
+                                    G_TYPE_STRING, &v, (refresher_fn) gtk_true, NULL, error)))
+                    {
+                        g_prefix_error (error, "Error in section '%s' for item '%s': "
+                                "Failed to set container-trigger: ",
+                                section, b);
+                        g_value_unset (&v);
+                        g_object_unref (node);
+                        free_context_info (&info);
+                        if (b != buf)
+                            g_free (b);
+                        g_ptr_array_unref (nodes);
+                        g_object_unref (pi);
+                        return NULL;
+                    }
+                    g_value_unset (&v);
+                }
+
+                free_context_info (&info);
+                if (b != buf)
+                    g_free (b);
+
+                g_ptr_array_add (nodes, node);
+            }
+        }
+        else if (!in_container && *e == '<')
+        {
+            in_container = TRUE;
+            cont_s = extra;
+            cont_len = e - cont_s;
+            children = g_ptr_array_new_with_free_func (donna_g_object_unref);
+            extra = e + 1;
+        }
+    }
+
+    if (in_container)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Invalid syntax: missing end of contained items ('>')");
+        g_ptr_array_unref (children);
+        g_ptr_array_unref (nodes);
+        g_object_unref (pi);
+        return NULL;
+    }
+
+    g_object_unref (pi);
+    return nodes;
+}
+
+
+/* getting nodes for context menu */
+
 static enum expr
 evaluate (DonnaContextReference reference, gchar *expr, GError **error)
 {
@@ -178,38 +455,6 @@ evaluate (DonnaContextReference reference, gchar *expr, GError **error)
     }
 }
 
-struct node_internal
-{
-    DonnaApp    *app;
-    DonnaNode   *node_trigger;
-    GPtrArray   *intrefs;
-    gchar       *fl;
-};
-
-static inline void
-free_intrefs (DonnaApp *app, GPtrArray *intrefs)
-{
-    if (intrefs)
-    {
-        guint i;
-
-        for (i = 0; i < intrefs->len; ++i)
-            donna_app_free_int_ref (app, intrefs->pdata[i]);
-        g_ptr_array_unref (intrefs);
-    }
-}
-
-static void
-free_node_internal (struct node_internal *ni)
-{
-    if (ni->node_trigger)
-        g_object_unref (ni->node_trigger);
-    free_intrefs (ni->app, ni->intrefs);
-    g_free (ni->fl);
-
-    g_slice_free (struct node_internal, ni);
-}
-
 struct err
 {
     DonnaApp *app;
@@ -225,23 +470,52 @@ show_error (struct err *e)
     return FALSE;
 }
 
+static void
+trigger_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+        donna_app_show_error (app, donna_task_get_error (task),
+                "Failed to trigger node");
+}
+
 static DonnaTaskState
 node_internal_cb (DonnaTask *task, DonnaNode *node, struct node_internal *ni)
 {
     GError *err = NULL;
+    DonnaTask *trigger_task;
 
-    if (!donna_app_trigger_fl (ni->app, ni->fl, ni->intrefs, FALSE, &err))
+    if (ni->node_trigger)
     {
-        struct err *e;
+        trigger_task = donna_node_trigger_task (ni->node_trigger, &err);
+        if (!trigger_task)
+        {
+            gchar *fl = donna_node_get_full_location (ni->node_trigger);
+            g_prefix_error (&err, "Cannot trigger node: "
+                    "Failed to get trigger task for '%s'", fl);
+            g_free (fl);
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
 
-        e = g_new (struct err, 1);
-        e->app = ni->app;
-        e->err = err;
-        g_main_context_invoke (NULL, (GSourceFunc) show_error, e);
+        donna_task_set_callback (trigger_task, (task_callback_fn) trigger_node_cb,
+                ni->app, NULL);
+        donna_app_run_task (ni->app, trigger_task);
     }
     else
-        /* because trigger_fl handled them for us */
-        ni->intrefs = NULL;
+    {
+        if (!donna_app_trigger_fl (ni->app, ni->fl, ni->intrefs, FALSE, &err))
+        {
+            struct err *e;
+
+            e = g_new (struct err, 1);
+            e->app = ni->app;
+            e->err = err;
+            g_main_context_invoke (NULL, (GSourceFunc) show_error, e);
+        }
+        else
+            /* because trigger_fl handled them for us */
+            ni->intrefs = NULL;
+    }
 
     free_node_internal (ni);
     return DONNA_TASK_DONE;

@@ -12,6 +12,7 @@ typedef enum
 {
     DONNA_CONTEXT_MENU_ERROR_NO_SECTIONS,
     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
+    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
     DONNA_CONTEXT_MENU_ERROR_OTHER,
 } DonnaContextMenuError;
 
@@ -27,12 +28,47 @@ typedef enum
             | DONNA_CONTEXT_REF_NOT_SELECTED)
 } DonnaContextReference;
 
+typedef struct
+{
+    gchar       *name;
+    gboolean     icon_is_pixbuf;
+    union {
+        gchar       *icon_name;
+        GdkPixbuf   *pixbuf;
+    };
+    gchar       *desc;
+    gchar       *trigger;
+    guint        is_visible     : 1;
+    guint        is_sensitive   : 1;
+
+    guint        free_name      : 1;
+    guint        free_icon      : 1;
+    guint        free_desc      : 1;
+    guint        free_trigger   : 1;
+} DonnaContextInfo;
+
+typedef gboolean (*get_item_info_fn) (const gchar             *section,
+                                      const gchar             *item,
+                                      DonnaContextReference    reference,
+                                      gpointer                 conv_data,
+                                      gpointer                 section_data,
+                                      DonnaContextInfo        *info,
+                                      GError                 **error);
+
 typedef GPtrArray * (*get_section_nodes_fn) (const gchar            *section,
                                              const gchar            *extra,
                                              DonnaContextReference   reference,
                                              gpointer                conv_data,
                                              GError                **error);
 
+GPtrArray *     donna_context_parse_extra       (DonnaApp               *app,
+                                                 const gchar            *section,
+                                                 const gchar            *extra,
+                                                 get_item_info_fn        get_item_info,
+                                                 DonnaContextReference   reference,
+                                                 gpointer                conv_data,
+                                                 gpointer                section_data,
+                                                 GError                **error);
 
 GPtrArray *     donna_context_menu_get_nodes_v  (DonnaApp               *app,
                                                  GError                **error,
