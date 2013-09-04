@@ -276,6 +276,8 @@ gboolean        donna_tree_view_full_collapse   (DonnaTreeView      *tree,
 gboolean        donna_tree_view_remove_row      (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
+gboolean        donna_tree_view_go_root         (DonnaTreeView      *tree,
+                                                 GError            **error);
 /* Mini-Tree */
 gboolean        donna_tree_view_maxi_expand     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,

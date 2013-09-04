@@ -1126,6 +1126,22 @@ cmd_tree_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+
+    if (!donna_tree_view_go_root (tree, &err))
+    {
+        g_prefix_error (&err, "Command 'tree_go_root': ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1913,6 +1929,11 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_go_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    add_command (tree_go_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

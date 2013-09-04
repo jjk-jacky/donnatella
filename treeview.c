@@ -11807,6 +11807,54 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
     return TRUE;
 }
 
+gboolean
+donna_tree_view_go_root (DonnaTreeView      *tree,
+                         GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeModel *model;
+    GtkTreeIter parent;
+    GtkTreeIter iter;
+    DonnaNode *node;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+    model = (GtkTreeModel *) priv->store;
+
+    if (G_UNLIKELY (!priv->location))
+        return TRUE;
+
+    if (!is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Can't go to root in mode List",
+                priv->name);
+        return FALSE;
+    }
+
+    if (donna_provider_get_flags (donna_node_peek_provider (priv->location))
+            & DONNA_PROVIDER_FLAG_FLAT)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
+                "Treeview '%s': Can't go to root, current location is in flat provider",
+                priv->name);
+        return FALSE;
+    }
+
+    iter = priv->location_iter;
+    while (gtk_tree_model_iter_parent (model, &parent, &iter))
+        iter = parent;
+
+    gtk_tree_model_get (model, &iter,
+            DONNA_TREE_COL_NODE,    &node,
+            -1);
+
+    g_object_unref (node);
+    return donna_tree_view_set_location (tree, node, error);
+}
+
 
 /* mode list only */
 GPtrArray *
