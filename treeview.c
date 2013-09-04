@@ -11255,6 +11255,52 @@ tree_context_get_item_info (const gchar             *section,
 
         return TRUE;
     }
+    else if (streq (section, "selection"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (streq (item, "select"))
+        {
+            info->name = "Select All";
+            info->icon_name = "edit-select-all";
+            info->trigger = g_strdup_printf (
+                    "command:tree_selection (%s, s, :all)",
+                    priv->name);
+            info->free_trigger = TRUE;
+        }
+        else if (streq (item, "unselect"))
+        {
+            info->name = "Unselect All";
+            info->trigger = g_strdup_printf (
+                    "command:tree_selection (%s, u, :all)",
+                    priv->name);
+            info->free_trigger = TRUE;
+        }
+        else if (streq (item, "invert"))
+        {
+            info->name = "Invert Selection";
+            info->trigger = g_strdup_printf (
+                    "command:tree_selection (%s, i, :all)",
+                    priv->name);
+            info->free_trigger = TRUE;
+        }
+        else if (*item == '\0')
+        {
+            /* generic container for a submenu */
+            info->name = "Selection";
+            info->icon_name = "edit-select-all";
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item '%s' in section '%s'",
+                    priv->name, item, section);
+            return FALSE;
+        }
+
+        return TRUE;
+    }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
@@ -11285,6 +11331,13 @@ tree_context_get_nodes (const gchar             *section,
     {
         nodes = donna_context_parse_extra (priv->app, section,
                 (extra) ? extra : "normal<visible;simple;normal;reload>",
+                (get_item_info_fn) tree_context_get_item_info,
+                reference, conv, NULL, error);
+    }
+    else if (streq (section, "selection"))
+    {
+        nodes = donna_context_parse_extra (priv->app, section,
+                (extra) ? extra : "select;invert;unselect",
                 (get_item_info_fn) tree_context_get_item_info,
                 reference, conv, NULL, error);
     }
