@@ -5,6 +5,7 @@
 #include "app.h"
 #include "columntype.h"
 #include "macros.h"
+#include "debug.h"
 
 enum
 {
@@ -306,7 +307,7 @@ get_quoted_string (gchar **str, gboolean get_string)
         if (get_string)
             g_string_append_c (string, *end);
     }
-    *str = end;
+    *str = end + 1;
     return (get_string) ? g_string_free (string, FALSE) : *str;
 }
 
