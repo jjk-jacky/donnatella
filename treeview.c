@@ -11392,6 +11392,197 @@ tree_context_get_item_info (const gchar             *section,
 
         return TRUE;
     }
+    else if (streq (section, "register"))
+    {
+        DonnaTask *task;
+        DonnaNode *node;
+        DonnaNodeHasValue has;
+        GValue v = G_VALUE_INIT;
+        struct {
+            const gchar *reg;
+            gint len;
+        } *sd = section_data;
+        gchar buf[64], *b = buf;
+        enum {
+            ON_NOTHING = 0,
+            ON_SEL,
+            ON_REF,
+            ON_REG,
+        } on = ON_NOTHING;
+
+        info->is_visible = TRUE;
+        if ((reference & DONNA_CONTEXT_REF_SELECTED)
+                || (!(reference & DONNA_CONTEXT_REF_NOT_SELECTED)
+                    && (reference & DONNA_CONTEXT_HAS_SELECTION)))
+            on = ON_SEL;
+        else if (reference & DONNA_CONTEXT_REF_NOT_SELECTED)
+            on = ON_REF;
+
+        if (streq (item, "cut"))
+        {
+            info->is_sensitive = on != ON_NOTHING;
+            if (on == ON_SEL)
+                info->trigger = g_strdup_printf (
+                        "command:register_set (%.*s, cut, "
+                        "@tree_get_nodes (%s, :selected))",
+                        sd->len, sd->reg, priv->name);
+            else if (on == ON_REF)
+                info->trigger = g_strdup_printf (
+                        "command:register_set (%.*s, cut, "
+                        "@tree_get_nodes (%s, [%p;%p]))",
+                        sd->len, sd->reg, priv->name,
+                        conv->row->node, conv->row->iter);
+        }
+        else if (streq (item, "copy"))
+        {
+            info->is_sensitive = on != ON_NOTHING;
+            if (on == ON_SEL)
+                info->trigger = g_strdup_printf (
+                        "command:register_set (%.*s, copy, "
+                        "@tree_get_nodes (%s, :selected))",
+                        sd->len, sd->reg, priv->name);
+            else if (on == ON_REF)
+                info->trigger = g_strdup_printf (
+                        "command:register_set (%.*s, copy, "
+                        "@tree_get_nodes (%s, [%p;%p]))",
+                        sd->len, sd->reg, priv->name,
+                        conv->row->node, conv->row->iter);
+        }
+        else if (streq (item, "append"))
+        {
+            info->is_sensitive = on != ON_NOTHING;
+            if (on == ON_SEL)
+                info->trigger = g_strdup_printf (
+                        "command:register_add_nodes (%.*s, "
+                        "@tree_get_nodes (%s, :selected))",
+                        sd->len, sd->reg, priv->name);
+            else if (on == ON_REF)
+                info->trigger = g_strdup_printf (
+                        "command:register_add_nodes (%.*s, "
+                        "@tree_get_nodes (%s, [%p;%p]))",
+                        sd->len, sd->reg, priv->name,
+                        conv->row->node, conv->row->iter);
+        }
+        else if (streq (item, "paste") || streq (item, "paste_copy")
+                || streq (item, "paste_move") || streq (item, "paste_new_folder"))
+        {
+            if (G_UNLIKELY (!priv->location))
+                info->is_sensitive = FALSE;
+            else
+            {
+                gchar *dest;
+
+                on = ON_REG;
+
+                if ((reference & DONNA_CONTEXT_REF_NOT_SELECTED)
+                        && donna_node_get_node_type (conv->row->node)
+                        == DONNA_NODE_CONTAINER)
+                    dest = donna_node_get_full_location (conv->row->node);
+                else
+                    dest = donna_node_get_full_location (priv->location);
+
+                info->trigger = g_strdup_printf (
+                        "command:register_nodes_io (%.*s, %s, %s, %d)",
+                        sd->len, sd->reg,
+                        (streq (item, "paste_copy")) ? "copy"
+                        : (streq (item, "paste_move")) ? "move" : "auto",
+                        dest,
+                        (streq (item, "paste_new_folder")) ? 1 : 0);
+
+                g_free (dest);
+            }
+        }
+        else if (*item == '\0')
+        {
+            /* generic container for a submenu */
+
+            if (sd->len <= 1)
+            {
+                if (sd->len == 0 || *sd->reg == '_')
+                    info->name = "Register";
+                else if (*sd->reg == '+')
+                    info->name = "Clipboard";
+            }
+            if (!info->name)
+            {
+                info->name = g_strdup_printf ("Register '%.*s'", sd->len, sd->reg);
+                info->free_name = TRUE;
+            }
+            info->icon_name = "edit-copy";
+            return TRUE;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item '%s' in section '%s'",
+                    priv->name, item, section);
+            return FALSE;
+        }
+
+        if (snprintf (buf, 64, "register:%.*s/%s", sd->len, sd->reg, item) >= 64)
+            b = g_strdup_printf ("register:%.*s/%s", sd->len, sd->reg, item);
+
+        task = donna_app_get_node_task (priv->app, b);
+        if (G_UNLIKELY (!task))
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Treeview '%s': Failed to get task for '%s'", b);
+            if (b != buf)
+                g_free (b);
+            return FALSE;
+        }
+
+        donna_task_set_can_block (g_object_ref_sink (task));
+        donna_app_run_task (priv->app, task);
+        donna_task_wait_for_it (task);
+
+        if (donna_task_get_state (task) != DONNA_TASK_DONE)
+        {
+            const GError *err = donna_task_get_error (task);
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': Cannot create item '%s' for register '%s': "
+                    "Failed to get node '%s': %s",
+                    priv->name, item, sd->reg, b,
+                    (err) ? err->message : "(no error message)");
+            g_object_unref (task);
+            if (b != buf)
+                g_free (b);
+            return FALSE;
+        }
+
+        if (b != buf)
+            g_free (b);
+
+        node = g_value_get_object (donna_task_get_return_value (task));
+
+        info->name = donna_node_get_name (node);
+        info->free_name = TRUE;
+
+        donna_node_get (node, FALSE, "icon", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->icon_is_pixbuf = TRUE;
+            info->pixbuf = g_value_dup_object (&v);
+            info->free_icon = TRUE;
+            g_value_unset (&v);
+        }
+
+        if (on == ON_REG)
+        {
+            donna_node_get (node, FALSE, "menu-is-sensitive", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                info->is_sensitive = g_value_get_boolean (&v);
+                g_value_unset (&v);
+            }
+        }
+
+        g_object_unref (task);
+        return TRUE;
+    }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
@@ -11431,6 +11622,57 @@ tree_context_get_nodes (const gchar             *section,
                 (extra) ? extra : "select;invert;unselect;filter",
                 (get_item_info_fn) tree_context_get_item_info,
                 reference, conv, NULL, error);
+    }
+    else if (streq (section, "register"))
+    {
+        const gchar *def = "<cut;copy;append;paste"
+            "<paste;paste_copy;paste_move;paste_new_folder>>";
+        struct {
+            const gchar *reg;
+            gint len;
+        } sd;
+
+        if (extra)
+        {
+            sd.reg = strchr (extra, '/');
+            if (sd.reg)
+            {
+                sd.len = sd.reg - extra;
+                sd.reg = extra;
+                extra += sd.len + 1;
+            }
+            else
+            {
+                sd.reg = extra;
+                sd.len = strlen (sd.reg);
+                extra = def;
+            }
+        }
+        else
+        {
+            sd.reg = "_";
+            sd.len = 1;
+            extra = def;
+        }
+
+        nodes = donna_context_parse_extra (priv->app, section, extra,
+                (get_item_info_fn) tree_context_get_item_info,
+                reference, conv, &sd, error);
+    }
+    else if (streq (section, "clipboard"))
+    {
+        struct {
+            const gchar *reg;
+            gint len;
+        } sd = { "+", 1 };
+
+        if (!extra)
+            extra = "cut;copy;append;paste"
+                "<paste;paste_copy;paste_move;paste_new_folder>";
+
+        nodes = donna_context_parse_extra (priv->app, "register", extra,
+                (get_item_info_fn) tree_context_get_item_info,
+                reference, conv, &sd, error);
     }
     else
     {
