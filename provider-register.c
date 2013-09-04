@@ -1823,12 +1823,12 @@ provider_register_new_node (DonnaProviderBase  *_provider,
         if (!node)
         {
             donna_task_take_error (task, err);
-            if (name != buf)
+            if (name != buf && name != reg_default)
                 g_free (name);
             return DONNA_TASK_FAILED;
         }
 
-        if (name != buf)
+        if (name != buf && name != reg_default)
             g_free (name);
         goto cache_and_return;
     }
