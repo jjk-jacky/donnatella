@@ -11110,88 +11110,21 @@ found:
     return TRUE;
 }
 
-enum ctxt_go
+static gboolean
+tree_context_get_item_info (const gchar             *section,
+                            const gchar             *item,
+                            DonnaContextReference    reference,
+                            struct conv             *conv,
+                            gpointer                 section_data,
+                            DonnaContextInfo        *info,
+                            GError                 **error)
 {
-    CTXT_GO_UP,
-    CTXT_GO_DOWN,
-    CTXT_GO_BACK,
-    CTXT_GO_FORWARD
-};
-
-struct context_go
-{
-    DonnaTreeView *tree;
-    enum ctxt_go go;
-};
-
-static void
-free_context_go (struct context_go *cgo)
-{
-    g_slice_free (struct context_go, cgo);
-}
-
-static DonnaTaskState
-context_go (DonnaTask           *task,
-            DonnaNode           *node,
-            struct context_go   *cgo)
-{
-    GError *err = NULL;
-
-    if (cgo->go == CTXT_GO_UP)
-        donna_tree_view_go_up (cgo->tree, 1, &err);
-    else if (cgo->go == CTXT_GO_DOWN)
-        donna_tree_view_go_down (cgo->tree, 1, &err);
-    else if (cgo->go == CTXT_GO_BACK)
-        donna_tree_view_history_move (cgo->tree, DONNA_HISTORY_BACKWARD, 1, &err);
-    else if (cgo->go == CTXT_GO_FORWARD)
-        donna_tree_view_history_move (cgo->tree, DONNA_HISTORY_FORWARD, 1, &err);
-    else
-        /* should never happen */
-        g_set_error (&err, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Invalid call to context_go(%d) -- How did you do that!?",
-                cgo->tree->priv->name, cgo->go);
-
-    if (err)
-    {
-        donna_app_show_error (cgo->tree->priv->app, NULL, err->message);
-        g_clear_error (&err);
-    }
-    free_context_go (cgo);
-}
-
-static inline GPtrArray *
-context_get_section_go (DonnaTreeView           *tree,
-                        DonnaProviderInternal   *pi,
-                        const gchar             *extra,
-                        DonnaContextReference    reference,
-                        struct conv             *conv,
-                        GError                 **error)
-{
+    DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
-    GPtrArray *nodes;
-    gchar *e;
 
-    if (!extra)
-        extra = "up;back;forward;down";
-
-    nodes = g_ptr_array_new ();
-    for (;;)
+    if (streq (section, "go"))
     {
-        gsize len;
-        const gchar *name;
-        const gchar *icon;
-        enum ctxt_go go;
-        gboolean is_sensitive = TRUE;
-        DonnaNode *node;
-        struct context_go *cgo;
-
-        e = strchr (extra, ';');
-        if (e)
-            len = e - extra;
-        else
-            len = strlen (extra);
-
-        if (len == 2 && streqn (extra, "up", 2))
+        if (streq (item, "up"))
         {
             gchar *s;
 
@@ -11199,218 +11132,136 @@ context_get_section_go (DonnaTreeView           *tree,
             if (!priv->location || (donna_provider_get_flags (
                             donna_node_peek_provider (priv->location))
                         & DONNA_PROVIDER_FLAG_FLAT))
-                goto next;
+                return TRUE;
 
             s = donna_node_get_location (priv->location);
-            is_sensitive = !streq (s, "/");
+            info->is_sensitive = !streq (s, "/");
             g_free (s);
 
-            name = "Go Up";
-            icon = "go-up";
-            go = CTXT_GO_UP;
+            info->is_visible = TRUE;
+            info->name = "Go Up";
+            info->icon_name = "go-up";
+            info->trigger = g_strdup_printf ("command:tree_go_up (%s)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 4 && streqn (extra, "down", 4))
+        else if (streq (item, "down"))
         {
             /* no location or flat provider means no going down */
             if (is_tree (tree) || !priv->location
                     || (donna_provider_get_flags (
                             donna_node_peek_provider (priv->location))
                         & DONNA_PROVIDER_FLAG_FLAT))
-                goto next;
+                return TRUE;
 
-            name = "Go Down";
-            icon = "go-down";
-            go = CTXT_GO_DOWN;
+            info->is_visible = TRUE;
+            info->is_sensitive = TRUE;
+            info->name = "Go Down";
+            info->icon_name = "go-down";
+            info->trigger = g_strdup_printf ("command:tree_go_down (%s)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 4 && streqn (extra, "back", 4))
+        else if (streq (item, "back"))
         {
             if (is_tree (tree))
-                goto next;
+                return TRUE;
 
-            name = "Go Back";
-            icon = "go-previous";
-            go = CTXT_GO_BACK;
-
-            is_sensitive = donna_history_get_item (priv->history,
+            info->name = "Go Back";
+            info->icon_name = "go-previous";
+            info->is_sensitive = donna_history_get_item (priv->history,
                     DONNA_HISTORY_BACKWARD, 1, NULL) != NULL;
+            info->trigger = g_strdup_printf (
+                    "command:tree_history_move (%s)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 7 && streqn (extra, "forward", 7))
+        else if (streq (item, "forward"))
         {
             if (is_tree (tree))
-                goto next;
+                return TRUE;
 
-            name = "Go Forward";
-            icon = "go-next";
-            go = CTXT_GO_FORWARD;
-
-            is_sensitive = donna_history_get_item (priv->history,
+            info->name = "Go Forward";
+            info->icon_name = "go-next";
+            info->is_sensitive = donna_history_get_item (priv->history,
                     DONNA_HISTORY_FORWARD, 1, NULL) != NULL;
+            info->trigger = g_strdup_printf (
+                    "command:tree_history_move (%s, forward)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 1 && *extra == '-')
+        else if (*item == '\0')
         {
-            g_ptr_array_add (nodes, NULL);
-            goto next;
+            /* generic container for a submenu */
+            info->name = "Go...";
+            info->icon_name = "go-jump";
         }
         else
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
-                    "Treeview '%s': Failed to get context section 'go'; "
-                    "invalid item '%.*s' -- Supported items are 'up', 'down', "
-                    "'back', 'forward' and '-'",
-                    priv->name, len, extra);
-            g_ptr_array_unref (nodes);
-            return NULL;
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item '%s' in section '%s'",
+                    priv->name, item, section);
+            return FALSE;
         }
 
-        cgo = g_slice_new (struct context_go);
-        cgo->tree = tree;
-        cgo->go = go;
-
-        node = donna_provider_internal_new_node (pi, name, FALSE, icon, NULL,
-                DONNA_NODE_ITEM, is_sensitive, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-                (internal_fn) context_go, cgo, (GDestroyNotify) free_context_go,
-                error);
-        if (G_UNLIKELY (!node))
+        return TRUE;
+    }
+    else if (streq (section, "refresh"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_name = "view-refresh";
+        if (streq (item, "visible"))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to get context section 'go'; "
-                    "couldn't create node: ",
+            info->name = "Refresh (Visible)";
+            info->trigger = g_strdup_printf ("command:tree_refresh (%s, visible)",
                     priv->name);
-            g_ptr_array_unref (nodes);
-            return NULL;
+            info->free_trigger = TRUE;
         }
-
-        g_ptr_array_add (nodes, node);
-next:
-        if (e)
-            extra = e + 1;
-        else
-            break;
-    }
-
-    return nodes;
-}
-
-struct context_refresh
-{
-    DonnaTreeView *tree;
-    DonnaTreeRefreshMode mode;
-};
-
-static void
-free_crefresh (struct context_refresh *crefresh)
-{
-    g_slice_free (struct context_refresh, crefresh);
-}
-
-static DonnaTaskState
-context_refresh (DonnaTask              *task,
-                 DonnaNode              *node,
-                 struct context_refresh *crefresh)
-{
-    GError *err = NULL;
-
-    if (!donna_tree_view_refresh (crefresh->tree, crefresh->mode, &err))
-    {
-        donna_app_show_error (crefresh->tree->priv->app, NULL, err->message);
-        g_clear_error (&err);
-    }
-    free_crefresh (crefresh);
-}
-
-static inline GPtrArray *
-context_get_section_refresh (DonnaTreeView           *tree,
-                             DonnaProviderInternal   *pi,
-                             const gchar             *extra,
-                             DonnaContextReference    reference,
-                             struct conv             *conv,
-                             GError                 **error)
-{
-    DonnaTreeViewPrivate *priv = tree->priv;
-    GPtrArray *nodes;
-    gchar *e;
-
-    if (!extra)
-        extra = "visible;normal;reload";
-
-    nodes = g_ptr_array_new ();
-    for (;;)
-    {
-        gsize len;
-        const gchar *name;
-        DonnaTreeRefreshMode mode;
-        DonnaNode *node;
-        struct context_refresh *crefresh;
-
-        e = strchr (extra, ';');
-        if (e)
-            len = e - extra;
-        else
-            len = strlen (extra);
-
-        if (len == 7 && streqn (extra, "visible", 7))
+        else if (streq (item, "simple"))
         {
-            name = "Refresh (Visible)";
-            mode = DONNA_TREE_REFRESH_VISIBLE;
+            info->name = "Refresh (Simple)";
+            info->trigger = g_strdup_printf ("command:tree_refresh (%s, simple)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 6 && streqn (extra, "simple", 6))
+        else if (streq (item, "normal"))
         {
-            name = "Refresh (Simple)";
-            mode = DONNA_TREE_REFRESH_SIMPLE;
+            info->name = "Refresh";
+            info->trigger = g_strdup_printf ("command:tree_refresh (%s, normal)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 6 && streqn (extra, "normal", 6))
+        else if (streq (item, "reload"))
         {
-            name = "Refresh";
-            mode = DONNA_TREE_REFRESH_NORMAL;
+            info->name = "Refresh (Reload)";
+            info->trigger = g_strdup_printf ("command:tree_refresh (%s, reload)",
+                    priv->name);
+            info->free_trigger = TRUE;
         }
-        else if (len == 6 && streqn (extra, "reload", 6))
+        else if (*item == '\0')
         {
-            name = "Refresh (Reload)";
-            mode = DONNA_TREE_REFRESH_RELOAD;
-        }
-        else if (len == 1 && *extra == '-')
-        {
-            g_ptr_array_add (nodes, NULL);
-            goto next;
+            /* generic container for a submenu */
+            info->name = "Refresh...";
         }
         else
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
-                    "Treeview '%s': Failed to get context section 'refresh'; "
-                    "invalid item '%.*s' -- Supported items are 'visible', "
-                    "'simple', 'normal', 'reload' and '-'",
-                    priv->name, len, extra);
-            g_ptr_array_unref (nodes);
-            return NULL;
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item '%s' in section '%s'",
+                    priv->name, item, section);
+            return FALSE;
         }
 
-        crefresh = g_slice_new (struct context_refresh);
-        crefresh->tree = tree;
-        crefresh->mode = mode;
-
-        node = donna_provider_internal_new_node (pi, name, FALSE, "view-refresh", NULL,
-                DONNA_NODE_ITEM, TRUE, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-                (internal_fn) context_refresh, crefresh, (GDestroyNotify) free_crefresh,
-                error);
-        if (G_UNLIKELY (!node))
-        {
-            g_prefix_error (error, "Treeview '%s': Failed to get context section 'refresh'; "
-                    "couldn't create node: ",
-                    priv->name);
-            g_ptr_array_unref (nodes);
-            return NULL;
-        }
-
-        g_ptr_array_add (nodes, node);
-next:
-        if (e)
-            extra = e + 1;
-        else
-            break;
+        return TRUE;
     }
 
-    return nodes;
+    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
+            "Treeview '%s': No such section: '%s'",
+                priv->name, section);
+    return FALSE;
 }
 
 static GPtrArray *
@@ -11422,33 +11273,36 @@ tree_context_get_nodes (const gchar             *section,
 {
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaProviderInternal *pi;
     GPtrArray *nodes;
 
-    pi = (DonnaProviderInternal *) donna_app_get_provider (priv->app, "internal");
-    if (G_UNLIKELY (!pi))
-    {
-        g_prefix_error (error, "Treeview '%s': Failed to get context section '%s': "
-                "couldn't get provider 'internal'",
-                priv->name, section);
-        return NULL;
-    }
-
     if (streq (section, "go"))
-        nodes = context_get_section_go (tree, pi, extra, reference, conv, error);
+    {
+        nodes = donna_context_parse_extra (priv->app, section,
+                (extra) ? extra : "up;back;forward;down",
+                (get_item_info_fn) tree_context_get_item_info,
+                reference, conv, NULL, error);
+    }
     else if (streq (section, "refresh"))
-        nodes = context_get_section_refresh (tree, pi, extra, reference, conv, error);
+    {
+        nodes = donna_context_parse_extra (priv->app, section,
+                (extra) ? extra : "normal<visible;simple;normal;reload>",
+                (get_item_info_fn) tree_context_get_item_info,
+                reference, conv, NULL, error);
+    }
     else
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
                 "Treeview '%s': No such section: '%s'",
                 priv->name, section);
-        g_object_unref (pi);
         return NULL;
     }
 
-    g_object_unref (pi);
+    if (!nodes)
+        g_prefix_error (error, "Treeview '%s': "
+                "Failed getting nodes for section '%s' of context menu: ",
+                priv->name, section);
+
     return nodes;
 }
 
