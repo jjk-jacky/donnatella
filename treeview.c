@@ -11414,7 +11414,7 @@ tree_context_get_nodes (const gchar             *section,
     if (streq (section, "go"))
     {
         nodes = donna_context_parse_extra (priv->app, section,
-                (extra) ? extra : "up;back;forward;down",
+                (extra) ? extra : "up<up;back;forward;down>",
                 (get_item_info_fn) tree_context_get_item_info,
                 reference, conv, NULL, error);
     }
