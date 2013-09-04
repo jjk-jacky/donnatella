@@ -9670,6 +9670,9 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     priv = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
+    if (G_UNLIKELY (!priv->location))
+            return TRUE;
+
     if (mode == DONNA_TREE_REFRESH_VISIBLE || mode == DONNA_TREE_REFRESH_SIMPLE)
     {
         struct refresh_data *data;
