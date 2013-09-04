@@ -143,6 +143,9 @@ parse_extra (DonnaApp               *app,
                 return NULL;
             }
 
+            if (!info.is_visible)
+                goto skip;
+
             ni = g_slice_new0 (struct node_internal);
             ni->app = app;
             ni->fl = info.trigger;
@@ -170,9 +173,10 @@ parse_extra (DonnaApp               *app,
                 return NULL;
             }
 
-            free_context_info (&info);
-
             g_ptr_array_add (nodes, node);
+
+skip:
+            free_context_info (&info);
 
             if (b != buf)
                 g_free (b);
