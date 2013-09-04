@@ -11124,6 +11124,8 @@ tree_context_get_item_info (const gchar             *section,
 
     if (streq (section, "go"))
     {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
         if (streq (item, "up"))
         {
             gchar *s;
@@ -11138,7 +11140,6 @@ tree_context_get_item_info (const gchar             *section,
             info->is_sensitive = !streq (s, "/");
             g_free (s);
 
-            info->is_visible = TRUE;
             info->name = "Go Up";
             info->icon_name = "go-up";
             info->trigger = g_strdup_printf ("command:tree_go_up (%s)",
@@ -11154,8 +11155,6 @@ tree_context_get_item_info (const gchar             *section,
                         & DONNA_PROVIDER_FLAG_FLAT))
                 return TRUE;
 
-            info->is_visible = TRUE;
-            info->is_sensitive = TRUE;
             info->name = "Go Down";
             info->icon_name = "go-down";
             info->trigger = g_strdup_printf ("command:tree_go_down (%s)",
