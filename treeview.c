@@ -11366,6 +11366,16 @@ tree_context_get_item_info (const gchar             *section,
                     priv->name);
             info->free_trigger = TRUE;
         }
+        else if (streq (item, "filter"))
+        {
+            info->name = "Selection Filter...";
+            info->trigger = g_strdup_printf (
+                    "command:tree_selection_nodes (%s, d, @nodes_filter ("
+                    "@tree_get_nodes (%s, :all), "
+                    "@ask_text (Enter your selection filter)))",
+                    priv->name, priv->name);
+            info->free_trigger = TRUE;
+        }
         else if (*item == '\0')
         {
             /* generic container for a submenu */
@@ -11419,7 +11429,7 @@ tree_context_get_nodes (const gchar             *section,
     else if (streq (section, "selection"))
     {
         nodes = donna_context_parse_extra (priv->app, section,
-                (extra) ? extra : "select;invert;unselect",
+                (extra) ? extra : "select;invert;unselect;filter",
                 (get_item_info_fn) tree_context_get_item_info,
                 reference, conv, NULL, error);
     }
