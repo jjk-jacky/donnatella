@@ -8561,7 +8561,6 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
 {
     DonnaTreeViewPrivate *priv;
     GtkTreeSelection *sel;
-    GtkTreeIter iter;
     guint i;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
