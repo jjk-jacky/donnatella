@@ -843,7 +843,9 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
         else if (str)
             g_string_append_c (str, *s);
     }
-    if (str && str->str[str->len - 1] == '/')
+    if (!str && s - location > 1 && s[-1] == '/')
+        str = g_string_new (location);
+    if (str && str->len > 1 && str->str[str->len - 1] == '/')
         g_string_truncate (str, str->len - 1);
 
     s = (str) ? str->str : location;
