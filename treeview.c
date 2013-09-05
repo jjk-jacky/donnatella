@@ -11438,8 +11438,8 @@ tree_context_get_item_info (const gchar             *section,
             info->trigger = g_strdup_printf (
                     "command:tree_selection_nodes (%s, d, @nodes_filter ("
                     "@tree_get_nodes (%s, :all), "
-                    "@ask_text (Enter your selection filter)))",
-                    priv->name, priv->name);
+                    "@ask_text (Enter your selection filter), %s))",
+                    priv->name, priv->name, priv->name);
             info->free_trigger = TRUE;
         }
         else if (*item == '\0')
