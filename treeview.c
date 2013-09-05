@@ -11209,7 +11209,63 @@ tree_context_get_item_info (const gchar             *section,
     if (streq (section, "go"))
     {
         info->is_sensitive = TRUE;
-        if (streq (item, "up"))
+        if (streq (item, "tree_root"))
+        {
+            struct {
+                const gchar *tree;
+                gint len;
+            } *sd = section_data;
+            DonnaTreeView *t;
+            GtkTreeIter iter;
+
+            info->name = "Go Up to Tree Root";
+            info->icon_name = "go-up";
+
+            /* no tree given & we're not a tree, not visible */
+            if (!sd && !is_tree (tree))
+                return TRUE;
+
+            /* if we're not a tree, get the given one */
+            if (!is_tree (tree))
+            {
+                gchar buf[32], *b = buf;
+
+                if (snprintf (buf, 32, "%.*s", sd->len, sd->tree) >= 32)
+                    b = g_strdup_printf ("%.*s", sd->len, sd->tree);
+
+                t = donna_app_get_treeview (priv->app, b);
+                if (b != buf)
+                    g_free (b);
+
+                if (!t)
+                    return TRUE;
+
+                /* must be a tree & in the same location as we are */
+                if (!is_tree (t) || t->priv->location != priv->location)
+                {
+                    g_object_unref (t);
+                    return TRUE;
+                }
+            }
+            else
+                t = tree;
+
+            /* no location or flat provider means no going up */
+            info->is_visible = (priv->location && !(donna_provider_get_flags (
+                            donna_node_peek_provider (priv->location))
+                        & DONNA_PROVIDER_FLAG_FLAT));
+
+            /* sensitive only if there's at least one parent to go up to */
+            info->is_sensitive = gtk_tree_model_iter_parent (
+                    (GtkTreeModel *) t->priv->store, &iter, &t->priv->location_iter);
+            if (t != tree)
+                g_object_unref (t);
+
+            info->trigger = g_strdup_printf ("command:tree_go_root (%.*s)",
+                    sd->len, sd->tree);
+            info->free_trigger = TRUE;
+        }
+        else if (streq (item, "up"))
         {
             gchar *s;
 
@@ -11615,10 +11671,34 @@ tree_context_get_nodes (const gchar             *section,
 
     if (streq (section, "go"))
     {
-        nodes = donna_context_parse_extra (priv->app, section,
-                (extra) ? extra : "up<up;back;forward;down>",
+        const gchar *def = "up<tree_root;-;up;back;forward;down>";
+        struct {
+            const gchar *tree;
+            gint len;
+        } sd;
+
+        if (extra)
+        {
+            sd.tree = strchr (extra, '/');
+            if (sd.tree)
+            {
+                sd.len = sd.tree - extra;
+                sd.tree = extra;
+                extra += sd.len + 1;
+            }
+            else
+            {
+                sd.tree = extra;
+                sd.len = strlen (extra);
+                extra = def;
+            }
+        }
+        else
+            extra = def;
+
+        nodes = donna_context_parse_extra (priv->app, section, extra,
                 (get_item_info_fn) tree_context_get_item_info,
-                reference, conv, NULL, error);
+                reference, conv, (sd.tree) ? &sd : NULL, error);
     }
     else if (streq (section, "refresh"))
     {
