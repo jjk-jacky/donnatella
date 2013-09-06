@@ -276,17 +276,23 @@ next:
 
             if (info.node)
             {
-                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                        DONNA_CONTEXT_MENU_ERROR_OTHER,
-                        "Context-menu: Cannot use given node for item '%s/%s', "
-                        "needs info to create a container",
-                        section, b);
-                free_context_info (&info);
-                if (b != buf)
-                    g_free (b);
-                g_ptr_array_unref (children);
-                g_ptr_array_unref (nodes);
-                return NULL;
+                /* we only have the node to use, only we can't use it since we
+                 * need to create a container. So we'll grab name/icon/etc from
+                 * it, and put it as container-trigger */
+
+                info.name = donna_node_get_name (info.node);
+                info.free_name = TRUE;
+
+                if (donna_node_get_icon (info.node, FALSE, &info.pixbuf)
+                        == DONNA_NODE_VALUE_SET)
+                {
+                    info.icon_is_pixbuf = TRUE;
+                    info.free_icon = TRUE;
+                }
+
+                if (donna_node_get_desc (info.node, FALSE, &info.desc)
+                        == DONNA_NODE_VALUE_SET)
+                    info.free_desc = TRUE;
             }
 
             node = donna_provider_internal_new_node (pi, info.name,
@@ -346,6 +352,32 @@ next:
 
                 if (G_UNLIKELY (!donna_node_add_property (node, "container-trigger",
                                 G_TYPE_STRING, &v, (refresher_fn) gtk_true, NULL, error)))
+                {
+                    g_prefix_error (error, "Error in section '%s' for item '%s': "
+                            "Failed to set 'container-trigger': ",
+                            section, b);
+                    g_value_unset (&v);
+                    g_object_unref (node);
+                    free_context_info (&info);
+                    if (b != buf)
+                        g_free (b);
+                    g_ptr_array_unref (nodes);
+                    g_object_unref (pi);
+                    return NULL;
+                }
+                g_value_unset (&v);
+            }
+
+            if (info.node)
+            {
+                GError *err = NULL;
+
+                g_value_init (&v, DONNA_TYPE_NODE);
+                g_value_set_object (&v, info.node);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "container-trigger",
+                                DONNA_TYPE_NODE, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
                 {
                     g_prefix_error (error, "Error in section '%s' for item '%s': "
                             "Failed to set 'container-trigger': ",
