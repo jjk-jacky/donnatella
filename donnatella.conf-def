@@ -70,3 +70,10 @@ title=Type of mark
 type=list-int
 value=0:standard:Standard mark
 value=1:dynamic:Dynamic mark
+
+[context-type]
+title=Type of context item
+type=list-int
+value=0:standard:Standard item
+value=1:trigger:Use trigger node
+value=2:container:Container item
