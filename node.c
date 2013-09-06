@@ -1013,13 +1013,13 @@ donna_node_get_name (DonnaNode *node)
     return name;
 }
 
-typedef guint64 (*value_dup_fn) (const GValue *value);
+typedef guintptr (*value_dup_fn) (const GValue *value);
 
 static DonnaNodeHasValue
 get_basic_prop (DonnaNode   *node,
                 gboolean     is_blocking,
                 gint         basic_id,
-                guint64     *dest,
+                guintptr    *dest,
                 value_dup_fn dup_value)
 {
     DonnaNodePrivate *priv = node->priv;
@@ -1062,10 +1062,11 @@ grab_basic_value:
 }
 #define _get_basic_prop(BASIC_PROP, get_fn, type, var) do { \
     DonnaNodeHasValue has;                                  \
-    guint64 value;                                          \
+    guintptr value;                                         \
     has = get_basic_prop (node, is_blocking, BASIC_PROP,    \
             &value, (value_dup_fn) get_fn);                 \
-    *var = (type) value;                                    \
+    if (has == DONNA_NODE_VALUE_SET)                        \
+        *var = (type) value;                                \
     return has;                                             \
 } while (0)
 
