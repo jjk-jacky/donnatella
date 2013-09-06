@@ -1989,7 +1989,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_history_get_node, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
