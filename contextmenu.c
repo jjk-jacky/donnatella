@@ -173,6 +173,26 @@ parse_extra (DonnaApp               *app,
                 return NULL;
             }
 
+            if (info.is_menu_bold)
+            {
+                GError *err = NULL;
+                GValue v = G_VALUE_INIT;
+
+                g_value_init (&v, G_TYPE_BOOLEAN);
+                g_value_set_boolean (&v, TRUE);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-is-label-bold",
+                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set label bold for "
+                            "item '%s' in section '%s': %s", b, section,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+            }
+
             g_ptr_array_add (nodes, node);
 
 skip:
@@ -256,6 +276,26 @@ next:
                 g_ptr_array_unref (children);
                 g_ptr_array_unref (nodes);
                 return NULL;
+            }
+
+            if (info.is_menu_bold)
+            {
+                GError *err = NULL;
+                GValue v = G_VALUE_INIT;
+
+                g_value_init (&v, G_TYPE_BOOLEAN);
+                g_value_set_boolean (&v, TRUE);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-is-label-bold",
+                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set label bold for "
+                            "item '%s' in section '%s': %s", b, section,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
             }
 
             if (info.trigger)

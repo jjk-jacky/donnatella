@@ -40,6 +40,7 @@ typedef struct
     gchar       *trigger;
     guint        is_visible     : 1;
     guint        is_sensitive   : 1;
+    guint        is_menu_bold   : 1;
 
     guint        free_name      : 1;
     guint        free_icon      : 1;
