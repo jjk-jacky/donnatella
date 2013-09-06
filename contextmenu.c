@@ -427,6 +427,18 @@ evaluate (DonnaContextReference reference, gchar *expr, GError **error)
 
                 expr += 9;
             }
+            else if (strcaseeqn (expr, "false", 5)
+                    && (expr[5] == '\0' || isblank (expr[5])))
+            {
+                subexpr = EXPR_FALSE;
+                expr += 5;
+            }
+            else if (strcaseeqn (expr, "true", 4)
+                    && (expr[4] == '\0' || isblank (expr[4])))
+            {
+                subexpr = EXPR_TRUE;
+                expr += 4;
+            }
             else
             {
                 g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
