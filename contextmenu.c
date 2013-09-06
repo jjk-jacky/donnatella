@@ -316,7 +316,6 @@ next:
             if (info.is_menu_bold)
             {
                 GError *err = NULL;
-                GValue v = G_VALUE_INIT;
 
                 g_value_init (&v, G_TYPE_BOOLEAN);
                 g_value_set_boolean (&v, TRUE);
