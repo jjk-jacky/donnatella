@@ -105,6 +105,8 @@ parse_extra (DonnaApp               *app,
              const gchar           **extra,
              get_item_info_fn        get_item_info,
              DonnaContextReference   reference,
+             const gchar            *conv_flags,
+             conv_flag_fn            conv_fn,
              gpointer                conv_data,
              gpointer                section_data,
              GError                **error)
@@ -136,7 +138,8 @@ parse_extra (DonnaApp               *app,
             if (snprintf (buf, 32, "%.*s", (gint) (e - *extra), *extra) >= 32)
                 b = g_strdup_printf ("%.*s", (gint) (e - *extra), *extra);
 
-            if (!get_item_info (section, b, reference, conv_data, section_data,
+            if (!get_item_info (section, b, reference,
+                        conv_flags, conv_fn, conv_data, section_data,
                         &info, error))
             {
                 if (b != buf)
@@ -145,9 +148,6 @@ parse_extra (DonnaApp               *app,
                 return NULL;
             }
 
-            if (!info.is_visible)
-                goto skip;
-
             if (info.node)
             {
                 g_ptr_array_add (nodes, info.node);
@@ -155,11 +155,19 @@ parse_extra (DonnaApp               *app,
                 goto skip;
             }
 
+            if (!info.is_visible)
+                goto skip;
+
             ni = g_slice_new0 (struct node_internal);
             ni->app = app;
-            ni->fl = info.trigger;
-            ni->free_fl = info.free_trigger;
-            info.free_trigger = FALSE;
+            if (info.trigger)
+            {
+                ni->fl = donna_app_parse_fl (app,
+                        (info.free_trigger) ? info.trigger : g_strdup (info.trigger),
+                        conv_flags, conv_fn, conv_data, &ni->intrefs);
+                ni->free_fl = TRUE;
+                info.free_trigger = FALSE;
+            }
 
             node = donna_provider_internal_new_node (pi, info.name,
                     info.icon_is_pixbuf, (info.icon_is_pixbuf)
@@ -243,7 +251,8 @@ next:
             *extra = e + 1;
 
             children = parse_extra (app, pi, TRUE, section, extra,
-                    get_item_info, reference, conv_data, section_data, error);
+                    get_item_info, reference, conv_flags, conv_fn, conv_data,
+                    section_data, error);
             if (!children)
             {
                 g_ptr_array_unref (nodes);
@@ -253,7 +262,8 @@ next:
             if (snprintf (buf, 32, "%.*s", cont_len, cont_s) >= 32)
                 b = g_strdup_printf ("%.*s", cont_len, cont_s);
 
-            if (!get_item_info (section, b, reference, conv_data, section_data,
+            if (!get_item_info (section, b, reference,
+                        conv_flags, conv_fn, conv_data, section_data,
                         &info, error))
             {
                 if (b != buf)
@@ -324,18 +334,21 @@ next:
 
             if (info.trigger)
             {
+                /* we do the parsing, but ignore intrefs since the trigger is
+                 * just a string property, so they'll be cleaned via GC */
+                info.trigger = donna_app_parse_fl (app,
+                        (info.free_trigger) ? g_strdup (info.trigger) : info.trigger,
+                        conv_flags, conv_fn, conv_data, NULL);
+
                 g_value_init (&v, G_TYPE_STRING);
-                if (info.free_trigger)
-                    g_value_take_string (&v, info.trigger);
-                else
-                    g_value_set_static_string (&v, info.trigger);
+                g_value_take_string (&v, info.trigger);
                 info.free_trigger = FALSE;
 
                 if (G_UNLIKELY (!donna_node_add_property (node, "container-trigger",
                                 G_TYPE_STRING, &v, (refresher_fn) gtk_true, NULL, error)))
                 {
                     g_prefix_error (error, "Error in section '%s' for item '%s': "
-                            "Failed to set container-trigger: ",
+                            "Failed to set 'container-trigger': ",
                             section, b);
                     g_value_unset (&v);
                     g_object_unref (node);
@@ -367,6 +380,8 @@ donna_context_parse_extra (DonnaApp               *app,
                            const gchar            *extra,
                            get_item_info_fn        get_item_info,
                            DonnaContextReference   reference,
+                           const gchar            *conv_flags,
+                           conv_flag_fn            conv_fn,
                            gpointer                conv_data,
                            gpointer                section_data,
                            GError                **error)
@@ -384,7 +399,8 @@ donna_context_parse_extra (DonnaApp               *app,
     }
 
     nodes = parse_extra (app, pi, FALSE, section, &extra,
-            get_item_info, reference, conv_data, section_data, error);
+            get_item_info, reference, conv_flags, conv_fn, conv_data,
+            section_data, error);
 
     g_object_unref (pi);
     return nodes;
@@ -737,24 +753,35 @@ container_children_cb (DonnaTask    *task,
 }
 
 static DonnaNode *
-get_node_trigger (DonnaApp *app, const gchar *fl)
+get_node_trigger (DonnaApp      *app,
+                  gchar         *fl,
+                  const gchar   *conv_flags,
+                  conv_flag_fn   conv_fn,
+                  gpointer       conv_data)
 {
     DonnaTask *task;
     DonnaNode *node;
 
+    fl = donna_app_parse_fl (app, g_strdup (fl), conv_flags, conv_fn, conv_data, NULL);
+
     task = donna_app_get_node_task (app, fl);
     if (G_UNLIKELY (!task))
+    {
+        g_free (fl);
         return NULL;
+    }
     donna_task_set_can_block (g_object_ref_sink (task));
     donna_app_run_task (app, task);
     donna_task_wait_for_it (task);
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
         g_object_unref (task);
+        g_free (fl);
         return NULL;
     }
     node = g_value_dup_object (donna_task_get_return_value (task));
     g_object_unref (task);
+    g_free (fl);
     return node;
 }
 
@@ -790,17 +817,404 @@ parse_Cc (gchar *_sce, const gchar *s_C, const gchar *s_c)
     return g_string_free (str, FALSE);
 }
 
+struct get_info {
+    DonnaApp    *app;
+    const gchar *source;
+    const gchar *s_c;
+    const gchar *s_C;
+};
+
 #define ensure_node_trigger()   do {                                        \
     if (!node_trigger)                                                      \
-        node_trigger = get_node_trigger (app, fl);                          \
+        node_trigger = get_node_trigger (gi->app, info->trigger,            \
+                conv_flags, conv_fn, conv_data);                            \
     if (!node_trigger)                                                      \
     {                                                                       \
         g_warning ("Context-menu: Cannot import options from node trigger " \
                 "for item 'context_menus/%s/%s/%s': Failed to get node",    \
-                source, section, item);                                     \
+                gi->source, section, item);                                 \
         import_from_trigger = FALSE;                                        \
     }                                                                       \
 } while (0)
+static gboolean
+context_get_item_info (const gchar             *section,
+                       const gchar             *item,
+                       DonnaContextReference    reference,
+                       const gchar             *conv_flags,
+                       conv_flag_fn             conv_fn,
+                       gpointer                 conv_data,
+                       struct get_info          *gi,
+                       DonnaContextInfo        *info,
+                       GError                 **error)
+{
+    DonnaConfig *config = donna_app_peek_config (gi->app);
+    DonnaNode *node_trigger = NULL;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+    GPtrArray *triggers = NULL;
+    enum type type;
+    gboolean import_from_trigger = FALSE;
+    gboolean b;
+    gchar *s;
+
+    /* default name/icon for container */
+    if (*item == '\0')
+    {
+        if (!donna_config_get_string (config, &info->name,
+                    "context_menus/%s/%s/name", gi->source, section))
+            info->name = g_strdup (section);
+        info->free_name = TRUE;
+
+        if (donna_config_get_string (config, &s, "context_menus/%s/%s/icon",
+                    gi->source, section))
+        {
+            info->icon_name = s;
+            info->free_icon = TRUE;
+        }
+
+        return TRUE;
+    }
+
+    if (!donna_config_has_category (config, "context_menus/%s/%s/%s",
+                gi->source, section, item))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "Unknown item '%s' in user section '%s' for '%s'",
+                item, section, gi->source);
+        return FALSE;
+    }
+
+    if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_visible",
+                gi->source, section, item))
+    {
+        enum expr expr;
+
+        expr = evaluate (reference, s, error);
+        if (expr == EXPR_INVALID)
+        {
+            g_prefix_error (error, "Failed to evaluate 'is_visible' "
+                    "for item 'context_menus/%s/%s/%s': ",
+                    gi->source, section, item);
+            g_free (s);
+            return FALSE;
+        }
+        info->is_visible = expr == EXPR_TRUE;
+        g_free (s);
+    }
+    else
+        info->is_visible = TRUE;
+
+    if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_sensitive",
+                gi->source, section, item))
+    {
+        enum expr expr;
+
+        expr = evaluate (reference, s, error);
+        if (expr == EXPR_INVALID)
+        {
+            g_prefix_error (error, "Failed to evaluate 'is_sensitive' "
+                    "for item 'context_menus/%s/%s/%s': ",
+                    gi->source, section, item);
+            g_free (s);
+            return FALSE;
+        }
+        info->is_sensitive = expr == EXPR_TRUE;
+        g_free (s);
+    }
+    else
+        info->is_sensitive = TRUE;
+
+    /* find the (matching) trigger */
+    if (donna_config_list_options (config, &triggers,
+                DONNA_CONFIG_OPTION_TYPE_OPTION, "context_menus/%s/%s/%s",
+                gi->source, section, item))
+    {
+        guint j;
+
+        for (j = 0; j < triggers->len; ++j)
+        {
+            GError *err = NULL;
+            gchar *t = triggers->pdata[j];
+            gsize len;
+
+            /* must start with "trigger", ignoring "trigger" itself */
+            if (!streqn ("trigger", t, 7) || t[7] == '\0')
+                continue;
+            len = strlen (t);
+            /* 13 == strlen ("trigger") + strlen ("_when") + 1 */
+            if (len < 13 || !streq (t + len - 5, "_when"))
+                continue;
+            /* get the triggerXXX_when expr to see if it's a match */
+            if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/%s",
+                        gi->source, section, item, t))
+            {
+                enum expr expr;
+
+                expr = evaluate (reference, s, &err);
+                if (expr == EXPR_INVALID)
+                {
+                    g_warning ("Context-menu: Skipping trigger declaration, "
+                            "invalid expression in 'context_menus/%s/%s/%s/%s': %s",
+                            gi->source, section, item, t,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                    g_free (s);
+                    continue;
+                }
+                else if (expr == EXPR_TRUE)
+                {
+                    /* get the actual trigger */
+                    if (!donna_config_get_string (config, &info->trigger,
+                                "context_menus/%s/%s/%s/%.*s",
+                                gi->source, section, item, (gint) (len - 5), t))
+                    {
+                        g_warning ("Context-menu: Trigger option missing: "
+                                "'context_menus/%s/%s/%s/%s' -- Skipping trigger",
+                                gi->source, section, item, t);
+                        g_free (s);
+                        continue;
+                    }
+                    g_free (s);
+                    break;
+                }
+                else /* EXPR_FALSE */
+                    g_free (s);
+            }
+        }
+        g_ptr_array_unref (triggers);
+    }
+
+    /* last chance: the default "trigger" */
+    if (!info->trigger && !donna_config_get_string (config, &info->trigger,
+                "context_menus/%s/%s/%s/trigger", gi->source, section, item))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "No trigger found for 'context_menus/%s/%s/%s'",
+                gi->source, section, item);
+        return FALSE;
+    }
+
+    /* parse %C/%c in the trigger */
+    info->trigger = parse_Cc (info->trigger, gi->s_C, gi->s_c);
+    info->free_trigger = TRUE;
+
+    /* type of item */
+    if (donna_config_get_int (config, (gint *) &type,
+                "context_menus/%s/%s/%s/type", gi->source, section, item))
+        type = CLAMP (type, TYPE_STANDARD, NB_TYPES - 1);
+    else
+        type = TYPE_STANDARD;
+
+    if (type == TYPE_TRIGGER)
+    {
+        info->node = get_node_trigger (gi->app, info->trigger,
+                conv_flags, conv_fn, conv_data);
+        g_free (info->trigger);
+        info->free_trigger = FALSE;
+        if (!info->node)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Failed to get node for item 'context_menus/%s/%s/%s'",
+                    gi->source, section, item);
+            return FALSE;
+        }
+
+        return TRUE;
+    }
+
+    /* shall we import non-specified stuff from node trigger? */
+    donna_config_get_boolean (config, &import_from_trigger,
+            "context_menus/%s/%s/%s/import_from_trigger",
+            gi->source, section, item);
+
+    /* is_sensitive is a bit special, in that we only import from trigger if
+     * TRUE (since if FALSE, that takes precedence, but if TRUE the value from
+     * trigger does) */
+    if (info->is_sensitive && import_from_trigger)
+    {
+        ensure_node_trigger ();
+        if (import_from_trigger)
+        {
+            donna_node_get (node_trigger, FALSE, "menu-is-sensitive",
+                    &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
+                    info->is_sensitive = g_value_get_boolean (&v);
+                g_value_unset (&v);
+            }
+        }
+    }
+
+    /* name */
+    if (!donna_config_get_string (config, &info->name, "context_menus/%s/%s/%s/name",
+                gi->source, section, item))
+    {
+        if (import_from_trigger)
+        {
+            ensure_node_trigger ();
+            if (import_from_trigger)
+                info->name = donna_node_get_name (node_trigger);
+        }
+        else
+            info->name = g_strdup (info->trigger);
+    }
+
+    /* parse %C/%c in the name */
+    info->name = parse_Cc (info->name, gi->s_C, gi->s_c);
+    info->free_name = TRUE;
+
+    /* icon */
+    if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/icon",
+            gi->source, section, item))
+    {
+        info->icon_name = s;
+        info->free_icon = TRUE;
+    }
+    else if (import_from_trigger)
+    {
+        ensure_node_trigger ();
+        if (import_from_trigger)
+        {
+            donna_node_get (node_trigger, FALSE, "icon", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                info->icon_is_pixbuf = TRUE;
+                info->pixbuf = g_value_dup_object (&v);
+                info->free_icon = TRUE;
+                g_value_unset (&v);
+            }
+        }
+    }
+
+    if (donna_config_get_boolean (config, &b,
+                "context_menus/%s/%s/%s/menu_is_label_bold",
+                gi->source, section, item))
+        info->is_menu_bold = b;
+    else
+    {
+        if (import_from_trigger)
+        {
+            ensure_node_trigger ();
+            if (import_from_trigger)
+            {
+                donna_node_get (node_trigger, FALSE, "menu-is-label-bold",
+                        &has, &v, NULL);
+                if (has == DONNA_NODE_VALUE_SET)
+                {
+                    info->is_menu_bold = g_value_get_boolean (&v);
+                    g_value_unset (&v);
+                }
+            }
+        }
+    }
+
+    if (type == TYPE_CONTAINER)
+    {
+        DonnaProviderInternal *pi;
+        DonnaNode *node;
+        struct node_internal *ni;
+
+        if (!node_trigger)
+            node_trigger = get_node_trigger (gi->app, info->trigger,
+                    conv_flags, conv_fn, conv_data);
+        if (!node_trigger)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Failed to get node for item '%s' ('context_menus/%s/%s/%s')",
+                    info->name, gi->source, section, item);
+            free_context_info (info);
+            return FALSE;
+        }
+        else if (donna_node_get_node_type (node_trigger) != DONNA_NODE_CONTAINER)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Node for item '%s' ('context_menus/%s/%s/%s') isn't a container",
+                    info->name, gi->source, section, item);
+            g_object_unref (node_trigger);
+            free_context_info (info);
+            return FALSE;
+        }
+        g_free (info->trigger);
+        info->free_trigger = FALSE;
+
+        /* special case: we need to create the node */
+        ni = g_slice_new0 (struct node_internal);
+        ni->app = gi->app;
+        ni->node_trigger = g_object_ref (node_trigger);
+        ni->fl = info->trigger;
+
+        pi = (DonnaProviderInternal *) donna_app_get_provider (gi->app, "internal");
+        if (G_UNLIKELY (!pi))
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Failed to create node for 'context_menus/%s/%s/%s': "
+                    "Couldn't get provider 'internal'",
+                    gi->source, section, item);
+            free_node_internal (ni);
+            free_context_info (info);
+            if (node_trigger)
+                g_object_unref (node_trigger);
+            return FALSE;
+        }
+
+        node = donna_provider_internal_new_node (pi, info->name,
+                info->icon_is_pixbuf,
+                (info->icon_is_pixbuf) ? info->pixbuf : (gconstpointer) info->icon_name,
+                NULL, DONNA_NODE_CONTAINER, info->is_sensitive,
+                DONNA_TASK_VISIBILITY_INTERNAL,
+                (internal_fn) node_children_cb, ni,
+                (GDestroyNotify) free_node_internal, error);
+        if (G_UNLIKELY (!node))
+        {
+            g_prefix_error (error, "Failed to create node for 'context_menus/%s/%s/%s': ",
+                    gi->source, section, item);
+            g_object_unref (pi);
+            free_node_internal (ni);
+            free_context_info (info);
+            if (node_trigger)
+                g_object_unref (node_trigger);
+            return FALSE;
+        }
+
+        g_object_unref (pi);
+
+        free_context_info (info);
+        memset (info, 0, sizeof (*info));
+        info->node = node;
+
+        if (info->is_menu_bold)
+        {
+            GError *err = NULL;
+
+            g_value_init (&v, G_TYPE_BOOLEAN);
+            g_value_set_boolean (&v, TRUE);
+            if (G_UNLIKELY (!donna_node_add_property (info->node, "menu-is-label-bold",
+                            G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
+            {
+                g_warning ("Context-menu: Failed to set label bold for item "
+                        "'context_menus/%s/%s/%s': %s",
+                        gi->source, section, item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            g_value_unset (&v);
+        }
+    }
+
+    if (node_trigger)
+        g_object_unref (node_trigger);
+
+    return TRUE;
+}
+#undef ensure_node_trigger
+
 GPtrArray *
 donna_context_menu_get_nodes_v (DonnaApp               *app,
                                 GError                **error,
@@ -817,7 +1231,6 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
 {
     GError *err = NULL;
     DonnaConfig *config;
-    DonnaProviderInternal *pi;
     GPtrArray *nodes;
     gchar *root;
     gchar *sections;
@@ -828,15 +1241,6 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
     g_return_val_if_fail (source != NULL, NULL);
 
     config = donna_app_peek_config (app);
-    pi = (DonnaProviderInternal *) donna_app_get_provider (app, "internal");
-    if (G_UNLIKELY (!pi))
-    {
-        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "Context-menu: Cannot get nodes for context menu: "
-                "failed to get provider 'internal'");
-        return NULL;
-    }
 
     if (root_fmt)
         root = g_strdup_vprintf (root_fmt, va_args);
@@ -868,7 +1272,6 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
                         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                                 DONNA_CONTEXT_MENU_ERROR_NO_SECTIONS,
                                 "Cannot get nodes for context menu: no sections defined");
-                        g_object_unref (pi);
                         g_free (root);
                         return NULL;
                     }
@@ -883,14 +1286,11 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
     for (;;)
     {
         GPtrArray *arr = NULL;
-        GPtrArray *children = NULL;
-        guint i;
-        const gchar *s_c = "";
-        const gchar *s_C = "";
+        struct get_info gi = { app, source, "", "" };
+        gchar *items = NULL;
         gchar *s;
         gchar *end, *e;
-        gboolean is_sensitive = TRUE;
-        gboolean b;
+        gboolean free_items = FALSE;
 
         skip_blank (section);
         end = strchr (section, ',');
@@ -923,23 +1323,14 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             if (s)
                 *s++ = '\0';
 
-            arr = get_section_nodes (section, s, reference, conv_data, &err);
+            arr = get_section_nodes (section, s, reference,
+                    conv_flags, conv_fn, conv_data, &err);
             if (!arr)
             {
                 g_warning ("Context-menu: Invalid section ':%s': %s",
                         section, (err) ? err->message: "(no error message)");
                 g_clear_error (&err);
-                goto next;
             }
-
-            if (arr->len > 0)
-            {
-                guint pos = nodes->len;
-                g_ptr_array_set_size (nodes, nodes->len + arr->len);
-                memcpy (&nodes->pdata[pos], &arr->pdata[0], sizeof (gpointer) * arr->len);
-                g_ptr_array_set_free_func (arr, NULL);
-            }
-            g_ptr_array_unref (arr);
             goto next;
         }
         else if (streq (section, "-"))
@@ -954,20 +1345,25 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         s = strchr (section, ':');
         if (s)
         {
+            /* and items can be specifed after a '/' */
+            items = strchr (s + 1, '/');
+            if (items)
+                *items++ = '\0';
+
             *s = '\0';
-            s_C = s + 1;
-            s = strchr (s_C, '=');
+            gi.s_C = s + 1;
+            s = strchr (gi.s_C, '=');
             if (s)
             {
                 *s = '\0';
-                s_c = s + 1;
+                gi.s_c = s + 1;
             }
         }
 
         if (!donna_config_has_category (config, "context_menus/%s/%s",
                     source, section))
         {
-            g_warning ("Context-menu: Invalid section '%s'", section);
+            g_warning ("Context-menu: Invalid user-section '%s'", section);
             goto next;
         }
 
@@ -985,8 +1381,8 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             }
             else if (expr == EXPR_INVALID)
             {
-                g_warning ("Context-menu: Failed to evaluate 'is_visible' for section '%s': "
-                        "%s -- Skipping", section,
+                g_warning ("Context-menu: Failed to evaluate 'is_visible' for "
+                        "section '%s': %s -- Skipping", section,
                         (err) ? err->message : "(no error message)");
                 g_clear_error (&err);
                 g_free (s);
@@ -995,416 +1391,46 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
             g_free (s);
         }
 
-        /* determine default is_sensitive */
-        if (donna_config_get_string (config, &s, "context_menus/%s/%s/is_sensitive",
-                    source, section))
+        /* if not specified, get default items */
+        if (!items)
         {
-            enum expr expr;
-
-            expr = evaluate (reference, s, &err);
-            if (expr == EXPR_INVALID)
+            if (!donna_config_get_string (config, &items,
+                    "context_menus/%s/%s/items", source, section))
             {
-                g_warning ("Context-menu: Failed to evaluate 'is_sensitive' for section '%s': "
-                        "%s -- Ignoring", section,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-            }
-            else
-                is_sensitive = expr == EXPR_TRUE;
-            g_free (s);
-        }
-
-        /* should this section be a container? */
-        if (donna_config_get_boolean (config, &b, "context_menus/%s/%s/is_container",
-                    source, section) && b)
-            children = g_ptr_array_new_with_free_func (g_object_unref);
-
-        /* process items */
-        if (!donna_config_list_options (config, &arr, DONNA_CONFIG_OPTION_TYPE_NUMBERED,
-                    "context_menus/%s/%s", source, section))
-            goto next;
-
-        for (i = 0; i < arr->len; ++i)
-        {
-            GPtrArray *triggers = NULL;
-            const gchar *item;
-            enum type type;
-            gchar *name;
-            gchar *icon = NULL;
-            GdkPixbuf *pixbuf = NULL;
-            gchar *fl = NULL;
-            GPtrArray *intrefs = NULL;
-            gboolean import_from_trigger = FALSE;
-            DonnaNode *node_trigger = NULL;
-            DonnaNodeHasValue has;
-            struct node_internal *ni;
-            DonnaNode *node;
-            GValue v = G_VALUE_INIT;
-
-            item = arr->pdata[i];
-
-            /* make sure it is visible */
-            if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_visible",
-                        source, section, item))
-            {
-                enum expr expr;
-
-                expr = evaluate (reference, s, &err);
-                if (expr == EXPR_INVALID)
-                {
-                    g_warning ("Context-menu: Failed to evaluate 'is_visible' "
-                            "for item 'context_menus/%s/%s/%s': %s -- Ignoring",
-                            source, section, item,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                    g_free (s);
-                }
-                else if (expr == EXPR_FALSE)
-                {
-                    g_free (s);
-                    continue;
-                }
-                else /* EXPR_TRUE */
-                    g_free (s);
-            }
-
-            /* find the (matching) trigger */
-            if (donna_config_list_options (config, &triggers,
-                        DONNA_CONFIG_OPTION_TYPE_OPTION, "context_menus/%s/%s/%s",
-                        source, section, item))
-            {
-                guint j;
-
-                for (j = 0; j < triggers->len; ++j)
-                {
-                    gchar *t = triggers->pdata[j];
-                    gsize len;
-
-                    /* must start with "trigger", ignoring "trigger" itself */
-                    if (!streqn ("trigger", t, 7) || t[7] == '\0')
-                        continue;
-                    len = strlen (t);
-                    /* 13 == strlen ("trigger") + strlen ("_when") + 1 */
-                    if (len < 13 || !streq (t + len - 5, "_when"))
-                        continue;
-                    /* get the triggerXXX_when expr to see if it's a match */
-                    if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/%s",
-                                source, section, item, t))
-                    {
-                        enum expr expr;
-
-                        expr = evaluate (reference, s, &err);
-                        if (expr == EXPR_INVALID)
-                        {
-                            g_warning ("Context-menu: skipping trigger declaration, "
-                                    "invalid expression in 'context_menus/%s/%s/%s/%s': %s",
-                                    source, section, item, t,
-                                    (err) ? err->message : "(no error message)");
-                            g_clear_error (&err);
-                            g_free (s);
-                            continue;
-                        }
-                        else if (expr == EXPR_TRUE)
-                        {
-                            /* get the actual trigger */
-                            if (!donna_config_get_string (config, &fl,
-                                        "context_menus/%s/%s/%s/%.*s",
-                                        source, section, item, (gint) (len - 5), t))
-                            {
-                                g_warning ("Context-menu: trigger option missing: "
-                                        "'context_menus/%s/%s/%s/%s' -- skipping trigger",
-                                        source, section, item, t);
-                                g_free (s);
-                                continue;
-                            }
-                            g_free (s);
-                            break;
-                        }
-                        else /* EXPR_FALSE */
-                            g_free (s);
-                    }
-                }
-                g_ptr_array_unref (triggers);
-            }
-
-            /* last chance: the default "trigger" */
-            if (!fl && !donna_config_get_string (config, &fl,
-                        "context_menus/%s/%s/%s/trigger", source, section, item))
-            {
-                g_warning ("Context-menu: No trigger found for 'context_menus/%s/%s/%s', "
-                        "skipping item", source, section, item);
-                continue;
-            }
-
-            /* parse %C/%c in the trigger */
-            fl = parse_Cc (fl, s_C, s_c);
-
-            /* parse the FL -- it doesn't have to be a command, but it can
-             * always include variables */
-            fl = donna_app_parse_fl (app, fl, conv_flags, conv_fn, conv_data, &intrefs);
-
-            /* type of item */
-            if (donna_config_get_int (config, (gint *) &type,
-                        "context_menus/%s/%s/%s/type", source, section, item))
-                type = CLAMP (type, TYPE_STANDARD, NB_TYPES - 1);
-            else
-                type = TYPE_STANDARD;
-
-            if (type == TYPE_TRIGGER)
-            {
-                node = get_node_trigger (app, fl);
-                g_free (fl);
-                if (!node)
-                {
-                    free_intrefs (app, intrefs);
-                    g_warning ("Context-menu: Failed to get node for item "
-                            "'context_menus/%s/%s/%s' -- Skipping",
-                            source, section, item);
-                }
-                else
-                    /* add the node trigger into the menu. It means the intrefs
-                     * aren't free-d in this case. Usually it's ok, because if
-                     * we put the node trigger directly, it's an actual node
-                     * (e.g. not a command) so there were no intrefs. If for
-                     * some reason there was, they'll just be free-d
-                     * automatically by the donna's GC after a while... */
-                    g_ptr_array_add ((children) ? children : nodes, node);
-
-                continue;
-            }
-
-            /* shall we import non-specified stuff from node trigger? */
-            donna_config_get_boolean (config, &import_from_trigger,
-                    "context_menus/%s/%s/%s/import_from_trigger", source, section, item);
-
-            /* item-specific "is_sensitive" */
-            if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s/is_sensitive",
-                        source, section, item))
-            {
-                enum expr expr;
-
-                expr = evaluate (reference, s, &err);
-                if (expr == EXPR_INVALID)
-                {
-                    g_warning ("Context-menu: Failed to evaluate 'is_sensitive' "
-                            "for item 'context_menus/%s/%s/%s': %s -- Ignoring",
-                            source, section, item,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                else
-                    is_sensitive = expr == EXPR_TRUE;
-                g_free (s);
-            }
-
-            /* is_sensitive is a bit special, in that we only import from
-             * trigger if TRUE (since if FALSE, that takes precedence, but if
-             * TRUE the value from trigger does) */
-            if (is_sensitive && import_from_trigger)
-            {
-                ensure_node_trigger ();
-                if (import_from_trigger)
-                {
-                    donna_node_get (node_trigger, FALSE, "menu-is-sensitive",
-                            &has, &v, NULL);
-                    if (has == DONNA_NODE_VALUE_SET)
-                    {
-                        if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
-                            is_sensitive = g_value_get_boolean (&v);
-                        g_value_unset (&v);
-                    }
-                }
-            }
-
-            /* name */
-            if (!donna_config_get_string (config, &name, "context_menus/%s/%s/%s/name",
-                        source, section, item))
-            {
-                if (import_from_trigger)
-                {
-                    ensure_node_trigger ();
-                    if (import_from_trigger)
-                        name = donna_node_get_name (node_trigger);
-                }
-                else
-                    name = g_strdup (fl);
-            }
-
-            /* parse %C/%c in the name */
-            name = parse_Cc (name, s_C, s_c);
-
-            /* icon */
-            donna_config_get_string (config, &icon, "context_menus/%s/%s/%s/icon",
-                        source, section, item);
-            if (!icon && import_from_trigger)
-            {
-                ensure_node_trigger ();
-                if (import_from_trigger)
-                {
-                    donna_node_get (node_trigger, FALSE, "icon", &has, &v, NULL);
-                    if (has == DONNA_NODE_VALUE_SET)
-                    {
-                        pixbuf = g_value_dup_object (&v);
-                        g_value_unset (&v);
-                    }
-                }
-            }
-
-            if (type == TYPE_CONTAINER)
-            {
-                if (!node_trigger)
-                    node_trigger = get_node_trigger (app, fl);
-                if (!node_trigger)
-                {
-                    g_warning ("Context-menu: Failed to get node for item '%s' "
-                            "('context_menus/%s/%s/%s') -- Skipping",
-                            name, source, section, item);
-                    g_free (fl);
-                    free_intrefs (app, intrefs);
-                    g_free (name);
-                    if (pixbuf)
-                        g_object_unref (pixbuf);
-                    continue;
-                }
-                else if (donna_node_get_node_type (node_trigger) != DONNA_NODE_CONTAINER)
-                {
-                    g_warning ("Context-menu: Node for item '%s' "
-                            "('context_menus/%s/%s/%s') isn't a container -- Skipping",
-                            name, source, section, item);
-                    g_free (fl);
-                    free_intrefs (app, intrefs);
-                    g_free (name);
-                    if (pixbuf)
-                        g_object_unref (pixbuf);
-                    g_object_unref (node_trigger);
-                    continue;
-                }
-                g_free (fl);
-                fl = NULL;
-            }
-
-            /* let's create the node */
-            ni = g_slice_new (struct node_internal);
-            ni->app = app;
-            ni->intrefs = intrefs;
-            if (type == TYPE_CONTAINER)
-                ni->node_trigger = g_object_ref (node_trigger);
-            else
-                ni->node_trigger = NULL;
-            ni->fl = fl;
-
-            node = donna_provider_internal_new_node (pi, name,
-                    pixbuf != NULL, (pixbuf) ? pixbuf : (gconstpointer) icon, NULL,
-                    (type == TYPE_CONTAINER) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
-                    is_sensitive,
-                    (type == TYPE_CONTAINER)
-                    /* children_cb is internal, starts a subtask.
-                     * node_internal_cb is fast, it only triggers another task */
-                    ? DONNA_TASK_VISIBILITY_INTERNAL : DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-                    (type == TYPE_CONTAINER)
-                    ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
-                    ni,
-                    (GDestroyNotify) free_node_internal, &err);
-            if (G_UNLIKELY (!node))
-            {
-                g_warning ("Context-menu: Failed to create node "
-                        "for 'context_menus/%s/%s/%s': %s",
-                        source, section, item,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-                g_free (name);
-                g_free (icon);
-                if (pixbuf)
-                    g_object_unref (pixbuf);
-                free_node_internal (ni);
-                if (node_trigger)
-                    g_object_unref (node_trigger);
-                continue;
-            }
-            g_free (name);
-            g_free (icon);
-            if (pixbuf)
-                g_object_unref (pixbuf);
-
-            if (!donna_config_get_boolean (config, &b,
-                        "context_menus/%s/%s/%s/menu_is_label_bold",
-                        source, section, item))
-            {
-                if (import_from_trigger)
-                {
-                    ensure_node_trigger ();
-                    if (import_from_trigger)
-                    {
-                        donna_node_get (node_trigger, FALSE, "menu-is-label-bold",
-                                &has, &v, NULL);
-                        if (has == DONNA_NODE_VALUE_SET)
-                        {
-                            b = g_value_get_boolean (&v);
-                            g_value_unset (&v);
-                        }
-                    }
-                }
-                else
-                    b = FALSE;
-            }
-
-            if (b)
-            {
-                g_value_init (&v, G_TYPE_BOOLEAN);
-                g_value_set_boolean (&v, TRUE);
-                if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-label-bold",
-                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set label bold for item "
-                            "'context_menus/%s/%s/%s': %s",
-                            source, section, item,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
-
-            g_ptr_array_add ((children) ? children : nodes, node);
-
-            if (node_trigger)
-                g_object_unref (node_trigger);
-        }
-
-        g_ptr_array_unref (arr);
-
-        if (children)
-        {
-            DonnaNode *node;
-            gchar *name;
-            gchar *icon = NULL;
-
-            if (!donna_config_get_string (config, &name, "context_menus/%s/%s/name",
-                        source, section))
-                name = g_strdup (section);
-
-            donna_config_get_string (config, &icon, "context_menus/%s/%s/icon",
+                g_warning ("Context-menu: Failed to get default items for section "
+                        "'context_menus/%s/%s' -- Skipping",
                         source, section);
-
-            node = donna_provider_internal_new_node (pi, name, FALSE, icon, NULL,
-                    DONNA_NODE_CONTAINER, TRUE, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-                    (internal_fn) container_children_cb,
-                    children,
-                    (GDestroyNotify) g_ptr_array_unref, &err);
-            if (G_UNLIKELY (!node))
-            {
-                g_warning ("Context-menu: Failed to create node "
-                        "for 'context_menus/%s/%s': %s", source, section,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-                g_ptr_array_unref (children);
+                goto next;
             }
-            else
-                g_ptr_array_add (nodes, node);
-            g_free (name);
-            g_free (icon);
+            free_items = TRUE;
         }
+
+        arr = donna_context_parse_extra (app, section, items,
+                (get_item_info_fn) context_get_item_info,
+                reference, conv_flags, conv_fn, conv_data, &gi, &err);
+        if (!arr)
+        {
+            g_warning ("Context-menu: Failed to get items for section '%s': %s",
+                    section, (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+
+        if (free_items)
+            g_free (items);
 
 next:
+        if (arr)
+        {
+            if (arr->len > 0)
+            {
+                guint pos = nodes->len;
+                g_ptr_array_set_size (nodes, nodes->len + arr->len);
+                memcpy (&nodes->pdata[pos], &arr->pdata[0], sizeof (gpointer) * arr->len);
+                g_ptr_array_set_free_func (arr, NULL);
+            }
+            g_ptr_array_unref (arr);
+        }
+
         if (e)
             *e = ' ';
         if (!end)
@@ -1415,11 +1441,9 @@ next:
 
     if (sections != _sections)
         g_free (sections);
-    g_object_unref (pi);
     g_free (root);
     return nodes;
 }
-#undef ensure_node_trigger
 
 GPtrArray *
 donna_context_menu_get_nodes (DonnaApp               *app,

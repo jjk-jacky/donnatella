@@ -11198,6 +11198,8 @@ static gboolean
 tree_context_get_item_info (const gchar             *section,
                             const gchar             *item,
                             DonnaContextReference    reference,
+                            const gchar             *conv_flags,
+                            conv_flag_fn             conv_fn,
                             struct conv             *conv,
                             gpointer                 section_data,
                             DonnaContextInfo        *info,
@@ -11662,6 +11664,8 @@ static GPtrArray *
 tree_context_get_nodes (const gchar             *section,
                         const gchar             *extra,
                         DonnaContextReference    reference,
+                        const gchar             *conv_flags,
+                        conv_flag_fn             conv_fn,
                         struct conv             *conv,
                         GError                 **error)
 {
@@ -11697,15 +11701,15 @@ tree_context_get_nodes (const gchar             *section,
             extra = def;
 
         nodes = donna_context_parse_extra (priv->app, section, extra,
-                (get_item_info_fn) tree_context_get_item_info,
-                reference, conv, (sd.tree) ? &sd : NULL, error);
+                (get_item_info_fn) tree_context_get_item_info, reference,
+                conv_flags, conv_fn, conv, (sd.tree) ? &sd : NULL, error);
     }
     else if (streq (section, "refresh"))
     {
         nodes = donna_context_parse_extra (priv->app, section,
                 (extra) ? extra : "normal<visible;simple;normal;reload>",
-                (get_item_info_fn) tree_context_get_item_info,
-                reference, conv, NULL, error);
+                (get_item_info_fn) tree_context_get_item_info, reference,
+                conv_flags, conv_fn, conv, NULL, error);
     }
     else if (streq (section, "selection"))
     {
@@ -11747,8 +11751,8 @@ tree_context_get_nodes (const gchar             *section,
         }
 
         nodes = donna_context_parse_extra (priv->app, section, extra,
-                (get_item_info_fn) tree_context_get_item_info,
-                reference, conv, &sd, error);
+                (get_item_info_fn) tree_context_get_item_info, reference,
+                conv_flags, conv_fn, conv, &sd, error);
     }
     else if (streq (section, "clipboard"))
     {
@@ -11762,8 +11766,8 @@ tree_context_get_nodes (const gchar             *section,
                 "<paste;paste_copy;paste_move;paste_new_folder>";
 
         nodes = donna_context_parse_extra (priv->app, "register", extra,
-                (get_item_info_fn) tree_context_get_item_info,
-                reference, conv, &sd, error);
+                (get_item_info_fn) tree_context_get_item_info, reference,
+                conv_flags, conv_fn, conv, &sd, error);
     }
     else
     {
