@@ -1081,13 +1081,11 @@ context_get_item_info (const gchar             *section,
         ensure_node_trigger ();
         if (import_from_trigger)
         {
-            donna_node_get (node_trigger, FALSE, "icon", &has, &v, NULL);
-            if (has == DONNA_NODE_VALUE_SET)
+            if (donna_node_get_icon (node_trigger, FALSE, &info->pixbuf)
+                    == DONNA_NODE_VALUE_SET)
             {
                 info->icon_is_pixbuf = TRUE;
-                info->pixbuf = g_value_dup_object (&v);
                 info->free_icon = TRUE;
-                g_value_unset (&v);
             }
         }
     }
