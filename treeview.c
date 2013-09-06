@@ -11257,15 +11257,18 @@ tree_context_get_item_info (const gchar             *section,
                             donna_node_peek_provider (priv->location))
                         & DONNA_PROVIDER_FLAG_FLAT));
 
-            /* sensitive only if there's at least one parent to go up to */
-            info->is_sensitive = gtk_tree_model_iter_parent (
-                    (GtkTreeModel *) t->priv->store, &iter, &t->priv->location_iter);
-            if (t != tree)
-                g_object_unref (t);
+            if (info->is_visible)
+            {
+                /* sensitive only if there's at least one parent to go up to */
+                info->is_sensitive = gtk_tree_model_iter_parent (
+                        (GtkTreeModel *) t->priv->store, &iter, &t->priv->location_iter);
+                if (t != tree)
+                    g_object_unref (t);
 
-            info->trigger = g_strdup_printf ("command:tree_go_root (%.*s)",
-                    sd->len, sd->tree);
-            info->free_trigger = TRUE;
+                info->trigger = g_strdup_printf ("command:tree_go_root (%.*s)",
+                        sd->len, sd->tree);
+                info->free_trigger = TRUE;
+            }
         }
         else if (streq (item, "up"))
         {
