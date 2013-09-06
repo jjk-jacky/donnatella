@@ -70,6 +70,8 @@ free_node_internal (struct node_internal *ni)
 static void
 free_context_info (DonnaContextInfo *info)
 {
+    if (info->node)
+        g_object_unref (info->node);
     if (info->free_name)
         g_free (info->name);
     if (info->free_icon)
@@ -145,6 +147,13 @@ parse_extra (DonnaApp               *app,
 
             if (!info.is_visible)
                 goto skip;
+
+            if (info.node)
+            {
+                g_ptr_array_add (nodes, info.node);
+                info.node = NULL;
+                goto skip;
+            }
 
             ni = g_slice_new0 (struct node_internal);
             ni->app = app;
@@ -247,6 +256,21 @@ next:
             if (!get_item_info (section, b, reference, conv_data, section_data,
                         &info, error))
             {
+                if (b != buf)
+                    g_free (b);
+                g_ptr_array_unref (children);
+                g_ptr_array_unref (nodes);
+                return NULL;
+            }
+
+            if (info.node)
+            {
+                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                        DONNA_CONTEXT_MENU_ERROR_OTHER,
+                        "Context-menu: Cannot use given node for item '%s/%s', "
+                        "needs info to create a container",
+                        section, b);
+                free_context_info (&info);
                 if (b != buf)
                     g_free (b);
                 g_ptr_array_unref (children);

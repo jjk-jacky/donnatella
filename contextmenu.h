@@ -30,6 +30,7 @@ typedef enum
 
 typedef struct
 {
+    DonnaNode   *node;
     gchar       *name;
     gboolean     icon_is_pixbuf;
     union {
