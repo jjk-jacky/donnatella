@@ -1402,9 +1402,14 @@ donna_donna_parse_fl (DonnaApp       *app,
                 {
                     gchar *s = donna_app_new_int_ref (app, type, ptr);
                     g_string_append (str, s);
-                    if (!*intrefs)
-                        *intrefs = g_ptr_array_new_with_free_func (g_free);
-                    g_ptr_array_add (*intrefs, s);
+                    if (intrefs)
+                    {
+                        if (!*intrefs)
+                            *intrefs = g_ptr_array_new_with_free_func (g_free);
+                        g_ptr_array_add (*intrefs, s);
+                    }
+                    else
+                        g_free (s);
                 }
             }
             else if (type & DONNA_ARG_TYPE_STRING)

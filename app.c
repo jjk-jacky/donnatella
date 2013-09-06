@@ -454,7 +454,6 @@ donna_app_parse_fl (DonnaApp       *app,
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (fl != NULL, NULL);
-    g_return_val_if_fail (intrefs != NULL, NULL);
 
     interface = DONNA_APP_GET_INTERFACE (app);
 
