@@ -584,7 +584,7 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
             donna_node_get (node, TRUE, "container-trigger", &has, &v, NULL);
             if (has == DONNA_NODE_VALUE_SET)
             {
-                if (G_LIKELY (G_VALUE_TYPE (&v) == G_TYPE_STRING))
+                if (G_VALUE_TYPE (&v) == G_TYPE_STRING)
                 {
                     if (!donna_app_trigger_node (app, g_value_get_string (&v)))
                     {
@@ -598,6 +598,24 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
                         g_value_unset (&v);
                         return DONNA_TASK_FAILED;
                     }
+                    g_value_unset (&v);
+                    return DONNA_TASK_DONE;
+                }
+                else if (G_VALUE_TYPE (&v) == DONNA_TYPE_NODE)
+                {
+                    DonnaTask *t;
+
+                    t = donna_node_trigger_task (g_value_get_object (&v), &err);
+                    if (!t)
+                    {
+                        g_prefix_error (&err, "Command 'node_trigger': "
+                                "Failed to get trigger task from container-trigger node: ");
+                        donna_task_take_error (task, err);
+                        g_value_unset (&v);
+                        return DONNA_TASK_FAILED;
+                    }
+
+                    donna_app_run_task (app, t);
                     g_value_unset (&v);
                     return DONNA_TASK_DONE;
                 }
