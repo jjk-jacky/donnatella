@@ -1125,6 +1125,35 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gint level = GPOINTER_TO_INT (args[1]); /* opt */
+
+    DonnaNode *node;
+    GValue *value;
+
+    if (level == 0)
+        level = 1;
+
+    node = donna_tree_view_get_node_down (tree, level, &err);
+    if (!node)
+    {
+        g_prefix_error (&err, "Command 'tree_get_node_down': ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1144,6 +1173,31 @@ cmd_tree_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+
+    DonnaNode *node;
+    GValue *value;
+
+    node = donna_tree_view_get_node_root (tree, &err);
+    if (!node)
+    {
+        g_prefix_error (&err, "Command 'tree_get_node_root': ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1155,6 +1209,38 @@ cmd_tree_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    gint level = GPOINTER_TO_INT (args[1]); /* opt */
+
+    DonnaNode *node;
+    GValue *value;
+
+    /* we cannot differentiate between the level arg being set to 0, and not
+     * specified. So, we assume not set and default to 1.
+     * In order to go up to the root, use a negative value */
+    if (level == 0)
+        level = 1;
+
+    node = donna_tree_view_get_node_up (tree, level, &err);
+    if (!node)
+    {
+        g_prefix_error (&err, "Command 'tree_get_node_up': ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -1946,13 +2032,30 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_get_node_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_go_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    add_command (tree_get_node_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     add_command (tree_go_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_get_node_up, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;

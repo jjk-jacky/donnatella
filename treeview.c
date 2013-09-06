@@ -10924,51 +10924,28 @@ donna_tree_view_history_clear (DonnaTreeView        *tree,
     return TRUE;
 }
 
-static void
-set_location (DonnaTask *task, gboolean timeout_called, DonnaTreeView *tree)
-{
-    GError *err = NULL;
-    DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaTaskState state = donna_task_get_state (task);
-
-    if (state != DONNA_TASK_DONE)
-    {
-        if (state == DONNA_TASK_FAILED)
-            donna_app_show_error (priv->app, donna_task_get_error (task),
-                    "Treeview '%s': Failed to get node to go up/down", priv->name);
-        return;
-    }
-
-    if (!donna_tree_view_set_location (tree,
-            g_value_get_object (donna_task_get_return_value (task)), &err))
-    {
-        donna_app_show_error (priv->app, err,
-                "Treeview '%s': Failed to go up/down", priv->name);
-        g_clear_error (&err);
-    }
-}
-
-gboolean
-donna_tree_view_go_up (DonnaTreeView      *tree,
-                       gint                level,
-                       GError            **error)
+DonnaNode *
+donna_tree_view_get_node_up (DonnaTreeView      *tree,
+                             gint                level,
+                             GError            **error)
 {
     DonnaTreeViewPrivate *priv;
     DonnaTask *task;
+    DonnaNode *node;
     gchar *fl = NULL;
     gchar *location;
     gchar *s;
 
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
 
     if (G_UNLIKELY (!priv->location))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Can't go up, no current location set",
+                "Treeview '%s': Can't get node 'up', no current location set",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     if (donna_provider_get_flags (donna_node_peek_provider (priv->location))
@@ -10976,9 +10953,9 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                "Treeview '%s': Can't go up, current location is in flat provider",
+                "Treeview '%s': Can't get node 'up', current location is in flat provider",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     /* if we're on root, trying to go up is a no-op, not an error */
@@ -10987,7 +10964,11 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
     if (streq (location, "/"))
     {
         g_free (fl);
-        return TRUE;
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Can't get node 'up', we're in root already",
+                priv->name);
+        return NULL;
     }
 
     if (level > 0)
@@ -11024,19 +11005,66 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
                 "Treeview '%s': Can't get node to go up", priv->name);
+        return NULL;
+    }
+
+    donna_task_set_can_block (g_object_ref_sink (task));
+    donna_app_run_task (priv->app, task);
+    donna_task_wait_for_it (task);
+
+    if (donna_task_get_state (task) != DONNA_TASK_DONE)
+    {
+        if (error)
+        {
+            *error = g_error_copy (donna_task_get_error (task));
+            g_prefix_error (error, "Treeview '%s': Failed to get node 'up': ",
+                    priv->name);
+        }
+        g_object_unref (task);
+        return NULL;
+    }
+
+    node = g_value_dup_object (donna_task_get_return_value (task));
+    g_object_unref (task);
+    return node;
+}
+
+gboolean
+donna_tree_view_go_up (DonnaTreeView      *tree,
+                       gint                level,
+                       GError            **error)
+{
+    GError *err = NULL;
+    DonnaNode *node;
+    gboolean ret;
+
+    node = donna_tree_view_get_node_up (tree, level, &err);
+    if (!node)
+    {
+        if (g_error_matches (err, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND))
+        {
+            /* even though there's no location to go up to (in root already),
+             * this is a no-op, not an error */
+            g_clear_error (&err);
+            return TRUE;
+        }
+        else
+            g_propagate_error (error, err);
+
         return FALSE;
     }
 
-    donna_task_set_callback (task, (task_callback_fn) set_location, tree, NULL);
-    donna_app_run_task (priv->app, task);
-    return TRUE;
+    ret = donna_tree_view_set_location (tree, node, error);
+    g_object_unref (node);
+    return ret;
 }
 
 /* mode list only (history based) */
-gboolean
-donna_tree_view_go_down (DonnaTreeView      *tree,
-                         gint                level,
-                         GError            **error)
+DonnaNode *
+donna_tree_view_get_node_down (DonnaTreeView      *tree,
+                               gint                level,
+                               GError            **error)
 {
     DonnaTreeViewPrivate *priv;
     DonnaHistoryDirection direction;
@@ -11050,25 +11078,25 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
     gint lvl = 0;
     DonnaTask *task;
 
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
 
     if (is_tree (tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Can't go down in mode Tree (requires history)",
+                "Treeview '%s': Can't get node 'down' in mode Tree (requires history)",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     if (G_UNLIKELY (!priv->location))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Can't go down, no current location set",
+                "Treeview '%s': Can't get node 'down', no current location set",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     if (donna_provider_get_flags (donna_node_peek_provider (priv->location))
@@ -11076,9 +11104,9 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                "Treeview '%s': Can't go down, current location is in flat provider",
+                "Treeview '%s': Can't get node 'down', current location is in flat provider",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     fl = donna_node_get_full_location (priv->location);
@@ -11094,10 +11122,10 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
         items = donna_history_get_items (priv->history, direction, 0, error);
         if (!items)
         {
-            g_prefix_error (error, "Treeview '%s': Can't go down: ", priv->name);
+            g_prefix_error (error, "Treeview '%s': Can't get node 'down': ", priv->name);
             g_free (fl);
             g_strfreev (items_f);
-            return FALSE;
+            return NULL;
         }
 
         if (direction == DONNA_HISTORY_BACKWARD)
@@ -11167,6 +11195,8 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
 
     if (best)
     {
+        DonnaNode *node;
+
 found:
         task = donna_app_get_node_task (priv->app, best);
         g_strfreev (items);
@@ -11178,20 +11208,71 @@ found:
                     DONNA_TREE_VIEW_ERROR_OTHER,
                     "Treeview '%s': Can't get node to go down",
                     priv->name);
-            return FALSE;
+            return NULL;
         }
 
-        donna_task_set_callback (task,
-                (task_callback_fn) set_location, tree, NULL);
+        donna_task_set_can_block (g_object_ref_sink (task));
         donna_app_run_task (priv->app, task);
-        return TRUE;
+        donna_task_wait_for_it (task);
+
+        if (donna_task_get_state (task) != DONNA_TASK_DONE)
+        {
+            if (error)
+            {
+                *error = g_error_copy (donna_task_get_error (task));
+                g_prefix_error (error, "Treeview '%s': Failed to get node 'down': ",
+                        priv->name);
+            }
+            g_object_unref (task);
+            return NULL;
+        }
+
+        node = g_value_dup_object (donna_task_get_return_value (task));
+        g_object_unref (task);
+        return node;
     }
 
     g_strfreev (items);
     g_strfreev (items_f);
     g_free (fl);
-    /* even though there's no location to go down to, this is a no-op, not an error */
-    return TRUE;
+
+    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+            DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+            "Treeview '%s': No node 'down' could be found",
+            priv->name);
+    return NULL;
+}
+
+/* mode list only (history based) */
+gboolean
+donna_tree_view_go_down (DonnaTreeView      *tree,
+                         gint                level,
+                         GError            **error)
+{
+    GError *err = NULL;
+    DonnaNode *node;
+    gboolean ret;
+
+    node = donna_tree_view_get_node_down (tree, level, &err);
+    if (!node)
+    {
+        if (g_error_matches (err, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND))
+        {
+            /* even though there's no location to go down to, this is a no-op,
+             * not an error */
+            g_clear_error (&err);
+            return TRUE;
+        }
+        else
+            g_propagate_error (error, err);
+
+        return FALSE;
+    }
+
+    ret = donna_tree_view_set_location (tree, node, error);
+    g_object_unref (node);
+    return ret;
 }
 
 static gboolean
@@ -11831,9 +11912,10 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
     return TRUE;
 }
 
-gboolean
-donna_tree_view_go_root (DonnaTreeView      *tree,
-                         GError            **error)
+/* mode tree only */
+DonnaNode *
+donna_tree_view_get_node_root   (DonnaTreeView      *tree,
+                                 GError            **error)
 {
     DonnaTreeViewPrivate *priv;
     GtkTreeModel *model;
@@ -11841,20 +11923,26 @@ donna_tree_view_go_root (DonnaTreeView      *tree,
     GtkTreeIter iter;
     DonnaNode *node;
 
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
     if (G_UNLIKELY (!priv->location))
-        return TRUE;
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Can't get root node, no current location",
+                priv->name);
+        return NULL;
+    }
 
     if (!is_tree (tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Can't go to root in mode List",
+                "Treeview '%s': Can't get root node in mode List",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     if (donna_provider_get_flags (donna_node_peek_provider (priv->location))
@@ -11862,9 +11950,9 @@ donna_tree_view_go_root (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                "Treeview '%s': Can't go to root, current location is in flat provider",
+                "Treeview '%s': Can't get root node, current location is in flat provider",
                 priv->name);
-        return FALSE;
+        return NULL;
     }
 
     iter = priv->location_iter;
@@ -11875,8 +11963,38 @@ donna_tree_view_go_root (DonnaTreeView      *tree,
             DONNA_TREE_COL_NODE,    &node,
             -1);
 
+    return node;
+}
+
+/* mode tree only */
+gboolean
+donna_tree_view_go_root (DonnaTreeView      *tree,
+                         GError            **error)
+{
+    GError *err = NULL;
+    DonnaNode *node;
+    gboolean ret;
+
+    node = donna_tree_view_get_node_root (tree, &err);
+    if (!node)
+    {
+        if (g_error_matches (err, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND))
+        {
+            /* even though there's no location to go to, this is a no-op, not an
+             * error */
+            g_clear_error (&err);
+            return TRUE;
+        }
+        else
+            g_propagate_error (error, err);
+
+        return FALSE;
+    }
+
+    ret = donna_tree_view_set_location (tree, node, error);
     g_object_unref (node);
-    return donna_tree_view_set_location (tree, node, error);
+    return ret;
 }
 
 

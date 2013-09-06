@@ -232,6 +232,9 @@ GPtrArray *     donna_tree_view_get_nodes       (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  gboolean            to_focused,
                                                  GError            **error);
+DonnaNode *     donna_tree_view_get_node_up     (DonnaTreeView      *tree,
+                                                 gint                level,
+                                                 GError            **error);
 gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
                                                  gint                level,
                                                  GError            **error);
@@ -278,6 +281,8 @@ gboolean        donna_tree_view_remove_row      (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_go_root         (DonnaTreeView      *tree,
                                                  GError            **error);
+DonnaNode *     donna_tree_view_get_node_root   (DonnaTreeView      *tree,
+                                                 GError            **error);
 /* Mini-Tree */
 gboolean        donna_tree_view_maxi_expand     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
@@ -311,6 +316,9 @@ gboolean        donna_tree_view_history_move    (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_history_clear   (DonnaTreeView      *tree,
                                                  DonnaHistoryDirection direction,
+                                                 GError            **error);
+DonnaNode *     donna_tree_view_get_node_down   (DonnaTreeView      *tree,
+                                                 gint                level,
                                                  GError            **error);
 gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
                                                  gint                level,
