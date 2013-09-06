@@ -166,6 +166,7 @@ parse_extra (DonnaApp               *app,
                         (info.free_trigger) ? info.trigger : g_strdup (info.trigger),
                         conv_flags, conv_fn, conv_data, &ni->intrefs);
                 ni->free_fl = TRUE;
+                info.trigger = NULL;
                 info.free_trigger = FALSE;
             }
 
@@ -1012,7 +1013,9 @@ context_get_item_info (const gchar             *section,
         info->node = get_node_trigger (gi->app, info->trigger,
                 conv_flags, conv_fn, conv_data);
         g_free (info->trigger);
+        info->trigger = NULL;
         info->free_trigger = FALSE;
+
         if (!info->node)
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
@@ -1141,6 +1144,7 @@ context_get_item_info (const gchar             *section,
             return FALSE;
         }
         g_free (info->trigger);
+        info->trigger = NULL;
         info->free_trigger = FALSE;
 
         /* special case: we need to create the node */
