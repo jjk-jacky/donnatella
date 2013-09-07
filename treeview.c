@@ -5759,6 +5759,9 @@ next:
     }
     g_object_unref (ctname);
 
+    /* have our columns in their actual order */
+    priv->columns = g_slist_reverse (priv->columns);
+
     /* ensure we have an expander column */
     if (!expander_column)
         expander_column = (ctname_column) ? ctname_column : first_column;
@@ -11667,6 +11670,63 @@ tree_context_get_item_info (const gchar             *section,
         g_object_unref (task);
         return TRUE;
     }
+    else if (streq (section, "edit-column"))
+    {
+        GError *err = NULL;
+        struct column *_col;
+
+        if (reference & DONNA_CONTEXT_HAS_REF)
+            info->is_visible = TRUE;
+
+        if (*item == '\0')
+        {
+            if (info->is_visible)
+            {
+                gchar *s = donna_node_get_name (conv->row->node);
+                info->name = g_strdup_printf ("Edit %s", s);
+                g_free (s);
+                info->free_name = TRUE;
+            }
+            else
+                info->name = "Edit...";
+            info->icon_name = "gtk-edit";
+            return TRUE;
+        }
+
+        _col = get_column_by_name (tree, item);
+        if (!_col)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item '%s' in section '%s'",
+                    priv->name, item, section);
+            return FALSE;
+        }
+
+        if (info->is_visible)
+        {
+            if (!donna_columntype_can_edit (_col->ct, _col->ct_data,
+                    conv->row->node, &err))
+            {
+                if (!g_error_matches (err, DONNA_COLUMNTYPE_ERROR,
+                            DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE))
+                    info->is_visible = FALSE;
+                g_clear_error (&err);
+            }
+            else
+                info->is_sensitive = TRUE;
+        }
+
+        info->name = g_strdup_printf ("Edit %s...",
+                gtk_tree_view_column_get_title (_col->column));
+        info->free_name = TRUE;
+
+        if (info->is_visible && info->is_sensitive)
+            info->trigger = g_strdup_printf (
+                    "command:tree_edit_column (%%o, %%r, %s)", _col->name);
+
+        return TRUE;
+    }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
@@ -11776,6 +11836,31 @@ tree_context_get_nodes (const gchar             *section,
         nodes = donna_context_parse_extra (priv->app, "register", extra,
                 (get_item_info_fn) tree_context_get_item_info, reference,
                 conv_flags, conv_fn, conv, &sd, error);
+    }
+    else if (streq (section, "edit-column"))
+    {
+        gboolean need_free = FALSE;
+
+        if (!extra)
+        {
+            GString *str = g_string_new ("<");
+            GSList *l;
+
+            for (l = priv->columns; l; l = l->next)
+            {
+                g_string_append (str, ((struct column *) l->data)->name);
+                g_string_append_c (str, ';');
+            }
+            str->str[str->len - 1] = '>';
+            extra = g_string_free (str, FALSE);
+        }
+
+        nodes = donna_context_parse_extra (priv->app, section, extra,
+                (get_item_info_fn) tree_context_get_item_info, reference,
+                conv_flags, conv_fn, conv, NULL, error);
+
+        if (need_free)
+            g_free ((gchar *) extra);
     }
     else
     {
