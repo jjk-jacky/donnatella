@@ -50,6 +50,10 @@ static void             ct_text_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GPtrArray *      ct_text_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
+static gboolean         ct_text_can_edit            (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
 static gboolean         ct_text_edit                (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -84,6 +88,7 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
     interface->refresh_data             = ct_text_refresh_data;
     interface->free_data                = ct_text_free_data;
     interface->get_props                = ct_text_get_props;
+    interface->can_edit                 = ct_text_can_edit;
     interface->edit                     = ct_text_edit;
     interface->render                   = ct_text_render;
     interface->node_cmp                 = ct_text_node_cmp;
@@ -199,7 +204,6 @@ ct_text_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
-    gint i;
 
     config = donna_app_peek_config (cttext->priv->app);
 
@@ -333,6 +337,16 @@ editing_started_cb (GtkCellRenderer     *renderer,
 }
 
 static gboolean
+ct_text_can_edit (DonnaColumnType    *ct,
+                  gpointer            data,
+                  DonnaNode          *node,
+                  GError            **error)
+{
+    return DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            ((struct tv_col_data *) data)->property, node, error);
+}
+
+static gboolean
 ct_text_edit (DonnaColumnType    *ct,
               gpointer            _data,
               DonnaNode          *node,
@@ -345,13 +359,8 @@ ct_text_edit (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     struct editing_data *ed;
 
-    if (!(donna_node_has_property (node, data->property) & DONNA_NODE_PROP_WRITABLE))
-    {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_WRITABLE,
-                "ColumnType 'text': property '%s' isn't writable",
-                data->property);
+    if (!ct_text_can_edit (ct, _data, node, error))
         return FALSE;
-    }
 
     ed = g_new0 (struct editing_data, 1);
     ed->cttext  = (DonnaColumnTypeText *) ct;

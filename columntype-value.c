@@ -57,6 +57,10 @@ static void             ct_value_free_data          (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GPtrArray *      ct_value_get_props          (DonnaColumnType    *ct,
                                                      gpointer            data);
+static gboolean         ct_value_can_edit           (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
 static gboolean         ct_value_edit               (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -88,6 +92,7 @@ ct_value_columntype_init (DonnaColumnTypeInterface *interface)
     interface->refresh_data     = ct_value_refresh_data;
     interface->free_data        = ct_value_free_data;
     interface->get_props        = ct_value_get_props;
+    interface->can_edit         = ct_value_can_edit;
     interface->edit             = ct_value_edit;
     interface->render           = ct_value_render;
     interface->set_tooltip      = ct_value_set_tooltip;
@@ -475,6 +480,26 @@ apply_cb (GtkButton *button, struct editing_data *ed)
 }
 
 static gboolean
+ct_value_can_edit (DonnaColumnType    *ct,
+                   gpointer            _data,
+                   DonnaNode          *node,
+                   GError            **error)
+{
+    struct tv_col_data *data = _data;
+
+    if (data->show_type)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+                "ColumnType 'value': Cannot change the type of an option");
+        return FALSE;
+    }
+
+    return DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            data->prop_value, node, error);
+}
+
+static gboolean
 ct_value_edit (DonnaColumnType    *ct,
                gpointer            _data,
                DonnaNode          *node,
@@ -493,20 +518,8 @@ ct_value_edit (DonnaColumnType    *ct,
     GType type;
     gint rnd;
 
-    if (data->show_type)
-    {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
-                "ColumnType 'value': Cannot change the type of an option");
+    if (!ct_value_can_edit (ct, _data, node, error))
         return FALSE;
-    }
-
-    if (!(donna_node_has_property (node, data->prop_value) & DONNA_NODE_PROP_WRITABLE))
-    {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_WRITABLE,
-                "ColumnType 'value': property '%s' isn't writable",
-                data->prop_value);
-        return FALSE;
-    }
 
     donna_node_get (node, TRUE, data->prop_value, &has, &value, NULL);
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)

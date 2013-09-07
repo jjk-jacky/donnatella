@@ -124,6 +124,10 @@ static GtkSortType      ct_perms_get_default_sort_order
                                                      gpointer            data);
 static GtkMenu *        ct_perms_get_options_menu   (DonnaColumnType    *ct,
                                                      gpointer            data);
+static gboolean         ct_perms_can_edit           (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
 static gboolean         ct_perms_edit               (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -165,6 +169,7 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_props                = ct_perms_get_props;
     interface->get_default_sort_order   = ct_perms_get_default_sort_order;
     interface->get_options_menu         = ct_perms_get_options_menu;
+    interface->can_edit                 = ct_perms_can_edit;
     interface->edit                     = ct_perms_edit;
     interface->render                   = ct_perms_render;
     interface->set_tooltip              = ct_perms_set_tooltip;
@@ -675,6 +680,27 @@ apply_cb (struct editing_data *data)
 }
 
 static gboolean
+ct_perms_can_edit (DonnaColumnType    *ct,
+                   gpointer            _data,
+                   DonnaNode          *node,
+                   GError            **error)
+{
+    if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            "mode", node, error))
+        return FALSE;
+
+    if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            "uid", node, error))
+        return FALSE;
+
+    if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            "gid", node, error))
+        return FALSE;
+
+    return TRUE;
+}
+
+static gboolean
 ct_perms_edit (DonnaColumnType    *ct,
                gpointer            data,
                DonnaNode          *node,
@@ -704,6 +730,9 @@ ct_perms_edit (DonnaColumnType    *ct,
     struct passwd *pwd;
     struct group *grp;
     GtkBox *box;
+
+    if (!ct_perms_can_edit (ct, data, node, error))
+        return FALSE;
 
     /* get the perms */
     has = donna_node_get_mode (node, TRUE, &mode);

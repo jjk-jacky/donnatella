@@ -61,6 +61,10 @@ static GPtrArray *      ct_name_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_name_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
+static gboolean         ct_name_can_edit            (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
 static gboolean         ct_name_edit                (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -101,6 +105,7 @@ ct_name_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_name_free_data;
     interface->get_props                = ct_name_get_props;
     interface->get_options_menu         = ct_name_get_options_menu;
+    interface->can_edit                 = ct_name_can_edit;
     interface->edit                     = ct_name_edit;
     interface->render                   = ct_name_render;
     interface->set_tooltip              = ct_name_set_tooltip;
@@ -387,6 +392,16 @@ editing_started_cb (GtkCellRenderer     *renderer,
 }
 
 static gboolean
+ct_name_can_edit (DonnaColumnType    *ct,
+                  gpointer            data,
+                  DonnaNode          *node,
+                  GError            **error)
+{
+    return DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            "name", node, error);
+}
+
+static gboolean
 ct_name_edit (DonnaColumnType    *ct,
               gpointer            data,
               DonnaNode          *node,
@@ -397,6 +412,9 @@ ct_name_edit (DonnaColumnType    *ct,
               GError            **error)
 {
     struct editing_data *ed;
+
+    if (!ct_name_can_edit (ct, data, node, error))
+        return FALSE;
 
     ed = g_new0 (struct editing_data, 1);
     ed->ctname    = (DonnaColumnTypeName *) ct;

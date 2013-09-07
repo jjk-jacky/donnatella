@@ -105,6 +105,10 @@ static GPtrArray *      ct_time_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkMenu *        ct_time_get_options_menu    (DonnaColumnType    *ct,
                                                      gpointer            data);
+static gboolean         ct_time_can_edit            (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     DonnaNode          *node,
+                                                     GError            **error);
 static gboolean         ct_time_edit                (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -145,6 +149,7 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_time_free_data;
     interface->get_props                = ct_time_get_props;
     interface->get_options_menu         = ct_time_get_options_menu;
+    interface->can_edit                 = ct_time_can_edit;
     interface->edit                     = ct_time_edit;
     interface->render                   = ct_time_render;
     interface->set_tooltip              = ct_time_set_tooltip;
@@ -956,6 +961,28 @@ editing_started_cb (GtkCellRenderer     *renderer,
 }
 
 static gboolean
+ct_time_can_edit (DonnaColumnType    *ct,
+                  gpointer            _data,
+                  DonnaNode          *node,
+                  GError            **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *prop;
+
+    if (data->which == WHICH_MTIME)
+        prop = "mtime";
+    else if (data->which == WHICH_ATIME)
+        prop = "atime";
+    else if (data->which == WHICH_CTIME)
+        prop = "ctime";
+    else
+        prop = data->property;
+
+    return DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+            prop, node, error);
+}
+
+static gboolean
 ct_time_edit (DonnaColumnType    *ct,
               gpointer            data,
               DonnaNode          *node,
@@ -976,6 +1003,9 @@ ct_time_edit (DonnaColumnType    *ct,
     gint row;
     gchar *s;
     gchar *ss;
+
+    if (!ct_time_can_edit (ct, data, node, error))
+        return FALSE;
 
     /* get selected nodes (if any) */
     arr = donna_tree_view_get_selected_nodes (treeview, NULL);

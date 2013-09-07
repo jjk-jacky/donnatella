@@ -22,7 +22,9 @@ GType           donna_columntype_get_type   (void) G_GNUC_CONST;
 typedef enum
 {
     DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
-    DONNA_COLUMNTYPE_ERROR_NOT_WRITABLE,
+    DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+    DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
+    DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE,
     DONNA_COLUMNTYPE_ERROR_OTHER,
 } DonnaColumnTypeError;
 
@@ -51,6 +53,11 @@ struct _DonnaColumnTypeInterface
     GTypeInterface parent;
 
     /* virtual table */
+    gboolean            (*helper_can_edit)  (DonnaColumnType    *ct,
+                                             const gchar        *property,
+                                             DonnaNode          *node,
+                                             GError            **error);
+
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
     DonnaColumnTypeNeed (*refresh_data)     (DonnaColumnType    *ct,
@@ -70,6 +77,10 @@ struct _DonnaColumnTypeInterface
                                              gpointer            data);
     GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
                                              gpointer            data);
+    gboolean            (*can_edit)         (DonnaColumnType    *ct,
+                                             gpointer            data,
+                                             DonnaNode          *node,
+                                             GError            **error);
     gboolean            (*edit)             (DonnaColumnType    *ct,
                                              gpointer            data,
                                              DonnaNode          *node,
@@ -121,6 +132,10 @@ GtkSortType     donna_columntype_get_default_sort_order
                                                  gpointer            data);
 GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  gpointer            data);
+gboolean        donna_columntype_can_edit       (DonnaColumnType    *ct,
+                                                 gpointer            data,
+                                                 DonnaNode          *node,
+                                                 GError            **error);
 gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  DonnaNode          *node,

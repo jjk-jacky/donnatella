@@ -44,6 +44,18 @@ default_get_options_menu (DonnaColumnType    *ct,
 }
 
 static gboolean
+default_can_edit (DonnaColumnType    *ct,
+                  gpointer            data,
+                  DonnaNode          *node,
+                  GError            **error)
+{
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+            "ColumnType '%s': No editing supported",
+            donna_columntype_get_name (ct));
+    return FALSE;
+}
+
+static gboolean
 default_edit (DonnaColumnType    *ct,
               gpointer            data,
               DonnaNode          *node,
@@ -53,7 +65,7 @@ default_edit (DonnaColumnType    *ct,
               DonnaTreeView      *treeview,
               GError            **error)
 {
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
             "ColumnType '%s': No editing supported",
             donna_columntype_get_name (ct));
     return FALSE;
@@ -69,11 +81,45 @@ default_set_tooltip (DonnaColumnType    *ct,
     return FALSE;
 }
 
+static gboolean
+helper_can_edit (DonnaColumnType    *ct,
+                 const gchar        *property,
+                 DonnaNode          *node,
+                 GError            **error)
+{
+    DonnaNodeHasProp has_prop;
+
+    has_prop = donna_node_has_property (node, property);
+
+    if (!(has_prop & DONNA_NODE_PROP_EXISTS))
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
+                "ColumnType '%s': property '%s' doesn't exist",
+                donna_columntype_get_name (ct), property);
+        return FALSE;
+    }
+
+    if (!(has_prop & DONNA_NODE_PROP_WRITABLE))
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE,
+                "ColumnType '%s': property '%s' isn't writable",
+                donna_columntype_get_name (ct), property);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 static void
 donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 {
+    interface->helper_can_edit          = helper_can_edit;
+
     interface->get_default_sort_order   = default_get_default_sort_order;
     interface->get_options_menu         = default_get_options_menu;
+    interface->can_edit                 = default_can_edit;
     interface->edit                     = default_edit;
     interface->set_tooltip              = default_set_tooltip;
 
@@ -206,6 +252,25 @@ donna_columntype_get_options_menu (DonnaColumnType  *ct,
     g_return_val_if_fail (interface->get_options_menu != NULL, NULL);
 
     return (*interface->get_options_menu) (ct, data);
+}
+
+gboolean
+donna_columntype_can_edit (DonnaColumnType    *ct,
+                           gpointer            data,
+                           DonnaNode          *node,
+                           GError            **error)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->can_edit != NULL, FALSE);
+
+    return (*interface->can_edit) (ct, data, node, error);
 }
 
 gboolean
