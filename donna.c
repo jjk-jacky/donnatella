@@ -2720,7 +2720,7 @@ static gboolean
 focus_in_event_cb (GtkWidget *w, GdkEvent *event, DonnaDonna *donna)
 {
     donna->priv->just_focused = TRUE;
-    g_timeout_add (420, (GSourceFunc) just_focused_expired, donna);
+    g_timeout_add (42, (GSourceFunc) just_focused_expired, donna);
     if (donna->priv->floating_window)
         gtk_widget_destroy (donna->priv->floating_window);
     return FALSE;
