@@ -203,7 +203,7 @@ gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
 gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
-gboolean        donna_tree_view_edit_column     (DonnaTreeView      *tree,
+gboolean        donna_tree_view_column_edit     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  const gchar        *column,
                                                  GError            **error);

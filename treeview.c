@@ -9302,7 +9302,7 @@ move_inline_edit (struct inline_edit *ie)
     rid.ptr  = ie->row;
 
     _col = get_column_by_column (ie->tree, ie->column);
-    donna_tree_view_edit_column (ie->tree, &rid, _col->name, NULL);
+    donna_tree_view_column_edit (ie->tree, &rid, _col->name, NULL);
     g_object_unref (ie->row->node);
     g_slice_free (DonnaTreeRow, ie->row);
     g_slice_free (struct inline_edit, ie);
@@ -9455,7 +9455,7 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
 }
 
 gboolean
-donna_tree_view_edit_column (DonnaTreeView      *tree,
+donna_tree_view_column_edit (DonnaTreeView      *tree,
                              DonnaTreeRowId     *rowid,
                              const gchar        *column,
                              GError            **error)
@@ -11670,7 +11670,7 @@ tree_context_get_item_info (const gchar             *section,
         g_object_unref (task);
         return TRUE;
     }
-    else if (streq (section, "edit-column"))
+    else if (streq (section, "column-edit"))
     {
         GError *err = NULL;
         struct column *_col;
@@ -11723,7 +11723,7 @@ tree_context_get_item_info (const gchar             *section,
 
         if (info->is_visible && info->is_sensitive)
             info->trigger = g_strdup_printf (
-                    "command:tree_edit_column (%%o, %%r, %s)", _col->name);
+                    "command:tree_column_edit (%%o, %%r, %s)", _col->name);
 
         return TRUE;
     }
@@ -11837,7 +11837,7 @@ tree_context_get_nodes (const gchar             *section,
                 (get_item_info_fn) tree_context_get_item_info, reference,
                 conv_flags, conv_fn, conv, &sd, error);
     }
-    else if (streq (section, "edit-column"))
+    else if (streq (section, "column-edit"))
     {
         gboolean need_free = FALSE;
 

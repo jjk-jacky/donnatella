@@ -903,6 +903,23 @@ cmd_tree_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gchar *col_name = args[2];
+
+    if (!donna_tree_view_column_edit (tree, rid, col_name, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -940,23 +957,6 @@ cmd_tree_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     if (!donna_tree_view_context_popup (tree, rowid, sections, menus,
                 no_focus_grab, &err))
-    {
-        donna_task_take_error (task, err);
-        return DONNA_TASK_FAILED;
-    }
-
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTaskState
-cmd_tree_edit_column (DonnaTask *task, DonnaApp *app, gpointer *args)
-{
-    GError *err = NULL;
-    DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
-    gchar *col_name = args[2];
-
-    if (!donna_tree_view_edit_column (tree, rid, col_name, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -1970,6 +1970,13 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tree_column_edit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_context_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
@@ -1982,13 +1989,6 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_context_popup, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-            DONNA_ARG_TYPE_NOTHING);
-
-    i = -1;
-    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
-    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_edit_column, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
