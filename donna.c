@@ -739,6 +739,12 @@ donna_donna_set_floating_window (DonnaApp *app, GtkWindow *window)
     if (priv->floating_window)
         gtk_widget_destroy (priv->floating_window);
 
+    /* make sure all events are processed before we switch to the new window,
+     * otherwise this could lead to immediate destruction of said new floating
+     * window */
+    while (gtk_events_pending ())
+        gtk_main_iteration ();
+
     priv->floating_window = (GtkWidget *) window;
     g_signal_connect (window, "destroy",
             (GCallback) floating_window_destroy_cb, app);
