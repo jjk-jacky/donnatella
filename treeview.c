@@ -11843,16 +11843,21 @@ tree_context_get_nodes (const gchar             *section,
 
         if (!extra)
         {
-            GString *str = g_string_new ("<");
-            GSList *l;
-
-            for (l = priv->columns; l; l = l->next)
+            if (priv->columns)
             {
-                g_string_append (str, ((struct column *) l->data)->name);
-                g_string_append_c (str, ';');
+                GString *str = g_string_new ("<");
+                GSList *l;
+
+                for (l = priv->columns; l; l = l->next)
+                {
+                    g_string_append (str, ((struct column *) l->data)->name);
+                    g_string_append_c (str, ';');
+                }
+                str->str[str->len - 1] = '>';
+                extra = g_string_free (str, FALSE);
             }
-            str->str[str->len - 1] = '>';
-            extra = g_string_free (str, FALSE);
+            else
+                extra = "";
         }
 
         nodes = donna_context_parse_extra (priv->app, section, extra,
