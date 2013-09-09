@@ -19,7 +19,7 @@ gchar *         donna_print_time                (guint64             ts,
 GValue *        duplicate_gvalue                (const GValue       *src);
 void            donna_g_string_append_quoted    (GString            *str,
                                                  const gchar        *s);
-void            donna_g_object_unref            (gpointer            object);
+inline void     donna_g_object_unref            (gpointer            object);
 
 G_END_DECLS
 
