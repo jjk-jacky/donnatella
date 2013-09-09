@@ -12,6 +12,7 @@
 #include "donna.h"
 #include "conf.h"
 #include "macros.h"
+#include "debug.h"
 
 #define SET_PERMS   (1 << 0)
 #define SET_UID     (1 << 1)
@@ -529,7 +530,7 @@ window_destroy_cb (struct editing_data *data)
 }
 
 static void
-toggle_set (GtkToggleButton *btn, struct editing_data *data)
+toggle_set (struct editing_data *data)
 {
     gchar lbl[128];
 
@@ -702,7 +703,7 @@ ct_perms_can_edit (DonnaColumnType    *ct,
 
 static gboolean
 ct_perms_edit (DonnaColumnType    *ct,
-               gpointer            data,
+               gpointer            _data,
                DonnaNode          *node,
                GtkCellRenderer   **renderers,
                renderer_edit_fn    renderer_edit,
@@ -710,6 +711,7 @@ ct_perms_edit (DonnaColumnType    *ct,
                DonnaTreeView      *treeview,
                GError            **error)
 {
+    struct tv_col_data *data = _data;
     struct editing_data *ed;
     DonnaNodeHasValue has;
     mode_t mode;
@@ -1021,7 +1023,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     g_signal_connect_swapped (w, "clicked",
             (GCallback) gtk_widget_destroy, win);
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
-    w = gtk_button_new_with_label ("Set Permissions");
+    w = gtk_button_new_with_label (NULL);
     ed->btn_set = (GtkButton *) w;
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_stock (GTK_STOCK_OK, GTK_ICON_SIZE_MENU));
@@ -1036,16 +1038,45 @@ ct_perms_edit (DonnaColumnType    *ct,
     w = gtk_label_new ("Set: ");
     gtk_box_pack_start (box, w, FALSE, FALSE, 0);
     w = gtk_check_button_new_with_label ("Permissions");
-    gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
-    g_signal_connect (w, "toggled", (GCallback) toggle_set, ed);
+    s = data->format;
+    while ((s = strchr (s, '%')))
+    {
+        ++s;
+        if (*s == 'p' || *s == 's' || *s == 'S' || *s == 'o')
+        {
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+            break;
+        }
+    }
+    g_signal_connect_swapped (w, "toggled", (GCallback) toggle_set, ed);
     ed->set_perms = (GtkToggleButton *) w;
     gtk_box_pack_start (box, w, FALSE, FALSE, 0);
     w = gtk_check_button_new_with_label ("User");
-    g_signal_connect (w, "toggled", (GCallback) toggle_set, ed);
+    s = data->format;
+    while ((s = strchr (s, '%')))
+    {
+        ++s;
+        if (*s == 'u' || *s == 'U' || *s == 'V')
+        {
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+            break;
+        }
+    }
+    g_signal_connect_swapped (w, "toggled", (GCallback) toggle_set, ed);
     ed->set_uid = (GtkToggleButton *) w;
     gtk_box_pack_start (box, w, FALSE, FALSE, 0);
     w = gtk_check_button_new_with_label ("Group");
-    g_signal_connect (w, "toggled", (GCallback) toggle_set, ed);
+    s = data->format;
+    while ((s = strchr (s, '%')))
+    {
+        ++s;
+        if (*s == 'g' || *s == 'G' || *s == 'H')
+        {
+            gtk_toggle_button_set_active ((GtkToggleButton *) w, TRUE);
+            break;
+        }
+    }
+    g_signal_connect_swapped (w, "toggled", (GCallback) toggle_set, ed);
     ed->set_gid = (GtkToggleButton *) w;
     gtk_box_pack_start (box, w, FALSE, FALSE, 0);
 
@@ -1053,6 +1084,9 @@ ct_perms_edit (DonnaColumnType    *ct,
             (GCallback) box_changed, &ed->set_uid);
     ed->sid_gid = g_signal_connect (ed->box_g, "changed",
             (GCallback) box_changed, &ed->set_gid);
+
+    /* set the button label/sensitivity */
+    toggle_set (ed);
 
     gtk_widget_show_all (ed->window);
     donna_app_set_floating_window (((DonnaColumnTypePerms *) ct)->priv->app, win);
