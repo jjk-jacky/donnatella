@@ -117,6 +117,13 @@ static gboolean         ct_time_edit                (DonnaColumnType    *ct,
                                                      gpointer            re_data,
                                                      DonnaTreeView      *treeview,
                                                      GError            **error);
+static gboolean         ct_time_set_value           (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     GPtrArray          *nodes,
+                                                     const gchar        *value,
+                                                     DonnaNode          *node_ref,
+                                                     DonnaTreeView      *treeview,
+                                                     GError            **error);
 static GPtrArray *      ct_time_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -151,6 +158,7 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_options_menu         = ct_time_get_options_menu;
     interface->can_edit                 = ct_time_can_edit;
     interface->edit                     = ct_time_edit;
+    interface->set_value                = ct_time_set_value;
     interface->render                   = ct_time_render;
     interface->set_tooltip              = ct_time_set_tooltip;
     interface->node_cmp                 = ct_time_node_cmp;
@@ -439,14 +447,14 @@ key_press_event_cb (GtkWidget *w, GdkEventKey *event, struct editing_data *ed)
 }
 
 static guint64
-get_ref_time (struct editing_data *ed, DonnaNode *node, gint which)
+get_ref_time (struct tv_col_data *data, DonnaNode *node, gint which)
 {
     GValue value = G_VALUE_INIT;
     DonnaNodeHasValue has;
     guint64 time;
 
     if (which == WHICH_OTHER)
-        which = ed->data->which;
+        which = data->which;
 
     if (which == WHICH_MTIME)
         has = donna_node_get_mtime (node, TRUE, &time);
@@ -455,14 +463,12 @@ get_ref_time (struct editing_data *ed, DonnaNode *node, gint which)
     else if (which == WHICH_CTIME)
         has = donna_node_get_ctime (node, TRUE, &time);
     else
-        donna_node_get (node, TRUE, ed->data->property, &has, &value, NULL);
+        donna_node_get (node, TRUE, data->property, &has, &value, NULL);
 
     if (has != DONNA_NODE_VALUE_SET && which == WHICH_OTHER)
     {
         if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
         {
-            struct tv_col_data *data = ed->data;
-
             warn_not_uint64 (node);
             g_value_unset (&value);
             return (guint64) -1;
@@ -520,7 +526,7 @@ enum
 } while (0)
 
 static guint64
-get_ts (struct editing_data *ed,
+get_ts (struct tv_col_data  *data,
         const gchar         *fmt,
         DonnaNode           *node_ref,
         DonnaNode           *node_cur,
@@ -558,17 +564,17 @@ get_ts (struct editing_data *ed,
         switch (*fmt)
         {
             case 'm':
-                ref = get_ref_time (ed, node_ref, WHICH_MTIME);
+                ref = get_ref_time (data, node_ref, WHICH_MTIME);
                 ++fmt;
                 skip_blank (fmt);
                 break;
             case 'a':
-                ref = get_ref_time (ed, node_ref, WHICH_ATIME);
+                ref = get_ref_time (data, node_ref, WHICH_ATIME);
                 ++fmt;
                 skip_blank (fmt);
                 break;
             case 'c':
-                ref = get_ref_time (ed, node_ref, WHICH_CTIME);
+                ref = get_ref_time (data, node_ref, WHICH_CTIME);
                 ++fmt;
                 skip_blank (fmt);
                 break;
@@ -577,7 +583,7 @@ get_ts (struct editing_data *ed,
                 skip_blank (fmt);
                 /* fall through */
             default:
-                ref = get_ref_time (ed, node_ref, WHICH_OTHER);
+                ref = get_ref_time (data, node_ref, WHICH_OTHER);
                 break;
         }
         if (ref == (guint64) -1)
@@ -675,7 +681,7 @@ get_ts (struct editing_data *ed,
                     {
                         guint64 ref;
 
-                        ref = get_ref_time (ed, node_cur, WHICH_OTHER);
+                        ref = get_ref_time (data, node_cur, WHICH_OTHER);
                         if (ref == (guint64) -1)
                         {
                             g_set_error (error, DONNA_COLUMNTYPE_ERROR,
@@ -753,7 +759,7 @@ get_ts (struct editing_data *ed,
                 {
                     guint64 ref;
 
-                    ref = get_ref_time (ed, node_cur, WHICH_OTHER);
+                    ref = get_ref_time (data, node_cur, WHICH_OTHER);
                     if (ref == (guint64) -1)
                     {
                         g_set_error (error, DONNA_COLUMNTYPE_ERROR,
@@ -794,33 +800,125 @@ get_ts (struct editing_data *ed,
 #undef get_date_bit
 #undef syntax_error
 
-static inline void
-set_prop (struct editing_data *ed, const gchar *prop, DonnaNode *node, guint64 ts)
+static inline gboolean
+set_prop (const gchar   *prop,
+          guint64        ts,
+          DonnaNode     *node,
+          DonnaTreeView *tree,
+          GError       **error)
 {
-    GValue value = G_VALUE_INIT;
-    GError *err = NULL;
+    GValue v = G_VALUE_INIT;
+    gboolean ret;
 
-    g_value_init (&value, G_TYPE_UINT64);
-    g_value_set_uint64 (&value, ts);
-    if (!donna_tree_view_set_node_property (ed->tree, node, prop, &value, &err))
+    g_value_init (&v, G_TYPE_UINT64);
+    g_value_set_uint64 (&v, ts);
+    ret = donna_tree_view_set_node_property (tree, node, prop, &v, error);
+    g_value_unset (&v);
+    return ret;
+}
+
+static gboolean
+set_value (struct tv_col_data   *data,
+           const gchar          *value,
+           DonnaNode            *node_ref,
+           GPtrArray            *nodes,
+           DonnaTreeView        *tree,
+           GError              **error)
+{
+    GError *err = NULL;
+    GString *str = NULL;
+    gboolean is_ts_fixed;
+    const gchar *prop;
+    guint64 ts;
+    guint i = 0;
+
+    if (data->which == WHICH_MTIME)
+        prop = "mtime";
+    else if (data->which == WHICH_ATIME)
+        prop = "atime";
+    else if (data->which == WHICH_CTIME)
+        prop = "ctime";
+    else
+        prop = data->property;
+
+    if (node_ref)
     {
-        donna_app_show_error (ed->app, err,
-                "ColumnType time: Failed to set '%s'", prop);
-        g_clear_error (&err);
+        ts = get_ts (data, value,
+                /* node for reference time */
+                node_ref,
+                /* node for time preservation */
+                nodes->pdata[0],
+                /* whether there's time preservation or not */
+                &is_ts_fixed,
+                error);
+        if (ts == (guint64) -1)
+            return FALSE;
     }
+    else
+        is_ts_fixed = FALSE;
+
+    if (node_ref)
+        set_prop (prop, ts, nodes->pdata[i++], tree, error);
+
+    for ( ; i < nodes->len; ++i)
+    {
+        if (!is_ts_fixed)
+        {
+            ts = get_ts (data, value,
+                    (node_ref) ? node_ref : nodes->pdata[i],
+                    nodes->pdata[i],
+                    NULL, &err);
+            if (ts == (guint64) -1)
+            {
+                gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+                if (!str)
+                    str = g_string_new (NULL);
+
+                g_string_append_printf (str,
+                        "\n- Failed to get new timestamp for '%s', skipping",
+                        fl);
+
+                g_free (fl);
+                g_clear_error (&err);
+                continue;
+            }
+        }
+
+        if (!set_prop (prop, ts, nodes->pdata[i], tree, &err))
+        {
+            gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+            if (!str)
+                str= g_string_new (NULL);
+
+            g_string_append_printf (str, "\n- Failed to set '%s' on '%s': %s",
+                    prop, fl, (err) ? err->message : "(no error message)");
+
+            g_free (fl);
+            g_clear_error (&err);
+        }
+    }
+
+    if (!str)
+        return TRUE;
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_PARTIAL_COMPLETION,
+            "Some operations failed :\n%s", str->str);
+    g_string_free (str, TRUE);
+
+    return FALSE;
 }
 
 static void
 apply_cb (struct editing_data *ed)
 {
     GError *err = NULL;
+    GPtrArray *arr;
     gboolean use_arr;
     gboolean is_ref_focused;
     gboolean is_ref_unique;
-    gboolean is_ts_fixed;
-    const gchar *fmt;
-    const gchar *prop;
-    guint64 ts;
 
     if (ed->window)
     {
@@ -835,69 +933,26 @@ apply_cb (struct editing_data *ed)
         use_arr = FALSE;
         is_ref_focused = is_ref_unique = TRUE;
     }
-    fmt = gtk_entry_get_text (ed->entry);
-
-    if (ed->data->which == WHICH_MTIME)
-        prop = "mtime";
-    else if (ed->data->which == WHICH_ATIME)
-        prop = "atime";
-    else if (ed->data->which == WHICH_CTIME)
-        prop = "ctime";
-    else
-        prop = ed->data->property;
-
-    if (is_ref_unique)
-    {
-        ts = get_ts (ed, fmt,
-                /* node for reference time */
-                (is_ref_focused) ? ed->node
-                : ((use_arr) ? ed->arr->pdata[0] : ed->node),
-                /* node for time preservation */
-                (use_arr) ? ed->arr->pdata[0] : ed->node,
-                /* whether there's time preservation or not */
-                &is_ts_fixed,
-                &err);
-        if (ts == (guint64) -1)
-        {
-            donna_app_show_error (ed->app, err,
-                    "ColumnType time: Cannot set '%s'", prop);
-            g_clear_error (&err);
-            goto done;
-        }
-    }
-    else
-        is_ts_fixed = FALSE;
 
     if (use_arr)
-    {
-        guint i = 0;
-
-        if (is_ref_unique)
-            set_prop (ed, prop, ed->arr->pdata[i++], ts);
-
-        for ( ; i < ed->arr->len; ++i)
-        {
-            if (!is_ts_fixed)
-            {
-                ts = get_ts (ed, fmt,
-                        (is_ref_focused) ? ed->node : ed->arr->pdata[i],
-                        ed->arr->pdata[i],
-                        NULL, &err);
-                if (ts == (guint64) -1)
-                {
-                    donna_app_show_error (ed->app, err,
-                            "ColumnType time: Cannot set '%s'", prop);
-                    g_clear_error (&err);
-                    continue;
-                }
-            }
-            set_prop (ed, prop, ed->arr->pdata[i], ts);
-        }
-    }
+        arr = g_ptr_array_ref (ed->arr);
     else
-        set_prop (ed, prop, ed->node, ts);
+    {
+        arr = g_ptr_array_sized_new (1);
+        g_ptr_array_add (arr, ed->node);
+    }
 
-done:
+    if (!set_value (ed->data, gtk_entry_get_text (ed->entry),
+            /* node for reference time */
+            (is_ref_focused) ? ed->node
+            : ((use_arr) ? ed->arr->pdata[0] : ed->node),
+            arr, ed->tree, &err))
+    {
+        donna_app_show_error (ed->app, err,
+                "ColumnType 'time': Operation failed");
+        g_clear_error (&err);
+    }
+
     if (ed->window)
         gtk_widget_destroy (ed->window);
 }
@@ -1130,6 +1185,36 @@ ct_time_edit (DonnaColumnType    *ct,
     gtk_widget_grab_focus ((GtkWidget *) ed->entry);
     donna_app_set_floating_window (((DonnaColumnTypeTime *) ct)->priv->app, win);
     return TRUE;
+}
+
+static gboolean
+ct_time_set_value (DonnaColumnType    *ct,
+                   gpointer            _data,
+                   GPtrArray          *nodes,
+                   const gchar        *value,
+                   DonnaNode          *node_ref,
+                   DonnaTreeView      *treeview,
+                   GError            **error)
+{
+    struct tv_col_data *data = _data;
+    guint i;
+
+    if (*value == '=')
+    {
+        if (!node_ref)
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    "ColumnType 'time': Prefix '=' to set_value given without reference");
+            return FALSE;
+        }
+        else
+            ++value;
+    }
+    else
+        node_ref = NULL;
+
+    return set_value (data, value, node_ref, nodes, treeview, error);
 }
 
 static GPtrArray *

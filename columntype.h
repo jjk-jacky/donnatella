@@ -25,6 +25,7 @@ typedef enum
     DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
     DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
     DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE,
+    DONNA_COLUMNTYPE_ERROR_PARTIAL_COMPLETION,
     DONNA_COLUMNTYPE_ERROR_OTHER,
 } DonnaColumnTypeError;
 
@@ -89,6 +90,13 @@ struct _DonnaColumnTypeInterface
                                              gpointer            re_data,
                                              DonnaTreeView      *treeview,
                                              GError            **error);
+    gboolean            (*set_value)        (DonnaColumnType    *ct,
+                                             gpointer            data,
+                                             GPtrArray          *nodes,
+                                             const gchar        *value,
+                                             DonnaNode          *node_ref,
+                                             DonnaTreeView      *treeview,
+                                             GError            **error);
     GPtrArray *         (*render)           (DonnaColumnType    *ct,
                                              gpointer            data,
                                              guint               index,
@@ -142,6 +150,13 @@ gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
                                                  GtkCellRenderer   **renderers,
                                                  renderer_edit_fn    renderer_edit,
                                                  gpointer            re_data,
+                                                 DonnaTreeView      *treeview,
+                                                 GError            **error);
+gboolean        donna_columntype_set_value      (DonnaColumnType    *ct,
+                                                 gpointer            data,
+                                                 GPtrArray          *nodes,
+                                                 const gchar        *value,
+                                                 DonnaNode          *node,
                                                  DonnaTreeView      *treeview,
                                                  GError            **error);
 GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,

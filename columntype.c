@@ -72,6 +72,21 @@ default_edit (DonnaColumnType    *ct,
 }
 
 static gboolean
+default_set_value (DonnaColumnType    *ct,
+                   gpointer            data,
+                   GPtrArray          *nodes,
+                   const gchar        *value,
+                   DonnaNode          *node_ref,
+                   DonnaTreeView      *treeview,
+                   GError            **error)
+{
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+            "ColumnType '%s': No editing supported",
+            donna_columntype_get_name (ct));
+    return FALSE;
+}
+
+static gboolean
 default_set_tooltip (DonnaColumnType    *ct,
                      gpointer            data,
                      guint               index,
@@ -121,6 +136,7 @@ donna_columntype_default_init (DonnaColumnTypeInterface *interface)
     interface->get_options_menu         = default_get_options_menu;
     interface->can_edit                 = default_can_edit;
     interface->edit                     = default_edit;
+    interface->set_value                = default_set_value;
     interface->set_tooltip              = default_set_tooltip;
 
     g_object_interface_install_property (interface,
@@ -298,6 +314,29 @@ donna_columntype_edit (DonnaColumnType    *ct,
 
     return (*interface->edit) (ct, data, node, renderers,
             renderer_edit, re_data, treeview, error);
+}
+
+gboolean
+donna_columntype_set_value (DonnaColumnType    *ct,
+                            gpointer            data,
+                            GPtrArray          *nodes,
+                            const gchar        *value,
+                            DonnaNode          *node_ref,
+                            DonnaTreeView      *treeview,
+                            GError            **error)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (!node_ref || DONNA_IS_NODE (node_ref), FALSE);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (treeview), FALSE);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->set_value != NULL, FALSE);
+
+    return (*interface->set_value) (ct, data, nodes, value, node_ref, treeview, error);
 }
 
 GPtrArray *

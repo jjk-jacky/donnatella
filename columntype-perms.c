@@ -95,6 +95,15 @@ struct filter_data
     guint       ref;
 };
 
+static struct _user *   get_user            (DonnaColumnTypePermsPrivate *priv,
+                                             uid_t                        uid);
+static struct _user *   get_user_from_name  (DonnaColumnTypePermsPrivate *priv,
+                                             const gchar                 *name);
+static struct _group *  get_group           (DonnaColumnTypePermsPrivate *priv,
+                                             gid_t                        gid);
+static struct _group *  get_group_from_name (DonnaColumnTypePermsPrivate *priv,
+                                             const gchar                 *name);
+
 static void             ct_perms_set_property       (GObject            *object,
                                                      guint               prop_id,
                                                      const GValue       *value,
@@ -137,6 +146,13 @@ static gboolean         ct_perms_edit               (DonnaColumnType    *ct,
                                                      gpointer            re_data,
                                                      DonnaTreeView      *treeview,
                                                      GError            **error);
+static gboolean         ct_perms_set_value          (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     GPtrArray          *nodes,
+                                                     const gchar        *value,
+                                                     DonnaNode          *node_ref,
+                                                     DonnaTreeView      *treeview,
+                                                     GError            **error);
 static GPtrArray *      ct_perms_render             (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -172,6 +188,7 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_options_menu         = ct_perms_get_options_menu;
     interface->can_edit                 = ct_perms_can_edit;
     interface->edit                     = ct_perms_edit;
+    interface->set_value                = ct_perms_set_value;
     interface->render                   = ct_perms_render;
     interface->set_tooltip              = ct_perms_set_tooltip;
     interface->node_cmp                 = ct_perms_node_cmp;
@@ -554,31 +571,45 @@ box_changed (GtkComboBox *box, struct box_changed *bc)
     gtk_toggle_button_set_active (bc->toggle, TRUE);
 }
 
-static void
+static gboolean
+set_value (const gchar   *prop,
+           guint          value,
+           DonnaNode     *node,
+           DonnaTreeView *tree,
+           GError       **error)
+{
+    GValue v = G_VALUE_INIT;
+
+    g_value_init (&v, G_TYPE_UINT);
+    g_value_set_uint (&v, value);
+    if (!donna_tree_view_set_node_property (tree, node, prop, &v, error))
+    {
+        gboolean is_mode = streq (prop, "mode");
+        gchar *fl = donna_node_get_full_location (node);
+        g_prefix_error (error, (is_mode)
+                ? "ColumnType 'perms': Unable to set property '%s' for '%s' to %o"
+                : "ColumnType 'perms': Unable to set property '%s' for '%s' to %d",
+                prop, fl, value);
+        g_free (fl);
+        return FALSE;
+    }
+    g_value_unset (&v);
+    return TRUE;
+}
+
+static inline void
 set_prop (struct editing_data   *data,
           DonnaNode             *node,
           const gchar           *prop,
           guint                  value)
 {
     GError *err = NULL;
-    GValue v = G_VALUE_INIT;
 
-    g_value_init (&v, G_TYPE_UINT);
-    g_value_set_uint (&v, value);
-    if (!donna_tree_view_set_node_property (data->tree, node,
-                prop, &v, &err))
+    if (!set_value (prop, value, node, data->tree, &err))
     {
-        gboolean is_mode = streq (prop, "mode");
-        gchar *fl = donna_node_get_full_location (node);
-        donna_app_show_error (data->app, err,
-                (is_mode)
-                ? "ColumnType perms: Unable to set property '%s' for '%s' to %o"
-                : "ColumnType perms: Unable to set property '%s' for '%s' to %d",
-                prop, fl, value);
-        g_free (fl);
+        donna_app_show_error (data->app, err, NULL);
         g_clear_error (&err);
     }
-    g_value_unset (&v);
 }
 
 static void
@@ -1091,6 +1122,342 @@ ct_perms_edit (DonnaColumnType    *ct,
     gtk_widget_show_all (ed->window);
     donna_app_set_floating_window (((DonnaColumnTypePerms *) ct)->priv->app, win);
     return TRUE;
+}
+
+static gboolean
+ct_perms_set_value (DonnaColumnType    *ct,
+                    gpointer            data,
+                    GPtrArray          *nodes,
+                    const gchar        *value,
+                    DonnaNode          *node_ref,
+                    DonnaTreeView      *treeview,
+                    GError            **error)
+{
+    GError *err = NULL;
+    DonnaColumnTypePermsPrivate *priv;
+    GString *str = NULL;
+    const gchar *s;
+    guint unit;
+    guint ref;
+    guint ref_add; /* for perms that are added, not set */
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), FALSE);
+    priv = ((DonnaColumnTypePerms *) ct)->priv;
+
+    s = value;
+
+    skip_blank (s);
+    switch (*s)
+    {
+        case UNIT_UID:
+        case UNIT_USER:
+        case UNIT_GID:
+        case UNIT_GROUP:
+        case UNIT_PERMS:
+            unit = *s;
+            break;
+
+        case UNIT_SELF:
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    "Cannot use unit SELF ('s') to set value");
+            return FALSE;
+
+        default:
+            unit = UNIT_PERMS;
+            break;
+    }
+
+    skip_blank (s);
+    if (*s == '\0')
+    {
+        DonnaNodeHasValue has;
+
+        if (!node_ref)
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    "Invalid syntax: no value given");
+            return FALSE;
+        }
+
+        if (unit == UNIT_UID || unit == UNIT_USER)
+        {
+            has = donna_node_get_uid (node_ref, TRUE, &ref);
+            if (has != DONNA_NODE_VALUE_SET)
+            {
+                gchar *fl = donna_node_get_full_location (node_ref);
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "Failed to import UID from '%s'",
+                        fl);
+                g_free (fl);
+                return FALSE;
+            }
+        }
+        else if (unit == UNIT_GID || unit == UNIT_GROUP)
+        {
+            has = donna_node_get_gid (node_ref, TRUE, &ref);
+            if (has != DONNA_NODE_VALUE_SET)
+            {
+                gchar *fl = donna_node_get_full_location (node_ref);
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "Failed to import GID from '%s'",
+                        fl);
+                g_free (fl);
+                return FALSE;
+            }
+        }
+        else
+        {
+            has = donna_node_get_mode (node_ref, TRUE, &ref);
+            if (has != DONNA_NODE_VALUE_SET)
+            {
+                gchar *fl = donna_node_get_full_location (node_ref);
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "Failed to import permissions from '%s'",
+                        fl);
+                g_free (fl);
+                return FALSE;
+            }
+            ref = (ref & (S_IRWXU | S_IRWXG | S_IRWXO));
+        }
+
+        goto ready;
+    }
+
+    switch (unit)
+    {
+        case UNIT_UID:
+        case UNIT_GID:
+            ref = g_ascii_strtoull (s, NULL, 10);
+            goto ready;
+
+        case UNIT_USER:
+            {
+                struct _user *u;
+
+                u = get_user_from_name (priv, s);
+                if (!u)
+                {
+                    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                            DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                            "Unable to find user '%s'", s);
+                    return FALSE;
+                }
+                unit = UNIT_UID;
+                ref = u->id;
+                goto ready;
+            }
+
+        case UNIT_GROUP:
+            {
+                struct _group *g;
+
+                g = get_group_from_name (priv, s);
+                if (!g)
+                {
+                    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                            DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                            "Unable to find group '%s'", s);
+                    return FALSE;
+                }
+                unit = UNIT_GID;
+                ref = g->id;
+                goto ready;
+            }
+
+        case UNIT_PERMS:
+        case UNIT_SELF:
+            /* silence warnings */
+            break;
+    }
+
+    if (*s >= '0' && *s <= '9')
+    {
+        ref = g_ascii_strtoull (s, NULL, 8);
+        goto ready;
+    }
+
+    ref_add = 0;
+    for (;;)
+    {
+        gint m = 0;
+        gboolean add = FALSE;
+
+        if (*s == 'u')
+            m = 0100;
+        else if (*s == 'g')
+            m = 010;
+        else if (*s == 'o')
+            m = 01;
+        else if (*s == 'a')
+            m = 0111;
+        else if (*s == '\0')
+            break;
+        else
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    "Invalid syntax, expected 'u', 'g', 'o', 'a' or EOL: %s",
+                    s);
+            return FALSE;
+        }
+        ++s;
+        if (*s == '+')
+            add = TRUE;
+        else if (*s != '=')
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    "Invalid syntax, expected '=' or '+': %s'",
+                    s);
+            return FALSE;
+        }
+        ++s;
+        for (;;)
+        {
+            guint *r = (add) ? &ref_add : &ref;
+
+            if (*s == 'r')
+                *r += 04 * m;
+            else if (*s == 'w')
+                *r += 02 * m;
+            else if (*s == 'x')
+                *r += 01 * m;
+            else if (*s == ',')
+            {
+                ++s;
+                break;
+            }
+            else if (*s == '\0')
+                break;
+            else
+            {
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                        "Invalid syntax, expected 'r', 'w', 'x', ',' or EOL: %s",
+                        s);
+                return FALSE;
+            }
+            ++s;
+        }
+    }
+
+ready:
+    for (i = 0; i < nodes->len; ++i)
+    {
+
+        if (!ct_perms_can_edit (ct, data, nodes->pdata[i], &err))
+        {
+            gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+            if (!str)
+                str = g_string_new (NULL);
+
+            g_string_append_printf (str, "\n- Cannot set value on '%s': %s",
+                    fl, (err) ? err->message : "(no error message)");
+            g_free (fl);
+            g_clear_error (&err);
+
+            continue;
+        }
+
+        switch (unit)
+        {
+            case UNIT_UID:
+                if (!set_value ("uid", ref, nodes->pdata[i], treeview, &err))
+                {
+                    gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+                    if (!str)
+                        str = g_string_new (NULL);
+
+                    g_string_append_printf (str, "\n- Failed to set user on '%s': %s",
+                            fl, (err) ? err->message : "(no error message)");
+                    g_free (fl);
+                    g_clear_error (&err);
+                }
+                break;
+
+            case UNIT_GID:
+                if (!set_value ("gid", ref, nodes->pdata[i], treeview, &err))
+                {
+                    gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+                    if (!str)
+                        str = g_string_new (NULL);
+
+                    g_string_append_printf (str, "\n- Failed to set group on '%s': %s",
+                            fl, (err) ? err->message : "(no error message)");
+                    g_free (fl);
+                    g_clear_error (&err);
+                }
+                break;
+
+            default: /* UNIT_PERMS */
+                if (ref_add > 0)
+                {
+                    mode_t m;
+
+                    if (donna_node_get_mode (nodes->pdata[i], TRUE, &m)
+                            != DONNA_NODE_VALUE_SET)
+                    {
+                        gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+                        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                                DONNA_COLUMNTYPE_ERROR_OTHER,
+                                "ColumnType 'perms': "
+                                "Couldn't update permissions of '%s', "
+                                "failed to get current value",
+                                fl);
+                        g_free (fl);
+                        return FALSE;
+                    }
+                    m |= ref_add;
+                    if (!set_value ("mode", m, nodes->pdata[i], treeview, error))
+                    {
+                        gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+                        if (!str)
+                            str = g_string_new (NULL);
+
+                        g_string_append_printf (str,
+                                "\n- Failed to set permissions on '%s': %s",
+                                fl, (err) ? err->message : "(no error message)");
+                        g_free (fl);
+                        g_clear_error (&err);
+
+                        continue;
+                    }
+                }
+                if (!set_value ("mode", ref, nodes->pdata[i], treeview, &err))
+                {
+                    gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+
+                    if (!str)
+                        str = g_string_new (NULL);
+
+                    g_string_append_printf (str,
+                            "\n- Failed to set permissions on '%s': %s",
+                            fl, (err) ? err->message : "(no error message)");
+                    g_free (fl);
+                    g_clear_error (&err);
+                }
+        }
+    }
+
+    if (!str)
+        return TRUE;
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_PARTIAL_COMPLETION,
+            "Some operations failed :\n%s", str->str);
+    g_string_free (str, TRUE);
+
+    return FALSE;
 }
 
 static struct _user *

@@ -62,6 +62,13 @@ static gboolean         ct_text_edit                (DonnaColumnType    *ct,
                                                      gpointer            re_data,
                                                      DonnaTreeView      *treeview,
                                                      GError            **error);
+static gboolean         ct_text_set_value           (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     GPtrArray          *nodes,
+                                                     const gchar        *value,
+                                                     DonnaNode          *node_ref,
+                                                     DonnaTreeView      *treeview,
+                                                     GError            **error);
 static GPtrArray *      ct_text_render              (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      guint               index,
@@ -90,6 +97,7 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_props                = ct_text_get_props;
     interface->can_edit                 = ct_text_can_edit;
     interface->edit                     = ct_text_edit;
+    interface->set_value                = ct_text_set_value;
     interface->render                   = ct_text_render;
     interface->node_cmp                 = ct_text_node_cmp;
     interface->is_match_filter          = ct_text_is_match_filter;
@@ -275,6 +283,31 @@ struct editing_data
     guint editing_done_sid;
 };
 
+static gboolean
+set_value (const gchar      *property,
+           const gchar      *value,
+           DonnaNode        *node,
+           DonnaTreeView    *tree,
+           GError          **error)
+{
+    GValue v = G_VALUE_INIT;
+
+    g_value_init (&v, G_TYPE_STRING);
+    g_value_set_string (&v, value);
+    if (!donna_tree_view_set_node_property (tree, node, property, &v, error))
+    {
+        gchar *fl = donna_node_get_full_location (node);
+        g_prefix_error (error, "ColumnType 'text': "
+                "Unable to set property '%s' for '%s' to '%s'",
+                property, fl, value);
+        g_free (fl);
+        g_value_unset (&v);
+        return FALSE;
+    }
+    g_value_unset (&v);
+    return TRUE;
+}
+
 static void
 editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
 {
@@ -303,18 +336,11 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
         return;
     }
 
-    g_value_init (&v, G_TYPE_STRING);
-    g_value_set_string (&v, gtk_entry_get_text ((GtkEntry *) editable));
-    if (!donna_tree_view_set_node_property (ed->tree, ed->node,
-                ed->data->property, &v, &err))
+    if (!set_value (ed->data->property, gtk_entry_get_text ((GtkEntry *) editable),
+            ed->node, ed->tree, &err))
     {
-        gchar *fl = donna_node_get_full_location (ed->node);
-        donna_app_show_error (ed->cttext->priv->app, err,
-                "ColumnType 'text': Unable to set property '%s' for '%s' to '%s'",
-                ed->data->property, fl, g_value_get_string (&v));
-        g_free (fl);
+        donna_app_show_error (ed->cttext->priv->app, err, NULL);
         g_clear_error (&err);
-        g_value_unset (&v);
         g_free (ed);
         return;
     }
@@ -380,6 +406,31 @@ ct_text_edit (DonnaColumnType    *ct,
         return FALSE;
     }
     return TRUE;
+}
+
+static gboolean
+ct_text_set_value (DonnaColumnType    *ct,
+                   gpointer            _data,
+                   GPtrArray          *nodes,
+                   const gchar        *value,
+                   DonnaNode          *node_ref,
+                   DonnaTreeView      *treeview,
+                   GError            **error)
+{
+    struct tv_col_data *data = _data;
+
+    if (nodes->len != 1)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+                "ColumnType 'text': Can only set value to one node at a time");
+        return FALSE;
+    }
+
+    if (!ct_text_can_edit (ct, _data, nodes->pdata[0], error))
+        return FALSE;
+
+    return set_value (data->property, value, nodes->pdata[0], treeview, error);
 }
 
 static GPtrArray *

@@ -9518,6 +9518,72 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     return TRUE;
 }
 
+gboolean
+donna_tree_view_column_set_value (DonnaTreeView      *tree,
+                                  DonnaTreeRowId     *rowid,
+                                  gboolean            to_focused,
+                                  const gchar        *column,
+                                  const gchar        *value,
+                                  DonnaTreeRowId     *rowid_ref,
+                                  GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GPtrArray *nodes;
+    struct column *_col;
+    DonnaNode *node_ref;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    g_return_val_if_fail (rowid != NULL, NULL);
+    g_return_val_if_fail (column != NULL, NULL);
+    priv = tree->priv;
+
+    _col = get_column_by_name (tree, column);
+    if (!_col)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
+                "Treeview '%s': Cannot set column value, unknown column '%s'",
+                priv->name, column);
+        return FALSE;
+    }
+
+    nodes = donna_tree_view_get_nodes (tree, rowid, to_focused, error);
+
+    if (rowid_ref)
+    {
+        row_id_type type;
+        GtkTreeIter iter;
+
+        type = convert_row_id_to_iter (tree, rowid_ref, &iter);
+        if (type != ROW_ID_ROW)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                    "Treeview '%s': Cannot set column value, invalid reference row-id",
+                    priv->name);
+            g_ptr_array_unref (nodes);
+            return FALSE;
+        }
+
+        gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                DONNA_TREE_VIEW_COL_NODE,   &node_ref,
+                -1);
+    }
+    else
+        node_ref = NULL;
+
+    ret = donna_columntype_set_value (_col->ct, _col->ct_data, nodes, value,
+            node_ref, tree, error);
+    if (!ret)
+        g_prefix_error (error, "Treeview '%s': Failed to set column value: ",
+                priv->name);
+
+    g_ptr_array_unref (nodes);
+    donna_g_object_unref (node_ref);
+    return ret;
+}
+
 struct refresh_list
 {
     DonnaTreeView *tree;

@@ -920,6 +920,27 @@ cmd_tree_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaTreeRowId *rid = args[1];
+    gboolean to_focused = GPOINTER_TO_INT (args[2]); /* opt */
+    const gchar *column = args[3];
+    const gchar *value = args[4];
+    DonnaTreeRowId *rid_ref = args[5]; /* opt */
+
+    if (!donna_tree_view_column_set_value (tree, rid, to_focused, column,
+                value, rid_ref, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1973,6 +1994,16 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (tree_column_edit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_column_set_value, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
