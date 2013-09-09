@@ -1879,7 +1879,7 @@ ct_perms_is_match_filter (DonnaColumnType    *ct,
                 {
                     g_set_error (error, DONNA_FILTER_ERROR,
                             DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                            "Invalid syntax, expected 'g', 'o', 'a' or EOL: %s",
+                            "Invalid syntax, expected 'u', 'g', 'o', 'a' or EOL: %s",
                             filter);
                     g_free (fd);
                     *filter_data = NULL;
