@@ -7,6 +7,7 @@ enum
     PROP_0,
 
     PROP_IS_COMBINED,
+    PROP_IS_COMBINED_SENSITIVE,
     PROP_IS_LABEL_BOLD,
 
     NB_PROPS
@@ -21,6 +22,7 @@ enum
 struct _DonnaImageMenuItemPrivate
 {
     gboolean is_combined;
+    gboolean is_combined_sensitive;
     gboolean is_label_bold;
     gint item_width;
     guint sid_button_release;
@@ -87,6 +89,12 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
                 FALSE,   /* default */
                 G_PARAM_READWRITE);
 
+    donna_image_menu_item_props[PROP_IS_COMBINED_SENSITIVE] =
+        g_param_spec_boolean ("is-combined-sensitive", "is-combined-sensitive",
+                "Whether or not the item part of the combine item is sensitive",
+                TRUE,   /* default */
+                G_PARAM_READWRITE);
+
     donna_image_menu_item_props[PROP_IS_LABEL_BOLD] =
         g_param_spec_boolean ("is-label-bold", "is-label-bold",
                 "Whether or not the label if shown in bold",
@@ -122,6 +130,8 @@ donna_image_menu_item_init (DonnaImageMenuItem *item)
             "button-release-event", (GCallback) menu_item_release_cb, item);
     item->priv->sid_notify_image = g_signal_connect (item, "notify::image",
             (GCallback) menu_item_notify_image_cb, item);
+
+    item->priv->is_combined_sensitive = TRUE;
 }
 
 static void
@@ -150,9 +160,14 @@ donna_image_menu_item_get_property (GObject        *object,
                                     GParamSpec     *pspec)
 {
     if (prop_id == PROP_IS_COMBINED)
-        g_value_set_boolean (value, ((DonnaImageMenuItem *) object)->priv->is_combined);
+        g_value_set_boolean (value,
+                ((DonnaImageMenuItem *) object)->priv->is_combined);
+    else if (prop_id == PROP_IS_COMBINED_SENSITIVE)
+        g_value_set_boolean (value,
+                ((DonnaImageMenuItem *) object)->priv->is_combined_sensitive);
     else if (prop_id == PROP_IS_LABEL_BOLD)
-        g_value_set_boolean (value, ((DonnaImageMenuItem *) object)->priv->is_label_bold);
+        g_value_set_boolean (value,
+                ((DonnaImageMenuItem *) object)->priv->is_label_bold);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -165,6 +180,9 @@ donna_image_menu_item_set_property (GObject        *object,
 {
     if (prop_id == PROP_IS_COMBINED)
         donna_image_menu_item_set_is_combined ((DonnaImageMenuItem *) object,
+                g_value_get_boolean (value));
+    else if (prop_id == PROP_IS_COMBINED_SENSITIVE)
+        donna_image_menu_item_set_is_combined_sensitive ((DonnaImageMenuItem *) object,
                 g_value_get_boolean (value));
     if (prop_id == PROP_IS_LABEL_BOLD)
         donna_image_menu_item_set_label_bold ((DonnaImageMenuItem *) object,
@@ -216,7 +234,7 @@ menu_item_release_cb (GtkWidget             *widget,
     /* doesn't get triggered if there's a submenu, so we know we don't have one
      * yet */
 
-    if (!priv->is_combined)
+    if (!priv->is_combined || !priv->is_combined_sensitive)
         return FALSE;
 
     if ((gint) event->x <= priv->item_width)
@@ -247,7 +265,7 @@ parent_button_release_cb (GtkWidget             *parent,
     DonnaImageMenuItemPrivate *priv = item->priv;
     GtkWidget *w;
 
-    if (!priv->is_combined)
+    if (!priv->is_combined || !priv->is_combined_sensitive)
         return FALSE;
 
     w = gtk_get_event_widget ((GdkEvent *) event);
@@ -406,11 +424,13 @@ struct draw
 {
     GtkContainer *container;
     cairo_t *cr;
+    gboolean is_sensitive;
 };
 
 static void
 draw_child (GtkWidget *widget, struct draw *data)
 {
+    gtk_widget_set_sensitive (widget, data->is_sensitive);
     gtk_container_propagate_draw (data->container, widget, data->cr);
 }
 
@@ -460,8 +480,11 @@ donna_image_menu_item_draw (GtkWidget          *widget,
          * used as non-highlighted separation between the two */
         priv->item_width = w - arrow_size - 2 * padding.right - padding.left;
 
-        gtk_render_background (context, cr, x, y, priv->item_width, h);
-        gtk_render_frame (context, cr, x, y, priv->item_width, h);
+        if (priv->is_combined_sensitive)
+        {
+            gtk_render_background (context, cr, x, y, priv->item_width, h);
+            gtk_render_frame (context, cr, x, y, priv->item_width, h);
+        }
 
         gtk_render_background (context, cr,
                 x + priv->item_width + padding.right, y,
@@ -531,6 +554,7 @@ donna_image_menu_item_draw (GtkWidget          *widget,
      * just call propagate_draw on all children */
     data.container = (GtkContainer *) widget;
     data.cr = cr;
+    data.is_sensitive = priv->is_combined_sensitive;
     gtk_container_forall ((GtkContainer *) widget, (GtkCallback) draw_child, &data);
 
     return FALSE;
@@ -564,6 +588,29 @@ donna_image_menu_item_get_is_combined (DonnaImageMenuItem *item)
 {
     g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
     return item->priv->is_combined;
+}
+
+void
+donna_image_menu_item_set_is_combined_sensitive (DonnaImageMenuItem *item,
+                                                 gboolean            combined_sensitive)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->is_combined_sensitive != combined_sensitive)
+    {
+        priv->is_combined_sensitive = combined_sensitive;
+        g_object_notify ((GObject *) item, "is-combined-sensitive");
+    }
+}
+
+gboolean
+donna_image_menu_item_get_is_combined_sensitive (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
+    return item->priv->is_combined_sensitive;
 }
 
 void

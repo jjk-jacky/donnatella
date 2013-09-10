@@ -2027,8 +2027,16 @@ submenu_get_children_cb (DonnaTask           *task,
         if (ls->mc->submenus == TYPE_ENABLED)
             gtk_widget_set_sensitive ((GtkWidget *) ls->item, FALSE);
         else if (ls->mc->submenus == TYPE_COMBINE)
+        {
             donna_image_menu_item_set_is_combined ((DonnaImageMenuItem *) ls->item,
                     FALSE);
+            if (!donna_image_menu_item_get_is_combined_sensitive (
+                        (DonnaImageMenuItem *) ls->item))
+            {
+                gtk_widget_set_sensitive ((GtkWidget *) ls->item, FALSE);
+                gtk_menu_item_deselect (ls->item);
+            }
+        }
         free_load_submenu (ls);
         return;
     }
@@ -2146,6 +2154,16 @@ load_menu (struct menu_click *mc)
             {
                 if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN && !g_value_get_boolean (&v))
                     gtk_widget_set_sensitive (item, FALSE);
+                g_value_unset (&v);
+            }
+
+            donna_node_get (node, TRUE, "menu-is-combined-sensitive", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
+                    donna_image_menu_item_set_is_combined_sensitive (
+                            (DonnaImageMenuItem *) item,
+                            g_value_get_boolean (&v));
                 g_value_unset (&v);
             }
 

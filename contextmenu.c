@@ -301,7 +301,7 @@ next:
                     info.desc,
                     DONNA_NODE_CONTAINER,
                     /* ignore info.is_sensitive otherwise we couldn't get the
-                     * submenu! */
+                     * submenu! -- Also see menu-is-combined-sensitive below */
                     TRUE,
                     DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     (internal_fn) container_children_cb, children,
@@ -317,6 +317,26 @@ next:
                 g_ptr_array_unref (children);
                 g_ptr_array_unref (nodes);
                 return NULL;
+            }
+
+            /* set sensitivity for the item part only (when combine) */
+            if (!info.is_sensitive)
+            {
+                GError *err = NULL;
+
+                g_value_init (&v, G_TYPE_BOOLEAN);
+                g_value_set_boolean (&v, FALSE);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-is-combined-sensitive",
+                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set item sensitivity for "
+                            "item '%s' in section '%s': %s", b, section,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
             }
 
             if (info.is_menu_bold)

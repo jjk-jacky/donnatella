@@ -11505,8 +11505,7 @@ tree_context_get_item_info (const gchar             *section,
     }
     else if (streq (section, "refresh"))
     {
-        info->is_visible = G_LIKELY (priv->location != NULL);
-        info->is_sensitive = TRUE;
+        info->is_visible = info->is_sensitive = G_LIKELY (priv->location != NULL);
         info->icon_name = "view-refresh";
         if (streq (item, "visible"))
         {
@@ -11649,6 +11648,7 @@ tree_context_get_item_info (const gchar             *section,
         {
             /* generic container for a submenu */
 
+            info->is_sensitive = TRUE;
             if (sd->len <= 1)
             {
                 if (sd->len == 0 || *sd->reg == '_')
@@ -11752,6 +11752,7 @@ tree_context_get_item_info (const gchar             *section,
                 info->name = g_strdup_printf ("Edit %s", s);
                 g_free (s);
                 info->free_name = TRUE;
+                info->is_sensitive = TRUE;
             }
             else
                 info->name = "Edit...";
