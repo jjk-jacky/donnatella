@@ -2112,6 +2112,7 @@ static GtkWidget *
 load_menu (struct menu_click *mc)
 {
     GtkWidget *menu;
+    guint last_sep;
     guint i;
 
     if (mc->is_sorted)
@@ -2119,6 +2120,13 @@ load_menu (struct menu_click *mc)
 
     menu = gtk_menu_new ();
     g_signal_connect_swapped (menu, "destroy", (GCallback) free_menu_click, mc);
+
+    /* in case the last few "nodes" are all NULLs, make sure we don't feature
+     * any separators */
+    for (last_sep = mc->nodes->len - 1;
+            last_sep > 0 && !mc->nodes->pdata[last_sep];
+            --last_sep)
+        ;
 
     for (i = 0; i < mc->nodes->len; ++i)
     {
@@ -2131,7 +2139,7 @@ load_menu (struct menu_click *mc)
         if (!node)
         {
             /* no separator as first or last item.. */
-            if (G_LIKELY (i > 0 && i < mc->nodes->len - 1
+            if (G_LIKELY (i > 0 && i < last_sep
                         /* ..and no separator after a separator */
                         && mc->nodes->pdata[i - 1]))
                 item = gtk_separator_menu_item_new ();
