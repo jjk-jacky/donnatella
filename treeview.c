@@ -11344,29 +11344,65 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
     return ret;
 }
 
+static gchar *
+tree_context_get_alias (const gchar             *alias,
+                        const gchar             *extra,
+                        DonnaContextReference    reference,
+                        const gchar             *conv_flags,
+                        conv_flag_fn             conv_fn,
+                        struct conv             *conv,
+                        GError                 **error)
+{
+    DonnaTreeView *tree = conv->tree;
+    DonnaTreeViewPrivate *priv = tree->priv;
+
+    if (streq (alias, "column_edit"))
+    {
+        if (priv->columns)
+        {
+            GString *str = g_string_new (NULL);
+            GSList *l;
+
+            for (l = priv->columns; l; l = l->next)
+            {
+                g_string_append (str, ":column_edit.");
+                g_string_append (str, ((struct column *) l->data)->name);
+                g_string_append_c (str, ',');
+            }
+            g_string_truncate (str, str->len - 1);
+            return g_string_free (str, FALSE);
+        }
+        else
+            /* this will simply result in a non-visible item, i.e. no item */
+            return g_strdup (":column_edit.name");
+    }
+
+    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+            "Unknown user alias '%s'", alias);
+    return NULL;
+}
+
 static gboolean
-tree_context_get_item_info (const gchar             *section,
-                            const gchar             *item,
+tree_context_get_item_info (const gchar             *item,
+                            const gchar             *extra,
                             DonnaContextReference    reference,
                             const gchar             *conv_flags,
                             conv_flag_fn             conv_fn,
                             struct conv             *conv,
-                            gpointer                 section_data,
                             DonnaContextInfo        *info,
                             GError                 **error)
 {
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
 
-    if (streq (section, "go"))
+    if (streqn (item, "go.", 3))
     {
+        item += 3;
         info->is_sensitive = TRUE;
+
         if (streq (item, "tree_root"))
         {
-            struct {
-                const gchar *tree;
-                gint len;
-            } *sd = section_data;
             DonnaTreeView *t;
             GtkTreeIter iter;
 
@@ -11374,21 +11410,13 @@ tree_context_get_item_info (const gchar             *section,
             info->icon_name = "go-up";
 
             /* no tree given & we're not a tree, not visible */
-            if (!sd && !is_tree (tree))
+            if (!extra && !is_tree (tree))
                 return TRUE;
 
             /* if we're not a tree, get the given one */
             if (!is_tree (tree))
             {
-                gchar buf[32], *b = buf;
-
-                if (snprintf (buf, 32, "%.*s", sd->len, sd->tree) >= 32)
-                    b = g_strdup_printf ("%.*s", sd->len, sd->tree);
-
-                t = donna_app_get_treeview (priv->app, b);
-                if (b != buf)
-                    g_free (b);
-
+                t = donna_app_get_treeview (priv->app, extra);
                 if (!t)
                     return TRUE;
 
@@ -11415,8 +11443,7 @@ tree_context_get_item_info (const gchar             *section,
                 if (t != tree)
                     g_object_unref (t);
 
-                info->trigger = g_strdup_printf ("command:tree_go_root (%.*s)",
-                        sd->len, sd->tree);
+                info->trigger = g_strdup_printf ("command:tree_go_root (%s)", extra);
                 info->free_trigger = TRUE;
             }
         }
@@ -11486,27 +11513,27 @@ tree_context_get_item_info (const gchar             *section,
             info->trigger = g_strdup ("command:tree_history_move (%o, forward)");
             info->free_trigger = TRUE;
         }
-        else if (*item == '\0')
-        {
-            /* generic container for a submenu */
-            info->name = "Go...";
-            info->icon_name = "go-jump";
-        }
         else
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item '%s' in section '%s'",
-                    priv->name, item, section);
-            return FALSE;
-        }
+            goto err;
 
         return TRUE;
     }
-    else if (streq (section, "refresh"))
+    else if (streqn (item, "refresh", 7))
     {
         info->is_visible = info->is_sensitive = G_LIKELY (priv->location != NULL);
         info->icon_name = "view-refresh";
+
+        if (item[7] == '\0')
+        {
+            info->name = "Refresh";
+            info->trigger = g_strdup ("command:tree_refresh (%o, normal)");
+            info->free_trigger = TRUE;
+            return TRUE;
+        }
+        else if (item[7] != '.')
+            goto err;
+
+        item += 8;
         if (streq (item, "visible"))
         {
             info->name = "Refresh (Visible)";
@@ -11519,45 +11546,24 @@ tree_context_get_item_info (const gchar             *section,
             info->trigger = g_strdup ("command:tree_refresh (%o, simple)");
             info->free_trigger = TRUE;
         }
-        else if (streq (item, "normal"))
-        {
-            info->name = "Refresh";
-            info->trigger = g_strdup ("command:tree_refresh (%o, normal)");
-            info->free_trigger = TRUE;
-        }
         else if (streq (item, "reload"))
         {
             info->name = "Refresh (Reload)";
             info->trigger = g_strdup ("command:tree_refresh (%o, reload)");
             info->free_trigger = TRUE;
         }
-        else if (*item == '\0')
-        {
-            /* generic container for a submenu */
-            info->name = "Refresh...";
-        }
         else
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item '%s' in section '%s'",
-                    priv->name, item, section);
-            return FALSE;
-        }
+            goto err;
 
         return TRUE;
     }
-    else if (streq (section, "register"))
+    else if (streqn (item, "register", 8))
     {
         DonnaTask *task;
         DonnaNode *node;
         DonnaNodeHasValue has;
-        GValue v = G_VALUE_INIT;
-        struct {
-            const gchar *reg;
-            gint len;
-        } *sd = section_data;
         gchar buf[64], *b = buf;
+        GValue v = G_VALUE_INIT;
         enum {
             ON_NOTHING = 0,
             ON_SEL,
@@ -11565,6 +11571,30 @@ tree_context_get_item_info (const gchar             *section,
             ON_REG,
         } on = ON_NOTHING;
 
+        if (!extra)
+            extra = "";
+
+        if (item[8] == '\0')
+        {
+            /* generic container for a submenu */
+
+            info->is_sensitive = TRUE;
+            if (!extra || streq (extra, "_"))
+                info->name = "Register";
+            else if (streq (extra, "+"))
+                info->name = "Clipboard";
+            else
+            {
+                info->name = g_strdup_printf ("Register '%s'", extra);
+                info->free_name = TRUE;
+            }
+            info->icon_name = "edit-copy";
+            return TRUE;
+        }
+        else if (item[8] != '.')
+            goto err;
+
+        item += 9;
         info->is_visible = TRUE;
         if ((reference & DONNA_CONTEXT_REF_SELECTED)
                 || (!(reference & DONNA_CONTEXT_REF_NOT_SELECTED)
@@ -11578,64 +11608,62 @@ tree_context_get_item_info (const gchar             *section,
             info->is_sensitive = on != ON_NOTHING;
             if (on == ON_SEL)
                 info->trigger = g_strdup_printf (
-                        "command:register_set (%.*s, cut, "
+                        "command:register_set (%s, cut, "
                         "@tree_get_nodes (%%o, :selected))",
-                        sd->len, sd->reg);
+                        extra);
             else if (on == ON_REF)
                 info->trigger = g_strdup_printf (
-                        "command:register_set (%.*s, cut, "
+                        "command:register_set (%s, cut, "
                         "@tree_get_nodes (%%o, %r))",
-                        sd->len, sd->reg);
+                        extra);
         }
         else if (streq (item, "copy"))
         {
             info->is_sensitive = on != ON_NOTHING;
             if (on == ON_SEL)
                 info->trigger = g_strdup_printf (
-                        "command:register_set (%.*s, copy, "
+                        "command:register_set (%s, copy, "
                         "@tree_get_nodes (%%o, :selected))",
-                        sd->len, sd->reg);
+                        extra);
             else if (on == ON_REF)
                 info->trigger = g_strdup_printf (
-                        "command:register_set (%.*s, copy, "
+                        "command:register_set (%s, copy, "
                         "@tree_get_nodes (%%o, %r))",
-                        sd->len, sd->reg);
+                        extra);
         }
         else if (streq (item, "append"))
         {
             info->is_sensitive = on != ON_NOTHING;
             if (on == ON_SEL)
                 info->trigger = g_strdup_printf (
-                        "command:register_add_nodes (%.*s, "
+                        "command:register_add_nodes (%s, "
                         "@tree_get_nodes (%%o, :selected))",
-                        sd->len, sd->reg);
+                        extra);
             else if (on == ON_REF)
                 info->trigger = g_strdup_printf (
-                        "command:register_add_nodes (%.*s, "
+                        "command:register_add_nodes (%s, "
                         "@tree_get_nodes (%%o, %%r))",
-                        sd->len, sd->reg);
+                        extra);
         }
         else if (streq (item, "paste") || streq (item, "paste_copy")
                 || streq (item, "paste_move") || streq (item, "paste_new_folder"))
         {
-            if (G_UNLIKELY (!priv->location))
-                info->is_sensitive = FALSE;
-            else
+            gchar *dest = NULL;
+
+            on = ON_REG;
+
+            if ((reference & DONNA_CONTEXT_REF_NOT_SELECTED)
+                    && donna_node_get_node_type (conv->row->node)
+                    == DONNA_NODE_CONTAINER)
+                dest = donna_node_get_full_location (conv->row->node);
+            else if (G_LIKELY (priv->location))
+                dest = donna_node_get_full_location (priv->location);
+
+            if (dest)
             {
-                gchar *dest;
-
-                on = ON_REG;
-
-                if ((reference & DONNA_CONTEXT_REF_NOT_SELECTED)
-                        && donna_node_get_node_type (conv->row->node)
-                        == DONNA_NODE_CONTAINER)
-                    dest = donna_node_get_full_location (conv->row->node);
-                else
-                    dest = donna_node_get_full_location (priv->location);
-
                 info->trigger = g_strdup_printf (
-                        "command:register_nodes_io (%.*s, %s, %s, %d)",
-                        sd->len, sd->reg,
+                        "command:register_nodes_io (%s, %s, %s, %d)",
+                        extra,
                         (streq (item, "paste_copy")) ? "copy"
                         : (streq (item, "paste_move")) ? "move" : "auto",
                         dest,
@@ -11644,37 +11672,11 @@ tree_context_get_item_info (const gchar             *section,
                 g_free (dest);
             }
         }
-        else if (*item == '\0')
-        {
-            /* generic container for a submenu */
-
-            info->is_sensitive = TRUE;
-            if (sd->len <= 1)
-            {
-                if (sd->len == 0 || *sd->reg == '_')
-                    info->name = "Register";
-                else if (*sd->reg == '+')
-                    info->name = "Clipboard";
-            }
-            if (!info->name)
-            {
-                info->name = g_strdup_printf ("Register '%.*s'", sd->len, sd->reg);
-                info->free_name = TRUE;
-            }
-            info->icon_name = "edit-copy";
-            return TRUE;
-        }
         else
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item '%s' in section '%s'",
-                    priv->name, item, section);
-            return FALSE;
-        }
+            goto err;
 
-        if (snprintf (buf, 64, "register:%.*s/%s", sd->len, sd->reg, item) >= 64)
-            b = g_strdup_printf ("register:%.*s/%s", sd->len, sd->reg, item);
+        if (snprintf (buf, 64, "register:%s/%s", extra, item) >= 64)
+            b = g_strdup_printf ("register:%s/%s", extra, item);
 
         task = donna_app_get_node_task (priv->app, b);
         if (G_UNLIKELY (!task))
@@ -11698,7 +11700,7 @@ tree_context_get_item_info (const gchar             *section,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
                     "Treeview '%s': Cannot create item '%s' for register '%s': "
                     "Failed to get node '%s': %s",
-                    priv->name, item, sd->reg, b,
+                    priv->name, item, extra, b,
                     (err) ? err->message : "(no error message)");
             g_object_unref (task);
             if (b != buf)
@@ -11736,7 +11738,7 @@ tree_context_get_item_info (const gchar             *section,
         g_object_unref (task);
         return TRUE;
     }
-    else if (streq (section, "column-edit"))
+    else if (streqn (item, "column_edit", 11))
     {
         GError *err = NULL;
         struct column *_col;
@@ -11744,7 +11746,7 @@ tree_context_get_item_info (const gchar             *section,
         if (reference & DONNA_CONTEXT_HAS_REF)
             info->is_visible = TRUE;
 
-        if (*item == '\0')
+        if (item[11] == '\0')
         {
             if (info->is_visible)
             {
@@ -11759,15 +11761,17 @@ tree_context_get_item_info (const gchar             *section,
             info->icon_name = "gtk-edit";
             return TRUE;
         }
+        else if (item[11] != '.')
+            goto err;
 
+        item += 12;
         _col = get_column_by_name (tree, item);
         if (!_col)
         {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item '%s' in section '%s'",
-                    priv->name, item, section);
-            return FALSE;
+            /* no error, so when a column isn't used on tree, it just silently
+             * isn't featured on the menu */
+            info->is_visible = FALSE;
+            return TRUE;
         }
 
         if (info->is_visible)
@@ -11795,166 +11799,18 @@ tree_context_get_item_info (const gchar             *section,
         return TRUE;
     }
 
+err:
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
-            "Treeview '%s': No such section: '%s'",
-                priv->name, section);
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+            "Treeview '%s': No such item: '%s'",
+                priv->name, item);
     return FALSE;
-}
-
-static GPtrArray *
-tree_context_get_nodes (const gchar             *section,
-                        const gchar             *extra,
-                        DonnaContextReference    reference,
-                        const gchar             *conv_flags,
-                        conv_flag_fn             conv_fn,
-                        struct conv             *conv,
-                        GError                 **error)
-{
-    DonnaTreeView *tree = conv->tree;
-    DonnaTreeViewPrivate *priv = tree->priv;
-    GPtrArray *nodes;
-
-    if (streq (section, "go"))
-    {
-        const gchar *def = "up<tree_root;-;up;back;forward;down>";
-        struct {
-            const gchar *tree;
-            gint len;
-        } sd;
-
-        if (extra)
-        {
-            sd.tree = strchr (extra, '/');
-            if (sd.tree)
-            {
-                sd.len = sd.tree - extra;
-                sd.tree = extra;
-                extra += sd.len + 1;
-            }
-            else
-            {
-                sd.tree = extra;
-                sd.len = strlen (extra);
-                extra = def;
-            }
-        }
-        else
-            extra = def;
-
-        nodes = donna_context_parse_extra (priv->app, section, extra,
-                (get_item_info_fn) tree_context_get_item_info, reference,
-                conv_flags, conv_fn, conv, (sd.tree) ? &sd : NULL, error);
-    }
-    else if (streq (section, "refresh"))
-    {
-        nodes = donna_context_parse_extra (priv->app, section,
-                (extra) ? extra : "normal<visible;simple;normal;reload>",
-                (get_item_info_fn) tree_context_get_item_info, reference,
-                conv_flags, conv_fn, conv, NULL, error);
-    }
-    else if (streq (section, "register"))
-    {
-        const gchar *def = "<cut;copy;append;paste"
-            "<paste;paste_copy;paste_move;paste_new_folder>>";
-        struct {
-            const gchar *reg;
-            gint len;
-        } sd;
-
-        if (extra)
-        {
-            sd.reg = strchr (extra, '/');
-            if (sd.reg)
-            {
-                sd.len = sd.reg - extra;
-                sd.reg = extra;
-                extra += sd.len + 1;
-            }
-            else
-            {
-                sd.reg = extra;
-                sd.len = strlen (sd.reg);
-                extra = def;
-            }
-        }
-        else
-        {
-            sd.reg = "_";
-            sd.len = 1;
-            extra = def;
-        }
-
-        nodes = donna_context_parse_extra (priv->app, section, extra,
-                (get_item_info_fn) tree_context_get_item_info, reference,
-                conv_flags, conv_fn, conv, &sd, error);
-    }
-    else if (streq (section, "clipboard"))
-    {
-        struct {
-            const gchar *reg;
-            gint len;
-        } sd = { "+", 1 };
-
-        if (!extra)
-            extra = "cut;copy;append;paste"
-                "<paste;paste_copy;paste_move;paste_new_folder>";
-
-        nodes = donna_context_parse_extra (priv->app, "register", extra,
-                (get_item_info_fn) tree_context_get_item_info, reference,
-                conv_flags, conv_fn, conv, &sd, error);
-    }
-    else if (streq (section, "column-edit"))
-    {
-        gboolean need_free = FALSE;
-
-        if (!extra)
-        {
-            if (priv->columns)
-            {
-                GString *str = g_string_new ("<");
-                GSList *l;
-
-                for (l = priv->columns; l; l = l->next)
-                {
-                    g_string_append (str, ((struct column *) l->data)->name);
-                    g_string_append_c (str, ';');
-                }
-                str->str[str->len - 1] = '>';
-                extra = g_string_free (str, FALSE);
-            }
-            else
-                extra = "";
-        }
-
-        nodes = donna_context_parse_extra (priv->app, section, extra,
-                (get_item_info_fn) tree_context_get_item_info, reference,
-                conv_flags, conv_fn, conv, NULL, error);
-
-        if (need_free)
-            g_free ((gchar *) extra);
-    }
-    else
-    {
-        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
-                "Treeview '%s': No such section: '%s'",
-                priv->name, section);
-        return NULL;
-    }
-
-    if (!nodes)
-        g_prefix_error (error, "Treeview '%s': "
-                "Failed getting nodes for section '%s' of context menu: ",
-                priv->name, section);
-
-    return nodes;
 }
 
 GPtrArray *
 donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
                                    DonnaTreeRowId     *rowid,
-                                   gchar              *sections,
+                                   gchar              *items,
                                    GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -11993,8 +11849,9 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
             || gtk_tree_selection_count_selected_rows (sel))
         reference |= DONNA_CONTEXT_HAS_SELECTION;
 
-    nodes = donna_context_menu_get_nodes (priv->app, error, sections, reference,
-                "treeviews", (get_section_nodes_fn) tree_context_get_nodes,
+    nodes = donna_context_menu_get_nodes (priv->app, error, items, reference,
+                "treeviews", (get_alias_fn) tree_context_get_alias,
+                (get_item_info_fn) tree_context_get_item_info,
                 "olLrnN", (conv_flag_fn) tree_conv_flag, &conv, (is_tree (tree))
                 ? "defaults/treeviews/tree" : "defaults/treeviews/list",
                 "treeviews/%s", priv->name);

@@ -11,8 +11,9 @@ G_BEGIN_DECLS
 typedef enum
 {
     DONNA_CONTEXT_MENU_ERROR_NO_SECTIONS,
-    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_SECTION,
+    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+    DONNA_CONTEXT_MENU_ERROR_INVALID_SYNTAX,
     DONNA_CONTEXT_MENU_ERROR_OTHER,
 } DonnaContextMenuError;
 
@@ -31,14 +32,17 @@ typedef enum
 typedef struct
 {
     DonnaNode   *node;
+
     gchar       *name;
-    gboolean     icon_is_pixbuf;
     union {
         gchar       *icon_name;
         GdkPixbuf   *pixbuf;
     };
     gchar       *desc;
     gchar       *trigger;
+
+    guint        icon_is_pixbuf : 1;
+
     guint        is_visible     : 1;
     guint        is_sensitive   : 1;
     guint        is_menu_bold   : 1;
@@ -49,41 +53,29 @@ typedef struct
     guint        free_trigger   : 1;
 } DonnaContextInfo;
 
-typedef gboolean (*get_item_info_fn) (const gchar             *section,
-                                      const gchar             *item,
+typedef gchar *  (*get_alias_fn)     (const gchar             *alias,
+                                      const gchar             *extra,
                                       DonnaContextReference    reference,
                                       const gchar             *conv_flags,
                                       conv_flag_fn             conv_fn,
                                       gpointer                 conv_data,
-                                      gpointer                 section_data,
+                                      GError                 **error);
+typedef gboolean (*get_item_info_fn) (const gchar             *item,
+                                      const gchar             *extra,
+                                      DonnaContextReference    reference,
+                                      const gchar             *conv_flags,
+                                      conv_flag_fn             conv_fn,
+                                      gpointer                 conv_data,
                                       DonnaContextInfo        *info,
                                       GError                 **error);
 
-typedef GPtrArray * (*get_section_nodes_fn) (const gchar            *section,
-                                             const gchar            *extra,
-                                             DonnaContextReference   reference,
-                                             const gchar            *conv_flags,
-                                             conv_flag_fn            conv_fn,
-                                             gpointer                conv_data,
-                                             GError                **error);
-
-GPtrArray *     donna_context_parse_extra       (DonnaApp               *app,
-                                                 const gchar            *section,
-                                                 const gchar            *extra,
-                                                 get_item_info_fn        get_item_info,
-                                                 DonnaContextReference   reference,
-                                                 const gchar            *conv_flags,
-                                                 conv_flag_fn            conv_fn,
-                                                 gpointer                conv_data,
-                                                 gpointer                section_data,
-                                                 GError                **error);
-
 GPtrArray *     donna_context_menu_get_nodes_v  (DonnaApp               *app,
                                                  GError                **error,
-                                                 gchar                  *sections,
+                                                 gchar                  *items,
                                                  DonnaContextReference   reference,
                                                  const gchar            *source,
-                                                 get_section_nodes_fn    get_section_nodes,
+                                                 get_alias_fn            get_alias,
+                                                 get_item_info_fn        get_item_info,
                                                  const gchar            *conv_flags,
                                                  conv_flag_fn            conv_fn,
                                                  gpointer                conv_data,
@@ -92,10 +84,11 @@ GPtrArray *     donna_context_menu_get_nodes_v  (DonnaApp               *app,
                                                  va_list                 va_args);
 GPtrArray *     donna_context_menu_get_nodes    (DonnaApp               *app,
                                                  GError                **error,
-                                                 gchar                  *sections,
+                                                 gchar                  *items,
                                                  DonnaContextReference   reference,
                                                  const gchar            *source,
-                                                 get_section_nodes_fn    get_section_nodes,
+                                                 get_alias_fn            get_alias,
+                                                 get_item_info_fn        get_item_info,
                                                  const gchar            *conv_flags,
                                                  conv_flag_fn            conv_fn,
                                                  gpointer                conv_data,
@@ -105,10 +98,11 @@ GPtrArray *     donna_context_menu_get_nodes    (DonnaApp               *app,
 inline gboolean
 donna_context_menu_popup (DonnaApp              *app,
                           GError               **error,
-                          gchar                 *sections,
+                          gchar                 *items,
                           DonnaContextReference  reference,
                           const gchar           *source,
-                          get_section_nodes_fn   get_section_nodes,
+                          get_alias_fn           get_alias,
+                          get_item_info_fn       get_item_info,
                           const gchar           *conv_flags,
                           conv_flag_fn           conv_fn,
                           gpointer               conv_data,
