@@ -2023,6 +2023,7 @@ submenu_get_children_cb (DonnaTask           *task,
 
     if (arr->len == 0)
     {
+no_submenu:
         gtk_menu_item_set_submenu (ls->item, NULL);
         if (ls->mc->submenus == TYPE_ENABLED)
             gtk_widget_set_sensitive ((GtkWidget *) ls->item, FALSE);
@@ -2046,7 +2047,11 @@ submenu_get_children_cb (DonnaTask           *task,
     mc->name  = g_strdup (ls->mc->name);
     mc->nodes = g_ptr_array_ref (arr);
 
-    menu = g_object_ref (load_menu (mc));
+    menu = load_menu (mc);
+    if (G_UNLIKELY (!menu))
+        goto no_submenu;
+    else
+        g_object_ref (menu);
 
 set_menu:
     /* see if the item is selected (if we're not TYPE_COMBINE then it can't be,
@@ -2114,12 +2119,12 @@ load_menu (struct menu_click *mc)
     GtkWidget *menu;
     guint last_sep;
     guint i;
+    gboolean has_items = FALSE;
 
     if (mc->is_sorted)
         g_ptr_array_sort_with_data (mc->nodes, (GCompareDataFunc) node_cmp, mc);
 
     menu = gtk_menu_new ();
-    g_signal_connect_swapped (menu, "destroy", (GCallback) free_menu_click, mc);
 
     /* in case the last few "nodes" are all NULLs, make sure we don't feature
      * any separators */
@@ -2263,8 +2268,16 @@ load_menu (struct menu_click *mc)
 
         gtk_widget_show (item);
         gtk_menu_attach ((GtkMenu *) menu, item, 0, 1, i, i + 1);
+        has_items = TRUE;
     }
 
+    if (G_UNLIKELY (!has_items))
+    {
+        g_object_unref (g_object_ref_sink (menu));
+        return NULL;
+    }
+
+    g_signal_connect_swapped (menu, "destroy", (GCallback) free_menu_click, mc);
     return menu;
 }
 
@@ -2385,7 +2398,15 @@ donna_donna_show_menu (DonnaApp       *app,
     /* menu will not be packed anywhere, so we need to take ownership and handle
      * it when done, i.e. on "unmap-event". It will trigger the widget's destroy
      * which is when we'll free mc */
-    menu = g_object_ref_sink (load_menu (mc));
+    menu = (GtkMenu *) load_menu (mc);
+    if (G_UNLIKELY (!menu))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Cannot show/popup an empty menu");
+        free_menu_click (mc);
+        return FALSE;
+    }
+    menu = g_object_ref_sink (menu);
     gtk_widget_add_events ((GtkWidget *) menu, GDK_STRUCTURE_MASK);
     g_signal_connect (menu, "unmap-event", (GCallback) g_object_unref, NULL);
 
