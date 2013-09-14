@@ -34,6 +34,9 @@ typedef enum
 typedef void            (*task_init_fn)     (DonnaTaskProcess   *taskp,
                                              gpointer            data,
                                              GError            **error);
+typedef gboolean        (*task_pauser_fn)   (DonnaTask          *task,
+                                             GPid                pid,
+                                             gpointer            data);
 typedef DonnaTaskState  (*task_closer_fn)   (DonnaTask          *task,
                                              gint                rc,
                                              DonnaTaskState      state,
@@ -59,13 +62,20 @@ DonnaTask *         donna_task_process_new          (const gchar        *workdir
                                                      task_closer_fn      closer,
                                                      gpointer            closer_data,
                                                      GDestroyNotify      closer_destroy);
-DonnaTask *         donna_task_process_new_init     (task_init_fn        init,
+DonnaTask *         donna_task_process_new_full     (task_init_fn        init,
                                                      gpointer            data,
                                                      GDestroyNotify      destroy,
                                                      gboolean            wait,
+                                                     task_pauser_fn      pauser,
+                                                     gpointer            pauser_data,
+                                                     GDestroyNotify      pauser_destroy,
                                                      task_closer_fn      closer,
                                                      gpointer            closer_data,
                                                      GDestroyNotify      closer_destroy);
+gboolean            donna_task_process_set_pauser   (DonnaTaskProcess   *taskp,
+                                                     task_pauser_fn      pauser,
+                                                     gpointer            data,
+                                                     GDestroyNotify      destroy);
 gboolean            donna_task_process_set_default_closer (
                                                      DonnaTaskProcess   *taskp);
 gboolean            donna_task_process_set_workdir_to_curdir (

@@ -41,6 +41,10 @@ struct _DonnaTaskProcessPrivate
     gboolean             wait;
     DonnaTaskUiMessages *tuimsg;
 
+    task_pauser_fn       pauser_fn;
+    gpointer             pauser_data;
+    GDestroyNotify       pauser_destroy;
+
     task_closer_fn       closer_fn;
     gpointer             closer_data;
     GDestroyNotify       closer_destroy;
@@ -154,6 +158,9 @@ donna_task_process_finalize (GObject *object)
 
     if (priv->closer_destroy && priv->closer_data)
         priv->closer_destroy (priv->closer_data);
+
+    if (priv->pauser_destroy && priv->pauser_data)
+        priv->pauser_destroy (priv->pauser_data);
 
     if (priv->init_destroy && priv->init_data)
         priv->init_destroy (priv->init_data);
@@ -350,6 +357,21 @@ default_closer (DonnaTask          *task,
 }
 
 static gboolean
+default_pauser (DonnaTask *task, GPid pid)
+{
+    gboolean ret;
+
+    kill (pid, SIGSTOP);
+    ret = donna_task_is_cancelling (task);
+
+    if (ret)
+        kill (pid, SIGTERM);
+    kill (pid, SIGCONT);
+
+    return ret;
+}
+
+static gboolean
 pulse_cb (DonnaTask *task)
 {
     donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS_PULSE, 0, NULL);
@@ -450,21 +472,23 @@ task_worker (DonnaTask *task, gpointer data)
 
         if (FD_ISSET (fd_task, &fds))
         {
+            gboolean is_cancelling;
+
             g_source_remove (sid);
-            kill (pid, SIGSTOP);
-            if (donna_task_is_cancelling (task))
+
+            if (priv->pauser_fn)
+                is_cancelling = priv->pauser_fn (task, pid, priv->pauser_data);
+            else
+                is_cancelling = default_pauser (task, pid);
+
+            if (is_cancelling)
             {
                 sid = 0;
-                kill (pid, SIGTERM);
-                kill (pid, SIGCONT);
                 failed = FAILED_CANCELLED;
                 break;
             }
             else
-            {
                 sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
-                kill (pid, SIGCONT);
-            }
         }
 
         if (fd_out >= 0 && FD_ISSET (fd_out, &fds))
@@ -581,10 +605,13 @@ donna_task_process_new (const gchar        *workdir,
 }
 
 DonnaTask *
-donna_task_process_new_init (task_init_fn        init,
+donna_task_process_new_full (task_init_fn        init,
                              gpointer            data,
                              GDestroyNotify      destroy,
                              gboolean            wait,
+                             task_pauser_fn      pauser,
+                             gpointer            pauser_data,
+                             GDestroyNotify      pauser_destroy,
                              task_closer_fn      closer,
                              gpointer            closer_data,
                              GDestroyNotify      closer_destroy)
@@ -601,6 +628,9 @@ donna_task_process_new_init (task_init_fn        init,
     priv->init_data      = data;
     priv->init_destroy   = destroy;
     priv->wait           = wait;
+    priv->pauser_fn      = pauser;
+    priv->pauser_data    = pauser_data;
+    priv->pauser_destroy = pauser_destroy;
     priv->closer_fn      = closer;
     priv->closer_data    = closer_data;
     priv->closer_destroy = closer_destroy;
@@ -625,6 +655,26 @@ donna_task_process_set_workdir_to_curdir (DonnaTaskProcess   *taskp,
         return FALSE;
 
     taskp->priv->workdir = workdir;
+    return TRUE;
+}
+
+gboolean
+donna_task_process_set_pauser (DonnaTaskProcess   *taskp,
+                               task_pauser_fn      pauser,
+                               gpointer            data,
+                               GDestroyNotify      destroy)
+{
+    DonnaTaskProcessPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TASK_PROCESS (taskp), FALSE);
+    priv = taskp->priv;
+
+    if (priv->pauser_fn)
+        return FALSE;
+
+    priv->pauser_fn      = pauser;
+    priv->pauser_data    = data;
+    priv->pauser_destroy = destroy;
     return TRUE;
 }
 
