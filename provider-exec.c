@@ -492,8 +492,7 @@ get_node_children_task (DonnaProvider      *provider,
 
     if (!app)
         g_object_get (provider, "app", &app, NULL);
-    if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task,
-                app, error))
+    if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task, app))
     {
         g_object_unref (app);
         g_object_ref_sink (task);
