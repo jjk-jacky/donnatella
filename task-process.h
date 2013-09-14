@@ -70,8 +70,7 @@ gboolean            donna_task_process_set_default_closer (
                                                      DonnaTaskProcess   *taskp);
 gboolean            donna_task_process_set_workdir_to_curdir (
                                                      DonnaTaskProcess   *taskp,
-                                                     DonnaApp           *app,
-                                                     GError            **error);
+                                                     DonnaApp           *app);
 gboolean            donna_task_process_set_ui_msg   (DonnaTaskProcess   *taskp);
 
 G_END_DECLS

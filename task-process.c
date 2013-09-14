@@ -590,12 +590,11 @@ donna_task_process_new_init (task_init_fn        init,
 
 gboolean
 donna_task_process_set_workdir_to_curdir (DonnaTaskProcess   *taskp,
-                                          DonnaApp           *app,
-                                          GError            **error)
+                                          DonnaApp           *app)
 {
     gchar *workdir;
 
-    workdir = donna_app_get_current_dirname (app, error);
+    workdir = donna_app_get_current_dirname (app);
     if (!workdir)
         return FALSE;
 
