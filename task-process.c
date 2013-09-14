@@ -25,6 +25,8 @@ enum
 {
     PIPE_DATA_RECEIVED,
     PIPE_NEW_LINE,
+    PROCESS_STARTED,
+    PROCESS_ENDED,
     NB_SIGNALS
 };
 
@@ -103,6 +105,26 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
                 2,
                 G_TYPE_INT,
                 G_TYPE_STRING);
+    donna_task_process_signals[PROCESS_STARTED] =
+        g_signal_new ("process-started",
+                DONNA_TYPE_TASK_PROCESS,
+                G_SIGNAL_RUN_FIRST,
+                0,
+                NULL,
+                NULL,
+                g_cclosure_marshal_VOID__VOID,
+                G_TYPE_NONE,
+                0);
+    donna_task_process_signals[PROCESS_ENDED] =
+        g_signal_new ("process-ended",
+                DONNA_TYPE_TASK_PROCESS,
+                G_SIGNAL_RUN_FIRST,
+                0,
+                NULL,
+                NULL,
+                g_cclosure_marshal_VOID__VOID,
+                G_TYPE_NONE,
+                0);
 
     o_class = (GObjectClass *) klass;
     o_class->get_property = donna_task_process_get_property;
@@ -391,6 +413,8 @@ task_worker (DonnaTask *task, gpointer data)
     if (!priv->wait)
         return DONNA_TASK_DONE;
 
+    g_signal_emit (task, donna_task_process_signals[PROCESS_STARTED], 0);
+
     /* install a timeout to pulsate our progress */
     sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
 
@@ -504,6 +528,8 @@ again:
         donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
         g_free (s);
     }
+
+    g_signal_emit (task, donna_task_process_signals[PROCESS_ENDED], 0);
 
     if (state == DONNA_TASK_DONE)
         donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS, 100, NULL);
