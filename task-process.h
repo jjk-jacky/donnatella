@@ -31,16 +31,27 @@ typedef enum
     DONNA_PIPE_ERROR
 } DonnaPipe;
 
-typedef void            (*task_init_fn)     (DonnaTaskProcess   *taskp,
-                                             gpointer            data,
-                                             GError            **error);
-typedef gboolean        (*task_pauser_fn)   (DonnaTask          *task,
-                                             GPid                pid,
-                                             gpointer            data);
-typedef DonnaTaskState  (*task_closer_fn)   (DonnaTask          *task,
-                                             gint                rc,
-                                             DonnaTaskState      state,
-                                             gpointer            data);
+typedef enum
+{
+    DONNA_TASK_PROCESS_STDIN_DONE = 0,
+    DONNA_TASK_PROCESS_STDIN_WAIT_NONBLOCKING,
+    DONNA_TASK_PROCESS_STDIN_FAILED
+} DonnaTaskProcessStdin;
+
+typedef void                    (*task_init_fn)     (DonnaTaskProcess   *taskp,
+                                                     gpointer            data,
+                                                     GError            **error);
+typedef gboolean                (*task_pauser_fn)   (DonnaTask          *task,
+                                                     GPid                pid,
+                                                     gpointer            data);
+typedef DonnaTaskProcessStdin   (*task_stdin_fn)    (DonnaTask          *task,
+                                                     GPid                pid,
+                                                     gint                fd,
+                                                     gpointer            data);
+typedef DonnaTaskState          (*task_closer_fn)   (DonnaTask          *task,
+                                                     gint                rc,
+                                                     DonnaTaskState      state,
+                                                     gpointer            data);
 
 struct _DonnaTaskProcess
 {
@@ -69,11 +80,18 @@ DonnaTask *         donna_task_process_new_full     (task_init_fn        init,
                                                      task_pauser_fn      pauser,
                                                      gpointer            pauser_data,
                                                      GDestroyNotify      pauser_destroy,
+                                                     task_stdin_fn       stdin_fn,
+                                                     gpointer            stdin_data,
+                                                     GDestroyNotify      stdin_destroy,
                                                      task_closer_fn      closer,
                                                      gpointer            closer_data,
                                                      GDestroyNotify      closer_destroy);
 gboolean            donna_task_process_set_pauser   (DonnaTaskProcess   *taskp,
                                                      task_pauser_fn      pauser,
+                                                     gpointer            data,
+                                                     GDestroyNotify      destroy);
+gboolean            donna_task_process_set_stdin    (DonnaTaskProcess   *taskp,
+                                                     task_stdin_fn       fn,
                                                      gpointer            data,
                                                      GDestroyNotify      destroy);
 gboolean            donna_task_process_set_default_closer (

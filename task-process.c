@@ -1,7 +1,10 @@
 
 #include <glib-object.h>
-#include <sys/select.h>
+#include <stdio.h>
+#include <poll.h>
 #include <sys/wait.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
 #include "task-process.h"
@@ -10,6 +13,7 @@
 #include "treeview.h"
 #include "closures.h"
 #include "macros.h"
+#include "debug.h"
 
 enum
 {
@@ -47,6 +51,10 @@ struct _DonnaTaskProcessPrivate
     task_pauser_fn       pauser_fn;
     gpointer             pauser_data;
     GDestroyNotify       pauser_destroy;
+
+    task_stdin_fn        stdin_fn;
+    gpointer             stdin_data;
+    GDestroyNotify       stdin_destroy;
 
     task_closer_fn       closer_fn;
     gpointer             closer_data;
@@ -395,6 +403,15 @@ pulse_cb (DonnaTask *task)
     return TRUE;
 }
 
+static void
+close_fd_in (gint *fd)
+{
+    for (;;)
+        if (close (*fd) != -1 || errno != EINTR)
+            break;
+    *fd = -1;
+}
+
 static DonnaTaskState
 task_worker (DonnaTask *task, gpointer data)
 {
@@ -406,11 +423,14 @@ task_worker (DonnaTask *task, gpointer data)
     GSpawnFlags flags;
     GPid pid;
     gint status;
-    fd_set fds;
+    struct pollfd pfd[4];
     gint fd_task;
+    gint fd_in = -1;
     gint fd_out;
     gint fd_err;
     gint ret;
+    gint n_in = -1;
+    gint closed = 0;
     gint failed = FAILED_NOT;
     guint sid;
 
@@ -440,7 +460,7 @@ task_worker (DonnaTask *task, gpointer data)
         flags |= G_SPAWN_DO_NOT_REAP_CHILD;
     if (!g_spawn_async_with_pipes (priv->workdir, argv, NULL, flags, NULL, NULL,
                 (priv->wait) ? &pid : NULL,
-                NULL,
+                (priv->wait && priv->stdin_fn) ? &fd_in : NULL,
                 (priv->wait) ? &fd_out : NULL,
                 (priv->wait) ? &fd_err : NULL,
                 &err))
@@ -463,34 +483,73 @@ task_worker (DonnaTask *task, gpointer data)
     fd_task = donna_task_get_fd (task);
     while (failed == FAILED_NOT && (fd_out >= 0 || fd_err >= 0))
     {
-        gint max;
+        gint n = 0;
 
-        FD_ZERO (&fds);
-        FD_SET (fd_task, &fds);
+        pfd[n].fd = fd_task;
+        pfd[n].events = POLLIN;
+        ++n;
+
+        if (fd_in >= 0)
+        {
+            DonnaTaskProcessStdin r;
+
+            /* we always at least want to get POLLHUP | POLLERR */
+            pfd[n].fd = fd_in;
+            pfd[n].events = 0;
+
+            /* we want to know if we can non-blockingly write if this is the
+             * first time (check before calling stdin_fn), or stdin_fn asks for
+             * it (got an EAGAIN error from write()) */
+            if (n_in < 0)
+                r = DONNA_TASK_PROCESS_STDIN_WAIT_NONBLOCKING;
+            else
+                r = priv->stdin_fn (task, pid, fd_in, priv->stdin_data);
+
+            if (r == DONNA_TASK_PROCESS_STDIN_WAIT_NONBLOCKING)
+                pfd[n].events = POLLOUT;
+            else if (r == DONNA_TASK_PROCESS_STDIN_FAILED)
+            {
+                failed = FAILED_ERROR;
+                break;
+            }
+
+            n_in = n;
+            ++n;
+        }
+
         if (fd_out >= 0)
-            FD_SET (fd_out, &fds);
+        {
+            pfd[n].fd = fd_out;
+            pfd[n].events = POLLIN;
+            ++n;
+        }
+
         if (fd_err >= 0)
-            FD_SET (fd_err, &fds);
+        {
+            pfd[n].fd = fd_err;
+            pfd[n].events = POLLIN;
+            ++n;
+        }
 
-        max = MAX (fd_out, fd_err);
-        ret = select (MAX (fd_task, max) + 1, &fds, NULL, NULL, NULL);
-
+        ret = poll (pfd, n, -1);
         if (ret < 0)
         {
             int _errno = errno;
 
-            if (errno == EINTR)
+            if (errno == EINTR || errno == EAGAIN)
                 continue;
 
             failed = FAILED_ERROR;
             donna_task_set_error (task, DONNA_TASK_PROCESS_ERROR,
                     DONNA_TASK_PROCESS_ERROR_READ,
-                    "Unexpected error in select() reading data from child process: %s",
+                    "Unexpected error in poll() reading data from child process: %s",
                     g_strerror (_errno));
             break;
         }
 
-        if (FD_ISSET (fd_task, &fds))
+        n = 0;
+
+        if (pfd[n].revents & POLLIN)
         {
             gboolean is_cancelling;
 
@@ -511,26 +570,69 @@ task_worker (DonnaTask *task, gpointer data)
             else if (sid)
                 sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
         }
+        ++n;
 
-        if (fd_out >= 0 && FD_ISSET (fd_out, &fds))
-            if (!read_data (task, DONNA_PIPE_OUTPUT, &fd_out))
-            {
-                failed = FAILED_ERROR;
-                break;
-            }
+        /* we just close the fd in case of POLLERR|POLLHUP because this might
+         * just be the process ending its execution normally. If there was an
+         * error, it shall come from the return code (or whatever else the close
+         * uses, e.g. parsing stderr) */
 
-        if (fd_err >= 0 && FD_ISSET (fd_err, &fds))
-            if (!read_data (task, DONNA_PIPE_ERROR, &fd_err))
+        if (fd_in >= 0)
+        {
+            if (pfd[n_in].revents & (POLLERR | POLLHUP))
             {
-                failed = FAILED_ERROR;
-                break;
+                close_fd_in (&fd_in);
+                ++closed;
             }
+            ++n;
+        }
+
+        if (fd_out >= 0)
+        {
+            if (pfd[n].revents & POLLIN)
+            {
+                if (!read_data (task, DONNA_PIPE_OUTPUT, &fd_out))
+                {
+                    failed = FAILED_ERROR;
+                    break;
+                }
+            }
+            if (pfd[n].revents & (POLLERR | POLLHUP))
+            {
+                close_fd (task, DONNA_PIPE_OUTPUT, &fd_out);
+                ++closed;
+            }
+            ++n;
+        }
+
+        if (fd_err >= 0)
+        {
+            if (pfd[n].revents & POLLIN)
+            {
+                if (!read_data (task, DONNA_PIPE_ERROR, &fd_err))
+                {
+                    failed = FAILED_ERROR;
+                    break;
+                }
+            }
+            if (pfd[n].revents & (POLLERR | POLLHUP))
+            {
+                close_fd (task, DONNA_PIPE_ERROR, &fd_err);
+                ++closed;
+            }
+            ++n;
+        }
+
+        if (closed == 3)
+            break;
     }
 
     if (fd_out >= 0)
         close_fd (task, DONNA_PIPE_OUTPUT, &fd_out);
     if (fd_err >= 0)
         close_fd (task, DONNA_PIPE_ERROR, &fd_err);
+    if (fd_in >= 0)
+        close_fd_in (&fd_in);
 
 again:
     ret = waitpid (pid, &status, 0);
@@ -633,6 +735,9 @@ donna_task_process_new_full (task_init_fn        init,
                              task_pauser_fn      pauser,
                              gpointer            pauser_data,
                              GDestroyNotify      pauser_destroy,
+                             task_stdin_fn       stdin_fn,
+                             gpointer            stdin_data,
+                             GDestroyNotify      stdin_destroy,
                              task_closer_fn      closer,
                              gpointer            closer_data,
                              GDestroyNotify      closer_destroy)
@@ -652,6 +757,9 @@ donna_task_process_new_full (task_init_fn        init,
     priv->pauser_fn      = pauser;
     priv->pauser_data    = pauser_data;
     priv->pauser_destroy = pauser_destroy;
+    priv->stdin_fn       = stdin_fn;
+    priv->stdin_data     = stdin_data;
+    priv->stdin_destroy  = stdin_destroy;
     priv->closer_fn      = closer;
     priv->closer_data    = closer_data;
     priv->closer_destroy = closer_destroy;
@@ -696,6 +804,26 @@ donna_task_process_set_pauser (DonnaTaskProcess   *taskp,
     priv->pauser_fn      = pauser;
     priv->pauser_data    = data;
     priv->pauser_destroy = destroy;
+    return TRUE;
+}
+
+gboolean
+donna_task_process_set_stdin (DonnaTaskProcess   *taskp,
+                              task_stdin_fn       fn,
+                              gpointer            data,
+                              GDestroyNotify      destroy)
+{
+    DonnaTaskProcessPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TASK_PROCESS (taskp), FALSE);
+    priv = taskp->priv;
+
+    if (priv->stdin_fn)
+        return FALSE;
+
+    priv->stdin_fn      = fn;
+    priv->stdin_data    = data;
+    priv->stdin_destroy = destroy;
     return TRUE;
 }
 
