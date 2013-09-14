@@ -17,6 +17,7 @@ enum
 
     PROP_WORKDIR,
     PROP_CMDLINE,
+    PROP_AUTOPULSE,
 
     NB_PROPS
 };
@@ -32,6 +33,8 @@ enum
 
 struct _DonnaTaskProcessPrivate
 {
+    gboolean             autopulse;
+
     task_init_fn         init_fn;
     gpointer             init_data;
     GDestroyNotify       init_destroy;
@@ -82,6 +85,11 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
         g_param_spec_string ("cmdline", "cmdline",
                 "Command-line to execute",
                 NULL, /* default */
+                G_PARAM_READWRITE);
+    donna_task_process_props[PROP_AUTOPULSE] =
+        g_param_spec_boolean ("autopulse", "autopulse",
+                "Whether to automatically pulse during process execution",
+                TRUE, /* default */
                 G_PARAM_READWRITE);
 
     donna_task_process_signals[PIPE_DATA_RECEIVED] =
@@ -147,6 +155,7 @@ donna_task_process_init (DonnaTaskProcess *taskp)
 
     priv = taskp->priv = G_TYPE_INSTANCE_GET_PRIVATE (taskp,
             DONNA_TYPE_TASK_PROCESS, DonnaTaskProcessPrivate);
+    priv->autopulse = TRUE;
 }
 
 static void
@@ -189,6 +198,10 @@ donna_task_process_get_property (GObject            *object,
             g_value_set_string (value, priv->cmdline);
             break;
 
+        case PROP_AUTOPULSE:
+            g_value_set_boolean (value, priv->autopulse);
+            break;
+
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
             break;
@@ -221,6 +234,10 @@ donna_task_process_set_property (GObject            *object,
                     donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
                 g_free (s);
             }
+            break;
+
+        case PROP_AUTOPULSE:
+            priv->autopulse = g_value_get_boolean (value);
             break;
 
         default:
@@ -438,7 +455,10 @@ task_worker (DonnaTask *task, gpointer data)
     g_signal_emit (task, donna_task_process_signals[PROCESS_STARTED], 0);
 
     /* install a timeout to pulsate our progress */
-    sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
+    if (priv->autopulse)
+        sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
+    else
+        sid = 0;
 
     fd_task = donna_task_get_fd (task);
     while (failed == FAILED_NOT && (fd_out >= 0 || fd_err >= 0))
@@ -474,7 +494,8 @@ task_worker (DonnaTask *task, gpointer data)
         {
             gboolean is_cancelling;
 
-            g_source_remove (sid);
+            if (sid)
+                g_source_remove (sid);
 
             if (priv->pauser_fn)
                 is_cancelling = priv->pauser_fn (task, pid, priv->pauser_data);
@@ -487,7 +508,7 @@ task_worker (DonnaTask *task, gpointer data)
                 failed = FAILED_CANCELLED;
                 break;
             }
-            else
+            else if (sid)
                 sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
         }
 
@@ -555,13 +576,13 @@ again:
 
     g_signal_emit (task, donna_task_process_signals[PROCESS_ENDED], 0);
 
+    if (sid)
+        g_source_remove (sid);
+
     if (state == DONNA_TASK_DONE)
         donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS, 100, NULL);
     else
         donna_task_update (task, DONNA_TASK_UPDATE_PROGRESS_PULSE, -1, NULL);
-
-    if (sid > 0)
-        g_source_remove (sid);
 
     return state;
 }
