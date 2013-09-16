@@ -240,7 +240,6 @@ donna_task_process_set_property (GObject            *object,
                 donna_task_take_desc ((DonnaTask *) object, s);
                 if (priv->tuimsg)
                     donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
-                g_free (s);
             }
             break;
 
@@ -443,7 +442,7 @@ task_worker (DonnaTask *task, gpointer data)
         else
             donna_task_set_error (task, DONNA_TASK_PROCESS_ERROR,
                     DONNA_TASK_PROCESS_ERROR_NO_CMDLINE,
-                    "Failed getting working directory and command-line to execute");
+                    "Failed getting working directory and/or command-line to execute");
         return DONNA_TASK_FAILED;
     }
     /* we don't want to free/destroy data in finalize anymore */
