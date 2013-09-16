@@ -445,13 +445,14 @@ static DonnaNode *
 new_node (DonnaProviderBase *_provider,
           const gchar       *location,
           DonnaTask         *t,
-          gboolean           has_lock,
+          gboolean           has_lock, /* whether a TM_BUSY_READ lock is held */
           GError           **error)
 {
     DonnaTaskManager *tm = (DonnaTaskManager *) _provider;
     DonnaProviderTaskPrivate *priv = tm->priv;
     DonnaProviderBaseClass *klass;
     DonnaNode *node;
+    DonnaNode *n;
     GValue v = G_VALUE_INIT;
     gchar *desc;
     gchar *status;
@@ -589,6 +590,18 @@ new_node (DonnaProviderBase *_provider,
         return NULL;
     }
     g_value_unset (&v);
+
+    klass->lock_nodes (_provider);
+    n = klass->get_cached_node (_provider, location);
+    if (G_LIKELY (!n))
+        klass->add_node_to_cache (_provider, node);
+    else
+    {
+        g_object_unref (node);
+        node = n;
+    }
+    klass->unlock_nodes (_provider);
+
     return node;
 }
 
@@ -606,13 +619,25 @@ provider_task_new_node (DonnaProviderBase  *_provider,
     {
         klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
         klass->lock_nodes (_provider);
+        /* adds another reference, for the caller/task */
         node = klass->get_cached_node (_provider, location);
-        if (node)
-            goto found;
-
-        node = donna_node_new ((DonnaProvider *) _provider, location,
-                DONNA_NODE_CONTAINER, NULL, (refresher_fn) gtk_true, NULL,
-                "Task Manager", 0);
+        if (!node)
+        {
+            node = donna_node_new ((DonnaProvider *) _provider, location,
+                    DONNA_NODE_CONTAINER, NULL, (refresher_fn) gtk_true, NULL,
+                    "Task Manager", 0);
+            if (G_UNLIKELY (!node))
+            {
+                klass->unlock_nodes (_provider);
+                donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'task': Failed to create new node for 'task:/'");
+                return DONNA_TASK_FAILED;
+            }
+            /* adds another reference, for the caller/task */
+            klass->add_node_to_cache (_provider, node);
+        }
+        klass->unlock_nodes (_provider);
     }
     else
     {
@@ -630,6 +655,7 @@ provider_task_new_node (DonnaProviderBase  *_provider,
         klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
         klass->lock_nodes (_provider);
         node = klass->get_cached_node (_provider, location);
+        klass->unlock_nodes (_provider);
         if (node)
             goto found;
 
@@ -643,7 +669,6 @@ provider_task_new_node (DonnaProviderBase  *_provider,
                 if (!node)
                 {
                     donna_task_take_error (task, err);
-                    klass->unlock_nodes (_provider);
                     unlock_manager ((DonnaProviderTask *) _provider, TM_BUSY_READ);
                     return DONNA_TASK_FAILED;
                 }
@@ -657,16 +682,11 @@ provider_task_new_node (DonnaProviderBase  *_provider,
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
                     "Provider 'task': No task found for '%s'", location);
-            klass->unlock_nodes (_provider);
             return DONNA_TASK_FAILED;
         }
     }
 
-    /* adds another reference, for the caller/task */
-    klass->add_node_to_cache (_provider, node);
 found:
-    klass->unlock_nodes (_provider);
-
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
     g_value_take_object (value, node);
@@ -714,7 +734,6 @@ provider_task_get_children (DonnaProviderBase  *_provider,
 
         arr = g_ptr_array_new_full (priv->tasks->len, g_object_unref);
         klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
-        klass->lock_nodes (_provider);
         lock_manager ((DonnaProviderTask *) _provider, TM_BUSY_READ);
         for (i = 0; i < priv->tasks->len; ++i)
         {
@@ -725,14 +744,11 @@ provider_task_get_children (DonnaProviderBase  *_provider,
 
             t = &g_array_index (priv->tasks, struct task, i);
             snprintf (location, 32, "/%p", t->task);
+            klass->lock_nodes (_provider);
             node = klass->get_cached_node (_provider, location);
+            klass->unlock_nodes (_provider);
             if (!node)
-            {
                 node = new_node (_provider, location, t->task, TRUE, &err);
-                if (node)
-                    /* adds another reference, for the caller/task */
-                    klass->add_node_to_cache (_provider, node);
-            }
             if (node)
                 g_ptr_array_add (arr, node);
             else
@@ -743,7 +759,6 @@ provider_task_get_children (DonnaProviderBase  *_provider,
             }
         }
         unlock_manager ((DonnaProviderTask *) _provider, TM_BUSY_READ);
-        klass->unlock_nodes (_provider);
     }
     else
         arr = g_ptr_array_sized_new (0);
@@ -1501,6 +1516,7 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
     klass = DONNA_PROVIDER_BASE_GET_CLASS (pb);
     klass->lock_nodes (pb);
     node = klass->get_cached_node (pb, "/");
+    klass->unlock_nodes (pb);
 
     if (node)
     {
@@ -1510,8 +1526,6 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
         child = new_node (pb, NULL, task, FALSE, &err);
         if (G_LIKELY (child))
         {
-            klass->add_node_to_cache (pb, child);
-            klass->unlock_nodes (pb);
             donna_provider_node_new_child ((DonnaProvider *) tm, node, child);
             g_object_unref (child);
         }
@@ -1520,12 +1534,9 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
             g_warning ("Provider 'task': Failed to create node for new task: %s",
                     err->message);
             g_clear_error (&err);
-            klass->unlock_nodes (pb);
         }
         g_object_unref (node);
     }
-    else
-        klass->unlock_nodes (pb);
 
     return TRUE;
 }
