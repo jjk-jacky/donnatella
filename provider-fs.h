@@ -29,7 +29,24 @@ struct _DonnaProviderFsClass
     DonnaProviderBaseClass parent;
 };
 
+typedef gchar *     (*fs_parse_cmdline)             (const gchar        *cmdline,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     GError            **error);
+
+typedef DonnaTask * (*fs_engine_io_task)            (DonnaApp           *app,
+                                                     DonnaIoType         type,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     fs_parse_cmdline    parser,
+                                                     GError            **error);
+
 GType               donna_provider_fs_get_type      (void) G_GNUC_CONST;
+
+gboolean            donna_provider_fs_add_io_engine (DonnaProviderFs    *pfs,
+                                                     const gchar        *name,
+                                                     fs_engine_io_task   engine,
+                                                     GError            **error);
 
 G_END_DECLS
 

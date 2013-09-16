@@ -14,8 +14,15 @@
 #include "app.h"
 #include "macros.h"
 
+struct io_engine
+{
+    gchar *name;
+    fs_engine_io_task io_engine_task;
+};
+
 struct _DonnaProviderFsPrivate
 {
+    GSList *io_engines;
 };
 
 static void             provider_fs_finalize        (GObject *object);
@@ -50,6 +57,14 @@ static DonnaTaskState   provider_fs_new_child       (DonnaProviderBase  *provide
                                                      DonnaNodeType       type,
                                                      const gchar        *name);
 
+/* fsengine-basic.c */
+DonnaTask *     donna_fs_engine_basic_io_task       (DonnaApp           *app,
+                                                     DonnaIoType         type,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     fs_parse_cmdline    parser,
+                                                     GError            **error);
+
 static void
 provider_fs_provider_init (DonnaProviderInterface *interface)
 {
@@ -74,18 +89,20 @@ donna_provider_fs_class_init (DonnaProviderFsClass *klass)
     o_class = (GObjectClass *) klass;
     o_class->finalize = provider_fs_finalize;
 
-//    g_type_class_add_private (klass, sizeof (DonnaProviderFsPrivate));
+    g_type_class_add_private (klass, sizeof (DonnaProviderFsPrivate));
 }
 
 static void
 donna_provider_fs_init (DonnaProviderFs *provider)
 {
-    return;
     DonnaProviderFsPrivate *priv;
 
     priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_FS,
             DonnaProviderFsPrivate);
+
+    donna_provider_fs_add_io_engine (provider, "basic",
+            donna_fs_engine_basic_io_task, NULL);
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderFs, donna_provider_fs,
@@ -94,11 +111,19 @@ G_DEFINE_TYPE_WITH_CODE (DonnaProviderFs, donna_provider_fs,
         )
 
 static void
+free_io_engine (struct io_engine *ioe)
+{
+    g_free (ioe->name);
+    g_free (ioe);
+}
+
+static void
 provider_fs_finalize (GObject *object)
 {
-//    DonnaProviderFsPrivate *priv;
+    DonnaProviderFsPrivate *priv;
 
-//    priv = DONNA_PROVIDER_FS (object)->priv;
+    priv = DONNA_PROVIDER_FS (object)->priv;
+    g_slist_free_full (priv->io_engines, (GDestroyNotify) free_io_engine);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_fs_parent_class)->finalize (object);
@@ -119,40 +144,49 @@ provider_fs_get_domain (DonnaProvider *provider)
     return "fs";
 }
 
-static DonnaTask *
-provider_fs_io_task (DonnaProvider      *provider,
-                     DonnaIoType         type,
-                     gboolean            is_source,
-                     GPtrArray          *sources,
-                     DonnaNode          *dest,
-                     GError            **error)
+gboolean
+donna_provider_fs_add_io_engine (DonnaProviderFs    *pfs,
+                                 const gchar        *name,
+                                 fs_engine_io_task   engine,
+                                 GError            **error)
 {
-    DonnaTask *task;
-    DonnaApp *app;
-    DonnaProvider *pe;
-    DonnaNode *node;
-    GString *str;
-    gchar *cmdline;
-    gchar *fmt;
-    gchar *s;
+    DonnaProviderFsPrivate *priv;
+    GSList *l;
+    struct io_engine *ioe;
 
-    if ((!is_source && donna_node_peek_provider (sources->pdata[0]) != provider)
-        || (is_source && type != DONNA_IO_DELETE
-            && donna_node_peek_provider (dest) != provider))
+    g_return_val_if_fail (DONNA_IS_PROVIDER_FS (pfs), FALSE);
+    g_return_val_if_fail (name != NULL, FALSE);
+    g_return_val_if_fail (engine != NULL, FALSE);
+    priv = pfs->priv;
+
+    for (l = priv->io_engines; l; l = l->next)
     {
-        g_set_error (error, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-                "Provider 'fs': Does not support IO operation outside of 'fs'");
-        return NULL;
+        if (streq (((struct io_engine *) l->data)->name, name))
+        {
+            g_set_error (error, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_ALREADY_EXIST,
+                    "Provider 'fs': Cannot add IO engine '%s', there's already one",
+                    name);
+            return FALSE;
+        }
     }
 
-    g_object_get (provider, "app", &app, NULL);
-    if (!donna_config_get_string (donna_app_peek_config (app), &cmdline,
-                "providers/fs/exec_%s",
-                (type == DONNA_IO_DELETE) ? "delete" : (
-                    (type == DONNA_IO_COPY) ? "copy" : "move")))
-        cmdline = g_strdup ((type == DONNA_IO_DELETE) ? ">rm -I -r %s"
-                : (type == DONNA_IO_COPY) ? ">cp -a -t %d %s" : ">mv -t %d %s");
+    ioe = g_new (struct io_engine, 1);
+    ioe->name = g_strdup (name);
+    ioe->io_engine_task = engine;
+    priv->io_engines = g_slist_prepend (priv->io_engines, ioe);
+    return TRUE;
+}
+
+static gchar *
+parse_cmdline (const gchar        *cmdline,
+               GPtrArray          *sources,
+               DonnaNode          *dest,
+               GError            **error)
+{
+    GString *str;
+    const gchar *fmt;
+    const gchar *s;
 
     s = fmt = cmdline;
     str = g_string_new (NULL);
@@ -191,66 +225,74 @@ provider_fs_io_task (DonnaProvider      *provider,
                 fmt = s;
                 break;
 
-            default:
+            case '%':
+                g_string_append_len (str, fmt, s - fmt);
+                g_string_append_c (str, '%');
                 s += 2;
+                fmt = s;
                 break;
+
+            default:
+                g_set_error (error, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'fs': Invalid syntax in command line: %s",
+                        cmdline);
+                g_string_free (str, TRUE);
+                return NULL;
         }
     }
     g_string_append (str, fmt);
-    g_free (cmdline);
 
-    pe = donna_app_get_provider (app, "exec");
-    g_object_unref (pe);
-    task = donna_provider_get_node_task (pe, str->str, error);
-    if (G_UNLIKELY (!task))
+    return g_string_free (str, FALSE);
+}
+
+static DonnaTask *
+provider_fs_io_task (DonnaProvider      *provider,
+                     DonnaIoType         type,
+                     gboolean            is_source,
+                     GPtrArray          *sources,
+                     DonnaNode          *dest,
+                     GError            **error)
+{
+    DonnaTask *task;
+    GSList *l;
+    struct io_engine *ioe;
+
+    if ((!is_source && donna_node_peek_provider (sources->pdata[0]) != provider)
+        || (is_source && type != DONNA_IO_DELETE
+            && donna_node_peek_provider (dest) != provider))
     {
-        g_prefix_error (error, "Provider 'fs': Failed to get task to get node 'exec:%s': ",
-                str->str);
-        g_string_free (str, TRUE);
-        g_object_unref (app);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider 'fs': Does not support IO operation outside of 'fs'");
         return NULL;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (app, task);
-    g_object_unref (app);
-    donna_task_wait_for_it (task);
-    if (G_UNLIKELY (donna_task_get_state (task) != DONNA_TASK_DONE))
+    for (l = ((DonnaProviderFs *) provider)->priv->io_engines; l; l = l->next)
     {
-        if (error)
+        ioe = l->data;
+
+        task = ioe->io_engine_task (((DonnaProviderBase *) provider)->app,
+                type, sources, dest, parse_cmdline, error);
+        if (G_UNLIKELY (!task))
         {
-            const GError *e = NULL;
-
-            e = donna_task_get_error (task);
-            if (e)
-            {
-                *error = g_error_copy (e);
-                g_prefix_error (error, "Provider 'fs': Failed to get node 'exec:%s': ",
-                        str->str);
-            }
+            if (l->next)
+                g_clear_error (error);
             else
-                g_set_error (error, DONNA_PROVIDER_ERROR,
-                        DONNA_PROVIDER_ERROR_OTHER,
-                        "Provider 'fs': Failed to get node 'exec:%s'",
-                        str->str);
+            {
+                g_prefix_error (error, "Provider 'fs': Failed to create IO task: ");
+                return NULL;
+            }
         }
-        g_object_unref (task);
-        g_string_free (str, TRUE);
-        return NULL;
     }
 
-    node = g_value_dup_object (donna_task_get_return_value (task));
-    g_object_unref (task);
-
-    task = donna_node_trigger_task (node, error);
     if (G_UNLIKELY (!task))
     {
-        g_prefix_error (error, "Provider 'fs': Failed to get trigger task for 'exec:%s': ",
-                str->str);
-        g_string_free (str, TRUE);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider 'fs': No IO engine available");
         return NULL;
     }
-    g_string_free (str, TRUE);
 
     return task;
 }
