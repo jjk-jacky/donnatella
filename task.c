@@ -110,7 +110,6 @@
  * donna_task_update()
  * In case an error occurs, the error can be set by using either
  * donna_task_set_error() or donna_task_take_error()
- * TODO donna_task_set_nodes_for_selection()
  *
  * A return value might also be set. This is not intended for the end-user, but
  * the caller. For example, a task to get a #DonnaNode from a #DonnaProvider
@@ -176,8 +175,6 @@ struct _DonnaTaskPrivate
     int                  fd;
     /* fd that can be used when blocking, see donna_task_set_can_block() */
     int                  fd_block;
-    /* GPtrArray of nodes to be selected on List */
-    GPtrArray           *nodes_for_selection;
     /* to hold the return value */
     GValue              *value;
     /* to hold the error */
@@ -204,7 +201,6 @@ enum
     PROP_STATE,
     PROP_DEVICES,
     PROP_TASKUI,
-    PROP_NODES_FOR_SELECTION,
     PROP_ERROR,
     PROP_RETURN_VALUE,
 
@@ -384,18 +380,6 @@ donna_task_class_init (DonnaTaskClass *klass)
                 DONNA_TYPE_TASKUI,
                 G_PARAM_READABLE);
     /**
-     * DonnaTask:nodes-for-selection:
-     *
-     * List of #DonnaNode to be selected on the List. FIXME
-     *
-     * Returns: (element-type DonnaNode) (transfer container): List of nodes
-     */
-    donna_task_props[PROP_NODES_FOR_SELECTION] =
-        g_param_spec_boxed ("nodes-for-selection", "nodes-for-selection",
-                "List of nodes to be selected on List",
-                G_TYPE_PTR_ARRAY,
-                G_PARAM_READABLE);
-    /**
      * DonnaTask:error:
      *
      * #GError is case an error occured. The #GError remains owned by the task,
@@ -449,7 +433,6 @@ donna_task_init (DonnaTask *task)
     priv->devices   = NULL;
     priv->fd        = -1;
     priv->fd_block  = -1;
-    priv->nodes_for_selection = NULL;
     priv->value     = NULL;
     priv->error     = NULL;
     g_mutex_init (&priv->mutex);
@@ -475,8 +458,6 @@ donna_task_finalize (GObject *object)
         close (priv->fd);
     if (priv->fd_block >= 0)
         close (priv->fd_block);
-    if (priv->nodes_for_selection)
-        g_ptr_array_unref (priv->nodes_for_selection);
     if (priv->value)
     {
         g_value_unset (priv->value);
@@ -540,9 +521,6 @@ donna_task_get_property (GObject        *object,
             break;
         case PROP_TASKUI:
             g_value_set_object (value, priv->taskui);
-            break;
-        case PROP_NODES_FOR_SELECTION:
-            g_value_set_boxed (value, priv->nodes_for_selection);
             break;
         case PROP_ERROR:
             g_value_set_pointer (value, priv->error);
@@ -1868,27 +1846,6 @@ donna_task_update (DonnaTask        *task,
         UNLOCK_TASK (task);
         notify_prop (task, PROP_STATUS);
     }
-}
-
-/**
- * donna_task_set_nodes_for_selection:
- * @task: Task to set ::nodes-for-selection on
- * @nodes: (element-type DonnaNode) (transfer container): List of nodes
- *
- * TODO
- */
-void
-donna_task_set_nodes_for_selection (DonnaTask *task, GPtrArray *nodes)
-{
-    DonnaTaskPrivate *priv;
-
-    g_return_if_fail (DONNA_IS_TASK (task));
-
-    priv = task->priv;
-
-    if (priv->nodes_for_selection)
-        g_ptr_array_unref (priv->nodes_for_selection);
-    priv->nodes_for_selection = g_ptr_array_ref (nodes);
 }
 
 /**
