@@ -373,7 +373,6 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *data)
             g_free (data);
             return;
         }
-        g_value_unset (&value);
     }
 
     g_free (data);
