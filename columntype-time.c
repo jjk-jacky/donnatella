@@ -801,14 +801,20 @@ get_ts (struct tv_col_data  *data,
 #undef syntax_error
 
 static inline gboolean
-set_prop (const gchar   *prop,
-          guint64        ts,
-          DonnaNode     *node,
-          DonnaTreeView *tree,
-          GError       **error)
+set_prop (struct tv_col_data    *data,
+          const gchar           *prop,
+          guint64                ts,
+          DonnaNode             *node,
+          DonnaTreeView         *tree,
+          GError               **error)
 {
     GValue v = G_VALUE_INIT;
+    guint64 ref;
     gboolean ret;
+
+    ref = get_ref_time (data, node, data->which);
+    if (ref != (guint64) -1 && ref == ts)
+        return TRUE;
 
     g_value_init (&v, G_TYPE_UINT64);
     g_value_set_uint64 (&v, ts);
@@ -858,7 +864,7 @@ set_value (struct tv_col_data   *data,
         is_ts_fixed = FALSE;
 
     if (node_ref)
-        set_prop (prop, ts, nodes->pdata[i++], tree, error);
+        set_prop (data, prop, ts, nodes->pdata[i++], tree, error);
 
     for ( ; i < nodes->len; ++i)
     {
@@ -885,7 +891,7 @@ set_value (struct tv_col_data   *data,
             }
         }
 
-        if (!set_prop (prop, ts, nodes->pdata[i], tree, &err))
+        if (!set_prop (data, prop, ts, nodes->pdata[i], tree, &err))
         {
             gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
 
