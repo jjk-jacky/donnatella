@@ -462,7 +462,7 @@ donna_provider_remove_from_task (DonnaProvider  *provider,
             }
 
             s = donna_node_get_location (node);
-            if (!streqn (location, s, len) || s[len] != '/')
+            if (!streqn (location, s, len) || (len > 1 && s[len] != '/'))
             {
                 can_convert = FALSE;
                 g_free (s);
