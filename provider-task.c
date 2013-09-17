@@ -1331,6 +1331,18 @@ done:
     return DONNA_TASK_DONE;
 }
 
+static inline void
+run_task_refresh_tm (DonnaProviderTask *tm)
+{
+    DonnaProviderTaskPrivate *priv = tm->priv;
+    DonnaTask *task;
+
+    task = donna_task_new ((task_fn) refresh_tm, tm, NULL);
+    DONNA_DEBUG (TASK,
+            donna_task_set_desc (task, "Refresh Task Manager"));
+    donna_app_run_task (priv->app, task);
+}
+
 static void
 notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
 {
@@ -1461,12 +1473,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
 next:
     if (check_refresh && (is_state || streq (pspec->name, "priority")
             || streq (pspec->name, "devices")))
-    {
-        DonnaTask *t;
-
-        t = donna_task_new ((task_fn) refresh_tm, tm, NULL);
-        donna_app_run_task (priv->app, t);
-    }
+        run_task_refresh_tm (tm);
      if (is_state)
          refresh_statuses (tm);
 }
@@ -1509,8 +1516,7 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
     refresh_statuses (tm);
     g_signal_connect (task, "notify", (GCallback) notify_cb, tm);
 
-    donna_app_run_task (priv->app,
-            donna_task_new ((task_fn) refresh_tm, tm, NULL));
+    run_task_refresh_tm (tm);
 
     /* we should signal a new child? */
     klass = DONNA_PROVIDER_BASE_GET_CLASS (pb);
@@ -1616,8 +1622,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                             donna_node_set_property_value (node, "state", &v);
                             g_value_unset (&v);
 
-                            donna_app_run_task (priv->app,
-                                    donna_task_new ((task_fn) refresh_tm, tm, NULL));
+                            run_task_refresh_tm (tm);
                         }
                         break;
                     }
@@ -1664,8 +1669,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                             donna_node_set_property_value (node, "state", &v);
                             g_value_unset (&v);
 
-                            donna_app_run_task (priv->app,
-                                    donna_task_new ((task_fn) refresh_tm, tm, NULL));
+                            run_task_refresh_tm (tm);
                         }
                         break;
                     }
