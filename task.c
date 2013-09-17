@@ -52,9 +52,10 @@
  *
  * donna_task_new_full() allows to define more properties, that can also be set
  * afterwards :
- * - donna_task_set_taskui() to set the #DonnaTaskUi object that will allow the
- *   task to interact with the user, e.g. when copying file, to confirm an
- *   overwrite.
+ * - donna_task_set_taskui() to set the #DonnaTaskUi object that will provide
+ *   additional UI about the task's process. This can be extra info while the
+ *   process/task runs (e.g. file currently copied, speed, etc) or afterwards
+ *   (e.g. detailled error messages/log).
  * - donna_task_set_devices() to set the list of devices involved in the task.
  *   This is to be used by #DonnaTaskManager to determine if multiple tasks can
  *   be run at the same time.
@@ -361,14 +362,25 @@ donna_task_class_init (DonnaTaskClass *klass)
     /**
      * DonnaTask:taskui:
      *
-     * The #DonnaTaskUi object used to provide interaction with the user (e.g.
-     * to ask for confirmations, etc)
-     * Can also be used by #DonnaTaskManager to show a more detailled
-     * progress/staus of the task (as it runs, or afterwards).
+     * The #DonnaTaskUi object used to provide additional user interface than
+     * what the task manager can offer (state, progress, status, ways to
+     * pause/resume/cancel).
+     *
+     * This is meant to be optional UI that isn't required, e.g. during a file
+     * operation it could include currently processed filename, current/total
+     * size, speed, ETA, etc
+     * It could also provide info after the task completed, e.g. detailled error
+     * messages/log.
+     *
+     * Though it could include options that affect the worker, any required user
+     * interaction (e.g. ask for confirmation) is done by the worker, using task
+     * helpers (as they need to block the thread while waiting for user input).
+     *
+     * Will be available in the #DonnaTaskManager as "Details"
      */
     donna_task_props[PROP_TASKUI] =
         g_param_spec_object ("taskui", "taskui",
-                "TaskUI object to provider user interaction for the task",
+                "TaskUI object to provide additional UI for the task",
                 DONNA_TYPE_TASKUI,
                 G_PARAM_READABLE);
     /**
@@ -639,7 +651,7 @@ donna_task_new (task_fn             func,
  * @func: Function to be run as the task (aka the "worker")
  * @data: user-data sent as parameter to @func
  * @destroy: Function called if the task isn't run, to free @data
- * @taskui: #DonnaTaskUi to be provide user-interactions
+ * @taskui: #DonnaTaskUi to be provide extra GUI feedback
  * @devices: List of devices involved in the task
  * @visibility: #DonnaTaskVisibility of the task
  * @priority: #DonnaTaskPriority of the task
