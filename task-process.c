@@ -288,10 +288,12 @@ close_fd (DonnaTask *task, DonnaPipe pipe, gint *fd)
     if (*fd < 0)
         return;
 
-again:
+    /* we should NOT check for EINTR and try again. POSIX says in that case the
+     * state in undefined, but on Linux it WILL be closed (and maybe already
+     * reused in threaded env) so we shouldn't try to close it again.
+     *
+     * See http://lkml.indiana.edu/hypermail/linux/kernel/0509.1/0877.html */
     ret = close (*fd);
-    if (ret == -1 && errno == EINTR)
-        goto again;
     *fd = -1;
 
     g_signal_emit (task, donna_task_process_signals[PIPE_DATA_RECEIVED], 0,
@@ -423,9 +425,8 @@ pulse_cb (DonnaTask *task)
 static void
 close_fd_in (gint *fd)
 {
-    for (;;)
-        if (close (*fd) != -1 || errno != EINTR)
-            break;
+    /* see close_fd() for lack of loop in case of EINTR */
+    close (*fd);
     *fd = -1;
 }
 
