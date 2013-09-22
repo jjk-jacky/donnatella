@@ -642,12 +642,12 @@ donna_app_filter_nodes (DonnaApp       *app,
             (get_ct_data_fn) donna_app_get_ct_data, app, error);
 }
 
-gboolean
-donna_app_nodes_io (DonnaApp       *app,
-                    GPtrArray      *nodes,
-                    DonnaIoType     io_type,
-                    DonnaNode      *dest,
-                    GError        **error)
+DonnaTask *
+donna_app_nodes_io_task (DonnaApp       *app,
+                         GPtrArray      *nodes,
+                         DonnaIoType     io_type,
+                         DonnaNode      *dest,
+                         GError        **error)
 {
     DonnaAppInterface *interface;
 
@@ -661,9 +661,9 @@ donna_app_nodes_io (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->nodes_io != NULL, FALSE);
+    g_return_val_if_fail (interface->nodes_io_task != NULL, FALSE);
 
-    return (*interface->nodes_io) (app, nodes, io_type, dest, error);
+    return (*interface->nodes_io_task) (app, nodes, io_type, dest, error);
 }
 
 gint

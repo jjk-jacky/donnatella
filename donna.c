@@ -234,7 +234,7 @@ static void             donna_donna_show_error      (DonnaApp       *app,
                                                      const GError   *error);
 static gpointer         donna_donna_get_ct_data     (DonnaApp       *app,
                                                      const gchar    *col_name);
-static gboolean         donna_donna_nodes_io        (DonnaApp       *app,
+static DonnaTask *      donna_donna_nodes_io_task   (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
@@ -278,7 +278,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->show_menu            = donna_donna_show_menu;
     interface->show_error           = donna_donna_show_error;
     interface->get_ct_data          = donna_donna_get_ct_data;
-    interface->nodes_io             = donna_donna_nodes_io;
+    interface->nodes_io_task        = donna_donna_nodes_io_task;
     interface->ask                  = donna_donna_ask;
     interface->ask_text             = donna_donna_ask_text;
 }
@@ -2474,20 +2474,12 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
     return NULL;
 }
 
-static void
-task_show_error (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
-{
-    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        donna_app_show_error (app, donna_task_get_error (task),
-                "IO operation failed");
-}
-
-static gboolean
-donna_donna_nodes_io (DonnaApp       *app,
-                      GPtrArray      *nodes,
-                      DonnaIoType     io_type,
-                      DonnaNode      *dest,
-                      GError        **error)
+static DonnaTask *
+donna_donna_nodes_io_task (DonnaApp       *app,
+                           GPtrArray      *nodes,
+                           DonnaIoType     io_type,
+                           DonnaNode      *dest,
+                           GError        **error)
 {
     DonnaProvider *provider;
     DonnaTask *task;
@@ -2497,7 +2489,7 @@ donna_donna_nodes_io (DonnaApp       *app,
     {
         g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_EMPTY,
                 "Cannot perform IO: no nodes given");
-        return FALSE;
+        return NULL;
     }
 
     /* make sure all nodes are from the same provider */
@@ -2508,7 +2500,7 @@ donna_donna_nodes_io (DonnaApp       *app,
         {
             g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
                     "Cannot perform IO: nodes are not all from the same provider/domain.");
-            return FALSE;
+            return NULL;
         }
     }
 
@@ -2524,12 +2516,10 @@ donna_donna_nodes_io (DonnaApp       *app,
     if (!task)
     {
         g_prefix_error (error, "Couldn't to perform IO operation: ");
-        return FALSE;
+        return NULL;
     }
 
-    donna_task_set_callback (task, (task_callback_fn) task_show_error, app, NULL);
-    donna_app_run_task (app, task);
-    return TRUE;
+    return task;
 }
 
 struct ask

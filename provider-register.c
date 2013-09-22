@@ -2856,6 +2856,8 @@ cmd_register_nodes_io (DonnaTask               *task,
     DonnaRegisterType reg_type;
     gint c_io;
     GPtrArray *nodes;
+    DonnaTask *t;
+    DonnaTaskState state;
 
     if (!is_valid_register_name (&name, &err))
     {
@@ -3068,7 +3070,8 @@ cmd_register_nodes_io (DonnaTask               *task,
     if (c_io == 0)
         c_io = (reg_type == DONNA_REGISTER_CUT) ? 2 /* MOVE */ : 1 /* COPY */;
 
-    if (!donna_app_nodes_io (app, nodes, io_types[c_io], dest, &err))
+    t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, &err);
+    if (!t)
     {
         donna_task_take_error (task, err);
         g_ptr_array_unref (nodes);
@@ -3076,7 +3079,37 @@ cmd_register_nodes_io (DonnaTask               *task,
     }
     g_ptr_array_unref (nodes);
 
-    return DONNA_TASK_DONE;
+    donna_task_set_can_block (g_object_ref_sink (t));
+    donna_app_run_task (app, t);
+    donna_task_wait_for_it (t);
+
+    state = donna_task_get_state (t);
+    if (state == DONNA_TASK_DONE)
+    {
+        GValue *value;
+
+        value = donna_task_grab_return_value (task);
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        g_value_set_boxed (value, g_value_get_boxed (donna_task_get_return_value (t)));
+        donna_task_release_return_value (task);
+    }
+    else
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+        {
+            err = g_error_copy (err);
+            g_prefix_error (&err, "Command 'register_nodes_io': IO task failed: ");
+            donna_task_take_error (task, err);
+        }
+        else
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'register_nodes_io': IO task failed without error message");
+    }
+
+    g_object_unref (t);
+    return state;
 }
 
 static DonnaTaskState
@@ -3358,7 +3391,7 @@ provider_register_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (register_nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;

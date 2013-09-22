@@ -90,7 +90,7 @@ struct _DonnaAppInterface
                                                      const GError   *error);
     gpointer            (*get_ct_data)              (DonnaApp       *app,
                                                      const gchar    *col_name);
-    gboolean            (*nodes_io)                 (DonnaApp       *app,
+    DonnaTask *         (*nodes_io_task)            (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
@@ -183,7 +183,7 @@ gboolean            donna_app_filter_nodes          (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *filter,
                                                      GError       **error);
-gboolean            donna_app_nodes_io              (DonnaApp       *app,
+DonnaTask *         donna_app_nodes_io_task         (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
