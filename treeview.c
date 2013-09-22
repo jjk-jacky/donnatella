@@ -2375,6 +2375,13 @@ set_children (DonnaTreeView *tree,
         }
         else
         {
+#ifdef GTK_IS_JJK
+            /* make sure we don't try to perform a rubber band on two different
+             * content, as that would be very likely to segfault in GTK, in
+             * addition to be quite unexpected at best */
+            if (gtk_tree_view_is_rubber_banding_pending ((GtkTreeView *) tree, TRUE))
+                gtk_tree_view_stop_rubber_banding ((GtkTreeView *) tree, FALSE);
+#endif
             /* clear the list (see selection_changed_cb() for why filling_list) */
             priv->filling_list = TRUE;
             donna_tree_store_clear (priv->store);
@@ -7706,6 +7713,13 @@ change_location (DonnaTreeView *tree,
         else if (priv->future_location != data->child)
             return FALSE;
 
+#ifdef GTK_IS_JJK
+        /* make sure we don't try to perform a rubber band on two different
+         * content, as that would be very likely to segfault in GTK, in
+         * addition to be quite unexpected at best */
+        if (gtk_tree_view_is_rubber_banding_pending ((GtkTreeView *) tree, TRUE))
+            gtk_tree_view_stop_rubber_banding ((GtkTreeView *) tree, FALSE);
+#endif
         /* clear the list (see selection_changed_cb() for why filling_list) */
         priv->filling_list = TRUE;
         donna_tree_store_clear (priv->store);
@@ -7724,6 +7738,13 @@ change_location (DonnaTreeView *tree,
 
         if (priv->cl < CHANGING_LOCATION_GOT_CHILD)
         {
+#ifdef GTK_IS_JJK
+            /* make sure we don't try to perform a rubber band on two different
+             * content, as that would be very likely to segfault in GTK, in
+             * addition to be quite unexpected at best */
+            if (gtk_tree_view_is_rubber_banding_pending ((GtkTreeView *) tree, TRUE))
+                gtk_tree_view_stop_rubber_banding ((GtkTreeView *) tree, FALSE);
+#endif
             /* clear the list (see selection_changed_cb() for why filling_list) */
             priv->filling_list = TRUE;
             donna_tree_store_clear (priv->store);
@@ -12981,7 +13002,7 @@ donna_tree_view_button_release_event (GtkWidget      *widget,
     GSList *l;
 
 #ifdef GTK_IS_JJK
-    if (gtk_tree_view_is_rubber_banding_active ((GtkTreeView *) widget))
+    if (gtk_tree_view_is_rubber_banding_pending ((GtkTreeView *) widget, TRUE))
         /* this ensures stopping rubber banding will not move the focus */
         gtk_tree_view_stop_rubber_banding ((GtkTreeView *) widget, FALSE);
 #endif
