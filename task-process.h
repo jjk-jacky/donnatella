@@ -94,6 +94,12 @@ gboolean            donna_task_process_set_stdin    (DonnaTaskProcess   *taskp,
                                                      task_stdin_fn       fn,
                                                      gpointer            data,
                                                      GDestroyNotify      destroy);
+void                donna_task_process_setenv       (DonnaTaskProcess   *taskp,
+                                                     const gchar        *variable,
+                                                     const gchar        *value,
+                                                     gboolean            overwrite);
+void                donna_task_process_unsetenv     (DonnaTaskProcess   *taskp,
+                                                     const gchar        *variable);
 gboolean            donna_task_process_set_default_closer (
                                                      DonnaTaskProcess   *taskp);
 gboolean            donna_task_process_set_workdir_to_curdir (

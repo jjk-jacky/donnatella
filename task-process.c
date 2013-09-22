@@ -21,6 +21,7 @@ enum
 
     PROP_WORKDIR,
     PROP_CMDLINE,
+    PROP_ENVIRON,
     PROP_AUTOPULSE,
 
     NB_PROPS
@@ -45,6 +46,7 @@ struct _DonnaTaskProcessPrivate
 
     gchar               *workdir;
     gchar               *cmdline;
+    gchar              **envp;
     gboolean             wait;
     DonnaTaskUiMessages *tuimsg;
 
@@ -93,6 +95,11 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
         g_param_spec_string ("cmdline", "cmdline",
                 "Command-line to execute",
                 NULL, /* default */
+                G_PARAM_READWRITE);
+    donna_task_process_props[PROP_ENVIRON] =
+        g_param_spec_boxed ("environ", "environ",
+                "Environnement for the executed process",
+                G_TYPE_STRV,
                 G_PARAM_READWRITE);
     donna_task_process_props[PROP_AUTOPULSE] =
         g_param_spec_boolean ("autopulse", "autopulse",
@@ -184,6 +191,7 @@ donna_task_process_finalize (GObject *object)
 
     g_free (priv->workdir);
     g_free (priv->cmdline);
+    g_strfreev (priv->envp);
 
     /* chain up */
     G_OBJECT_CLASS (donna_task_process_parent_class)->finalize (object);
@@ -205,6 +213,10 @@ donna_task_process_get_property (GObject            *object,
 
         case PROP_CMDLINE:
             g_value_set_string (value, priv->cmdline);
+            break;
+
+        case PROP_ENVIRON:
+            g_value_set_boxed (value, priv->envp);
             break;
 
         case PROP_AUTOPULSE:
@@ -242,6 +254,11 @@ donna_task_process_set_property (GObject            *object,
                 if (priv->tuimsg)
                     donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
             }
+            break;
+
+        case PROP_ENVIRON:
+            g_strfreev (priv->envp);
+            priv->envp = g_value_dup_boxed (value);
             break;
 
         case PROP_AUTOPULSE:
@@ -458,7 +475,7 @@ task_worker (DonnaTask *task, gpointer data)
     flags = G_SPAWN_SEARCH_PATH;
     if (priv->wait)
         flags |= G_SPAWN_DO_NOT_REAP_CHILD;
-    if (!g_spawn_async_with_pipes (priv->workdir, argv, NULL, flags, NULL, NULL,
+    if (!g_spawn_async_with_pipes (priv->workdir, argv, priv->envp, flags, NULL, NULL,
                 (priv->wait) ? &pid : NULL,
                 (priv->wait && priv->stdin_fn) ? &fd_in : NULL,
                 (priv->wait) ? &fd_out : NULL,
@@ -826,6 +843,32 @@ donna_task_process_set_stdin (DonnaTaskProcess   *taskp,
     priv->stdin_data    = data;
     priv->stdin_destroy = destroy;
     return TRUE;
+}
+
+void
+donna_task_process_setenv (DonnaTaskProcess   *taskp,
+                           const gchar        *variable,
+                           const gchar        *value,
+                           gboolean            overwrite)
+{
+    DonnaTaskProcessPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK_PROCESS (taskp));
+    priv = taskp->priv;
+
+    priv->envp = g_environ_setenv (priv->envp, variable, value, overwrite);
+}
+
+void
+donna_task_process_unsetenv (DonnaTaskProcess   *taskp,
+                             const gchar        *variable)
+{
+    DonnaTaskProcessPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK_PROCESS (taskp));
+    priv = taskp->priv;
+
+    priv->envp = g_environ_unsetenv (priv->envp, variable);
 }
 
 gboolean
