@@ -182,6 +182,7 @@ donna_task_process_finalize (GObject *object)
     if (priv->init_destroy && priv->init_data)
         priv->init_destroy (priv->init_data);
 
+    g_free (priv->workdir);
     g_free (priv->cmdline);
 
     /* chain up */
@@ -467,6 +468,7 @@ task_worker (DonnaTask *task, gpointer data)
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+    g_strfreev (argv);
 
     if (!priv->wait)
         return DONNA_TASK_DONE;
