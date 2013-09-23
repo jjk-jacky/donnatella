@@ -31,6 +31,22 @@ static void             provider_mark_finalize          (GObject            *obj
 /* DonnaProvider */
 static const gchar *    provider_mark_get_domain        (DonnaProvider      *provider);
 static DonnaProviderFlags provider_mark_get_flags       (DonnaProvider      *provider);
+static gchar *          provider_mark_get_context_alias_new_nodes (
+                                                         DonnaProvider      *provider,
+                                                         const gchar        *extra,
+                                                         DonnaNode          *location,
+                                                         const gchar        *prefix,
+                                                         GError            **error);
+static gboolean         provider_mark_get_context_item_info (
+                                                         DonnaProvider      *provider,
+                                                         const gchar        *item,
+                                                         const gchar        *extra,
+                                                         DonnaContextReference reference,
+                                                         DonnaNode          *node_ref,
+                                                         tree_context_get_sel_fn get_sel,
+                                                         gpointer            get_sel_data,
+                                                         DonnaContextInfo   *info,
+                                                         GError            **error);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_mark_new_node          (DonnaProviderBase  *provider,
                                                          DonnaTask          *task,
@@ -59,8 +75,10 @@ static DonnaTaskState   provider_mark_remove_from       (DonnaProviderBase  *pro
 static void
 provider_mark_provider_init (DonnaProviderInterface *interface)
 {
-    interface->get_domain   = provider_mark_get_domain;
-    interface->get_flags    = provider_mark_get_flags;
+    interface->get_domain                   = provider_mark_get_domain;
+    interface->get_flags                    = provider_mark_get_flags;
+    interface->get_context_alias_new_nodes  = provider_mark_get_context_alias_new_nodes;
+    interface->get_context_item_info        = provider_mark_get_context_item_info;
 }
 
 static void
@@ -579,6 +597,56 @@ provider_mark_get_domain (DonnaProvider *provider)
 {
     g_return_val_if_fail (DONNA_IS_PROVIDER_MARK (provider), NULL);
     return "mark";
+}
+
+static gchar *
+provider_mark_get_context_alias_new_nodes (DonnaProvider      *provider,
+                                           const gchar        *extra,
+                                           DonnaNode          *location,
+                                           const gchar        *prefix,
+                                           GError            **error)
+{
+    return g_strdup_printf ("%snew_mark,%snew_dynamic_mark", prefix, prefix);
+}
+
+static gboolean
+provider_mark_get_context_item_info (DonnaProvider          *provider,
+                                     const gchar            *item,
+                                     const gchar            *extra,
+                                     DonnaContextReference   reference,
+                                     DonnaNode              *node_ref,
+                                     tree_context_get_sel_fn get_sel,
+                                     gpointer                get_sel_data,
+                                     DonnaContextInfo       *info,
+                                     GError                **error)
+{
+    if (streq (item, "new_mark"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->name = "New (Standard) Mark";
+        info->icon_name = "document-new";
+        info->trigger = "command:tree_goto_line (%o, f+s, @mark_set ("
+            "@ask_text (Please enter the location for the new mark), "
+            "@ask_text (Please enter the name of the new mark), s,"
+            "@ask_text (\"Please enter the destination (full location) of the new mark\")))";
+        return TRUE;
+    }
+    else if (streq (item, "new_dynamic_mark"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->name = "New Dynamic Mark";
+        info->icon_name = "document-new";
+        info->trigger = "command:tree_goto_line (%o, f+s, @mark_set ("
+            "@ask_text (Please enter the location for the new mark), "
+            "@ask_text (Please enter the name of the new mark), d,"
+            "@ask_text (\"Please enter the trigger (full location) for the new mark\")))";
+        return TRUE;
+    }
+
+    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+            "Provider 'fs': No such context item: '%s'", item);
+    return FALSE;
 }
 
 /* DonnaProviderBase */
@@ -1234,12 +1302,13 @@ cmd_mark_set (DonnaTask         *task,
     DonnaMarkType m_types[] = { DONNA_MARK_STANDARD, DONNA_MARK_DYNAMIC };
     DonnaMarkType m_type;
     gint t = -1;
-    DonnaNode *node;
+    DonnaNode *node = NULL;
     enum {
         UPD_NAME    = (1 << 0),
         UPD_TYPE    = (1 << 1),
         UPD_VALUE   = (1 << 2),
     } updated = 0;
+    GValue *rv;
 
     if (type)
     {
@@ -1332,12 +1401,36 @@ cmd_mark_set (DonnaTask         *task,
             g_mutex_unlock (&priv->mutex);
 
             donna_provider_node_new_child ((DonnaProvider *) pm, node_root, node);
-            g_object_unref (node);
             g_object_unref (node_root);
         }
         else
             g_mutex_unlock (&priv->mutex);
     }
+
+    /* we *might* have the node already, either because it was in cache or the
+     * root was and we needed to create it (for new-child) */
+    if (!node)
+        node = get_node_for (pm, GET_CREATE_FROM_LOCATION, (gpointer) location, &err);
+    if (G_UNLIKELY (!node))
+    {
+        if (err)
+        {
+            g_prefix_error (&err, "Command 'mark_set': "
+                    "Failed to get node for newly create mark: ");
+            donna_task_take_error (task, err);
+        }
+        else
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Command 'mark_set': Failed to get node for newly created mark");
+
+        return DONNA_TASK_FAILED;
+    }
+
+    rv = donna_task_grab_return_value (task);
+    g_value_init (rv, DONNA_TYPE_NODE);
+    g_value_take_object (rv, node);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -1399,7 +1492,7 @@ provider_mark_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (mark_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_NODE);
 
     g_object_unref (pc);
 }
