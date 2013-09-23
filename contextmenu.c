@@ -1074,29 +1074,34 @@ parse_items (DonnaApp               *app,
                 return NULL;
             }
 
-            s = alias;
-            arr = parse_items (app, pi, cur_parse | PARSE_IS_ALIAS, &s,
-                    get_alias, get_item_info, reference, source,
-                    conv_flags, conv_fn, conv_data, error);
-            if (!arr)
+            /* alias can be an empty string, in which case we don't need to free
+             * it, and it just means nothing (i.e. not an error) */
+            if (*alias != '\0')
             {
+                s = alias;
+                arr = parse_items (app, pi, cur_parse | PARSE_IS_ALIAS, &s,
+                        get_alias, get_item_info, reference, source,
+                        conv_flags, conv_fn, conv_data, error);
+                if (!arr)
+                {
+                    g_free (alias);
+                    g_ptr_array_unref (nodes);
+                    return NULL;
+                }
                 g_free (alias);
-                g_ptr_array_unref (nodes);
-                return NULL;
+
+                if (arr->len > 0)
+                {
+                    guint len = nodes->len;
+
+                    g_ptr_array_set_size (nodes, len + arr->len);
+                    memcpy (&nodes->pdata[len], &arr->pdata[0],
+                            sizeof (gpointer) * arr->len);
+                    g_ptr_array_set_free_func (arr, NULL);
+                }
+
+                g_ptr_array_unref (arr);
             }
-            g_free (alias);
-
-            if (arr->len > 0)
-            {
-                guint len = nodes->len;
-
-                g_ptr_array_set_size (nodes, len + arr->len);
-                memcpy (&nodes->pdata[len], &arr->pdata[0],
-                        sizeof (gpointer) * arr->len);
-                g_ptr_array_set_free_func (arr, NULL);
-            }
-
-            g_ptr_array_unref (arr);
             goto next;
         }
         else if (parse & PARSE_IS_INTERNAL)

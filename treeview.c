@@ -11394,8 +11394,7 @@ tree_context_get_alias (const gchar             *alias,
             return g_string_free (str, FALSE);
         }
         else
-            /* this will simply result in a non-visible item, i.e. no item */
-            return g_strdup (":column_edit.name");
+            return "";
     }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
