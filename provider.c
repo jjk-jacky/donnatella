@@ -502,3 +502,97 @@ donna_provider_remove_from_task (DonnaProvider  *provider,
 
     return (*interface->remove_from_task) (provider, nodes, source, error);
 }
+
+gchar *
+donna_provider_get_context_alias (DonnaProvider         *provider,
+                                  const gchar           *alias,
+                                  const gchar           *extra,
+                                  DonnaContextReference  reference,
+                                  const gchar           *prefix,
+                                  GError               **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (alias != NULL, NULL);
+    g_return_val_if_fail (prefix != NULL, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->get_context_alias == NULL)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "Provider '%s': No context alias supported",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
+
+    return (*interface->get_context_alias) (provider, alias, extra, reference,
+            prefix, error);
+}
+
+gchar *
+donna_provider_get_context_alias_new_nodes (DonnaProvider  *provider,
+                                            const gchar    *extra,
+                                            DonnaNode      *location,
+                                            const gchar    *prefix,
+                                            GError        **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (location), NULL);
+    g_return_val_if_fail (donna_node_peek_provider (location) == provider, NULL);
+    g_return_val_if_fail (prefix != NULL, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->get_context_alias_new_nodes == NULL)
+        /* if not implemented we just don't have anything, but the alias must
+         * always exist/be valid */
+        return "";
+
+    return (*interface->get_context_alias_new_nodes) (provider, extra, location,
+            prefix, error);
+}
+
+gboolean
+donna_provider_get_context_item_info (DonnaProvider             *provider,
+                                      const gchar               *item,
+                                      const gchar               *extra,
+                                      DonnaContextReference      reference,
+                                      DonnaNode                 *node_ref,
+                                      tree_context_get_sel_fn    get_sel,
+                                      gpointer                   get_sel_data,
+                                      DonnaContextInfo          *info,
+                                      GError                   **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), FALSE);
+    g_return_val_if_fail (item != NULL, FALSE);
+    g_return_val_if_fail (info != NULL, FALSE);
+    g_return_val_if_fail (node_ref == NULL || DONNA_IS_NODE (node_ref), FALSE);
+    g_return_val_if_fail (get_sel != NULL, FALSE);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+
+    if (interface->get_context_item_info == NULL)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "Provider '%s': No context item supported",
+                donna_provider_get_domain (provider));
+        return FALSE;
+    }
+
+    return (*interface->get_context_item_info) (provider, item, extra,
+            reference, node_ref, get_sel, get_sel_data, info, error);
+}

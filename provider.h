@@ -5,6 +5,7 @@
 #include "common.h"
 #include "node.h"
 #include "task.h"
+#include "contextmenu.h"
 
 G_BEGIN_DECLS
 
@@ -87,6 +88,27 @@ struct _DonnaProviderInterface
                                                      GPtrArray      *nodes,
                                                      DonnaNode      *source,
                                                      GError        **error);
+    gchar *             (*get_context_alias)        (DonnaProvider  *provider,
+                                                     const gchar    *alias,
+                                                     const gchar    *extra,
+                                                     DonnaContextReference reference,
+                                                     const gchar    *prefix,
+                                                     GError        **error);
+    gchar *             (*get_context_alias_new_nodes) (
+                                                     DonnaProvider  *provider,
+                                                     const gchar    *extra,
+                                                     DonnaNode      *location,
+                                                     const gchar    *prefix,
+                                                     GError        **error);
+    gboolean            (*get_context_item_info)    (DonnaProvider  *provider,
+                                                     const gchar    *item,
+                                                     const gchar    *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode      *node_ref,
+                                                     tree_context_get_sel_fn get_sel,
+                                                     gpointer        get_sel_data,
+                                                     DonnaContextInfo *info,
+                                                     GError        **error);
 };
 
 /* signals */
@@ -142,6 +164,28 @@ DonnaTask * donna_provider_new_child_task           (DonnaProvider  *provider,
 DonnaTask * donna_provider_remove_from_task         (DonnaProvider  *provider,
                                                      GPtrArray      *nodes,
                                                      DonnaNode      *source,
+                                                     GError        **error);
+/* context related */
+gchar *     donna_provider_get_context_alias        (DonnaProvider  *provider,
+                                                     const gchar    *alias,
+                                                     const gchar    *extra,
+                                                     DonnaContextReference reference,
+                                                     const gchar    *prefix,
+                                                     GError        **error);
+gchar *     donna_provider_get_context_alias_new_nodes (
+                                                     DonnaProvider  *provider,
+                                                     const gchar    *extra,
+                                                     DonnaNode      *location,
+                                                     const gchar    *prefix,
+                                                     GError        **error);
+gboolean    donna_provider_get_context_item_info    (DonnaProvider  *provider,
+                                                     const gchar    *item,
+                                                     const gchar    *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode      *node_ref,
+                                                     tree_context_get_sel_fn get_sel,
+                                                     gpointer        get_sel_data,
+                                                     DonnaContextInfo *info,
                                                      GError        **error);
 
 G_END_DECLS
