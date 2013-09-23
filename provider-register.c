@@ -2063,8 +2063,8 @@ provider_register_get_children (DonnaProviderBase  *_provider,
                     g_ptr_array_unref (nodes);
                     return DONNA_TASK_FAILED;
                 }
+                klass->add_node_to_cache (_provider, n);
             }
-            klass->add_node_to_cache (_provider, n);
             g_ptr_array_add (nodes, n);
         }
         if (!(has & HAS_CLIPBOARD))
@@ -2085,8 +2085,8 @@ provider_register_get_children (DonnaProviderBase  *_provider,
                     g_ptr_array_unref (nodes);
                     return DONNA_TASK_FAILED;
                 }
+                klass->add_node_to_cache (_provider, n);
             }
-            klass->add_node_to_cache (_provider, n);
             g_ptr_array_add (nodes, n);
         }
 
