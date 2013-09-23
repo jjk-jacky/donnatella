@@ -11479,7 +11479,6 @@ tree_context_get_item_info (const gchar             *item,
     else if (streqn (item, "go.", 3))
     {
         item += 3;
-        info->is_sensitive = TRUE;
 
         if (streq (item, "tree_root"))
         {
@@ -11536,7 +11535,7 @@ tree_context_get_item_info (const gchar             *item,
                             donna_node_peek_provider (priv->location))
                         & DONNA_PROVIDER_FLAG_FLAT));
 
-            if (priv->location)
+            if (info->is_visible && priv->location)
             {
                 s = donna_node_get_location (priv->location);
                 info->is_sensitive = !streq (s, "/");
@@ -11554,10 +11553,11 @@ tree_context_get_item_info (const gchar             *item,
         else if (streq (item, "down"))
         {
             /* no location or flat provider means no going down */
-            info->is_visible = (!is_tree (tree) && priv->location
-                    && !(donna_provider_get_flags (
-                            donna_node_peek_provider (priv->location))
-                        & DONNA_PROVIDER_FLAG_FLAT));
+            info->is_visible = info->is_sensitive =
+                (!is_tree (tree) && priv->location
+                 && !(donna_provider_get_flags (
+                         donna_node_peek_provider (priv->location))
+                     & DONNA_PROVIDER_FLAG_FLAT));
 
             info->name = "Go Down";
             info->icon_name = "go-down";
