@@ -268,10 +268,12 @@ struct status
 /* for conv_flag_fn() used in actions/context menus */
 struct conv
 {
-    DonnaTreeView *tree;
-    DonnaTreeRow  *row;
-    gchar         *col_name;
-    guint          key_m;
+    DonnaTreeView   *tree;
+    DonnaTreeRow    *row;
+    gchar           *col_name;
+    guint            key_m;
+    /* context menus: selected nodes, if asked by a provider */
+    GPtrArray       *selection;
 };
 
 
@@ -11396,11 +11398,52 @@ tree_context_get_alias (const gchar             *alias,
         else
             return "";
     }
+    else if (streq (alias, "new_nodes"))
+    {
+        gchar buf[255], *b = buf;
+        gchar *ret;
+
+        if (!priv->location)
+            return "";
+
+        if (G_UNLIKELY (snprintf (buf, 255, ":domain.%s.",
+                        donna_node_get_domain (priv->location)) >= 255))
+            b = g_strdup_printf (":domain.%s.", donna_node_get_domain (priv->location));
+
+        ret = donna_provider_get_context_alias_new_nodes (
+                donna_node_peek_provider (priv->location), extra,
+                priv->location, buf, error);
+
+        if (G_UNLIKELY (b != buf))
+            g_free (b);
+        return ret;
+    }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
             "Unknown user alias '%s'", alias);
     return NULL;
+}
+
+static GPtrArray *
+context_get_selection (struct conv *conv, GError **error)
+{
+    DonnaTreeView *tree = conv->tree;
+
+    if (!conv->selection)
+    {
+        GError *err = NULL;
+
+        conv->selection = donna_tree_view_get_selected_nodes (tree, &err);
+        if (!conv->selection && !err)
+            /* it returns NULL if there's no selection, but sets an error.
+             * Neither means no selection, which here is an error */
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': No selection", tree->priv->name);
+    }
+
+    return conv->selection;
 }
 
 static gboolean
@@ -11595,6 +11638,47 @@ tree_context_get_item_info (const gchar             *item,
         }
         else
             goto err;
+
+        return TRUE;
+    }
+    else if (streqn (item, "domain.", 7))
+    {
+        DonnaProvider *provider;
+        gchar *s;
+
+        item += 7;
+        s = strchr (item, '.');
+        if (!s)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No such item: '%s'",
+                    priv->name, item - 4);
+            return FALSE;
+        }
+
+        *s = '\0';
+        provider = donna_app_get_provider (priv->app, item);
+        *s = '.';
+        if (!provider)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No such item: '%s' (provider not found)",
+                    priv->name, item - 7);
+            return FALSE;
+        }
+
+        if (!donna_provider_get_context_item_info (provider, s + 1, extra,
+                reference, (conv->row) ? conv->row->node : NULL,
+                (tree_context_get_sel_fn) context_get_selection,
+                (reference & DONNA_CONTEXT_HAS_SELECTION) ? conv : NULL,
+                info, error))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to get item '%s': ",
+                    priv->name, item - 7);
+            return FALSE;
+        }
 
         return TRUE;
     }
@@ -11878,6 +11962,8 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 
     if (conv.row)
         g_free (conv.row);
+    if (conv.selection)
+        g_ptr_array_unref (conv.selection);
 
     if (!nodes)
     {
