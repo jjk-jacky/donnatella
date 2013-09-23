@@ -36,6 +36,22 @@ static DonnaTask *      provider_fs_io_task         (DonnaProvider      *provide
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
                                                      GError            **error);
+static gchar *          provider_fs_get_context_alias_new_nodes (
+                                                     DonnaProvider      *provider,
+                                                     const gchar        *extra,
+                                                     DonnaNode          *location,
+                                                     const gchar        *prefix,
+                                                     GError            **error);
+static gboolean         provider_fs_get_context_item_info (
+                                                     DonnaProvider      *provider,
+                                                     const gchar        *item,
+                                                     const gchar        *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode          *node_ref,
+                                                     tree_context_get_sel_fn get_sel,
+                                                     gpointer            get_sel_data,
+                                                     DonnaContextInfo   *info,
+                                                     GError            **error);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_fs_new_node        (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
@@ -68,9 +84,11 @@ DonnaTask *     donna_fs_engine_basic_io_task       (DonnaApp           *app,
 static void
 provider_fs_provider_init (DonnaProviderInterface *interface)
 {
-    interface->get_domain = provider_fs_get_domain;
-    interface->get_flags  = provider_fs_get_flags;
-    interface->io_task    = provider_fs_io_task;
+    interface->get_domain                   = provider_fs_get_domain;
+    interface->get_flags                    = provider_fs_get_flags;
+    interface->io_task                      = provider_fs_io_task;
+    interface->get_context_alias_new_nodes  = provider_fs_get_context_alias_new_nodes;
+    interface->get_context_item_info        = provider_fs_get_context_item_info;
 }
 
 static void
@@ -295,6 +313,54 @@ provider_fs_io_task (DonnaProvider      *provider,
     }
 
     return task;
+}
+
+static gchar *
+provider_fs_get_context_alias_new_nodes (DonnaProvider      *provider,
+                                         const gchar        *extra,
+                                         DonnaNode          *location,
+                                         const gchar        *prefix,
+                                         GError            **error)
+{
+    return g_strdup_printf ("%snew_folder,%snew_file", prefix, prefix);
+}
+
+static gboolean
+provider_fs_get_context_item_info (DonnaProvider            *provider,
+                                   const gchar              *item,
+                                   const gchar              *extra,
+                                   DonnaContextReference     reference,
+                                   DonnaNode                *node_ref,
+                                   tree_context_get_sel_fn   get_sel,
+                                   gpointer                  get_sel_data,
+                                   DonnaContextInfo         *info,
+                                   GError                  **error)
+{
+    if (streq (item, "new_folder"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->name = "New Folder";
+        info->icon_name = "folder-new";
+        info->trigger = "command:tree_goto_line (%o, f+s, "
+            "@node_new_child (@tree_get_location (%o), c, "
+            "@ask_text (Please enter the name of the new folder to create)))";
+        return TRUE;
+    }
+    else if (streq (item, "new_file"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->name = "New File";
+        info->icon_name = "document-new";
+        info->trigger = "command:tree_goto_line (%o, f+s, "
+            "@node_new_child (@tree_get_location (%o), i, "
+            "@ask_text (Please enter the name of the new file to create)))";
+        return TRUE;
+    }
+
+    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+            "Provider 'fs': No such context item: '%s'", item);
+    return FALSE;
 }
 
 static inline gboolean
