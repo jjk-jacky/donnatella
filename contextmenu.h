@@ -2,8 +2,9 @@
 #ifndef __DONNA_CONTEXT_MENU_H__
 #define __DONNA_CONTEXT_MENU_H__
 
-#include <glib-object.h>
-#include "app.h"
+#include <gtk/gtk.h>
+#include "common.h"
+#include "treeview.h"
 
 G_BEGIN_DECLS
 

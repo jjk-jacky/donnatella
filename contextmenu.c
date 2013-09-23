@@ -1,6 +1,6 @@
 
 #include "contextmenu.h"
-#include "conf.h"
+#include "app.h"
 #include "provider-internal.h"
 #include "node.h"
 #include "util.h"
