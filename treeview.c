@@ -11416,7 +11416,67 @@ tree_context_get_item_info (const gchar             *item,
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
 
-    if (streqn (item, "go.", 3))
+    if (streqn (item, "column_edit", 11))
+    {
+        GError *err = NULL;
+        struct column *_col;
+
+        if (reference & DONNA_CONTEXT_HAS_REF)
+            info->is_visible = TRUE;
+
+        if (item[11] == '\0')
+        {
+            if (info->is_visible)
+            {
+                gchar *s = donna_node_get_name (conv->row->node);
+                info->name = g_strdup_printf ("Edit %s", s);
+                g_free (s);
+                info->free_name = TRUE;
+                info->is_sensitive = TRUE;
+            }
+            else
+                info->name = "Edit...";
+            info->icon_name = "gtk-edit";
+            return TRUE;
+        }
+        else if (item[11] != '.')
+            goto err;
+
+        item += 12;
+        _col = get_column_by_name (tree, item);
+        if (!_col)
+        {
+            /* no error, so when a column isn't used on tree, it just silently
+             * isn't featured on the menu */
+            info->is_visible = FALSE;
+            return TRUE;
+        }
+
+        if (info->is_visible)
+        {
+            if (!donna_columntype_can_edit (_col->ct, _col->ct_data,
+                    conv->row->node, &err))
+            {
+                if (!g_error_matches (err, DONNA_COLUMNTYPE_ERROR,
+                            DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE))
+                    info->is_visible = FALSE;
+                g_clear_error (&err);
+            }
+            else
+                info->is_sensitive = TRUE;
+        }
+
+        info->name = g_strdup_printf ("Edit %s...",
+                gtk_tree_view_column_get_title (_col->column));
+        info->free_name = TRUE;
+
+        if (info->is_visible && info->is_sensitive)
+            info->trigger = g_strdup_printf (
+                    "command:tree_column_edit (%%o, %%r, %s)", _col->name);
+
+        return TRUE;
+    }
+    else if (streqn (item, "go.", 3))
     {
         item += 3;
         info->is_sensitive = TRUE;
@@ -11756,66 +11816,6 @@ tree_context_get_item_info (const gchar             *item,
         }
 
         g_object_unref (task);
-        return TRUE;
-    }
-    else if (streqn (item, "column_edit", 11))
-    {
-        GError *err = NULL;
-        struct column *_col;
-
-        if (reference & DONNA_CONTEXT_HAS_REF)
-            info->is_visible = TRUE;
-
-        if (item[11] == '\0')
-        {
-            if (info->is_visible)
-            {
-                gchar *s = donna_node_get_name (conv->row->node);
-                info->name = g_strdup_printf ("Edit %s", s);
-                g_free (s);
-                info->free_name = TRUE;
-                info->is_sensitive = TRUE;
-            }
-            else
-                info->name = "Edit...";
-            info->icon_name = "gtk-edit";
-            return TRUE;
-        }
-        else if (item[11] != '.')
-            goto err;
-
-        item += 12;
-        _col = get_column_by_name (tree, item);
-        if (!_col)
-        {
-            /* no error, so when a column isn't used on tree, it just silently
-             * isn't featured on the menu */
-            info->is_visible = FALSE;
-            return TRUE;
-        }
-
-        if (info->is_visible)
-        {
-            if (!donna_columntype_can_edit (_col->ct, _col->ct_data,
-                    conv->row->node, &err))
-            {
-                if (!g_error_matches (err, DONNA_COLUMNTYPE_ERROR,
-                            DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE))
-                    info->is_visible = FALSE;
-                g_clear_error (&err);
-            }
-            else
-                info->is_sensitive = TRUE;
-        }
-
-        info->name = g_strdup_printf ("Edit %s...",
-                gtk_tree_view_column_get_title (_col->column));
-        info->free_name = TRUE;
-
-        if (info->is_visible && info->is_sensitive)
-            info->trigger = g_strdup_printf (
-                    "command:tree_column_edit (%%o, %%r, %s)", _col->name);
-
         return TRUE;
     }
 
