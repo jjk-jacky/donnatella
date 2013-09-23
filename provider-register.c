@@ -582,7 +582,7 @@ is_valid_register_name (const gchar **name, GError **error)
     return FALSE;
 }
 
-static inline DonnaNode *
+static DonnaNode *
 get_node_for (DonnaProviderRegister *pr, const gchar *name)
 {
     DonnaProviderBase *pb = (DonnaProviderBase *) pr;
@@ -594,6 +594,51 @@ get_node_for (DonnaProviderRegister *pr, const gchar *name)
     node = klass->get_cached_node (pb, name);
     klass->unlock_nodes (pb);
 
+    return node;
+}
+
+static DonnaNode *
+create_node_for (DonnaProviderRegister *pr, const gchar *name, GError **error)
+{
+    DonnaProviderRegisterPrivate *priv = pr->priv;
+    DonnaProviderBase *pb = (DonnaProviderBase *) pr;
+    DonnaProviderBaseClass *klass;
+    DonnaNode *node;
+    DonnaNode *n;
+    struct reg *reg;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    reg = get_register (priv->registers, name);
+    if (G_UNLIKELY (!reg))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Provider 'register': Register '%s' doesn't exist", name);
+        return NULL;
+    }
+
+    node = new_node_for_reg ((DonnaProvider *) pr, reg, error);
+    if (G_UNLIKELY (!node))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return NULL;
+    }
+
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (pb);
+    klass->lock_nodes (pb);
+    n = klass->get_cached_node (pb, name);
+    if (n)
+    {
+        /* already added while we were busy */
+        g_object_unref (node);
+        node = n;
+    }
+    else
+        klass->add_node_to_cache (pb, node);
+    klass->unlock_nodes (pb);
+
+    g_rec_mutex_unlock (&priv->rec_mutex);
     return node;
 }
 
@@ -695,12 +740,13 @@ register_set (DonnaProviderRegister *pr,
               const gchar           *name,
               DonnaRegisterType      type,
               GPtrArray             *nodes,
+              DonnaNode            **reg_node,
               GError               **error)
 {
     DonnaProviderRegisterPrivate *priv = pr->priv;
     DonnaProvider *pfs;
     DonnaNode *node_root = NULL;
-    DonnaNode *node;
+    DonnaNode *node = NULL;
     GPtrArray *arr;
     struct reg *reg;
     gboolean is_clipboard;
@@ -747,7 +793,6 @@ register_set (DonnaProviderRegister *pr,
     {
         donna_provider_node_new_child ((DonnaProvider *) pr, node_root, node);
         g_object_unref (node_root);
-        g_object_unref (node);
     }
     else if ((node = get_node_for (pr, name)))
     {
@@ -755,11 +800,15 @@ register_set (DonnaProviderRegister *pr,
             update_node_type ((DonnaProvider *) pr, node, reg_type);
         donna_provider_node_children ((DonnaProvider *) pr, node,
                 DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, arr);
-        g_object_unref (node);
     }
     g_ptr_array_unref (arr);
 
     update_special_nodes (pr, name, nodes->len > 0);
+
+    if (reg_node)
+        *reg_node = node;
+    else if (node)
+        g_object_unref (node);
 
     return TRUE;
 }
@@ -768,13 +817,14 @@ static gboolean
 register_add_nodes (DonnaProviderRegister   *pr,
                     const gchar             *name,
                     GPtrArray               *nodes,
+                    DonnaNode              **reg_node,
                     GError                 **error)
 {
     DonnaProviderRegisterPrivate *priv = pr->priv;
     DonnaApp *app = ((DonnaProviderBase *) pr)->app;
     DonnaProvider *pfs;
     DonnaNode *node_root = NULL;
-    DonnaNode *node;
+    DonnaNode *node = NULL;
     GPtrArray *arr;
     struct reg *reg;
     gboolean is_clipboard;
@@ -829,17 +879,20 @@ register_add_nodes (DonnaProviderRegister   *pr,
     {
         donna_provider_node_new_child ((DonnaProvider *) pr, node_root, node);
         g_object_unref (node_root);
-        g_object_unref (node);
     }
     else if ((node = get_node_for (pr, name)))
     {
         for (i = 0; i < arr->len; ++i)
             donna_provider_node_new_child ((DonnaProvider *) pr, node, arr->pdata[i]);
-        g_object_unref (node);
     }
     g_ptr_array_unref (arr);
 
     update_special_nodes (pr, name, has_items || nodes->len > 0);
+
+    if (reg_node)
+        *reg_node = node;
+    else if (node)
+        g_object_unref (node);
 
     return TRUE;
 }
@@ -2213,7 +2266,8 @@ provider_register_io (DonnaProviderBase  *_provider,
     gchar *name;
 
     name = donna_node_get_location (dest);
-    if (!register_add_nodes ((DonnaProviderRegister *) _provider, name, sources, &err))
+    if (!register_add_nodes ((DonnaProviderRegister *) _provider, name, sources,
+                NULL, &err))
     {
         donna_task_take_error (task, err);
         g_free (name);
@@ -2506,17 +2560,36 @@ cmd_register_add_nodes (DonnaTask               *task,
     const gchar *name = args[0]; /* opt */
     GPtrArray *nodes = args[1];
 
+    DonnaNode *node;
+    GValue *value;
+
     if (!is_valid_register_name (&name, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
 
-    if (!register_add_nodes (pr, name, nodes, &err))
+    if (!register_add_nodes (pr, name, nodes, &node, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    if (!node)
+        node = create_node_for (pr, name, &err);
+    if (G_UNLIKELY (!node))
+    {
+        g_prefix_error (&err, "Command 'register_add_nodes': "
+                "Failed to get node for register: ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
+
     return DONNA_TASK_DONE;
 }
 
@@ -2644,6 +2717,9 @@ cmd_register_load (DonnaTask               *task,
         DONNA_REGISTER_FILE_FILE, DONNA_REGISTER_FILE_URIS };
     gint c;
 
+    DonnaNode *node;
+    GValue *value;
+
     if (!is_valid_register_name (&name, &err))
     {
         donna_task_take_error (task, err);
@@ -2671,6 +2747,20 @@ cmd_register_load (DonnaTask               *task,
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    node = create_node_for (pr, name, &err);
+    if (G_UNLIKELY (!node))
+    {
+        g_prefix_error (&err, "Command 'register_load': "
+                "Failed to get node for register: ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -3255,6 +3345,9 @@ cmd_register_set (DonnaTask               *task,
     DonnaRegisterType types[] = { DONNA_REGISTER_CUT, DONNA_REGISTER_COPY };
     gint c;
 
+    DonnaNode *node;
+    GValue *value;
+
     if (!is_valid_register_name (&name, &err))
     {
         donna_task_take_error (task, err);
@@ -3272,11 +3365,26 @@ cmd_register_set (DonnaTask               *task,
         return DONNA_TASK_FAILED;
     }
 
-    if (!register_set (pr, name, types[c], nodes, &err))
+    if (!register_set (pr, name, types[c], nodes, &node, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    if (!node)
+        node = create_node_for (pr, name, &err);
+    if (G_UNLIKELY (!node))
+    {
+        g_prefix_error (&err, "Command 'register_set': "
+                "Failed to get node for register: ");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -3353,7 +3461,7 @@ provider_register_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     add_command (register_add_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
@@ -3376,7 +3484,7 @@ provider_register_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (register_load, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
@@ -3410,7 +3518,7 @@ provider_register_contructed (GObject *object)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     add_command (register_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
