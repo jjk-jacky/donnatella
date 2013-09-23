@@ -11875,6 +11875,10 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
                 "olLrnN", (conv_flag_fn) tree_conv_flag, &conv, (is_tree (tree))
                 ? "defaults/treeviews/tree" : "defaults/treeviews/list",
                 "treeviews/%s", priv->name);
+
+    if (conv.row)
+        g_free (conv.row);
+
     if (!nodes)
     {
         g_prefix_error (error, "Treeview '%s': Failed to get context nodes: ",
