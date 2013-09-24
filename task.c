@@ -1120,6 +1120,23 @@ donna_task_get_wait_fd (DonnaTask          *task)
 }
 
 /**
+ * donna_task_has_taskui:
+ * @task: Task to check if it has a #DonnaTaskUi or not
+ *
+ * This is a simple helper mostly meant for the task manager, to quickly
+ * determine whether there's a TaskUI for the task or not (e.g. whether a
+ * "Details" context menuitem should be sensitive or not)
+ *
+ * Returns: Whether the task has a #DonnaTaskUi or not
+ */
+gboolean
+donna_task_has_taskui (DonnaTask          *task)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    return !!task->priv->taskui;
+}
+
+/**
  * donna_task_can_be_duplicated:
  * @task: Task to check if it can be duplicated
  *
