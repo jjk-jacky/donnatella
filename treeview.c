@@ -11953,6 +11953,42 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
             || gtk_tree_selection_count_selected_rows (sel))
         reference |= DONNA_CONTEXT_HAS_SELECTION;
 
+    if (!items)
+    {
+        DonnaConfig *config = donna_app_peek_config (priv->app);
+        const gchar *domain;
+
+        domain = (priv->location) ? donna_node_get_domain (priv->location) : NULL;
+
+        /* if no domain or no domain-specific, try basic definition */
+        if (!domain || !donna_config_get_string (config, &items,
+                    "treeviews/%s/context_menu_%s",
+                    priv->name, domain))
+            donna_config_get_string (config, &items,
+                    "treeviews/%s/context_menu", priv->name);
+
+        /* still nothing, use defaults */
+        if (!items)
+        {
+            if (!domain || !donna_config_get_string (config, &items,
+                        "defaults/treeviews/%s/context_menu_%s",
+                        (is_tree (tree)) ? "tree": "list",
+                        domain))
+                donna_config_get_string (config, &items,
+                        "defaults/treeviews/%s/context_menu",
+                        (is_tree (tree)) ? "tree": "list");
+        }
+
+        if (!items)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                    "Treeview '%s': No items for context menu found",
+                    priv->name);
+            return NULL;
+        }
+    }
+
     nodes = donna_context_menu_get_nodes (priv->app, items, reference, "treeviews",
                 (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
