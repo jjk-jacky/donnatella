@@ -63,6 +63,18 @@ struct _DonnaTaskProcess
 struct _DonnaTaskProcessClass
 {
     DonnaTaskClass parent;
+
+    /* signals */
+
+    void            (*pipe_data_received)           (DonnaTaskProcess   *taskp,
+                                                     DonnaPipe           pipe,
+                                                     gsize               len,
+                                                     const gchar        *str);
+    void            (*pipe_new_line)                (DonnaTaskProcess   *taskp,
+                                                     DonnaPipe           pipe,
+                                                     const gchar        *line);
+    void            (*process_started)              (DonnaTaskProcess   *taskp);
+    void            (*process_ended)                (DonnaTaskProcess   *taskp);
 };
 
 GType               donna_task_process_get_type     (void) G_GNUC_CONST;

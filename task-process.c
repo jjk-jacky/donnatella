@@ -79,6 +79,11 @@ static void     donna_task_process_set_property         (GObject            *obj
                                                          GParamSpec         *pspec);
 static void     donna_task_process_finalize             (GObject            *object);
 
+static void     donna_task_process_pipe_data_received   (DonnaTaskProcess   *taskp,
+                                                         DonnaPipe           pipe,
+                                                         gsize               len,
+                                                         const gchar        *str);
+
 G_DEFINE_TYPE (DonnaTaskProcess, donna_task_process, DONNA_TYPE_TASK)
 
 static void
@@ -111,20 +116,20 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
         g_signal_new ("pipe-data-received",
                 DONNA_TYPE_TASK_PROCESS,
                 G_SIGNAL_RUN_FIRST,
-                0,
+                G_STRUCT_OFFSET (DonnaTaskProcessClass, pipe_data_received),
                 NULL,
                 NULL,
                 g_cclosure_user_marshal_VOID__INT_LONG_STRING,
                 G_TYPE_NONE,
                 3,
                 G_TYPE_INT,
-                G_TYPE_LONG,
+                G_TYPE_ULONG,
                 G_TYPE_STRING);
     donna_task_process_signals[PIPE_NEW_LINE] =
         g_signal_new ("pipe-new-line",
                 DONNA_TYPE_TASK_PROCESS,
                 G_SIGNAL_RUN_FIRST,
-                0,
+                G_STRUCT_OFFSET (DonnaTaskProcessClass, pipe_new_line),
                 NULL,
                 NULL,
                 g_cclosure_user_marshal_VOID__INT_STRING,
@@ -136,7 +141,7 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
         g_signal_new ("process-started",
                 DONNA_TYPE_TASK_PROCESS,
                 G_SIGNAL_RUN_FIRST,
-                0,
+                G_STRUCT_OFFSET (DonnaTaskProcessClass, process_started),
                 NULL,
                 NULL,
                 g_cclosure_marshal_VOID__VOID,
@@ -146,7 +151,7 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
         g_signal_new ("process-ended",
                 DONNA_TYPE_TASK_PROCESS,
                 G_SIGNAL_RUN_FIRST,
-                0,
+                G_STRUCT_OFFSET (DonnaTaskProcessClass, process_ended),
                 NULL,
                 NULL,
                 g_cclosure_marshal_VOID__VOID,
@@ -157,6 +162,8 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
     o_class->get_property = donna_task_process_get_property;
     o_class->set_property = donna_task_process_set_property;
     o_class->finalize     = donna_task_process_finalize;
+
+    klass->pipe_data_received = donna_task_process_pipe_data_received;
 
     g_object_class_install_properties (o_class, NB_PROPS, donna_task_process_props);
 
@@ -315,6 +322,47 @@ close_fd (DonnaTask *task, DonnaPipe pipe, gint *fd)
     }
 }
 
+static void
+donna_task_process_pipe_data_received (DonnaTaskProcess   *taskp,
+                                       DonnaPipe           pipe,
+                                       gsize               len,
+                                       const gchar        *data)
+{
+    DonnaTaskProcessPrivate *priv = taskp->priv;
+
+    /* if there's no handler connected, no need to process this. This will
+     * save us a little time/memory since we don't need to bother with the
+     * GString and whatnot.
+     * Obviously, this would be bad/bugged if someone decided to connect a
+     * handler *during* the task's execution. That's true, but also quite
+     * unlikely (since it wouldn't really make sense) so let's do it... */
+    if (g_signal_has_handler_pending (taskp,
+                donna_task_process_signals[PIPE_NEW_LINE], 0, TRUE))
+    {
+        GString *str = (pipe == DONNA_PIPE_OUTPUT) ? priv->str_out : priv->str_err;
+        gchar *s;
+
+        if (G_LIKELY (str))
+            g_string_append_len (str, data, len);
+        else
+        {
+            str = g_string_new_len (data, len);
+            if (pipe == DONNA_PIPE_OUTPUT)
+                priv->str_out = str;
+            else
+                priv->str_err = str;
+        }
+
+        while ((s = strchr (str->str, '\n')))
+        {
+            *s = '\0';
+            g_signal_emit (taskp, donna_task_process_signals[PIPE_NEW_LINE], 0,
+                    pipe, str->str);
+            g_string_erase (str, 0, s - str->str + 1);
+        }
+    }
+}
+
 static gboolean
 read_data (DonnaTask *task, DonnaPipe pipe, gint *fd)
 {
@@ -329,42 +377,8 @@ again:
         /* EOF */
         close_fd (task, pipe, fd);
     else if (len > 0)
-    {
         g_signal_emit (task, donna_task_process_signals[PIPE_DATA_RECEIVED], 0,
                 pipe, len, buf);
-
-        /* if there's no handler connected, no need to process this. This will
-         * save us a little time/memory since we don't need to bother with the
-         * GString and whatnot.
-         * Obviously, this would be bad/bugged if someone decided to connect a
-         * handler *during* the task's execution. That's true, but also quite
-         * unlikely (since it wouldn't really make sense) so let's do it... */
-        if (g_signal_has_handler_pending (task,
-                    donna_task_process_signals[PIPE_NEW_LINE], 0, TRUE))
-        {
-            GString *str = (pipe == DONNA_PIPE_OUTPUT) ? priv->str_out : priv->str_err;
-            gchar *s;
-
-            if (G_LIKELY (str))
-                g_string_append_len (str, buf, len);
-            else
-            {
-                str = g_string_new_len (buf, len);
-                if (pipe == DONNA_PIPE_OUTPUT)
-                    priv->str_out = str;
-                else
-                    priv->str_err = str;
-            }
-
-            while ((s = strchr (str->str, '\n')))
-            {
-                *s = '\0';
-                g_signal_emit (task, donna_task_process_signals[PIPE_NEW_LINE], 0,
-                        pipe, str->str);
-                g_string_erase (str, 0, s - str->str + 1);
-            }
-        }
-    }
     else if (errno == EINTR)
         goto again;
     else
