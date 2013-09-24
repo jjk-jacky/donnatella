@@ -90,6 +90,16 @@ static void             provider_task_finalize      (GObject            *object)
 /* DonnaProvider */
 static const gchar *    provider_task_get_domain    (DonnaProvider      *provider);
 static DonnaProviderFlags provider_task_get_flags   (DonnaProvider      *provider);
+static gboolean         provider_task_get_context_item_info (
+                                                         DonnaProvider      *provider,
+                                                         const gchar        *item,
+                                                         const gchar        *extra,
+                                                         DonnaContextReference reference,
+                                                         DonnaNode          *node_ref,
+                                                         tree_context_get_sel_fn get_sel,
+                                                         gpointer            get_sel_data,
+                                                         DonnaContextInfo   *info,
+                                                         GError            **error);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_task_new_node      (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
@@ -125,8 +135,9 @@ inline const gchar *state_name (DonnaTaskState state);
 static void
 provider_task_provider_init (DonnaProviderInterface *interface)
 {
-    interface->get_domain = provider_task_get_domain;
-    interface->get_flags  = provider_task_get_flags;
+    interface->get_domain               = provider_task_get_domain;
+    interface->get_flags                = provider_task_get_flags;
+    interface->get_context_item_info    = provider_task_get_context_item_info;
 }
 
 static void
@@ -258,6 +269,217 @@ provider_task_get_flags (DonnaProvider *provider)
     g_return_val_if_fail (DONNA_IS_PROVIDER_TASK (provider),
             DONNA_PROVIDER_FLAG_INVALID);
     return 0;
+}
+
+static gboolean
+provider_task_get_context_item_info (DonnaProvider      *provider,
+                                     const gchar        *item,
+                                     const gchar        *extra,
+                                     DonnaContextReference reference,
+                                     DonnaNode          *node_ref,
+                                     tree_context_get_sel_fn get_sel,
+                                     gpointer            get_sel_data,
+                                     DonnaContextInfo   *info,
+                                     GError            **error)
+
+{
+    if (streq (item, "toggle"))
+    {
+        GValue v = G_VALUE_INIT;
+        DonnaNodeHasValue has;
+
+        info->name = "Pause/Resume Task";
+        info->icon_name = "media-playback-pause";
+
+        /* no ref, or not a task */
+        if (!node_ref || donna_node_peek_provider (node_ref) != provider
+                /* not an item == a container == root/task manager */
+                || donna_node_get_node_type (node_ref) != DONNA_NODE_ITEM)
+            return TRUE;
+
+        /* we know there's a reference, but there might be a selection as well:
+         * ref_selected: apply to the whole selection
+         * ref_not_selected: apply only to the ref
+         * */
+
+        /* there must not be a selection, or all selection must be tasks */
+        if (reference & DONNA_CONTEXT_REF_SELECTED)
+        {
+            GError *err = NULL;
+            GPtrArray *selection;
+            enum {
+                CAN_START       = (1 << 0),
+                CAN_RESUME      = (1 << 1),
+                CAN_STOP        = (1 << 2),
+                CAN_PAUSE       = (1 << 3),
+            } possible = 0;
+            guint i;
+
+            /* we should NOT unref the array (if any) */
+            selection = get_sel (get_sel_data, &err);
+            if (!selection)
+            {
+                g_propagate_prefixed_error (error, err, "Provider 'task': "
+                        "Failed to get selection from treeview: ");
+                return FALSE;
+            }
+
+            /* all selected nodes must be tasks, else it's not sensitive.
+             * If there's at least one task that can be paused/stopped, we'll
+             * offer to pause/stop all tasks (where applicable);
+             * Else if there's at least one that can be resumed/started, we'll
+             * offer to do that (w/a);
+             * Else there's nothing we can do. */
+            for (i = 0; i < selection->len; ++i)
+            {
+                gint st;
+
+                if (donna_node_peek_provider (selection->pdata[i]) != provider
+                        /* not an item == a container == root/task manager */
+                        || donna_node_get_node_type (selection->pdata[i]) != DONNA_NODE_ITEM)
+                    return TRUE;
+
+                donna_node_get (selection->pdata[i], FALSE, "state", &has, &v, NULL);
+                if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+                    return TRUE;
+
+                switch (g_value_get_int (&v))
+                {
+                    case ST_STOPPED:
+                        possible |= CAN_START;
+                        break;
+
+                    case ST_WAITING:
+                        possible |= CAN_STOP;
+                        break;
+
+                    case ST_RUNNING:
+                    case ST_ON_HOLD:
+                        possible |= CAN_PAUSE;
+                        break;
+
+                    case ST_PAUSED:
+                        possible |= CAN_RESUME;
+                        break;
+
+                    case ST_CANCELLED:
+                    case ST_FAILED:
+                    case ST_DONE:
+                        break;
+                }
+                g_value_unset (&v);
+            }
+
+            info->is_visible = TRUE;
+            if (possible & (CAN_STOP | CAN_PAUSE))
+            {
+                info->is_sensitive = TRUE;
+                info->trigger = "command:tasks_switch (@tree_get_nodes (%o, :selected))";
+
+                if (!(possible & CAN_PAUSE))
+                {
+                    info->name = "Stop Selected Tasks";
+                    info->icon_name = "media-playback-stop";
+                }
+                else if (!(possible & CAN_STOP))
+                    info->name = "Pause Selected Tasks";
+                else
+                    info->name = "Stop/Pause Selected Tasks";
+            }
+            else if (possible & (CAN_START | CAN_RESUME))
+            {
+                info->icon_name = "media-playback-start";
+                info->is_sensitive = TRUE;
+                info->trigger = "command:tasks_switch (@tree_get_nodes (%o, :selected), 1)";
+
+                if (!(possible & CAN_RESUME))
+                    info->name = "Start Selected Tasks";
+                else if (!(possible & CAN_START))
+                    info->name = "Resume Selected Tasks";
+                else
+                    info->name = "Start/Resume Selected Tasks";
+            }
+            else
+                info->name = "Pause/Resume Selected Tasks";
+        }
+        else
+        {
+            info->is_visible = TRUE;
+
+            donna_node_get (node_ref, FALSE, "state", &has, &v, NULL);
+            if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+                return TRUE;
+
+            switch (g_value_get_int (&v))
+            {
+                case ST_STOPPED:
+                    info->name = "Start Task";
+                    info->icon_name = "media-playback-start";
+                    info->is_sensitive = TRUE;
+                    info->trigger = "command:task_toggle (%n)";
+                    break;
+
+                case ST_WAITING:
+                    info->name = "Stop Task";
+                    info->icon_name = "media-playback-stop";
+                    info->is_sensitive = TRUE;
+                    info->trigger = "command:task_toggle (%n)";
+                    break;
+
+                case ST_RUNNING:
+                case ST_ON_HOLD:
+                    info->name = "Pause Task";
+                    info->is_sensitive = TRUE;
+                    info->trigger = "command:task_toggle (%n)";
+                    break;
+
+                case ST_PAUSED:
+                    info->name = "Resume Task";
+                    info->icon_name = "media-playback-start";
+                    info->is_sensitive = TRUE;
+                    info->trigger = "command:task_toggle (%n)";
+                    break;
+
+                case ST_CANCELLED:
+                case ST_FAILED:
+                case ST_DONE:
+                    break;
+            }
+            g_value_unset (&v);
+        }
+
+        return TRUE;
+    }
+    else if (streq (item, "show_ui"))
+    {
+        DonnaTask *task;
+        gchar *location;
+
+        info->name = "Show Task UI...";
+
+        /* no ref, or not a task */
+        if (!node_ref || donna_node_peek_provider (node_ref) != provider
+                /* not an item == a container == root/task manager */
+                || donna_node_get_node_type (node_ref) != DONNA_NODE_ITEM)
+            return TRUE;
+
+        info->is_visible = TRUE;
+
+        location = donna_node_get_location (node_ref);
+        if (sscanf (location, "/%p", &task) == 1)
+        {
+            info->is_sensitive = donna_task_has_taskui (task);
+            info->trigger = "command:task_show_ui (%n)";
+        }
+        g_free (location);
+
+        return TRUE;
+    }
+
+    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+            "Provider 'task': No such context item: '%s'", item);
+    return FALSE;
 }
 
 /* this works as a read/write lock, but with a special handling for refreshers.
