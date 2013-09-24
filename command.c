@@ -853,6 +853,21 @@ cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_task_show_ui (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaNode *node = args[0];
+
+    if (!donna_task_manager_show_ui (donna_app_get_task_manager (app), node, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -1998,6 +2013,11 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (task_set_state, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (task_show_ui, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

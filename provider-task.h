@@ -54,6 +54,9 @@ gboolean    donna_task_manager_set_state        (DonnaTaskManager       *tm,
                                                  DonnaNode              *node,
                                                  DonnaTaskState          state,
                                                  GError                **error);
+gboolean    donna_task_manager_show_ui          (DonnaTaskManager       *tm,
+                                                 DonnaNode              *node,
+                                                 GError                **error);
 
 G_END_DECLS
 

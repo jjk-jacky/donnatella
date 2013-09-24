@@ -1733,3 +1733,59 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
 
     return ret;
 }
+
+gboolean
+donna_task_manager_show_ui (DonnaTaskManager    *tm,
+                            DonnaNode           *node,
+                            GError             **error)
+{
+    DonnaProviderTaskPrivate *priv;
+    DonnaTask *task;
+    DonnaTaskUi *taskui;
+    gchar *location;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    priv = tm->priv;
+
+    if (donna_node_peek_provider (node) != (DonnaProvider *) tm
+            /* not an item == a container == root/task manager */
+            || donna_node_get_node_type (node) != DONNA_NODE_ITEM)
+    {
+        gchar *fl = donna_node_get_full_location (node);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_INVALID_VALUE,
+                "Provider 'task': Cannot switch tasks, node '%s' isn't a task",
+                fl);
+        g_free (fl);
+        return FALSE;
+    }
+
+    location = donna_node_get_location (node);
+    if (sscanf (location, "/%p", &task) != 1)
+    {
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Failed to get task from node 'task:%s'", location);
+        g_free (location);
+        return FALSE;
+    }
+    g_free (location);
+
+    g_object_get (task, "taskui", &taskui, NULL);
+    if (!taskui)
+    {
+        gchar *desc = donna_task_get_desc (task);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'task': No TaskUI available for task '%s'",
+                desc);
+        g_free (desc);
+        return FALSE;
+    }
+
+    donna_taskui_show (taskui);
+    g_object_unref (taskui);
+
+    return TRUE;
+}
