@@ -11976,7 +11976,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 gboolean
 donna_tree_view_context_popup (DonnaTreeView      *tree,
                                DonnaTreeRowId     *rowid,
-                               gchar              *sections,
+                               gchar              *items,
                                const gchar        *_menus,
                                gboolean            no_focus_grab,
                                GError            **error)
@@ -11986,7 +11986,7 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
     GPtrArray *nodes;
     gchar *menus;
 
-    nodes = donna_tree_view_context_get_nodes (tree, rowid, sections, error);
+    nodes = donna_tree_view_context_get_nodes (tree, rowid, items, error);
     if (!nodes)
         return FALSE;
 
