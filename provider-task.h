@@ -59,6 +59,9 @@ gboolean    donna_task_manager_switch_tasks     (DonnaTaskManager       *tm,
                                                  gboolean                switch_on,
                                                  gboolean                fail_on_failure,
                                                  GError                **error);
+gboolean    donna_task_manager_cancel           (DonnaTaskManager       *tm,
+                                                 DonnaNode              *node,
+                                                 GError                **error);
 gboolean    donna_task_manager_show_ui          (DonnaTaskManager       *tm,
                                                  DonnaNode              *node,
                                                  GError                **error);

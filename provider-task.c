@@ -450,6 +450,113 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
 
         return TRUE;
     }
+    else if (streq (item, "cancel"))
+    {
+        GValue v = G_VALUE_INIT;
+        DonnaNodeHasValue has;
+
+        info->name = "Cancel Task";
+        info->icon_name = "gtk-cancel";
+
+        /* no ref, or not a task */
+        if (!node_ref || donna_node_peek_provider (node_ref) != provider
+                /* not an item == a container == root/task manager */
+                || donna_node_get_node_type (node_ref) != DONNA_NODE_ITEM)
+            return TRUE;
+
+        /* we know there's a reference, but there might be a selection as well:
+         * ref_selected: apply to the whole selection
+         * ref_not_selected: apply only to the ref
+         * */
+
+        /* there must not be a selection, or all selection must be tasks */
+        if (reference & DONNA_CONTEXT_REF_SELECTED)
+        {
+            GError *err = NULL;
+            GPtrArray *selection;
+            gboolean is_sensitive = FALSE;
+            guint i;
+
+            info->name = "Cancel Tasks";
+
+            /* we should NOT unref the array (if any) */
+            selection = get_sel (get_sel_data, &err);
+            if (!selection)
+            {
+                g_propagate_prefixed_error (error, err, "Provider 'task': "
+                        "Failed to get selection from treeview: ");
+                return FALSE;
+            }
+
+            /* all selected nodes must be tasks, else it's not visible.
+             * If there's at least one task that can be cancelled, we'll
+             * offer to cancel all tasks (where applicable);
+             * Else there's nothing we can do. */
+            for (i = 0; i < selection->len; ++i)
+            {
+                gint st;
+
+                if (donna_node_peek_provider (selection->pdata[i]) != provider
+                        /* not an item == a container == root/task manager */
+                        || donna_node_get_node_type (selection->pdata[i]) != DONNA_NODE_ITEM)
+                    return TRUE;
+
+                donna_node_get (selection->pdata[i], FALSE, "state", &has, &v, NULL);
+                if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+                    return TRUE;
+
+                switch (g_value_get_int (&v))
+                {
+                    case ST_RUNNING:
+                    case ST_PAUSED:
+                    case ST_ON_HOLD:
+                        is_sensitive = TRUE;
+                        info->trigger = "command:tasks_cancel ("
+                            "@tree_get_nodes (%o, :selected))";
+                        break;
+
+                    case ST_WAITING:
+                    case ST_STOPPED:
+                    case ST_CANCELLED:
+                    case ST_FAILED:
+                    case ST_DONE:
+                        break;
+                }
+                g_value_unset (&v);
+            }
+
+            info->is_visible = TRUE;
+            info->is_sensitive = is_sensitive;
+        }
+        else
+        {
+            info->is_visible = TRUE;
+
+            donna_node_get (node_ref, FALSE, "state", &has, &v, NULL);
+            if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+                return TRUE;
+
+            switch (g_value_get_int (&v))
+            {
+                case ST_RUNNING:
+                case ST_PAUSED:
+                case ST_ON_HOLD:
+                    info->is_sensitive = TRUE;
+                    info->trigger = "command:task_cancel (%n)";
+                    break;
+
+                case ST_WAITING:
+                case ST_STOPPED:
+                case ST_CANCELLED:
+                case ST_FAILED:
+                case ST_DONE:
+                    break;
+            }
+            g_value_unset (&v);
+        }
+
+        return TRUE;
+    }
     else if (streq (item, "show_ui"))
     {
         DonnaTask *task;
@@ -2072,6 +2179,47 @@ donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
         return FALSE;
     }
 
+    return TRUE;
+}
+
+gboolean
+donna_task_manager_cancel (DonnaTaskManager     *tm,
+                           DonnaNode            *node,
+                           GError              **error)
+{
+    DonnaProviderTaskPrivate *priv;
+    DonnaTask *task;
+    gchar *location;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    priv = tm->priv;
+
+    if (donna_node_peek_provider (node) != (DonnaProvider *) tm
+            /* not an item == a container == root/task manager */
+            || donna_node_get_node_type (node) != DONNA_NODE_ITEM)
+    {
+        gchar *fl = donna_node_get_full_location (node);
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_INVALID_VALUE,
+                "Provider 'task': Cannot cancel task, node '%s' isn't a task",
+                fl);
+        g_free (fl);
+        return FALSE;
+    }
+
+    location = donna_node_get_location (node);
+    if (sscanf (location, "/%p", &task) != 1)
+    {
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Failed to get task from node 'task:%s'", location);
+        g_free (location);
+        return FALSE;
+    }
+    g_free (location);
+
+    donna_task_cancel (task);
     return TRUE;
 }
 

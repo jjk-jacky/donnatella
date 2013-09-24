@@ -807,6 +807,21 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_task_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaNode *node = args[0];
+
+    if (!donna_task_manager_cancel (donna_app_get_task_manager (app), node, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -907,6 +922,27 @@ cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
     }
 
     g_object_unref (t);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tasks_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    GPtrArray *nodes = args[0];
+    DonnaTaskManager *tm;
+    guint i;
+
+    tm = donna_app_get_task_manager (app);
+    for (i = 0; i < nodes->len; ++i)
+    {
+        if (!donna_task_manager_cancel (tm, nodes->pdata[i], &err))
+        {
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
     return DONNA_TASK_DONE;
 }
 
@@ -2029,6 +2065,11 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    add_command (task_cancel, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (task_set_state, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NOTHING);
@@ -2041,6 +2082,11 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
     add_command (task_toggle, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    add_command (tasks_cancel, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
