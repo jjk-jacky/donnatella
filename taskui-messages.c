@@ -13,15 +13,15 @@ struct _DonnaTaskUiMessagesPrivate
 static void             tui_messages_finalize       (GObject            *object);
 
 /* TaskUi */
-static void             tui_messages_set_title      (DonnaTaskUi        *tui,
-                                                     const gchar        *title);
+static void             tui_messages_take_title     (DonnaTaskUi        *tui,
+                                                     gchar              *title);
 static void             tui_messages_show           (DonnaTaskUi        *tui);
 
 static void
 tui_messages_taskui_init (DonnaTaskUiInterface *interface)
 {
-    interface->set_title = tui_messages_set_title;
-    interface->show      = tui_messages_show;
+    interface->take_title   = tui_messages_take_title;
+    interface->show         = tui_messages_show;
 }
 
 static void
@@ -73,13 +73,13 @@ tui_messages_finalize (GObject *object)
 }
 
 static void
-tui_messages_set_title (DonnaTaskUi        *tui,
-                        const gchar        *title)
+tui_messages_take_title (DonnaTaskUi        *tui,
+                         gchar              *title)
 {
     DonnaTaskUiMessagesPrivate *priv = ((DonnaTaskUiMessages *) tui)->priv;
 
     g_free (priv->title);
-    priv->title = g_strdup (title);
+    priv->title = title;
     if (priv->window)
         gtk_window_set_title ((GtkWindow *) priv->window, priv->title);
 }

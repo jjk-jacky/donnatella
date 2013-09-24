@@ -20,13 +20,15 @@ struct _DonnaTaskUiInterface
     GTypeInterface parent;
 
     /* virtual table */
-    void            (*set_title)            (DonnaTaskUi    *taskui,
-                                             const gchar    *title);
+    void            (*take_title)           (DonnaTaskUi    *taskui,
+                                             gchar          *title);
     void            (*show)                 (DonnaTaskUi    *taskui);
 };
 
 void            donna_taskui_set_title      (DonnaTaskUi    *taskui,
                                              const gchar    *title);
+void            donna_taskui_take_title     (DonnaTaskUi    *taskui,
+                                             gchar          *title);
 void            donna_taskui_show           (DonnaTaskUi    *taskui);
 
 G_END_DECLS
