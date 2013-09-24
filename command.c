@@ -911,6 +911,24 @@ cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    GPtrArray *nodes = args[0];
+    gboolean switch_on = GPOINTER_TO_INT (args[1]); /* opt */
+    gboolean fail_on_failure = GPOINTER_TO_INT (args[2]); /* opt */
+
+    if (!donna_task_manager_switch_tasks (donna_app_get_task_manager (app), nodes,
+                switch_on, fail_on_failure, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     DonnaTreeView *tree = args[0];
@@ -2023,6 +2041,13 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
     add_command (task_toggle, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tasks_switch, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

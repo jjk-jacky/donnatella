@@ -1735,6 +1735,125 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
 }
 
 gboolean
+donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
+                                 GPtrArray          *nodes,
+                                 gboolean            switch_on,
+                                 gboolean            fail_on_failure,
+                                 GError            **error)
+{
+    DonnaProvider *provider = (DonnaProvider *) tm;
+    DonnaProviderTaskPrivate *priv;
+    GString *str = NULL;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    priv = tm->priv;
+
+    if (G_UNLIKELY (nodes->len == 0))
+        return TRUE;
+
+    for (i = 0; i < nodes->len; ++i)
+    {
+        if (donna_node_peek_provider (nodes->pdata[i]) != provider
+                /* not an item == a container == root/task manager */
+                || donna_node_get_node_type (nodes->pdata[i]) != DONNA_NODE_ITEM)
+        {
+            gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+            g_set_error (error, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_INVALID_VALUE,
+                    "Provider 'task': Cannot switch tasks, node '%s' isn't a task",
+                    fl);
+            g_free (fl);
+            return FALSE;
+        }
+    }
+
+    for (i = 0; i < nodes->len; ++i)
+    {
+        DonnaNodeHasValue has;
+        GValue v = G_VALUE_INIT;
+        GError *err = NULL;
+
+        donna_node_get (nodes->pdata[i], FALSE, "state", &has, &v, NULL);
+        if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+        {
+            gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
+            g_warning ("Provider 'task': Failed to get property 'state' for '%s', "
+                    "skipping node/task", fl);
+            g_free (fl);
+            continue;
+        }
+
+        switch (g_value_get_int (&v))
+        {
+            case ST_STOPPED:
+            case ST_PAUSED:
+                if (switch_on)
+                    if (!donna_task_manager_set_state (tm, nodes->pdata[i],
+                            DONNA_TASK_RUNNING, (fail_on_failure) ? &err : NULL)
+                            && fail_on_failure)
+                    {
+                        if (!str)
+                            str = g_string_new (NULL);
+
+                        g_string_append (str, "\n- ");
+                        g_string_append (str, err->message);
+                        g_clear_error (&err);
+                    }
+                break;
+
+            case ST_RUNNING:
+            case ST_ON_HOLD:
+                if (!switch_on)
+                    if (!donna_task_manager_set_state (tm, nodes->pdata[i],
+                                DONNA_TASK_PAUSED, (fail_on_failure) ? &err : NULL))
+                    {
+                        if (!str)
+                            str = g_string_new (NULL);
+
+                        g_string_append (str, "\n- ");
+                        g_string_append (str, err->message);
+                        g_clear_error (&err);
+                    }
+                break;
+
+            case ST_WAITING:
+                if (!switch_on)
+                    if (!donna_task_manager_set_state (tm, nodes->pdata[i],
+                            DONNA_TASK_STOPPED, (fail_on_failure) ? &err : NULL))
+                    {
+                        if (!str)
+                            str = g_string_new (NULL);
+
+                        g_string_append (str, "\n- ");
+                        g_string_append (str, err->message);
+                        g_clear_error (&err);
+                    }
+                break;
+
+            case ST_CANCELLED:
+            case ST_FAILED:
+            case ST_DONE:
+                break;
+        }
+        g_value_unset (&v);
+    }
+
+    if (str)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'task': Not all tasks could be switched:\n%s",
+                str->str);
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+gboolean
 donna_task_manager_show_ui (DonnaTaskManager    *tm,
                             DonnaNode           *node,
                             GError             **error)
