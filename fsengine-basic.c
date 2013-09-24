@@ -352,6 +352,10 @@ write:
                 }
             }
 
+            /* so what we've written gets logged by the taskui */
+            g_signal_emit_by_name (task, "pipe-data-received", DONNA_PIPE_ERROR,
+                    written, data->wbuf);
+
             if (written < data->wlen)
             {
                 data->wlen -= written;
@@ -499,6 +503,8 @@ donna_fs_engine_basic_io_task (DonnaApp           *app,
         g_free (cmdline);
         return NULL;
     }
+
+    donna_task_process_set_ui_msg (taskp);
 
     if (G_UNLIKELY (!donna_task_process_set_workdir_to_curdir (taskp, app)))
     {
