@@ -286,7 +286,7 @@ lock_manager (DonnaProviderTask *tm, TmState state)
     }
     else if (state == TM_BUSY_READ)
     {
-        while (priv->state & TM_BUSY_WRITE || priv->queued > 0)
+        while ((priv->state & TM_BUSY_WRITE) || priv->queued > 0)
             g_cond_wait (&priv->cond, &priv->mutex);
 
         ++priv->readers;

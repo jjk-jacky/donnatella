@@ -645,7 +645,7 @@ provider_mark_get_context_item_info (DonnaProvider          *provider,
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-            "Provider 'fs': No such context item: '%s'", item);
+            "Provider 'mark': No such context item: '%s'", item);
     return FALSE;
 }
 
