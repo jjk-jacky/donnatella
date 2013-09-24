@@ -11953,12 +11953,10 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
             || gtk_tree_selection_count_selected_rows (sel))
         reference |= DONNA_CONTEXT_HAS_SELECTION;
 
-    nodes = donna_context_menu_get_nodes (priv->app, error, items, reference,
-                "treeviews", (get_alias_fn) tree_context_get_alias,
+    nodes = donna_context_menu_get_nodes (priv->app, items, reference, "treeviews",
+                (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
-                "olLrnN", (conv_flag_fn) tree_conv_flag, &conv, (is_tree (tree))
-                ? "defaults/treeviews/tree" : "defaults/treeviews/list",
-                "treeviews/%s", priv->name);
+                "olLrnN", (conv_flag_fn) tree_conv_flag, &conv, error);
 
     if (conv.row)
         g_free (conv.row);

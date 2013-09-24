@@ -70,21 +70,7 @@ typedef gboolean (*get_item_info_fn) (const gchar             *item,
                                       DonnaContextInfo        *info,
                                       GError                 **error);
 
-GPtrArray *     donna_context_menu_get_nodes_v  (DonnaApp               *app,
-                                                 GError                **error,
-                                                 gchar                  *items,
-                                                 DonnaContextReference   reference,
-                                                 const gchar            *source,
-                                                 get_alias_fn            get_alias,
-                                                 get_item_info_fn        get_item_info,
-                                                 const gchar            *conv_flags,
-                                                 conv_flag_fn            conv_fn,
-                                                 gpointer                conv_data,
-                                                 const gchar            *def_root,
-                                                 const gchar            *root_fmt,
-                                                 va_list                 va_args);
 GPtrArray *     donna_context_menu_get_nodes    (DonnaApp               *app,
-                                                 GError                **error,
                                                  gchar                  *items,
                                                  DonnaContextReference   reference,
                                                  const gchar            *source,
@@ -93,12 +79,10 @@ GPtrArray *     donna_context_menu_get_nodes    (DonnaApp               *app,
                                                  const gchar            *conv_flags,
                                                  conv_flag_fn            conv_fn,
                                                  gpointer                conv_data,
-                                                 const gchar            *def_root,
-                                                 const gchar            *root_fmt,
-                                                 ...);
+                                                 GError                **error);
+
 inline gboolean
 donna_context_menu_popup (DonnaApp              *app,
-                          GError               **error,
                           gchar                 *items,
                           DonnaContextReference  reference,
                           const gchar           *source,
@@ -108,9 +92,7 @@ donna_context_menu_popup (DonnaApp              *app,
                           conv_flag_fn           conv_fn,
                           gpointer               conv_data,
                           const gchar           *menu,
-                          const gchar           *def_root,
-                          const gchar           *root_fmt,
-                          ...);
+                          GError               **error);
 
 G_END_DECLS
 

@@ -1358,29 +1358,23 @@ next:
 }
 
 GPtrArray *
-donna_context_menu_get_nodes_v (DonnaApp               *app,
-                                GError                **error,
-                                gchar                  *_items,
-                                DonnaContextReference   reference,
-                                const gchar            *source,
-                                get_alias_fn            get_alias,
-                                get_item_info_fn        get_item_info,
-                                const gchar            *conv_flags,
-                                conv_flag_fn            conv_fn,
-                                gpointer                conv_data,
-                                const gchar            *def_root,
-                                const gchar            *root_fmt,
-                                va_list                 va_args)
+donna_context_menu_get_nodes (DonnaApp               *app,
+                              gchar                  *items,
+                              DonnaContextReference   reference,
+                              const gchar            *source,
+                              get_alias_fn            get_alias,
+                              get_item_info_fn        get_item_info,
+                              const gchar            *conv_flags,
+                              conv_flag_fn            conv_fn,
+                              gpointer                conv_data,
+                              GError                **error)
 {
     DonnaProviderInternal *pi;
     DonnaConfig *config;
     GPtrArray *nodes;
-    gchar *root;
-    gchar *items;
-    gchar *s;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-    g_return_val_if_fail (_items != NULL || root_fmt != NULL, NULL);
+    g_return_val_if_fail (items != NULL, NULL);
     g_return_val_if_fail (source != NULL, NULL);
 
     config = donna_app_peek_config (app);
@@ -1394,86 +1388,15 @@ donna_context_menu_get_nodes_v (DonnaApp               *app,
         return NULL;
     }
 
-    if (root_fmt)
-        root = g_strdup_vprintf (root_fmt, va_args);
-    else
-        root = NULL;
-
-    if (_items)
-        items = _items;
-    else
-    {
-        /* try the _ref/_no_ref setting */
-        if (!donna_config_get_string (config, &items, "%s/context_menu_%s",
-                    root,
-                    (reference & DONNA_CONTEXT_HAS_REF) ? "ref" : "no_ref"))
-        {
-            /* then try _ref/_no_ref defaults (if possible)*/
-            if (!def_root || !donna_config_get_string (config, &items,
-                        "%s/context_menu_%s",
-                        def_root,
-                        (reference & DONNA_CONTEXT_HAS_REF) ? "ref" : "no_ref"))
-            {
-                /* alright, try simple "context_menu" then */
-                if (!donna_config_get_string (config, &items, "%s/context_menu", root))
-                {
-                    /* last chance, the "context_menu" default */
-                    if (!def_root || !donna_config_get_string (config, &items,
-                                "%s/context_menu", def_root))
-                    {
-                        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                                DONNA_CONTEXT_MENU_ERROR_NO_SECTIONS,
-                                "Cannot get nodes for context menu: no items defined");
-                        g_free (root);
-                        g_object_unref (pi);
-                        return NULL;
-                    }
-                }
-            }
-        }
-    }
-
-    s = items;
-    nodes = parse_items (app, pi, PARSE_DEFAULT, &s, get_alias, get_item_info,
+    nodes = parse_items (app, pi, PARSE_DEFAULT, &items, get_alias, get_item_info,
             reference, source, conv_flags, conv_fn, conv_data, error);
 
-    if (items != _items)
-        g_free (items);
-    g_free (root);
     g_object_unref (pi);
-
-    return nodes;
-}
-
-GPtrArray *
-donna_context_menu_get_nodes (DonnaApp               *app,
-                              GError                **error,
-                              gchar                  *items,
-                              DonnaContextReference   reference,
-                              const gchar            *source,
-                              get_alias_fn            get_alias,
-                              get_item_info_fn        get_item_info,
-                              const gchar            *conv_flags,
-                              conv_flag_fn            conv_fn,
-                              gpointer                conv_data,
-                              const gchar            *def_root,
-                              const gchar            *root_fmt,
-                              ...)
-{
-    GPtrArray *nodes;
-    va_list va_args;
-
-    va_start (va_args, root_fmt);
-    nodes = donna_context_menu_get_nodes_v (app, error, items, reference,
-            source, get_alias, get_item_info, conv_flags, conv_fn, conv_data,
-            def_root, root_fmt, va_args);
-    va_end (va_args);
     return nodes;
 }
 
 inline gboolean
 donna_context_menu_popup (DonnaApp              *app,
-                          GError               **error,
                           gchar                 *items,
                           DonnaContextReference  reference,
                           const gchar           *source,
@@ -1483,18 +1406,12 @@ donna_context_menu_popup (DonnaApp              *app,
                           conv_flag_fn           conv_fn,
                           gpointer               conv_data,
                           const gchar           *menu,
-                          const gchar           *def_root,
-                          const gchar           *root_fmt,
-                          ...)
+                          GError               **error)
 {
     GPtrArray *nodes;
-    va_list va_args;
 
-    va_start (va_args, root_fmt);
-    nodes = donna_context_menu_get_nodes_v (app, error, items, reference,
-            source, get_alias, get_item_info, conv_flags, conv_fn, conv_data,
-            def_root, root_fmt, va_args);
-    va_end (va_args);
+    nodes = donna_context_menu_get_nodes (app, items, reference, source,
+            get_alias, get_item_info, conv_flags, conv_fn, conv_data, error);
     if (!nodes)
         return FALSE;
 
