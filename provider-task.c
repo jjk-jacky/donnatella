@@ -245,19 +245,19 @@ provider_task_finalize (GObject *object)
     G_OBJECT_CLASS (donna_provider_task_parent_class)->finalize (object);
 }
 
+static const gchar *
+provider_task_get_domain (DonnaProvider *provider)
+{
+    g_return_val_if_fail (DONNA_IS_PROVIDER_TASK (provider), NULL);
+    return "task";
+}
+
 static DonnaProviderFlags
 provider_task_get_flags (DonnaProvider *provider)
 {
     g_return_val_if_fail (DONNA_IS_PROVIDER_TASK (provider),
             DONNA_PROVIDER_FLAG_INVALID);
     return 0;
-}
-
-static const gchar *
-provider_task_get_domain (DonnaProvider *provider)
-{
-    g_return_val_if_fail (DONNA_IS_PROVIDER_TASK (provider), NULL);
-    return "task";
 }
 
 /* this works as a read/write lock, but with a special handling for refreshers.
