@@ -204,6 +204,31 @@ donna_task_process_finalize (GObject *object)
     G_OBJECT_CLASS (donna_task_process_parent_class)->finalize (object);
 }
 
+struct set_taskui_title
+{
+    DonnaTaskUi *taskui;
+    gchar *title;
+};
+
+static gboolean
+real_set_taskui_title (struct set_taskui_title *stt)
+{
+    donna_taskui_take_title (stt->taskui, stt->title);
+    g_free (stt);
+    return FALSE;
+}
+
+static void
+set_taskui_title (DonnaTaskUi *taskui, gchar *title, gboolean need_dup)
+{
+    struct set_taskui_title *stt;
+
+    stt = g_new (struct set_taskui_title, 1);
+    stt->taskui = taskui;
+    stt->title = (need_dup) ? g_strdup (title) : title;
+    g_main_context_invoke (NULL, (GSourceFunc) real_set_taskui_title, stt);
+}
+
 static void
 donna_task_process_get_property (GObject            *object,
                                  guint               prop_id,
@@ -259,7 +284,7 @@ donna_task_process_set_property (GObject            *object,
                 gchar *s = g_strdup_printf ("Execute: %s", priv->cmdline);
                 donna_task_take_desc ((DonnaTask *) object, s);
                 if (priv->tuimsg)
-                    donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
+                    set_taskui_title ((DonnaTaskUi *) priv->tuimsg, s, TRUE);
             }
             break;
 
@@ -705,8 +730,7 @@ again:
         gchar *s = g_strdup_printf ("%s: %s",
                 (state == DONNA_TASK_DONE) ? "Success" : "Failed",
                 priv->cmdline);
-        donna_taskui_set_title ((DonnaTaskUi *) priv->tuimsg, s);
-        g_free (s);
+        set_taskui_title ((DonnaTaskUi *) priv->tuimsg, s, FALSE);
     }
 
     g_signal_emit (task, donna_task_process_signals[PROCESS_ENDED], 0);
@@ -954,11 +978,10 @@ donna_task_process_set_ui_msg (DonnaTaskProcess   *taskp)
     if (priv->cmdline)
     {
         gchar *s = g_strdup_printf ("Execute: %s", priv->cmdline);
-        donna_taskui_set_title (tui, s);
-        g_free (s);
+        set_taskui_title (tui, s, FALSE);
     }
     else
-        donna_taskui_set_title (tui, "Execute process");
+        set_taskui_title (tui, "Execute process", TRUE);
     g_signal_connect (taskp, "pipe-new-line", (GCallback) pipe_new_line_cb, NULL);
 
     return TRUE;
