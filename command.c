@@ -766,6 +766,7 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     DonnaProvider *provider;
     DonnaTask *t;
+    DonnaTaskState state;
 
     provider = donna_node_peek_provider (source);
     t = donna_provider_remove_from_task (provider, nodes, source, &err);
@@ -780,7 +781,8 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
     donna_app_run_task (app, t);
     donna_task_wait_for_it (t);
 
-    if (donna_task_get_state (t) != DONNA_TASK_DONE)
+    state = donna_task_get_state (t);
+    if (state != DONNA_TASK_DONE)
     {
         err = (GError *) donna_task_get_error (t);
         if (err)
@@ -789,7 +791,7 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
             g_prefix_error (&err, "Command 'nodes_remove_from' failed: ");
             donna_task_take_error (task, err);
         }
-        else
+        else if (state == DONNA_TASK_FAILED)
         {
             gchar *fl = donna_node_get_full_location (source);
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
@@ -799,7 +801,7 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
             g_free (fl);
         }
         g_object_unref (t);
-        return DONNA_TASK_FAILED;
+        return state;
     }
     g_object_unref (t);
 
