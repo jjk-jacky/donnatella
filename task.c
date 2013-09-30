@@ -95,6 +95,10 @@
  * Once a task is started, if can be paused, resumed or cancelled using
  * donna_task_pause(), donna_task_resume() and donna_task_cancel() resp.
  *
+ * It is also possible to cancel a task *before* it was started (using
+ * donna_task_cancel() as well), i.e. when it was still stopped or waiting. In
+ * that case, the worker will never be called, but the callback (if any) will.
+ *
  *
  * The worker (i.e. the task's function) should regularly use
  * donna_task_is_cancelling() to see if the task has been cancelled. If the task
@@ -1629,11 +1633,12 @@ donna_task_resume (DonnaTask *task)
  * Send a request to the task's worker to cancel. It might take a little while
  * before the request is taken into account (a worker might even ignore it
  * completely).
- * If you need to know if/when the task gets actually paused, watch the task's
+ * If you need to know if/when the task gets actually cancelled, watch the task's
  * property ::state Note that it might not be set to %DONNA_TASK_CANCELLED (e.g.
  * if the task was already completed)
  *
- * Note that this has no effect if the task isn't running or paused
+ * It is also possible to cancel a task that hasn't yet started, i.e. still
+ * %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED.
  */
 void
 donna_task_cancel (DonnaTask *task)
@@ -1647,11 +1652,36 @@ donna_task_cancel (DonnaTask *task)
 
     priv = task->priv;
     state = priv->state;
-    /* one can cancel a task if it's running, paused or about to be paused.
-     * Going from pausing to cancelling isn't a problem */
-    if (state != DONNA_TASK_RUNNING && state != DONNA_TASK_PAUSING
-            && state != DONNA_TASK_PAUSED)
+    if (state & (DONNA_TASK_STOPPED | DONNA_TASK_WAITING))
     {
+        g_object_ref_sink (task);
+        priv->state = DONNA_TASK_CANCELLED;
+        UNLOCK_TASK (task);
+
+        /* notify change of state (in main thread) */
+        notify_prop (task, PROP_STATE);
+
+        if (priv->callback_fn)
+            /* trigger the callback in main thread -- our reference on task will
+             * be removed after the callback has been triggered */
+            g_main_context_invoke (NULL, callback_cb, task);
+        else
+        {
+            guint64 one = 1;
+
+            /* someone blocked for us? */
+            if (priv->fd_block >= 0)
+                write (priv->fd_block, &one, sizeof (one));
+            /* remove our reference on task */
+            g_object_unref (task);
+        }
+
+        return;
+    }
+    else if (!(state & (DONNA_TASK_RUNNING | DONNA_TASK_PAUSING | DONNA_TASK_PAUSED)))
+    {
+        /* Neither running, pausing or paused can't be paused.
+         * Going from pausing to cancelling isn't a problem */
         UNLOCK_TASK (task);
         return;
     }

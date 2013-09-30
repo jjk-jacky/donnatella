@@ -507,6 +507,8 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
 
                 switch (g_value_get_int (&v))
                 {
+                    case ST_WAITING:
+                    case ST_STOPPED:
                     case ST_RUNNING:
                     case ST_PAUSED:
                     case ST_ON_HOLD:
@@ -515,8 +517,6 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
                             "@tree_get_nodes (%o, :selected))";
                         break;
 
-                    case ST_WAITING:
-                    case ST_STOPPED:
                     case ST_CANCELLED:
                     case ST_FAILED:
                     case ST_DONE:
@@ -538,6 +538,8 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
 
             switch (g_value_get_int (&v))
             {
+                case ST_WAITING:
+                case ST_STOPPED:
                 case ST_RUNNING:
                 case ST_PAUSED:
                 case ST_ON_HOLD:
@@ -545,8 +547,6 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
                     info->trigger = "command:task_cancel (%n)";
                     break;
 
-                case ST_WAITING:
-                case ST_STOPPED:
                 case ST_CANCELLED:
                 case ST_FAILED:
                 case ST_DONE:
@@ -2011,9 +2011,9 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
 
         case DONNA_TASK_CANCELLING:
         case DONNA_TASK_CANCELLED:
-            if (cur_state == DONNA_TASK_RUNNING
-                    || cur_state == DONNA_TASK_PAUSED
-                    || cur_state == DONNA_TASK_PAUSING)
+            if (cur_state & (DONNA_TASK_RUNNING | DONNA_TASK_PAUSED
+                        | DONNA_TASK_PAUSING | DONNA_TASK_STOPPED
+                        | DONNA_TASK_WAITING))
                 donna_task_cancel (task);
             else if (cur_state != DONNA_TASK_CANCELLED
                     && cur_state != DONNA_TASK_CANCELLING)
