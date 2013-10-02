@@ -387,9 +387,8 @@ take_clipboard_ownership (DonnaProviderRegister *pr, gboolean clear)
 
     task = donna_task_new (task_take_clipboard_ownership, &data, NULL);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (((DonnaProviderBase *) pr)->app, task);
-    donna_task_wait_for_it (task);
+    donna_app_run_task (((DonnaProviderBase *) pr)->app, g_object_ref (task));
+    donna_task_wait_for_it (task, NULL, NULL);
     ret = donna_task_get_state (task) == DONNA_TASK_DONE;
     g_object_unref (task);
     return ret;
@@ -544,9 +543,8 @@ get_from_clipboard (DonnaApp             *app,
 
     task = donna_task_new (task_get_from_clipboard, &data, NULL);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (app, task);
-    donna_task_wait_for_it (task);
+    donna_app_run_task (app, g_object_ref (task));
+    donna_task_wait_for_it (task, NULL, NULL);
     ret = donna_task_get_state (task) == DONNA_TASK_DONE;
     g_object_unref (task);
     return ret;
@@ -1081,9 +1079,10 @@ register_get_nodes (DonnaProviderRegister   *pr,
             continue;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (task));
-        donna_app_run_task (((DonnaProviderBase *) pr)->app, task);
-        donna_task_wait_for_it (task);
+        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+        donna_app_run_task (((DonnaProviderBase *) pr)->app, g_object_ref (task));
+        donna_task_wait_for_it (task, NULL, NULL);
 
         if (donna_task_get_state (task) == DONNA_TASK_DONE)
             g_ptr_array_add (*nodes,
@@ -1183,9 +1182,10 @@ emit_node_children_from_arr (DonnaProviderRegister  *pr,
             continue;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (task));
-        donna_app_run_task (app, task);
-        donna_task_wait_for_it (task);
+        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+        donna_app_run_task (app, g_object_ref (task));
+        donna_task_wait_for_it (task, NULL, NULL);
 
         if (donna_task_get_state (task) != DONNA_TASK_DONE)
         {
@@ -3066,9 +3066,15 @@ cmd_register_nodes_io (DonnaTask               *task,
             return DONNA_TASK_FAILED;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (t));
-        donna_app_run_task (app, t);
-        donna_task_wait_for_it (t);
+        if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+        {
+            g_prefix_error (&err, "Command 'register_nodes_io': "
+                    "Failed to run get_node task: ");
+            donna_task_take_error (task, err);
+            g_object_unref (t);
+            g_ptr_array_unref (nodes);
+            return DONNA_TASK_FAILED;
+        }
 
         state = donna_task_get_state (t);
         if (state != DONNA_TASK_DONE)
@@ -3099,9 +3105,15 @@ cmd_register_nodes_io (DonnaTask               *task,
             return DONNA_TASK_FAILED;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (t));
-        donna_app_run_task (app, t);
-        donna_task_wait_for_it (t);
+        if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+        {
+            g_prefix_error (&err, "Command 'register_nodes_io': "
+                    "Failed to run trigger task: ");
+            donna_task_take_error (task, err);
+            g_object_unref (t);
+            g_ptr_array_unref (nodes);
+            return DONNA_TASK_FAILED;
+        }
 
         state = donna_task_get_state (t);
         if (state != DONNA_TASK_DONE)
@@ -3133,9 +3145,15 @@ cmd_register_nodes_io (DonnaTask               *task,
         }
         g_free (name);
 
-        donna_task_set_can_block (g_object_ref_sink (t));
-        donna_app_run_task (app, t);
-        donna_task_wait_for_it (t);
+        if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+        {
+            g_prefix_error (&err, "Command 'register_nodes_io': "
+                    "Failed to run new_child task: ");
+            donna_task_take_error (task, err);
+            g_object_unref (t);
+            g_ptr_array_unref (nodes);
+            return DONNA_TASK_FAILED;
+        }
 
         state = donna_task_get_state (t);
         if (state != DONNA_TASK_DONE)
@@ -3169,9 +3187,14 @@ cmd_register_nodes_io (DonnaTask               *task,
     }
     g_ptr_array_unref (nodes);
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'register_nodes_io': "
+                "Failed to run nodes_io task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state == DONNA_TASK_DONE)

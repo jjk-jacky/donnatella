@@ -313,9 +313,14 @@ node_children_cb (DonnaTask             *task,
         return DONNA_TASK_FAILED;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (ni->app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (ni->app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Failed to run %s_children task: ",
+                (get_children) ? "get" : "has");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state != DONNA_TASK_DONE)
@@ -425,9 +430,16 @@ get_node_trigger (DonnaApp      *app,
         g_free (fl);
         return NULL;
     }
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (app, task);
-    donna_task_wait_for_it (task);
+    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+    donna_app_run_task (app, g_object_ref (task));
+    if (!donna_task_wait_for_it (task, NULL, NULL))
+    {
+        g_object_unref (task);
+        g_free (fl);
+        return NULL;
+    }
+
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
         g_object_unref (task);

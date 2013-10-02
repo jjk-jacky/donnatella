@@ -134,6 +134,10 @@ DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
                                                      const gchar    *filter);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
+gboolean            donna_app_run_task_and_wait     (DonnaApp       *app,
+                                                     DonnaTask      *task,
+                                                     DonnaTask      *current_task,
+                                                     GError        **error);
 DonnaTaskManager *  donna_app_get_task_manager      (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);

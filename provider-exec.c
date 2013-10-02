@@ -275,10 +275,11 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
     if (path != line)
         g_free (path);
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (data->app, t);
-    donna_task_wait_for_it (t);
-    if (donna_task_get_state (t) != DONNA_TASK_DONE)
+    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+    donna_task_set_visibility (t, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+    donna_app_run_task (data->app, g_object_ref (t));
+    if (!donna_task_wait_for_it (t, NULL, NULL)
+            || donna_task_get_state (t) != DONNA_TASK_DONE)
     {
         g_object_unref (t);
         return;

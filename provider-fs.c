@@ -485,9 +485,8 @@ set_icon (DonnaApp *app, DonnaNode *node, const gchar *filename)
 
     task = donna_task_new (set_icon_worker, &data, NULL);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (app, task);
-    donna_task_wait_for_it (task);
+    donna_app_run_task (app, g_object_ref (task));
+    donna_task_wait_for_it (task, NULL, NULL);
     ret = donna_task_get_state (task) == DONNA_TASK_DONE;
     g_object_unref (task);
     return ret;
@@ -1158,10 +1157,15 @@ provider_fs_trigger_node (DonnaProviderBase  *_provider,
         g_object_set (tp, "workdir", filename, NULL);
 
         g_object_get (_provider, "app", &app, NULL);
-        donna_task_set_can_block (g_object_ref_sink (tp));
-        donna_app_run_task (app, tp);
+        if (!donna_app_run_task_and_wait (app, g_object_ref (tp), task, &err))
+        {
+            g_prefix_error (&err, "Failed to run task: ");
+            donna_task_take_error (task, err);
+            g_object_unref (app);
+            g_object_unref (tp);
+            return DONNA_TASK_FAILED;
+        }
         g_object_unref (app);
-        donna_task_wait_for_it (tp);
 
         ret = donna_task_get_state (tp);
         if (ret == DONNA_TASK_FAILED)

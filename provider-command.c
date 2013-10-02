@@ -452,8 +452,10 @@ get_node (DonnaApp *app, const gchar *fl, GError **error)
                 "Can't get node for '%s'", fl);
         return NULL;
     }
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (app, task);
+    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+    donna_app_run_task (app, g_object_ref (task));
+    donna_task_wait_for_it (task, NULL, NULL);
     if (donna_task_get_state (task) == DONNA_TASK_DONE)
         node = g_value_dup_object (donna_task_get_return_value (task));
     else
@@ -1223,9 +1225,13 @@ run_command (DonnaTask *task, struct run_command *rc)
                 donna_task_take_desc (cmd_task, g_strdup_printf (
                         "run command: %s", rc->cmdline)));
         donna_task_set_visibility (cmd_task, rc->command->visibility);
-        donna_task_set_can_block (g_object_ref_sink (cmd_task));
-        donna_app_run_task (app, cmd_task);
-        donna_task_wait_for_it (cmd_task);
+        if (!donna_app_run_task_and_wait (app, g_object_ref (cmd_task), task, &err))
+        {
+            g_prefix_error (&err, "Failed to run command's task: ");
+            donna_task_take_error (task, err);
+            g_object_unref (cmd_task);
+            return DONNA_TASK_FAILED;
+        }
         ret = donna_task_get_state (cmd_task);
         g_object_unref (cmd_task);
     }

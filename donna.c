@@ -1509,7 +1509,7 @@ get_node_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
 
     /* see _donna_command_trigger_fl() for why this is blocking */
     if (timeout_called)
-        donna_task_set_can_block (g_object_ref_sink (t));
+        g_object_ref (t);
     else
         donna_task_set_callback (t, (task_callback_fn) trigger_cb, fir, NULL);
 
@@ -1545,7 +1545,7 @@ donna_donna_trigger_fl (DonnaApp     *app,
         return FALSE;
     }
     if (blocking)
-        donna_task_set_can_block (g_object_ref_sink (task));
+        g_object_ref (task);
     else
     {
         struct fir *fir;
@@ -2097,7 +2097,7 @@ load_submenu (struct load_submenu *ls)
             ls,
             (ls->blocking) ? NULL : (GDestroyNotify) free_load_submenu);
     if (ls->blocking)
-        donna_task_set_can_block (g_object_ref_sink (task));
+        g_object_ref (task);
     else
         donna_task_set_timeout (task, /*FIXME*/ 800,
                 (task_timeout_fn) submenu_get_children_timeout, ls, NULL);
@@ -2108,7 +2108,7 @@ load_submenu (struct load_submenu *ls)
     donna_app_run_task ((DonnaApp *) ls->mc->donna, task);
     if (ls->blocking)
     {
-        donna_task_wait_for_it (task);
+        donna_task_wait_for_it (task, NULL, NULL);
         g_object_unref (task);
     }
 }

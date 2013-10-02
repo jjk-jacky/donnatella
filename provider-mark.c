@@ -472,9 +472,14 @@ get_mark_node (DonnaTask            *task,
     type = mark->type;
     g_mutex_unlock (&priv->mutex);
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Provider 'mark': "
+                "Failed to run get_node task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state == DONNA_TASK_DONE)
@@ -501,9 +506,16 @@ get_mark_node (DonnaTask            *task,
                     location);
             return DONNA_TASK_FAILED;
         }
-        donna_task_set_can_block (g_object_ref_sink (t));
-        donna_app_run_task (app, t);
-        donna_task_wait_for_it (t);
+        if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+        {
+            g_prefix_error (&err, "Provider 'mark': "
+                    "Failed to run trigger task for mark '%s': ",
+                    location);
+            donna_task_take_error (task, err);
+            g_object_unref (n);
+            g_object_unref (t);
+            return DONNA_TASK_FAILED;
+        }
         g_object_unref (n);
 
         state = donna_task_get_state (t);

@@ -285,6 +285,29 @@ donna_app_run_task (DonnaApp       *app,
     return (*interface->run_task) (app, task);
 }
 
+gboolean
+donna_app_run_task_and_wait (DonnaApp       *app,
+                             DonnaTask      *task,
+                             DonnaTask      *current_task,
+                             GError        **error)
+{
+    DonnaTaskVisibility visibility;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (DONNA_IS_TASK (current_task), FALSE);
+
+    g_object_get (task, "visibility", &visibility, NULL);
+    if (visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+        /* make it FAST so it runs inside the current thread instead of a new
+         * one. This in intended to be used from a task worker, so no need to
+         * "waste" an internal thread for no reason. */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+
+    donna_app_run_task (app, task);
+    return donna_task_wait_for_it (task, current_task, error);
+}
+
 DonnaTaskManager *
 donna_app_get_task_manager (DonnaApp       *app)
 {

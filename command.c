@@ -340,9 +340,13 @@ cmd_node_new_child (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'node_new_child': Failed to run new_child task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     ret = donna_task_get_state (t);
     if (ret != DONNA_TASK_DONE)
@@ -449,9 +453,14 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'node_popup_children': "
+                "Failed to run get_children task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state != DONNA_TASK_DONE)
@@ -485,9 +494,14 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     t = donna_task_new ((task_fn) popup_children, &data, NULL);
     donna_task_set_visibility (t, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (data.app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'node_popup_children': "
+                "Failed to run popup_children task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state != DONNA_TASK_DONE)
@@ -724,9 +738,14 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'nodes_io': "
+                "Failed to run nodes_io task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state == DONNA_TASK_DONE)
@@ -777,9 +796,14 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'nodes_remove_from': "
+                "Failed to run remove_from task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     state = donna_task_get_state (t);
     if (state != DONNA_TASK_DONE)
@@ -910,9 +934,14 @@ cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (t));
-    donna_app_run_task (app, t);
-    donna_task_wait_for_it (t);
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command 'task_toggle': "
+                "Failed to run trigger task: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
 
     if (donna_task_get_state (t) != DONNA_TASK_DONE)
     {

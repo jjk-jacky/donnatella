@@ -415,9 +415,8 @@ _provider_base_set_property_icon (DonnaApp      *app,
 
     task = donna_task_new ((task_fn) set_property_icon, &data, NULL);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (app, task);
-    donna_task_wait_for_it (task);
+    donna_app_run_task (app, g_object_ref (task));
+    donna_task_wait_for_it (task, NULL, NULL);
     ret = donna_task_get_state (task) == DONNA_TASK_DONE;
     g_object_unref (task);
     return ret;

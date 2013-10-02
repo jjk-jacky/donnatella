@@ -11100,9 +11100,10 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
         return NULL;
     }
 
-    donna_task_set_can_block (g_object_ref_sink (task));
-    donna_app_run_task (priv->app, task);
-    donna_task_wait_for_it (task);
+    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+    donna_app_run_task (priv->app, g_object_ref (task));
+    donna_task_wait_for_it (task, NULL, NULL);
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
@@ -11303,9 +11304,10 @@ found:
             return NULL;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (task));
-        donna_app_run_task (priv->app, task);
-        donna_task_wait_for_it (task);
+        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+        donna_app_run_task (priv->app, g_object_ref (task));
+        donna_task_wait_for_it (task, NULL, NULL);
 
         if (donna_task_get_state (task) != DONNA_TASK_DONE)
         {
@@ -11853,9 +11855,10 @@ tree_context_get_item_info (const gchar             *item,
             return FALSE;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (task));
-        donna_app_run_task (priv->app, task);
-        donna_task_wait_for_it (task);
+        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+        donna_app_run_task (priv->app, g_object_ref (task));
+        donna_task_wait_for_it (task, NULL, NULL);
 
         if (donna_task_get_state (task) != DONNA_TASK_DONE)
         {

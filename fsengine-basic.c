@@ -190,9 +190,10 @@ pipe_new_line (DonnaTask    *task,
             goto remove;
         }
 
-        donna_task_set_can_block (g_object_ref_sink (task));
-        donna_app_run_task (data->app, task);
-        donna_task_wait_for_it (task);
+        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+        donna_app_run_task (data->app, g_object_ref (task));
+        donna_task_wait_for_it (task, NULL, NULL);
         if (donna_task_get_state (task) != DONNA_TASK_DONE)
         {
             g_warning ("FS Engine 'basic': Failed to get node for '%s'",
