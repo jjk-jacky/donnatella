@@ -688,7 +688,7 @@ donna_app_ask (DonnaApp       *app,
     g_return_val_if_fail (interface != NULL, 0);
     g_return_val_if_fail (interface->ask != NULL, 0);
 
-    va_start (va_args, details);
+    va_start (va_args, btn2_label);
     ret = (*interface->ask) (app, title, details,
             btn1_icon, btn1_label, btn2_icon, btn2_label, va_args);
     va_end (va_args);
