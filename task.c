@@ -1074,14 +1074,12 @@ donna_task_wait_for_it (DonnaTask          *task,
                         DonnaTask          *current_task,
                         GError            **error)
 {
-    DonnaTaskPrivate *priv;
     fd_set fd_set;
     int fd_wait;
     int fd_current;
 
     g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
     g_return_val_if_fail (!current_task || DONNA_IS_TASK (current_task), FALSE);
-    priv = task->priv;
 
     fd_wait = donna_task_get_wait_fd (task);
     if (G_UNLIKELY (fd_wait == -1))
