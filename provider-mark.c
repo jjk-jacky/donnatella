@@ -92,6 +92,14 @@ donna_provider_mark_class_init (DonnaProviderMarkClass *klass)
     o_class->finalize           = provider_mark_finalize;
 
     pb_class = (DonnaProviderBaseClass *) klass;
+
+    pb_class->task_visiblity.new_node       = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.has_children   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.get_children   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.trigger_node   = DONNA_TASK_VISIBILITY_INTERNAL_GUI;
+    pb_class->task_visiblity.new_child      = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.remove_from    = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+
     pb_class->new_node          = provider_mark_new_node;
     pb_class->has_children      = provider_mark_has_children;
     pb_class->get_children      = provider_mark_get_children;

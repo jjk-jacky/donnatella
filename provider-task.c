@@ -157,6 +157,12 @@ donna_provider_task_class_init (DonnaProviderTaskClass *klass)
     GObjectClass *o_class;
 
     pb_class = (DonnaProviderBaseClass *) klass;
+
+    pb_class->task_visiblity.new_node       = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.has_children   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.get_children   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visiblity.trigger_node   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+
     pb_class->new_node      = provider_task_new_node;
     pb_class->has_children  = provider_task_has_children;
     pb_class->get_children  = provider_task_get_children;
