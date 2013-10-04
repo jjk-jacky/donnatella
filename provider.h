@@ -56,8 +56,10 @@ struct _DonnaProviderInterface
     /* virtual table */
     const gchar *       (*get_domain)               (DonnaProvider  *provider);
     DonnaProviderFlags  (*get_flags)                (DonnaProvider  *provider);
-    DonnaTask *         (*get_node_task)            (DonnaProvider  *provider,
+    gboolean            (*get_node)                 (DonnaProvider  *provider,
                                                      const gchar    *location,
+                                                     gboolean       *is_node,
+                                                     gpointer       *ret,
                                                      GError        **error);
     DonnaTask *         (*has_node_children_task)   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
@@ -133,7 +135,7 @@ void    donna_provider_node_removed_from            (DonnaProvider  *provider,
 /* API */
 const gchar * donna_provider_get_domain             (DonnaProvider  *provider);
 DonnaProviderFlags donna_provider_get_flags         (DonnaProvider  *provider);
-DonnaTask * donna_provider_get_node_task            (DonnaProvider  *provider,
+DonnaNode * donna_provider_get_node                 (DonnaProvider  *provider,
                                                      const gchar    *location,
                                                      GError        **error);
 DonnaTask * donna_provider_has_node_children_task   (DonnaProvider  *provider,

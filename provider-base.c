@@ -58,9 +58,11 @@ static void             provider_base_node_updated (
                                             DonnaProvider  *provider,
                                             DonnaNode      *node,
                                             const gchar    *name);
-static DonnaTask *      provider_base_get_node_task (
+static gboolean         provider_base_get_node (
                                             DonnaProvider       *provider,
                                             const gchar         *location,
+                                            gboolean            *is_node,
+                                            gpointer            *ret,
                                             GError             **error);
 static DonnaTask *      provider_base_has_node_children_task (
                                             DonnaProvider       *provider,
@@ -108,7 +110,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
 {
     interface->node_updated           = provider_base_node_updated;
 
-    interface->get_node_task          = provider_base_get_node_task;
+    interface->get_node               = provider_base_get_node;
     interface->has_node_children_task = provider_base_has_node_children_task;
     interface->get_node_children_task = provider_base_get_node_children_task;
     interface->get_node_parent_task   = provider_base_get_node_parent_task;
@@ -488,17 +490,71 @@ get_node (DonnaTask *task, struct get_node_data *data)
     return ret;
 }
 
-static DonnaTask *
-provider_base_get_node_task (DonnaProvider    *provider,
-                             const gchar      *location,
-                             GError          **error)
+static gboolean
+provider_base_get_node (DonnaProvider    *provider,
+                        const gchar      *location,
+                        gboolean         *is_node,
+                        gpointer         *ret,
+                        GError          **error)
 {
     DonnaProviderBase *p = (DonnaProviderBase *) provider;
+    DonnaProviderBasePrivate *priv;
     DonnaTask *task;
     struct get_node_data *data;
 
-    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), NULL);
-    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->new_node != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (p), FALSE);
+    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->new_node != NULL, FALSE);
+    priv = p->priv;
+
+    g_rec_mutex_lock (&priv->nodes_mutex);
+    *ret = provider_base_get_cached_node (p, location);
+    g_rec_mutex_unlock (&priv->nodes_mutex);
+
+    if (*ret)
+    {
+        *is_node = TRUE;
+        return TRUE;
+    }
+
+    if (DONNA_PROVIDER_BASE_GET_CLASS (p)->task_visiblity.new_node
+            == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
+    {
+        DonnaTaskState state;
+
+        /* fake task, to get the node/error */
+        task = g_object_ref_sink (donna_task_new ((task_fn) gtk_false, NULL, NULL));
+
+        state = DONNA_PROVIDER_BASE_GET_CLASS (p)->new_node (p, task, location);
+        if (state != DONNA_TASK_DONE)
+        {
+            if (error)
+            {
+                const GError *err;
+
+                err = donna_task_get_error (task);
+                if (err)
+                    *error = g_error_copy (err);
+                else if (state == DONNA_TASK_CANCELLED)
+                    g_set_error (error, DONNA_PROVIDER_ERROR,
+                            DONNA_PROVIDER_ERROR_OTHER,
+                            "Provider '%s': Task get_node for '%s' cancelled",
+                            donna_provider_get_domain (provider), location);
+                else
+                    g_set_error (error, DONNA_PROVIDER_ERROR,
+                            DONNA_PROVIDER_ERROR_OTHER,
+                            "Provider '%s': Task get_node for '%s' failed without error message",
+                            donna_provider_get_domain (provider), location);
+            }
+
+            g_object_unref (task);
+            return FALSE;
+        }
+
+        *is_node = TRUE;
+        *ret = g_value_dup_object (donna_task_get_return_value (task));
+        g_object_unref (task);
+        return TRUE;
+    }
 
     data = g_slice_new0 (struct get_node_data);
     data->provider_base = g_object_ref (p);
@@ -512,7 +568,9 @@ provider_base_get_node_task (DonnaProvider    *provider,
                     donna_provider_get_domain (provider),
                     location)));
 
-    return task;
+    *is_node = FALSE;
+    *ret = task;
+    return TRUE;
 }
 
 struct node_children_data

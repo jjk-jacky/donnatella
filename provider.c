@@ -210,12 +210,24 @@ donna_provider_get_flags (DonnaProvider *provider)
     return (*interface->get_flags) (provider);
 }
 
-DonnaTask *
-donna_provider_get_node_task (DonnaProvider    *provider,
-                              const gchar      *location,
-                              GError          **error)
+static gboolean
+dispatch (GSource *source, GSourceFunc callback, gpointer data)
+{
+    callback (data);
+    return FALSE;
+}
+
+DonnaNode *
+donna_provider_get_node (DonnaProvider    *provider,
+                         const gchar      *location,
+                         GError          **error)
 {
     DonnaProviderInterface *interface;
+    DonnaApp *app;
+    DonnaTask *task;
+    DonnaTaskState state;
+    gboolean is_node;
+    gpointer ret;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
     g_return_val_if_fail (location != NULL, NULL);
@@ -223,9 +235,105 @@ donna_provider_get_node_task (DonnaProvider    *provider,
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
 
     g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_node_task != NULL, NULL);
+    g_return_val_if_fail (interface->get_node != NULL, NULL);
 
-    return (*interface->get_node_task) (provider, location, error);
+    if (!(*interface->get_node) (provider, location, &is_node, &ret, error))
+        return NULL;
+
+    if (is_node)
+        return (DonnaNode *) ret;
+
+    /* the provider gave us a task, which means it could take a little while to
+     * get the actual node (e.g. requires access to (potentially slow)
+     * filesystem), in which case we'll determine whether we're in the UI thead
+     * or not.
+     * If so, we start a new main loop while waiting for the task.
+     * If not, we can just block the thread.
+     * */
+
+    g_object_get (provider, "app", &app, NULL);
+    task = (DonnaTask *) g_object_ref (ret);
+
+    if (g_main_context_is_owner (g_main_context_default ()))
+    {
+        GMainLoop *loop;
+        GSource *source;
+        GSourceFuncs funcs = {
+            .prepare = NULL,
+            .check = NULL,
+            .dispatch = dispatch,
+            .finalize = NULL
+        };
+        gint fd;
+
+        fd = donna_task_get_wait_fd (task);
+        if (G_UNLIKELY (fd < 0))
+        {
+            g_set_error (error, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Provider '%s': Failed to get wait_fd from get_node task for location '%s'",
+                    donna_provider_get_domain (provider), location);
+            g_object_unref (app);
+            g_object_unref (task);
+            return NULL;
+        }
+
+        loop = g_main_loop_new (NULL, TRUE);
+
+        source = g_source_new (&funcs, sizeof (GSource));
+        g_source_add_unix_fd (source, fd, G_IO_IN);
+        g_source_set_callback (source, (GSourceFunc) g_main_loop_quit, loop, NULL);
+        g_source_attach (source, NULL);
+        g_source_unref (source);
+
+        donna_app_run_task (app, task);
+        g_main_loop_run (loop);
+    }
+    else
+    {
+        donna_app_run_task (app, task);
+        if (G_UNLIKELY (!donna_task_wait_for_it (task, NULL, error)))
+        {
+            g_object_unref (app);
+            g_object_unref (task);
+            return NULL;
+        }
+    }
+    g_object_unref (app);
+
+    state = donna_task_get_state (task);
+    if (state != DONNA_TASK_DONE)
+    {
+        if (state == DONNA_TASK_CANCELLED)
+            g_set_error (error, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Provider '%s': Task get_node for '%s' cancelled",
+                    donna_provider_get_domain (provider), location);
+        else if (error)
+        {
+            const GError *err;
+
+            err = donna_task_get_error (task);
+            if (err)
+            {
+                *error = g_error_copy (err);
+                g_prefix_error (error, "Provider '%s': Task get_node for '%s' failed: ",
+                        donna_provider_get_domain (provider), location);
+            }
+            else
+                g_set_error (error, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider '%s': Task get_node for '%s' failed without error message",
+                        donna_provider_get_domain (provider), location);
+        }
+
+        g_object_unref (task);
+        return NULL;
+    }
+
+    ret = g_value_dup_object (donna_task_get_return_value (task));
+    g_object_unref (task);
+    return (DonnaNode *) ret;
 }
 
 DonnaTask *
