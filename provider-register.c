@@ -1966,7 +1966,7 @@ provider_register_has_children (DonnaProviderBase  *_provider,
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_BOOLEAN);
     if (streq (location, "/"))
-        /* because default & clipboard alwas exist */
+        /* because default & clipboard always exist */
         g_value_set_boolean (value, TRUE);
     else
     {
@@ -2245,7 +2245,7 @@ provider_register_support_io (DonnaProviderBase  *_provider,
         gchar *fl = donna_node_get_full_location (dest);
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-                "Provider 'register': destination node '%s' isn't in domain 'rehister'",
+                "Provider 'register': destination node '%s' isn't in domain 'register'",
                 fl);
         g_free (fl);
         return FALSE;
