@@ -312,7 +312,6 @@ static void
 editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
 {
     GError *err = NULL;
-    GValue v = G_VALUE_INIT;
     gboolean canceled;
 
     g_signal_handler_disconnect (editable, ed->editing_done_sid);
@@ -344,7 +343,6 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
         g_free (ed);
         return;
     }
-    g_value_unset (&v);
 
     g_free (ed);
 }
