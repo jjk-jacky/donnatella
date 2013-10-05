@@ -3385,7 +3385,7 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
     data->config     = DONNA_PROVIDER_CONFIG (provider);
     data->node       = g_object_ref (node);
     data->node_types = node_types;
-    data->children   = g_ptr_array_new ();
+    data->children   = g_ptr_array_new_with_free_func (g_object_unref);
     data->ref_count  = 1;
 
     task = donna_task_new ((task_fn) node_children, data,
