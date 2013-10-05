@@ -515,7 +515,8 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
 
         if (*data->list)
         {
-            g_list_append (*data->last, filename);
+            /* append to last item directly; p to silence warning */
+            gpointer p = g_list_append (*data->last, filename);
             *data->last = (*data->last)->next;
         }
         else
@@ -684,8 +685,8 @@ add_node_to_reg (struct reg *reg, DonnaNode *node, gboolean is_clipboard)
     {
         if (reg->list)
         {
-            /* append to last item directly */
-            g_list_append (reg->last, s);
+            /* append to last item directly; p to silence warning */
+            gpointer p = g_list_append (reg->last, s);
             reg->last = reg->last->next;
         }
         else
@@ -1273,7 +1274,8 @@ register_import (DonnaProviderRegister  *pr,
         {
             if (new_reg->list)
             {
-                g_list_append (new_reg->last, new);
+                /* append to last item directly; p to silence warning */
+                gpointer p = g_list_append (new_reg->last, new);
                 new_reg->last = new_reg->last->next;
             }
             else
