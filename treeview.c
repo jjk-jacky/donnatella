@@ -12661,6 +12661,8 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
             if (!node)
                 /* prevent clicking/selecting a fake node */
                 return TRUE;
+            /* tree already has a ref on it */
+            g_object_unref (node);
 
 #ifdef GTK_IS_JJK
             if (!renderer)
@@ -12762,10 +12764,8 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                     gtk_tree_path_free (path);
                 }
 
-                g_object_unref (node);
                 return TRUE;
             }
-            g_object_unref (node);
             if (tree_might_grab_focus)
                 gtk_widget_grab_focus ((GtkWidget *) tree);
             /* there was no as for this column */
