@@ -706,6 +706,7 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
                 donna_provider_get_domain ((DonnaProvider *) provider_base),
                 location);
         g_free (location);
+        g_object_unref (node);
         return DONNA_TASK_FAILED;
     }
 
@@ -737,6 +738,7 @@ get_node_parent (DonnaTask *task, DonnaNode *node)
     }
 
     g_free (location);
+    g_object_unref (node);
     return ret;
 }
 
