@@ -816,10 +816,12 @@ provider_mark_trigger_node (DonnaProviderBase  *_provider,
         g_prefix_error (&err, "Provider 'mark': Failed to trigger '%s': ",
                 location);
         donna_task_take_error (task, err);
+        g_object_unref (n);
         g_free (location);
         return DONNA_TASK_FAILED;
     }
 
+    g_object_unref (n);
     g_free (location);
     return DONNA_TASK_DONE;
 }
