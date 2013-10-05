@@ -444,13 +444,12 @@ get_mark_node (DonnaTask            *task,
                DonnaNode           **node,
                DonnaProviderMark    *pm)
 {
-    DonnaProviderMarkPrivate *priv = pm->priv;
     GError *err = NULL;
+    DonnaProviderMarkPrivate *priv = pm->priv;
     struct mark *mark;
     DonnaNode *n = NULL;
     DonnaMarkType type;
-    DonnaTaskState state;
-    DonnaTask *t;
+    DonnaTaskState state = DONNA_TASK_DONE;
 
     g_assert (node);
 
@@ -466,45 +465,26 @@ get_mark_node (DonnaTask            *task,
         return DONNA_TASK_FAILED;
     }
 
-    t = donna_app_get_node_task (app, mark->value);
-    if (G_UNLIKELY (!t))
+    n = donna_app_get_node (app, mark->value, &err);
+    if (G_UNLIKELY (!n))
     {
         g_mutex_unlock (&priv->mutex);
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_OTHER,
-                "Provider 'mark': Cannot get %s's get_node task for mark '%s' [%s]",
+        g_prefix_error (&err, "Provider 'mark': "
+                "Cannot get %s's node for mark '%s' [%s]: ",
                 (mark->type == DONNA_MARK_STANDARD) ? "dest" : "trigger",
                 location, mark->value);
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
     type = mark->type;
     g_mutex_unlock (&priv->mutex);
 
-    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
-    {
-        g_prefix_error (&err, "Provider 'mark': "
-                "Failed to run get_node task: ");
-        donna_task_take_error (task, err);
-        g_object_unref (t);
-        return DONNA_TASK_FAILED;
-    }
-
-    state = donna_task_get_state (t);
-    if (state == DONNA_TASK_DONE)
-        n = g_value_dup_object (donna_task_get_return_value (t));
-    else if (state == DONNA_TASK_FAILED)
-    {
-        err = g_error_copy (donna_task_get_error (t));
-        g_prefix_error (&err, "Provider 'mark': Failed to get node for mark '%s': ",
-                location);
-        donna_task_take_error (task, err);
-    }
-    g_object_unref (t);
-
     /* in STANDARD we have the node we want. In DYNAMIC we have the node to
      * trigger, which should give us the node we want */
-    if (state == DONNA_TASK_DONE && type == DONNA_MARK_DYNAMIC)
+    if (type == DONNA_MARK_DYNAMIC)
     {
+        DonnaTask *t;
+
         t = donna_node_trigger_task (n, &err);
         if (G_UNLIKELY (!t))
         {

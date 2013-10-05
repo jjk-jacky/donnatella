@@ -1014,6 +1014,7 @@ sync_with_location_changed_cb (GObject       *object,
     GtkTreeSelection *sel;
     GtkTreeIter *iter = NULL;
     DonnaNode *node;
+    static DonnaNode *node_ref;
 
     g_object_get (object, "location", &node, NULL);
     if (node == priv->location)
@@ -1025,6 +1026,7 @@ sync_with_location_changed_cb (GObject       *object,
     else if (!node)
         return;
 
+    node_ref = node;
     switch (priv->sync_mode)
     {
         case DONNA_TREE_SYNC_NODES:
@@ -1042,6 +1044,27 @@ sync_with_location_changed_cb (GObject       *object,
         case DONNA_TREE_SYNC_FULL:
             iter = get_best_iter_for_node (tree, node, TRUE, NULL);
             break;
+    }
+
+    /* Here's the thing: those functions probably had to call some get_node()
+     * which in turn could have led to running a new main loop while the task
+     * (to get the node) was running.
+     * It is technically possible that, during that main loop, something
+     * happened that changed location again. If that's the case, we shall not
+     * keep working anymore and just abort.
+     * We could have done that check after each get_node() in the functions, but
+     * that's a lot more of a PITA to do, and also it could be argued that in
+     * such a case any expansion shall still happened, so this is a better
+     * handling of it.
+     * (Anyhow, it should be pretty rare to occur, since usually the nodes we
+     * need might already be in the provider's cache (i.e. no main loop), the
+     * expansion bit happens "à la" minitree even in non-minitree so it's very
+     * fast; IOW it shouldn't be easy to trigger it.)
+     */
+    if (node_ref != node)
+    {
+        g_object_unref (node);
+        return;
     }
 
     treev = (GtkTreeView *) tree;
@@ -1141,6 +1164,14 @@ sync_with_location_changed_cb (GObject       *object,
                     donna_node_peek_provider (node), location,
                     NULL, NULL);
             g_free (location);
+
+            /* see comment for same stuff above */
+            if (node_ref != node)
+            {
+                g_object_unref (node);
+                return;
+            }
+
             if (iter)
             {
                 GtkTreePath *path;
@@ -4111,77 +4142,13 @@ struct node_deleted_data
 {
     DonnaTreeView   *tree;
     DonnaNode       *node;
-    gchar           *location;
 };
 
 static void
 free_node_deleted_data (struct node_deleted_data *data)
 {
     g_object_unref (data->node);
-    g_free (data->location);
     g_free (data);
-}
-
-static void
-list_go_up_cb (DonnaTask                *task,
-               gboolean                  timeout_called,
-               struct node_deleted_data *data)
-{
-    GError *err = NULL;
-    DonnaTask *t;
-    gchar *s;
-
-    if (!task)
-        data->location = donna_node_get_location (data->node);
-    else if (donna_task_get_state (task) == DONNA_TASK_DONE)
-    {
-        DonnaNode *node;
-
-        node = g_value_get_object (donna_task_get_return_value (task));
-        if (!donna_tree_view_set_location (data->tree, node, &err))
-        {
-            gchar *fl = donna_node_get_full_location (data->node);
-            donna_app_show_error (data->tree->priv->app, err,
-                    "Treeview '%s': Failed to go to '%s' (as parent of '%s')",
-                    data->tree->priv->name, data->location, fl);
-            g_free (fl);
-        }
-        free_node_deleted_data (data);
-        return;
-    }
-
-    if (streq (data->location, "/"))
-    {
-        gchar *fl = donna_node_get_full_location (data->node);
-        donna_app_show_error (data->tree->priv->app, err,
-                "Treeview '%s': Failed to go to any parent of '%s'",
-                data->tree->priv->name, fl);
-        g_free (fl);
-        free_node_deleted_data (data);
-        return;
-    }
-
-    /* location can't be "/" since root can't be deleted */
-    s = strrchr (data->location, '/');
-    if (s == data->location)
-        ++s;
-    *s = '\0';
-
-    t = donna_provider_get_node_task (donna_node_peek_provider (data->node),
-            data->location, &err);
-    if (!t)
-    {
-        gchar *fl = donna_node_get_full_location (data->node);
-        donna_app_show_error (data->tree->priv->app, err,
-                "Treeview '%s': Failed to go to a parent of '%s'",
-                data->tree->priv->name, fl);
-        g_free (fl);
-        free_node_deleted_data (data);
-        return;
-    }
-    donna_task_set_callback (t, (task_callback_fn) list_go_up_cb, data,
-            (GDestroyNotify) free_node_deleted_data);
-    donna_app_run_task (data->tree->priv->app, t);
 }
 
 static gboolean
@@ -4193,6 +4160,11 @@ real_node_deleted_cb (struct node_deleted_data *data)
 
     if (!is_tree (data->tree) && priv->location == data->node)
     {
+        GError *err = NULL;
+        DonnaNode *n;
+        gchar *location;
+        gchar *s;
+
         if (donna_provider_get_flags (donna_node_peek_provider (data->node))
                 & DONNA_PROVIDER_FLAG_FLAT)
         {
@@ -4201,10 +4173,50 @@ real_node_deleted_cb (struct node_deleted_data *data)
                     "Treeview '%s': Current location (%s) has been deleted",
                     priv->name, fl);
             g_free (fl);
+            /*FIXME DRAW_ERROR*/
             goto free;
         }
-        list_go_up_cb (NULL, FALSE, data);
-        return FALSE;
+
+        /* try to go up */
+        location = donna_node_get_location (data->node);
+
+        for (;;)
+        {
+            /* location can't be "/" since root can't be deleted */
+            s = strrchr (location, '/');
+            if (s == location)
+                ++s;
+            *s = '\0';
+
+            n = donna_provider_get_node (donna_node_peek_provider (data->node),
+                    location, &err);
+            if (!n)
+            {
+                if (g_error_matches (err, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND))
+                {
+                    g_clear_error (&err);
+                    continue;
+                }
+
+                /*FIXME DRAW_ERROR*/
+                g_clear_error (&err);
+                break;
+            }
+
+            if (!donna_tree_view_set_location (data->tree, n, &err))
+            {
+                gchar *fl = donna_node_get_full_location (data->node);
+                donna_app_show_error (data->tree->priv->app, err,
+                        "Treeview '%s': Failed to go to '%s' (as parent of '%s')",
+                        data->tree->priv->name, location, fl);
+                g_free (fl);
+            }
+            g_object_unref (n);
+            break;
+        }
+
+        goto free;
     }
 
     list = g_hash_table_lookup (priv->hashtable, data->node);
@@ -6695,8 +6707,6 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     size_t len;
     gchar *s;
     gchar *ss;
-    DonnaTask *task;
-    const GValue *value;
 
     model = GTK_TREE_MODEL (priv->store);
     iter = iter_root;
@@ -6737,23 +6747,9 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
             s = (gchar *) location;
 
         /* get the corresponding node */
-        task = donna_provider_get_node_task (provider, (const gchar *) s, NULL);
+        n = donna_provider_get_node (provider, (const gchar *) s, NULL);
         if (s != location)
             g_free (s);
-        g_object_ref_sink (task);
-        /* FIXME? should this be in a separate thread, and continue in a
-         * callback and all that? might not be worth the trouble... */
-        donna_task_run (task);
-        if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        {
-            /* TODO */
-            g_object_unref (task);
-            g_free (location);
-            return NULL;
-        }
-        value = donna_task_get_return_value (task);
-        n = g_value_dup_object (value);
-        g_object_unref (task);
 
         if (only_accessible)
         {
@@ -7024,8 +7020,6 @@ get_best_iter_for_node (DonnaTreeView   *tree,
     }
     else if (add_root_if_needed)
     {
-        DonnaTask *task;
-        const GValue *value;
         gchar *s;
         GSList *list;
         GtkTreeIter *i;
@@ -7035,19 +7029,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
         if (s)
             *++s = '\0';
 
-        task = donna_provider_get_node_task (provider, location, NULL);
-        g_object_ref_sink (task);
-        donna_task_run (task);
-        if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        {
-            g_object_unref (task);
-            g_free (location);
-            /* FIXME set error */
-            return NULL;
-        }
-        value = donna_task_get_return_value (task);
-        n = g_value_dup_object (value);
-        g_object_unref (task);
+        n = donna_provider_get_node (provider, location, NULL);
         g_free (location);
 
         add_node_to_tree (tree, NULL, n, &priv->future_location_iter);
@@ -7508,16 +7490,9 @@ switch_provider (DonnaTreeView *tree,
 
 struct history_move
 {
-    DonnaTreeView *tree;
     DonnaHistoryDirection direction;
     guint nb;
 };
-
-static void
-free_history_move (struct history_move *data)
-{
-    g_slice_free (struct history_move, data);
-}
 
 static inline gboolean
 handle_history_move (DonnaTreeView *tree, DonnaNode *node)
@@ -7879,6 +7854,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
 
     if (is_tree (tree))
     {
+        static DonnaNode *node_ref;
         GtkTreeIter *iter;
 
         if (!(priv->node_types & donna_node_get_node_type (node)))
@@ -7891,7 +7867,11 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             return FALSE;
         }
 
+        node_ref = node;
         iter = get_best_iter_for_node (tree, node, TRUE, error);
+        /* see comment in sync_with_location_changed_cb */
+        if (node_ref != node)
+            return TRUE;
         if (iter)
         {
             GtkTreePath *path;
@@ -10907,36 +10887,6 @@ donna_tree_view_history_get_node (DonnaTreeView          *tree,
 }
 
 /* mode list only */
-static void
-history_move_get_node_cb (DonnaTask             *task,
-                          gboolean               timeout_called,
-                          struct history_move   *hm)
-{
-    GError *err = NULL;
-    DonnaTreeViewPrivate *priv = hm->tree->priv;
-    DonnaTaskState state;
-
-    state = donna_task_get_state (task);
-    if (state == DONNA_TASK_FAILED)
-    {
-        donna_app_show_error (priv->app, donna_task_get_error (task),
-                "Treeview '%s': Failed to move in history; "
-                "getting destination node failed",
-                priv->name);
-        return;
-    }
-    else if (state == DONNA_TASK_CANCELLED)
-        return;
-
-    if (!change_location (hm->tree, CHANGING_LOCATION_ASKED,
-                g_value_get_object (donna_task_get_return_value (task)), hm, &err))
-        donna_app_show_error (priv->app, err,
-                "Treeview '%s': Failed to move in history",
-                priv->name);
-    free_history_move (hm);
-}
-
-/* mode list only */
 gboolean
 donna_tree_view_history_move (DonnaTreeView         *tree,
                               DonnaHistoryDirection  direction,
@@ -10944,9 +10894,9 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
                               GError               **error)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaTask *task;
+    DonnaNode *node;
     const gchar *fl;
-    struct history_move *data;
+    struct history_move hm = { direction, nb };
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     priv = tree->priv;
@@ -10968,27 +10918,20 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
         return FALSE;
     }
 
-    task = donna_app_get_node_task (priv->app, fl);
-    if (G_UNLIKELY (!task))
+    node = donna_app_get_node (priv->app, fl, error);
+    if (!node)
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Canot move in history; "
-                "failed to create task to get node '%s'",
-                priv->name, fl);
+        g_prefix_error (error, "Treeview '%s': Failed to move in history: ",
+                priv->name);
         return FALSE;
     }
 
-    data = g_slice_new (struct history_move);
-    data->tree = tree;
-    data->direction = direction;
-    data->nb = nb;
-
-    donna_task_set_callback (task,
-            (task_callback_fn) history_move_get_node_cb,
-            data,
-            (GDestroyNotify) free_history_move);
-    donna_app_run_task (priv->app, task);
+    if (!change_location (tree, CHANGING_LOCATION_ASKED, node, &hm, error))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to move in history: ",
+                priv->name);
+        return FALSE;
+    }
     return TRUE;
 }
 
@@ -11022,7 +10965,6 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
                              GError            **error)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaTask *task;
     DonnaNode *node;
     gchar *fl = NULL;
     gchar *location;
@@ -11090,35 +11032,15 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
         /* go to root */
         *++location = '\0';
 
-    task = donna_app_get_node_task (priv->app, fl);
+    node = donna_app_get_node (priv->app, fl, error);
     g_free (fl);
-    if (G_UNLIKELY (!task))
+    if (!node)
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Can't get node to go up", priv->name);
+        g_prefix_error (error, "Treeview '%s': Can't get node to go up: ",
+                priv->name);
         return NULL;
     }
 
-    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-    donna_app_run_task (priv->app, g_object_ref (task));
-    donna_task_wait_for_it (task, NULL, NULL);
-
-    if (donna_task_get_state (task) != DONNA_TASK_DONE)
-    {
-        if (error)
-        {
-            *error = g_error_copy (donna_task_get_error (task));
-            g_prefix_error (error, "Treeview '%s': Failed to get node 'up': ",
-                    priv->name);
-        }
-        g_object_unref (task);
-        return NULL;
-    }
-
-    node = g_value_dup_object (donna_task_get_return_value (task));
-    g_object_unref (task);
     return node;
 }
 
@@ -11169,7 +11091,6 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
     gint is_root;
     gchar *best = NULL;
     gint lvl = 0;
-    DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
@@ -11291,38 +11212,17 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
         DonnaNode *node;
 
 found:
-        task = donna_app_get_node_task (priv->app, best);
+        node = donna_app_get_node (priv->app, best, error);
         g_strfreev (items);
         g_strfreev (items_f);
         g_free (fl);
-        if (G_UNLIKELY (!task))
+        if (!node)
         {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Can't get node to go down",
+            g_prefix_error (error, "Treeview '%s': Can't get node to go down: ",
                     priv->name);
             return NULL;
         }
 
-        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-        donna_app_run_task (priv->app, g_object_ref (task));
-        donna_task_wait_for_it (task, NULL, NULL);
-
-        if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        {
-            if (error)
-            {
-                *error = g_error_copy (donna_task_get_error (task));
-                g_prefix_error (error, "Treeview '%s': Failed to get node 'down': ",
-                        priv->name);
-            }
-            g_object_unref (task);
-            return NULL;
-        }
-
-        node = g_value_dup_object (donna_task_get_return_value (task));
-        g_object_unref (task);
         return node;
     }
 
@@ -11725,7 +11625,6 @@ tree_context_get_item_info (const gchar             *item,
     }
     else if (streqn (item, "register", 8))
     {
-        DonnaTask *task;
         DonnaNode *node;
         DonnaNodeHasValue has;
         gchar buf[64], *b = buf;
@@ -11844,32 +11743,12 @@ tree_context_get_item_info (const gchar             *item,
         if (snprintf (buf, 64, "register:%s/%s", extra, item) >= 64)
             b = g_strdup_printf ("register:%s/%s", extra, item);
 
-        task = donna_app_get_node_task (priv->app, b);
-        if (G_UNLIKELY (!task))
+        node = donna_app_get_node (priv->app, b, error);
+        if (!node)
         {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Treeview '%s': Failed to get task for '%s'", b);
-            if (b != buf)
-                g_free (b);
-            return FALSE;
-        }
-
-        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-        donna_app_run_task (priv->app, g_object_ref (task));
-        donna_task_wait_for_it (task, NULL, NULL);
-
-        if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        {
-            const GError *err = donna_task_get_error (task);
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': Cannot create item '%s' for register '%s': "
-                    "Failed to get node '%s': %s",
-                    priv->name, item, extra, b,
-                    (err) ? err->message : "(no error message)");
-            g_object_unref (task);
+            g_prefix_error (error, "Treeview '%s': "
+                    "Cannot create item '%s' for register '%s', failed to get node '%s': ",
+                    priv->name, item, extra, b);
             if (b != buf)
                 g_free (b);
             return FALSE;
@@ -11877,8 +11756,6 @@ tree_context_get_item_info (const gchar             *item,
 
         if (b != buf)
             g_free (b);
-
-        node = g_value_get_object (donna_task_get_return_value (task));
 
         info->name = donna_node_get_name (node);
         info->free_name = TRUE;
@@ -11902,7 +11779,7 @@ tree_context_get_item_info (const gchar             *item,
             }
         }
 
-        g_object_unref (task);
+        g_object_unref (node);
         return TRUE;
     }
 

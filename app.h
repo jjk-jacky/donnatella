@@ -124,10 +124,12 @@ DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
 DonnaConfig *       donna_app_peek_config           (DonnaApp       *app);
 DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
-DonnaTask *         donna_app_get_node_task         (DonnaApp       *app,
-                                                     const gchar    *full_location);
+DonnaNode *         donna_app_get_node              (DonnaApp       *app,
+                                                     const gchar    *full_location,
+                                                     GError        **error);
 gboolean            donna_app_trigger_node          (DonnaApp       *app,
-                                                     const gchar    *full_location);
+                                                     const gchar    *full_location,
+                                                     GError        **error);
 DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
                                                      const gchar    *type);
 DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,

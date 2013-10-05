@@ -225,19 +225,6 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     /* "preload" the type of visibility neede for the task trigger_node */
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, cmd->visibility);
-    /* commands cannot be PUBLIC (though they could start another task PUBLIC),
-     * only INTERNAL, FAST or GUI. But, the task trigger_node might need an
-     * upgrade to INTERNAL if at least one arg is NODE or ROW_ID, as that might
-     * trigger a get_node task. */
-    if (cmd->visibility != DONNA_TASK_VISIBILITY_INTERNAL)
-        for (i = 0; i < cmd->argc; ++i)
-        {
-            if ((cmd->arg_type[i] & (DONNA_ARG_TYPE_NODE | DONNA_ARG_TYPE_ROW_ID)))
-            {
-                g_value_set_uint (&v, DONNA_TASK_VISIBILITY_INTERNAL);
-                break;
-            }
-        }
     if (!donna_node_add_property (node, "trigger-visibility", G_TYPE_UINT, &v,
             (refresher_fn) gtk_true, NULL, &err))
     {
@@ -442,34 +429,6 @@ unquote_string (gchar **start, gchar **_end, GError **error)
         *_end = end;
 
     return TRUE;
-}
-
-static DonnaNode *
-get_node (DonnaApp *app, const gchar *fl, GError **error)
-{
-    DonnaTask *task;
-    DonnaNode *node = NULL;
-
-    task = donna_app_get_node_task (app, fl);
-    if (!task)
-    {
-        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                "Can't get node for '%s'", fl);
-        return NULL;
-    }
-    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-    donna_app_run_task (app, g_object_ref (task));
-    donna_task_wait_for_it (task, NULL, NULL);
-    if (donna_task_get_state (task) == DONNA_TASK_DONE)
-        node = g_value_dup_object (donna_task_get_return_value (task));
-    else
-    {
-        if (error)
-            *error = g_error_copy (donna_task_get_error (task));
-    }
-    g_object_unref (task);
-    return node;
 }
 
 static DonnaTaskState run_command (DonnaTask *task, struct run_command *rc);
@@ -850,12 +809,13 @@ convert:
         {
             GError *err = NULL;
 
-            ptr = get_node (app, s, &err);
+            ptr = donna_app_get_node (app, s, &err);
             if (!ptr)
             {
                 g_free (rid);
-                g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
-                        rc->command->name, rc->i + 1);
+                g_propagate_prefixed_error (error, err, "Command '%s', argument %d: "
+                        "Can't get node for '%s': ",
+                        rc->command->name, rc->i + 1, s);
                 goto error;
             }
             rid->ptr = ptr;
@@ -952,12 +912,12 @@ convert:
                     *++e = '\0';
                 }
 
-                ptr = get_node (app, start, &err);
+                ptr = donna_app_get_node (app, start, &err);
                 if (!ptr)
                 {
                     g_propagate_prefixed_error (error, err,
-                            "Command '%s', argument %d: ",
-                            rc->command->name, rc->i + 1);
+                            "Command '%s', argument %d: Can't get node for '%s': ",
+                            rc->command->name, rc->i + 1, start);
                     g_ptr_array_unref (arr);
                     goto error;
                 }
@@ -992,12 +952,12 @@ convert:
              * already been unquoted. "Double-quoting" can only happen in case
              * of arrays, where the list is quoted, and so are each element */
 
-            ptr = get_node (app, s, &err);
+            ptr = donna_app_get_node (app, s, &err);
             if (!ptr)
             {
                 g_propagate_prefixed_error (error, err,
-                        "Command '%s', argument %d: ",
-                        rc->command->name, rc->i + 1);
+                        "Command '%s', argument %d: Can't get node for '%s': ",
+                        rc->command->name, rc->i + 1, s);
                 goto error;
             }
             g_ptr_array_add (rc->args, ptr);

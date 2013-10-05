@@ -241,7 +241,6 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
                   gchar             *line,
                   struct children   *data)
 {
-    DonnaTask *t;
     DonnaNode *n;
     GValue value = G_VALUE_INIT;
     gchar *location;
@@ -268,8 +267,8 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
             return;
     }
 
-    t = donna_provider_get_node_task (data->pfs, path, NULL);
-    if (!t)
+    n = donna_provider_get_node (data->pfs, path, NULL);
+    if (!n)
     {
         if (path != line)
             g_free (path);
@@ -278,21 +277,9 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
     if (path != line)
         g_free (path);
 
-    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-    donna_task_set_visibility (t, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-    donna_app_run_task (data->app, g_object_ref (t));
-    if (!donna_task_wait_for_it (t, NULL, NULL)
-            || donna_task_get_state (t) != DONNA_TASK_DONE)
-    {
-        g_object_unref (t);
-        return;
-    }
-
-    n = g_value_dup_object (donna_task_get_return_value (t));
     if (!(donna_node_get_node_type (n) & data->node_types))
     {
         g_object_unref (n);
-        g_object_unref (t);
         return;
     }
 
@@ -314,7 +301,6 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
 
     /* give our ref on n to the array */
     g_ptr_array_add (data->children, n);
-    g_object_unref (t);
 
     /* emit new-child */
     donna_provider_node_new_child (data->provider, data->node, n);

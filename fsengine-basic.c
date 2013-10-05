@@ -157,7 +157,7 @@ pipe_new_line (DonnaTask    *task,
     if (filename)
     {
         GError *err = NULL;
-        DonnaTask *task;
+        DonnaNode *node;
 
         *e = c;
         if (b && b != buf)
@@ -180,31 +180,17 @@ pipe_new_line (DonnaTask    *task,
         *e = '\0';
         b = unesc_fn (s, e, buf, 255);
 
-        task = donna_provider_get_node_task (data->pfs, (b) ? b : s, &err);
-        if (G_UNLIKELY (!task))
+        node = donna_provider_get_node (data->pfs, (b) ? b : s, &err);
+        if (G_UNLIKELY (!node))
         {
-            g_warning ("FS Engine 'basic': Failed to get task for '%s': %s",
+            g_warning ("FS Engine 'basic': Failed to get node 'fs:%s': %s",
                     (b) ? b : s,
                     (err) ? err->message : "(no error message)");
             g_clear_error (&err);
             goto remove;
         }
 
-        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-        donna_app_run_task (data->app, g_object_ref (task));
-        donna_task_wait_for_it (task, NULL, NULL);
-        if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        {
-            g_warning ("FS Engine 'basic': Failed to get node for '%s'",
-                    (b) ? b : s);
-            g_object_unref (task);
-            goto remove;
-        }
-
-        g_ptr_array_add (data->ret_nodes, g_value_dup_object (
-                    donna_task_get_return_value (task)));
-        g_object_unref (task);
+        g_ptr_array_add (data->ret_nodes, node);
 
 remove:
         g_hash_table_remove (data->loc_sources, filename);

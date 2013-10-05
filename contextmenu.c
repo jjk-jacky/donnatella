@@ -424,30 +424,13 @@ get_node_trigger (DonnaApp      *app,
 
     fl = donna_app_parse_fl (app, g_strdup (fl), conv_flags, conv_fn, conv_data, NULL);
 
-    task = donna_app_get_node_task (app, fl);
-    if (G_UNLIKELY (!task))
+    node = donna_app_get_node (app, fl, NULL);
+    if (G_UNLIKELY (!node))
     {
-        g_free (fl);
-        return NULL;
-    }
-    /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-    donna_app_run_task (app, g_object_ref (task));
-    if (!donna_task_wait_for_it (task, NULL, NULL))
-    {
-        g_object_unref (task);
         g_free (fl);
         return NULL;
     }
 
-    if (donna_task_get_state (task) != DONNA_TASK_DONE)
-    {
-        g_object_unref (task);
-        g_free (fl);
-        return NULL;
-    }
-    node = g_value_dup_object (donna_task_get_return_value (task));
-    g_object_unref (task);
     g_free (fl);
     return node;
 }

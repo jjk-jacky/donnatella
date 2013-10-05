@@ -1070,48 +1070,28 @@ register_get_nodes (DonnaProviderRegister   *pr,
     *nodes = g_ptr_array_new_full (g_hash_table_size (hashtable), g_object_unref);
     for (l = list; l; l = l->next)
     {
-        DonnaTask *task;
+        GError *err = NULL;
+        DonnaNode *node;
 
         if (pfs)
-            task = donna_provider_get_node_task (pfs, (gchar *) l->data, NULL);
+            node = donna_provider_get_node (pfs, (gchar *) l->data, &err);
         else
-            task = donna_app_get_node_task (((DonnaProviderBase *) pr)->app,
-                    (gchar *) l->data);
+            node = donna_app_get_node (((DonnaProviderBase *) pr)->app,
+                    (gchar *) l->data, &err);
 
-        if (!task)
+        if (!node)
         {
             if (!str)
                 str = g_string_new (NULL);
 
-            g_string_append_printf (str, "\n- Failed to get node for '%s' (couldn't get task)",
-                    (gchar *) l->data);
+            g_string_append_printf (str, "\n- Failed to get node for '%s': %s",
+                    (gchar *) l->data,
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
             continue;
         }
 
-        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-        donna_app_run_task (((DonnaProviderBase *) pr)->app, g_object_ref (task));
-        donna_task_wait_for_it (task, NULL, NULL);
-
-        if (donna_task_get_state (task) == DONNA_TASK_DONE)
-            g_ptr_array_add (*nodes,
-                    g_value_dup_object (donna_task_get_return_value (task)));
-        else if (error)
-        {
-            const GError *e = donna_task_get_error (task);
-
-            if (!str)
-                str = g_string_new (NULL);
-
-            if (e)
-                g_string_append_printf (str, "\n- Failed to get node for '%s': %s",
-                        (gchar *) l->data, e->message);
-            else
-                g_string_append_printf (str, "\n- Failed to get node for '%s'",
-                        (gchar *) l->data);
-        }
-
-        g_object_unref (task);
+        g_ptr_array_add (*nodes, node);
     }
 
     if (str)
@@ -1177,40 +1157,24 @@ emit_node_children_from_arr (DonnaProviderRegister  *pr,
     children = g_ptr_array_new_full (arr->len, g_object_unref);
     for (i = 0; i < arr->len; ++i)
     {
-        DonnaTask *task;
+        GError *err = NULL;
+        DonnaNode *node;
 
-        task = donna_app_get_node_task (app, arr->pdata[i]);
-        if (G_UNLIKELY (!task))
+        node = donna_app_get_node (app, arr->pdata[i], &err);
+        if (!node)
         {
-            gchar *fl = donna_node_get_full_location (parent);
-            g_warning ("Provider 'register': Failed to get get_node task for '%s' "
-                    "(children of '%s')",
-                    (gchar *) arr->pdata[i],
-                    fl);
-            g_free (fl);
-            continue;
-        }
-
-        /* FIXME: to avoid deadlock. will get fixed w/ new get_node() API */
-        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-        donna_app_run_task (app, g_object_ref (task));
-        donna_task_wait_for_it (task, NULL, NULL);
-
-        if (donna_task_get_state (task) != DONNA_TASK_DONE)
-        {
-            const GError *err = donna_task_get_error (task);
             gchar *fl = donna_node_get_full_location (parent);
             g_warning ("Provider 'register': Failed to get node for '%s' "
                     "(children of '%s'): %s",
                     (gchar *) arr->pdata[i],
                     fl,
-                    (err) ? err->message : "<no error message>");
+                    (err) ? err->message : "(no error message)");
             g_free (fl);
-            g_object_unref (task);
+            g_clear_error (&err);
             continue;
         }
 
-        g_ptr_array_add (children, g_value_dup_object (donna_task_get_return_value (task)));
+        g_ptr_array_add (children, node);
     }
     donna_provider_node_children ((DonnaProvider *) pr, parent,
             DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, children);
@@ -2143,6 +2107,7 @@ provider_register_trigger_node (DonnaProviderBase  *_provider,
                                 DonnaTask          *task,
                                 DonnaNode          *node)
 {
+    GError *err = NULL;
     DonnaTask *t;
     gchar *location;
     gchar *name;
@@ -2205,12 +2170,11 @@ provider_register_trigger_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_trigger_node (_provider->app, s))
+    if (!donna_app_trigger_node (_provider->app, s, &err))
     {
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_OTHER,
-                "Provider 'register': Failed to trigger node 'register:%s'",
+        g_prefix_error (&err, "Provider 'register': Failed to trigger node 'register:%s': ",
                 location);
+        donna_task_take_error (task, err);
         g_free (s);
         g_free (location);
         if (name != location)
@@ -3063,44 +3027,16 @@ cmd_register_nodes_io (DonnaTask               *task,
         g_string_append_c (str, ')');
 
         /* get the node for ask_text() */
-        t = donna_app_get_node_task (app, str->str);
+        n = donna_app_get_node (app, str->str, &err);
         g_string_free (str, TRUE);
-        if (G_UNLIKELY (!t))
-        {
-            donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                    DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'register_nodes_io': "
-                    "Failed to create task for ask_text command");
-            g_ptr_array_unref (nodes);
-            return DONNA_TASK_FAILED;
-        }
-
-        if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+        if (G_UNLIKELY (!n))
         {
             g_prefix_error (&err, "Command 'register_nodes_io': "
-                    "Failed to run get_node task: ");
+                    "Failed to get node for ask_text command: ");
             donna_task_take_error (task, err);
-            g_object_unref (t);
             g_ptr_array_unref (nodes);
             return DONNA_TASK_FAILED;
         }
-
-        state = donna_task_get_state (t);
-        if (state != DONNA_TASK_DONE)
-        {
-            if (state == DONNA_TASK_FAILED)
-            {
-                err = g_error_copy (donna_task_get_error (t));
-                g_prefix_error (&err, "Command 'register_nodes_io': "
-                        "Failed to get node for ask_text command: ");
-                donna_task_take_error (task, err);
-            }
-            g_ptr_array_unref (nodes);
-            return state;
-        }
-
-        n = g_value_dup_object (donna_task_get_return_value (t));
-        g_object_unref (t);
 
         /* trigger ask_text() */
         t = donna_node_trigger_task (n, &err);

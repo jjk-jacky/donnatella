@@ -600,14 +600,14 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
             {
                 if (G_VALUE_TYPE (&v) == G_TYPE_STRING)
                 {
-                    if (!donna_app_trigger_node (app, g_value_get_string (&v)))
+                    if (!donna_app_trigger_node (app, g_value_get_string (&v), &err))
                     {
                         gchar *fl = donna_node_get_full_location (node);
-                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                                DONNA_COMMAND_ERROR_OTHER,
-                                "Command 'node_trigger': Failed to trigger container '%s'; "
-                                "Trigger was '%s'",
+                        g_prefix_error (&err, "Command 'node_trigger': "
+                                "Failed to trigger container '%s'; "
+                                "Trigger was '%s': ",
                                 fl, g_value_get_string (&v));
+                        donna_task_take_error (task, err);
                         g_free (fl);
                         g_value_unset (&v);
                         return DONNA_TASK_FAILED;

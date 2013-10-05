@@ -135,13 +135,14 @@ donna_app_get_provider (DonnaApp       *app,
     return (*interface->get_provider) (app, domain);
 }
 
-DonnaTask *
-donna_app_get_node_task (DonnaApp    *app,
-                         const gchar *full_location)
+DonnaNode *
+donna_app_get_node (DonnaApp    *app,
+                    const gchar *full_location,
+                    GError     **error)
 {
     DonnaAppInterface *interface;
     DonnaProvider *provider;
-    DonnaTask *task;
+    DonnaNode *node;
     gchar buf[64], *b = buf;
     const gchar *location;
 
@@ -154,10 +155,14 @@ donna_app_get_node_task (DonnaApp    *app,
     g_return_val_if_fail (interface->get_provider != NULL, NULL);
 
     location = strchr (full_location, ':');
-    if (!location)
+    if (G_UNLIKELY (!location))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Invalid full location");
         return NULL;
+    }
 
-    if (location - full_location >= 64)
+    if (G_UNLIKELY (location - full_location >= 64))
         b = g_strdup_printf ("%.*s", (gint) (location - full_location),
                 full_location);
     else
@@ -166,71 +171,78 @@ donna_app_get_node_task (DonnaApp    *app,
         strncat (buf, full_location, location - full_location);
     }
     provider = (*interface->get_provider) (app, buf);
+    if (!provider)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Unknown provider: %s", b);
+        if (b != buf)
+            g_free (b);
+        return NULL;
+    }
     if (b != buf)
         g_free (b);
-    if (!provider)
-        return NULL;
 
-    task = donna_provider_get_node_task (provider, ++location, NULL);
+    node = donna_provider_get_node (provider, ++location, error);
     g_object_unref (provider);
-    return task;
+    return node;
+}
+
+struct trigger_node
+{
+    DonnaApp *app;
+    DonnaNode *node;
+};
+
+static void
+free_tn (struct trigger_node *tn)
+{
+    g_object_unref (tn->node);
+    g_slice_free (struct trigger_node, tn);
 }
 
 static void
-trigger_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
+trigger_node_cb (DonnaTask *task, gboolean timeout_called, struct trigger_node *tn)
 {
     if (donna_task_get_state (task) == DONNA_TASK_FAILED)
-        donna_app_show_error (app, donna_task_get_error (task),
-                "Failed to trigger node");
-}
-
-static void
-get_node_cb (DonnaTask *task, gboolean timeout_called, DonnaApp *app)
-{
-    GError *err = NULL;
-    DonnaTask *trigger_task;
-
-    if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        donna_app_show_error (app, donna_task_get_error (task),
-                "Cannot trigger node");
-        return;
+        gchar *fl = donna_node_get_full_location (tn->node);
+        donna_app_show_error (tn->app, donna_task_get_error (task),
+                "Failed to trigger node '%s'", fl);
+        g_free (fl);
     }
-
-    trigger_task = donna_node_trigger_task (
-            g_value_get_object (donna_task_get_return_value (task)), &err);
-    if (!trigger_task)
-    {
-        donna_app_show_error (app, err, "Cannot trigger node");
-        g_clear_error (&err);
-        return;
-    }
-
-    donna_task_set_callback (trigger_task, (task_callback_fn) trigger_node_cb,
-            app, NULL);
-    donna_app_run_task (app, trigger_task);
+    free_tn (tn);
 }
 
 gboolean
 donna_app_trigger_node (DonnaApp       *app,
-                        const gchar    *full_location)
+                        const gchar    *full_location,
+                        GError        **error)
 {
-    DonnaAppInterface *interface;
+    DonnaNode *node;
     DonnaTask *task;
+    struct trigger_node *tn;
 
     g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
     g_return_val_if_fail (full_location != NULL, FALSE);
 
-    interface = DONNA_APP_GET_INTERFACE (app);
-
-    g_return_val_if_fail (interface != NULL, FALSE);
-    g_return_val_if_fail (interface->run_task != NULL, FALSE);
-
-    task = donna_app_get_node_task (app, full_location);
-    if (G_UNLIKELY (!task))
+    node = donna_app_get_node (app, full_location, error);
+    if (!node)
         return FALSE;
-    donna_task_set_callback (task, (task_callback_fn) get_node_cb, app, NULL);
-    (*interface->run_task) (app, task);
+
+    task = donna_node_trigger_task (node, error);
+    if (!task)
+    {
+        g_object_unref (node);
+        return FALSE;
+    }
+
+    tn = g_slice_new (struct trigger_node);
+    tn->app = app;
+    tn->node = node;
+
+    donna_task_set_callback (task, (task_callback_fn) trigger_node_cb, tn,
+            (GDestroyNotify) free_tn);
+    donna_app_run_task (app, task);
     return TRUE;
 }
 

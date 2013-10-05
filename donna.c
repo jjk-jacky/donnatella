@@ -1482,68 +1482,28 @@ trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
 }
 
 static gboolean
-get_node_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
-{
-    GError *err = NULL;
-    DonnaNode *node;
-    DonnaTask *t;
-
-    if (donna_task_get_state (task) != DONNA_TASK_DONE)
-    {
-        donna_app_show_error (fir->app, donna_task_get_error (task),
-                "Failed to trigger action, couldn't get node");
-        free_fir (fir);
-        return FALSE;
-    }
-
-    node = g_value_get_object (donna_task_get_return_value (task));
-    t = donna_node_trigger_task (node, &err);
-    if (G_UNLIKELY (!t))
-    {
-        donna_app_show_error (fir->app, err,
-                "Failed to trigger action, couldn't get task");
-        g_clear_error (&err);
-        free_fir (fir);
-        return FALSE;
-    }
-
-    /* see _donna_command_trigger_fl() for why this is blocking */
-    if (timeout_called)
-        g_object_ref (t);
-    else
-        donna_task_set_callback (t, (task_callback_fn) trigger_cb, fir, NULL);
-
-    donna_app_run_task (fir->app, t);
-
-    if (timeout_called)
-    {
-        gboolean ret;
-
-        ret = donna_task_get_state (t) == DONNA_TASK_DONE;
-        g_object_unref (t);
-        free_fir (fir);
-        return ret;
-    }
-
-    return TRUE;
-}
-
-static gboolean
 donna_donna_trigger_fl (DonnaApp     *app,
                         const gchar  *fl,
                         GPtrArray    *intrefs,
                         gboolean      blocking,
                         GError      **error)
 {
+    DonnaNode *node;
     DonnaTask *task;
 
-    task = donna_app_get_node_task (app, fl);
+    node = donna_app_get_node (app, fl, error);
+    if (!node)
+        return FALSE;
+
+    task = donna_node_trigger_task (node, error);
     if (G_UNLIKELY (!task))
     {
-        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
-                "Failed to trigger action, couldn't get task get_node()");
+        g_prefix_error (error, "Failed to trigger '%s': ", fl);
+        g_object_unref (node);
         return FALSE;
     }
+    g_object_unref (node);
+
     if (blocking)
         g_object_ref (task);
     else
@@ -1552,7 +1512,7 @@ donna_donna_trigger_fl (DonnaApp     *app,
         fir = g_new0 (struct fir, 1);
         fir->app = app;
         fir->intrefs = intrefs;
-        donna_task_set_callback (task, (task_callback_fn) get_node_cb, fir, NULL);
+        donna_task_set_callback (task, (task_callback_fn) trigger_cb, fir, NULL);
     }
 
     donna_app_run_task (app, task);
@@ -1562,10 +1522,10 @@ donna_donna_trigger_fl (DonnaApp     *app,
         struct fir fir = { TRUE, app, intrefs };
         gboolean ret;
 
-        /* we're abusing timeout_called here, since we don't use a timeout it
-         * should always be FALSE. If TRUE, that'll mean be blocking */
-        ret = get_node_cb (task, TRUE, &fir);
+        donna_task_wait_for_it (task, NULL, NULL);
+        ret = donna_task_get_state (task) == DONNA_TASK_DONE;
         g_object_unref (task);
+        free_fir (&fir);
         return ret;
     }
 
