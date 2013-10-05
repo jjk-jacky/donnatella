@@ -10,6 +10,7 @@
 #include "task-process.h"
 #include "task-helpers.h"
 #include "macros.h"
+#include "util.h"
 #include "debug.h"
 
 #define LEN_PREFIX      4
@@ -201,7 +202,6 @@ remove:
         }
     }
 
-done:
     *e = c;
     if (b && b != buf)
         g_free (b);
