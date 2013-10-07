@@ -1763,6 +1763,21 @@ menuitem_activate_cb (GtkWidget *item, struct menu_click *mc)
     menuitem_button_release_cb (item, &event, mc);
 }
 
+struct menu_trigger
+{
+    DonnaApp *app;
+    gchar *fl;
+    GPtrArray *intrefs;
+};
+
+static gboolean
+menu_trigger (struct menu_trigger *mt)
+{
+    donna_app_trigger_fl (mt->app, mt->fl, mt->intrefs, FALSE, NULL);
+    g_slice_free (struct menu_trigger, mt);
+    return FALSE;
+}
+
 static gboolean
 menuitem_button_release_cb (GtkWidget           *item,
                             GdkEventButton      *event,
@@ -1770,6 +1785,7 @@ menuitem_button_release_cb (GtkWidget           *item,
 {
     DonnaDonnaPrivate *priv = mc->donna->priv;
     DonnaNode *node;
+    struct menu_trigger *mt;
     GPtrArray *intrefs = NULL;
     gchar *fl = NULL;
     /* longest possible is "ctrl_shift_middle_click" (len=23) */
@@ -1829,7 +1845,17 @@ menuitem_button_release_cb (GtkWidget           *item,
 
     fl = donna_app_parse_fl ((DonnaApp *) mc->donna, fl, "nN",
             (conv_flag_fn) menu_conv_flag, node, &intrefs);
-    donna_app_trigger_fl ((DonnaApp *) mc->donna, fl, intrefs, FALSE, NULL);
+
+    /* we use an idle source to trigger it, because otherwise this could lead to
+     * e.g. ask the user something (e.g. @ask_text) which would start its own
+     * main loop, all that from this thread, so as a result the menu wouldn't be
+     * closed (since the event hasn't finished being processed) */
+    mt = g_slice_new (struct menu_trigger);
+    mt->app = (DonnaApp *) mc->donna;
+    mt->fl = fl;
+    mt->intrefs = intrefs;
+    g_idle_add ((GSourceFunc) menu_trigger, mt);
+
     return FALSE;
 }
 
