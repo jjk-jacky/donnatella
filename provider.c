@@ -383,37 +383,6 @@ donna_provider_get_node_children_task (DonnaProvider  *provider,
 }
 
 DonnaTask *
-donna_provider_get_node_parent_task (DonnaProvider  *provider,
-                                     DonnaNode      *node,
-                                     GError        **error)
-{
-    DonnaProviderInterface *interface;
-    DonnaProviderFlags flags;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-
-    /* make sure the provider is the node's provider */
-    g_return_val_if_fail (donna_node_peek_provider (node) == provider, NULL);
-
-    flags = donna_provider_get_flags (provider);
-    if (flags & DONNA_PROVIDER_FLAG_INVALID || flags & DONNA_PROVIDER_FLAG_FLAT)
-    {
-        g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_INVALID_CALL,
-                "Provider '%s' is flat: impossible to get a node's parent",
-                donna_provider_get_domain (provider));
-        return NULL;
-    }
-
-    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
-
-    g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_node_parent_task != NULL, NULL);
-
-    return (*interface->get_node_parent_task) (provider, node, error);
-}
-
-DonnaTask *
 donna_provider_trigger_node_task (DonnaProvider  *provider,
                                   DonnaNode      *node,
                                   GError        **error)

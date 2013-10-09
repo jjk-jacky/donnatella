@@ -119,10 +119,6 @@ static DonnaTask *      provider_config_get_node_children_task (
                                             DonnaNode           *node,
                                             DonnaNodeType        node_types,
                                             GError             **error);
-static DonnaTask *      provider_config_get_node_parent_task (
-                                            DonnaProvider       *provider,
-                                            DonnaNode           *node,
-                                            GError             **error);
 static DonnaTask *      provider_config_trigger_node_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
@@ -154,7 +150,6 @@ provider_config_provider_init (DonnaProviderInterface *interface)
     interface->get_node               = provider_config_get_node;
     interface->has_node_children_task = provider_config_has_node_children_task;
     interface->get_node_children_task = provider_config_get_node_children_task;
-    interface->get_node_parent_task   = provider_config_get_node_parent_task;
     interface->trigger_node_task      = provider_config_trigger_node_task;
     interface->io_task                = provider_config_io_task;
 }
@@ -3462,98 +3457,6 @@ provider_config_io_task (DonnaProvider       *provider,
             donna_task_take_desc (task, g_strdup_printf (
                     "config_io_task() to remove %d option(s)",
                     sources->len)));
-
-    return task;
-}
-
-static DonnaTaskState
-get_node_parent (DonnaTask *task, DonnaNode *node)
-{
-    DonnaProviderConfig *config;
-    DonnaProviderConfigPrivate *priv;
-    DonnaProvider *provider;
-    gchar *location;
-    GNode *gnode;
-    struct option *option;
-    gchar *opt_loc;
-    GValue *value;
-
-    provider = donna_node_peek_provider (node);
-    location = donna_node_get_location (node);
-
-    config = DONNA_PROVIDER_CONFIG (provider);
-    priv = config->priv;
-
-    g_rw_lock_reader_lock (&priv->lock);
-    gnode = get_option_node (priv->root, location);
-    if (!gnode)
-    {
-        g_rw_lock_reader_unlock (&priv->lock);
-        g_critical ("Unable to find option '%s' while trying to get its parent",
-                location);
-
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_OTHER,
-                "Internal error, cannot find option '%s'",
-                location);
-
-        g_free (location);
-        return DONNA_TASK_FAILED;
-    }
-
-    gnode = gnode->parent;
-    if (!gnode)
-    {
-        g_rw_lock_reader_unlock (&priv->lock);
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
-                "Node '%s:%s' has no parent",
-                donna_provider_get_domain (provider),
-                location);
-
-        g_free (location);
-        return DONNA_TASK_FAILED;
-    }
-
-    option = gnode->data;
-    opt_loc = get_option_full_name (priv->root, gnode);
-
-    ensure_option_has_node (config, opt_loc, option);
-
-    g_rw_lock_reader_unlock (&priv->lock);
-    g_free (opt_loc);
-
-    /* set node as return value */
-    value = donna_task_grab_return_value (task);
-    g_value_init (value, G_TYPE_OBJECT);
-    g_value_take_object (value, option->node);
-    donna_task_release_return_value (task);
-
-    g_free (location);
-    return DONNA_TASK_DONE;
-}
-
-static DonnaTask *
-provider_config_get_node_parent_task (DonnaProvider *provider,
-                                      DonnaNode     *node,
-                                      GError       **error)
-{
-    DonnaTask *task;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (provider), NULL);
-
-    task = donna_task_new ((task_fn) get_node_parent,
-            g_object_ref (node),
-            g_object_unref);
-    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
-
-    DONNA_DEBUG (TASK,
-            gchar *location = donna_node_get_location (node);
-            donna_task_take_desc (task, g_strdup_printf (
-                    "get_node_parent() for node '%s:%s'",
-                    donna_node_get_domain (node),
-                    location));
-            g_free (location));
 
     return task;
 }

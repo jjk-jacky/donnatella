@@ -7357,67 +7357,6 @@ free:
 
 /* mode list only */
 static void
-node_get_parent_list_cb (DonnaTask                            *task,
-                         gboolean                              timeout_called,
-                         struct node_get_children_list_data   *data)
-{
-    DonnaTreeViewPrivate *priv = data->tree->priv;
-    const GValue *value;
-
-    if (donna_task_get_state (task) != DONNA_TASK_DONE)
-    {
-        if (priv->future_location == data->child)
-        {
-            const GError *error;
-            gchar *fl = donna_node_get_full_location (data->child);
-
-            error = donna_task_get_error (task);
-            donna_app_show_error (priv->app, error,
-                    "Treeview '%s': Failed to get parent for node '%s'",
-                    priv->name, fl);
-            g_free (fl);
-
-            /* this is needed to maybe switch back providers, also we might have
-             * gone SLOW/DRAW_WAIT and need to re-fill/ask for children */
-            change_location (data->tree, CHANGING_LOCATION_ASKED,
-                    priv->location, NULL, NULL);
-        }
-
-        free_node_get_children_list_data (data);
-        return;
-    }
-
-    /* is this still valid (or did the user click away already) ? */
-    if (priv->future_location != data->child)
-    {
-        free_node_get_children_list_data (data);
-        return;
-    }
-
-    value = donna_task_get_return_value (task);
-    /* simply update data, as we'll re-use it for the new task */
-    data->node = g_value_dup_object (value);
-    /* update future location (no ref needed) */
-    priv->future_location = data->node;
-    priv->future_history_direction = 0;
-    priv->future_history_nb = 0;
-
-    task = donna_node_get_children_task (data->node, priv->node_types, NULL);
-    set_get_children_task (data->tree, task);
-    if (!timeout_called)
-        donna_task_set_timeout (task, 800, /* FIXME */
-                (task_timeout_fn) node_get_children_list_timeout,
-                data,
-                NULL);
-    donna_task_set_callback (task,
-            (task_callback_fn) node_get_children_list_cb,
-            data,
-            (GDestroyNotify) free_node_get_children_list_data);
-    donna_app_run_task (priv->app, task);
-}
-
-/* mode list only */
-static void
 switch_provider (DonnaTreeView *tree,
                  DonnaProvider *provider_current,
                  DonnaProvider *provider_future)
@@ -7543,6 +7482,7 @@ change_location (DonnaTreeView *tree,
     if (cl == CHANGING_LOCATION_ASKED)
     {
         DonnaTask *task;
+        DonnaNode *child = NULL;
         struct node_get_children_list_data *data;
 
         /* if that's already happening, nothing needs to be done. This can
@@ -7573,62 +7513,42 @@ change_location (DonnaTreeView *tree,
 
         provider_future = donna_node_peek_provider (node);
 
-        if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
+        if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
         {
-            task = donna_node_get_children_task (node, priv->node_types, error);
-            if (!task)
+            child = node;
+            node = donna_node_get_parent (node, error);
+            if (!node)
                 return FALSE;
-            set_get_children_task (tree, task);
+            if (node == priv->future_location)
+            {
+                g_object_unref (node);
+                return TRUE;
+            }
+        }
 
-            data = g_slice_new0 (struct node_get_children_list_data);
-            data->tree = tree;
+        task = donna_node_get_children_task (node, priv->node_types, error);
+        if (!task)
+            return FALSE;
+        set_get_children_task (tree, task);
+
+        data = g_slice_new0 (struct node_get_children_list_data);
+        data->tree = tree;
+        if (child)
+        {
+            data->node = node;
+            data->child = g_object_ref (child);
+        }
+        else
             data->node = g_object_ref (node);
 
-            donna_task_set_timeout (task, 800, /* FIXME */
-                    (task_timeout_fn) node_get_children_list_timeout,
-                    data,
-                    NULL);
-            donna_task_set_callback (task,
-                    (task_callback_fn) node_get_children_list_cb,
-                    data,
-                    (GDestroyNotify) free_node_get_children_list_data);
-        }
-        else /* DONNA_NODE_ITEM */
-        {
-            if (donna_provider_get_flags (provider_future) == DONNA_PROVIDER_FLAG_FLAT)
-            {
-                gchar *fl;
-
-                /* special case: if this is a node from history_get_node() we
-                 * will process it as a move in history. This will allow e.g.
-                 * dynamic marks to move backward/forward/etc */
-                if (handle_history_move (tree, node))
-                    return TRUE;
-
-                fl = donna_node_get_full_location (node);
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                        DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                        "Treeview '%s': Cannot set node '%s' as current location, "
-                        "provider is flat (i.e. no parent to go to)",
-                        priv->name, fl);
-                g_free (fl);
-                return FALSE;
-            }
-
-            data = g_slice_new0 (struct node_get_children_list_data);
-            data->tree = tree;
-            data->child = g_object_ref (node);
-
-            task = donna_node_get_parent_task (node, NULL);
-            donna_task_set_timeout (task, 800, /* FIXME */
-                    (task_timeout_fn) node_get_children_list_timeout,
-                    data,
-                    NULL);
-            donna_task_set_callback (task,
-                    (task_callback_fn) node_get_parent_list_cb,
-                    data,
-                    (GDestroyNotify) free_node_get_children_list_data);
-        }
+        donna_task_set_timeout (task, 800, /* FIXME */
+                (task_timeout_fn) node_get_children_list_timeout,
+                data,
+                NULL);
+        donna_task_set_callback (task,
+                (task_callback_fn) node_get_children_list_cb,
+                data,
+                (GDestroyNotify) free_node_get_children_list_data);
 
         /* if we're not or already switched, current location is as expected */
         if (priv->cl == CHANGING_LOCATION_NOT

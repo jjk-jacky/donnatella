@@ -69,9 +69,6 @@ struct _DonnaProviderInterface
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,
                                                      GError        **error);
-    DonnaTask *         (*get_node_parent_task)     (DonnaProvider  *provider,
-                                                     DonnaNode      *node,
-                                                     GError        **error);
     DonnaTask *         (*trigger_node_task)        (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      GError        **error);
@@ -145,9 +142,6 @@ DonnaTask * donna_provider_has_node_children_task   (DonnaProvider  *provider,
 DonnaTask * donna_provider_get_node_children_task   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,
-                                                     GError        **error);
-DonnaTask * donna_provider_get_node_parent_task     (DonnaProvider  *provider,
-                                                     DonnaNode      *node,
                                                      GError        **error);
 DonnaTask * donna_provider_trigger_node_task        (DonnaProvider  *provider,
                                                      DonnaNode      *node,

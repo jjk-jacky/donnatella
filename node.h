@@ -171,6 +171,8 @@ DonnaNodeHasValue   donna_node_get_gid              (DonnaNode          *node,
 DonnaNodeHasValue   donna_node_get_desc             (DonnaNode          *node,
                                                      gboolean            is_blocking,
                                                      gchar             **desc);
+DonnaNode *         donna_node_get_parent           (DonnaNode          *node,
+                                                     GError            **error);
 DonnaTask *         donna_node_refresh_task         (DonnaNode          *node,
                                                      GError            **error,
                                                      const gchar        *first_name,
@@ -187,8 +189,6 @@ DonnaTask *         donna_node_has_children_task    (DonnaNode          *node,
                                                      GError            **error);
 DonnaTask *         donna_node_get_children_task    (DonnaNode          *node,
                                                      DonnaNodeType       node_types,
-                                                     GError            **error);
-DonnaTask *         donna_node_get_parent_task      (DonnaNode          *node,
                                                      GError            **error);
 DonnaTask *         donna_node_trigger_task         (DonnaNode          *node,
                                                      GError            **error);

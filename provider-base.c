@@ -74,10 +74,6 @@ static DonnaTask *      provider_base_get_node_children_task (
                                             DonnaNode           *node,
                                             DonnaNodeType        node_types,
                                             GError             **error);
-static DonnaTask *      provider_base_get_node_parent_task (
-                                            DonnaProvider       *provider,
-                                            DonnaNode           *node,
-                                            GError             **error);
 static DonnaTask *      provider_base_trigger_node_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
@@ -113,7 +109,6 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->get_node               = provider_base_get_node;
     interface->has_node_children_task = provider_base_has_node_children_task;
     interface->get_node_children_task = provider_base_get_node_children_task;
-    interface->get_node_parent_task   = provider_base_get_node_parent_task;
     interface->trigger_node_task      = provider_base_trigger_node_task;
     interface->io_task                = provider_base_io_task;
     interface->new_child_task         = provider_base_new_child_task;
@@ -678,89 +673,6 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "get_children() for node '%s:%s'",
-                    donna_node_get_domain (node),
-                    location));
-            g_free (location));
-
-    return task;
-}
-
-static DonnaTaskState
-get_node_parent (DonnaTask *task, DonnaNode *node)
-{
-    DonnaProviderBase *provider_base;
-    gchar *location;
-    DonnaNode *parent;
-    gchar *s;
-    DonnaTaskState ret;
-
-    provider_base = (DonnaProviderBase *) donna_node_peek_provider (node);
-    location = donna_node_get_location (node);
-
-    /* is this root? */
-    if (streq (location, "/"))
-    {
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
-                "Node '%s:%s' has no parent",
-                donna_provider_get_domain ((DonnaProvider *) provider_base),
-                location);
-        g_free (location);
-        g_object_unref (node);
-        return DONNA_TASK_FAILED;
-    }
-
-    s = strrchr (location, '/');
-    if (s != location)
-        *s = '\0';
-
-    g_rec_mutex_lock (&provider_base->priv->nodes_mutex);
-    parent = provider_base_get_cached_node (provider_base,
-            (s == location) ? "/" : location);
-    g_rec_mutex_unlock (&provider_base->priv->nodes_mutex);
-    if (!parent)
-        /* create the node. It is new_node's responsability to lock, call
-         * add_node_to_cache, unlock */
-        ret = DONNA_PROVIDER_BASE_GET_CLASS (provider_base)->new_node (
-                provider_base,
-                task,
-                (s == location) ? "/" : location);
-    else
-    {
-        GValue *value;
-
-        value = donna_task_grab_return_value (task);
-        g_value_init (value, G_TYPE_OBJECT);
-        /* a ref was added for us by provider_base_get_cached_node */
-        g_value_take_object (value, parent);
-        donna_task_release_return_value (task);
-        ret = DONNA_TASK_DONE;
-    }
-
-    g_free (location);
-    g_object_unref (node);
-    return ret;
-}
-
-static DonnaTask *
-provider_base_get_node_parent_task (DonnaProvider   *provider,
-                                    DonnaNode       *node,
-                                    GError         **error)
-{
-    DonnaTask *task;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
-    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->new_node != NULL, NULL);
-
-    task = donna_task_new ((task_fn) get_node_parent, g_object_ref (node),
-            g_object_unref);
-    /* because if we can't get it from the cache, we'll call new_node */
-    set_task_visibility (task, provider, new_node);
-
-    DONNA_DEBUG (TASK,
-            gchar *location = donna_node_get_location (node);
-            donna_task_take_desc (task, g_strdup_printf (
-                    "get_node_parent() for node '%s:%s'",
                     donna_node_get_domain (node),
                     location));
             g_free (location));

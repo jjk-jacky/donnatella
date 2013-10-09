@@ -1303,6 +1303,59 @@ donna_node_get_desc (DonnaNode  *node,
     _get_basic_prop (BASIC_PROP_DESC, g_value_dup_string, gchar *, desc);
 }
 
+/**
+ * donna_node_get_parent:
+ * @node: Node to get parent node of
+ * @error: (allow none): Return location of a #GError, or %NULL
+ *
+ * Returns the parent #DonnaNode of @node
+ *
+ * Note that this will call donna_provider_get_node(), and as such a new main
+ * loop could be started while getting the node.
+ *
+ * Returns: (transfer full): The #DonnaNode, or %NULL
+ */
+DonnaNode *
+donna_node_get_parent (DonnaNode          *node,
+                       GError            **error)
+{
+    DonnaNodePrivate *priv;
+    gchar *parent_location;
+    gchar *s;
+    DonnaNode *parent;
+
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    priv = node->priv;
+
+    if (donna_provider_get_flags (priv->provider) & DONNA_PROVIDER_FLAG_FLAT)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': Cannot get parent of '%s', provider is flat",
+                donna_provider_get_domain (priv->provider),
+                priv->location);
+        return NULL;
+    }
+
+    if (streq (priv->location, "/"))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Provider '%s': Root has no parent",
+                donna_provider_get_domain (priv->provider));
+        return NULL;
+    }
+
+    parent_location = g_strdup (priv->location);
+    s = strrchr (parent_location, '/');
+    if (s == parent_location)
+        ++s;
+    *s = '\0';
+    parent = donna_provider_get_node (priv->provider, parent_location, error);
+    g_free (parent_location);
+    return parent;
+}
+
 struct refresh_data
 {
     DonnaNode   *node;
@@ -1962,26 +2015,6 @@ donna_node_get_children_task (DonnaNode          *node,
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
     return donna_provider_get_node_children_task (node->priv->provider, node,
             node_types, error);
-}
-
-/**
- * donna_node_get_parent_task:
- * @node: Node to get parent node of
- * @error: (allow none): Return location of a #GError, or %NULL
- *
- * Returns a task to get the parent #DonnaNode of @node
- *
- * Note: this is an helper function, that calls
- * donna_provider_get_node_parent_task() on @node's provider
- *
- * Returns: (transfer floating): The floating #DonnaTask, or %NULL
- */
-DonnaTask *
-donna_node_get_parent_task (DonnaNode          *node,
-                            GError            **error)
-{
-    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
-    return donna_provider_get_node_parent_task (node->priv->provider, node, error);
 }
 
 /**
