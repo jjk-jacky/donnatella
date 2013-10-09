@@ -8496,11 +8496,15 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
             || action == DONNA_TREE_SEL_DEFINE, FALSE);
     g_return_val_if_fail (nodes != NULL, FALSE);
 
-    if (G_UNLIKELY (nodes->len == 0))
-        return TRUE;
-
     priv = tree->priv;
     sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+
+    if (nodes->len == 0)
+    {
+        if (action == DONNA_TREE_SEL_DEFINE)
+            gtk_tree_selection_unselect_all (sel);
+        return TRUE;
+    }
 
     /* tree is limited in its selection capabilities */
     if (is_tree (tree))
