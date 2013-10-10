@@ -913,17 +913,13 @@ get_user_item_info (const gchar             *item,
 
         g_object_unref (pi);
 
-        free_context_info (info);
-        memset (info, 0, sizeof (*info));
-        info->node = node;
-
         if (info->is_menu_bold)
         {
             GError *err = NULL;
 
             g_value_init (&v, G_TYPE_BOOLEAN);
             g_value_set_boolean (&v, TRUE);
-            if (G_UNLIKELY (!donna_node_add_property (info->node, "menu-is-label-bold",
+            if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-label-bold",
                             G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
             {
                 g_warning ("Context-menu: Failed to set label bold for item "
@@ -934,6 +930,10 @@ get_user_item_info (const gchar             *item,
             }
             g_value_unset (&v);
         }
+
+        free_context_info (info);
+        memset (info, 0, sizeof (*info));
+        info->node = node;
     }
 
     if (node_trigger)
