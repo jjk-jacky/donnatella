@@ -58,15 +58,6 @@ enum
     NB_COL_TYPES
 };
 
-enum types
-{
-    TYPE_UNKNOWN = 0,
-    TYPE_ENABLED,
-    TYPE_DISABLED,
-    TYPE_COMBINE,
-    TYPE_IGNORE
-};
-
 enum
 {
     TITLE_DOMAIN_LOCATION,
@@ -1056,7 +1047,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
     gchar _source[255];
     gchar *source[] = { _source, "arrangements" };
     guint i, max = sizeof (source) / sizeof (source[0]);
-    enum types type;
+    DonnaEnabledTypes type;
     gboolean is_first = TRUE;
     gchar buf[255], *b = buf;
     gchar *location;
@@ -1076,24 +1067,24 @@ tree_select_arrangement (DonnaTreeView  *tree,
         {
             if (!donna_config_get_int (priv->config, (gint *) &type, "%s/type",
                         sce))
-                type = TYPE_ENABLED;
+                type = DONNA_ENABLED_TYPE_ENABLED;
             switch (type)
             {
-                case TYPE_ENABLED:
-                case TYPE_COMBINE:
+                case DONNA_ENABLED_TYPE_ENABLED:
+                case DONNA_ENABLED_TYPE_COMBINE:
                     /* process */
                     break;
 
-                case TYPE_DISABLED:
+                case DONNA_ENABLED_TYPE_DISABLED:
                     /* flag to stop */
                     i = max;
                     break;
 
-                case TYPE_IGNORE:
+                case DONNA_ENABLED_TYPE_IGNORE:
                     /* next source */
                     continue;
 
-                case TYPE_UNKNOWN:
+                case DONNA_ENABLED_TYPE_UNKNOWN:
                 default:
                     g_warning ("Unable to load arrangements: Invalid option '%s/type'",
                             sce);
@@ -1173,7 +1164,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
             }
         }
         /* at this point type can only be ENABLED or COMBINE */
-        if (type == TYPE_ENABLED || (arr /* could still be NULL */
+        if (type == DONNA_ENABLED_TYPE_ENABLED || (arr /* could still be NULL */
                     /* even in COMBINE, if arr is "full" we're done */
                     && (arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL))
             break;
@@ -2011,9 +2002,9 @@ submenu_get_children_cb (DonnaTask           *task,
     {
 no_submenu:
         gtk_menu_item_set_submenu (ls->item, NULL);
-        if (ls->mc->submenus == TYPE_ENABLED)
+        if (ls->mc->submenus == DONNA_ENABLED_TYPE_ENABLED)
             gtk_widget_set_sensitive ((GtkWidget *) ls->item, FALSE);
-        else if (ls->mc->submenus == TYPE_COMBINE)
+        else if (ls->mc->submenus == DONNA_ENABLED_TYPE_COMBINE)
         {
             donna_image_menu_item_set_is_combined ((DonnaImageMenuItem *) ls->item,
                     FALSE);
@@ -2043,7 +2034,7 @@ set_menu:
     /* see if the item is selected (if we're not TYPE_COMBINE then it can't be,
      * since thje menu hasn't event been shown yet). If so, we need to unselect
      * it before we can add/change (if timeout_called) the submenu */
-    is_selected = ls->mc->submenus == TYPE_COMBINE
+    is_selected = ls->mc->submenus == DONNA_ENABLED_TYPE_COMBINE
         && (GtkWidget *) ls->item == gtk_menu_shell_get_selected_item (
                 (GtkMenuShell *) gtk_widget_get_parent ((GtkWidget *) ls->item));
 
@@ -2213,7 +2204,7 @@ load_menu (struct menu_click *mc)
 
             if (type == DONNA_NODE_CONTAINER)
             {
-                if (mc->submenus == TYPE_ENABLED)
+                if (mc->submenus == DONNA_ENABLED_TYPE_ENABLED)
                 {
                     struct load_submenu ls = { 0, };
 
@@ -2223,7 +2214,7 @@ load_menu (struct menu_click *mc)
 
                     load_submenu (&ls);
                 }
-                else if (mc->submenus == TYPE_COMBINE)
+                else if (mc->submenus == DONNA_ENABLED_TYPE_COMBINE)
                 {
                     struct load_submenu *ls;
 
@@ -2321,8 +2312,8 @@ donna_donna_show_menu (DonnaApp       *app,
     get_boolean (b, "use_default_icons", TRUE);
     mc->use_default_icons = b;
 
-    get_int (i, "submenus", TYPE_DISABLED);
-    if (i == TYPE_ENABLED || i == TYPE_COMBINE)
+    get_int (i, "submenus", DONNA_ENABLED_TYPE_DISABLED);
+    if (i == DONNA_ENABLED_TYPE_ENABLED || i == DONNA_ENABLED_TYPE_COMBINE)
     {
         mc->submenus = i;
 
