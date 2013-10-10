@@ -1365,14 +1365,11 @@ donna_context_menu_get_nodes (DonnaApp               *app,
                               GError                **error)
 {
     DonnaProviderInternal *pi;
-    DonnaConfig *config;
     GPtrArray *nodes;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (items != NULL, NULL);
     g_return_val_if_fail (source != NULL, NULL);
-
-    config = donna_app_peek_config (app);
 
     pi = (DonnaProviderInternal *) donna_app_get_provider (app, "internal");
     if (G_UNLIKELY (!pi))
