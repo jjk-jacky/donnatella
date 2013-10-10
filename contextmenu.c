@@ -485,6 +485,8 @@ free_context_info (DonnaContextInfo *info)
         g_free (info->desc);
     if (info->free_trigger)
         g_free (info->trigger);
+    if (info->free_menu)
+        g_free (info->menu);
 }
 
 static inline gchar *
@@ -867,6 +869,27 @@ get_user_item_info (const gchar             *item,
         }
     }
 
+    if (donna_config_get_string (config, &s, "context_menus/%s/%s/menu",
+                source, item))
+    {
+        info->menu = s;
+        info->free_menu = TRUE;
+    }
+    else if (import_from_trigger)
+    {
+        ensure_node_trigger ();
+        if (import_from_trigger)
+        {
+            donna_node_get (node_trigger, FALSE, "menu-menu", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                info->menu = g_value_dup_string (&v);
+                info->free_menu = TRUE;
+                g_value_unset (&v);
+            }
+        }
+    }
+
     if (type == TYPE_CONTAINER)
     {
         DonnaProviderInternal *pi;
@@ -969,6 +992,30 @@ get_user_item_info (const gchar             *item,
                             G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, &err)))
             {
                 g_warning ("Context-menu: Failed to set submenus type for item "
+                        "'context_menus/%s/%s': %s",
+                        source, item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            g_value_unset (&v);
+        }
+
+        if (info->menu)
+        {
+            GError *err = NULL;
+
+            g_value_init (&v, G_TYPE_STRING);
+            if (info->free_menu)
+            {
+                g_value_take_string (&v, info->menu);
+                info->free_menu = FALSE;
+            }
+            else
+                g_value_set_static_string (&v, info->menu);
+            if (G_UNLIKELY (!donna_node_add_property (node, "menu-menu",
+                            G_TYPE_STRING, &v, (refresher_fn) gtk_true, NULL, &err)))
+            {
+                g_warning ("Context-menu: Failed to set menu definition for item "
                         "'context_menus/%s/%s': %s",
                         source, item,
                         (err) ? err->message : "(no error message)");
@@ -1283,6 +1330,33 @@ parse_items (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
+            if (info.menu)
+            {
+                GError *err = NULL;
+                GValue v = G_VALUE_INIT;
+
+                g_value_init (&v, G_TYPE_STRING);
+                if (info.free_menu)
+                {
+                    g_value_take_string (&v, info.menu);
+                    info.free_menu = FALSE;
+                }
+                else
+                    g_value_set_static_string (&v, info.menu);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-menu",
+                                G_TYPE_STRING, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set menu definition "
+                            "for item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+            }
+
             if (info.trigger)
             {
                 GValue v = G_VALUE_INIT;
@@ -1414,6 +1488,33 @@ parse_items (DonnaApp               *app,
                                 NULL, &err)))
                 {
                     g_warning ("Context-menu: Failed to set submenus type "
+                            "for item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+            }
+
+            if (info.menu)
+            {
+                GError *err = NULL;
+                GValue v = G_VALUE_INIT;
+
+                g_value_init (&v, G_TYPE_STRING);
+                if (info.free_menu)
+                {
+                    g_value_take_string (&v, info.menu);
+                    info.free_menu = FALSE;
+                }
+                else
+                    g_value_set_static_string (&v, info.menu);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-menu",
+                                G_TYPE_STRING, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set menu definition "
                             "for item '%s': %s",
                             items,
                             (err) ? err->message : "(no error message)");

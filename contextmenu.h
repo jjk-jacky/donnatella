@@ -41,6 +41,8 @@ typedef struct
     };
     gchar       *desc;
     gchar       *trigger;
+    /* container only */
+    gchar       *menu;
 
     guint        icon_is_pixbuf : 1;
 
@@ -54,6 +56,7 @@ typedef struct
     guint        free_icon      : 1;
     guint        free_desc      : 1;
     guint        free_trigger   : 1;
+    guint        free_menu      : 1;
 } DonnaContextInfo;
 
 typedef gchar *  (*get_alias_fn)     (const gchar             *alias,
