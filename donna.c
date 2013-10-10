@@ -1994,20 +1994,23 @@ submenu_get_children_cb (DonnaTask           *task,
     arr = g_value_get_boxed (donna_task_get_return_value (task));
     if (!ls->mc->show_hidden)
     {
+        GPtrArray *filtered = NULL;
         guint i;
 
-        for (i = 0; i < arr->len; )
+        /* arr is owned by the task, we shouldn't modify it. (It could also be
+         * used by e.g. a treeview to refresh its content) */
+        filtered = g_ptr_array_new_with_free_func (g_object_unref);
+        for (i = 0; i < arr->len; ++i)
         {
             gchar *name;
 
             name = donna_node_get_name (arr->pdata[i]);
-            if (*name == '.')
-                /* move last item into i; hence no increment */
-                g_ptr_array_remove_index_fast (arr, i);
-            else
-                ++i;
+            if (*name != '.')
+                g_ptr_array_add (filtered, g_object_ref (arr->pdata[i]));
             g_free (name);
         }
+
+        arr = filtered;
     }
 
     if (arr->len == 0)
@@ -2034,7 +2037,7 @@ no_submenu:
     mc = g_slice_new0 (struct menu_click);
     memcpy (mc, ls->mc, sizeof (struct menu_click));
     mc->name = g_strdup (ls->mc->name);
-    mc->nodes = g_ptr_array_ref (arr);
+    mc->nodes = (ls->mc->show_hidden) ? g_ptr_array_ref (arr) : arr;
 
     menu = load_menu (mc);
     if (G_UNLIKELY (!menu))
