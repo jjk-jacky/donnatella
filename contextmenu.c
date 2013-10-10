@@ -839,6 +839,34 @@ get_user_item_info (const gchar             *item,
         }
     }
 
+    /* TYPE_EMPTY means we force to submenus ENABLED, since it's meant to define
+     * the parent of a submenu */
+    if (type == TYPE_EMPTY)
+        info->submenus = DONNA_ENABLED_TYPE_ENABLED;
+    else
+    {
+        gint submenus;
+
+        if (donna_config_get_int (config, &submenus,
+                    "context_menus/%s/%s/submenus",
+                    source, item))
+            info->submenus = CLAMP (submenus, 0, 3);
+        else if (import_from_trigger)
+        {
+            ensure_node_trigger ();
+            if (import_from_trigger)
+            {
+                donna_node_get (node_trigger, FALSE, "menu-submenus",
+                        &has, &v, NULL);
+                if (has == DONNA_NODE_VALUE_SET)
+                {
+                    info->submenus = g_value_get_uint (&v);
+                    g_value_unset (&v);
+                }
+            }
+        }
+    }
+
     if (type == TYPE_CONTAINER)
     {
         DonnaProviderInternal *pi;
@@ -923,6 +951,24 @@ get_user_item_info (const gchar             *item,
                             G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
             {
                 g_warning ("Context-menu: Failed to set label bold for item "
+                        "'context_menus/%s/%s': %s",
+                        source, item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            g_value_unset (&v);
+        }
+
+        if (info->submenus > 0)
+        {
+            GError *err = NULL;
+
+            g_value_init (&v, G_TYPE_UINT);
+            g_value_set_uint (&v, CLAMP (info->submenus, 0, 3));
+            if (G_UNLIKELY (!donna_node_add_property (node, "menu-submenus",
+                            G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, &err)))
+            {
+                g_warning ("Context-menu: Failed to set submenus type for item "
                         "'context_menus/%s/%s': %s",
                         source, item,
                         (err) ? err->message : "(no error message)");
@@ -1216,6 +1262,27 @@ parse_items (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
+            if (info.submenus > 0)
+            {
+                GError *err = NULL;
+                GValue v = G_VALUE_INIT;
+
+                g_value_init (&v, G_TYPE_UINT);
+                g_value_set_uint (&v, CLAMP (info.submenus, 0, 3));
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-submenus",
+                                G_TYPE_UINT, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set submenus type "
+                            "for item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+            }
+
             if (info.trigger)
             {
                 GValue v = G_VALUE_INIT;
@@ -1327,6 +1394,27 @@ parse_items (DonnaApp               *app,
                 {
                     g_warning ("Context-menu: Failed to set label bold for "
                             "item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+            }
+
+            if (info.submenus > 0)
+            {
+                GError *err = NULL;
+                GValue v = G_VALUE_INIT;
+
+                g_value_init (&v, G_TYPE_UINT);
+                g_value_set_uint (&v, CLAMP (info.submenus, 0, 3));
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-submenus",
+                                G_TYPE_UINT, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set submenus type "
+                            "for item '%s': %s",
                             items,
                             (err) ? err->message : "(no error message)");
                     g_clear_error (&err);
