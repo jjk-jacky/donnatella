@@ -1693,6 +1693,8 @@ struct menu_click
     guint            submenus               : 2;
     /* can children override submenus */
     guint            can_children_submenus  : 1;
+    /* can children override menu definition */
+    guint            can_children_menu      : 1;
     /* type of nodes to load in submenus */
     DonnaNodeType    node_type              : 2;
     /* do we "show" dot files in submenus */
@@ -1923,6 +1925,8 @@ struct load_submenu
     /* whether we own the mc (newly allocated), or it's just a pointer to our
      * parent (therefore we need to make a copy when loading the submenu) */
     gboolean             own_mc;
+    /* mc for submenu/children (if already allocated, else copy mc) */
+    struct menu_click   *sub_mc;
     /* parent menu item */
     GtkMenuItem         *item;
     /* get_children task, to cancel on item's destroy */
@@ -2034,9 +2038,14 @@ no_submenu:
         return;
     }
 
-    mc = g_slice_new0 (struct menu_click);
-    memcpy (mc, ls->mc, sizeof (struct menu_click));
-    mc->name = g_strdup (ls->mc->name);
+    if (ls->sub_mc)
+        mc = ls->sub_mc;
+    else
+    {
+        mc = g_slice_new0 (struct menu_click);
+        memcpy (mc, ls->mc, sizeof (struct menu_click));
+        mc->name = g_strdup (ls->mc->name);
+    }
     mc->nodes = (ls->mc->show_hidden) ? g_ptr_array_ref (arr) : arr;
 
     menu = load_menu (mc);
@@ -2105,6 +2114,121 @@ load_submenu (struct load_submenu *ls)
         submenu_get_children_cb (task, FALSE, ls);
         g_object_unref (task);
     }
+}
+
+#define get_boolean(var, option, def_val)   do {            \
+    if (!donna_config_get_boolean (priv->config, &var,      \
+                "/menus/%s/" option, name))                 \
+        if (!donna_config_get_boolean (priv->config, &var,  \
+                    "/defaults/menus/" option))             \
+        {                                                   \
+            var = def_val;                                  \
+            donna_config_set_boolean (priv->config, var,    \
+                    "/defaults/menus/" option);             \
+        }                                                   \
+} while (0)
+
+#define get_int(var, option, def_val)   do {                \
+    if (!donna_config_get_int (priv->config, &var,          \
+                "/menus/%s/" option, name))                 \
+        if (!donna_config_get_int (priv->config, &var,      \
+                    "/defaults/menus/" option))             \
+        {                                                   \
+            var = def_val;                                  \
+            donna_config_set_int (priv->config, var,        \
+                    "/defaults/menus/" option);             \
+        }                                                   \
+} while (0)
+
+static struct menu_click *
+load_mc (DonnaDonna *donna, const gchar *name, GPtrArray *nodes)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    struct menu_click *mc;
+    gboolean b;
+    gint i;
+
+    mc = g_slice_new0 (struct menu_click);
+    mc->donna = donna;
+    mc->name  = g_strdup (name);
+    mc->nodes = nodes;
+    if (nodes)
+        /* because we allow to have NULL elements to be used as separator, we
+         * can't just use g_object_unref() as GDestroyNotify since that will
+         * cause warning when called on NULL */
+        g_ptr_array_set_free_func (nodes, (GDestroyNotify) donna_g_object_unref);
+
+    /* icon options */
+    get_boolean (b, "show_icons", TRUE);
+    mc->show_icons = b;
+    get_boolean (b, "use_default_icons", TRUE);
+    mc->use_default_icons = b;
+
+    get_int (i, "submenus", DONNA_ENABLED_TYPE_DISABLED);
+    if (i == DONNA_ENABLED_TYPE_ENABLED || i == DONNA_ENABLED_TYPE_COMBINE)
+    {
+        mc->submenus = i;
+
+        /* we could have made this option a list-flags, i.e. be exactly the
+         * value we want, but we wanted it to be similar to what's used in
+         * commands, where you say "all" not "item,container" (as would have
+         * been the case using flags) */
+        get_int (i, "children", 0);
+        if (i == 1)
+            mc->node_type = DONNA_NODE_ITEM;
+        else if (i == 2)
+            mc->node_type = DONNA_NODE_CONTAINER;
+        else /* if (i == 0) */
+            mc->node_type = DONNA_NODE_ITEM | DONNA_NODE_CONTAINER;
+
+        get_boolean (b, "children_show_hidden", TRUE);
+        mc->show_hidden = b;
+    }
+    get_boolean (b, "can_children_submenus", TRUE);
+    mc->can_children_submenus = b;
+    get_boolean (b, "can_children_menu", TRUE);
+    mc->can_children_menu = b;
+
+    get_boolean (b, "sort", FALSE);
+    mc->is_sorted = b;
+    if (mc->is_sorted)
+    {
+        get_boolean (b, "container_first", TRUE);
+        mc->container_first = b;
+
+        get_boolean (b, "locale_based", FALSE);
+        mc->is_locale_based = b;
+
+        get_boolean (b, "natural_order", TRUE);
+        if (b)
+            mc->options |= DONNA_SORT_NATURAL_ORDER;
+
+        get_boolean (b, "dot_first", TRUE);
+        if (b)
+            mc->options |= DONNA_SORT_DOT_FIRST;
+
+        if (mc->is_locale_based)
+        {
+            get_boolean (b, "special_first", TRUE);
+            mc->sort_special_first = b;
+        }
+        else
+        {
+            get_boolean (b, "dot_mixed", FALSE);
+            if (b)
+                mc->options |= DONNA_SORT_DOT_MIXED;
+
+            get_boolean (b, "case_sensitive", FALSE);
+            if (!b)
+                mc->options |= DONNA_SORT_CASE_INSENSITIVE;
+
+            get_boolean (b, "ignore_spunct", FALSE);
+            if (b)
+                mc->options |= DONNA_SORT_IGNORE_SPUNCT;
+        }
+    }
+
+    return mc;
 }
 
 static GtkWidget *
@@ -2222,6 +2346,7 @@ load_menu (struct menu_click *mc)
             if (type == DONNA_NODE_CONTAINER)
             {
                 DonnaEnabledTypes submenus = mc->submenus;
+                struct menu_click *sub_mc = NULL;
 
                 if (mc->can_children_submenus)
                 {
@@ -2237,22 +2362,35 @@ load_menu (struct menu_click *mc)
                     }
                 }
 
+                if (mc->can_children_menu
+                        && (submenus == DONNA_ENABLED_TYPE_ENABLED
+                            || submenus == DONNA_ENABLED_TYPE_COMBINE))
+                {
+                    donna_node_get (node, TRUE, "menu-menu", &has, &v, NULL);
+                    if (has == DONNA_NODE_VALUE_SET)
+                    {
+                        if (G_VALUE_TYPE (&v) == G_TYPE_STRING)
+                            sub_mc = load_mc (mc->donna, g_value_get_string (&v), NULL);
+                        g_value_unset (&v);
+                    }
+                }
+
                 if (submenus == DONNA_ENABLED_TYPE_ENABLED)
                 {
                     struct load_submenu ls = { 0, };
 
                     ls.blocking = TRUE;
-                    ls.item = (GtkMenuItem *) item;
+                    ls.mc       = mc;
+                    ls.sub_mc   = sub_mc;
+                    ls.item     = (GtkMenuItem *) item;
 
-                    if (submenus == mc->submenus)
-                        ls.mc = mc;
-                    else
+                    if (submenus != mc->submenus)
                     {
-                        ls.own_mc = TRUE;
-                        ls.mc = g_slice_new0 (struct menu_click);
+                        ls.own_mc       = TRUE;
+                        ls.mc           = g_slice_new0 (struct menu_click);
                         memcpy (ls.mc, mc, sizeof (struct menu_click));
-                        ls.mc->name  = g_strdup (mc->name);
-                        ls.mc->nodes = NULL;
+                        ls.mc->name     = g_strdup (mc->name);
+                        ls.mc->nodes    = NULL;
                         ls.mc->submenus = submenus;
                     }
 
@@ -2263,18 +2401,18 @@ load_menu (struct menu_click *mc)
                     struct load_submenu *ls;
 
                     ls = g_slice_new0 (struct load_submenu);
-                    ls->item = (GtkMenuItem *) item;
+                    ls->mc          = mc;
+                    ls->sub_mc      = sub_mc;
+                    ls->item        = (GtkMenuItem *) item;
                     ls->ref_count = 1;
 
-                    if (submenus == mc->submenus)
-                        ls->mc = mc;
-                    else
+                    if (submenus != mc->submenus)
                     {
-                        ls->own_mc = TRUE;
-                        ls->mc = g_slice_new0 (struct menu_click);
+                        ls->own_mc       = TRUE;
+                        ls->mc           = g_slice_new0 (struct menu_click);
                         memcpy (ls->mc, mc, sizeof (struct menu_click));
-                        ls->mc->name  = g_strdup (mc->name);
-                        ls->mc->nodes = NULL;
+                        ls->mc->name     = g_strdup (mc->name);
+                        ls->mc->nodes    = NULL;
                         ls->mc->submenus = submenus;
                     }
 
@@ -2313,30 +2451,6 @@ load_menu (struct menu_click *mc)
     return menu;
 }
 
-#define get_boolean(var, option, def_val)   do {            \
-    if (!donna_config_get_boolean (priv->config, &var,      \
-                "/menus/%s/" option, name))                 \
-        if (!donna_config_get_boolean (priv->config, &var,  \
-                    "/defaults/menus/" option))             \
-        {                                                   \
-            var = def_val;                                  \
-            donna_config_set_boolean (priv->config, var,    \
-                    "/defaults/menus/" option);             \
-        }                                                   \
-} while (0)
-
-#define get_int(var, option, def_val)   do {                \
-    if (!donna_config_get_int (priv->config, &var,          \
-                "/menus/%s/" option, name))                 \
-        if (!donna_config_get_int (priv->config, &var,      \
-                    "/defaults/menus/" option))             \
-        {                                                   \
-            var = def_val;                                  \
-            donna_config_set_int (priv->config, var,        \
-                    "/defaults/menus/" option);             \
-        }                                                   \
-} while (0)
-
 static gboolean
 donna_donna_show_menu (DonnaApp       *app,
                        GPtrArray      *nodes,
@@ -2346,89 +2460,11 @@ donna_donna_show_menu (DonnaApp       *app,
     DonnaDonnaPrivate *priv;
     struct menu_click *mc;
     GtkMenu *menu;
-    gboolean b;
-    gint i;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
     priv = ((DonnaDonna *) app)->priv;
 
-    mc = g_slice_new0 (struct menu_click);
-    mc->donna = (DonnaDonna *) app;
-    mc->name  = g_strdup (name);
-    mc->nodes = nodes;
-    /* because we allow to have NULL elements to be used as separator, we can't
-     * just use g_object_unref() as GDestroyNotify since that will cause warning
-     * when called on NULL */
-    g_ptr_array_set_free_func (nodes, (GDestroyNotify) donna_g_object_unref);
-
-    /* icon options */
-    get_boolean (b, "show_icons", TRUE);
-    mc->show_icons = b;
-    get_boolean (b, "use_default_icons", TRUE);
-    mc->use_default_icons = b;
-
-    get_int (i, "submenus", DONNA_ENABLED_TYPE_DISABLED);
-    if (i == DONNA_ENABLED_TYPE_ENABLED || i == DONNA_ENABLED_TYPE_COMBINE)
-    {
-        mc->submenus = i;
-
-        /* we could have made this option a list-flags, i.e. be exactly the
-         * value we want, but we wanted it to be similar to what's used in
-         * commands, where you say "all" not "item,container" (as would have
-         * been the case using flags) */
-        get_int (i, "children", 0);
-        if (i == 1)
-            mc->node_type = DONNA_NODE_ITEM;
-        else if (i == 2)
-            mc->node_type = DONNA_NODE_CONTAINER;
-        else /* if (i == 0) */
-            mc->node_type = DONNA_NODE_ITEM | DONNA_NODE_CONTAINER;
-
-        get_boolean (b, "children_show_hidden", TRUE);
-        mc->show_hidden = b;
-    }
-    get_boolean (b, "can_children_submenus", TRUE);
-    mc->can_children_submenus = b;
-
-    get_boolean (b, "sort", FALSE);
-    mc->is_sorted = b;
-    if (mc->is_sorted)
-    {
-        get_boolean (b, "container_first", TRUE);
-        mc->container_first = b;
-
-        get_boolean (b, "locale_based", FALSE);
-        mc->is_locale_based = b;
-
-        get_boolean (b, "natural_order", TRUE);
-        if (b)
-            mc->options |= DONNA_SORT_NATURAL_ORDER;
-
-        get_boolean (b, "dot_first", TRUE);
-        if (b)
-            mc->options |= DONNA_SORT_DOT_FIRST;
-
-        if (mc->is_locale_based)
-        {
-            get_boolean (b, "special_first", TRUE);
-            mc->sort_special_first = b;
-        }
-        else
-        {
-            get_boolean (b, "dot_mixed", FALSE);
-            if (b)
-                mc->options |= DONNA_SORT_DOT_MIXED;
-
-            get_boolean (b, "case_sensitive", FALSE);
-            if (!b)
-                mc->options |= DONNA_SORT_CASE_INSENSITIVE;
-
-            get_boolean (b, "ignore_spunct", FALSE);
-            if (b)
-                mc->options |= DONNA_SORT_IGNORE_SPUNCT;
-        }
-    }
-
+    mc = load_mc ((DonnaDonna *) app, name, nodes);
     /* menu will not be packed anywhere, so we need to take ownership and handle
      * it when done, i.e. on "unmap-event". It will trigger the widget's destroy
      * which is when we'll free mc */
