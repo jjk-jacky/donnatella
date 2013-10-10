@@ -2069,15 +2069,16 @@ load_submenu (struct load_submenu *ls)
 
     task = donna_node_get_children_task (node, ls->mc->node_type, NULL);
 
-    donna_task_set_callback (task,
-            (task_callback_fn) submenu_get_children_cb,
-            ls,
-            (ls->blocking) ? NULL : (GDestroyNotify) free_load_submenu);
     if (ls->blocking)
         g_object_ref (task);
     else
+    {
+        donna_task_set_callback (task,
+                (task_callback_fn) submenu_get_children_cb,
+                ls, (GDestroyNotify) free_load_submenu);
         donna_task_set_timeout (task, /*FIXME*/ 800,
                 (task_timeout_fn) submenu_get_children_timeout, ls, NULL);
+    }
 
     g_atomic_int_inc (&ls->ref_count);
     ls->task = task;
@@ -2086,6 +2087,7 @@ load_submenu (struct load_submenu *ls)
     if (ls->blocking)
     {
         donna_task_wait_for_it (task, NULL, NULL);
+        submenu_get_children_cb (task, FALSE, ls);
         g_object_unref (task);
     }
 }
