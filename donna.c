@@ -1686,27 +1686,30 @@ struct menu_click
     /* this is only used to hold references to the nodes for the menu */
     GPtrArray       *nodes;
     /* should icons be features on menuitems? */
-    guint            show_icons         : 1;
+    guint            show_icons             : 1;
     /* default to file/folder icon based on item/container if no icon set */
-    guint            use_default_icons  : 1;
+    guint            use_default_icons      : 1;
     /* are containers just items, submenus, or both combined? */
-    guint            submenus           : 2;
+    guint            submenus               : 2;
+    /* can children override submenus */
+    guint            can_children_submenus  : 1;
     /* type of nodes to load in submenus */
-    DonnaNodeType    node_type          : 2;
+    DonnaNodeType    node_type              : 2;
     /* do we "show" dot files in submenus */
-    guint            show_hidden        : 1;
+    guint            show_hidden            : 1;
     /* sort options */
-    guint            is_sorted          : 1;
-    guint            container_first    : 1;
-    guint            is_locale_based    : 1;
-    DonnaSortOptions options            : 5;
-    guint            sort_special_first : 1;
+    guint            is_sorted              : 1;
+    guint            container_first        : 1;
+    guint            is_locale_based        : 1;
+    DonnaSortOptions options                : 5;
+    guint            sort_special_first     : 1;
 };
 
 static void
 free_menu_click (struct menu_click *mc)
 {
-    g_ptr_array_unref (mc->nodes);
+    if (mc->nodes)
+        g_ptr_array_unref (mc->nodes);
     g_free (mc->name);
     g_slice_free (struct menu_click, mc);
 }
@@ -1917,6 +1920,10 @@ node_cmp (gconstpointer n1, gconstpointer n2, struct menu_click *mc)
 struct load_submenu
 {
     struct menu_click   *mc;
+    /* whether we own the mc (newly allocated), or it's just a pointer to our
+     * parent (therefore we need to make a copy when loading the submenu) */
+    gboolean             own_mc;
+    /* parent menu item */
     GtkMenuItem         *item;
     /* get_children task, to cancel on item's destroy */
     DonnaTask           *task;
@@ -1931,9 +1938,14 @@ struct load_submenu
 static void
 free_load_submenu (struct load_submenu *ls)
 {
-    if (g_atomic_int_dec_and_test (&ls->ref_count) && !ls->blocking)
-        /* if not blocking it was on stack */
-        g_slice_free (struct load_submenu, ls);
+    if (g_atomic_int_dec_and_test (&ls->ref_count))
+    {
+        if (ls->own_mc)
+            free_menu_click (ls->mc);
+        if (!ls->blocking)
+            /* if not blocking it was on stack */
+            g_slice_free (struct load_submenu, ls);
+    }
 }
 
 static void
@@ -2021,7 +2033,7 @@ no_submenu:
 
     mc = g_slice_new0 (struct menu_click);
     memcpy (mc, ls->mc, sizeof (struct menu_click));
-    mc->name  = g_strdup (ls->mc->name);
+    mc->name = g_strdup (ls->mc->name);
     mc->nodes = g_ptr_array_ref (arr);
 
     menu = load_menu (mc);
@@ -2206,24 +2218,62 @@ load_menu (struct menu_click *mc)
 
             if (type == DONNA_NODE_CONTAINER)
             {
-                if (mc->submenus == DONNA_ENABLED_TYPE_ENABLED)
+                DonnaEnabledTypes submenus = mc->submenus;
+
+                if (mc->can_children_submenus)
+                {
+                    donna_node_get (node, TRUE, "menu-submenus", &has, &v, NULL);
+                    if (has == DONNA_NODE_VALUE_SET)
+                    {
+                        if (G_VALUE_TYPE (&v) == G_TYPE_UINT)
+                        {
+                            submenus = g_value_get_uint (&v);
+                            submenus = CLAMP (submenus, 0, 3);
+                        }
+                        g_value_unset (&v);
+                    }
+                }
+
+                if (submenus == DONNA_ENABLED_TYPE_ENABLED)
                 {
                     struct load_submenu ls = { 0, };
 
                     ls.blocking = TRUE;
                     ls.item = (GtkMenuItem *) item;
-                    ls.mc = mc;
+
+                    if (submenus == mc->submenus)
+                        ls.mc = mc;
+                    else
+                    {
+                        ls.own_mc = TRUE;
+                        ls.mc = g_slice_new0 (struct menu_click);
+                        memcpy (ls.mc, mc, sizeof (struct menu_click));
+                        ls.mc->name  = g_strdup (mc->name);
+                        ls.mc->nodes = NULL;
+                        ls.mc->submenus = submenus;
+                    }
 
                     load_submenu (&ls);
                 }
-                else if (mc->submenus == DONNA_ENABLED_TYPE_COMBINE)
+                else if (submenus == DONNA_ENABLED_TYPE_COMBINE)
                 {
                     struct load_submenu *ls;
 
                     ls = g_slice_new0 (struct load_submenu);
-                    ls->mc = mc;
                     ls->item = (GtkMenuItem *) item;
                     ls->ref_count = 1;
+
+                    if (submenus == mc->submenus)
+                        ls->mc = mc;
+                    else
+                    {
+                        ls->own_mc = TRUE;
+                        ls->mc = g_slice_new0 (struct menu_click);
+                        memcpy (ls->mc, mc, sizeof (struct menu_click));
+                        ls->mc->name  = g_strdup (mc->name);
+                        ls->mc->nodes = NULL;
+                        ls->mc->submenus = submenus;
+                    }
 
                     donna_image_menu_item_set_is_combined (
                             (DonnaImageMenuItem *) item, TRUE);
@@ -2334,6 +2384,8 @@ donna_donna_show_menu (DonnaApp       *app,
         get_boolean (b, "children_show_hidden", TRUE);
         mc->show_hidden = b;
     }
+    get_boolean (b, "can_children_submenus", TRUE);
+    mc->can_children_submenus = b;
 
     get_boolean (b, "sort", FALSE);
     mc->is_sorted = b;
