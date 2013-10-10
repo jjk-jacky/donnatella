@@ -1018,8 +1018,7 @@ donna_task_set_timeout (DonnaTask       *task,
  * @current_task's worker)
  *
  * This will return only if @task has already finished its execution, or wait
- * until it has before returning (that includes full execution of the callback,
- * if any); See donna_task_get_wait_fd() for more.
+ * until it has before returning; See donna_task_get_wait_fd() for more.
  *
  * This is intended for task worker (i.e. function that run as task) that need
  * to run another task as part of its execution. In such cases, you might need
@@ -1056,6 +1055,7 @@ donna_task_set_timeout (DonnaTask       *task,
  * donna_app_run_task (app, g_object_ref (task));
  * donna_task_wait_for_it (task, current_task);
  * // check donna_task_get_state (task) ...
+ * g_object_unref (task);
  * </program>
  * An easier alternative is to call donna_app_run_task_and_wait() which does
  * exactly that, but will also switch @task visibility from
@@ -1155,8 +1155,8 @@ donna_task_wait_for_it (DonnaTask          *task,
  * state (i.e. it could get cancelled without running at all).
  *
  * This fd can be polled for reading. When data is available, it means the task
- * has reached %DONNA_TASK_POST_RUN state -- in case it ran, it happens after the
- * callback (if any) was called.
+ * has reached %DONNA_TASK_POST_RUN state. There's no guarantee that the
+ * callback has - or han't - been called at that time.
  *
  * Note that you should not try and read data from the fd, only test for it.
  *
@@ -1389,18 +1389,12 @@ callback_cb (gpointer data)
 {
     DonnaTask *task = (DonnaTask *) data;
     DonnaTaskPrivate *priv = task->priv;
-    guint64 one = 1;
 
     DONNA_DEBUG (TASK,
             g_debug2 ("Callback for task: %s",
                 (priv->desc) ? priv->desc : "(no desc)"));
     priv->callback_fn (task, priv->timeout_ran, priv->callback_data);
 
-    /* someone blocked for us? */
-    LOCK_TASK (task);
-    if (priv->fd_block >= 0)
-        write (priv->fd_block, &one, sizeof (one));
-    UNLOCK_TASK (task);
     /* remove the reference we had on the task */
     g_object_unref (task);
 
@@ -1527,6 +1521,13 @@ donna_task_run (DonnaTask *task)
         priv->timeout_destroyed = 1;
     }
 
+    /* someone blocked for us? */
+    if (priv->fd_block >= 0)
+    {
+        guint64 one = 1;
+        write (priv->fd_block, &one, sizeof (one));
+    }
+
     /* we're done with the lock */
     UNLOCK_TASK (task);
 
@@ -1543,17 +1544,8 @@ donna_task_run (DonnaTask *task)
          * be removed after the callback has been triggered */
         g_main_context_invoke (NULL, callback_cb, task);
     else
-    {
-        guint64 one = 1;
-
-        /* someone blocked for us? */
-        LOCK_TASK (task);
-        if (priv->fd_block >= 0)
-            write (priv->fd_block, &one, sizeof (one));
-        UNLOCK_TASK (task);
         /* remove our reference on task */
         g_object_unref (task);
-    }
 }
 
 /**
@@ -1732,6 +1724,14 @@ donna_task_cancel (DonnaTask *task)
     {
         g_object_ref_sink (task);
         priv->state = DONNA_TASK_CANCELLED;
+
+        /* someone blocked for us? */
+        if (priv->fd_block >= 0)
+        {
+            guint64 one = 1;
+            write (priv->fd_block, &one, sizeof (one));
+        }
+
         UNLOCK_TASK (task);
 
         /* notify change of state (in main thread) */
@@ -1742,17 +1742,8 @@ donna_task_cancel (DonnaTask *task)
              * be removed after the callback has been triggered */
             g_main_context_invoke (NULL, callback_cb, task);
         else
-        {
-            guint64 one = 1;
-
-            /* someone blocked for us? */
-            LOCK_TASK (task);
-            if (priv->fd_block >= 0)
-                write (priv->fd_block, &one, sizeof (one));
-            UNLOCK_TASK (task);
             /* remove our reference on task */
             g_object_unref (task);
-        }
 
         return;
     }
