@@ -2386,6 +2386,16 @@ load_menu (struct menu_click *mc)
 
                     if (submenus != mc->submenus)
                     {
+                        if (!sub_mc)
+                        {
+                            /* load the sub_mc now, since we'll change option
+                             * submenus in mc */
+                            ls.sub_mc           = g_slice_new0 (struct menu_click);
+                            memcpy (ls.sub_mc, mc, sizeof (struct menu_click));
+                            ls.sub_mc->name     = g_strdup (mc->name);
+                            ls.sub_mc->nodes    = NULL;
+                        }
+
                         ls.own_mc       = TRUE;
                         ls.mc           = g_slice_new0 (struct menu_click);
                         memcpy (ls.mc, mc, sizeof (struct menu_click));
@@ -2408,6 +2418,16 @@ load_menu (struct menu_click *mc)
 
                     if (submenus != mc->submenus)
                     {
+                        if (!sub_mc)
+                        {
+                            /* load the sub_mc now, since we'll change option
+                             * submenus in mc */
+                            ls->sub_mc           = g_slice_new0 (struct menu_click);
+                            memcpy (ls->sub_mc, mc, sizeof (struct menu_click));
+                            ls->sub_mc->name     = g_strdup (mc->name);
+                            ls->sub_mc->nodes    = NULL;
+                        }
+
                         ls->own_mc       = TRUE;
                         ls->mc           = g_slice_new0 (struct menu_click);
                         memcpy (ls->mc, mc, sizeof (struct menu_click));
