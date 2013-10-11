@@ -2399,7 +2399,7 @@ load_menu (struct menu_click *mc)
                         ls.own_mc       = TRUE;
                         ls.mc           = g_slice_new0 (struct menu_click);
                         memcpy (ls.mc, mc, sizeof (struct menu_click));
-                        ls.mc->name     = g_strdup (mc->name);
+                        ls.mc->name     = NULL;
                         ls.mc->nodes    = NULL;
                         ls.mc->submenus = submenus;
                     }
@@ -2431,7 +2431,7 @@ load_menu (struct menu_click *mc)
                         ls->own_mc       = TRUE;
                         ls->mc           = g_slice_new0 (struct menu_click);
                         memcpy (ls->mc, mc, sizeof (struct menu_click));
-                        ls->mc->name     = g_strdup (mc->name);
+                        ls->mc->name     = NULL;
                         ls->mc->nodes    = NULL;
                         ls->mc->submenus = submenus;
                     }
