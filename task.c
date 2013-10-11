@@ -1011,6 +1011,13 @@ donna_task_set_timeout (DonnaTask       *task,
     return TRUE;
 }
 
+static gboolean
+dispatch (GSource *source, GSourceFunc callback, gpointer data)
+{
+    callback (data);
+    return FALSE;
+}
+
 /**
  * donna_task_wait_for_it:
  * @task: Task to wait for execution to be over
@@ -1104,44 +1111,73 @@ donna_task_wait_for_it (DonnaTask          *task,
     else
         fd_current = -1;
 
-    for (;;)
+    /* in the off chance we're in the main thrad (UI), we start a new main loop
+     * to make sure (a) the UI isn't frozen, and (b) we don't deadlock.
+     * Note that in this case, we ignore fd_current (if any), in order to avoid
+     * deadlocks (since otherwise we would block/deadlock when calling
+     * is_cancelling()).
+     * This really shouldn't be called from thread UI anyways, and when it is it
+     * should only be for rare/fast cases, e.g. loading a submenu. */
+    if (g_main_context_is_owner (g_main_context_default ()))
     {
-        gint ret;
+        GMainLoop *loop;
+        GSource *source;
+        GSourceFuncs funcs = {
+            .prepare = NULL,
+            .check = NULL,
+            .dispatch = dispatch,
+            .finalize = NULL
+        };
 
-        FD_ZERO (&fd_set);
-        FD_SET (fd_wait, &fd_set);
-        if (fd_current >= 0)
-            FD_SET (fd_current, &fd_set);
+        loop = g_main_loop_new (NULL, TRUE);
 
-        ret = select (MAX (fd_wait, fd_current) + 1, &fd_set, NULL, NULL, 0);
-        if (ret < 0)
-        {
-            int _errno = errno;
+        source = g_source_new (&funcs, sizeof (GSource));
+        g_source_add_unix_fd (source, fd_wait, G_IO_IN);
+        g_source_set_callback (source, (GSourceFunc) g_main_loop_quit, loop, NULL);
+        g_source_attach (source, NULL);
+        g_source_unref (source);
 
-            if (errno == EINTR)
-                continue;
-
-            g_set_error (error, DONNA_TASK_ERROR,
-                    DONNA_TASK_ERROR_OTHER,
-                    "Unexpected error in select() waiting for task: %s",
-                    g_strerror (_errno));
-            return FALSE;
-        }
-
-        if (FD_ISSET (fd_wait, &fd_set))
-            break;
-        else if (fd_current >=0 && FD_ISSET (fd_current, &fd_set))
-        {
-            donna_task_pause (task);
-            if (donna_task_is_cancelling (current_task))
-            {
-                donna_task_cancel (task);
-                fd_current = -1;
-            }
-            else
-                donna_task_resume (task);
-        }
+        g_main_loop_run (loop);
     }
+    else
+        for (;;)
+        {
+            gint ret;
+
+            FD_ZERO (&fd_set);
+            FD_SET (fd_wait, &fd_set);
+            if (fd_current >= 0)
+                FD_SET (fd_current, &fd_set);
+
+            ret = select (MAX (fd_wait, fd_current) + 1, &fd_set, NULL, NULL, 0);
+            if (ret < 0)
+            {
+                int _errno = errno;
+
+                if (errno == EINTR)
+                    continue;
+
+                g_set_error (error, DONNA_TASK_ERROR,
+                        DONNA_TASK_ERROR_OTHER,
+                        "Unexpected error in select() waiting for task: %s",
+                        g_strerror (_errno));
+                return FALSE;
+            }
+
+            if (FD_ISSET (fd_wait, &fd_set))
+                break;
+            else if (fd_current >= 0 && FD_ISSET (fd_current, &fd_set))
+            {
+                donna_task_pause (task);
+                if (donna_task_is_cancelling (current_task))
+                {
+                    donna_task_cancel (task);
+                    fd_current = -1;
+                }
+                else
+                    donna_task_resume (task);
+            }
+        }
 
     return TRUE;
 }
