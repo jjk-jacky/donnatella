@@ -2883,8 +2883,24 @@ donna_donna_ask_text (DonnaApp       *app,
 static gboolean
 window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaDonna *donna)
 {
-    gtk_widget_hide (window);
-    gtk_main_quit ();
+    static gboolean in_pre_exit = FALSE;
+
+    /* because emitting event pre-exit could result in a new main loop started
+     * while waiting for a trigger, there's a possibility of reentrancy that we
+     * need to handle/avoid */
+    if (in_pre_exit)
+        return TRUE;
+    in_pre_exit = TRUE;
+
+    /* FALSE means it wasn't aborted */
+    if (!donna_app_emit_event ((DonnaApp *) donna, "pre-exit", TRUE,
+                NULL, NULL, NULL, NULL))
+    {
+        gtk_widget_hide (window);
+        gtk_main_quit ();
+    }
+
+    in_pre_exit = FALSE;
     return TRUE;
 }
 
