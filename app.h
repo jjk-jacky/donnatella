@@ -42,6 +42,12 @@ struct _DonnaAppInterface
     /* signals */
     void                (*treeview_loaded)          (DonnaApp       *app,
                                                      DonnaTreeView  *tree);
+    gboolean            (*event)                    (DonnaApp       *app,
+                                                     const gchar    *event,
+                                                     const gchar    *source,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data);
 
     /* virtual table */
     void                (*ensure_focused)           (DonnaApp       *app);
@@ -85,8 +91,8 @@ struct _DonnaAppInterface
                                                      GError        **error);
     gboolean            (*emit_event)               (DonnaApp       *app,
                                                      const gchar    *event,
-                                                     const gchar    *fmt_source,
-                                                     va_list         va_args,
+                                                     gboolean        is_confirm,
+                                                     const gchar    *source,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data);
@@ -179,6 +185,7 @@ gboolean            donna_app_trigger_fl            (DonnaApp       *app,
                                                      GError        **error);
 gboolean            donna_app_emit_event            (DonnaApp       *app,
                                                      const gchar    *event,
+                                                     gboolean        is_confirm,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data,

@@ -211,8 +211,8 @@ static gboolean         donna_donna_trigger_fl      (DonnaApp       *app,
                                                      GError        **error);
 static gboolean         donna_donna_emit_event      (DonnaApp       *app,
                                                      const gchar    *event,
-                                                     const gchar    *fmt_source,
-                                                     va_list         va_args,
+                                                     gboolean        is_confirm,
+                                                     const gchar    *source,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data);
@@ -1473,11 +1473,12 @@ trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
 }
 
 static gboolean
-donna_donna_trigger_fl (DonnaApp     *app,
-                        const gchar  *fl,
-                        GPtrArray    *intrefs,
-                        gboolean      blocking,
-                        GError      **error)
+trigger_fl (DonnaApp    *app,
+            const gchar *fl,
+            GPtrArray   *intrefs,
+            gboolean     blocking,
+            gboolean    *ret,
+            GError     **error)
 {
     DonnaNode *node;
     DonnaTask *task;
@@ -1511,16 +1512,51 @@ donna_donna_trigger_fl (DonnaApp     *app,
     if (blocking)
     {
         struct fir fir = { TRUE, app, intrefs };
-        gboolean ret;
+        gboolean r;
 
         donna_task_wait_for_it (task, NULL, NULL);
-        ret = donna_task_get_state (task) == DONNA_TASK_DONE;
+        r = donna_task_get_state (task) == DONNA_TASK_DONE;
+        /* ret: for events, there can be a return value that means TRUE, i.e.
+         * stop the event emission. */
+        if (r && ret)
+        {
+            const GValue *v;
+
+            v = donna_task_get_return_value (task);
+            if (G_VALUE_TYPE (v) == G_TYPE_INT)
+                *ret = g_value_get_int (v) != 0;
+            else if (G_VALUE_TYPE (v) == G_TYPE_STRING)
+            {
+                const gchar *s = g_value_get_string (v);
+                gchar *e = NULL;
+                gint64 i;
+
+                i = g_ascii_strtoll (s, &e, 10);
+                if (!e || *e != '\0')
+                    /* if the string wasn't just a number, we "ignore" it */
+                    *ret = FALSE;
+                else
+                    *ret = i != 0;
+            }
+            else
+                *ret = FALSE;
+        }
         g_object_unref (task);
         free_fir (&fir);
-        return ret;
+        return r;
     }
 
     return TRUE;
+}
+
+static gboolean
+donna_donna_trigger_fl (DonnaApp     *app,
+                        const gchar  *fl,
+                        GPtrArray    *intrefs,
+                        gboolean      blocking,
+                        GError      **error)
+{
+    return trigger_fl (app, fl, intrefs, blocking, NULL, error);
 }
 
 static gint
@@ -1529,9 +1565,10 @@ arr_str_cmp (gconstpointer a, gconstpointer b)
     return strcmp (* (const gchar **) a, * (const gchar **) b);
 }
 
-static void
+static gboolean
 trigger_event (DonnaDonna   *donna,
                const gchar  *event,
+               gboolean      is_confirm,
                const gchar  *source,
                const gchar  *conv_flags,
                conv_flag_fn  conv_fn,
@@ -1542,7 +1579,7 @@ trigger_event (DonnaDonna   *donna,
 
     if (!donna_config_list_options (donna->priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_OPTION, "%s/events/%s", source, event))
-        return;
+        return FALSE;
 
     g_ptr_array_sort (arr, arr_str_cmp);
     for (i = 0; i < arr->len; ++i)
@@ -1554,10 +1591,12 @@ trigger_event (DonnaDonna   *donna,
         if (donna_config_get_string (donna->priv->config, &fl, "%s/events/%s/%s",
                     source, event, arr->pdata[i]))
         {
+            gboolean ret;
+
             fl = donna_donna_parse_fl ((DonnaApp *) donna, fl,
                     conv_flags, conv_fn, conv_data, &intrefs);
-            if (!donna_donna_trigger_fl ((DonnaApp *) donna, fl, intrefs,
-                        FALSE, &err))
+            if (!trigger_fl ((DonnaApp *) donna, fl, intrefs,
+                        is_confirm, &ret, &err))
             {
                 donna_app_show_error ((DonnaApp *) donna, err,
                         "Event '%s': Failed to trigger '%s'%s%s%s",
@@ -1567,36 +1606,43 @@ trigger_event (DonnaDonna   *donna,
                         (*source != '\0') ? "'" : "");
                 g_clear_error (&err);
             }
+            else if (is_confirm && ret)
+            {
+                g_free (fl);
+                g_ptr_array_unref (arr);
+                return TRUE;
+            }
             g_free (fl);
         }
     }
 
     g_ptr_array_unref (arr);
+    return FALSE;
 }
 
 static gboolean
 donna_donna_emit_event (DonnaApp        *app,
                         const gchar     *event,
-                        const gchar     *fmt_source,
-                        va_list          va_args,
+                        gboolean         is_confirm,
+                        const gchar     *source,
                         const gchar     *conv_flags,
                         conv_flag_fn     conv_fn,
                         gpointer         conv_data)
 {
     g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
 
-    if (fmt_source)
+    if (source)
     {
-        gchar *s = g_strdup_vprintf (fmt_source, va_args);
-        trigger_event ((DonnaDonna *) app, event, s,
+        gboolean ret;
+
+        ret = trigger_event ((DonnaDonna *) app, event, is_confirm, source,
                 conv_flags, conv_fn, conv_data);
-        g_free (s);
+        if (is_confirm && ret)
+            return TRUE;
     }
 
-    trigger_event ((DonnaDonna *) app, event, "",
+    return trigger_event ((DonnaDonna *) app, event, is_confirm, "",
             conv_flags, conv_fn, conv_data);
-
-    return TRUE;
 }
 
 static gchar *
@@ -3587,7 +3633,7 @@ main (int argc, char *argv[])
     if (G_UNLIKELY (rc != 0))
         return rc;
 
-    donna_app_emit_event ((DonnaApp *) donna, "start", NULL, NULL, NULL, NULL);
+    donna_app_emit_event ((DonnaApp *) donna, "start", FALSE, NULL, NULL, NULL, NULL);
 
     /* in the off-chance something before already led to closing the app (could
      * happen e.g. if something had started its own mainloop (e.g. in event
@@ -3597,7 +3643,7 @@ main (int argc, char *argv[])
         gtk_main ();
 
     donna->priv->exiting = TRUE;
-    donna_app_emit_event ((DonnaApp *) donna, "exit", NULL, NULL, NULL, NULL);
+    donna_app_emit_event ((DonnaApp *) donna, "exit", FALSE, NULL, NULL, NULL, NULL);
 
     /* let's make sure all (internal) tasks (e.g. triggered from event "exit")
      * are done before we die */

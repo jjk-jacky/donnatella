@@ -3,14 +3,22 @@
 #include "app.h"
 #include "provider.h"
 #include "macros.h"
+#include "closures.h"
 
 enum
 {
     TREEVIEW_LOADED,
+    EVENT,
     NB_SIGNALS
 };
 
 static guint donna_app_signals[NB_SIGNALS] = { 0 };
+static GSList *event_confirm = NULL;
+
+static gboolean event_accumulator (GSignalInvocationHint    *ihint,
+                                   GValue                   *value_accu,
+                                   const GValue             *value_handler,
+                                   gpointer                  data);
 
 static void
 donna_app_default_init (DonnaAppInterface *interface)
@@ -26,6 +34,21 @@ donna_app_default_init (DonnaAppInterface *interface)
             G_TYPE_NONE,
             1,
             DONNA_TYPE_TREE_VIEW);
+    donna_app_signals[EVENT] =
+        g_signal_new ("event",
+            DONNA_TYPE_APP,
+            G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+            G_STRUCT_OFFSET (DonnaAppInterface, event),
+            event_accumulator,
+            &event_confirm,
+            g_cclosure_user_marshal_BOOLEAN__STRING_STRING_STRING_POINTER_POINTER,
+            G_TYPE_BOOLEAN,
+            5,
+            G_TYPE_STRING,
+            G_TYPE_STRING,
+            G_TYPE_STRING,
+            G_TYPE_POINTER,
+            G_TYPE_POINTER);
 
     g_object_interface_install_property (interface,
             g_param_spec_object ("active-list", "active-list",
@@ -42,6 +65,34 @@ donna_app_default_init (DonnaAppInterface *interface)
 G_DEFINE_INTERFACE (DonnaApp, donna_app, G_TYPE_OBJECT)
 
 /* signals */
+
+static gboolean
+event_accumulator (GSignalInvocationHint    *ihint,
+                   GValue                   *value_accu,
+                   const GValue             *value_handler,
+                   gpointer                  data)
+{
+    GSList *l = * (GSList **) data;
+    gboolean is_confirm = FALSE;
+
+    for ( ; l; l = l->next)
+        if ((GQuark) GPOINTER_TO_UINT (l->data) == ihint->detail)
+        {
+            is_confirm = TRUE;
+            break;
+        }
+
+    if (!is_confirm)
+        return TRUE;
+
+    if (g_value_get_boolean (value_handler))
+    {
+        g_value_set_boolean (value_accu, TRUE);
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 void
 donna_app_treeview_loaded (DonnaApp       *app,
@@ -521,6 +572,7 @@ donna_app_trigger_fl (DonnaApp       *app,
 gboolean
 donna_app_emit_event (DonnaApp       *app,
                       const gchar    *event,
+                      gboolean        is_confirm,
                       const gchar    *conv_flags,
                       conv_flag_fn    conv_fn,
                       gpointer        conv_data,
@@ -528,7 +580,9 @@ donna_app_emit_event (DonnaApp       *app,
                       ...)
 {
     DonnaAppInterface *interface;
-    va_list va_args;
+    GQuark q;
+    GSList *l;
+    gchar *source;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
@@ -539,10 +593,46 @@ donna_app_emit_event (DonnaApp       *app,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->emit_event != NULL, NULL);
 
-    va_start (va_args, fmt_source);
-    ret = (*interface->emit_event) (app, event, fmt_source, va_args,
-            conv_flags, conv_fn, conv_data);
-    va_end (va_args);
+    if (is_confirm)
+    {
+        gboolean in_list = FALSE;
+
+        q = g_quark_from_string (event);
+        for (l = event_confirm; l; l = l->next)
+        {
+            if ((GQuark) GPOINTER_TO_UINT (l->data) == q)
+            {
+                in_list = TRUE;
+                break;
+            }
+        }
+
+        if (!in_list)
+            event_confirm = g_slist_prepend (event_confirm, GUINT_TO_POINTER (q));
+    }
+
+    if (fmt_source)
+    {
+        va_list va_args;
+        va_start (va_args, fmt_source);
+        source = g_strdup_vprintf (fmt_source, va_args);
+        va_end (va_args);
+    }
+    else
+        source = NULL;
+
+    g_signal_emit (app, donna_app_signals[EVENT],
+            g_quark_from_string (event),
+            event, source, conv_flags, conv_fn, conv_data,
+            &ret);
+
+    if (!is_confirm || !ret)
+        ret = (*interface->emit_event) (app, event, is_confirm, source,
+                conv_flags, conv_fn, conv_data);
+
+    if (is_confirm)
+        event_confirm = g_slist_remove (event_confirm, GUINT_TO_POINTER (q));
+    g_free (source);
     return ret;
 }
 
