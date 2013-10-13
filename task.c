@@ -1011,13 +1011,6 @@ donna_task_set_timeout (DonnaTask       *task,
     return TRUE;
 }
 
-static gboolean
-dispatch (GSource *source, GSourceFunc callback, gpointer data)
-{
-    callback (data);
-    return FALSE;
-}
-
 /**
  * donna_task_wait_for_it:
  * @task: Task to wait for execution to be over
@@ -1121,22 +1114,9 @@ donna_task_wait_for_it (DonnaTask          *task,
     if (g_main_context_is_owner (g_main_context_default ()))
     {
         GMainLoop *loop;
-        GSource *source;
-        GSourceFuncs funcs = {
-            .prepare = NULL,
-            .check = NULL,
-            .dispatch = dispatch,
-            .finalize = NULL
-        };
 
         loop = g_main_loop_new (NULL, TRUE);
-
-        source = g_source_new (&funcs, sizeof (GSource));
-        g_source_add_unix_fd (source, fd_wait, G_IO_IN);
-        g_source_set_callback (source, (GSourceFunc) g_main_loop_quit, loop, NULL);
-        g_source_attach (source, NULL);
-        g_source_unref (source);
-
+        donna_fd_add_source (fd_wait, (GSourceFunc) g_main_loop_quit, loop, NULL);
         g_main_loop_run (loop);
     }
     else

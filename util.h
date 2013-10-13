@@ -20,6 +20,14 @@ GValue *        duplicate_gvalue                (const GValue       *src);
 void            donna_g_string_append_quoted    (GString            *str,
                                                  const gchar        *s);
 inline void     donna_g_object_unref            (gpointer            object);
+GSource *       donna_fd_source_new             (gint                fd,
+                                                 GSourceFunc         callback,
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
+guint           donna_fd_add_source             (gint                fd,
+                                                 GSourceFunc         callback,
+                                                 gpointer            data,
+                                                 GDestroyNotify      destroy);
 
 G_END_DECLS
 

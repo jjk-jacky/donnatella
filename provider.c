@@ -2,6 +2,7 @@
 #include <glib-object.h>
 #include "provider.h"
 #include "node.h"
+#include "util.h"
 #include "closures.h"
 #include "macros.h"
 
@@ -210,13 +211,6 @@ donna_provider_get_flags (DonnaProvider *provider)
     return (*interface->get_flags) (provider);
 }
 
-static gboolean
-dispatch (GSource *source, GSourceFunc callback, gpointer data)
-{
-    callback (data);
-    return FALSE;
-}
-
 DonnaNode *
 donna_provider_get_node (DonnaProvider    *provider,
                          const gchar      *location,
@@ -257,13 +251,6 @@ donna_provider_get_node (DonnaProvider    *provider,
     if (g_main_context_is_owner (g_main_context_default ()))
     {
         GMainLoop *loop;
-        GSource *source;
-        GSourceFuncs funcs = {
-            .prepare = NULL,
-            .check = NULL,
-            .dispatch = dispatch,
-            .finalize = NULL
-        };
         gint fd;
 
         fd = donna_task_get_wait_fd (task);
@@ -279,13 +266,7 @@ donna_provider_get_node (DonnaProvider    *provider,
         }
 
         loop = g_main_loop_new (NULL, TRUE);
-
-        source = g_source_new (&funcs, sizeof (GSource));
-        g_source_add_unix_fd (source, fd, G_IO_IN);
-        g_source_set_callback (source, (GSourceFunc) g_main_loop_quit, loop, NULL);
-        g_source_attach (source, NULL);
-        g_source_unref (source);
-
+        donna_fd_add_source (fd, (GSourceFunc) g_main_loop_quit, loop, NULL);
         donna_app_run_task (app, task);
         g_main_loop_run (loop);
     }

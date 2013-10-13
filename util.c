@@ -293,3 +293,51 @@ donna_g_object_unref (gpointer object)
     if (object)
         g_object_unref (object);
 }
+
+static gboolean
+dispatch (GSource *source, GSourceFunc callback, gpointer data)
+{
+    callback (data);
+    return FALSE;
+}
+
+static GSourceFuncs funcs = {
+    .prepare = NULL,
+    .check = NULL,
+    .dispatch = dispatch,
+    .finalize = NULL
+};
+
+GSource *
+donna_fd_source_new (gint                fd,
+                     GSourceFunc         callback,
+                     gpointer            data,
+                     GDestroyNotify      destroy)
+{
+    GSource *source;
+
+    g_return_val_if_fail (fd >= 0, NULL);
+    g_return_val_if_fail (callback != NULL, NULL);
+
+    source = g_source_new (&funcs, sizeof (GSource));
+    g_source_add_unix_fd (source, fd, G_IO_IN);
+    g_source_set_callback (source, callback, data, destroy);
+
+    return source;
+}
+
+guint
+donna_fd_add_source (gint                fd,
+                     GSourceFunc         callback,
+                     gpointer            data,
+                     GDestroyNotify      destroy)
+{
+    GSource *source;
+    guint id;
+
+    source = donna_fd_source_new (fd, callback, data, destroy);
+    id = g_source_attach (source, NULL);
+    g_source_unref (source);
+
+    return id;
+}
