@@ -978,6 +978,32 @@ cmd_tasks_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tasks_cancel_all (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    donna_task_manager_cancel_all (donna_app_get_task_manager (app));
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tasks_pre_exit (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    gboolean always_confirm = GPOINTER_TO_INT (args[0]); /* opt */
+
+    GValue *value;
+    gboolean ret;
+
+    ret = donna_task_manager_pre_exit (donna_app_get_task_manager (app),
+            always_confirm);
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, (ret) ? 1 : 0);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2119,6 +2145,15 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     add_command (tasks_cancel, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    add_command (tasks_cancel_all, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (tasks_pre_exit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;

@@ -6,6 +6,7 @@
 #include "node.h"
 #include "task.h"
 #include "statusprovider.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -75,6 +76,8 @@ struct _DonnaProviderTaskPrivate
     /* statusbar */
     GArray      *statuses;
     guint        last_status_id;
+    /* cancel all tasks in exit? */
+    gboolean     cancel_all_in_exit;
 };
 
 static void             provider_task_get_property  (GObject            *object,
@@ -127,6 +130,22 @@ static void             provider_task_render        (DonnaStatusProvider    *sp,
                                                      guint                   id,
                                                      guint                   index,
                                                      GtkCellRenderer        *renderer);
+
+static gboolean         pre_exit_cb                 (DonnaApp               *app,
+                                                     const gchar            *event,
+                                                     const gchar            *source,
+                                                     const gchar            *conv_flags,
+                                                     conv_flag_fn            conv_fn,
+                                                     gpointer                conv_data,
+                                                     DonnaProviderTask      *tm);
+static void             exit_cb                     (DonnaApp               *app,
+                                                     const gchar            *event,
+                                                     const gchar            *source,
+                                                     const gchar            *conv_flags,
+                                                     conv_flag_fn            conv_fn,
+                                                     gpointer                conv_data,
+                                                     DonnaProviderTask      *tm);
+
 
 
 /* internal -- from task.c */
@@ -236,7 +255,17 @@ provider_task_set_property (GObject        *object,
 {
     if (prop_id == PROP_APP)
     {
-        ((DonnaProviderTask *) object)->priv->app = g_value_dup_object (value);
+        DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) object)->priv;
+
+        if (G_UNLIKELY (priv->app))
+        {
+            g_signal_handlers_disconnect_by_func (priv->app, pre_exit_cb, object);
+            g_signal_handlers_disconnect_by_func (priv->app, exit_cb, object);
+            g_object_unref (priv->app);
+        }
+        priv->app = g_value_dup_object (value);
+        g_signal_connect (priv->app, "event::pre-exit", (GCallback) pre_exit_cb, object);
+        g_signal_connect (priv->app, "event::exit", (GCallback) exit_cb, object);
         G_OBJECT_CLASS (donna_provider_task_parent_class)->set_property (
                 object, prop_id, value, pspec);
     }
@@ -2283,4 +2312,195 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
     g_object_unref (taskui);
 
     return TRUE;
+}
+
+void
+donna_task_manager_cancel_all (DonnaProviderTask      *tm)
+{
+    DonnaProviderTaskPrivate *priv;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    priv = tm->priv;
+
+    lock_manager (tm, TM_BUSY_READ);
+    for (i = 0; i < priv->tasks->len; ++i)
+    {
+        struct task *t = &g_array_index (priv->tasks, struct task, i);
+        if (!(donna_task_get_state (t->task) & DONNA_TASK_POST_RUN))
+            donna_task_cancel (t->task);
+    }
+    unlock_manager (tm, TM_BUSY_READ);
+}
+
+gboolean
+donna_task_manager_pre_exit (DonnaProviderTask      *tm,
+                             gboolean                always_confirm)
+{
+    DonnaProviderTaskPrivate *priv;
+    gboolean busy = FALSE;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
+    priv = tm->priv;
+
+    lock_manager (tm, TM_BUSY_READ);
+    for (i = 0; i < priv->tasks->len; ++i)
+    {
+        struct task *t = &g_array_index (priv->tasks, struct task, i);
+        if (!(donna_task_get_state (t->task) & DONNA_TASK_POST_RUN))
+        {
+            busy = TRUE;
+            break;
+        }
+    }
+    unlock_manager (tm, TM_BUSY_READ);
+
+    if (busy)
+    {
+        if (donna_app_ask (priv->app, "Confirmation",
+                    "Are you sure you want to cancel all pending tasks and exit?",
+                    "application-exit", "Yes, cancel tasks & exit",
+                    NULL, "No, don't exit",
+                    NULL) != 1)
+            return TRUE;
+        priv->cancel_all_in_exit = TRUE;
+    }
+    else if (always_confirm && donna_app_ask (priv->app, "Confirmation",
+                    "Are you sure you want to exit ?",
+                    "application-exit", "Yes, exit",
+                    NULL, "No, don't exit",
+                    NULL) != 1)
+            return TRUE;
+
+    return FALSE;
+}
+
+static gboolean
+pre_exit_cb (DonnaApp               *app,
+             const gchar            *event,
+             const gchar            *source,
+             const gchar            *conv_flags,
+             conv_flag_fn            conv_fn,
+             gpointer                conv_data,
+             DonnaProviderTask      *tm)
+{
+    tm->priv->cancel_all_in_exit = FALSE;
+    return FALSE;
+}
+
+struct refresh_exit_waiting
+{
+    DonnaProviderTask *tm;
+    GMainLoop *loop;
+};
+
+static void refresh_exit_waiting (struct refresh_exit_waiting *rew);
+
+static GSource *
+real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
+{
+    DonnaProviderTask *tm = rew->tm;
+    DonnaProviderTaskPrivate *priv = tm->priv;
+    GSource *source = NULL;
+    guint i;
+
+    lock_manager (tm, TM_BUSY_READ);
+    for (i = 0; i < priv->tasks->len; ++i)
+    {
+        struct task *t = &g_array_index (priv->tasks, struct task, i);
+        DonnaTaskState state = donna_task_get_state (t->task);
+
+        /* are there any tasks still "pending" ? */
+        if (!(state & DONNA_TASK_POST_RUN))
+        {
+            /* user asked to cancel them */
+            if (priv->cancel_all_in_exit)
+                donna_task_cancel (t->task);
+            /* invalid state, i.e. they need to be either canceled or
+             * started/resumed; else they'll never go away */
+            else if (state & (DONNA_TASK_STOPPED | DONNA_TASK_PAUSING | DONNA_TASK_PAUSED))
+            {
+                gchar *desc;
+                gchar *msg;
+                gint r = 0;
+
+                desc = donna_task_get_desc (t->task);
+                msg = g_strdup_printf ("The task '%s' needs to be either %s or canceled.",
+                        desc, (state & DONNA_TASK_STOPPED) ? "started" : "resumed");
+                while (r == 0)
+                    r = donna_app_ask (priv->app, "Exiting Donnatella", msg,
+                            NULL, (state & DONNA_TASK_STOPPED) ? "Start task" : "Resume task",
+                            NULL, "Cancel task",
+                            NULL);
+                g_free (desc);
+                g_free (msg);
+
+                if (r == 1)
+                {
+                    if (state & DONNA_TASK_STOPPED)
+                        donna_task_set_autostart (t->task, TRUE);
+                    else
+                        donna_task_resume (t->task);
+                }
+                else /* r == 2 */
+                    donna_task_cancel (t->task);
+            }
+
+            /* refresh the state in case a task has already been cancelled (e.g.
+             * from STOPPED to CANCELLED is immediate) */
+            if (!(donna_task_get_state (t->task) & DONNA_TASK_POST_RUN))
+            {
+                if (!source)
+                    source = donna_fd_source_new (donna_task_get_wait_fd (t->task),
+                            (GSourceFunc) refresh_exit_waiting, rew, NULL);
+                else
+                    g_source_add_unix_fd (source, donna_task_get_wait_fd (t->task),
+                            G_IO_IN);
+            }
+        }
+    }
+    unlock_manager (tm, TM_BUSY_READ);
+
+    return source;
+}
+
+static void
+refresh_exit_waiting (struct refresh_exit_waiting *rew)
+{
+    GSource *source;
+
+    source = real_refresh_exit_waiting (rew);
+    if (source)
+    {
+        g_source_attach (source, NULL);
+        g_source_unref (source);
+    }
+    else
+        g_main_loop_quit (rew->loop);
+}
+
+static void
+exit_cb (DonnaApp               *app,
+         const gchar            *event,
+         const gchar            *event_source,
+         const gchar            *conv_flags,
+         conv_flag_fn            conv_fn,
+         gpointer                conv_data,
+         DonnaProviderTask      *tm)
+{
+    DonnaProviderTaskPrivate *priv = tm->priv;
+    struct refresh_exit_waiting rew;
+    GSource *source;
+
+    rew.tm = tm;
+    source = real_refresh_exit_waiting (&rew);
+
+    if (source)
+    {
+        rew.loop = g_main_loop_new (NULL, TRUE);
+        g_source_attach (source, NULL);
+        g_source_unref (source);
+        g_main_loop_run (rew.loop);
+    }
 }

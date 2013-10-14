@@ -65,6 +65,9 @@ gboolean    donna_task_manager_cancel           (DonnaTaskManager       *tm,
 gboolean    donna_task_manager_show_ui          (DonnaTaskManager       *tm,
                                                  DonnaNode              *node,
                                                  GError                **error);
+void        donna_task_manager_cancel_all       (DonnaProviderTask      *tm);
+gboolean    donna_task_manager_pre_exit         (DonnaProviderTask      *tm,
+                                                 gboolean                always_confirm);
 
 G_END_DECLS
 
