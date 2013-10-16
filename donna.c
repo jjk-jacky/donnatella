@@ -181,7 +181,7 @@ static DonnaFilter *    donna_donna_get_filter      (DonnaApp       *app,
                                                      const gchar    *filter);
 static void             donna_donna_run_task        (DonnaApp       *app,
                                                      DonnaTask      *task);
-static DonnaTaskManager*donna_donna_get_task_manager(DonnaApp       *app);
+static DonnaTaskManager*donna_donna_peek_task_manager(DonnaApp       *app);
 static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
                                                      const gchar    *name);
 static gchar *          donna_donna_get_current_dirname (
@@ -256,7 +256,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_columntype       = donna_donna_get_columntype;
     interface->get_filter           = donna_donna_get_filter;
     interface->run_task             = donna_donna_run_task;
-    interface->get_task_manager     = donna_donna_get_task_manager;
+    interface->peek_task_manager    = donna_donna_peek_task_manager;
     interface->get_treeview         = donna_donna_get_treeview;
     interface->get_current_dirname  = donna_donna_get_current_dirname;
     interface->get_conf_filename    = donna_donna_get_conf_filename;
@@ -1183,7 +1183,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
 }
 
 static DonnaTaskManager *
-donna_donna_get_task_manager (DonnaApp *app)
+donna_donna_peek_task_manager (DonnaApp *app)
 {
     DonnaDonnaPrivate *priv;
 

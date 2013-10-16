@@ -372,7 +372,7 @@ donna_app_run_task_and_wait (DonnaApp       *app,
 }
 
 DonnaTaskManager *
-donna_app_get_task_manager (DonnaApp       *app)
+donna_app_peek_task_manager (DonnaApp       *app)
 {
     DonnaAppInterface *interface;
 
@@ -381,9 +381,9 @@ donna_app_get_task_manager (DonnaApp       *app)
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_task_manager != NULL, NULL);
+    g_return_val_if_fail (interface->peek_task_manager != NULL, NULL);
 
-    return (*interface->get_task_manager) (app);
+    return (*interface->peek_task_manager) (app);
 }
 
 DonnaTreeView *

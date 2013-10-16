@@ -63,7 +63,7 @@ struct _DonnaAppInterface
                                                      const gchar    *filter);
     void                (*run_task)                 (DonnaApp       *app,
                                                      DonnaTask      *task);
-    DonnaTaskManager *  (*get_task_manager)         (DonnaApp       *app);
+    DonnaTaskManager *  (*peek_task_manager)        (DonnaApp       *app);
     DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
                                                      const gchar    *name);
     gchar *             (*get_current_dirname)      (DonnaApp       *app);
@@ -155,7 +155,7 @@ gboolean            donna_app_run_task_and_wait     (DonnaApp       *app,
                                                      DonnaTask      *task,
                                                      DonnaTask      *current_task,
                                                      GError        **error);
-DonnaTaskManager *  donna_app_get_task_manager      (DonnaApp       *app);
+DonnaTaskManager *  donna_app_peek_task_manager     (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
                                                      const gchar    *name);
 DonnaNode *         donna_app_get_current_location  (DonnaApp       *app,

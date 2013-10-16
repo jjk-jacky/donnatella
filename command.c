@@ -838,7 +838,7 @@ cmd_task_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaNode *node = args[0];
 
-    if (!donna_task_manager_cancel (donna_app_get_task_manager (app), node, &err))
+    if (!donna_task_manager_cancel (donna_app_peek_task_manager (app), node, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -883,7 +883,7 @@ cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_task_manager_set_state (donna_app_get_task_manager (app), node,
+    if (!donna_task_manager_set_state (donna_app_peek_task_manager (app), node,
                 states[c], &err))
     {
         donna_task_take_error (task, err);
@@ -899,7 +899,7 @@ cmd_task_show_ui (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaNode *node = args[0];
 
-    if (!donna_task_manager_show_ui (donna_app_get_task_manager (app), node, &err))
+    if (!donna_task_manager_show_ui (donna_app_peek_task_manager (app), node, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -964,7 +964,7 @@ cmd_tasks_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTaskManager *tm;
     guint i;
 
-    tm = donna_app_get_task_manager (app);
+    tm = donna_app_peek_task_manager (app);
     for (i = 0; i < nodes->len; ++i)
     {
         if (!donna_task_manager_cancel (tm, nodes->pdata[i], &err))
@@ -980,7 +980,7 @@ cmd_tasks_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
 static DonnaTaskState
 cmd_tasks_cancel_all (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    donna_task_manager_cancel_all (donna_app_get_task_manager (app));
+    donna_task_manager_cancel_all (donna_app_peek_task_manager (app));
     return DONNA_TASK_DONE;
 }
 
@@ -992,7 +992,7 @@ cmd_tasks_pre_exit (DonnaTask *task, DonnaApp *app, gpointer *args)
     GValue *value;
     gboolean ret;
 
-    ret = donna_task_manager_pre_exit (donna_app_get_task_manager (app),
+    ret = donna_task_manager_pre_exit (donna_app_peek_task_manager (app),
             always_confirm);
 
     value = donna_task_grab_return_value (task);
@@ -1011,7 +1011,7 @@ cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
     gboolean switch_on = GPOINTER_TO_INT (args[1]); /* opt */
     gboolean fail_on_failure = GPOINTER_TO_INT (args[2]); /* opt */
 
-    if (!donna_task_manager_switch_tasks (donna_app_get_task_manager (app), nodes,
+    if (!donna_task_manager_switch_tasks (donna_app_peek_task_manager (app), nodes,
                 switch_on, fail_on_failure, &err))
     {
         donna_task_take_error (task, err);
