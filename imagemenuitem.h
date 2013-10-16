@@ -22,19 +22,25 @@ GType   donna_image_menu_item_get_type          (void) G_GNUC_CONST;
 struct _DonnaImageMenuItem
 {
     /*< private >*/
-    GtkImageMenuItem              item;
+    GtkMenuItem                   item;
     DonnaImageMenuItemPrivate    *priv;
 };
 
 struct _DonnaImageMenuItemClass
 {
-    GtkImageMenuItemClass parent_class;
+    GtkMenuItemClass parent_class;
 
     void        (*load_submenu)                 (DonnaImageMenuItem     *item,
                                                  gboolean                from_click);
 };
 
 GtkWidget * donna_image_menu_item_new_with_label    (const gchar        *label);
+void        donna_image_menu_item_set_image         (DonnaImageMenuItem *item,
+                                                     GtkWidget          *image);
+GtkWidget * donna_image_menu_item_get_image         (DonnaImageMenuItem *item);
+void        donna_image_menu_item_set_image_selected(DonnaImageMenuItem *item,
+                                                     GtkWidget          *image);
+GtkWidget * donna_image_menu_item_get_image_selected(DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_is_combined   (DonnaImageMenuItem *item,
                                                      gboolean            combined);
 gboolean    donna_image_menu_item_get_is_combined   (DonnaImageMenuItem *item);
@@ -46,9 +52,6 @@ gboolean    donna_image_menu_item_get_is_combined_sensitive (
 void        donna_image_menu_item_set_label_bold    (DonnaImageMenuItem *item,
                                                      gboolean            is_bold);
 gboolean    donna_image_menu_item_get_label_bold    (DonnaImageMenuItem *item);
-void        donna_image_menu_item_set_image_selected(DonnaImageMenuItem *item,
-                                                     GtkWidget          *image);
-GtkWidget * donna_image_menu_item_get_image_selected(DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_loading_submenu (
                                                      DonnaImageMenuItem   *item,
                                                      const gchar          *label);

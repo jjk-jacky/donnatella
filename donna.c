@@ -2033,7 +2033,7 @@ submenu_get_children_cb (DonnaTask           *task,
 
         error = donna_task_get_error (task);
         menu = gtk_menu_new ();
-        w = gtk_image_menu_item_new_with_label (
+        w = donna_image_menu_item_new_with_label (
                 (error) ? error->message : "Failed to load children");
         gtk_widget_set_sensitive (w, FALSE);
         gtk_menu_attach ((GtkMenu *) menu, w, 0, 1, 0, 1);
@@ -2491,7 +2491,7 @@ load_menu (struct menu_click *mc)
                 }
             }
 
-            gtk_image_menu_item_set_image ((GtkImageMenuItem *) item, image);
+            donna_image_menu_item_set_image ((DonnaImageMenuItem *) item, image);
         }
 
         /* we use button-release because that's what's handled by

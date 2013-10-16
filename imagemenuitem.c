@@ -1,11 +1,14 @@
 
 #include <gtk/gtk.h>
 #include "imagemenuitem.h"
+#include "macros.h"
 
 enum
 {
     PROP_0,
 
+    PROP_IMAGE,
+    PROP_IMAGE_SELECTED,
     PROP_IS_COMBINED,
     PROP_IS_COMBINED_SENSITIVE,
     PROP_IS_LABEL_BOLD,
@@ -21,89 +24,172 @@ enum
 
 struct _DonnaImageMenuItemPrivate
 {
-    gboolean is_combined;
-    gboolean is_combined_sensitive;
-    gboolean is_label_bold;
-    gint item_width;
-    guint sid_button_release;
-    guint sid_parent_button_release;
-    guint sid_timeout;
-    GtkWidget *image_org;
-    GtkWidget *image_sel;
-    guint sid_notify_image;
+    GtkWidget   *image;
+    GtkWidget   *image_org;
+    GtkWidget   *image_sel;
+    gboolean     is_combined;
+    gboolean     is_combined_sensitive;
+    gboolean     is_label_bold;
+    gint         toggle_size;
+
+    gint         item_width;
+    guint        sid_button_release;
+    guint        sid_parent_button_release;
+    guint        sid_timeout;
 };
 
 static GParamSpec * donna_image_menu_item_props[NB_PROPS] = { NULL, };
 static guint        donna_image_menu_item_signals[NB_SIGNALS] = { 0, };
 
-static void menu_item_notify_image_cb           (GObject                *object,
-                                                 GParamSpec             *pspec,
-                                                 DonnaImageMenuItem     *item);
+
 static gboolean menu_item_release_cb            (GtkWidget             *widget,
                                                  GdkEventButton        *event,
                                                  DonnaImageMenuItem    *item);
 
-static void donna_image_menu_item_get_property  (GObject            *object,
-                                                 guint               prop_id,
-                                                 GValue             *value,
-                                                 GParamSpec         *pspec);
-static void donna_image_menu_item_set_property  (GObject            *object,
-                                                 guint               prop_id,
-                                                 const GValue       *value,
-                                                 GParamSpec         *pspec);
-static void donna_image_menu_item_finalize      (GObject            *object);
-static void donna_image_menu_item_parent_set    (GtkWidget          *widget,
-                                                 GtkWidget          *old_parent);
-static void donna_image_menu_item_select        (GtkMenuItem        *menuitem);
-static void donna_image_menu_item_deselect      (GtkMenuItem        *menuitem);
-static gboolean donna_image_menu_item_draw      (GtkWidget          *widget,
-                                                 cairo_t            *cr);
 
+static void donna_image_menu_item_destroy               (GtkWidget      *widget);
+static void donna_image_menu_item_get_preferred_width   (GtkWidget      *widget,
+                                                         gint           *minimum,
+                                                         gint           *natural);
+static void donna_image_menu_item_get_preferred_height  (GtkWidget      *widget,
+                                                         gint           *minimum,
+                                                         gint           *natural);
+static void donna_image_menu_item_get_preferred_height_for_width (
+                                                         GtkWidget      *widget,
+                                                         gint            width,
+                                                         gint           *minimum,
+                                                         gint           *natural);
+static void donna_image_menu_item_size_allocate         (GtkWidget      *widget,
+                                                         GtkAllocation  *allocation);
+static void donna_image_menu_item_map                   (GtkWidget      *widget);
+static void donna_image_menu_item_parent_set            (GtkWidget      *widget,
+                                                         GtkWidget      *old_parent);
+static gboolean donna_image_menu_item_draw              (GtkWidget      *widget,
+                                                         cairo_t        *cr);
+
+static void donna_image_menu_item_toggle_size_request   (GtkMenuItem    *menu_item,
+                                                         gint           *requisition);
+static void donna_image_menu_item_toggle_size_allocate  (GtkMenuItem    *menu_item,
+                                                         gint            allocation);
+static void donna_image_menu_item_select                (GtkMenuItem    *item);
+static void donna_image_menu_item_deselect              (GtkMenuItem    *item);
+
+static void donna_image_menu_item_forall                (GtkContainer   *container,
+                                                         gboolean        include_internals,
+                                                         GtkCallback     callback,
+                                                         gpointer        data);
+static void donna_image_menu_item_remove                (GtkContainer   *container,
+                                                         GtkWidget      *child);
+
+static void donna_image_menu_item_finalize              (GObject        *object);
+static void donna_image_menu_item_set_property          (GObject        *object,
+                                                         guint           prop_id,
+                                                         const GValue   *value,
+                                                         GParamSpec     *pspec);
+static void donna_image_menu_item_get_property          (GObject        *object,
+                                                         guint           prop_id,
+                                                         GValue         *value,
+                                                         GParamSpec     *pspec);
 
 G_DEFINE_TYPE (DonnaImageMenuItem, donna_image_menu_item,
-        GTK_TYPE_IMAGE_MENU_ITEM)
+        GTK_TYPE_MENU_ITEM)
+
 
 static void
 donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
 {
     GObjectClass *o_class;
     GtkWidgetClass *w_class;
+    GtkContainerClass *c_class;
     GtkMenuItemClass *mi_class;
 
     o_class = (GObjectClass *) klass;
-    o_class->get_property   = donna_image_menu_item_get_property;
-    o_class->set_property   = donna_image_menu_item_set_property;
     o_class->finalize       = donna_image_menu_item_finalize;
+    o_class->set_property   = donna_image_menu_item_set_property;
+    o_class->get_property   = donna_image_menu_item_get_property;
 
     w_class = (GtkWidgetClass *) klass;
-    w_class->parent_set     = donna_image_menu_item_parent_set;
-    w_class->draw           = donna_image_menu_item_draw;
+    w_class->destroy                = donna_image_menu_item_destroy;
+    w_class->get_preferred_width    = donna_image_menu_item_get_preferred_width;
+    w_class->get_preferred_height   = donna_image_menu_item_get_preferred_height;
+    w_class->get_preferred_height_for_width = donna_image_menu_item_get_preferred_height_for_width;
+    w_class->size_allocate          = donna_image_menu_item_size_allocate;
+    w_class->map                    = donna_image_menu_item_map;
+    w_class->parent_set             = donna_image_menu_item_parent_set;
+    w_class->draw                   = donna_image_menu_item_draw;
+
+    c_class = (GtkContainerClass *) klass;
+    c_class->forall = donna_image_menu_item_forall;
+    c_class->remove = donna_image_menu_item_remove;
 
     mi_class = (GtkMenuItemClass *) klass;
-    mi_class->select        = donna_image_menu_item_select;
-    mi_class->deselect      = donna_image_menu_item_deselect;
+    mi_class->toggle_size_request   = donna_image_menu_item_toggle_size_request;
+    mi_class->toggle_size_allocate  = donna_image_menu_item_toggle_size_allocate;
+    mi_class->select                = donna_image_menu_item_select;
+    mi_class->deselect              = donna_image_menu_item_deselect;
 
+    /**
+     * DonnaImageMenuItem:image:
+     *
+     * Child widget to appear next to the menu text.
+     */
+    donna_image_menu_item_props[PROP_IMAGE] =
+        g_param_spec_object ("image", "Image widget",
+                "Child widget to appear next to the menu text",
+                GTK_TYPE_WIDGET,
+                G_PARAM_READWRITE);
+    /**
+     * DonnaImageMenuItem:image-selected:
+     *
+     * Child widget to appear next to the menu text when item is selected.
+     */
+    donna_image_menu_item_props[PROP_IMAGE_SELECTED] =
+        g_param_spec_object ("image-selected", "Selected image widget",
+                "Child widget to appear next to the menu text when item is selected",
+                GTK_TYPE_WIDGET,
+                G_PARAM_READWRITE);
+
+    /**
+     * DonnaImageMenuItem:is-combined:
+     *
+     * Whether or not this item is a combined action and submenu
+     */
     donna_image_menu_item_props[PROP_IS_COMBINED] =
         g_param_spec_boolean ("is-combined", "is-combined",
                 "Whether or not this item is a combined action and submenu",
                 FALSE,   /* default */
                 G_PARAM_READWRITE);
 
+    /**
+     * DonnaImageMenuItem:is-combined-sensitive:
+     *
+     * Whether or not the item part of the combne item is sensitive
+     */
     donna_image_menu_item_props[PROP_IS_COMBINED_SENSITIVE] =
         g_param_spec_boolean ("is-combined-sensitive", "is-combined-sensitive",
                 "Whether or not the item part of the combine item is sensitive",
                 TRUE,   /* default */
                 G_PARAM_READWRITE);
 
+    /**
+     * DonnaImageMenuItem:is-label-bold:
+     *
+     * Whether or not the label is shown in bold
+     */
     donna_image_menu_item_props[PROP_IS_LABEL_BOLD] =
         g_param_spec_boolean ("is-label-bold", "is-label-bold",
-                "Whether or not the label if shown in bold",
+                "Whether or not the label is shown in bold",
                 FALSE,  /* default */
                 G_PARAM_READWRITE);
 
     g_object_class_install_properties (o_class, NB_PROPS,
             donna_image_menu_item_props);
 
+    /**
+     * DonnaImageMenuItem::load-submenu:
+     *
+     * Emitetd when the submenu for the item should be loaded
+     */
     donna_image_menu_item_signals[SIGNAL_LOAD_SUBMENU] =
         g_signal_new ("load-submenu",
                 DONNA_TYPE_IMAGE_MENU_ITEM,
@@ -128,8 +214,6 @@ donna_image_menu_item_init (DonnaImageMenuItem *item)
     /* this will be the first handler called, so we can block everything else */
     item->priv->sid_button_release = g_signal_connect (item,
             "button-release-event", (GCallback) menu_item_release_cb, item);
-    item->priv->sid_notify_image = g_signal_connect (item, "notify::image",
-            (GCallback) menu_item_notify_image_cb, item);
 
     item->priv->is_combined_sensitive = TRUE;
 }
@@ -137,9 +221,7 @@ donna_image_menu_item_init (DonnaImageMenuItem *item)
 static void
 donna_image_menu_item_finalize (GObject *object)
 {
-    DonnaImageMenuItemPrivate *priv;
-
-    priv = ((DonnaImageMenuItem *) object)->priv;
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) object)->priv;
 
     if (priv->sid_parent_button_release)
         g_signal_handler_disconnect (
@@ -154,54 +236,363 @@ donna_image_menu_item_finalize (GObject *object)
 }
 
 static void
-donna_image_menu_item_get_property (GObject        *object,
-                                    guint           prop_id,
-                                    GValue         *value,
-                                    GParamSpec     *pspec)
-{
-    if (prop_id == PROP_IS_COMBINED)
-        g_value_set_boolean (value,
-                ((DonnaImageMenuItem *) object)->priv->is_combined);
-    else if (prop_id == PROP_IS_COMBINED_SENSITIVE)
-        g_value_set_boolean (value,
-                ((DonnaImageMenuItem *) object)->priv->is_combined_sensitive);
-    else if (prop_id == PROP_IS_LABEL_BOLD)
-        g_value_set_boolean (value,
-                ((DonnaImageMenuItem *) object)->priv->is_label_bold);
-    else
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-}
-
-static void
 donna_image_menu_item_set_property (GObject        *object,
                                     guint           prop_id,
                                     const GValue   *value,
                                     GParamSpec     *pspec)
 {
-    if (prop_id == PROP_IS_COMBINED)
-        donna_image_menu_item_set_is_combined ((DonnaImageMenuItem *) object,
-                g_value_get_boolean (value));
-    else if (prop_id == PROP_IS_COMBINED_SENSITIVE)
-        donna_image_menu_item_set_is_combined_sensitive ((DonnaImageMenuItem *) object,
-                g_value_get_boolean (value));
-    if (prop_id == PROP_IS_LABEL_BOLD)
-        donna_image_menu_item_set_label_bold ((DonnaImageMenuItem *) object,
-                g_value_get_boolean (value));
-    else
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    DonnaImageMenuItem *item = (DonnaImageMenuItem *) object;
+
+    switch (prop_id)
+    {
+        case PROP_IMAGE:
+            donna_image_menu_item_set_image (item,
+                    (GtkWidget *) g_value_get_object (value));
+            break;
+        case PROP_IMAGE_SELECTED:
+            donna_image_menu_item_set_image_selected (item,
+                    (GtkWidget *) g_value_get_object (value));
+            break;
+
+        case PROP_IS_COMBINED:
+            donna_image_menu_item_set_is_combined (item,
+                    g_value_get_boolean (value));
+            break;
+
+        case PROP_IS_COMBINED_SENSITIVE:
+            donna_image_menu_item_set_is_combined_sensitive (item,
+                    g_value_get_boolean (value));
+            break;
+
+        case PROP_IS_LABEL_BOLD:
+            donna_image_menu_item_set_label_bold (item,
+                    g_value_get_boolean (value));
+            break;
+
+        default:
+            G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+            break;
+    }
 }
 
 static void
-menu_item_notify_image_cb (GObject                *object,
-                           GParamSpec             *pspec,
-                           DonnaImageMenuItem     *item)
+donna_image_menu_item_get_property (GObject        *object,
+                                    guint           prop_id,
+                                    GValue         *value,
+                                    GParamSpec     *pspec)
 {
-    DonnaImageMenuItemPrivate *priv = item->priv;
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) object)->priv;
 
-    if (priv->image_org)
-        g_object_unref (priv->image_org);
-    g_object_get (item, "image", &priv->image_org, NULL);
+    switch (prop_id)
+    {
+        case PROP_IMAGE:
+            g_value_set_object (value, priv->image);
+            break;
+
+        case PROP_IMAGE_SELECTED:
+            g_value_set_object (value, priv->image_sel);
+            break;
+
+        case PROP_IS_COMBINED:
+            g_value_set_boolean (value, priv->is_combined);
+            break;
+
+        case PROP_IS_COMBINED_SENSITIVE:
+            g_value_set_boolean (value, priv->is_combined_sensitive);
+            break;
+
+        case PROP_IS_LABEL_BOLD:
+            g_value_set_boolean (value, priv->is_label_bold);
+            break;
+
+        default:
+            G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+            break;
+    }
 }
+
+static void
+donna_image_menu_item_map (GtkWidget *widget)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
+
+    if (priv->image)
+        g_object_set (priv->image, "visible", TRUE, NULL);
+
+    ((GtkWidgetClass *) donna_image_menu_item_parent_class)->map (widget);
+}
+
+static void
+donna_image_menu_item_destroy (GtkWidget *widget)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
+
+    if (priv->image)
+        gtk_container_remove ((GtkContainer *) widget, priv->image);
+
+    ((GtkWidgetClass *) donna_image_menu_item_parent_class)->destroy (widget);
+}
+
+static void
+donna_image_menu_item_toggle_size_request (GtkMenuItem *menu_item,
+                                           gint        *requisition)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) menu_item)->priv;
+
+    *requisition = 0;
+
+    if (priv->image)
+    {
+        GtkWidget *widget = (GtkWidget *) menu_item;
+        GtkWidget *parent;
+        GtkPackDirection pack_dir;
+        GtkRequisition image_requisition;
+        guint toggle_spacing;
+
+        parent = gtk_widget_get_parent (widget);
+        if (GTK_IS_MENU_BAR (parent))
+            pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
+        else
+            pack_dir = GTK_PACK_DIRECTION_LTR;
+
+        gtk_widget_get_preferred_size (priv->image, &image_requisition, NULL);
+        gtk_widget_style_get (widget, "toggle-spacing", &toggle_spacing, NULL);
+
+        if (pack_dir == GTK_PACK_DIRECTION_LTR || pack_dir == GTK_PACK_DIRECTION_RTL)
+        {
+            if (image_requisition.width > 0)
+                *requisition = image_requisition.width + toggle_spacing;
+        }
+        else
+        {
+            if (image_requisition.height > 0)
+                *requisition = image_requisition.height + toggle_spacing;
+        }
+    }
+}
+
+static void
+donna_image_menu_item_toggle_size_allocate (GtkMenuItem    *menu_item,
+                                            gint            allocation)
+{
+    ((DonnaImageMenuItem *) menu_item)->priv->toggle_size = allocation;
+    ((GtkMenuItemClass *) donna_image_menu_item_parent_class)->
+        toggle_size_allocate (menu_item, allocation);
+}
+
+static void
+donna_image_menu_item_get_preferred_width (GtkWidget        *widget,
+                                           gint             *minimum,
+                                           gint             *natural)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
+
+    ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
+        get_preferred_width (widget, minimum, natural);
+
+    if (priv->image)
+    {
+        GtkPackDirection pack_dir;
+        GtkWidget *parent;
+
+        parent = gtk_widget_get_parent (widget);
+        if (GTK_IS_MENU_BAR (parent))
+            pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
+        else
+            pack_dir = GTK_PACK_DIRECTION_LTR;
+
+        if (pack_dir == GTK_PACK_DIRECTION_TTB || pack_dir == GTK_PACK_DIRECTION_BTT)
+        {
+            gint child_minimum, child_natural;
+
+            gtk_widget_get_preferred_width (priv->image, &child_minimum, &child_natural);
+            *minimum = MAX (*minimum, child_minimum);
+            *natural = MAX (*natural, child_natural);
+        }
+    }
+}
+
+static void
+donna_image_menu_item_get_preferred_height (GtkWidget        *widget,
+                                            gint             *minimum,
+                                            gint             *natural)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
+
+    ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
+        get_preferred_height (widget, minimum, natural);
+
+    if (priv->image)
+    {
+        GtkPackDirection pack_dir;
+        GtkWidget *parent;
+
+        parent = gtk_widget_get_parent (widget);
+        if (GTK_IS_MENU_BAR (parent))
+            pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
+        else
+            pack_dir = GTK_PACK_DIRECTION_LTR;
+
+        if (pack_dir == GTK_PACK_DIRECTION_RTL || pack_dir == GTK_PACK_DIRECTION_LTR)
+        {
+            GtkRequisition child_requisition;
+
+            gtk_widget_get_preferred_size (priv->image, &child_requisition, NULL);
+            *minimum = MAX (*minimum, child_requisition.height);
+            *natural = MAX (*natural, child_requisition.height);
+        }
+    }
+}
+
+static void
+donna_image_menu_item_get_preferred_height_for_width (GtkWidget        *widget,
+                                                      gint              width,
+                                                      gint             *minimum,
+                                                      gint             *natural)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
+
+    ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
+        get_preferred_height_for_width (widget, width, minimum, natural);
+
+    if (priv->image)
+    {
+        GtkPackDirection pack_dir;
+        GtkWidget *parent;
+
+        parent = gtk_widget_get_parent (widget);
+        if (GTK_IS_MENU_BAR (parent))
+            pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
+        else
+            pack_dir = GTK_PACK_DIRECTION_LTR;
+
+        if (pack_dir == GTK_PACK_DIRECTION_RTL || pack_dir == GTK_PACK_DIRECTION_LTR)
+        {
+            GtkRequisition child_requisition;
+
+            gtk_widget_get_preferred_size (priv->image, &child_requisition, NULL);
+            *minimum = MAX (*minimum, child_requisition.height);
+            *natural = MAX (*natural, child_requisition.height);
+        }
+    }
+}
+
+
+static void
+donna_image_menu_item_size_allocate (GtkWidget     *widget,
+                                     GtkAllocation *allocation)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
+
+    ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
+        size_allocate (widget, allocation);
+
+    if (priv->image)
+    {
+        GtkAllocation widget_allocation;
+        GtkPackDirection pack_dir;
+        GtkWidget *parent;
+        gint x, y, offset;
+        GtkStyleContext *context;
+        GtkStateFlags state;
+        GtkBorder padding;
+        GtkRequisition child_requisition;
+        GtkAllocation child_allocation;
+        guint horizontal_padding, toggle_spacing;
+
+        parent = gtk_widget_get_parent (widget);
+        if (GTK_IS_MENU_BAR (parent))
+            pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
+        else
+            pack_dir = GTK_PACK_DIRECTION_LTR;
+
+        gtk_widget_style_get (widget,
+                "horizontal-padding",   &horizontal_padding,
+                "toggle-spacing",       &toggle_spacing,
+                NULL);
+
+        gtk_widget_get_preferred_size (priv->image, &child_requisition, NULL);
+
+        gtk_widget_get_allocation (widget, &widget_allocation);
+
+        context = gtk_widget_get_style_context (widget);
+        state = gtk_widget_get_state_flags (widget);
+        gtk_style_context_get_padding (context, state, &padding);
+        offset = gtk_container_get_border_width ((GtkContainer *) widget);
+
+        if (pack_dir == GTK_PACK_DIRECTION_LTR || pack_dir == GTK_PACK_DIRECTION_RTL)
+        {
+            if ((gtk_widget_get_direction (widget) == GTK_TEXT_DIR_LTR) ==
+                    (pack_dir == GTK_PACK_DIRECTION_LTR))
+                x = offset + horizontal_padding + padding.left
+                    + (priv->toggle_size - toggle_spacing - child_requisition.width) / 2;
+            else
+                x = widget_allocation.width - offset - horizontal_padding
+                    - padding.right - priv->toggle_size + toggle_spacing
+                    + (priv->toggle_size - toggle_spacing - child_requisition.width) / 2;
+
+            y = (widget_allocation.height - child_requisition.height) / 2;
+        }
+        else
+        {
+            if ((gtk_widget_get_direction (widget) == GTK_TEXT_DIR_LTR) ==
+                    (pack_dir == GTK_PACK_DIRECTION_TTB))
+                y = offset + horizontal_padding + padding.top
+                    + (priv->toggle_size - toggle_spacing - child_requisition.height) / 2;
+            else
+                y = widget_allocation.height - offset - horizontal_padding
+                    - padding.bottom - priv->toggle_size + toggle_spacing
+                    + (priv->toggle_size - toggle_spacing - child_requisition.height) / 2;
+
+            x = (widget_allocation.width - child_requisition.width) / 2;
+        }
+
+        child_allocation.width = child_requisition.width;
+        child_allocation.height = child_requisition.height;
+        child_allocation.x = widget_allocation.x + MAX (x, 0);
+        child_allocation.y = widget_allocation.y + MAX (y, 0);
+
+        gtk_widget_size_allocate (priv->image, &child_allocation);
+    }
+}
+
+static void
+donna_image_menu_item_forall (GtkContainer   *container,
+                              gboolean        include_internals,
+                              GtkCallback     callback,
+                              gpointer        data)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) container)->priv;
+
+    ((GtkContainerClass *) donna_image_menu_item_parent_class)->
+        forall (container, include_internals, callback, data);
+
+    if (include_internals && priv->image)
+        (*callback) (priv->image, data);
+}
+
+static void
+donna_image_menu_item_remove (GtkContainer *container,
+                              GtkWidget    *child)
+{
+    DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) container)->priv;
+
+    if (child == priv->image)
+    {
+        gtk_widget_unparent (child);
+        priv->image = NULL;
+
+        if (gtk_widget_get_visible ((GtkWidget *) container))
+            gtk_widget_queue_resize ((GtkWidget *) container);
+
+        g_object_notify ((GObject *) container, "image");
+    }
+    else
+        ((GtkContainerClass *) donna_image_menu_item_parent_class)->
+            remove (container, child);
+}
+
+/* ***************** */
 
 static void
 popdown_menu (GtkWidget *item)
@@ -330,9 +721,9 @@ donna_image_menu_item_select (GtkMenuItem        *menuitem)
 
     if (priv->image_sel)
     {
-        g_signal_handler_block (menuitem, priv->sid_notify_image);
-        gtk_image_menu_item_set_image ((GtkImageMenuItem *) menuitem, priv->image_sel);
-        g_signal_handler_unblock (menuitem, priv->sid_notify_image);
+        if (priv->image)
+            priv->image_org = g_object_ref (priv->image);
+        donna_image_menu_item_set_image ((DonnaImageMenuItem *) menuitem, priv->image_sel);
     }
 
     if (!priv->is_combined || gtk_menu_item_get_submenu (menuitem))
@@ -365,9 +756,9 @@ donna_image_menu_item_deselect (GtkMenuItem          *menuitem)
 
     if (priv->image_sel)
     {
-        g_signal_handler_block (menuitem, priv->sid_notify_image);
-        gtk_image_menu_item_set_image ((GtkImageMenuItem *) menuitem, priv->image_org);
-        g_signal_handler_unblock (menuitem, priv->sid_notify_image);
+        donna_image_menu_item_set_image ((DonnaImageMenuItem *) menuitem, priv->image_org);
+        g_object_unref (priv->image_org);
+        priv->image_org = NULL;
     }
 
     if (priv->sid_timeout)
@@ -560,12 +951,116 @@ donna_image_menu_item_draw (GtkWidget          *widget,
     return FALSE;
 }
 
+/* ***************** */
+
+/**
+ * donna_image_menu_item_new_with_label:
+ * @label: Text of the menu item
+ *
+ * Creates a new #DonnaImageMenuItem using @label
+ *
+ * Returns: a new #DonnaImageMenuItem
+ */
 GtkWidget *
-donna_image_menu_item_new_with_label (const gchar        *label)
+donna_image_menu_item_new_with_label (const gchar *label)
 {
     return g_object_new (DONNA_TYPE_IMAGE_MENU_ITEM, "label", label, NULL);
 }
 
+/**
+ * donna_image_menu_item_set_image:
+ * @item: #DonnaImageMenuItem to set the image of
+ * @image: (allow-none): a #GtkWidget to set as the image for the menu item
+ *
+ * Sets the image of @item to the given widget
+ */
+void
+donna_image_menu_item_set_image (DonnaImageMenuItem *item,
+                                 GtkWidget          *image)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (image == priv->image)
+        return;
+
+    if (priv->image)
+        gtk_container_remove ((GtkContainer *) item, priv->image);
+
+    priv->image = image;
+
+    if (image == NULL)
+        return;
+
+    gtk_widget_set_parent (image, (GtkWidget *) item);
+    g_object_set (image, "visible", TRUE, "no-show-all", TRUE, NULL);
+    g_object_notify ((GObject *) item, "image");
+}
+
+/**
+ * donna_image_menu_item_get_image:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Gets the widget that is currently set as the image of @item
+ * See donna_image_menu_item_set_image()
+ *
+ * Returns: (transfer none): the widget set as image of @item
+ **/
+GtkWidget *
+donna_image_menu_item_get_image (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), NULL);
+    return item->priv->image;
+}
+
+/**
+ * donna_image_menu_item_set_image_selected:
+ * @item: #DonnaImageMenuItem to set the image-selected of
+ * @image: (allow-none): a #GtkWidget to set as the image-selected for the menu
+ * item
+ *
+ * Sets the image shown when @item is selected to the given widget
+ */
+void
+donna_image_menu_item_set_image_selected (DonnaImageMenuItem *item,
+                                          GtkWidget          *image)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->image_sel)
+        g_object_unref (priv->image_sel);
+    priv->image_sel = g_object_ref_sink (image);
+}
+
+/**
+ * donna_image_menu_item_get_image_selected:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Gets the widget that is currently set as the image of @item when it is
+ * selected. See donna_image_menu_item_set_image_selected()
+ *
+ * Returns: (transfer none): the widget set as image-selected of @item
+ **/
+GtkWidget *
+donna_image_menu_item_get_image_selected (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), NULL);
+    return item->priv->image_sel;
+}
+
+/**
+ * donna_image_menu_item_set_is_combined:
+ * @item: a #DonnaImageMenuItem
+ * @combined: Whether @item should combine an item and a submenu or not
+ *
+ * Sets whether the menu item will be both an item (that can be clicked) as well
+ * as a submenu, or not (i.e. either one or the other)
+ */
 void
 donna_image_menu_item_set_is_combined (DonnaImageMenuItem *item,
                                        gboolean            combined)
@@ -583,6 +1078,12 @@ donna_image_menu_item_set_is_combined (DonnaImageMenuItem *item,
     }
 }
 
+/**
+ * donna_image_menu_item_get_is_combined:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Returns: Whether @item combines an item and a submenu or not
+ */
 gboolean
 donna_image_menu_item_get_is_combined (DonnaImageMenuItem *item)
 {
@@ -590,6 +1091,17 @@ donna_image_menu_item_get_is_combined (DonnaImageMenuItem *item)
     return item->priv->is_combined;
 }
 
+/**
+ * donna_image_menu_item_set_is_combined_sensitive:
+ * @item: a #DonnaImageMenuItem
+ * @combined_sensitive: Whether the action part of @item is sensitive or not
+ *
+ * Sets whether the item (i.e. clickable) part of the item is sensitive or not.
+ * This allows to have it non-sensitive (i.e. disabled) while keeping the
+ * submenu functionnal.
+ * Obviously, only works if @item combines both an item & a submenu, see
+ * donna_image_menu_item_set_is_combined()
+ */
 void
 donna_image_menu_item_set_is_combined_sensitive (DonnaImageMenuItem *item,
                                                  gboolean            combined_sensitive)
@@ -606,6 +1118,14 @@ donna_image_menu_item_set_is_combined_sensitive (DonnaImageMenuItem *item,
     }
 }
 
+/**
+ * donna_image_menu_item_get_is_combined_sensitive:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Returns whether the item/clickable part of @item is sensitive or not
+ *
+ * Returns: %TRUE if @item can be clicked, else %FALSE
+ */
 gboolean
 donna_image_menu_item_get_is_combined_sensitive (DonnaImageMenuItem *item)
 {
@@ -613,6 +1133,13 @@ donna_image_menu_item_get_is_combined_sensitive (DonnaImageMenuItem *item)
     return item->priv->is_combined_sensitive;
 }
 
+/**
+ * donna_image_menu_item_set_label_bold:
+ * @item: a #DonnaImageMenuItem
+ * @is_bold: Whether the label should be bold or not
+ *
+ * Sets whether the label of @item should be written in bold or not
+ */
 void
 donna_image_menu_item_set_label_bold (DonnaImageMenuItem *item,
                                       gboolean            is_bold)
@@ -645,6 +1172,14 @@ donna_image_menu_item_set_label_bold (DonnaImageMenuItem *item,
     }
 }
 
+/**
+ * donna_image_menu_item_get_label_bold:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Returns whether the label of @item is written in bold or not
+ *
+ * Returns: %TRUE is @item's label is in bold, else %FALSE
+ */
 gboolean
 donna_image_menu_item_get_label_bold (DonnaImageMenuItem *item)
 {
@@ -652,27 +1187,16 @@ donna_image_menu_item_get_label_bold (DonnaImageMenuItem *item)
     return item->priv->is_label_bold;
 }
 
-void
-donna_image_menu_item_set_image_selected (DonnaImageMenuItem *item,
-                                          GtkWidget          *image)
-{
-    DonnaImageMenuItemPrivate *priv;
-
-    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
-    priv = item->priv;
-
-    if (priv->image_sel)
-        g_object_unref (priv->image_sel);
-    priv->image_sel = g_object_ref_sink (image);
-}
-
-GtkWidget *
-donna_image_menu_item_get_image_selected (DonnaImageMenuItem *item)
-{
-    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
-    return item->priv->image_sel;
-}
-
+/**
+ * donna_image_menu_item_set_loading_submenu:
+ * @item: a #DonnaImageMenuItem
+ * @label: (allow-none): Label for the item in the submenu of @item
+ *
+ * Creates a new submenu for @item, containing only one non-sensitive item with
+ * @label as label (or "Please wait..." if %NULL).
+ * This is an helper function to be used if/when loading the actual submenu is a
+ * slow operation, to give some feedback to the user.
+ */
 void
 donna_image_menu_item_set_loading_submenu (DonnaImageMenuItem   *item,
                                            const gchar          *label)
@@ -684,7 +1208,7 @@ donna_image_menu_item_set_loading_submenu (DonnaImageMenuItem   *item,
     g_return_if_fail (gtk_menu_item_get_submenu ((GtkMenuItem *) item) == NULL);
 
     menu = (GtkMenu *) gtk_menu_new ();
-    w = gtk_image_menu_item_new_with_label ((label) ? label : "Please wait...");
+    w = donna_image_menu_item_new_with_label ((label) ? label : "Please wait...");
     gtk_widget_set_sensitive (w, FALSE);
     gtk_menu_attach (menu, w, 0, 1, 0, 1);
     gtk_widget_show (w);
