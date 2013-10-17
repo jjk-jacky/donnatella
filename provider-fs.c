@@ -35,6 +35,7 @@ static DonnaTask *      provider_fs_io_task         (DonnaProvider      *provide
                                                      gboolean            is_source,
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
+                                                     const gchar        *new_name,
                                                      GError            **error);
 static gchar *          provider_fs_get_context_alias_new_nodes (
                                                      DonnaProvider      *provider,
@@ -78,6 +79,7 @@ DonnaTask *     donna_fs_engine_basic_io_task       (DonnaApp           *app,
                                                      DonnaIoType         type,
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
+                                                     const gchar        *new_name,
                                                      fs_parse_cmdline    parser,
                                                      GError            **error);
 
@@ -270,6 +272,7 @@ provider_fs_io_task (DonnaProvider      *provider,
                      gboolean            is_source,
                      GPtrArray          *sources,
                      DonnaNode          *dest,
+                     const gchar        *new_name,
                      GError            **error)
 {
     DonnaTask *task;
@@ -291,7 +294,7 @@ provider_fs_io_task (DonnaProvider      *provider,
         ioe = l->data;
 
         task = ioe->io_engine_task (((DonnaProviderBase *) provider)->app,
-                type, sources, dest, parse_cmdline, error);
+                type, sources, dest, new_name, parse_cmdline, error);
         if (G_UNLIKELY (!task))
         {
             if (l->next)

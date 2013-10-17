@@ -38,6 +38,7 @@ typedef DonnaTask * (*fs_engine_io_task)            (DonnaApp           *app,
                                                      DonnaIoType         type,
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
+                                                     const gchar        *new_name,
                                                      fs_parse_cmdline    parser,
                                                      GError            **error);
 

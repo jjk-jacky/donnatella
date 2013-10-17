@@ -77,13 +77,15 @@ struct _DonnaProviderBaseClass
                                              gboolean            is_source,
                                              GPtrArray          *sources,
                                              DonnaNode          *dest,
+                                             const gchar        *new_name,
                                              GError            **error);
     DonnaTaskState  (*io)                   (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaIoType         type,
                                              gboolean            is_source,
                                              GPtrArray          *sources,
-                                             DonnaNode          *dest);
+                                             DonnaNode          *dest,
+                                             const gchar        *new_name);
     DonnaTaskState  (*new_child)            (DonnaProviderBase  *provider,
                                              DonnaTask          *task,
                                              DonnaNode          *parent,

@@ -129,6 +129,7 @@ static DonnaTask *      provider_config_io_task (
                                             gboolean             is_source,
                                             GPtrArray           *sources,
                                             DonnaNode           *dest,
+                                            const gchar         *new_name,
                                             GError             **error);
 
 
@@ -3436,6 +3437,7 @@ provider_config_io_task (DonnaProvider       *provider,
                          gboolean             is_source,
                          GPtrArray           *sources,
                          DonnaNode           *dest,
+                         const gchar         *new_name,
                          GError             **error)
 {
     DonnaTask *task;

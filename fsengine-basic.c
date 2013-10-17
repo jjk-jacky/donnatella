@@ -417,12 +417,14 @@ donna_fs_engine_basic_io_task (DonnaApp           *app,
                                DonnaIoType         type,
                                GPtrArray          *sources,
                                DonnaNode          *dest,
+                               const gchar        *new_name,
                                fs_parse_cmdline    parser,
                                GError            **error)
 {
     DonnaTaskProcess *taskp;
     struct data *data;
     gchar *cmdline;
+    gchar *s = NULL;
     guint i;
 
     data = g_slice_new0 (struct data);
@@ -443,12 +445,26 @@ donna_fs_engine_basic_io_task (DonnaApp           *app,
     switch (type)
     {
         case DONNA_IO_COPY:
-            cmdline = (gchar *) "cp -irvat %d %s";
+            if (new_name && sources->len == 1)
+            {
+                gchar *ss = g_shell_quote (new_name);
+                cmdline = s = g_strconcat ("cp -irvaT %s %d/", ss, NULL);
+                g_free (ss);
+            }
+            else
+                cmdline = (gchar *) "cp -irvat %d %s";
             snprintf (data->prefix, LEN_PREFIX + 1, "cp: ");
             break;
 
         case DONNA_IO_MOVE:
-            cmdline = (gchar *) "mv -irvat %d %s";
+            if (new_name && sources->len == 1)
+            {
+                gchar *ss = g_shell_quote (new_name);
+                cmdline = s = g_strconcat ("mv -ivT %s %d/", ss, NULL);
+                g_free (ss);
+            }
+            else
+                cmdline = (gchar *) "mv -ivt %d %s";
             snprintf (data->prefix, LEN_PREFIX + 1, "mv: ");
             break;
 
@@ -471,8 +487,10 @@ donna_fs_engine_basic_io_task (DonnaApp           *app,
     {
         free_data (data);
         g_prefix_error (error, "FS Engine 'basic': Failed to parse command line: ");
+        g_free (s);
         return NULL;
     }
+    g_free (s);
 
 
     taskp = (DonnaTaskProcess *) donna_task_process_new_full (

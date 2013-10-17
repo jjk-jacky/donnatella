@@ -772,6 +772,7 @@ donna_app_nodes_io_task (DonnaApp       *app,
                          GPtrArray      *nodes,
                          DonnaIoType     io_type,
                          DonnaNode      *dest,
+                         const gchar    *new_name,
                          GError        **error)
 {
     DonnaAppInterface *interface;
@@ -788,7 +789,7 @@ donna_app_nodes_io_task (DonnaApp       *app,
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->nodes_io_task != NULL, FALSE);
 
-    return (*interface->nodes_io_task) (app, nodes, io_type, dest, error);
+    return (*interface->nodes_io_task) (app, nodes, io_type, dest, new_name, error);
 }
 
 gint

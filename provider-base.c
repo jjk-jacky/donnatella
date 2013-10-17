@@ -84,6 +84,7 @@ static DonnaTask *      provider_base_io_task (
                                             gboolean             is_source,
                                             GPtrArray           *sources,
                                             DonnaNode           *dest,
+                                            const gchar         *new_name,
                                             GError             **error);
 static DonnaTask *      provider_base_new_child_task (
                                             DonnaProvider       *provider,
@@ -723,6 +724,7 @@ struct io
     gboolean             is_source;
     GPtrArray           *sources;
     DonnaNode           *dest;
+    gchar               *new_name;
 };
 
 static void
@@ -731,6 +733,7 @@ free_io (struct io *io)
     g_ptr_array_unref (io->sources);
     if (io->dest)
         g_object_unref (io->dest);
+    g_free (io->new_name);
     g_slice_free (struct io, io);
 }
 
@@ -740,7 +743,8 @@ perform_io (DonnaTask *task, struct io *io)
     DonnaTaskState ret;
 
     ret = DONNA_PROVIDER_BASE_GET_CLASS (io->pb)->io (
-            io->pb, task, io->type, io->is_source, io->sources, io->dest);
+            io->pb, task, io->type, io->is_source, io->sources,
+            io->dest, io->new_name);
     free_io (io);
     return ret;
 }
@@ -751,6 +755,7 @@ provider_base_io_task (DonnaProvider       *provider,
                        gboolean             is_source,
                        GPtrArray           *sources,
                        DonnaNode           *dest,
+                       const gchar         *new_name,
                        GError             **error)
 {
     DonnaTask *task;
@@ -769,7 +774,8 @@ provider_base_io_task (DonnaProvider       *provider,
     }
 
     if (!DONNA_PROVIDER_BASE_GET_CLASS (provider)->support_io (
-                (DonnaProviderBase *) provider, type, is_source, sources, dest, error))
+                (DonnaProviderBase *) provider, type, is_source, sources,
+                dest, new_name, error))
         return NULL;
 
     io = g_slice_new (struct io);
@@ -778,6 +784,7 @@ provider_base_io_task (DonnaProvider       *provider,
     io->is_source   = is_source;
     io->sources     = g_ptr_array_ref (sources);
     io->dest        = (dest) ? g_object_ref (dest) : NULL;
+    io->new_name    = (new_name && sources->len == 1) ? g_strdup (new_name) : NULL;
 
     task = donna_task_new ((task_fn) perform_io, io, (GDestroyNotify) free_io);
     set_task_visibility (task, provider, io);

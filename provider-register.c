@@ -82,13 +82,15 @@ static gboolean         provider_register_support_io    (DonnaProviderBase  *pro
                                                          gboolean            is_source,
                                                          GPtrArray          *sources,
                                                          DonnaNode          *dest,
+                                                         const gchar        *new_name,
                                                          GError            **error);
 static DonnaTaskState  provider_register_io             (DonnaProviderBase  *provider,
                                                          DonnaTask          *task,
                                                          DonnaIoType         type,
                                                          gboolean            is_source,
                                                          GPtrArray          *sources,
-                                                         DonnaNode          *dest);
+                                                         DonnaNode          *dest,
+                                                         const gchar        *new_name);
 static DonnaTaskState   provider_register_new_child     (DonnaProviderBase  *provider,
                                                          DonnaTask          *task,
                                                          DonnaNode          *parent,
@@ -2197,6 +2199,7 @@ provider_register_support_io (DonnaProviderBase  *_provider,
                               gboolean            is_source,
                               GPtrArray          *sources,
                               DonnaNode          *dest,
+                              const gchar        *new_name,
                               GError            **error)
 {
     if (is_source)
@@ -2226,6 +2229,15 @@ provider_register_support_io (DonnaProviderBase  *_provider,
         return FALSE;
     }
 
+    if (new_name && sources->len == 1)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider 'register': "
+                "Doesn't support move/copy operation with renaming on-the-fly");
+        return FALSE;
+    }
+
     return TRUE;
 }
 
@@ -2235,7 +2247,8 @@ provider_register_io (DonnaProviderBase  *_provider,
                       DonnaIoType         type,
                       gboolean            is_source,
                       GPtrArray          *sources,
-                      DonnaNode          *dest)
+                      DonnaNode          *dest,
+                      const gchar        *new_name)
 {
     GError *err = NULL;
     gchar *name;
@@ -3125,7 +3138,7 @@ cmd_register_nodes_io (DonnaTask               *task,
     if (c_io == 0)
         c_io = (reg_type == DONNA_REGISTER_CUT) ? 2 /* MOVE */ : 1 /* COPY */;
 
-    t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, &err);
+    t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, NULL, &err);
     if (!t)
     {
         donna_task_take_error (task, err);

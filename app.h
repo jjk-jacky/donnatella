@@ -109,6 +109,7 @@ struct _DonnaAppInterface
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
+                                                     const gchar    *new_name,
                                                      GError        **error);
     gint                (*ask)                      (DonnaApp       *app,
                                                      const gchar    *title,
@@ -209,6 +210,7 @@ DonnaTask *         donna_app_nodes_io_task         (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
+                                                     const gchar    *new_name,
                                                      GError        **error);
 gint                donna_app_ask                   (DonnaApp       *app,
                                                      const gchar    *title,

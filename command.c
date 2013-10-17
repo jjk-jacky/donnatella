@@ -713,6 +713,7 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
     GPtrArray *nodes = args[0];
     gchar *io_type = args[1];
     DonnaNode *dest = args[2]; /* opt */
+    gchar *new_name = args[3]; /* opt */
 
     const gchar *c_io_type[] = { "copy", "move", "delete" };
     DonnaIoType io_types[] = { DONNA_IO_COPY, DONNA_IO_MOVE, DONNA_IO_DELETE };
@@ -731,7 +732,7 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, &err);
+    t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, new_name, &err);
     if (!t)
     {
         donna_task_take_error (task, err);
@@ -2111,6 +2112,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 

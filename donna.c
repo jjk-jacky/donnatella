@@ -229,6 +229,7 @@ static DonnaTask *      donna_donna_nodes_io_task   (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      DonnaIoType     io_type,
                                                      DonnaNode      *dest,
+                                                     const gchar    *new_name,
                                                      GError        **error);
 static gint             donna_donna_ask             (DonnaApp       *app,
                                                      const gchar    *title,
@@ -2615,6 +2616,7 @@ donna_donna_nodes_io_task (DonnaApp       *app,
                            GPtrArray      *nodes,
                            DonnaIoType     io_type,
                            DonnaNode      *dest,
+                           const gchar    *new_name,
                            GError        **error)
 {
     DonnaProvider *provider;
@@ -2640,13 +2642,14 @@ donna_donna_nodes_io_task (DonnaApp       *app,
         }
     }
 
-    task = donna_provider_io_task (provider, io_type, TRUE, nodes, dest, error);
+    task = donna_provider_io_task (provider, io_type, TRUE, nodes,
+            dest, new_name, error);
     if (!task && dest && provider != donna_node_peek_provider (dest))
     {
         g_clear_error (error);
         /* maybe the IO can be done by dest's provider */
         task = donna_provider_io_task (donna_node_peek_provider (dest),
-                io_type, FALSE, nodes, dest, error);
+                io_type, FALSE, nodes, dest, new_name, error);
     }
 
     if (!task)

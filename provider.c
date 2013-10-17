@@ -400,6 +400,7 @@ donna_provider_io_task (DonnaProvider  *provider,
                         gboolean        is_source,
                         GPtrArray      *sources,
                         DonnaNode      *dest,
+                        const gchar    *new_name,
                         GError        **error)
 {
     DonnaProviderInterface *interface;
@@ -441,7 +442,8 @@ donna_provider_io_task (DonnaProvider  *provider,
         return NULL;
     }
 
-    return (*interface->io_task) (provider, type, is_source, sources, dest, error);
+    return (*interface->io_task) (provider, type, is_source, sources,
+            dest, new_name, error);
 }
 
 DonnaTask *
@@ -542,7 +544,7 @@ donna_provider_remove_from_task (DonnaProvider  *provider,
         }
 
         return donna_provider_io_task (provider, DONNA_IO_DELETE, TRUE,
-                nodes, NULL, error);
+                nodes, NULL, NULL, error);
     }
 
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
