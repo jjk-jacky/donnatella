@@ -560,38 +560,69 @@ parse_arg (struct run_command    *rc,
              * types */
             else
             {
-                GString *str = g_string_new (NULL);
+                GString *str;
                 GPtrArray *arr = g_value_get_boxed (v);
                 guint i;
 
-                /* turn to string */
-
-                for (i = 0; i < arr->len; ++i)
+                /* try to match things up */
+                if (arr->len == 1)
                 {
-                    gchar *ss;
-
-                    /* only 2 types of arrays are supported: NODE & STRING */
-                    if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
-                        s = donna_node_get_full_location (arr->pdata[i]);
-                    else
-                        s = arr->pdata[i];
-
-                    g_string_append_c (str, '"');
-                    for (ss = s; *ss != '\0'; ++ss)
+                    if ((_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                            && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_NODE))
+                        g_ptr_array_add (rc->args, g_object_ref (arr->pdata[0]));
+                    else if ((_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                            && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_ROW_ID))
                     {
-                        if (*ss == '"' || *ss == '\\')
-                            g_string_append_c (str, '\\');
-                        g_string_append_c (str, *ss);
+                        DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                        rid->ptr = g_object_ref (arr->pdata[0]);
+                        rid->type = DONNA_ARG_TYPE_NODE;
+                        g_ptr_array_add (rc->args, rid);
                     }
-                    g_string_append_c (str, '"');
-
-                    if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
-                        g_free (s);
-                    g_string_append_c (str, ',');
+                    else if ((_rc.command->return_type & DONNA_ARG_TYPE_STRING)
+                            && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_STRING))
+                        g_ptr_array_add (rc->args, g_strdup (arr->pdata[0]));
+                    else
+                    {
+                        /* since we only have one element, we'll give the string
+                         * (or full location) unquoted */
+                        if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                            s = donna_node_get_full_location (arr->pdata[0]);
+                        else
+                            s = g_strdup (arr->pdata[0]);
+                    }
                 }
-                /* remove last ',' */
-                g_string_truncate (str, str->len - 1);
-                s = g_string_free (str, FALSE);
+                /* turn to string */
+                else
+                {
+                    str = g_string_new (NULL);
+
+                    for (i = 0; i < arr->len; ++i)
+                    {
+                        gchar *ss;
+
+                        /* only 2 types of arrays are supported: NODE & STRING */
+                        if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                            s = donna_node_get_full_location (arr->pdata[i]);
+                        else
+                            s = arr->pdata[i];
+
+                        g_string_append_c (str, '"');
+                        for (ss = s; *ss != '\0'; ++ss)
+                        {
+                            if (*ss == '"' || *ss == '\\')
+                                g_string_append_c (str, '\\');
+                            g_string_append_c (str, *ss);
+                        }
+                        g_string_append_c (str, '"');
+
+                        if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                            g_free (s);
+                        g_string_append_c (str, ',');
+                    }
+                    /* remove last ',' */
+                    g_string_truncate (str, str->len - 1);
+                    s = g_string_free (str, FALSE);
+                }
             }
         }
         else if (_rc.command->return_type & DONNA_ARG_TYPE_INT)
