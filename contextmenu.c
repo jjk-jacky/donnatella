@@ -903,8 +903,8 @@ get_user_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Failed to get node for item '%s' ('context_menus/%s/%s')",
-                    info->name, source, item);
+                    "Failed to get node '%s' for item '%s' ('context_menus/%s/%s')",
+                    info->trigger, info->name, source, item);
             free_context_info (info);
             return FALSE;
         }
