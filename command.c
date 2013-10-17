@@ -370,7 +370,7 @@ cmd_node_new_child (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, DONNA_TYPE_NODE);
-    g_value_set_object (value, g_value_dup_object (v));
+    g_value_set_object (value, g_value_get_object (v));
     donna_task_release_return_value (task);
 
     g_object_unref (t);
