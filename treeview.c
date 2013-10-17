@@ -17,6 +17,7 @@
 #include "size.h"
 #include "provider-internal.h"
 #include "contextmenu.h"
+#include "util.h"
 #include "closures.h"
 
 enum
@@ -11578,6 +11579,7 @@ tree_context_get_item_info (const gchar             *item,
                 info->free_name = TRUE;
             }
             info->icon_name = "edit-copy";
+            info->submenus = DONNA_ENABLED_TYPE_ENABLED;
             return TRUE;
         }
         else if (item[8] != '.')
