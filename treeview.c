@@ -4476,9 +4476,16 @@ node_new_child_cb (DonnaProvider *provider,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     struct new_child_data *data;
+    DonnaNodeType type;
 
-    /* if we don't care for this type of nodes, nothing to do */
-    if (!(donna_node_get_node_type (child) & priv->node_types))
+    type = donna_node_get_node_type (child);
+    /* if we don't care for this type of nodes, nothing to do. We also ignore
+     * containers in minitree.
+     * XXX technically this is bad, since we shouldn't access priv from possibly
+     * another thread. But really, everything we look at exists, and is very
+     * unlikely to change/cause issues, so this saves one alloc + 2 ref */
+    if (!(type & priv->node_types) || (is_tree (tree) && priv->is_minitree
+                && type == DONNA_NODE_CONTAINER))
         return;
 
     /* we can't check if node is in the tree though, because there's no lock,
