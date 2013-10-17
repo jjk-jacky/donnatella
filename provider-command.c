@@ -642,6 +642,13 @@ parse_arg (struct run_command    *rc,
                 else
                     g_ptr_array_add (rc->args, g_value_dup_object (v));
             }
+            else if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_ROW_ID)
+            {
+                DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                rid->ptr = g_value_dup_object (v);
+                rid->type = DONNA_ARG_TYPE_NODE;
+                g_ptr_array_add (rc->args, rid);
+            }
             else
                 s = donna_node_get_full_location (g_value_get_object (v));
         }
