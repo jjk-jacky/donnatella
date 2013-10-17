@@ -12763,11 +12763,6 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
         return TRUE;
     }
 
-    if (event->window != gtk_tree_view_get_bin_window ((GtkTreeView *) widget)
-            || event->type != GDK_BUTTON_PRESS)
-        return GTK_WIDGET_CLASS (donna_tree_view_parent_class)
-            ->button_press_event (widget, event);
-
     if (priv->renderer_editable)
     {
         /* we abort the editing -- we just do this, because our signal handlers
@@ -12780,6 +12775,11 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
             /* this is a focusing click, don't process it further */
             return TRUE;
     }
+
+    if (event->window != gtk_tree_view_get_bin_window ((GtkTreeView *) widget)
+            || event->type != GDK_BUTTON_PRESS)
+        return GTK_WIDGET_CLASS (donna_tree_view_parent_class)
+            ->button_press_event (widget, event);
 
 #ifdef GTK_IS_JJK
     gint x, y;
