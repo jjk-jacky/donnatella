@@ -20,6 +20,10 @@ struct data
     DonnaApp        *app;
     /* to create nodes for return value */
     DonnaProviderFs *pfs;
+    /* to announce a file/folder was created */
+    fs_file_created  file_created;
+    /* to announce a file/folder was deleted */
+    fs_file_deleted  file_deleted;
     /* location of sources, to construct return value's nodes */
     GHashTable      *loc_sources;
     /* the nodes for return value, e.g. new (copied/moved) nodes */
@@ -29,6 +33,9 @@ struct data
     gchar           *openq;
     /* closing quote around filename */
     gchar           *closeq;
+    /* prefix for announce of removal by rm */
+    gchar           *removed_prefix;
+    gsize            removed_prefix_len;
     /* prefix to id confirmation, must start with it (e.g. "cp: ") */
     gchar            prefix[LEN_PREFIX + 1];
     /* buffer to write the answer to stdin */
@@ -143,7 +150,30 @@ pipe_new_line (DonnaTask    *task,
     gchar *e;
     gchar c;
 
-    if (pipe != DONNA_PIPE_OUTPUT || !data->loc_sources)
+    if (pipe != DONNA_PIPE_OUTPUT)
+        return;
+
+    if (data->is_rm)
+    {
+        if (!streqn (str, data->removed_prefix, data->removed_prefix_len))
+            return;
+
+        if (!get_filename (str, data->openq, data->closeq, &s, &e))
+            return;
+
+        c = *e;
+        *e = '\0';
+        b = unesc_fn (s, e, buf, 255);
+
+        data->file_deleted (data->pfs, (b) ? b : s);
+
+        if (b && b != buf)
+            g_free (b);
+
+        return;
+    }
+
+    if (!data->loc_sources)
         return;
 
     if (!get_filename (str, data->openq, data->closeq, &s, &e))
@@ -433,6 +463,14 @@ donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
     data = g_slice_new0 (struct data);
     data->pfs = g_object_ref (pfs);
     data->app = app;
+    data->file_created = file_created;
+    data->file_deleted = file_deleted;
+
+    if (type == DONNA_IO_DELETE)
+    {
+        data->removed_prefix = (gchar *) "removed ";
+        data->removed_prefix_len = 8; /* x = strlen ("removed ") */
+    }
 
     data->openq = data->closeq = "'";
     switch (type)
@@ -462,7 +500,7 @@ donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
             break;
 
         case DONNA_IO_DELETE:
-            cmdline = (gchar *) "rm -Ir %s";
+            cmdline = (gchar *) "rm -Irv %s";
             snprintf (data->prefix, LEN_PREFIX + 1, "rm: ");
             data->is_rm = TRUE;
             break;
