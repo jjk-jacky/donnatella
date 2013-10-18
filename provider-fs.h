@@ -33,13 +33,20 @@ typedef gchar *     (*fs_parse_cmdline)             (const gchar        *cmdline
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
                                                      GError            **error);
+typedef void        (*fs_file_created)              (DonnaProviderFs    *pfs,
+                                                     const gchar        *location);
+typedef void        (*fs_file_deleted)              (DonnaProviderFs    *pfs,
+                                                     const gchar        *location);
 
-typedef DonnaTask * (*fs_engine_io_task)            (DonnaApp           *app,
+typedef DonnaTask * (*fs_engine_io_task)            (DonnaProviderFs    *pfs,
+                                                     DonnaApp           *app,
                                                      DonnaIoType         type,
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
                                                      const gchar        *new_name,
                                                      fs_parse_cmdline    parser,
+                                                     fs_file_created     created,
+                                                     fs_file_deleted     deleted,
                                                      GError            **error);
 
 GType               donna_provider_fs_get_type      (void) G_GNUC_CONST;

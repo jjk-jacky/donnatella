@@ -19,7 +19,7 @@ struct data
 {
     DonnaApp        *app;
     /* to create nodes for return value */
-    DonnaProvider   *pfs;
+    DonnaProviderFs *pfs;
     /* location of sources, to construct return value's nodes */
     GHashTable      *loc_sources;
     /* the nodes for return value, e.g. new (copied/moved) nodes */
@@ -51,7 +51,6 @@ struct data
 static void
 free_data (struct data *data)
 {
-    donna_g_object_unref (data->app);
     donna_g_object_unref (data->pfs);
     if (data->loc_sources)
         g_hash_table_unref (data->loc_sources);
@@ -181,7 +180,8 @@ pipe_new_line (DonnaTask    *task,
         *e = '\0';
         b = unesc_fn (s, e, buf, 255);
 
-        node = donna_provider_get_node (data->pfs, (b) ? b : s, &err);
+        node = donna_provider_get_node ((DonnaProvider *) data->pfs,
+                (b) ? b : s, &err);
         if (G_UNLIKELY (!node))
         {
             g_warning ("FS Engine 'basic': Failed to get node 'fs:%s': %s",
@@ -413,12 +413,15 @@ set_cmdline (DonnaTaskProcess   *taskp,
 }
 
 DonnaTask *
-donna_fs_engine_basic_io_task (DonnaApp           *app,
+donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
+                               DonnaApp           *app,
                                DonnaIoType         type,
                                GPtrArray          *sources,
                                DonnaNode          *dest,
                                const gchar        *new_name,
                                fs_parse_cmdline    parser,
+                               fs_file_created     file_created,
+                               fs_file_deleted     file_deleted,
                                GError            **error)
 {
     DonnaTaskProcess *taskp;
@@ -428,19 +431,9 @@ donna_fs_engine_basic_io_task (DonnaApp           *app,
     guint i;
 
     data = g_slice_new0 (struct data);
-    data->app = g_object_ref (app);
-    if (type == DONNA_IO_COPY || type == DONNA_IO_MOVE)
-    {
-        data->pfs = donna_app_get_provider (app, "fs");
-        if (!data->pfs)
-        {
-            free_data (data);
-            g_set_error (error, DONNA_PROVIDER_ERROR,
-                    DONNA_PROVIDER_ERROR_OTHER,
-                    "FS Engine 'basic': Failed to get provider 'fs'");
-            return NULL;
-        }
-    }
+    data->pfs = g_object_ref (pfs);
+    data->app = app;
+
     data->openq = data->closeq = "'";
     switch (type)
     {
@@ -520,7 +513,7 @@ donna_fs_engine_basic_io_task (DonnaApp           *app,
         return NULL;
     }
 
-    if (data->pfs)
+    if (type == DONNA_IO_COPY || type == DONNA_IO_MOVE)
     {
         /* construct the list of location to watch for return nodes */
         data->loc_sources = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);

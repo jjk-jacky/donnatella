@@ -25,6 +25,11 @@ struct _DonnaProviderFsPrivate
     GSList *io_engines;
 };
 
+static DonnaNode *      new_node                    (DonnaProviderBase  *_provider,
+                                                     const gchar        *location,
+                                                     const gchar        *filename);
+
+
 static void             provider_fs_finalize        (GObject *object);
 
 /* DonnaProvider */
@@ -75,12 +80,15 @@ static DonnaTaskState   provider_fs_new_child       (DonnaProviderBase  *provide
                                                      const gchar        *name);
 
 /* fsengine-basic.c */
-DonnaTask *     donna_fs_engine_basic_io_task       (DonnaApp           *app,
+DonnaTask *     donna_fs_engine_basic_io_task       (DonnaProviderFs    *pfs,
+                                                     DonnaApp           *app,
                                                      DonnaIoType         type,
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
                                                      const gchar        *new_name,
                                                      fs_parse_cmdline    parser,
+                                                     fs_file_created     created,
+                                                     fs_file_deleted     deleted,
                                                      GError            **error);
 
 static void
@@ -266,6 +274,99 @@ parse_cmdline (const gchar        *cmdline,
     return g_string_free (str, FALSE);
 }
 
+static void
+file_created (DonnaProviderFs    *pfs,
+              const gchar        *location)
+{
+    DonnaProviderFsPrivate *priv = pfs->priv;
+    DonnaProviderBase *_provider = (DonnaProviderBase *) pfs;
+    DonnaProviderBaseClass  *klass;
+    DonnaNode *parent;
+    DonnaNode *node;
+    gchar buf[255], *b = buf;
+    gchar *s;
+
+    /* so: engines might call this after a sucessful copy/move operation,
+     * whether or not the file was indeed created (might have been an
+     * overwrite). This is ok, because the node-new-child signal doesn't
+     * guarantee that the child was just created, just that it's likely.
+     * Also, we will:
+     * - do nothing if we have a node for the child already (clearly not a
+     *   creation)
+     * - do nothing if we don't have a node for the parent (no one cares)
+     * - if we had a node for parent but not child, it's likely that either it
+     *   was indeed a creation, or whoever has a ref on parent doesn't list its
+     *   content (or there was a problem since it was missing child)
+     */
+
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    klass->lock_nodes (_provider);
+    node = klass->get_cached_node (_provider, location);
+    klass->unlock_nodes (_provider);
+
+    if (G_UNLIKELY (node))
+    {
+        DonnaTask *task;
+
+        /* we have a node, so it's not a creation. Probably an overwrite, so it
+         * might be good to ask for a refresh then */
+        task = donna_node_refresh_task (node, NULL, DONNA_NODE_REFRESH_SET_VALUES);
+        if (G_LIKELY (task))
+            donna_app_run_task (_provider->app, task);
+
+        g_object_unref (node);
+        return;
+    }
+
+    s = strrchr (location, '/');
+    if (s == location)
+        ++s;
+
+    if (G_UNLIKELY (s - location >= 255))
+        b = g_strndup (location, s - location);
+    else
+    {
+        memcpy (buf, location, s - location);
+        buf[s - location] = '\0';
+    }
+
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    klass->lock_nodes (_provider);
+    parent = klass->get_cached_node (_provider, b);
+    klass->unlock_nodes (_provider);
+    if (G_UNLIKELY (b != buf))
+        g_free (b);
+
+    if (!parent)
+        return;
+
+    node = new_node (_provider, location, NULL);
+    donna_provider_node_new_child ((DonnaProvider *) pfs, parent, node);
+    g_object_unref (parent);
+    g_object_unref (node);
+}
+
+static void
+file_deleted (DonnaProviderFs    *pfs,
+              const gchar        *location)
+{
+    DonnaProviderFsPrivate *priv = pfs->priv;
+    DonnaProviderBase *_provider = (DonnaProviderBase *) pfs;
+    DonnaProviderBaseClass  *klass;
+    DonnaNode *node;
+
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
+    klass->lock_nodes (_provider);
+    node = klass->get_cached_node (_provider, location);
+    klass->unlock_nodes (_provider);
+
+    if (!node)
+        return;
+
+    donna_provider_node_deleted ((DonnaProvider *) pfs, node);
+    g_object_unref (node);
+}
+
 static DonnaTask *
 provider_fs_io_task (DonnaProvider      *provider,
                      DonnaIoType         type,
@@ -275,6 +376,7 @@ provider_fs_io_task (DonnaProvider      *provider,
                      const gchar        *new_name,
                      GError            **error)
 {
+    DonnaProviderFs *pfs = (DonnaProviderFs *) provider;
     DonnaTask *task;
     GSList *l;
     struct io_engine *ioe;
@@ -289,12 +391,13 @@ provider_fs_io_task (DonnaProvider      *provider,
         return NULL;
     }
 
-    for (l = ((DonnaProviderFs *) provider)->priv->io_engines; l; l = l->next)
+    for (l = pfs->priv->io_engines; l; l = l->next)
     {
         ioe = l->data;
 
-        task = ioe->io_engine_task (((DonnaProviderBase *) provider)->app,
-                type, sources, dest, new_name, parse_cmdline, error);
+        task = ioe->io_engine_task (pfs, ((DonnaProviderBase *) pfs)->app,
+                type, sources, dest, new_name, parse_cmdline,
+                file_created, file_deleted, error);
         if (G_UNLIKELY (!task))
         {
             if (l->next)
