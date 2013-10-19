@@ -197,6 +197,8 @@ DonnaTask *         donna_node_new_child_task       (DonnaNode          *node,
                                                      const gchar        *name,
                                                      GError            **error);
 void                donna_node_mark_ready           (DonnaNode          *node);
+void                donna_node_mark_invalid         (DonnaNode          *node,
+                                                     DonnaProvider      *pinv);
 void                donna_node_set_property_value   (DonnaNode          *node,
                                                      const gchar        *name,
                                                      const GValue       *value);

@@ -2,6 +2,7 @@
 #include <glib-object.h>
 #include "provider.h"
 #include "node.h"
+#include "app.h"
 #include "util.h"
 #include "closures.h"
 #include "macros.h"
@@ -128,6 +129,38 @@ donna_provider_node_updated (DonnaProvider  *provider,
             node, name);
 }
 
+static gboolean
+post_node_deleted (DonnaNode *node)
+{
+    DonnaProvider *provider = donna_node_peek_provider (node);
+    DonnaProviderInterface *interface;
+    DonnaApp *app;
+
+    /* ideally, after the signal all references to the node were removed (maybe
+     * in the thread UI, that's why we used an idle source, to let e.g.
+     * treeviews remove their references to the node as well), so there should
+     * only be 2 left: us, and the provider. */
+    if (((GObject *) node)->ref_count <= 2)
+        goto done;
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+    if (G_UNLIKELY (!interface || !interface->unref_node))
+        g_warning ("Provider '%s': post_node_deleted(): unref_node not implemented",
+                donna_provider_get_domain (provider));
+    else
+        (*interface->unref_node) (provider, node);
+
+    /* Since there are still references to the node, we're gonna mark it invalid
+     * and ask the provider to let it go */
+    g_object_get (provider, "app", &app, NULL),
+    donna_node_mark_invalid (node, donna_app_get_provider (app, "invalid"));
+    g_object_unref (app);
+
+done:
+    g_object_unref (node);
+    return FALSE;
+}
+
 void
 donna_provider_node_deleted (DonnaProvider  *provider,
                              DonnaNode      *node)
@@ -136,6 +169,7 @@ donna_provider_node_deleted (DonnaProvider  *provider,
     g_return_if_fail (DONNA_IS_NODE (node));
 
     g_signal_emit (provider, donna_provider_signals[NODE_DELETED], 0, node);
+    g_idle_add ((GSourceFunc) post_node_deleted, g_object_ref (node));
 }
 
 void

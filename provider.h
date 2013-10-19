@@ -61,6 +61,8 @@ struct _DonnaProviderInterface
                                                      gboolean       *is_node,
                                                      gpointer       *ret,
                                                      GError        **error);
+    void                (*unref_node)               (DonnaProvider  *provider,
+                                                     DonnaNode      *node);
     DonnaTask *         (*has_node_children_task)   (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaNodeType   node_types,

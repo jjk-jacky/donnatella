@@ -2078,6 +2078,65 @@ donna_node_mark_ready (DonnaNode          *node)
 }
 
 /**
+ * donna_node_mark_invalid:
+ * @node: The node to mark invalid
+ * @pinv: #DonnaProviderInvalid
+ *
+ * This should only be used by the interface #DonnaProvider, if needed, from an
+ * idle sourfce after emission of a node-deleted signal. That is, is there are
+ * still references on the node, then the provider's virtual function
+ * unref_node() will be called, then this to make the node "invalid."
+ *
+ * This is in case e.g. a task still has a ref on a node (e.g. as return value)
+ * to make sure it won't create conflicts in case a new file is created uner the
+ * same name.
+ */
+void
+donna_node_mark_invalid (DonnaNode          *node,
+                         DonnaProvider      *pinv)
+{
+    DonnaNodePrivate *priv;
+    guint i;
+    gchar *s;
+
+    g_return_if_fail (DONNA_IS_NODE (node));
+    priv = node->priv;
+
+    g_rw_lock_writer_lock (&priv->props_lock);
+    DONNA_DEBUG (NODE,
+            g_debug ("mark_invalid() on '%s:%s'",
+                donna_provider_get_domain (priv->provider),
+                priv->location));
+
+    g_hash_table_remove_all (priv->props);
+
+    s = g_strconcat ("[invalid] ", donna_provider_get_domain (priv->provider),
+            ":", priv->location, NULL);
+    g_free (priv->name);
+    priv->name = s;
+
+    g_free (priv->location);
+    priv->location = g_strdup_printf ("%p", node);
+
+    priv->flags = 0;//DONNA_NODE_ICON_EXISTS;
+    priv->refresher = (refresher_fn) gtk_true;
+    for (i = 0; i < NB_BASIC_PROPS; ++i)
+    {
+        GType type;
+
+        type = G_VALUE_TYPE (&priv->basic_props[i].value);
+        g_value_unset (&priv->basic_props[i].value);
+        g_value_init (&priv->basic_props[i].value, type);
+        priv->basic_props[i].has_value = DONNA_NODE_VALUE_NONE;
+    }
+
+    g_object_unref (priv->provider);
+    priv->provider = pinv;
+
+    g_rw_lock_writer_unlock (&priv->props_lock);
+}
+
+/**
  * donna_node_set_property_value:
  * @node: The node
  * @name: Name of the property

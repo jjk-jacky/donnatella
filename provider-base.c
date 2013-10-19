@@ -64,6 +64,9 @@ static gboolean         provider_base_get_node (
                                             gboolean            *is_node,
                                             gpointer            *ret,
                                             GError             **error);
+static void             provider_base_unref_node (
+                                            DonnaProvider       *provider,
+                                            DonnaNode           *node);
 static DonnaTask *      provider_base_has_node_children_task (
                                             DonnaProvider       *provider,
                                             DonnaNode           *node,
@@ -108,6 +111,7 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->node_updated           = provider_base_node_updated;
 
     interface->get_node               = provider_base_get_node;
+    interface->unref_node             = provider_base_unref_node;
     interface->has_node_children_task = provider_base_has_node_children_task;
     interface->get_node_children_task = provider_base_get_node_children_task;
     interface->trigger_node_task      = provider_base_trigger_node_task;
@@ -567,6 +571,22 @@ provider_base_get_node (DonnaProvider    *provider,
     *is_node = FALSE;
     *ret = task;
     return TRUE;
+}
+
+static void
+provider_base_unref_node (DonnaProvider       *provider,
+                          DonnaNode           *node)
+{
+    /* node_toggle_ref_cb() will remove the node from our hashmap, and as such
+     * remove our reference to the node (amongst other things), but since we
+     * want to actually remove the toggle_ref, we need to add a ref to node here
+     * (that will be removed right after, in node_toggle_ref_cb()) */
+    node_toggle_ref_cb ((DonnaProviderBase *) provider, g_object_ref (node), TRUE);
+    /* this will remove our actual (strong) ref to the node, as well the
+     * toggle_ref */
+    g_object_remove_toggle_ref (G_OBJECT (node),
+            (GToggleNotify) node_toggle_ref_cb,
+            provider);
 }
 
 struct node_children_data
