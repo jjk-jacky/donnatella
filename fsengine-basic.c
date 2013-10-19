@@ -173,27 +173,31 @@ pipe_new_line (DonnaTask    *task,
         return;
     }
 
-    if (!data->loc_sources)
-        return;
-
+    /* get original/source name */
     if (!get_filename (str, data->openq, data->closeq, &s, &e))
         return;
 
-    c = *e;
-    *e = '\0';
-    b = unesc_fn (s, e, buf, 255);
-
-    filename = g_hash_table_lookup (data->loc_sources, (b) ? b : s);
-    if (filename)
+    if (data->loc_sources)
     {
-        GError *err = NULL;
-        DonnaNode *node;
+        c = *e;
+        *e = '\0';
+        b = unesc_fn (s, e, buf, 255);
+
+        /* was this one of the source, i.e. we need to return a node of the new
+         * file */
+        filename = g_hash_table_lookup (data->loc_sources, (b) ? b : s);
 
         *e = c;
         if (b && b != buf)
             g_free (b);
+    }
+    else
+        filename = NULL;
 
-        if (!get_filename (e + strlen (data->closeq), data->openq, data->closeq, &s, &e))
+    /* get new/copied/moved name */
+    if (!get_filename (e + strlen (data->closeq), data->openq, data->closeq, &s, &e))
+    {
+        if (filename)
         {
             g_warning ("FS Engine 'basic': Failed to get new filename for '%s'; "
                     "Will be skipped in returned nodes", filename);
@@ -203,12 +207,23 @@ pipe_new_line (DonnaTask    *task,
                 g_hash_table_unref (data->loc_sources);
                 data->loc_sources = NULL;
             }
-            return;
         }
+        return;
+    }
 
-        c = *e;
-        *e = '\0';
-        b = unesc_fn (s, e, buf, 255);
+    c = *e;
+    *e = '\0';
+    b = unesc_fn (s, e, buf, 255);
+
+    /* might not have been created, but that's fine. See file_created() in
+     * provider-fs.c for more */
+    data->file_created (data->pfs, (b) ? b : s);
+
+    /* do we need to return a node of it? */
+    if (filename)
+    {
+        GError *err = NULL;
+        DonnaNode *node;
 
         node = donna_provider_get_node ((DonnaProvider *) data->pfs,
                 (b) ? b : s, &err);
@@ -218,12 +233,10 @@ pipe_new_line (DonnaTask    *task,
                     (b) ? b : s,
                     (err) ? err->message : "(no error message)");
             g_clear_error (&err);
-            goto remove;
         }
+        else
+            g_ptr_array_add (data->ret_nodes, node);
 
-        g_ptr_array_add (data->ret_nodes, node);
-
-remove:
         g_hash_table_remove (data->loc_sources, filename);
         if (g_hash_table_size (data->loc_sources) == 0)
         {
