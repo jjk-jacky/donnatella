@@ -672,6 +672,9 @@ donna_donna_log_handler (const gchar    *domain,
     strftime (buf, 12, "[%H:%M:%S] ", tm);
     str = g_string_new (buf);
 
+    if (g_main_context_is_owner (g_main_context_default ()))
+        g_string_append_printf (str, "[UI] ");
+
     if (thread != mt)
         g_string_append_printf (str, "[thread %p] ", thread);
 
