@@ -5,6 +5,7 @@
 #include "treeview.h"
 #include "task-manager.h"
 #include "provider.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -303,6 +304,284 @@ cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    DonnaNode *node = args[0];
+    const gchar *name = args[1];
+    gchar *options = args[2]; /* opt */
+
+    DonnaNodeHasValue has = DONNA_NODE_VALUE_ERROR;
+    GValue *value;
+    gchar *s = NULL;
+    guint64 nb;
+    gboolean is_nb = FALSE;
+
+    if (streq (name, "domain") || streq (name, "provider"))
+        s = g_strdup (donna_node_get_domain (node));
+    else if (streq (name, "location"))
+        s = donna_node_get_location (node);
+    else if (streq (name, "full-location"))
+        s = donna_node_get_full_location (node);
+    else if (streq (name, "name"))
+        s = donna_node_get_name (node);
+    else if (streq (name, "filename"))
+        s = donna_node_get_filename (node);
+    else if (streq (name, "full-name"))
+        has = donna_node_get_full_name (node, TRUE, &s);
+    else if (streq (name, "size"))
+    {
+        has = donna_node_get_size (node, TRUE, &nb);
+        is_nb = has == DONNA_NODE_VALUE_SET;
+    }
+    else if (streq (name, "ctime"))
+    {
+        has = donna_node_get_ctime (node, TRUE, &nb);
+        is_nb = has == DONNA_NODE_VALUE_SET;
+    }
+    else if (streq (name, "mtime"))
+    {
+        has = donna_node_get_ctime (node, TRUE, &nb);
+        is_nb = has == DONNA_NODE_VALUE_SET;
+    }
+    else if (streq (name, "atime"))
+    {
+        has = donna_node_get_ctime (node, TRUE, &nb);
+        is_nb = has == DONNA_NODE_VALUE_SET;
+    }
+    else if (streq (name, "node-type"))
+    {
+        if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+            s = g_strdup ("Item");
+        else
+            s = g_strdup ("Container");
+    }
+    else if (streq (name, "mode"))
+    {
+        has = donna_node_get_mode (node, TRUE, (guint *) &nb);
+        if (has == DONNA_NODE_VALUE_SET)
+            s = g_strdup_printf ("%u", (guint) nb);
+    }
+    else if (streq (name, "uid"))
+    {
+        has = donna_node_get_uid (node, TRUE, (guint *) &nb);
+        if (has == DONNA_NODE_VALUE_SET)
+            s = g_strdup_printf ("%u", (guint) nb);
+    }
+    else if (streq (name, "gid"))
+    {
+        has = donna_node_get_gid (node, TRUE, (guint *) &nb);
+        if (has == DONNA_NODE_VALUE_SET)
+            s = g_strdup_printf ("%u", (guint) nb);
+    }
+    else if (streq (name, "desc"))
+        has = donna_node_get_desc (node, TRUE, &s);
+    else
+    {
+        GValue v = G_VALUE_INIT;
+
+        donna_node_get (node, TRUE, name, &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            switch (G_VALUE_TYPE (&v))
+            {
+                case G_TYPE_STRING:
+                    s = g_value_dup_string (&v);
+                    break;
+
+                case G_TYPE_UINT64:
+                    nb = g_value_get_uint64 (&v);
+                    is_nb = TRUE;
+                    break;
+
+                case G_TYPE_UINT:
+                    nb = (guint64) g_value_get_uint (&v);
+                    is_nb = TRUE;
+                    break;
+
+                case G_TYPE_INT64:
+                    nb = (guint64) g_value_get_int64 (&v);
+                    is_nb = TRUE;
+                    break;
+
+                case G_TYPE_INT:
+                    nb = (guint64) g_value_get_int (&v);
+                    is_nb = TRUE;
+                    break;
+
+                default:
+                    if (g_value_type_transformable (G_VALUE_TYPE (&v), G_TYPE_STRING))
+                    {
+                        GValue v2 = G_VALUE_INIT;
+                        g_value_transform (&v, &v2);
+                        s = g_value_dup_string (&v2);
+                        g_value_unset (&v2);
+                    }
+                    else
+                    {
+                        s = donna_node_get_full_location (node);
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command 'node_get_property': "
+                                "Failed to retrieve property '%s' on node '%s': "
+                                "Unsupported property type: %s",
+                                name, s, G_VALUE_TYPE_NAME (&v));
+                        g_free (s);
+                        g_value_unset (&v);
+                        return DONNA_TASK_FAILED;
+                    }
+            }
+            g_value_unset (&v);
+        }
+    }
+
+    if (is_nb && !options)
+        s = g_strdup_printf ("%" G_GUINT64_FORMAT, nb);
+    else if (is_nb)
+    {
+        DonnaConfig *config = donna_app_peek_config (app);
+        gboolean is_time = streqn (options, "time", 4);
+        gchar *errmsg = NULL;
+
+        if ((!is_time && !streqn (options, "size", 4))
+                || (options[4] != '=' && options[4] != '@' && options[4] != '\0'))
+        {
+            s = donna_node_get_full_location (node);
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'node_get_property': "
+                    "Failed to format property '%s' on node '%s': "
+                    "Invalid formatting options, neither 'date' nor 'size': %s",
+                    name, s, options);
+            g_free (s);
+            return DONNA_TASK_FAILED;
+        }
+
+        if (is_time)
+        {
+            DonnaTimeOptions timeopts;
+            const gchar *sce;
+            gchar *fmt;
+
+            if (options[4] == '@')
+                sce = options + 5;
+            else
+                sce = "defaults/time";
+
+            if (options[4] == '=')
+                fmt = options + 5;
+            else
+                if (!donna_config_get_string (config, &fmt,
+                            "%s/format", sce))
+                {
+                    errmsg = g_strdup_printf ("Failed to get option '%s/format'",
+                            sce);
+                    goto err;
+                }
+
+            if (!donna_config_get_int (config, (gint *) &timeopts.age_span_seconds,
+                        "%s/age_span_seconds", sce))
+            {
+                errmsg = g_strdup_printf ("Failed to get option '%s/age_span_seconds'",
+                        sce);
+                goto err;
+            }
+
+            if (!donna_config_get_string (config, (gchar **) &timeopts.age_fallback_fmt,
+                        "%s/age_fallback_fmt", sce))
+            {
+                errmsg = g_strdup_printf ("Failed to get option '%s/age_fallback_fmt'",
+                        sce);
+                goto err;
+            }
+
+            s = donna_print_time (nb, fmt, &timeopts);
+        }
+        else
+        {
+            const gchar *sce;
+            gchar *fmt;
+            gint digits;
+            gboolean long_unit;
+            gssize len;
+
+            if (options[4] == '@')
+                sce = options + 5;
+            else
+                sce = "defaults/size";
+
+            if (options[4] == '=')
+                fmt = options + 5;
+            else
+                if (!donna_config_get_string (config, &fmt,
+                            "%s/format", sce))
+                {
+                    errmsg = g_strdup_printf ("Failed to get option '%s/format'",
+                            sce);
+                    goto err;
+                }
+
+            if (!donna_config_get_int (config, &digits,
+                        "%s/digits", sce))
+            {
+                errmsg = g_strdup_printf ("Failed to get option '%s/digits'",
+                        sce);
+                goto err;
+            }
+
+            if (!donna_config_get_boolean (config, &long_unit,
+                        "%s/long_unit", sce))
+            {
+                errmsg = g_strdup_printf ("Failed to get option '%s/long_unit'",
+                        sce);
+                goto err;
+            }
+
+            len = donna_print_size (NULL, 0, fmt, nb, digits, long_unit);
+            s = g_new (gchar, ++len);
+            donna_print_size (s, len, fmt, nb, digits, long_unit);
+        }
+
+        if (errmsg)
+        {
+err:
+            s = donna_node_get_full_location (node);
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'node_get_property': "
+                    "Failed to format property '%s' on node '%s': %s",
+                    name, s, errmsg);
+            g_free (s);
+            g_free (errmsg);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    if (!s)
+    {
+        s = donna_node_get_full_location (node);
+        if (has == DONNA_NODE_VALUE_NONE)
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'node_get_property': Property '%s' doesn't exist on node '%s'",
+                    name, s);
+        else
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'node_get_property': Failed to retrieve property '%s' on node '%s'",
+                    name, s);
+        g_free (s);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_STRING);
+    g_value_take_string (value, s);
+    donna_task_release_return_value (task);
+
     return DONNA_TASK_DONE;
 }
 
@@ -2076,6 +2355,13 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (menu_popup, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (node_get_property, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_STRING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
