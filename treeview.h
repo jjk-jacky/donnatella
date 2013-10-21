@@ -259,6 +259,15 @@ gboolean        donna_tree_view_context_popup   (DonnaTreeView      *tree,
                                                  const gchar        *menus,
                                                  gboolean            no_focus_grab,
                                                  GError            **error);
+gboolean        donna_tree_view_set_sort_order  (DonnaTreeView      *tree,
+                                                 const gchar        *column,
+                                                 DonnaSortOrder      order,
+                                                 GError            **error);
+gboolean        donna_tree_view_set_second_sort_order (
+                                                 DonnaTreeView      *tree,
+                                                 const gchar        *column,
+                                                 DonnaSortOrder      order,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
                                                  const gchar        *data);

@@ -11954,6 +11954,59 @@ donna_tree_view_go_root (DonnaTreeView      *tree,
     return ret;
 }
 
+gboolean
+donna_tree_view_set_sort_order (DonnaTreeView      *tree,
+                                const gchar        *column,
+                                DonnaSortOrder      order,
+                                GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    struct column *_col;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
+    priv = tree->priv;
+
+    _col = get_column_by_name (tree, column);
+    if (!_col)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Cannot sort by column '%s': Column doesn't exist",
+                priv->name, column);
+        return FALSE;
+    }
+
+    set_sort_column (tree, _col->column, order, FALSE);
+    return TRUE;
+}
+
+gboolean
+donna_tree_view_set_second_sort_order (DonnaTreeView      *tree,
+                                       const gchar        *column,
+                                       DonnaSortOrder      order,
+                                       GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    struct column *_col;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
+    priv = tree->priv;
+
+    _col = get_column_by_name (tree, column);
+    if (!_col)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Cannot second sort by column '%s': Column doesn't exist",
+                priv->name, column);
+        return FALSE;
+    }
+
+    set_second_sort_column (tree, _col->column, order, FALSE);
+    return TRUE;
+}
 
 /* mode list only */
 GPtrArray *

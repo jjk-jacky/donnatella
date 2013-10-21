@@ -2197,6 +2197,82 @@ cmd_tree_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *column = args[1];
+    const gchar *s_order = args[2]; /* opt */
+
+    const gchar *c_order[] = { "asc", "desc", "unknown" };
+    DonnaSortOrder order[] = { DONNA_SORT_ASC, DONNA_SORT_DESC, DONNA_SORT_UNKNOWN };
+    gint c;
+
+    if (s_order)
+    {
+        c = _get_choice (c_order, s_order);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'tree_set_second_sort': Invalid sort order '%s'; "
+                    "Must be 'asc', 'desc' or 'unknown'",
+                    s_order);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* default UNKNOWN */
+        c = 2;
+
+    if (!donna_tree_view_set_second_sort_order (tree, column, order[c], &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *column = args[1];
+    const gchar *s_order = args[2]; /* opt */
+
+    const gchar *c_order[] = { "asc", "desc", "unknown" };
+    DonnaSortOrder order[] = { DONNA_SORT_ASC, DONNA_SORT_DESC, DONNA_SORT_UNKNOWN };
+    gint c;
+
+    if (s_order)
+    {
+        c = _get_choice (c_order, s_order);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'tree_set_sort': Invalid sort order '%s'; "
+                    "Must be 'asc', 'desc' or 'unknown'",
+                    s_order);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* default UNKNOWN */
+        c = 2;
+
+    if (!donna_tree_view_set_sort_order (tree, column, order[c], &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2677,6 +2753,20 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
     add_command (tree_set_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_set_second_sort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_set_sort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
