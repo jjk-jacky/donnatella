@@ -125,6 +125,14 @@ enum
     SELECT_HIGHLIGHT_COLUMN_UNDERLINE
 };
 
+enum
+{
+    CLICK_REGULAR = 0,
+    CLICK_ON_BLANK,
+    CLICK_ON_EXPANDER,
+    CLICK_ON_COLHEADER
+};
+
 enum spec_type
 {
     SPEC_NONE        = 0,
@@ -234,10 +242,6 @@ struct column
     gint                 sort_id;
     DonnaColumnType     *ct;
     gpointer             ct_data;
-    /* state of mouse button when click on column header, used to handle a
-     * Ctrl+click to (un)set the secondary sort order */
-    gboolean             pressed;
-    gboolean             ctrl_held;
 };
 
 /* when filters use columns not loaded/used in tree */
@@ -5085,16 +5089,77 @@ col_drag_func (GtkTreeView          *treev,
         return TRUE;
 }
 
+static void handle_click (DonnaTreeView     *tree,
+                          DonnaClick         click,
+                          GdkEventButton    *event,
+                          GtkTreeIter       *iter,
+                          GtkTreeViewColumn *column,
+                          GtkCellRenderer   *renderer,
+                          guint              click_on);
+
 static gboolean
 column_button_press_event_cb (GtkWidget         *btn,
                               GdkEventButton    *event,
                               struct column     *column)
 {
-    if (event->button == 1 && event->type == GDK_BUTTON_PRESS)
+    DonnaClick click;
+
+    if (event->button == 1)
+        click = DONNA_CLICK_LEFT;
+    else if (event->button == 2)
+        click = DONNA_CLICK_MIDDLE;
+    else if (event->button == 3)
+        click = DONNA_CLICK_RIGHT;
+
+    column->tree->priv->on_release_triggered = FALSE;
+    handle_click (column->tree, click, event, NULL, column->column, NULL,
+            CLICK_ON_COLHEADER);
+
+    return FALSE;
+}
+
+/* we have a "special" handling of clicks on column headers. First off, we
+ * don't use gtk_tree_view_column_set_sort_column_id() to handle the sorting
+ * because we want control to do things like have a default order (ASC/DESC)
+ * based on the type, etc
+ * Then, we also don't use the signal clicked because we want to provider
+ * support for a second sort order, which is why instead we're connecting to
+ * signals of the button making the column header:
+ * - in button-press-event (above) we set a flag stating that a click was done.
+ *   We also set whether Ctrl was held or not
+ * - in button-release-event (below) we check that flag. If there was a click,
+ *   we then check that there's no DND class that was added (which would signal
+ *   a dragging of the column (header) is taking place, in which case we shall
+ *   ignore the click). If good, we can then process the click.
+ * This should allow us to deal with a regular click as well as a Ctrl+click for
+ * second order, while preserving normal drawing as well as dragging. */
+static gboolean
+column_button_release_event_cb (GtkWidget       *btn,
+                                GdkEventButton  *event,
+                                struct column   *column)
+{
+    DonnaTreeViewPrivate *priv = column->tree->priv;
+
+    if (priv->on_release_click)
     {
-        column->pressed = TRUE;
-        column->ctrl_held = (event->state & GDK_CONTROL_MASK) == GDK_CONTROL_MASK;
+        gint distance;
+
+        g_object_get (gtk_settings_get_default (),
+                "gtk-double-click-distance",    &distance,
+                NULL);
+
+        /* only validate/trigger the click on release if it's within dbl-click
+         * distance of the press event */
+        if ((ABS (event->x - priv->on_release_x) <= distance)
+                && ABS (event->y - priv->on_release_y) <= distance)
+            handle_click (column->tree, priv->on_release_click, event,
+                    NULL, column->column, NULL, CLICK_ON_COLHEADER);
+
+        priv->on_release_click = 0;
     }
+    else
+        priv->on_release_triggered = TRUE;
+
     return FALSE;
 }
 
@@ -5267,47 +5332,6 @@ set_second_sort_column (DonnaTreeView       *tree,
 
     /* trigger a resort */
     resort_tree (tree);
-}
-
-/* we have a "special" handling of clicks on column headers. First off, we
- * don't use gtk_tree_view_column_set_sort_column_id() to handle the sorting
- * because we want control to do things like have a default order (ASC/DESC)
- * based on the type, etc
- * Then, we also don't use the signal clicked because we want to provider
- * support for a second sort order, which is why instead we're connecting to
- * signals of the button making the column header:
- * - in button-press-event (above) we set a flag stating that a click was done.
- *   We also set whether Ctrl was held or not
- * - in button-release-event (below) we check that flag. If there was a click,
- *   we then check that there's no DND class that was added (which would signal
- *   a dragging of the column (header) is taking place, in which case we shall
- *   ignore the click). If good, we can then process the click.
- * This should allow us to deal with a regular click as well as a Ctrl+click for
- * second order, while preserving normal drawing as well as dragging. */
-static gboolean
-column_button_release_event_cb (GtkWidget       *btn,
-                                GdkEventButton  *event,
-                                struct column   *column)
-{
-    GtkStyleContext *context;
-
-    if (event->button != 1 || event->type != GDK_BUTTON_RELEASE || !column->pressed)
-        return FALSE;
-
-    column->pressed = FALSE;
-
-    context = gtk_widget_get_style_context (btn);
-    if (gtk_style_context_has_class (context, GTK_STYLE_CLASS_DND))
-        return FALSE;
-
-    /* ctrl+click on column for second sort; on current sort_column to turn off
-     * the second_sort */
-    if (column->ctrl_held)
-        set_second_sort_column (column->tree, column->column, DONNA_SORT_UNKNOWN, FALSE);
-    else
-        set_sort_column (column->tree, column->column, DONNA_SORT_UNKNOWN, FALSE);
-
-    return FALSE;
 }
 
 static inline void
@@ -12258,13 +12282,6 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
      == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)         \
      && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
 
-enum
-{
-    CLICK_REGULAR = 0,
-    CLICK_ON_BLANK,
-    CLICK_ON_EXPANDER,
-};
-
 static gboolean
 tree_conv_flag (const gchar      c,
                 DonnaArgType    *type,
@@ -12358,9 +12375,11 @@ handle_click (DonnaTreeView     *tree,
     gboolean is_selected;
     gchar *clicks = NULL;
     /* longest possible is "blankcol_ctrl_shift_middle_double_click_on_rls"
-     * (len=46) */
-    gchar buf[47];
-    gchar *b = buf + 9; /* leave space for "blankcol_" prefix */
+     * (len=46); But longest prefix is "colheader_" (len=10) and even though it
+     * can't be slow/double and therefore would fit inside 46, we move to 47 (48
+     * with NUL) because we need a prefix space of 10 */
+    gchar buf[48];
+    gchar *b = buf + 10; /* leave space for "blankcol_" prefix */
     const gchar *def = NULL;
 
     if (event->state & GDK_CONTROL_MASK)
@@ -12388,17 +12407,21 @@ handle_click (DonnaTreeView     *tree,
         strcpy (b, "right_");
         b += 6;
     }
-    if (click & DONNA_CLICK_DOUBLE)
+    /* COLHEADER doesn't do (slow) double clicks */
+    if (click_on != CLICK_ON_COLHEADER)
     {
-        strcpy (b, "double_");
-        b += 7;
+        if (click & DONNA_CLICK_DOUBLE)
+        {
+            strcpy (b, "double_");
+            b += 7;
+        }
+        else if (click & DONNA_CLICK_SLOW_DOUBLE)
+        {
+            strcpy (b, "slow_");
+            b += 5;
+        }
+        /* else DONNA_CLICK_SINGLE; we don't print anything for it */
     }
-    else if (click & DONNA_CLICK_SLOW_DOUBLE)
-    {
-        strcpy (b, "slow_");
-        b += 5;
-    }
-    /* else DONNA_CLICK_SINGLE; we don't print anything for it */
     strcpy (b, "click");
 
     _col = get_column_by_column (tree, column);
@@ -12406,28 +12429,34 @@ handle_click (DonnaTreeView     *tree,
     if (_col)
         conv.col_name = _col->name;
 
-    if (!iter)
+    /* test this first, because if also doesn't have an iter */
+    if (click_on == CLICK_ON_COLHEADER)
     {
-        memcpy (buf, "blankrow_", 9 * sizeof (gchar));
+        memcpy (buf, "colheader_", 10 * sizeof (gchar));
         b = buf;
+    }
+    else if (!iter)
+    {
+        memcpy (buf + 1, "blankrow_", 9 * sizeof (gchar));
+        b = buf + 1;
     }
     else if (!_col)
     {
-        memcpy (buf, "blankcol_", 9 * sizeof (gchar));
-        b = buf;
+        memcpy (buf + 1, "blankcol_", 9 * sizeof (gchar));
+        b = buf + 1;
     }
     else if (click_on == CLICK_ON_BLANK)
     {
-        memcpy (buf + 3, "blank_", 6 * sizeof (gchar));
-        b = buf + 3;
+        memcpy (buf + 4, "blank_", 6 * sizeof (gchar));
+        b = buf + 4;
     }
     else if (click_on == CLICK_ON_EXPANDER)
     {
-        memcpy (buf, "expander_", 9 * sizeof (gchar));
-        b = buf;
+        memcpy (buf + 1, "expander_", 9 * sizeof (gchar));
+        b = buf + 1;
     }
     else
-        b = buf + 9;
+        b = buf + 10;
 
 
     if (is_tree && iter)
@@ -12494,6 +12523,10 @@ handle_click (DonnaTreeView     *tree,
             def = "command:tree_selection (%o, unselect, :all, )";
         else if (streq (b, "left_double_click"))
             def = "command:tree_activate_row (%o, %r)";
+        else if (streq (b, "colheader_left_click"))
+            def = "command:tree_set_sort (%o, %R)";
+        else if (streq (b, "colheader_ctrl_left_click"))
+            def = "command:tree_set_second_sort (%o, %R)";
     }
 
     fl = _donna_config_get_string_tree_column (config, priv->name,
