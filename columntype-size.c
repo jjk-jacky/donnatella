@@ -6,7 +6,7 @@
 #include "node.h"
 #include "donna.h"
 #include "conf.h"
-#include "size.h"
+#include "util.h"
 #include "macros.h"
 
 enum

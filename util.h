@@ -13,6 +13,12 @@ typedef struct
     const gchar *age_fallback_fmt;
 } DonnaTimeOptions;
 
+gssize          donna_print_size                (gchar              *str,
+                                                 gssize              max,
+                                                 const gchar        *fmt,
+                                                 guint64             size,
+                                                 gint                digits,
+                                                 gboolean            long_unit);
 gchar *         donna_print_time                (guint64             ts,
                                                  const gchar        *fmt,
                                                  DonnaTimeOptions   *options);

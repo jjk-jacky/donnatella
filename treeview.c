@@ -14,7 +14,6 @@
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMNTYPE_NAME */
 #include "cellrenderertext.h"
 #include "colorfilter.h"
-#include "size.h"
 #include "provider-internal.h"
 #include "contextmenu.h"
 #include "util.h"
