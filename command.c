@@ -1385,12 +1385,13 @@ cmd_tree_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     DonnaTreeRowId *rowid = args[1]; /* opt */
-    gchar *sections = args[2]; /* opt */
+    const gchar *column = args[2]; /* opt */
+    gchar *sections = args[3]; /* opt */
 
     GPtrArray *nodes;
     GValue *value;
 
-    nodes = donna_tree_view_context_get_nodes (tree, rowid, sections, &err);
+    nodes = donna_tree_view_context_get_nodes (tree, rowid, column, sections, &err);
     if (!nodes)
     {
         donna_task_take_error (task, err);
@@ -1411,11 +1412,12 @@ cmd_tree_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     DonnaTreeRowId *rowid = args[1]; /* opt */
-    gchar *sections = args[2]; /* opt */
-    const gchar *menus = args[3]; /* opt */
-    gboolean no_focus_grab = GPOINTER_TO_INT (args[4]); /* opt */
+    const gchar *column = args[2]; /* opt */
+    gchar *sections = args[3]; /* opt */
+    const gchar *menus = args[4]; /* opt */
+    gboolean no_focus_grab = GPOINTER_TO_INT (args[5]); /* opt */
 
-    if (!donna_tree_view_context_popup (tree, rowid, sections, menus,
+    if (!donna_tree_view_context_popup (tree, rowid, column, sections, menus,
                 no_focus_grab, &err))
     {
         donna_task_take_error (task, err);
@@ -2564,12 +2566,14 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_context_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;

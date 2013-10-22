@@ -249,10 +249,12 @@ gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
 GPtrArray *     donna_tree_view_context_get_nodes (
                                                  DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
+                                                 const gchar        *column,
                                                  gchar              *sections,
                                                  GError            **error);
 gboolean        donna_tree_view_context_popup   (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
+                                                 const gchar        *column,
                                                  gchar              *sections,
                                                  const gchar        *menus,
                                                  gboolean            no_focus_grab,

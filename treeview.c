@@ -11891,6 +11891,7 @@ err:
 GPtrArray *
 donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
                                    DonnaTreeRowId     *rowid,
+                                   const gchar        *column,
                                    gchar              *items,
                                    GError            **error)
 {
@@ -11907,6 +11908,24 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 
     sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
     conv.tree = tree;
+
+    if (column)
+    {
+        struct column *_col;
+
+        _col = get_column_by_name (tree, column);
+        if (!_col)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                    "Treeview '%s': Cannot get context nodes, no column '%s'",
+                    priv->name, column);
+            return NULL;
+        }
+        conv.col_name = _col->name;
+    }
+    else
+        conv.col_name = "";
 
     if (rowid)
     {
@@ -11969,7 +11988,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     nodes = donna_context_menu_get_nodes (priv->app, items, reference, "treeviews",
                 (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
-                "olLrnN", (conv_flag_fn) tree_conv_flag, &conv, error);
+                "olLrRnN", (conv_flag_fn) tree_conv_flag, &conv, error);
 
     if (conv.row)
         g_free (conv.row);
@@ -11989,6 +12008,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 gboolean
 donna_tree_view_context_popup (DonnaTreeView      *tree,
                                DonnaTreeRowId     *rowid,
+                               const gchar        *column,
                                gchar              *items,
                                const gchar        *_menus,
                                gboolean            no_focus_grab,
@@ -11999,7 +12019,7 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
     GPtrArray *nodes;
     gchar *menus;
 
-    nodes = donna_tree_view_context_get_nodes (tree, rowid, items, error);
+    nodes = donna_tree_view_context_get_nodes (tree, rowid, column, items, error);
     if (!nodes)
         return FALSE;
 
