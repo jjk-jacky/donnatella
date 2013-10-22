@@ -11528,7 +11528,7 @@ tree_context_get_item_info (const gchar             *item,
 
         if (!donna_provider_get_context_item_info (provider, s + 1, extra,
                 reference, (conv->row) ? conv->row->node : NULL,
-                (tree_context_get_sel_fn) context_get_selection,
+                (get_sel_fn) context_get_selection,
                 (reference & DONNA_CONTEXT_HAS_SELECTION) ? conv : NULL,
                 info, error))
         {

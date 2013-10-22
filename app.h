@@ -29,12 +29,6 @@ typedef enum
     DONNA_ENABLED_TYPE_IGNORE
 } DonnaEnabledTypes;
 
-typedef gboolean (*conv_flag_fn) (const gchar     c,
-                                  DonnaArgType   *type,
-                                  gpointer       *ptr,
-                                  GDestroyNotify *destroy,
-                                  gpointer        data);
-
 struct _DonnaAppInterface
 {
     GTypeInterface parent;

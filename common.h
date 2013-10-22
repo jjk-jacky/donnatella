@@ -39,6 +39,12 @@ typedef enum
     DONNA_ARG_IS_ARRAY      = (1 << 16),
 } DonnaArgType;
 
+typedef gboolean (*conv_flag_fn) (const gchar     c,
+                                  DonnaArgType   *type,
+                                  gpointer       *ptr,
+                                  GDestroyNotify *destroy,
+                                  gpointer        data);
+
 
 typedef struct _DonnaApp                    DonnaApp; /* dummy typedef */
 typedef struct _DonnaAppInterface           DonnaAppInterface;

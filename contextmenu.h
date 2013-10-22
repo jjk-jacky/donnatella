@@ -4,7 +4,6 @@
 
 #include <gtk/gtk.h>
 #include "common.h"
-#include "treeview.h"
 
 G_BEGIN_DECLS
 
@@ -58,6 +57,8 @@ typedef struct
     guint        free_trigger   : 1;
     guint        free_menu      : 1;
 } DonnaContextInfo;
+
+typedef GPtrArray * (*get_sel_fn)   (gpointer data, GError **error);
 
 typedef gchar *  (*get_alias_fn)     (const gchar             *alias,
                                       const gchar             *extra,

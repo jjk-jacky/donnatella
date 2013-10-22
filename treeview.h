@@ -171,8 +171,6 @@ struct _DonnaTreeViewClass
                                                          DonnaNode      *node);
 };
 
-/* for donna_provider_get_context_item_info() */
-typedef GPtrArray * (*tree_context_get_sel_fn)  (gpointer data, GError **error);
 
 GtkWidget *     donna_tree_view_new             (DonnaApp           *app,
                                                  const gchar        *name);

@@ -43,7 +43,7 @@ static gboolean         provider_mark_get_context_item_info (
                                                          const gchar        *extra,
                                                          DonnaContextReference reference,
                                                          DonnaNode          *node_ref,
-                                                         tree_context_get_sel_fn get_sel,
+                                                         get_sel_fn          get_sel,
                                                          gpointer            get_sel_data,
                                                          DonnaContextInfo   *info,
                                                          GError            **error);
@@ -615,7 +615,7 @@ provider_mark_get_context_item_info (DonnaProvider          *provider,
                                      const gchar            *extra,
                                      DonnaContextReference   reference,
                                      DonnaNode              *node_ref,
-                                     tree_context_get_sel_fn get_sel,
+                                     get_sel_fn              get_sel,
                                      gpointer                get_sel_data,
                                      DonnaContextInfo       *info,
                                      GError                **error)
