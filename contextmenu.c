@@ -1123,14 +1123,56 @@ parse_items (DonnaApp               *app,
         /* get extra (if any) */
         if (c_end == ':')
         {
-            extra = end + 1;
-            for (end = extra;
-                    *end != ',' && *end != '\0' && *end != '<'
-                    && (!(parse & PARSE_IN_CONTAINER) || *end != '>');
-                    ++end)
-                ;
-            c_end = *end;
-            *end = '\0';
+            /* extras can be quoted */
+            if (end[1] == '"')
+            {
+                guint i = 0;
+
+                extra = end + 2;
+                for (end = extra; ; ++end)
+                {
+                    if (end[i] == '\\')
+                    {
+                        *end = end[++i];
+                        continue;
+                    }
+                    *end = end[i];
+                    if (*end == '"')
+                        break;
+                    else if (*end == '\0')
+                    {
+                        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                                DONNA_CONTEXT_MENU_ERROR_INVALID_SYNTAX,
+                                "Missing ending quote of extras");
+                        g_ptr_array_unref (nodes);
+                        return NULL;
+                    }
+                }
+                *end = '\0';
+                end += i;
+                if (*end != ',' && *end != '\0' && *end != '<'
+                        && (!(parse & PARSE_IN_CONTAINER) || *end != '>'))
+                {
+                    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                            DONNA_CONTEXT_MENU_ERROR_INVALID_SYNTAX,
+                            "Invalid character after quoted extras, "
+                            "expected EOL, ',', '<' or (if in submenu) '>'");
+                    g_ptr_array_unref (nodes);
+                    return NULL;
+                }
+                c_end = *end;
+            }
+            else
+            {
+                extra = end + 1;
+                for (end = extra;
+                        *end != ',' && *end != '\0' && *end != '<'
+                        && (!(parse & PARSE_IN_CONTAINER) || *end != '>');
+                        ++end)
+                    ;
+                c_end = *end;
+                *end = '\0';
+            }
         }
         else
             extra = NULL;
