@@ -2308,7 +2308,6 @@ load_menu (struct menu_click *mc)
     {
         DonnaNode *node = mc->nodes->pdata[i];
         GtkWidget *item;
-        GtkWidget *image = NULL;
         GdkPixbuf *icon;
         gchar *name;
 
@@ -2360,24 +2359,12 @@ load_menu (struct menu_click *mc)
                 g_value_unset (&v);
             }
 
-            donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
-            if (has == DONNA_NODE_VALUE_SET)
-            {
-                if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
-                {
-                    GtkWidget *image;
-
-                    image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
-                    donna_image_menu_item_set_image_selected ((DonnaImageMenuItem *) item,
-                            image);
-                }
-                g_value_unset (&v);
-            }
-
             g_object_set_data ((GObject *) item, "node", node);
 
             if (mc->show_icons)
             {
+                GtkWidget *image;
+
                 if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
                 {
                     image = gtk_image_new_from_pixbuf (icon);
@@ -2394,6 +2381,21 @@ load_menu (struct menu_click *mc)
                 }
                 else
                     image = NULL;
+
+                if (image)
+                    donna_image_menu_item_set_image ((DonnaImageMenuItem *) item, image);
+
+                donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
+                if (has == DONNA_NODE_VALUE_SET)
+                {
+                    if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
+                    {
+                        image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
+                        donna_image_menu_item_set_image_selected ((DonnaImageMenuItem *) item,
+                                image);
+                    }
+                    g_value_unset (&v);
+                }
             }
 
             if (type == DONNA_NODE_CONTAINER)
@@ -2497,8 +2499,6 @@ load_menu (struct menu_click *mc)
                             (GCallback) item_destroy_cb, ls);
                 }
             }
-
-            donna_image_menu_item_set_image ((DonnaImageMenuItem *) item, image);
         }
 
         /* we use button-release because that's what's handled by
