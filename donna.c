@@ -2323,6 +2323,7 @@ load_menu (struct menu_click *mc)
         }
         else
         {
+            DonnaImageMenuItem *imi;
             DonnaNodeType type;
             DonnaNodeHasValue has;
             GValue v = G_VALUE_INIT;
@@ -2330,6 +2331,7 @@ load_menu (struct menu_click *mc)
             type = donna_node_get_node_type (node);
             name = donna_node_get_name (node);
             item = donna_image_menu_item_new_with_label (name);
+            imi  = (DonnaImageMenuItem *) item;
             g_free (name);
 
             donna_node_get (node, TRUE, "menu-is-sensitive", &has, &v, NULL);
@@ -2344,8 +2346,7 @@ load_menu (struct menu_click *mc)
             if (has == DONNA_NODE_VALUE_SET)
             {
                 if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
-                    donna_image_menu_item_set_is_combined_sensitive (
-                            (DonnaImageMenuItem *) item,
+                    donna_image_menu_item_set_is_combined_sensitive (imi,
                             g_value_get_boolean (&v));
                 g_value_unset (&v);
             }
@@ -2354,7 +2355,7 @@ load_menu (struct menu_click *mc)
             if (has == DONNA_NODE_VALUE_SET)
             {
                 if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
-                    donna_image_menu_item_set_label_bold ((DonnaImageMenuItem *) item,
+                    donna_image_menu_item_set_label_bold (imi,
                             g_value_get_boolean (&v));
                 g_value_unset (&v);
             }
@@ -2383,7 +2384,7 @@ load_menu (struct menu_click *mc)
                     image = NULL;
 
                 if (image)
-                    donna_image_menu_item_set_image ((DonnaImageMenuItem *) item, image);
+                    donna_image_menu_item_set_image (imi, image);
 
                 donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
                 if (has == DONNA_NODE_VALUE_SET)
@@ -2391,8 +2392,7 @@ load_menu (struct menu_click *mc)
                     if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
                     {
                         image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
-                        donna_image_menu_item_set_image_selected ((DonnaImageMenuItem *) item,
-                                image);
+                        donna_image_menu_item_set_image_selected (imi, image);
                     }
                     g_value_unset (&v);
                 }
@@ -2491,8 +2491,7 @@ load_menu (struct menu_click *mc)
                         ls->mc->submenus = submenus;
                     }
 
-                    donna_image_menu_item_set_is_combined (
-                            (DonnaImageMenuItem *) item, TRUE);
+                    donna_image_menu_item_set_is_combined (imi, TRUE);
                     g_signal_connect_swapped (item, "load-submenu",
                             (GCallback) load_submenu, ls);
                     g_signal_connect_swapped (item, "destroy",
