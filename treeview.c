@@ -11224,6 +11224,27 @@ donna_tree_view_go_down (DonnaTreeView      *tree,
     return ret;
 }
 
+static GPtrArray *
+context_get_selection (struct conv *conv, GError **error)
+{
+    DonnaTreeView *tree = conv->tree;
+
+    if (!conv->selection)
+    {
+        GError *err = NULL;
+
+        conv->selection = donna_tree_view_get_selected_nodes (tree, &err);
+        if (!conv->selection && !err)
+            /* it returns NULL if there's no selection, but sets an error.
+             * Neither means no selection, which here is an error */
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': No selection", tree->priv->name);
+    }
+
+    return conv->selection;
+}
+
 static gchar *
 tree_context_get_alias (const gchar             *alias,
                         const gchar             *extra,
@@ -11236,7 +11257,99 @@ tree_context_get_alias (const gchar             *alias,
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
 
-    if (streq (alias, "column_edit"))
+    if (streqn (alias, "column.", 7))
+    {
+        struct column *_col;
+        gchar buf[255], *b = buf;
+        gchar *s;
+        gchar *ret;
+
+        alias += 7;
+        s = strchr (alias, '.');
+        if (!s)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                    "Treeview '%s': No such alias: '%s'",
+                    priv->name, alias - 4);
+            return NULL;
+        }
+
+        *s = '\0';
+        _col = get_column_by_name (tree, alias);
+        *s = '.';
+        if (!_col)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                    "Treeview '%s': No such alias: '%s' (no such column)",
+                    priv->name, alias - 7);
+            return NULL;
+        }
+
+        if (G_UNLIKELY (snprintf (buf, 255, ":column.%s.", _col->name) >= 255))
+            b = g_strdup_printf (":column.%s.", _col->name);
+
+        ret = donna_columntype_get_context_alias (_col->ct,
+                priv->name,
+                _col->name,
+                priv->arrangement->columns_options,
+                _col->ct_data,
+                s + 1,
+                extra,
+                reference,
+                (conv->row) ? conv->row->node : NULL,
+                (get_sel_fn) context_get_selection,
+                (reference & DONNA_CONTEXT_HAS_SELECTION) ? conv : NULL,
+                b,
+                error);
+
+        if (G_UNLIKELY (b != buf))
+            g_free (b);
+        return ret;
+    }
+    else if (streq (alias, "column_options"))
+    {
+        struct column *_col;
+        gchar buf[255], *b = buf;
+        gchar *ret;
+
+        if (!conv->col_name)
+            return "";
+
+        _col = get_column_by_name (tree, conv->col_name);
+        if (G_UNLIKELY (!_col))
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                    "Treeview '%s': Can't resolve alias 'column_options': "
+                    "Failed to get column '%s' -- This is not supposed to happen!",
+                    priv->name, conv->col_name);
+            return NULL;
+        }
+
+        if (G_UNLIKELY (snprintf (buf, 255, ":column.%s.", _col->name) >= 255))
+            b = g_strdup_printf (":column.%s.", _col->name);
+
+        ret = donna_columntype_get_context_alias (_col->ct,
+                priv->name,
+                _col->name,
+                priv->arrangement->columns_options,
+                _col->ct_data,
+                "options",
+                extra,
+                reference,
+                (conv->row) ? conv->row->node : NULL,
+                (get_sel_fn) context_get_selection,
+                (reference & DONNA_CONTEXT_HAS_SELECTION) ? conv : NULL,
+                b,
+                error);
+
+        if (G_UNLIKELY (b != buf))
+            g_free (b);
+        return ret;
+    }
+    else if (streq (alias, "column_edit"))
     {
         if (priv->columns)
         {
@@ -11282,27 +11395,6 @@ tree_context_get_alias (const gchar             *alias,
     return NULL;
 }
 
-static GPtrArray *
-context_get_selection (struct conv *conv, GError **error)
-{
-    DonnaTreeView *tree = conv->tree;
-
-    if (!conv->selection)
-    {
-        GError *err = NULL;
-
-        conv->selection = donna_tree_view_get_selected_nodes (tree, &err);
-        if (!conv->selection && !err)
-            /* it returns NULL if there's no selection, but sets an error.
-             * Neither means no selection, which here is an error */
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': No selection", tree->priv->name);
-    }
-
-    return conv->selection;
-}
-
 static gboolean
 tree_context_get_item_info (const gchar             *item,
                             const gchar             *extra,
@@ -11316,7 +11408,56 @@ tree_context_get_item_info (const gchar             *item,
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
 
-    if (streqn (item, "column_edit", 11))
+    if (streqn (item, "column.", 7))
+    {
+        struct column *_col;
+        gchar *s;
+
+        item += 7;
+        s = strchr (item, '.');
+        if (!s)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No such item: '%s'",
+                    priv->name, item - 4);
+            return FALSE;
+        }
+
+        *s = '\0';
+        _col = get_column_by_name (tree, item);
+        *s = '.';
+        if (!_col)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No such item: '%s' (no such column)",
+                    priv->name, item - 7);
+            return FALSE;
+        }
+
+        if (!donna_columntype_get_context_item_info (_col->ct,
+                    priv->name,
+                    _col->name,
+                    priv->arrangement->columns_options,
+                    _col->ct_data,
+                    s + 1,
+                    extra,
+                    reference,
+                    (conv->row) ? conv->row->node : NULL,
+                    (get_sel_fn) context_get_selection,
+                    (reference & DONNA_CONTEXT_HAS_SELECTION) ? conv : NULL,
+                    info,
+                    error))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to get item '%s': ",
+                    priv->name, item - 7);
+            return FALSE;
+        }
+
+        return TRUE;
+    }
+    else if (streqn (item, "column_edit", 11))
     {
         GError *err = NULL;
         struct column *_col;
