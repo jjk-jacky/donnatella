@@ -9,6 +9,9 @@ enum
 
     PROP_IMAGE,
     PROP_IMAGE_SELECTED,
+    PROP_IMAGE_SPECIAL,
+    PROP_IS_ACTIVE,
+    PROP_IS_INCONSISTENT,
     PROP_IS_COMBINED,
     PROP_IS_COMBINED_SENSITIVE,
     PROP_IS_LABEL_BOLD,
@@ -27,9 +30,12 @@ struct _DonnaImageMenuItemPrivate
     GtkWidget   *image;
     GtkWidget   *image_org;
     GtkWidget   *image_sel;
-    gboolean     is_combined;
-    gboolean     is_combined_sensitive;
-    gboolean     is_label_bold;
+    guint        image_special          : 2;
+    guint        is_active              : 1;
+    guint        is_inconsistent        : 1;
+    guint        is_combined            : 1;
+    guint        is_combined_sensitive  : 1;
+    guint        is_label_bold          : 1;
     gint         toggle_size;
 
     gint         item_width;
@@ -151,6 +157,50 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
                 G_PARAM_READWRITE);
 
     /**
+     * DonnaImageMenuItem:image-special:
+     *
+     * Special image to use in the menu item. This allows to use, instead of an
+     * image, a check box or radio option.
+     *
+     * If set, it will take precedence over :image or :image-selected
+     */
+    donna_image_menu_item_props[PROP_IMAGE_SPECIAL] =
+        g_param_spec_uint ("image-special", "Special image",
+                "Special image used in the menu item",
+                DONNA_IMAGE_MENU_ITEM_IS_IMAGE, /* minimum */
+                _DONNA_IMAGE_MENU_ITEM_NB_IMAGE_SPECIAL - 1, /* maximum */
+                DONNA_IMAGE_MENU_ITEM_IS_IMAGE, /* default */
+                G_PARAM_READWRITE);
+
+    /**
+     * DonnaImageMenuItem:is-active:
+     *
+     * Whether the check box or radio option is active/enabled or not.
+     *
+     * This only applies if :image-special is %DONNA_IMAGE_MENU_ITEM_IS_CHECK
+     * or %DONNA_IMAGE_MENU_ITEM_IS_RADIO
+     */
+    donna_image_menu_item_props[PROP_IS_ACTIVE] =
+        g_param_spec_boolean ("is-active", "is-active",
+                "Whether the check box/radio option is active/checked",
+                FALSE, /* default */
+                G_PARAM_READWRITE);
+
+    /**
+     * DonnaImageMenuItem:is-inconsistent:
+     *
+     * Whether the check box is in an inconsistent state or not (i.e. mixed of
+     * active/selected and not)
+     *
+     * This only applies if :image-special is %DONNA_IMAGE_MENU_ITEM_IS_CHECK
+     */
+    donna_image_menu_item_props[PROP_IS_INCONSISTENT] =
+        g_param_spec_boolean ("is-inconsistent", "is-inconsistent",
+                "Whether the check box option is inconsistent",
+                FALSE, /* default */
+                G_PARAM_READWRITE);
+
+    /**
      * DonnaImageMenuItem:is-combined:
      *
      * Whether or not this item is a combined action and submenu
@@ -185,6 +235,19 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
 
     g_object_class_install_properties (o_class, NB_PROPS,
             donna_image_menu_item_props);
+
+    /**
+     * DonnaImageMenuItem:indicator-size:
+     *
+     * Size of the check box/radio option, when applicable (See :image-special)
+     */
+    gtk_widget_class_install_style_property (w_class,
+            g_param_spec_int ("indicator-size", "Indicator size",
+                "Size of check box or radio option image",
+                0,
+                G_MAXINT,
+                16,
+                G_PARAM_READWRITE));
 
     /**
      * DonnaImageMenuItem::load-submenu:
@@ -256,6 +319,21 @@ donna_image_menu_item_set_property (GObject        *object,
                     (GtkWidget *) g_value_get_object (value));
             break;
 
+        case PROP_IMAGE_SPECIAL:
+            donna_image_menu_item_set_image_special (item,
+                    g_value_get_uint (value));
+            break;
+
+        case PROP_IS_ACTIVE:
+            donna_image_menu_item_set_is_active (item,
+                    g_value_get_boolean (value));
+            break;
+
+        case PROP_IS_INCONSISTENT:
+            donna_image_menu_item_set_is_inconsistent (item,
+                    g_value_get_boolean (value));
+            break;
+
         case PROP_IS_COMBINED:
             donna_image_menu_item_set_is_combined (item,
                     g_value_get_boolean (value));
@@ -295,6 +373,17 @@ donna_image_menu_item_get_property (GObject        *object,
             g_value_set_object (value, priv->image_sel);
             break;
 
+        case PROP_IMAGE_SPECIAL:
+            g_value_set_uint (value, priv->image_special);
+
+        case PROP_IS_ACTIVE:
+            g_value_set_boolean (value, priv->is_active);
+            break;
+
+        case PROP_IS_INCONSISTENT:
+            g_value_set_boolean (value, priv->is_inconsistent);
+            break;
+
         case PROP_IS_COMBINED:
             g_value_set_boolean (value, priv->is_combined);
             break;
@@ -318,7 +407,7 @@ donna_image_menu_item_map (GtkWidget *widget)
 {
     DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) widget)->priv;
 
-    if (priv->image)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image)
         g_object_set (priv->image, "visible", TRUE, NULL);
 
     ((GtkWidgetClass *) donna_image_menu_item_parent_class)->map (widget);
@@ -343,33 +432,48 @@ donna_image_menu_item_toggle_size_request (GtkMenuItem *menu_item,
 
     *requisition = 0;
 
-    if (priv->image)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE)
     {
-        GtkWidget *widget = (GtkWidget *) menu_item;
-        GtkWidget *parent;
-        GtkPackDirection pack_dir;
-        GtkRequisition image_requisition;
+        if (priv->image)
+        {
+            GtkWidget *widget = (GtkWidget *) menu_item;
+            GtkWidget *parent;
+            GtkPackDirection pack_dir;
+            GtkRequisition image_requisition;
+            guint toggle_spacing;
+
+            parent = gtk_widget_get_parent (widget);
+            if (GTK_IS_MENU_BAR (parent))
+                pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
+            else
+                pack_dir = GTK_PACK_DIRECTION_LTR;
+
+            gtk_widget_get_preferred_size (priv->image, &image_requisition, NULL);
+            gtk_widget_style_get (widget, "toggle-spacing", &toggle_spacing, NULL);
+
+            if (pack_dir == GTK_PACK_DIRECTION_LTR || pack_dir == GTK_PACK_DIRECTION_RTL)
+            {
+                if (image_requisition.width > 0)
+                    *requisition = image_requisition.width + toggle_spacing;
+            }
+            else
+            {
+                if (image_requisition.height > 0)
+                    *requisition = image_requisition.height + toggle_spacing;
+            }
+        }
+    }
+    else
+    {
         guint toggle_spacing;
+        guint indicator_size;
 
-        parent = gtk_widget_get_parent (widget);
-        if (GTK_IS_MENU_BAR (parent))
-            pack_dir = gtk_menu_bar_get_child_pack_direction ((GtkMenuBar *) parent);
-        else
-            pack_dir = GTK_PACK_DIRECTION_LTR;
+        gtk_widget_style_get ((GtkWidget *) menu_item,
+                "toggle-spacing",   &toggle_spacing,
+                "indicator-size",   &indicator_size,
+                NULL);
 
-        gtk_widget_get_preferred_size (priv->image, &image_requisition, NULL);
-        gtk_widget_style_get (widget, "toggle-spacing", &toggle_spacing, NULL);
-
-        if (pack_dir == GTK_PACK_DIRECTION_LTR || pack_dir == GTK_PACK_DIRECTION_RTL)
-        {
-            if (image_requisition.width > 0)
-                *requisition = image_requisition.width + toggle_spacing;
-        }
-        else
-        {
-            if (image_requisition.height > 0)
-                *requisition = image_requisition.height + toggle_spacing;
-        }
+        *requisition = indicator_size + toggle_spacing;
     }
 }
 
@@ -392,7 +496,7 @@ donna_image_menu_item_get_preferred_width (GtkWidget        *widget,
     ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
         get_preferred_width (widget, minimum, natural);
 
-    if (priv->image)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image)
     {
         GtkPackDirection pack_dir;
         GtkWidget *parent;
@@ -424,7 +528,7 @@ donna_image_menu_item_get_preferred_height (GtkWidget        *widget,
     ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
         get_preferred_height (widget, minimum, natural);
 
-    if (priv->image)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image)
     {
         GtkPackDirection pack_dir;
         GtkWidget *parent;
@@ -457,7 +561,7 @@ donna_image_menu_item_get_preferred_height_for_width (GtkWidget        *widget,
     ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
         get_preferred_height_for_width (widget, width, minimum, natural);
 
-    if (priv->image)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image)
     {
         GtkPackDirection pack_dir;
         GtkWidget *parent;
@@ -489,7 +593,7 @@ donna_image_menu_item_size_allocate (GtkWidget     *widget,
     ((GtkWidgetClass *) donna_image_menu_item_parent_class)->
         size_allocate (widget, allocation);
 
-    if (priv->image)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image)
     {
         GtkAllocation widget_allocation;
         GtkPackDirection pack_dir;
@@ -569,7 +673,8 @@ donna_image_menu_item_forall (GtkContainer   *container,
     ((GtkContainerClass *) donna_image_menu_item_parent_class)->
         forall (container, include_internals, callback, data);
 
-    if (include_internals && priv->image)
+    if (include_internals && priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE
+            && priv->image)
         (*callback) (priv->image, data);
 }
 
@@ -721,7 +826,7 @@ donna_image_menu_item_select (GtkMenuItem        *menuitem)
 {
     DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) menuitem)->priv;
 
-    if (priv->image_sel)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image_sel)
     {
         if (priv->image)
             priv->image_org = g_object_ref (priv->image);
@@ -756,7 +861,7 @@ donna_image_menu_item_deselect (GtkMenuItem          *menuitem)
 {
     DonnaImageMenuItemPrivate *priv = ((DonnaImageMenuItem *) menuitem)->priv;
 
-    if (priv->image_sel)
+    if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE && priv->image_sel)
     {
         donna_image_menu_item_set_image ((DonnaImageMenuItem *) menuitem, priv->image_org);
         g_object_unref (priv->image_org);
@@ -828,7 +933,7 @@ draw_child (GtkWidget *widget, struct draw *data)
 }
 
 /* the following is pretty much a copy/paste from gtkmenuitem.c, except for the
- * is_combined bit obviously.
+ * is_combined bit, and check/radio indicator.
  *
  * gtkmenuitem.c
  * Copyright (C) 1995-1997 Peter Mattis, Spencer Kimball and Josh MacDonald
@@ -943,6 +1048,55 @@ donna_image_menu_item_draw (GtkWidget          *widget,
                     y + padding.top);
     }
 
+    if (priv->image_special != DONNA_IMAGE_MENU_ITEM_IS_IMAGE)
+    {
+        guint toggle_spacing;
+        guint horizontal_padding;
+        guint indicator_size;
+        guint border_width;
+        guint offset;
+
+        gtk_widget_style_get (widget,
+                "toggle-spacing",       &toggle_spacing,
+                "horizontal-padding",   &horizontal_padding,
+                "indicator-size",       &indicator_size,
+                NULL);
+
+        border_width = gtk_container_get_border_width ((GtkContainer *) widget);
+        offset = border_width + padding.left + 2;
+
+        if (gtk_widget_get_direction (widget) == GTK_TEXT_DIR_LTR)
+            x = offset + horizontal_padding
+                + (priv->toggle_size - toggle_spacing - indicator_size) / 2;
+        else
+            x = width - offset - horizontal_padding - priv->toggle_size + toggle_spacing
+                + (priv->toggle_size - toggle_spacing - indicator_size) / 2;
+        y = (height - indicator_size) / 2;
+
+        gtk_style_context_save (context);
+
+        if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_CHECK
+                && priv->is_inconsistent)
+            state |= GTK_STATE_FLAG_INCONSISTENT;
+        else if (priv->is_active)
+            state |= GTK_STATE_FLAG_ACTIVE;
+
+        gtk_style_context_set_state (context, state);
+
+        if (priv->image_special == DONNA_IMAGE_MENU_ITEM_IS_CHECK)
+        {
+            gtk_style_context_add_class (context, GTK_STYLE_CLASS_CHECK);
+            gtk_render_check (context, cr, x, y, indicator_size, indicator_size);
+        }
+        else
+        {
+            gtk_style_context_add_class (context, GTK_STYLE_CLASS_RADIO);
+            gtk_render_option (context, cr, x, y, indicator_size, indicator_size);
+        }
+
+        gtk_style_context_restore (context);
+    }
+
     /* we don't chain up because then the background is done over ours, so we
      * just call propagate_draw on all children */
     data.container = (GtkContainer *) widget;
@@ -975,6 +1129,10 @@ donna_image_menu_item_new_with_label (const gchar *label)
  * @image: (allow-none): a #GtkWidget to set as the image for the menu item
  *
  * Sets the image of @item to the given widget
+ *
+ * Note that is will not be used if :image-special was set to something other
+ * than %DONNA_IMAGE_MENU_ITEM_IS_IMAGE; see
+ * donna_image_menu_item_set_image_special()
  */
 void
 donna_image_menu_item_set_image (DonnaImageMenuItem *item,
@@ -1025,6 +1183,10 @@ donna_image_menu_item_get_image (DonnaImageMenuItem *item)
  * item
  *
  * Sets the image shown when @item is selected to the given widget
+ *
+ * Note that is will not be used if :image-special was set to something other
+ * than %DONNA_IMAGE_MENU_ITEM_IS_IMAGE; see
+ * donna_image_menu_item_set_image_special()
  */
 void
 donna_image_menu_item_set_image_selected (DonnaImageMenuItem *item,
@@ -1063,6 +1225,128 @@ donna_image_menu_item_get_image_selected (DonnaImageMenuItem *item)
 {
     g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), NULL);
     return item->priv->image_sel;
+}
+
+/**
+ * donna_image_menu_item_set_image_special:
+ * @item: #DonnaImageMenuItem to set the image-selected of
+ * @image: Which type of image will be used on the menu item
+ *
+ * Sets which type of image will be used on the menu item. It can be a special
+ * rendering for check box or radio option, or whatever image was set using
+ * donna_image_menu_item_set_image()
+ */
+void
+donna_image_menu_item_set_image_special (DonnaImageMenuItem             *item,
+                                         DonnaImageMenuItemImageSpecial  image)
+{
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    g_return_if_fail (image >= DONNA_IMAGE_MENU_ITEM_IS_IMAGE
+            && image < _DONNA_IMAGE_MENU_ITEM_NB_IMAGE_SPECIAL);
+
+    item->priv->image_special = image;
+    g_object_notify ((GObject *) item, "image-special");
+}
+
+/**
+ * donna_image_menu_item_get_image_special:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Returns which type of image is used on the menu item. Note that
+ * %DONNA_IMAGE_MENU_ITEM_IS_IMAGE doesn't mean an image will be featured, see
+ * donna_image_menu_item_get_image() to see which, if any, will actually be
+ * used.
+ *
+ * Returns: Which type of image is used
+ **/
+DonnaImageMenuItemImageSpecial
+donna_image_menu_item_get_image_special (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), 0);
+    return item->priv->image_special;
+}
+
+/**
+ * donna_image_menu_item_set_is_active:
+ * @item: a #DonnaImageMenuItem
+ * @is_active: Whether @item is active/checked or not
+ *
+ * Sets whether the menu item will show an active/checked check box/radio option
+ * or not. This obviously only applies if :image-special is set to either
+ * %DONNA_IMAGE_MENU_ITEM_IS_CHECK or %DONNA_IMAGE_MENU_ITEM_IS_RADIO
+ */
+void
+donna_image_menu_item_set_is_active (DonnaImageMenuItem *item,
+                                     gboolean            is_active)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->is_active != is_active)
+    {
+        priv->is_active = is_active;
+        g_object_notify ((GObject *) item, "is-active");
+    }
+}
+
+/**
+ * donna_image_menu_item_get_is_active:
+ * @item: a #DonnaImageMenuItem
+ *
+ * This only applies if :image-special is set to either
+ * %DONNA_IMAGE_MENU_ITEM_IS_CHECK or %DONNA_IMAGE_MENU_ITEM_IS_RADIO
+ *
+ * Returns: Whether @item is active/checked or not
+ */
+gboolean
+donna_image_menu_item_get_is_active (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
+    return item->priv->is_active;
+}
+
+/**
+ * donna_image_menu_item_set_is_inconsistent:
+ * @item: a #DonnaImageMenuItem
+ * @is_inconsistent: Whether the check box of @item is in an inconsistent state
+ * or not
+ *
+ * Sets whether the menu item will show a check box in an inconsistent state or
+ * not. This takes precedence over :is-active and will obviously only apply if
+ * :image-special is set to either %DONNA_IMAGE_MENU_ITEM_IS_CHECK or
+ * %DONNA_IMAGE_MENU_ITEM_IS_RADIO
+ */
+void
+donna_image_menu_item_set_is_inconsistent (DonnaImageMenuItem *item,
+                                           gboolean            is_inconsistent)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->is_inconsistent != is_inconsistent)
+    {
+        priv->is_inconsistent = is_inconsistent;
+        g_object_notify ((GObject *) item, "is-inconsistent");
+    }
+}
+
+/**
+ * donna_image_menu_item_get_is_inconsistent:
+ * @item: a #DonnaImageMenuItem
+ *
+ * This only applies if :image-special is set to %DONNA_IMAGE_MENU_ITEM_IS_CHECK
+ *
+ * Returns: Whether the check box of @item is in an inconsistent state or not
+ */
+gboolean
+donna_image_menu_item_get_is_inconsistent (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
+    return item->priv->is_inconsistent;
 }
 
 /**
