@@ -138,6 +138,7 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
                 "Child widget to appear next to the menu text",
                 GTK_TYPE_WIDGET,
                 G_PARAM_READWRITE);
+
     /**
      * DonnaImageMenuItem:image-selected:
      *
@@ -188,7 +189,7 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
     /**
      * DonnaImageMenuItem::load-submenu:
      *
-     * Emitetd when the submenu for the item should be loaded
+     * Emitted when the submenu for the item should be loaded
      */
     donna_image_menu_item_signals[SIGNAL_LOAD_SUBMENU] =
         g_signal_new ("load-submenu",
@@ -249,6 +250,7 @@ donna_image_menu_item_set_property (GObject        *object,
             donna_image_menu_item_set_image (item,
                     (GtkWidget *) g_value_get_object (value));
             break;
+
         case PROP_IMAGE_SELECTED:
             donna_image_menu_item_set_image_selected (item,
                     (GtkWidget *) g_value_get_object (value));
@@ -991,11 +993,12 @@ donna_image_menu_item_set_image (DonnaImageMenuItem *item,
 
     priv->image = image;
 
-    if (image == NULL)
-        return;
+    if (image != NULL)
+    {
+        gtk_widget_set_parent (image, (GtkWidget *) item);
+        g_object_set (image, "visible", TRUE, "no-show-all", TRUE, NULL);
+    }
 
-    gtk_widget_set_parent (image, (GtkWidget *) item);
-    g_object_set (image, "visible", TRUE, "no-show-all", TRUE, NULL);
     g_object_notify ((GObject *) item, "image");
 }
 
@@ -1032,9 +1035,18 @@ donna_image_menu_item_set_image_selected (DonnaImageMenuItem *item,
     g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
     priv = item->priv;
 
+    if (image == priv->image_sel)
+        return;
+
     if (priv->image_sel)
         g_object_unref (priv->image_sel);
-    priv->image_sel = g_object_ref_sink (image);
+
+    priv->image_sel = image;
+
+    if (image != NULL)
+        g_object_ref_sink (image);
+
+    g_object_notify ((GObject *) item, "image-selected");
 }
 
 /**
@@ -1056,23 +1068,23 @@ donna_image_menu_item_get_image_selected (DonnaImageMenuItem *item)
 /**
  * donna_image_menu_item_set_is_combined:
  * @item: a #DonnaImageMenuItem
- * @combined: Whether @item should combine an item and a submenu or not
+ * @is_combined: Whether @item should combine an item and a submenu or not
  *
  * Sets whether the menu item will be both an item (that can be clicked) as well
  * as a submenu, or not (i.e. either one or the other)
  */
 void
 donna_image_menu_item_set_is_combined (DonnaImageMenuItem *item,
-                                       gboolean            combined)
+                                       gboolean            is_combined)
 {
     DonnaImageMenuItemPrivate *priv;
 
     g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
     priv = item->priv;
 
-    if (priv->is_combined != combined)
+    if (priv->is_combined != is_combined)
     {
-        priv->is_combined = combined;
+        priv->is_combined = is_combined;
         gtk_menu_item_set_reserve_indicator ((GtkMenuItem *) item, priv->is_combined);
         g_object_notify ((GObject *) item, "is-combined");
     }
@@ -1094,7 +1106,7 @@ donna_image_menu_item_get_is_combined (DonnaImageMenuItem *item)
 /**
  * donna_image_menu_item_set_is_combined_sensitive:
  * @item: a #DonnaImageMenuItem
- * @combined_sensitive: Whether the action part of @item is sensitive or not
+ * @is_combined_sensitive: Whether the action part of @item is sensitive or not
  *
  * Sets whether the item (i.e. clickable) part of the item is sensitive or not.
  * This allows to have it non-sensitive (i.e. disabled) while keeping the
@@ -1104,16 +1116,16 @@ donna_image_menu_item_get_is_combined (DonnaImageMenuItem *item)
  */
 void
 donna_image_menu_item_set_is_combined_sensitive (DonnaImageMenuItem *item,
-                                                 gboolean            combined_sensitive)
+                                                 gboolean            is_combined_sensitive)
 {
     DonnaImageMenuItemPrivate *priv;
 
     g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
     priv = item->priv;
 
-    if (priv->is_combined_sensitive != combined_sensitive)
+    if (priv->is_combined_sensitive != is_combined_sensitive)
     {
-        priv->is_combined_sensitive = combined_sensitive;
+        priv->is_combined_sensitive = is_combined_sensitive;
         g_object_notify ((GObject *) item, "is-combined-sensitive");
     }
 }

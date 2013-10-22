@@ -42,11 +42,11 @@ void        donna_image_menu_item_set_image_selected(DonnaImageMenuItem *item,
                                                      GtkWidget          *image);
 GtkWidget * donna_image_menu_item_get_image_selected(DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_is_combined   (DonnaImageMenuItem *item,
-                                                     gboolean            combined);
+                                                     gboolean            is_combined);
 gboolean    donna_image_menu_item_get_is_combined   (DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_is_combined_sensitive (
                                                      DonnaImageMenuItem *item,
-                                                     gboolean            combined_sensitive);
+                                                     gboolean            is_combined_sensitive);
 gboolean    donna_image_menu_item_get_is_combined_sensitive (
                                                      DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_label_bold    (DonnaImageMenuItem *item,
