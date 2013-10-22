@@ -2365,36 +2365,74 @@ load_menu (struct menu_click *mc)
             if (mc->show_icons)
             {
                 GtkWidget *image;
+                DonnaImageMenuItemImageSpecial img;
 
-                if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
-                {
-                    image = gtk_image_new_from_pixbuf (icon);
-                    g_object_unref (icon);
-                }
-                else if (mc->use_default_icons)
-                {
-                    if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
-                        image = gtk_image_new_from_stock (GTK_STOCK_FILE,
-                                GTK_ICON_SIZE_MENU);
-                    else /* DONNA_NODE_CONTAINER */
-                        image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY,
-                                GTK_ICON_SIZE_MENU);
-                }
-                else
-                    image = NULL;
-
-                if (image)
-                    donna_image_menu_item_set_image (imi, image);
-
-                donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
+                donna_node_get (node, TRUE, "menu-image-special", &has, &v, NULL);
                 if (has == DONNA_NODE_VALUE_SET)
                 {
-                    if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
-                    {
-                        image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
-                        donna_image_menu_item_set_image_selected (imi, image);
-                    }
+                    img = g_value_get_uint (&v);
                     g_value_unset (&v);
+                }
+                else
+                    img = DONNA_IMAGE_MENU_ITEM_IS_IMAGE;
+
+                if (img == DONNA_IMAGE_MENU_ITEM_IS_CHECK
+                        || img == DONNA_IMAGE_MENU_ITEM_IS_RADIO)
+                {
+                    donna_image_menu_item_set_image_special (imi, img);
+
+                    donna_node_get (node, TRUE, "menu-is-active", &has, &v, NULL);
+                    if (has == DONNA_NODE_VALUE_SET)
+                    {
+                        donna_image_menu_item_set_is_active (imi,
+                                g_value_get_boolean (&v));
+                        g_value_unset (&v);
+                    }
+
+                    if (img == DONNA_IMAGE_MENU_ITEM_IS_CHECK)
+                    {
+                        donna_node_get (node, TRUE, "menu-is-inconsistent",
+                                &has, &v, NULL);
+                        if (has == DONNA_NODE_VALUE_SET)
+                        {
+                            donna_image_menu_item_set_is_inconsistent (imi,
+                                    g_value_get_boolean (&v));
+                            g_value_unset (&v);
+                        }
+                    }
+                }
+                else /* DONNA_IMAGE_MENU_ITEM_IS_IMAGE */
+                {
+                    if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
+                    {
+                        image = gtk_image_new_from_pixbuf (icon);
+                        g_object_unref (icon);
+                    }
+                    else if (mc->use_default_icons)
+                    {
+                        if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+                            image = gtk_image_new_from_stock (GTK_STOCK_FILE,
+                                    GTK_ICON_SIZE_MENU);
+                        else /* DONNA_NODE_CONTAINER */
+                            image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY,
+                                    GTK_ICON_SIZE_MENU);
+                    }
+                    else
+                        image = NULL;
+
+                    if (image)
+                        donna_image_menu_item_set_image (imi, image);
+
+                    donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
+                    if (has == DONNA_NODE_VALUE_SET)
+                    {
+                        if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
+                        {
+                            image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
+                            donna_image_menu_item_set_image_selected (imi, image);
+                        }
+                        g_value_unset (&v);
+                    }
                 }
             }
 
