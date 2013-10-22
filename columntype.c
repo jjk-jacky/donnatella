@@ -36,13 +36,6 @@ default_get_default_sort_order (DonnaColumnType    *ct,
     return order;
 }
 
-static GtkMenu *
-default_get_options_menu (DonnaColumnType    *ct,
-                          gpointer            data)
-{
-    return NULL;
-}
-
 static gboolean
 default_can_edit (DonnaColumnType    *ct,
                   gpointer            data,
@@ -133,7 +126,6 @@ donna_columntype_default_init (DonnaColumnTypeInterface *interface)
     interface->helper_can_edit          = helper_can_edit;
 
     interface->get_default_sort_order   = default_get_default_sort_order;
-    interface->get_options_menu         = default_get_options_menu;
     interface->can_edit                 = default_can_edit;
     interface->edit                     = default_edit;
     interface->set_value                = default_set_value;
@@ -252,22 +244,6 @@ donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
     g_return_val_if_fail (interface->get_default_sort_order != NULL, GTK_SORT_ASCENDING);
 
     return (*interface->get_default_sort_order) (ct, tv_name, col_name, arr_name, data);
-}
-
-GtkMenu *
-donna_columntype_get_options_menu (DonnaColumnType  *ct,
-                                   gpointer          data)
-{
-    DonnaColumnTypeInterface *interface;
-
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
-
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
-
-    g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_options_menu != NULL, NULL);
-
-    return (*interface->get_options_menu) (ct, data);
 }
 
 gboolean
@@ -449,6 +425,86 @@ donna_columntype_free_filter_data (DonnaColumnType   *ct,
     g_return_val_if_fail (interface->free_filter_data != NULL, 0);
 
     return (*interface->free_filter_data) (ct, filter_data);
+}
+
+gchar *
+donna_columntype_get_context_alias (DonnaColumnType    *ct,
+                                    const gchar        *tv_name,
+                                    const gchar        *col_name,
+                                    const gchar        *arr_name,
+                                    gpointer           *data,
+                                    const gchar        *alias,
+                                    const gchar        *extra,
+                                    DonnaContextReference reference,
+                                    DonnaNode          *node_ref,
+                                    get_sel_fn          get_sel,
+                                    gpointer            get_sel_data,
+                                    const gchar        *prefix,
+                                    GError            **error)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (alias != NULL, NULL);
+    g_return_val_if_fail (prefix != NULL, NULL);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->get_context_alias == NULL)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType '%s': No context alias supported",
+                donna_columntype_get_name (ct));
+        return NULL;
+    }
+
+    return (*interface->get_context_alias) (ct,
+            tv_name, col_name, arr_name, data,
+            alias, extra, reference, node_ref, get_sel, get_sel_data,
+            prefix, error);
+}
+
+gboolean
+donna_columntype_get_context_item_info (DonnaColumnType    *ct,
+                                        const gchar        *tv_name,
+                                        const gchar        *col_name,
+                                        const gchar        *arr_name,
+                                        gpointer           *data,
+                                        const gchar        *item,
+                                        const gchar        *extra,
+                                        DonnaContextReference reference,
+                                        DonnaNode          *node_ref,
+                                        get_sel_fn          get_sel,
+                                        gpointer            get_sel_data,
+                                        DonnaContextInfo   *info,
+                                        GError            **error)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (item != NULL, FALSE);
+    g_return_val_if_fail (info != NULL, FALSE);
+    g_return_val_if_fail (node_ref == NULL || DONNA_IS_NODE (node_ref), FALSE);
+    g_return_val_if_fail (get_sel != NULL, FALSE);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    g_return_val_if_fail (interface != NULL, FALSE);
+
+    if (interface->get_context_item_info == NULL)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType '%s': No context item supported",
+                donna_columntype_get_name (ct));
+        return FALSE;
+    }
+
+    return (*interface->get_context_item_info) (ct,
+            tv_name, col_name, arr_name, data,
+            item, extra, reference, node_ref, get_sel, get_sel_data,
+            info, error);
 }
 
 /** donna_columntype_new_floating_window:

@@ -132,8 +132,6 @@ static GtkSortType      ct_perms_get_default_sort_order
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
                                                      gpointer            data);
-static GtkMenu *        ct_perms_get_options_menu   (DonnaColumnType    *ct,
-                                                     gpointer            data);
 static gboolean         ct_perms_can_edit           (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -185,7 +183,6 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
     interface->free_data                = ct_perms_free_data;
     interface->get_props                = ct_perms_get_props;
     interface->get_default_sort_order   = ct_perms_get_default_sort_order;
-    interface->get_options_menu         = ct_perms_get_options_menu;
     interface->can_edit                 = ct_perms_can_edit;
     interface->edit                     = ct_perms_edit;
     interface->set_value                = ct_perms_set_value;
@@ -466,14 +463,6 @@ ct_perms_get_default_sort_order (DonnaColumnType *ct,
                 tv_name, col_name, arr_name, NULL, "desc_first",
                 data->sort == SORT_PERMS || data->sort == SORT_MY_PERMS))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
-}
-
-static GtkMenu *
-ct_perms_get_options_menu (DonnaColumnType    *ct,
-                           gpointer            data)
-{
-    /* FIXME */
-    return NULL;
 }
 
 struct editing_data

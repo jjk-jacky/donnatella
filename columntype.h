@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 #include "common.h"
 #include "conf.h"
+#include "contextmenu.h"
 
 G_BEGIN_DECLS
 
@@ -76,8 +77,6 @@ struct _DonnaColumnTypeInterface
                                              const gchar        *col_name,
                                              const gchar        *arr_name,
                                              gpointer            data);
-    GtkMenu *           (*get_options_menu) (DonnaColumnType    *ct,
-                                             gpointer            data);
     gboolean            (*can_edit)         (DonnaColumnType    *ct,
                                              gpointer            data,
                                              DonnaNode          *node,
@@ -119,6 +118,34 @@ struct _DonnaColumnTypeInterface
                                              GError            **error);
     void                (*free_filter_data) (DonnaColumnType    *ct,
                                              gpointer            filter_data);
+    /* context related */
+    gchar *             (*get_context_alias)(DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             const gchar        *arr_name,
+                                             gpointer           *data,
+                                             const gchar        *alias,
+                                             const gchar        *extra,
+                                             DonnaContextReference reference,
+                                             DonnaNode          *node_ref,
+                                             get_sel_fn          get_sel,
+                                             gpointer            get_sel_data,
+                                             const gchar        *prefix,
+                                             GError            **error);
+    gboolean            (*get_context_item_info) (
+                                             DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             const gchar        *arr_name,
+                                             gpointer           *data,
+                                             const gchar        *item,
+                                             const gchar        *extra,
+                                             DonnaContextReference reference,
+                                             DonnaNode          *node_ref,
+                                             get_sel_fn          get_sel,
+                                             gpointer            get_sel_data,
+                                             DonnaContextInfo   *info,
+                                             GError            **error);
 };
 
 const gchar *   donna_columntype_get_name       (DonnaColumnType    *ct);
@@ -137,8 +164,6 @@ GtkSortType     donna_columntype_get_default_sort_order
                                                  const gchar        *tv_name,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
-                                                 gpointer            data);
-GtkMenu *       donna_columntype_get_options_menu (DonnaColumnType  *ct,
                                                  gpointer            data);
 gboolean        donna_columntype_can_edit       (DonnaColumnType    *ct,
                                                  gpointer            data,
@@ -181,6 +206,35 @@ gboolean        donna_columntype_is_match_filter(DonnaColumnType    *ct,
                                                  GError            **error);
 void            donna_columntype_free_filter_data(DonnaColumnType   *ct,
                                                  gpointer            filter_data);
+/* context related */
+gchar *         donna_columntype_get_context_alias (
+                                                 DonnaColumnType    *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name,
+                                                 const gchar        *arr_name,
+                                                 gpointer           *data,
+                                                 const gchar        *alias,
+                                                 const gchar        *extra,
+                                                 DonnaContextReference reference,
+                                                 DonnaNode          *node_ref,
+                                                 get_sel_fn          get_sel,
+                                                 gpointer            get_sel_data,
+                                                 const gchar        *prefix,
+                                                 GError            **error);
+gboolean        donna_columntype_get_context_item_info (
+                                                 DonnaColumnType    *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name,
+                                                 const gchar        *arr_name,
+                                                 gpointer           *data,
+                                                 const gchar        *item,
+                                                 const gchar        *extra,
+                                                 DonnaContextReference reference,
+                                                 DonnaNode          *node_ref,
+                                                 get_sel_fn          get_sel,
+                                                 gpointer            get_sel_data,
+                                                 DonnaContextInfo   *info,
+                                                 GError            **error);
 
 
 inline GtkWindow * donna_columntype_new_floating_window (

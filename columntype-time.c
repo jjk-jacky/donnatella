@@ -103,8 +103,6 @@ static void             ct_time_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GPtrArray *      ct_time_get_props           (DonnaColumnType    *ct,
                                                      gpointer            data);
-static GtkMenu *        ct_time_get_options_menu    (DonnaColumnType    *ct,
-                                                     gpointer            data);
 static gboolean         ct_time_can_edit            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node,
@@ -155,7 +153,6 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
     interface->refresh_data             = ct_time_refresh_data;
     interface->free_data                = ct_time_free_data;
     interface->get_props                = ct_time_get_props;
-    interface->get_options_menu         = ct_time_get_options_menu;
     interface->can_edit                 = ct_time_can_edit;
     interface->edit                     = ct_time_edit;
     interface->set_value                = ct_time_set_value;
@@ -393,14 +390,6 @@ ct_time_get_props (DonnaColumnType  *ct,
     g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
 
     return props;
-}
-
-static GtkMenu *
-ct_time_get_options_menu (DonnaColumnType    *ct,
-                          gpointer            data)
-{
-    /* FIXME */
-    return NULL;
 }
 
 #define warn_not_uint64(node)    do {                   \
