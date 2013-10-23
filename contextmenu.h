@@ -47,21 +47,24 @@ typedef struct
     /* container only */
     gchar       *menu;
 
-    guint        icon_is_pixbuf : 1;
+    guint        icon_special       : 2; /* DonnaImageMenuItemImageSpecial */
+    guint        icon_is_pixbuf     : 1;
     guint        icon_is_pixbuf_selected : 1;
+    guint        is_active          : 1;
+    guint        is_inconsistent    : 1;
 
-    guint        is_visible     : 1;
-    guint        is_sensitive   : 1;
-    guint        is_menu_bold   : 1;
+    guint        is_visible         : 1;
+    guint        is_sensitive       : 1;
+    guint        is_menu_bold       : 1;
     /* container only */
-    guint        submenus       : 2;
+    guint        submenus           : 2;
 
-    guint        free_name      : 1;
-    guint        free_icon      : 1;
+    guint        free_name          : 1;
+    guint        free_icon          : 1;
     guint        free_icon_selected : 1;
-    guint        free_desc      : 1;
-    guint        free_trigger   : 1;
-    guint        free_menu      : 1;
+    guint        free_desc          : 1;
+    guint        free_trigger       : 1;
+    guint        free_menu          : 1;
 } DonnaContextInfo;
 
 typedef GPtrArray * (*get_sel_fn)   (gpointer data, GError **error);

@@ -5,6 +5,7 @@
 #include "node.h"
 #include "util.h"
 #include "macros.h"
+#include "imagemenuitem.h"  /* DonnaImageMenuItemImageSpecial */
 #include "debug.h"
 
 enum type
@@ -1368,49 +1369,105 @@ parse_items (DonnaApp               *app,
                 }
                 g_value_unset (&v);
             }
-            
-            if ((info.icon_is_pixbuf_selected && info.pixbuf_selected)
-                    || info.icon_name_selected)
+
+            if (info.icon_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE)
             {
-                if (info.icon_is_pixbuf_selected)
+                if ((info.icon_is_pixbuf_selected && info.pixbuf_selected)
+                        || info.icon_name_selected)
                 {
-                    g_value_init (&v, GDK_TYPE_PIXBUF);
-                    if (info.free_icon_selected)
+                    if (info.icon_is_pixbuf_selected)
                     {
-                        g_value_take_object (&v, info.pixbuf_selected);
-                        info.free_icon_selected = FALSE;
+                        g_value_init (&v, GDK_TYPE_PIXBUF);
+                        if (info.free_icon_selected)
+                        {
+                            g_value_take_object (&v, info.pixbuf_selected);
+                            info.free_icon_selected = FALSE;
+                        }
+                        else
+                            g_value_set_object (&v, info.pixbuf_selected);
+                    }
+
+                    if (G_UNLIKELY (!donna_node_add_property (node,
+                                    "menu-image-selected",
+                                    GDK_TYPE_PIXBUF,
+                                    (info.icon_is_pixbuf_selected) ? &v : NULL,
+                                    (refresher_fn) gtk_true,
+                                    NULL,
+                                    &err)))
+                    {
+                        g_warning ("Context-menu: Failed to set image selected "
+                                "for item '%s': %s",
+                                items,
+                                (err) ? err->message : "(no error message)");
+                        g_clear_error (&err);
+                        g_value_unset (&v);
+                    }
+                    else if (!_provider_base_set_property_icon (app, node,
+                                "menu-image-selected", info.icon_name_selected,
+                                &err))
+                    {
+                        g_warning ("Context-menu: Failed to set image selected "
+                                "for item '%s': %s",
+                                items,
+                                (err) ? err->message : "(no error message)");
+                        g_clear_error (&err);
                     }
                     else
-                        g_value_set_object (&v, info.pixbuf_selected);
+                        g_value_unset (&v);
+                }
+            }
+            else
+            {
+                g_value_init (&v, G_TYPE_UINT);
+                g_value_set_uint (&v, info.icon_special);
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-image-special",
+                                G_TYPE_UINT, &v, (refresher_fn) gtk_true,
+                                NULL, &err)))
+                {
+                    g_warning ("Context-menu: Failed to set image-special "
+                            "for item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                g_value_unset (&v);
+
+                if (info.is_active)
+                {
+                    g_value_init (&v, G_TYPE_BOOLEAN);
+                    g_value_set_boolean (&v, info.is_active);
+                    if (G_UNLIKELY (!donna_node_add_property (node,
+                                    "menu-is-active",
+                                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                                    NULL, &err)))
+                    {
+                        g_warning ("Context-menu: Failed to set is-active "
+                                "for item '%s': %s",
+                                items,
+                                (err) ? err->message : "(no error message)");
+                        g_clear_error (&err);
+                    }
+                    g_value_unset (&v);
                 }
 
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-image-selected",
-                                GDK_TYPE_PIXBUF,
-                                (info.icon_is_pixbuf_selected) ? &v : NULL,
-                                (refresher_fn) gtk_true,
-                                NULL,
-                                &err)))
+                if (info.is_inconsistent)
                 {
-                    g_warning ("Context-menu: Failed to set image selected "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
+                    g_value_init (&v, G_TYPE_BOOLEAN);
+                    g_value_set_boolean (&v, info.is_inconsistent);
+                    if (G_UNLIKELY (!donna_node_add_property (node,
+                                    "menu-is-active",
+                                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                                    NULL, &err)))
+                    {
+                        g_warning ("Context-menu: Failed to set is-inconsistent "
+                                "for item '%s': %s",
+                                items,
+                                (err) ? err->message : "(no error message)");
+                        g_clear_error (&err);
+                    }
                     g_value_unset (&v);
                 }
-                else if (!_provider_base_set_property_icon (app, node,
-                            "menu-image-selected", info.icon_name_selected,
-                            &err))
-                {
-                    g_warning ("Context-menu: Failed to set image selected "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                else
-                    g_value_unset (&v);
             }
 
             if (info.is_menu_bold)
