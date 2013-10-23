@@ -314,6 +314,17 @@ set_value (const gchar      *property,
            GError          **error)
 {
     GValue v = G_VALUE_INIT;
+    gchar *current;
+
+    g_return_val_if_fail (streq (property, "name"), FALSE);
+
+    current = donna_node_get_name (node);
+    if (streq (current, value))
+    {
+        g_free (current);
+        return TRUE;
+    }
+    g_free (current);
 
     g_value_init (&v, G_TYPE_STRING);
     g_value_set_string (&v, value);
