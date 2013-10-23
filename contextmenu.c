@@ -639,6 +639,9 @@ get_user_item_info (const gchar             *item,
     else
         type = TYPE_STANDARD;
 
+    if (type == TYPE_CONTAINER)
+        info->is_container = TRUE;
+
     /* shall we import non-specified stuff from node trigger? */
     if (type != TYPE_EMPTY)
         donna_config_get_boolean (config, &import_from_trigger,
@@ -929,145 +932,6 @@ get_user_item_info (const gchar             *item,
                 g_value_unset (&v);
             }
         }
-    }
-
-    if (type == TYPE_CONTAINER)
-    {
-        DonnaProviderInternal *pi;
-        DonnaNode *node;
-        struct node_internal *ni;
-
-        if (!node_trigger)
-            node_trigger = get_node_trigger (app, info->trigger,
-                    conv_flags, conv_fn, conv_data);
-        if (!node_trigger)
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Failed to get node '%s' for item '%s' ('context_menus/%s/%s')",
-                    info->trigger, info->name, source, item);
-            free_context_info (info);
-            return FALSE;
-        }
-        else if (donna_node_get_node_type (node_trigger) != DONNA_NODE_CONTAINER)
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Node for item '%s' ('context_menus/%s/%s') isn't a container",
-                    info->name, source, item);
-            g_object_unref (node_trigger);
-            free_context_info (info);
-            return FALSE;
-        }
-        g_free (info->trigger);
-        info->trigger = NULL;
-        info->free_trigger = FALSE;
-
-        /* special case: we need to create the node */
-        ni = g_slice_new0 (struct node_internal);
-        ni->app = app;
-        ni->node_trigger = g_object_ref (node_trigger);
-        ni->fl = info->trigger;
-
-        pi = (DonnaProviderInternal *) donna_app_get_provider (app, "internal");
-        if (G_UNLIKELY (!pi))
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Failed to create node for 'context_menus/%s/%s': "
-                    "Couldn't get provider 'internal'",
-                    source, item);
-            free_node_internal (ni);
-            free_context_info (info);
-            if (node_trigger)
-                g_object_unref (node_trigger);
-            return FALSE;
-        }
-
-        node = donna_provider_internal_new_node (pi, info->name,
-                info->icon_is_pixbuf,
-                (info->icon_is_pixbuf) ? info->pixbuf : (gconstpointer) info->icon_name,
-                NULL, DONNA_NODE_CONTAINER, info->is_sensitive,
-                DONNA_TASK_VISIBILITY_INTERNAL,
-                (internal_fn) node_children_cb, ni,
-                (GDestroyNotify) free_node_internal, error);
-        if (G_UNLIKELY (!node))
-        {
-            g_prefix_error (error, "Failed to create node for 'context_menus/%s/%s': ",
-                    source, item);
-            g_object_unref (pi);
-            free_node_internal (ni);
-            free_context_info (info);
-            if (node_trigger)
-                g_object_unref (node_trigger);
-            return FALSE;
-        }
-
-        g_object_unref (pi);
-
-        if (info->is_menu_bold)
-        {
-            GError *err = NULL;
-
-            g_value_init (&v, G_TYPE_BOOLEAN);
-            g_value_set_boolean (&v, TRUE);
-            if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-label-bold",
-                            G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, &err)))
-            {
-                g_warning ("Context-menu: Failed to set label bold for item "
-                        "'context_menus/%s/%s': %s",
-                        source, item,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-            }
-            g_value_unset (&v);
-        }
-
-        if (info->submenus > 0)
-        {
-            GError *err = NULL;
-
-            g_value_init (&v, G_TYPE_UINT);
-            g_value_set_uint (&v, CLAMP (info->submenus, 0, 3));
-            if (G_UNLIKELY (!donna_node_add_property (node, "menu-submenus",
-                            G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, &err)))
-            {
-                g_warning ("Context-menu: Failed to set submenus type for item "
-                        "'context_menus/%s/%s': %s",
-                        source, item,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-            }
-            g_value_unset (&v);
-        }
-
-        if (info->menu)
-        {
-            GError *err = NULL;
-
-            g_value_init (&v, G_TYPE_STRING);
-            if (info->free_menu)
-            {
-                g_value_take_string (&v, info->menu);
-                info->free_menu = FALSE;
-            }
-            else
-                g_value_set_static_string (&v, info->menu);
-            if (G_UNLIKELY (!donna_node_add_property (node, "menu-menu",
-                            G_TYPE_STRING, &v, (refresher_fn) gtk_true, NULL, &err)))
-            {
-                g_warning ("Context-menu: Failed to set menu definition for item "
-                        "'context_menus/%s/%s': %s",
-                        source, item,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-            }
-            g_value_unset (&v);
-        }
-
-        free_context_info (info);
-        memset (info, 0, sizeof (*info));
-        info->node = node;
     }
 
     if (node_trigger)
@@ -1488,10 +1352,13 @@ parse_items (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
-            if (info.submenus > 0)
+            /* if is_container it can't be triggered, so we'll force submenus to
+             * ENABLED */
+            if (info.is_container || info.submenus > 0)
             {
                 g_value_init (&v, G_TYPE_UINT);
-                g_value_set_uint (&v, CLAMP (info.submenus, 0, 3));
+                g_value_set_uint (&v,
+                        (info.is_container) ? 1 : CLAMP (info.submenus, 0, 3));
                 if (G_UNLIKELY (!donna_node_add_property (node,
                                 "menu-submenus",
                                 G_TYPE_UINT, &v, (refresher_fn) gtk_true,
@@ -1530,52 +1397,62 @@ parse_items (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
-            if (info.trigger)
+            if (!info.is_container)
             {
-                /* we do the parsing, but ignore intrefs since the trigger is
-                 * just a string property, so they'll be cleaned via GC */
-                info.trigger = donna_app_parse_fl (app,
-                        (info.free_trigger) ? g_strdup (info.trigger) : info.trigger,
-                        conv_flags, conv_fn, conv_data, NULL);
-
-                g_value_init (&v, G_TYPE_STRING);
-                g_value_take_string (&v, info.trigger);
-                info.free_trigger = FALSE;
-
-                if (G_UNLIKELY (!donna_node_add_property (node, "container-trigger",
-                                G_TYPE_STRING, &v, (refresher_fn) gtk_true, NULL, error)))
+                if (info.trigger)
                 {
-                    g_prefix_error (error, "Error for item '%s': "
-                            "Failed to set 'container-trigger': ",
-                            items);
-                    g_value_unset (&v);
-                    g_object_unref (node);
-                    free_context_info (&info);
-                    g_ptr_array_unref (nodes);
-                    return NULL;
-                }
-                g_value_unset (&v);
-            }
+                    /* we do the parsing, but ignore intrefs since the trigger is
+                     * just a string property, so they'll be cleaned via GC */
+                    info.trigger = donna_app_parse_fl (app,
+                            (info.free_trigger) ? g_strdup (info.trigger) : info.trigger,
+                            conv_flags, conv_fn, conv_data, NULL);
 
-            if (info.node)
-            {
-                g_value_init (&v, DONNA_TYPE_NODE);
-                g_value_set_object (&v, info.node);
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "container-trigger",
-                                DONNA_TYPE_NODE, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_prefix_error (error, "Error for item '%s': "
-                            "Failed to set 'container-trigger': ",
-                            items);
+                    g_value_init (&v, G_TYPE_STRING);
+                    g_value_take_string (&v, info.trigger);
+                    info.free_trigger = FALSE;
+
+                    if (G_UNLIKELY (!donna_node_add_property (node,
+                                    "container-trigger",
+                                    G_TYPE_STRING,
+                                    &v,
+                                    (refresher_fn) gtk_true,
+                                    NULL,
+                                    error)))
+                    {
+                        g_prefix_error (error, "Error for item '%s': "
+                                "Failed to set 'container-trigger': ",
+                                items);
+                        g_value_unset (&v);
+                        g_object_unref (node);
+                        free_context_info (&info);
+                        g_ptr_array_unref (nodes);
+                        return NULL;
+                    }
                     g_value_unset (&v);
-                    g_object_unref (node);
-                    free_context_info (&info);
-                    g_ptr_array_unref (nodes);
-                    return NULL;
                 }
-                g_value_unset (&v);
+                else if (info.node)
+                {
+                    g_value_init (&v, DONNA_TYPE_NODE);
+                    g_value_set_object (&v, info.node);
+                    if (G_UNLIKELY (!donna_node_add_property (node,
+                                    "container-trigger",
+                                    DONNA_TYPE_NODE,
+                                    &v,
+                                    (refresher_fn) gtk_true,
+                                    NULL,
+                                    &err)))
+                    {
+                        g_prefix_error (error, "Error for item '%s': "
+                                "Failed to set 'container-trigger': ",
+                                items);
+                        g_value_unset (&v);
+                        g_object_unref (node);
+                        free_context_info (&info);
+                        g_ptr_array_unref (nodes);
+                        return NULL;
+                    }
+                    g_value_unset (&v);
+                }
             }
         }
         else /* not a submenu */
@@ -1594,21 +1471,53 @@ parse_items (DonnaApp               *app,
             ni->app = app;
             if (info.trigger)
             {
-                ni->fl = donna_app_parse_fl (app,
-                        (info.free_trigger) ? info.trigger : g_strdup (info.trigger),
-                        conv_flags, conv_fn, conv_data, &ni->intrefs);
-                ni->free_fl = TRUE;
+                if (info.is_container)
+                {
+                    ni->node_trigger = donna_app_get_node (app, info.trigger, &err);
+                    if (!ni->node_trigger)
+                    {
+                        g_prefix_error (error, "Error for item '%s': "
+                                "couldn't create node_trigger: ", items);
+                        free_context_info (&info);
+                        free_node_internal (ni);
+                        g_ptr_array_unref (nodes);
+                        return NULL;
+                    }
+                    else if (donna_node_get_node_type (ni->node_trigger)
+                            != DONNA_NODE_CONTAINER)
+                    {
+                        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                                "Node for trigger of item '%s' isn't a container"
+                                " (while item is flagged is-container)",
+                                items);
+                        free_context_info (&info);
+                        free_node_internal (ni);
+                        g_ptr_array_unref (nodes);
+                        return NULL;
+                    }
+                }
+                else
+                {
+                    ni->fl = donna_app_parse_fl (app,
+                            (info.free_trigger) ? info.trigger : g_strdup (info.trigger),
+                            conv_flags, conv_fn, conv_data, &ni->intrefs);
+                    ni->free_fl = TRUE;
+                }
                 info.trigger = NULL;
                 info.free_trigger = FALSE;
             }
 
-            node = donna_provider_internal_new_node (pi, info.name,
-                    info.icon_is_pixbuf, (info.icon_is_pixbuf)
-                    ? (gconstpointer) info.pixbuf : info.icon_name,
+            node = donna_provider_internal_new_node (pi,
+                    info.name,
+                    info.icon_is_pixbuf,
+                    (info.icon_is_pixbuf) ? (gconstpointer) info.pixbuf : info.icon_name,
                     info.desc,
-                    DONNA_NODE_ITEM, info.is_sensitive,
-                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-                    (internal_fn) node_internal_cb, ni,
+                    (info.is_container) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+                    info.is_sensitive,
+                    (info.is_container) ? DONNA_TASK_VISIBILITY_INTERNAL : DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (info.is_container) ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
+                    ni,
                     (GDestroyNotify) free_node_internal,
                     error);
             if (G_UNLIKELY (!node))
