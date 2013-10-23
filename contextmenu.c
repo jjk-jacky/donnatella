@@ -481,6 +481,13 @@ free_context_info (DonnaContextInfo *info)
         else
             g_free (info->icon_name);
     }
+    if (info->free_icon_selected)
+    {
+        if (info->icon_is_pixbuf_selected)
+            g_object_unref (info->pixbuf_selected);
+        else
+            g_free (info->icon_name_selected);
+    }
     if (info->free_desc)
         g_free (info->desc);
     if (info->free_trigger)
@@ -701,6 +708,12 @@ get_user_item_info (const gchar             *item,
                             source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_icon = TRUE;
 
+                    /* try to get the icon selected under the same suffix */
+                    if (donna_config_get_string (config, &info->icon_name_selected,
+                            "context_menus/%s/%s/icon_selected%.*s",
+                            source, item, (gint) (len - 7 - 5), t + 7))
+                        info->free_icon_selected = TRUE;
+
                     break;
                 }
                 else /* EXPR_FALSE */
@@ -814,6 +827,33 @@ get_user_item_info (const gchar             *item,
                 {
                     info->icon_is_pixbuf = TRUE;
                     info->free_icon = TRUE;
+                }
+            }
+        }
+    }
+
+    /* icon selected */
+    if (!info->icon_name_selected)
+    {
+        if (donna_config_get_string (config, &s, "context_menus/%s/%s/icon_selected",
+                    source, item))
+        {
+            info->icon_name_selected = s;
+            info->free_icon_selected = TRUE;
+        }
+        else if (import_from_trigger)
+        {
+            ensure_node_trigger ();
+            if (import_from_trigger)
+            {
+                donna_node_get (node_trigger, FALSE, "menu-image-selected",
+                        &has, &v, NULL);
+                if (has == DONNA_NODE_VALUE_SET)
+                {
+                    info->pixbuf_selected = g_value_dup_object (&v);
+                    g_value_unset (&v);
+                    info->icon_is_pixbuf_selected = TRUE;
+                    info->free_icon_selected = TRUE;
                 }
             }
         }
@@ -1327,6 +1367,50 @@ parse_items (DonnaApp               *app,
                     g_clear_error (&err);
                 }
                 g_value_unset (&v);
+            }
+            
+            if ((info.icon_is_pixbuf_selected && info.pixbuf_selected)
+                    || info.icon_name_selected)
+            {
+                if (info.icon_is_pixbuf_selected)
+                {
+                    g_value_init (&v, GDK_TYPE_PIXBUF);
+                    if (info.free_icon_selected)
+                    {
+                        g_value_take_object (&v, info.pixbuf_selected);
+                        info.free_icon_selected = FALSE;
+                    }
+                    else
+                        g_value_set_object (&v, info.pixbuf_selected);
+                }
+
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "menu-image-selected",
+                                GDK_TYPE_PIXBUF,
+                                (info.icon_is_pixbuf_selected) ? &v : NULL,
+                                (refresher_fn) gtk_true,
+                                NULL,
+                                &err)))
+                {
+                    g_warning ("Context-menu: Failed to set image selected "
+                            "for item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                    g_value_unset (&v);
+                }
+                else if (!_provider_base_set_property_icon (app, node,
+                            "menu-image-selected", info.icon_name_selected,
+                            &err))
+                {
+                    g_warning ("Context-menu: Failed to set image selected "
+                            "for item '%s': %s",
+                            items,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+                else
+                    g_value_unset (&v);
             }
 
             if (info.is_menu_bold)

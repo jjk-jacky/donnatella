@@ -38,12 +38,17 @@ typedef struct
         gchar       *icon_name;
         GdkPixbuf   *pixbuf;
     };
+    union {
+        gchar       *icon_name_selected;
+        GdkPixbuf   *pixbuf_selected;
+    };
     gchar       *desc;
     gchar       *trigger;
     /* container only */
     gchar       *menu;
 
     guint        icon_is_pixbuf : 1;
+    guint        icon_is_pixbuf_selected : 1;
 
     guint        is_visible     : 1;
     guint        is_sensitive   : 1;
@@ -53,6 +58,7 @@ typedef struct
 
     guint        free_name      : 1;
     guint        free_icon      : 1;
+    guint        free_icon_selected : 1;
     guint        free_desc      : 1;
     guint        free_trigger   : 1;
     guint        free_menu      : 1;
