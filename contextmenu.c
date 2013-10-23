@@ -1064,6 +1064,7 @@ parse_items (DonnaApp               *app,
     nodes = g_ptr_array_new_with_free_func (donna_g_object_unref);
     for (;;)
     {
+        GError *err = NULL;
         DonnaContextInfo info = { NULL, };
         DonnaNode *node;
         enum parse parse = PARSE_DEFAULT;
@@ -1072,6 +1073,7 @@ parse_items (DonnaApp               *app,
         gchar *extra;
         gchar *end, *e;
         gchar c_end;
+        GValue v = G_VALUE_INIT;
 
         if (cur_parse & PARSE_IN_CONTAINER)
             parse |= PARSE_IN_CONTAINER;
@@ -1311,9 +1313,6 @@ parse_items (DonnaApp               *app,
             /* set sensitivity for the item part only (when combine) */
             if (!info.is_sensitive)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_BOOLEAN);
                 g_value_set_boolean (&v, FALSE);
                 if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1332,9 +1331,6 @@ parse_items (DonnaApp               *app,
 
             if (info.is_menu_bold)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_BOOLEAN);
                 g_value_set_boolean (&v, TRUE);
                 if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1353,9 +1349,6 @@ parse_items (DonnaApp               *app,
 
             if (info.submenus > 0)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_UINT);
                 g_value_set_uint (&v, CLAMP (info.submenus, 0, 3));
                 if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1374,9 +1367,6 @@ parse_items (DonnaApp               *app,
 
             if (info.menu)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_STRING);
                 if (info.free_menu)
                 {
@@ -1401,8 +1391,6 @@ parse_items (DonnaApp               *app,
 
             if (info.trigger)
             {
-                GValue v = G_VALUE_INIT;
-
                 /* we do the parsing, but ignore intrefs since the trigger is
                  * just a string property, so they'll be cleaned via GC */
                 info.trigger = donna_app_parse_fl (app,
@@ -1430,9 +1418,6 @@ parse_items (DonnaApp               *app,
 
             if (info.node)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, DONNA_TYPE_NODE);
                 g_value_set_object (&v, info.node);
                 if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1451,7 +1436,6 @@ parse_items (DonnaApp               *app,
                 }
                 g_value_unset (&v);
             }
-
         }
         else /* not a submenu */
         {
@@ -1498,9 +1482,6 @@ parse_items (DonnaApp               *app,
 
             if (info.is_menu_bold)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_BOOLEAN);
                 g_value_set_boolean (&v, TRUE);
                 if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1519,9 +1500,6 @@ parse_items (DonnaApp               *app,
 
             if (info.submenus > 0)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_UINT);
                 g_value_set_uint (&v, CLAMP (info.submenus, 0, 3));
                 if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1540,9 +1518,6 @@ parse_items (DonnaApp               *app,
 
             if (info.menu)
             {
-                GError *err = NULL;
-                GValue v = G_VALUE_INIT;
-
                 g_value_init (&v, G_TYPE_STRING);
                 if (info.free_menu)
                 {
