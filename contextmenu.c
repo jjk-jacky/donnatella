@@ -8,6 +8,14 @@
 #include "imagemenuitem.h"  /* DonnaImageMenuItemImageSpecial */
 #include "debug.h"
 
+/* from provider-base.c */
+gboolean
+_provider_base_set_property_icon (DonnaApp      *app,
+                                  DonnaNode     *node,
+                                  const gchar   *property,
+                                  const gchar   *icon,
+                                  GError       **error);
+
 enum type
 {
     TYPE_STANDARD = 0,
@@ -941,6 +949,176 @@ get_user_item_info (const gchar             *item,
 }
 #undef ensure_node_trigger
 
+static void
+load_menu_properties_to_node (DonnaContextInfo  *info,
+                              DonnaNode         *node,
+                              DonnaApp          *app,
+                              const gchar       *item)
+{
+    GError *err = NULL;
+    GValue v = G_VALUE_INIT;
+
+    if (info->icon_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE)
+    {
+        if ((info->icon_is_pixbuf_selected && info->pixbuf_selected)
+                || info->icon_name_selected)
+        {
+            if (info->icon_is_pixbuf_selected)
+            {
+                g_value_init (&v, GDK_TYPE_PIXBUF);
+                if (info->free_icon_selected)
+                {
+                    g_value_take_object (&v, info->pixbuf_selected);
+                    info->free_icon_selected = FALSE;
+                }
+                else
+                    g_value_set_object (&v, info->pixbuf_selected);
+            }
+
+            if (G_UNLIKELY (!donna_node_add_property (node,
+                            "menu-image-selected",
+                            GDK_TYPE_PIXBUF,
+                            (info->icon_is_pixbuf_selected) ? &v : NULL,
+                            (refresher_fn) gtk_true,
+                            NULL,
+                            &err)))
+            {
+                g_warning ("Context-menu: Failed to set image selected "
+                        "for item '%s': %s",
+                        item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+                g_value_unset (&v);
+            }
+            else if (!_provider_base_set_property_icon (app, node,
+                        "menu-image-selected", info->icon_name_selected,
+                        &err))
+            {
+                g_warning ("Context-menu: Failed to set image selected "
+                        "for item '%s': %s",
+                        item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            else
+                g_value_unset (&v);
+        }
+    }
+    else
+    {
+        g_value_init (&v, G_TYPE_UINT);
+        g_value_set_uint (&v, info->icon_special);
+        if (G_UNLIKELY (!donna_node_add_property (node,
+                        "menu-image-special",
+                        G_TYPE_UINT, &v, (refresher_fn) gtk_true,
+                        NULL, &err)))
+        {
+            g_warning ("Context-menu: Failed to set image-special "
+                    "for item '%s': %s",
+                    item,
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+        g_value_unset (&v);
+
+        if (info->is_active)
+        {
+            g_value_init (&v, G_TYPE_BOOLEAN);
+            g_value_set_boolean (&v, info->is_active);
+            if (G_UNLIKELY (!donna_node_add_property (node,
+                            "menu-is-active",
+                            G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                            NULL, &err)))
+            {
+                g_warning ("Context-menu: Failed to set is-active "
+                        "for item '%s': %s",
+                        item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            g_value_unset (&v);
+        }
+
+        if (info->is_inconsistent)
+        {
+            g_value_init (&v, G_TYPE_BOOLEAN);
+            g_value_set_boolean (&v, info->is_inconsistent);
+            if (G_UNLIKELY (!donna_node_add_property (node,
+                            "menu-is-active",
+                            G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                            NULL, &err)))
+            {
+                g_warning ("Context-menu: Failed to set is-inconsistent "
+                        "for item '%s': %s",
+                        item,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            g_value_unset (&v);
+        }
+    }
+
+    if (info->is_menu_bold)
+    {
+        g_value_init (&v, G_TYPE_BOOLEAN);
+        g_value_set_boolean (&v, TRUE);
+        if (G_UNLIKELY (!donna_node_add_property (node,
+                        "menu-is-label-bold",
+                        G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
+                        NULL, &err)))
+        {
+            g_warning ("Context-menu: Failed to set label bold "
+                    "for item '%s': %s",
+                    item,
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+        g_value_unset (&v);
+    }
+
+    if (info->submenus > 0)
+    {
+        g_value_init (&v, G_TYPE_UINT);
+        g_value_set_uint (&v, CLAMP (info->submenus, 0, 3));
+        if (G_UNLIKELY (!donna_node_add_property (node,
+                        "menu-submenus",
+                        G_TYPE_UINT, &v, (refresher_fn) gtk_true,
+                        NULL, &err)))
+        {
+            g_warning ("Context-menu: Failed to set submenus type "
+                    "for item '%s': %s",
+                    item,
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+        g_value_unset (&v);
+    }
+
+    if (info->menu)
+    {
+        g_value_init (&v, G_TYPE_STRING);
+        if (info->free_menu)
+        {
+            g_value_take_string (&v, info->menu);
+            info->free_menu = FALSE;
+        }
+        else
+            g_value_set_static_string (&v, info->menu);
+        if (G_UNLIKELY (!donna_node_add_property (node,
+                        "menu-menu",
+                        G_TYPE_STRING, &v, (refresher_fn) gtk_true,
+                        NULL, &err)))
+        {
+            g_warning ("Context-menu: Failed to set menu definition "
+                    "for item '%s': %s",
+                    item,
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+        g_value_unset (&v);
+    }
+}
+
 enum parse
 {
     PARSE_DEFAULT       = 0,
@@ -1234,168 +1412,12 @@ parse_items (DonnaApp               *app,
                 g_value_unset (&v);
             }
 
-            if (info.icon_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE)
-            {
-                if ((info.icon_is_pixbuf_selected && info.pixbuf_selected)
-                        || info.icon_name_selected)
-                {
-                    if (info.icon_is_pixbuf_selected)
-                    {
-                        g_value_init (&v, GDK_TYPE_PIXBUF);
-                        if (info.free_icon_selected)
-                        {
-                            g_value_take_object (&v, info.pixbuf_selected);
-                            info.free_icon_selected = FALSE;
-                        }
-                        else
-                            g_value_set_object (&v, info.pixbuf_selected);
-                    }
-
-                    if (G_UNLIKELY (!donna_node_add_property (node,
-                                    "menu-image-selected",
-                                    GDK_TYPE_PIXBUF,
-                                    (info.icon_is_pixbuf_selected) ? &v : NULL,
-                                    (refresher_fn) gtk_true,
-                                    NULL,
-                                    &err)))
-                    {
-                        g_warning ("Context-menu: Failed to set image selected "
-                                "for item '%s': %s",
-                                items,
-                                (err) ? err->message : "(no error message)");
-                        g_clear_error (&err);
-                        g_value_unset (&v);
-                    }
-                    else if (!_provider_base_set_property_icon (app, node,
-                                "menu-image-selected", info.icon_name_selected,
-                                &err))
-                    {
-                        g_warning ("Context-menu: Failed to set image selected "
-                                "for item '%s': %s",
-                                items,
-                                (err) ? err->message : "(no error message)");
-                        g_clear_error (&err);
-                    }
-                    else
-                        g_value_unset (&v);
-                }
-            }
-            else
-            {
-                g_value_init (&v, G_TYPE_UINT);
-                g_value_set_uint (&v, info.icon_special);
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-image-special",
-                                G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set image-special "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-
-                if (info.is_active)
-                {
-                    g_value_init (&v, G_TYPE_BOOLEAN);
-                    g_value_set_boolean (&v, info.is_active);
-                    if (G_UNLIKELY (!donna_node_add_property (node,
-                                    "menu-is-active",
-                                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                                    NULL, &err)))
-                    {
-                        g_warning ("Context-menu: Failed to set is-active "
-                                "for item '%s': %s",
-                                items,
-                                (err) ? err->message : "(no error message)");
-                        g_clear_error (&err);
-                    }
-                    g_value_unset (&v);
-                }
-
-                if (info.is_inconsistent)
-                {
-                    g_value_init (&v, G_TYPE_BOOLEAN);
-                    g_value_set_boolean (&v, info.is_inconsistent);
-                    if (G_UNLIKELY (!donna_node_add_property (node,
-                                    "menu-is-active",
-                                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                                    NULL, &err)))
-                    {
-                        g_warning ("Context-menu: Failed to set is-inconsistent "
-                                "for item '%s': %s",
-                                items,
-                                (err) ? err->message : "(no error message)");
-                        g_clear_error (&err);
-                    }
-                    g_value_unset (&v);
-                }
-            }
-
-            if (info.is_menu_bold)
-            {
-                g_value_init (&v, G_TYPE_BOOLEAN);
-                g_value_set_boolean (&v, TRUE);
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-is-label-bold",
-                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set label bold "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
-
             /* if is_container it can't be triggered, so we'll force submenus to
              * ENABLED */
-            if (info.is_container || info.submenus > 0)
-            {
-                g_value_init (&v, G_TYPE_UINT);
-                g_value_set_uint (&v,
-                        (info.is_container) ? 1 : CLAMP (info.submenus, 0, 3));
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-submenus",
-                                G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set submenus type "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
+            if (info.is_container)
+                info.submenus = 1;
 
-            if (info.menu)
-            {
-                g_value_init (&v, G_TYPE_STRING);
-                if (info.free_menu)
-                {
-                    g_value_take_string (&v, info.menu);
-                    info.free_menu = FALSE;
-                }
-                else
-                    g_value_set_static_string (&v, info.menu);
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-menu",
-                                G_TYPE_STRING, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set menu definition "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
+            load_menu_properties_to_node (&info, node, app, items);
 
             if (!info.is_container)
             {
@@ -1530,65 +1552,7 @@ parse_items (DonnaApp               *app,
                 return NULL;
             }
 
-            if (info.is_menu_bold)
-            {
-                g_value_init (&v, G_TYPE_BOOLEAN);
-                g_value_set_boolean (&v, TRUE);
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-is-label-bold",
-                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set label bold for "
-                            "item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
-
-            if (info.submenus > 0)
-            {
-                g_value_init (&v, G_TYPE_UINT);
-                g_value_set_uint (&v, CLAMP (info.submenus, 0, 3));
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-submenus",
-                                G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set submenus type "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
-
-            if (info.menu)
-            {
-                g_value_init (&v, G_TYPE_STRING);
-                if (info.free_menu)
-                {
-                    g_value_take_string (&v, info.menu);
-                    info.free_menu = FALSE;
-                }
-                else
-                    g_value_set_static_string (&v, info.menu);
-                if (G_UNLIKELY (!donna_node_add_property (node,
-                                "menu-menu",
-                                G_TYPE_STRING, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
-                {
-                    g_warning ("Context-menu: Failed to set menu definition "
-                            "for item '%s': %s",
-                            items,
-                            (err) ? err->message : "(no error message)");
-                    g_clear_error (&err);
-                }
-                g_value_unset (&v);
-            }
+            load_menu_properties_to_node (&info, node, app, items);
         }
 
         g_ptr_array_add (nodes, node);
