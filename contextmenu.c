@@ -540,18 +540,132 @@ get_user_alias (const gchar *alias,
     return s;
 }
 
-#define ensure_node_trigger()   do {                                        \
-    if (!node_trigger)                                                      \
-        node_trigger = get_node_trigger (app, info->trigger,                \
-                conv_flags, conv_fn, conv_data);                            \
-    if (!node_trigger)                                                      \
-    {                                                                       \
-        g_warning ("Context-menu: Cannot import options from node trigger " \
-                "for item 'context_menus/%s/%s': Failed to get node",       \
-                source, item);                                              \
-        import_from_trigger = FALSE;                                        \
-    }                                                                       \
-} while (0)
+enum
+{
+    /* DEFAULT is anything that can be determined based on their existence in
+     * info. E.g. if image-selected is set, there will be a name/pixbuf, if not
+     * it'll be NULL. */
+    IMPORT_DEFAULT              = (1 << 0),
+    IMPORT_ICON_SPECIAL         = (1 << 1),
+    IMPORT_IS_ACTIVE            = (1 << 2),
+    IMPORT_IS_INCONSISTENT      = (1 << 3),
+    IMPORT_IS_SENSITIVE         = (1 << 4),
+    IMPORT_IS_LABEL_BOLD        = (1 << 5),
+    IMPORT_SUBEMNUS             = (1 << 6),
+    IMPORT_ALL                  = IMPORT_DEFAULT | IMPORT_ICON_SPECIAL
+        | IMPORT_IS_ACTIVE | IMPORT_IS_INCONSISTENT | IMPORT_IS_SENSITIVE
+        | IMPORT_IS_LABEL_BOLD | IMPORT_SUBEMNUS
+};
+
+static void
+import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
+{
+    GValue v = G_VALUE_INIT;
+    DonnaNodeHasValue has;
+
+    info->is_container = donna_node_get_node_type (node) == DONNA_NODE_CONTAINER;
+
+    if ((import & IMPORT_DEFAULT) && !info->name)
+    {
+        info->name = donna_node_get_name (node);
+        info->free_name = TRUE;
+    }
+
+    if ((import & IMPORT_DEFAULT) && !info->pixbuf
+            && donna_node_get_icon (node, FALSE, &info->pixbuf) == DONNA_NODE_VALUE_SET)
+    {
+        info->icon_is_pixbuf = TRUE;
+        info->free_icon = TRUE;
+    }
+
+    if ((import & IMPORT_DEFAULT) && !info->desc
+            && donna_node_get_desc (node, FALSE, &info->desc) == DONNA_NODE_VALUE_SET)
+        info->free_desc = TRUE;
+
+    if (import & IMPORT_ICON_SPECIAL)
+    {
+        donna_node_get (node, FALSE, "menu-image-special", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->icon_special = g_value_get_uint (&v);
+            g_value_unset (&v);
+        }
+    }
+
+    if (import & IMPORT_IS_ACTIVE)
+    {
+        donna_node_get (node, FALSE, "menu-is-active", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->is_active = g_value_get_boolean (&v);
+            g_value_unset (&v);
+        }
+    }
+
+    if (import & IMPORT_IS_INCONSISTENT)
+    {
+        donna_node_get (node, FALSE, "menu-is-inconsistent", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->is_inconsistent = g_value_get_boolean (&v);
+            g_value_unset (&v);
+        }
+    }
+
+    if (!info->pixbuf_selected)
+    {
+        donna_node_get (node, FALSE, "menu-image-selected", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->pixbuf_selected = g_value_dup_object (&v);
+            g_value_unset (&v);
+            info->icon_is_pixbuf_selected = TRUE;
+            info->free_icon_selected = TRUE;
+        }
+    }
+
+    if (import & IMPORT_IS_SENSITIVE)
+    {
+        donna_node_get (node, FALSE, "menu-is-sensitive", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->is_sensitive = g_value_get_boolean (&v);
+            g_value_unset (&v);
+        }
+    }
+
+    if (import & IMPORT_IS_LABEL_BOLD)
+    {
+        donna_node_get (node, FALSE, "menu-is-label-bold", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->is_menu_bold = g_value_get_boolean (&v);
+            g_value_unset (&v);
+        }
+    }
+
+    if (import & IMPORT_SUBEMNUS)
+    {
+        donna_node_get (node, FALSE, "menu-submenus", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->submenus = g_value_get_uint (&v);
+            g_value_unset (&v);
+        }
+    }
+
+    if ((import & IMPORT_DEFAULT) && !info->menu)
+    {
+        donna_node_get (node, FALSE, "menu-menu", &has, &v, NULL);
+        if (has == DONNA_NODE_VALUE_SET)
+        {
+            info->menu = g_value_dup_string (&v);
+            info->free_menu = TRUE;
+            g_value_unset (&v);
+        }
+    }
+}
+
 static gboolean
 get_user_item_info (const gchar             *item,
                     const gchar             *extra,
@@ -566,11 +680,10 @@ get_user_item_info (const gchar             *item,
 {
     DonnaConfig *config = donna_app_peek_config (app);
     DonnaNode *node_trigger = NULL;
-    DonnaNodeHasValue has;
-    GValue v = G_VALUE_INIT;
     GPtrArray *triggers = NULL;
     enum type type;
     gboolean import_from_trigger = FALSE;
+    guint import = 0;
     gboolean b;
     const gchar *s_c;
     const gchar *s_C;
@@ -785,111 +898,44 @@ get_user_item_info (const gchar             *item,
      * TRUE (since if FALSE, that takes precedence, but if TRUE the value from
      * trigger does) */
     if (info->is_sensitive && import_from_trigger)
-    {
-        ensure_node_trigger ();
-        if (import_from_trigger)
-        {
-            donna_node_get (node_trigger, FALSE, "menu-is-sensitive",
-                    &has, &v, NULL);
-            if (has == DONNA_NODE_VALUE_SET)
-            {
-                if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
-                    info->is_sensitive = g_value_get_boolean (&v);
-                g_value_unset (&v);
-            }
-        }
-    }
+        import |= IMPORT_IS_SENSITIVE;
 
     /* name */
-    if (!info->name && !donna_config_get_string (config, &info->name,
-                "context_menus/%s/%s/name", source, item))
+    if (!info->name)
     {
-        if (import_from_trigger)
-        {
-            ensure_node_trigger ();
-            if (import_from_trigger)
-                info->name = donna_node_get_name (node_trigger);
-        }
-        else
-            info->name = g_strdup (item);
+        if (donna_config_get_string (config, &info->name,
+                    "context_menus/%s/%s/name", source, item))
+            info->free_name = TRUE;
+        else if (import_from_trigger)
+            import |= IMPORT_DEFAULT;
     }
-
-    /* parse %C/%c in the name */
-    info->name = parse_Cc (info->name, s_C, s_c);
-    info->free_name = TRUE;
 
     /* icon */
     if (!info->icon_name)
     {
-        if (donna_config_get_string (config, &s, "context_menus/%s/%s/icon",
-                    source, item))
-        {
-            info->icon_name = s;
+        if (donna_config_get_string (config, &info->icon_name,
+                    "context_menus/%s/%s/icon", source, item))
             info->free_icon = TRUE;
-        }
         else if (import_from_trigger)
-        {
-            ensure_node_trigger ();
-            if (import_from_trigger)
-            {
-                if (donna_node_get_icon (node_trigger, FALSE, &info->pixbuf)
-                        == DONNA_NODE_VALUE_SET)
-                {
-                    info->icon_is_pixbuf = TRUE;
-                    info->free_icon = TRUE;
-                }
-            }
-        }
+            import |= IMPORT_DEFAULT;
     }
 
     /* icon selected */
     if (!info->icon_name_selected)
     {
-        if (donna_config_get_string (config, &s, "context_menus/%s/%s/icon_selected",
-                    source, item))
-        {
-            info->icon_name_selected = s;
+        if (donna_config_get_string (config, &info->icon_name_selected,
+                    "context_menus/%s/%s/icon_selected", source, item))
             info->free_icon_selected = TRUE;
-        }
         else if (import_from_trigger)
-        {
-            ensure_node_trigger ();
-            if (import_from_trigger)
-            {
-                donna_node_get (node_trigger, FALSE, "menu-image-selected",
-                        &has, &v, NULL);
-                if (has == DONNA_NODE_VALUE_SET)
-                {
-                    info->pixbuf_selected = g_value_dup_object (&v);
-                    g_value_unset (&v);
-                    info->icon_is_pixbuf_selected = TRUE;
-                    info->free_icon_selected = TRUE;
-                }
-            }
-        }
+            import |= IMPORT_DEFAULT;
     }
 
     if (donna_config_get_boolean (config, &b,
                 "context_menus/%s/%s/menu_is_label_bold",
                 source, item))
         info->is_menu_bold = b;
-    else
-    {
-        if (import_from_trigger)
-        {
-            ensure_node_trigger ();
-            if (import_from_trigger)
-            {
-                donna_node_get (node_trigger, FALSE, "menu-is-label-bold",
-                        &has, &v, NULL);
-                if (has == DONNA_NODE_VALUE_SET)
-                {
-                    info->is_menu_bold = g_value_get_boolean (&v);
-                    g_value_unset (&v);
-                }
-            }
-        }
-    }
+    else if (import_from_trigger)
+        import |= IMPORT_IS_LABEL_BOLD;
 
     /* TYPE_EMPTY means we force to submenus ENABLED, since it's meant to define
      * the parent of a submenu */
@@ -904,48 +950,44 @@ get_user_item_info (const gchar             *item,
                     source, item))
             info->submenus = CLAMP (submenus, 0, 3);
         else if (import_from_trigger)
-        {
-            ensure_node_trigger ();
-            if (import_from_trigger)
-            {
-                donna_node_get (node_trigger, FALSE, "menu-submenus",
-                        &has, &v, NULL);
-                if (has == DONNA_NODE_VALUE_SET)
-                {
-                    info->submenus = g_value_get_uint (&v);
-                    g_value_unset (&v);
-                }
-            }
-        }
+            import |= IMPORT_SUBEMNUS;
     }
 
-    if (donna_config_get_string (config, &s, "context_menus/%s/%s/menu",
-                source, item))
-    {
-        info->menu = s;
+    if (donna_config_get_string (config, &info->menu,
+                "context_menus/%s/%s/menu", source, item))
         info->free_menu = TRUE;
-    }
     else if (import_from_trigger)
+        import |= IMPORT_DEFAULT;
+
+    /* do we need to import anything from node_trigger? */
+    if (import > 0)
     {
-        ensure_node_trigger ();
-        if (import_from_trigger)
-        {
-            donna_node_get (node_trigger, FALSE, "menu-menu", &has, &v, NULL);
-            if (has == DONNA_NODE_VALUE_SET)
-            {
-                info->menu = g_value_dup_string (&v);
-                info->free_menu = TRUE;
-                g_value_unset (&v);
-            }
-        }
+        if (!node_trigger)
+            node_trigger = get_node_trigger (app, info->trigger,
+                    conv_flags, conv_fn, conv_data);
+        if (!node_trigger)
+            g_warning ("Context-menu: Cannot import options from node trigger "
+                    "for item 'context_menus/%s/%s': Failed to get node",
+                    source, item);
+        else
+            import_info_from_node (node_trigger, import, info);
     }
+
+    /* ensure there is always a name */
+    if (!info->name)
+    {
+        info->name = g_strdup (item);
+        info->free_name = TRUE;
+    }
+    else
+        /* parse %C/%c in the name */
+        info->name = parse_Cc (info->name, s_C, s_c);
 
     if (node_trigger)
         g_object_unref (node_trigger);
 
     return TRUE;
 }
-#undef ensure_node_trigger
 
 static void
 load_menu_properties_to_node (DonnaContextInfo  *info,
@@ -1350,23 +1392,16 @@ parse_items (DonnaApp               *app,
 
             if (info.node)
             {
+                DonnaNode *node;
+
                 /* we only have the node to use, only we can't use it since we
-                 * need to create a container. So we'll grab name/icon/etc from
-                 * it, and put it as container-trigger */
+                 * need to create a container. So we import everything from it
+                 * */
 
-                info.name = donna_node_get_name (info.node);
-                info.free_name = TRUE;
-
-                if (donna_node_get_icon (info.node, FALSE, &info.pixbuf)
-                        == DONNA_NODE_VALUE_SET)
-                {
-                    info.icon_is_pixbuf = TRUE;
-                    info.free_icon = TRUE;
-                }
-
-                if (donna_node_get_desc (info.node, FALSE, &info.desc)
-                        == DONNA_NODE_VALUE_SET)
-                    info.free_desc = TRUE;
+                node = info.node;
+                memset (&info, 0, sizeof (info));
+                import_info_from_node (node, IMPORT_ALL, &info);
+                g_object_unref (node);
             }
 
             node = donna_provider_internal_new_node (pi, info.name,
