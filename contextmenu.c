@@ -428,11 +428,9 @@ get_node_trigger (DonnaApp      *app,
                   conv_flag_fn   conv_fn,
                   gpointer       conv_data)
 {
-    DonnaTask *task;
     DonnaNode *node;
 
     fl = donna_app_parse_fl (app, g_strdup (fl), conv_flags, conv_fn, conv_data, NULL);
-
     node = donna_app_get_node (app, fl, NULL);
     if (G_UNLIKELY (!node))
     {
