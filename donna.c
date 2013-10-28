@@ -2309,7 +2309,6 @@ load_menu (struct menu_click *mc)
         DonnaNode *node = mc->nodes->pdata[i];
         GtkWidget *item;
         GdkPixbuf *icon;
-        gchar *name;
 
         if (!node)
         {
@@ -2327,12 +2326,19 @@ load_menu (struct menu_click *mc)
             DonnaNodeType type;
             DonnaNodeHasValue has;
             GValue v = G_VALUE_INIT;
+            gchar *name;
 
             type = donna_node_get_node_type (node);
             name = donna_node_get_name (node);
             item = donna_image_menu_item_new_with_label (name);
             imi  = (DonnaImageMenuItem *) item;
             g_free (name);
+
+            if (donna_node_get_desc (node, TRUE, &name) == DONNA_NODE_VALUE_SET)
+            {
+                gtk_widget_set_tooltip_text (item, name);
+                g_free (name);
+            }
 
             donna_node_get (node, TRUE, "menu-is-sensitive", &has, &v, NULL);
             if (has == DONNA_NODE_VALUE_SET)
