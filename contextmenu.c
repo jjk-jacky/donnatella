@@ -1298,6 +1298,9 @@ parse_items (DonnaApp               *app,
                 c_end = *end;
                 *end = '\0';
             }
+
+            if (*extra == '\0')
+                extra = NULL;
         }
         else
             extra = NULL;
