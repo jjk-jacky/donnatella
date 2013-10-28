@@ -9424,9 +9424,9 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     struct column *_col;
     DonnaNode *node;
 
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
-    g_return_val_if_fail (rowid != NULL, NULL);
-    g_return_val_if_fail (column != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
     priv = tree->priv;
 
     _col = get_column_by_name (tree, column);
@@ -9491,9 +9491,9 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
     DonnaNode *node_ref;
     gboolean ret;
 
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
-    g_return_val_if_fail (rowid != NULL, NULL);
-    g_return_val_if_fail (column != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
     priv = tree->priv;
 
     _col = get_column_by_name (tree, column);
@@ -12183,6 +12183,7 @@ donna_tree_view_set_second_sort_order (DonnaTreeView      *tree,
     set_second_sort_column (tree, _col->column, order, FALSE);
     return TRUE;
 }
+
 
 /* mode list only */
 GPtrArray *
