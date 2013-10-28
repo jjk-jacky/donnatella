@@ -3126,6 +3126,7 @@ cmd_register_nodes_io (DonnaTask               *task,
                 donna_task_take_error (task, err);
             }
             g_ptr_array_unref (nodes);
+            g_object_unref (t);
             return state;
         }
 
