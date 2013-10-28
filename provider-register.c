@@ -3131,7 +3131,6 @@ cmd_register_nodes_io (DonnaTask               *task,
         }
 
         /* switch dest to the newly created folder */
-        g_object_unref (dest);
         dest = g_value_dup_object (donna_task_get_return_value (t));
         g_object_unref (t);
     }
@@ -3144,6 +3143,8 @@ cmd_register_nodes_io (DonnaTask               *task,
     {
         donna_task_take_error (task, err);
         g_ptr_array_unref (nodes);
+        if (in_new_folder && nodes->len > 0)
+            g_object_unref (dest);
         return DONNA_TASK_FAILED;
     }
     g_ptr_array_unref (nodes);
@@ -3154,6 +3155,8 @@ cmd_register_nodes_io (DonnaTask               *task,
                 "Failed to run nodes_io task: ");
         donna_task_take_error (task, err);
         g_object_unref (t);
+        if (in_new_folder && nodes->len > 0)
+            g_object_unref (dest);
         return DONNA_TASK_FAILED;
     }
 
@@ -3183,6 +3186,8 @@ cmd_register_nodes_io (DonnaTask               *task,
     }
 
     g_object_unref (t);
+    if (in_new_folder && nodes->len > 0)
+        g_object_unref (dest);
     return state;
 }
 
