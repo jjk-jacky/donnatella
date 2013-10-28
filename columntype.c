@@ -120,10 +120,67 @@ helper_can_edit (DonnaColumnType    *ct,
     return TRUE;
 }
 
+static const gchar *
+helper_get_save_location (DonnaColumnType    *ct,
+                          const gchar       **extra,
+                          gboolean            from_alias,
+                          GError            **error)
+{
+    const gchar *save = "";
+    g_assert (extra);
+
+    if (*extra && (from_alias || **extra == '@'))
+    {
+        gchar *s;
+        gsize len;
+
+        if (!from_alias)
+            ++*extra;
+        s = strchr (*extra, ':');
+        if (s)
+            len = s - *extra;
+        else
+            len = strlen (*extra);
+
+        if (len == 0)
+            save = "";
+        else if (streqn (*extra, "memory", len))
+            save = "memory";
+        else if (streqn (*extra, "current", len))
+            save = "current";
+        else if (streqn (*extra, "ask", len))
+            save = "ask";
+        else if (streqn (*extra, "arr", len))
+            save = "arr";
+        else if (streqn (*extra, "tree", len))
+            save = "tree";
+        else if (streqn (*extra, "col", len))
+            save = "col";
+        else if (streqn (*extra, "default", len))
+            save = "default";
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "ColumnType '%s': Invalid save location from extra: '%s''",
+                    donna_columntype_get_name (ct), *extra);
+            return NULL;
+        }
+
+        if (!s || s[1] == '\0')
+            *extra = NULL;
+        else
+            *extra = s + 1;
+    }
+
+    return save;
+}
+
 static void
 donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 {
     interface->helper_can_edit          = helper_can_edit;
+    interface->helper_get_save_location = helper_get_save_location;
 
     interface->get_default_sort_order   = default_get_default_sort_order;
     interface->can_edit                 = default_can_edit;

@@ -59,6 +59,11 @@ struct _DonnaColumnTypeInterface
                                              const gchar        *property,
                                              DonnaNode          *node,
                                              GError            **error);
+    const gchar *       (*helper_get_save_location) (
+                                             DonnaColumnType    *ct,
+                                             const gchar       **extra,
+                                             gboolean            from_alias,
+                                             GError            **error);
 
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
