@@ -11291,9 +11291,6 @@ tree_context_get_alias (const gchar             *alias,
             b = g_strdup_printf (":column.%s.", _col->name);
 
         ret = donna_columntype_get_context_alias (_col->ct,
-                priv->name,
-                _col->name,
-                priv->arrangement->columns_options,
                 _col->ct_data,
                 s + 1,
                 extra,
@@ -11332,9 +11329,6 @@ tree_context_get_alias (const gchar             *alias,
             b = g_strdup_printf (":column.%s.", _col->name);
 
         ret = donna_columntype_get_context_alias (_col->ct,
-                priv->name,
-                _col->name,
-                priv->arrangement->columns_options,
                 _col->ct_data,
                 "options",
                 extra,
@@ -11437,9 +11431,6 @@ tree_context_get_item_info (const gchar             *item,
         }
 
         if (!donna_columntype_get_context_item_info (_col->ct,
-                    priv->name,
-                    _col->name,
-                    priv->arrangement->columns_options,
                     _col->ct_data,
                     s + 1,
                     extra,

@@ -429,10 +429,7 @@ donna_columntype_free_filter_data (DonnaColumnType   *ct,
 
 gchar *
 donna_columntype_get_context_alias (DonnaColumnType    *ct,
-                                    const gchar        *tv_name,
-                                    const gchar        *col_name,
-                                    const gchar        *arr_name,
-                                    gpointer           *data,
+                                    gpointer            data,
                                     const gchar        *alias,
                                     const gchar        *extra,
                                     DonnaContextReference reference,
@@ -460,18 +457,14 @@ donna_columntype_get_context_alias (DonnaColumnType    *ct,
         return NULL;
     }
 
-    return (*interface->get_context_alias) (ct,
-            tv_name, col_name, arr_name, data,
+    return (*interface->get_context_alias) (ct, data,
             alias, extra, reference, node_ref, get_sel, get_sel_data,
             prefix, error);
 }
 
 gboolean
 donna_columntype_get_context_item_info (DonnaColumnType    *ct,
-                                        const gchar        *tv_name,
-                                        const gchar        *col_name,
-                                        const gchar        *arr_name,
-                                        gpointer           *data,
+                                        gpointer            data,
                                         const gchar        *item,
                                         const gchar        *extra,
                                         DonnaContextReference reference,
@@ -501,8 +494,7 @@ donna_columntype_get_context_item_info (DonnaColumnType    *ct,
         return FALSE;
     }
 
-    return (*interface->get_context_item_info) (ct,
-            tv_name, col_name, arr_name, data,
+    return (*interface->get_context_item_info) (ct, data,
             item, extra, reference, node_ref, get_sel, get_sel_data,
             info, error);
 }

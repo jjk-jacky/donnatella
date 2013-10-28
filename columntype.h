@@ -120,10 +120,7 @@ struct _DonnaColumnTypeInterface
                                              gpointer            filter_data);
     /* context related */
     gchar *             (*get_context_alias)(DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
-                                             const gchar        *arr_name,
-                                             gpointer           *data,
+                                             gpointer            data,
                                              const gchar        *alias,
                                              const gchar        *extra,
                                              DonnaContextReference reference,
@@ -134,10 +131,7 @@ struct _DonnaColumnTypeInterface
                                              GError            **error);
     gboolean            (*get_context_item_info) (
                                              DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
-                                             const gchar        *col_name,
-                                             const gchar        *arr_name,
-                                             gpointer           *data,
+                                             gpointer            data,
                                              const gchar        *item,
                                              const gchar        *extra,
                                              DonnaContextReference reference,
@@ -209,10 +203,7 @@ void            donna_columntype_free_filter_data(DonnaColumnType   *ct,
 /* context related */
 gchar *         donna_columntype_get_context_alias (
                                                  DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
-                                                 const gchar        *arr_name,
-                                                 gpointer           *data,
+                                                 gpointer            data,
                                                  const gchar        *alias,
                                                  const gchar        *extra,
                                                  DonnaContextReference reference,
@@ -223,10 +214,7 @@ gchar *         donna_columntype_get_context_alias (
                                                  GError            **error);
 gboolean        donna_columntype_get_context_item_info (
                                                  DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
-                                                 const gchar        *col_name,
-                                                 const gchar        *arr_name,
-                                                 gpointer           *data,
+                                                 gpointer            data,
                                                  const gchar        *item,
                                                  const gchar        *extra,
                                                  DonnaContextReference reference,
