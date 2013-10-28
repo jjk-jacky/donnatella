@@ -9477,6 +9477,61 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
 }
 
 gboolean
+donna_tree_view_column_set_option (DonnaTreeView      *tree,
+                                   const gchar        *column,
+                                   const gchar        *option,
+                                   const gchar        *value,
+                                   DonnaColumnOptionSaveLocation save_location,
+                                   GError            **error)
+{
+    GError *err = NULL;
+    DonnaTreeViewPrivate *priv;
+    struct column *_col;
+    DonnaColumnTypeNeed need;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
+    g_return_val_if_fail (option != NULL, FALSE);
+    g_return_val_if_fail (value != NULL, FALSE);
+    priv = tree->priv;
+
+    _col = get_column_by_name (tree, column);
+    if (!_col)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
+                "Treeview '%s': Cannot set column option, unknown column '%s'",
+                priv->name, column);
+        return FALSE;
+    }
+
+    need = donna_columntype_set_option (_col->ct,
+            priv->name,
+            _col->name,
+            priv->arrangement->columns_options,
+            _col->ct_data,
+            option,
+            value,
+            save_location,
+            &err);
+
+    if (err)
+    {
+        g_propagate_prefixed_error (error, err, "Treeview '%s': "
+                "Failed to set option '%s' on column '%s': ",
+                priv->name, option, column);
+        return FALSE;
+    }
+
+    if (need & DONNA_COLUMNTYPE_NEED_RESORT)
+        resort_tree (tree);
+    else if (need & DONNA_COLUMNTYPE_NEED_REDRAW)
+        gtk_widget_queue_draw ((GtkWidget *) tree);
+
+    return TRUE;
+}
+
+gboolean
 donna_tree_view_column_set_value (DonnaTreeView      *tree,
                                   DonnaTreeRowId     *rowid,
                                   gboolean            to_focused,

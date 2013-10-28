@@ -208,6 +208,13 @@ gboolean        donna_tree_view_column_edit     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  const gchar        *column,
                                                  GError            **error);
+gboolean        donna_tree_view_column_set_option (
+                                                 DonnaTreeView      *tree,
+                                                 const gchar        *column,
+                                                 const gchar        *option,
+                                                 const gchar        *value,
+                                                 DonnaColumnOptionSaveLocation save_location,
+                                                 GError            **error);
 gboolean        donna_tree_view_column_set_value(DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  gboolean            to_focused,

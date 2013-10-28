@@ -47,6 +47,17 @@ typedef enum
     DONNA_COLUMNTYPE_NEED_RESORT    = (1 << 1)
 } DonnaColumnTypeNeed;
 
+typedef enum
+{
+    DONNA_COLUMN_OPTION_SAVE_IN_MEMORY = 0, /* i.e. don't save, only apply */
+    DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
+    DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT,
+    DONNA_COLUMN_OPTION_SAVE_IN_TREE,
+    DONNA_COLUMN_OPTION_SAVE_IN_COLUMN,
+    DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT,
+    DONNA_COLUMN_OPTION_SAVE_IN_ASK
+} DonnaColumnOptionSaveLocation;
+
 typedef gboolean    (*renderer_edit_fn)     (GtkCellRenderer    *renderer,
                                              gpointer            data);
 
@@ -93,6 +104,15 @@ struct _DonnaColumnTypeInterface
                                              renderer_edit_fn    renderer_edit,
                                              gpointer            re_data,
                                              DonnaTreeView      *treeview,
+                                             GError            **error);
+    DonnaColumnTypeNeed (*set_option)       (DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             const gchar        *arr_name,
+                                             gpointer            data,
+                                             const gchar        *option,
+                                             const gchar        *value,
+                                             DonnaColumnOptionSaveLocation save_location,
                                              GError            **error);
     gboolean            (*set_value)        (DonnaColumnType    *ct,
                                              gpointer            data,
@@ -175,6 +195,15 @@ gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
                                                  renderer_edit_fn    renderer_edit,
                                                  gpointer            re_data,
                                                  DonnaTreeView      *treeview,
+                                                 GError            **error);
+DonnaColumnTypeNeed donna_columntype_set_option (DonnaColumnType    *ct,
+                                                 const gchar        *tv_name,
+                                                 const gchar        *col_name,
+                                                 const gchar        *arr_name,
+                                                 gpointer            data,
+                                                 const gchar        *option,
+                                                 const gchar        *value,
+                                                 DonnaColumnOptionSaveLocation save_location,
                                                  GError            **error);
 gboolean        donna_columntype_set_value      (DonnaColumnType    *ct,
                                                  gpointer            data,

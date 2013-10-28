@@ -349,6 +349,34 @@ donna_columntype_edit (DonnaColumnType    *ct,
             renderer_edit, re_data, treeview, error);
 }
 
+DonnaColumnTypeNeed
+donna_columntype_set_option (DonnaColumnType    *ct,
+                             const gchar        *tv_name,
+                             const gchar        *col_name,
+                             const gchar        *arr_name,
+                             gpointer            data,
+                             const gchar        *option,
+                             const gchar        *value,
+                             DonnaColumnOptionSaveLocation save_location,
+                             GError            **error)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (tv_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (col_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (option != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (value != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+
+    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (interface->set_option != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+
+    return (*interface->set_option) (ct, tv_name, col_name, arr_name, data,
+            option, value, save_location, error);
+}
+
 gboolean
 donna_columntype_set_value (DonnaColumnType    *ct,
                             gpointer            data,

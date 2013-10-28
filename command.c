@@ -1359,6 +1359,56 @@ cmd_tree_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *column = args[1];
+    const gchar *option = args[2];
+    const gchar *value  = args[3];
+    const gchar *s_l    = args[4]; /* opt */
+
+    const gchar *c_s_l[] = { "memory", "current", "ask", "arrangement", "tree",
+        "column", "default" };
+    DonnaColumnOptionSaveLocation save_location[] = {
+        DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
+        DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
+        DONNA_COLUMN_OPTION_SAVE_IN_ASK,
+        DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT,
+        DONNA_COLUMN_OPTION_SAVE_IN_TREE,
+        DONNA_COLUMN_OPTION_SAVE_IN_COLUMN,
+        DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT };
+    gint c;
+
+    if (s_l)
+    {
+        c = _get_choice (c_s_l, s_l);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Cannot set column option, invalid save location: '%s'; "
+                    "Must be 'memory', 'current', 'ask', 'arrangement', 'tree', "
+                    "'column' or 'default'",
+                    s_l);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* default: IN_MEMORY */
+        c = 0;
+
+    if (!donna_tree_view_column_set_option (tree, column, option, value,
+                save_location[c], &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2550,6 +2600,15 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (tree_column_edit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_column_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
