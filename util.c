@@ -371,13 +371,17 @@ duplicate_gvalue (const GValue *src)
 }
 
 void
-donna_g_string_append_quoted (GString *str, const gchar *s)
+donna_g_string_append_quoted (GString            *str,
+                              const gchar        *s,
+                              gboolean            double_percent)
 {
     g_string_append_c (str, '"');
     for ( ; *s != '\0'; ++s)
     {
         if (*s == '"' || *s == '\\')
             g_string_append_c (str, '\\');
+        else if (double_percent && *s == '%')
+            g_string_append_c (str, '%');
 
         g_string_append_c (str, *s);
     }

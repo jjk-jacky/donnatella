@@ -2139,7 +2139,7 @@ provider_register_trigger_node (DonnaProviderBase  *_provider,
         GString *str;
 
         str = g_string_new (NULL);
-        donna_g_string_append_quoted (str, location);
+        donna_g_string_append_quoted (str, location, FALSE);
         name = g_string_free (str, FALSE);
     }
     else
@@ -3001,10 +3001,10 @@ cmd_register_nodes_io (DonnaTask               *task,
 
         /* create command ask_text() to ask user the name of the new folder */
         str = g_string_new ("command:ask_text (");
-        donna_g_string_append_quoted (str, "Paste Into New Folder");
+        donna_g_string_append_quoted (str, "Paste Into New Folder", FALSE);
         g_string_append_c (str, ',');
         donna_g_string_append_quoted (str,
-                "Please enter the name of the new folder to paste into");
+                "Please enter the name of the new folder to paste into", FALSE);
         g_string_append_c (str, ',');
 
         /* other defaults: name & name w/out extension, for first 3 items */
@@ -3016,19 +3016,19 @@ cmd_register_nodes_io (DonnaTask               *task,
             if (i > 0)
                 g_string_append_c (str_defs, ',');
             name = donna_node_get_name (nodes->pdata[i]);
-            donna_g_string_append_quoted (str_defs, name);
+            donna_g_string_append_quoted (str_defs, name, FALSE);
 
             s = strrchr (name, '.');
             if (s)
             {
                 *s = '\0';
                 g_string_append_c (str_defs, ',');
-                donna_g_string_append_quoted (str_defs, name);
+                donna_g_string_append_quoted (str_defs, name, FALSE);
             }
             /* main default */
             if (i == 0)
             {
-                donna_g_string_append_quoted (str, name);
+                donna_g_string_append_quoted (str, name, FALSE);
                 g_string_append_c (str, ',');
             }
 
@@ -3036,7 +3036,7 @@ cmd_register_nodes_io (DonnaTask               *task,
         }
 
         if (str_defs->len > 0)
-            donna_g_string_append_quoted (str, str_defs->str);
+            donna_g_string_append_quoted (str, str_defs->str, FALSE);
         g_string_free (str_defs, TRUE);
 
         g_string_append_c (str, ')');

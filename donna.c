@@ -1375,7 +1375,7 @@ donna_donna_parse_fl (DonnaApp       *app,
                                 gchar *fl;
                                 fl = donna_node_get_full_location (
                                         (DonnaNode *) arr->pdata[i]);
-                                donna_g_string_append_quoted (str_arr, fl);
+                                donna_g_string_append_quoted (str_arr, fl, FALSE);
                                 g_string_append_c (str_arr, ',');
                                 g_free (fl);
                             }
@@ -1383,7 +1383,7 @@ donna_donna_parse_fl (DonnaApp       *app,
                             for (i = 0; i < arr->len; ++i)
                             {
                                 donna_g_string_append_quoted (str_arr,
-                                        (gchar *) arr->pdata[i]);
+                                        (gchar *) arr->pdata[i], FALSE);
                                 g_string_append_c (str_arr, ',');
                             }
 
@@ -1391,14 +1391,14 @@ donna_donna_parse_fl (DonnaApp       *app,
                         g_string_truncate (str_arr, str_arr->len - 1);
                         /* str_arr is a list of quoted strings/FL, but we also
                          * need to quote the list itself */
-                        donna_g_string_append_quoted (str, str_arr->str);
+                        donna_g_string_append_quoted (str, str_arr->str, FALSE);
                         g_string_free (str_arr, TRUE);
                     }
                     else
                     {
                         gchar *fl;
                         fl = donna_node_get_full_location ((DonnaNode *) ptr);
-                        donna_g_string_append_quoted (str, fl);
+                        donna_g_string_append_quoted (str, fl, FALSE);
                         g_free (fl);
                     }
                 }
@@ -1417,7 +1417,7 @@ donna_donna_parse_fl (DonnaApp       *app,
                 }
             }
             else if (type & DONNA_ARG_TYPE_STRING)
-                donna_g_string_append_quoted (str, (gchar *) ptr);
+                donna_g_string_append_quoted (str, (gchar *) ptr, FALSE);
             else if (type & DONNA_ARG_TYPE_INT)
                 g_string_append_printf (str, "%d", * (gint *) ptr);
 
