@@ -19,6 +19,7 @@ typedef struct _DonnaImageMenuItemClass         DonnaImageMenuItemClass;
 
 GType   donna_image_menu_item_get_type          (void) G_GNUC_CONST;
 
+/* keep in sync with DonnaContextIconSpecial in contextmenu.h */
 typedef enum
 {
     DONNA_IMAGE_MENU_ITEM_IS_IMAGE = 0,

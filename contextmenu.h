@@ -29,6 +29,14 @@ typedef enum
             | DONNA_CONTEXT_REF_NOT_SELECTED)
 } DonnaContextReference;
 
+/* keep in sync with DonnaImageMenuItemImageSpecial in imagemenuitem.h */
+typedef enum
+{
+    DONNA_CONTEXT_ICON_IS_IMAGE = 0,
+    DONNA_CONTEXT_ICON_IS_CHECK,
+    DONNA_CONTEXT_ICON_IS_RADIO,
+} DonnaContextIconSpecial;
+
 typedef struct
 {
     DonnaNode   *node;
@@ -47,7 +55,7 @@ typedef struct
     /* container only */
     gchar       *menu;
 
-    guint        icon_special       : 2; /* DonnaImageMenuItemImageSpecial */
+    guint        icon_special       : 2; /* DonnaContextIconSpecial */
     guint        icon_is_pixbuf     : 1;
     guint        icon_is_pixbuf_selected : 1;
     guint        is_active          : 1;

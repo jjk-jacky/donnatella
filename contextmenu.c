@@ -998,7 +998,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
     GError *err = NULL;
     GValue v = G_VALUE_INIT;
 
-    if (info->icon_special == DONNA_IMAGE_MENU_ITEM_IS_IMAGE)
+    if (info->icon_special == DONNA_CONTEXT_ICON_IS_IMAGE)
     {
         if ((info->icon_is_pixbuf_selected && info->pixbuf_selected)
                 || info->icon_name_selected)
