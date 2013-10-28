@@ -94,6 +94,27 @@ static gboolean         ct_size_is_match_filter     (DonnaColumnType    *ct,
                                                      GError            **error);
 static void             ct_size_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
+static gchar *          ct_size_get_context_alias   (DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *alias,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     const gchar       *prefix,
+                                                     GError           **error);
+static gboolean         ct_size_get_context_item_info (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *item,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     DonnaContextInfo  *info,
+                                                     GError           **error);
 
 static void
 ct_size_columntype_init (DonnaColumnTypeInterface *interface)
@@ -108,6 +129,8 @@ ct_size_columntype_init (DonnaColumnTypeInterface *interface)
     interface->node_cmp                 = ct_size_node_cmp;
     interface->is_match_filter          = ct_size_is_match_filter;
     interface->free_filter_data         = ct_size_free_filter_data;
+    interface->get_context_alias        = ct_size_get_context_alias;
+    interface->get_context_item_info    = ct_size_get_context_item_info;
 }
 
 static void
@@ -293,6 +316,24 @@ ct_size_get_props (DonnaColumnType  *ct,
     return props;
 }
 
+static gchar *
+format_size (guint64             size,
+             struct tv_col_data *data,
+             const gchar        *fmt,
+             gchar              *str,
+             gsize               max)
+{
+    gssize len;
+
+    len = donna_print_size (str, max, fmt, size, data->digits, data->long_unit);
+    if (len >= max)
+    {
+        str = g_new (gchar, ++len);
+        donna_print_size (str, len, fmt, size, data->digits, data->long_unit);
+    }
+    return str;
+}
+
 #define warn_not_uint64(node)    do {                   \
     gchar *location = donna_node_get_location (node);   \
     g_warning ("ColumnType 'size': property '%s' for node '%s:%s' isn't of expected type (%s instead of %s)",  \
@@ -358,12 +399,7 @@ ct_size_render (DonnaColumnType    *ct,
         g_value_unset (&value);
     }
 
-    len = donna_print_size (b, 20, data->format, size, data->digits, data->long_unit);
-    if (len >= 20)
-    {
-        b = g_new (gchar, ++len);
-        donna_print_size (b, len, data->format, size, data->digits, data->long_unit);
-    }
+    b = format_size (size, data, data->format, b, 20);
     g_object_set (renderer, "visible", TRUE, "text", b, "xalign", 1.0, NULL);
     donna_renderer_set (renderer, "xalign", NULL);
     if (b != buf)
@@ -404,14 +440,7 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
         g_value_unset (&value);
     }
 
-    len = donna_print_size (b, 20, data->format_tooltip, size,
-            data->digits, data->long_unit);
-    if (len >= 20)
-    {
-        b = g_new (gchar, ++len);
-        donna_print_size (b, len, data->format_tooltip, size,
-                data->digits, data->long_unit);
-    }
+    b = format_size (size, data, data->format_tooltip, b, 20);
     gtk_tooltip_set_text (tooltip, b);
     if (b != buf)
         g_free (b);
@@ -637,4 +666,312 @@ ct_size_free_filter_data (DonnaColumnType    *ct,
                           gpointer            filter_data)
 {
     g_free (filter_data);
+}
+
+static gchar *
+ct_size_get_context_alias (DonnaColumnType   *ct,
+                           gpointer            data,
+                           const gchar       *alias,
+                           const gchar       *extra,
+                           DonnaContextReference reference,
+                           DonnaNode         *node_ref,
+                           get_sel_fn         get_sel,
+                           gpointer           get_sel_data,
+                           const gchar       *prefix,
+                           GError           **error)
+{
+    const gchar *save_location;
+
+    if (!streq (alias, "options"))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType 'size': Unknown alias '%s'",
+                alias);
+        return NULL;
+    }
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, TRUE, error);
+    if (!save_location)
+        return NULL;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'size': Invalid extra '%s' for alias '%s'",
+                extra, alias);
+        return NULL;
+    }
+
+    return g_strconcat (
+            prefix, "format:@", save_location, "<",
+                prefix, "format:@", save_location, ":%R,",
+                prefix, "format:@", save_location, ":%M,",
+                prefix, "format:@", save_location, ":%m,",
+                prefix, "format:@", save_location, ":%K,",
+                prefix, "format:@", save_location, ":%k,",
+                prefix, "format:@", save_location, ":%B,",
+                prefix, "format:@", save_location, ":%b,",
+                prefix, "format:@", save_location, ":%r,-,",
+                prefix, "format:@", save_location, ":=>,",
+            prefix, "format:@", save_location, ":tt<",
+                prefix, "format:@", save_location, ":tt:%R,",
+                prefix, "format:@", save_location, ":tt:%M,",
+                prefix, "format:@", save_location, ":tt:%m,",
+                prefix, "format:@", save_location, ":tt:%K,",
+                prefix, "format:@", save_location, ":tt:%k,",
+                prefix, "format:@", save_location, ":tt:%B,",
+                prefix, "format:@", save_location, ":tt:%b,",
+                prefix, "format:@", save_location, ":tt:%r,-,",
+                prefix, "format:@", save_location, ":tt=>,",
+            prefix, "digits:@", save_location, "<",
+                prefix, "digits:@", save_location, ":0,",
+                prefix, "digits:@", save_location, ":1,",
+                prefix, "digits:@", save_location, ":2>,",
+            prefix, "long_unit:@", save_location, ",",
+            prefix, "prop:@", save_location, "<",
+                prefix, "prop:@", save_location, ":size,",
+                prefix, "prop:@", save_location, ":custom>",
+            NULL);
+}
+
+static gboolean
+ct_size_get_context_item_info (DonnaColumnType   *ct,
+                               gpointer            _data,
+                               const gchar       *item,
+                               const gchar       *extra,
+                               DonnaContextReference reference,
+                               DonnaNode         *node_ref,
+                               get_sel_fn         get_sel,
+                               gpointer           get_sel_data,
+                               DonnaContextInfo  *info,
+                               GError           **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *option = NULL;
+    const gchar *value;
+    const gchar *save_location;
+    gboolean quote_value = FALSE;
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, FALSE, error);
+    if (!save_location)
+        return FALSE;
+
+    if (streq (item, "prop"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+
+        if (!extra)
+        {
+            info->name = "Node Property";
+            info->submenus = 1;
+        }
+        else if (streq (extra, "size"))
+        {
+            info->name = "Size";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->is_size;
+            option = "property";
+            value = "size";
+        }
+        else if (streq (extra, "custom"))
+        {
+            if (data->is_size)
+                info->name = "<Custom...>";
+            else
+            {
+                info->name = g_strdup_printf ("Custom: %s", data->property);
+                info->free_name = TRUE;
+                info->is_active = TRUE;
+            }
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            option = "property";
+            value = "@ask_text (Enter the name of the property)";
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "ColumnType 'size': Invalid extra '%s' for item 'prop'",
+                    extra);
+            return FALSE;
+        }
+    }
+    else if (streq (item, "format"))
+    {
+        gchar buf[20], *b = buf;
+        guint64 size = 123456789;
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            b = format_size (size, data, data->format, b, 20);
+            info->name = g_strconcat ("Column: ", b, NULL);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", data->format, NULL);
+            info->free_desc = TRUE;
+            option = "format";
+            value = "@ask_text (Enter the format for the column)";
+            if (b != buf)
+                g_free (b);
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current format: ", data->format, NULL);
+            info->free_desc = TRUE;
+            option = "format";
+            value = "@ask_text (Enter the format for the column)";
+        }
+        else if (streqn (extra, "tt", 2))
+        {
+            if (extra[2] == '\0')
+            {
+                b = format_size (size, data, data->format_tooltip, b, 20);
+                info->name = g_strconcat ("Tooltip: ", b, NULL);
+                info->free_name = TRUE;
+                info->desc = g_strconcat ("Format: ", data->format_tooltip, NULL);
+                info->free_desc = TRUE;
+                option = "format_tooltip";
+                value = "@ask_text (Enter the format for the tooltip)";
+                if (b != buf)
+                    g_free (b);
+            }
+            else if (extra[2] == '=')
+            {
+                if (extra[3] == '\0')
+                    info->name = "Custom...";
+                else
+                {
+                    info->name = g_strdup (extra + 3);
+                    info->free_name = TRUE;
+                }
+                info->desc = g_strconcat ("Current format: ", data->format_tooltip, NULL);
+                info->free_desc = TRUE;
+                option = "format_tooltip";
+                value = "@ask_text (Enter the format for the tooltip)";
+            }
+            else if (extra[2] == ':')
+            {
+                extra += 3;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->is_active = streq (extra, data->format_tooltip);
+                b = format_size (size, data, extra, b, 20);
+                if (b == buf)
+                    info->name = g_strdup (b);
+                else
+                    info->name = b;
+                info->free_name = TRUE;
+                info->desc = g_strconcat ("Format: ", extra, NULL);
+                info->free_desc = TRUE;
+                option = "format_tooltip";
+                value = extra;
+                quote_value = TRUE;
+            }
+            else
+            {
+                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                        DONNA_CONTEXT_MENU_ERROR_OTHER,
+                        "ColumnType 'size': Invalid extra '%s' for item 'format'",
+                        extra);
+                return FALSE;
+            }
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->format);
+            b = format_size (size, data, extra, b, 20);
+            if (b == buf)
+                info->name = g_strdup (b);
+            else
+                info->name = b;
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            option = "format";
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "long_unit"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = data->long_unit;
+        info->name = "Use long units (MiB instead of M)";
+        option = "long_unit";
+        value = (data->long_unit) ? "0" : "1";
+    }
+    else if (streq (item, "digits"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            info->name = "Number of digits";
+            info->desc = "Number of digits to use when rounding up";
+            info->submenus = 1;
+        }
+        else if (extra[1] == '\0' && *extra >= '0' && *extra <= '2')
+        {
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->digits == *extra - '0';
+            info->name = g_strdup (extra);
+            info->free_name = TRUE;
+            option = "digits";
+            value = extra;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "ColumnType 'size': Invalid extra '%s' for item 'digits'",
+                    extra);
+            return FALSE;
+        }
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "ColumnType 'size': Unknown item '%s'",
+                item);
+        return FALSE;
+    }
+
+    if (option)
+    {
+        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+        g_string_append (str, option);
+        g_string_append_c (str, ',');
+        if (quote_value)
+            donna_g_string_append_quoted (str, value, TRUE);
+        else
+            g_string_append (str, value);
+        if (*save_location != '\0')
+        {
+            g_string_append_c (str, ',');
+            g_string_append (str, save_location);
+        }
+        g_string_append_c (str, ')');
+        info->trigger = g_string_free (str, FALSE);
+        info->free_trigger = TRUE;
+    }
+
+    return TRUE;
 }
