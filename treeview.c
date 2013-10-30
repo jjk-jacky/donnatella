@@ -7377,11 +7377,6 @@ no_task:
     priv->location_task = (donna_task_can_be_duplicated (task))
         ? g_object_ref (task) : NULL;
 
-    /* emit signal */
-    g_object_notify_by_pspec ((GObject *) data->tree,
-            donna_tree_view_props[PROP_LOCATION]);
-    check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
-
 free:
     free_node_get_children_list_data (data);
 }
