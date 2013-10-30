@@ -618,13 +618,13 @@ get_node_key (DonnaColumnTypeName   *ctname,
             const gchar *domain;
             guint i;
 
+            if (!priv->domains)
+                priv->domains = g_ptr_array_new ();
             domain = donna_node_get_domain (node);
             for (i = 0; i < priv->domains->len; ++i)
                 if (streq (domain, priv->domains->pdata[i]))
                     break;
             /* no match, must connect */
-            if (!priv->domains)
-                priv->domains = g_ptr_array_new ();
             if (i >= priv->domains->len)
             {
                 /* FIXME? (not actually needed since our cb is "self-contained")
