@@ -75,6 +75,18 @@ struct _DonnaColumnTypeInterface
                                              const gchar       **extra,
                                              gboolean            from_alias,
                                              GError            **error);
+    gboolean            (*helper_set_option) (
+                                             DonnaColumnType    *ct,
+                                             const gchar        *tv_name,
+                                             const gchar        *col_name,
+                                             const gchar        *arr_name,
+                                             const gchar        *def_cat,
+                                             DonnaColumnOptionSaveLocation save_location,
+                                             const gchar        *option,
+                                             GType               type,
+                                             gpointer            current,
+                                             gpointer            value,
+                                             GError            **error);
 
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);

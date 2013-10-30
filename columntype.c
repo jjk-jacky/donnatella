@@ -176,11 +176,439 @@ helper_get_save_location (DonnaColumnType    *ct,
     return save;
 }
 
+struct asl
+{
+    GtkWidget *win;
+    GSList *list;
+    DonnaColumnOptionSaveLocation save_location;
+    DonnaTreeView *tree;
+    gulong sid;
+};
+
+static void
+btn_clicked (struct asl *asl)
+{
+    for ( ; asl->list; asl->list = asl->list->next)
+    {
+        if (gtk_toggle_button_get_active ((GtkToggleButton *) asl->list->data))
+        {
+            gpointer sl;
+
+            sl = g_object_get_data (asl->list->data, "_from");
+            asl->save_location = GPOINTER_TO_UINT (sl);
+            gtk_widget_destroy (asl->win);
+            return;
+        }
+    }
+    g_warn_if_reached ();
+}
+
+static void
+tree_changed_location (struct asl *asl)
+{
+    g_signal_handler_disconnect (asl->tree, asl->sid);
+    asl->sid = 0;
+    gtk_widget_destroy (asl->win);
+}
+
+static DonnaColumnOptionSaveLocation
+ask_save_location (DonnaApp     *app,
+                   const gchar  *tv_name,
+                   const gchar  *col_name,
+                   const gchar  *arr_name,
+                   const gchar  *def_cat,
+                   const gchar  *option,
+                   guint         from,
+                   GError      **error)
+{
+    struct asl asl;
+    GMainLoop *loop;
+    GtkStyleContext *context;
+    GtkWidget *win;
+    GtkWidget *hbox;
+    GtkWidget *btn;
+    GtkWidget *w;
+    GtkGrid *grid;
+    GtkRadioButton *btn_grp;
+    GtkWidget *btn_box;
+    gchar *s;
+    gint row;
+
+    win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_widget_set_name (win, "columnoption-save-location");
+    donna_app_add_window (app, (GtkWindow *) win, TRUE);
+    gtk_window_set_default_size ((GtkWindow *) win, 420, -1);
+    gtk_window_set_decorated ((GtkWindow *) win, FALSE);
+    gtk_window_set_has_resize_grip ((GtkWindow *) win, FALSE);
+    gtk_container_set_border_width ((GtkContainer *) win, 4);
+
+    hbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add ((GtkContainer *) win, hbox);
+
+    w = gtk_label_new ("Where do you want to save the new value ?");
+    context = gtk_widget_get_style_context (w);
+    gtk_style_context_add_class (context, "title");
+    gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
+
+    s = g_strdup_printf ("Column options can be saved in different locations, "
+            "each with a different reach. Select where the new value for "
+            "option '%s' of column '%s' will be saved.",
+            option, col_name);
+    w = gtk_label_new (s);
+    g_object_set (w, "wrap", TRUE, NULL);
+    g_free (s);
+    context = gtk_widget_get_style_context (w);
+    gtk_style_context_add_class (context, "details");
+    gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
+
+    w = gtk_grid_new ();
+    grid = (GtkGrid *) w;
+    gtk_grid_set_row_homogeneous (grid, TRUE);
+    gtk_grid_set_column_homogeneous (grid, TRUE);
+    gtk_grid_set_column_spacing (grid, 6);
+    gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
+    row = 0;
+
+    btn = gtk_radio_button_new (NULL);
+    btn_grp = (GtkRadioButton *) btn;
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, "In <b>current arrangement</b>");
+    gtk_container_add ((GtkContainer *) btn, w);
+    if (!arr_name)
+    {
+        gtk_widget_set_sensitive (btn, FALSE);
+        gtk_grid_attach (grid, btn, 0, row, 2, 1);
+    }
+    else
+    {
+        gtk_grid_attach (grid, btn, 0, row, 1, 1);
+
+        w = gtk_label_new (NULL);
+        s = g_strdup_printf ("(<i>%s/columns_options/%s</i>)", arr_name, col_name);
+        gtk_label_set_markup ((GtkLabel *) w, s);
+        g_free (s);
+        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+        if (from == _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT)
+            g_object_set (btn, "active", TRUE, NULL);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+    }
+    g_object_set_data ((GObject *) btn, "_from",
+            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT));
+    ++row;
+
+    btn = gtk_radio_button_new_from_widget (btn_grp);
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, "As a <b>treeview</b> option");
+    gtk_container_add ((GtkContainer *) btn, w);
+    gtk_grid_attach (grid, btn, 0, row, 1, 1);
+    w = gtk_label_new (NULL);
+    s = g_strdup_printf ("(<i>treeviews/%s/columns/%s</i>)", tv_name, col_name);
+    gtk_label_set_markup ((GtkLabel *) w, s);
+    g_free (s);
+    gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+    if (from == _DONNA_CONFIG_COLUMN_FROM_TREE)
+        g_object_set (btn, "active", TRUE, NULL);
+    gtk_grid_attach (grid, w, 1, row, 1, 1);
+    g_object_set_data ((GObject *) btn, "_from",
+            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_TREE));
+    ++row;
+
+    btn = gtk_radio_button_new_from_widget (btn_grp);
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, "As a <b>column</b> option");
+    gtk_container_add ((GtkContainer *) btn, w);
+    gtk_grid_attach (grid, btn, 0, row, 1, 1);
+    w = gtk_label_new (NULL);
+    s = g_strdup_printf ("(<i>columns/%s</i>)", col_name);
+    gtk_label_set_markup ((GtkLabel *) w, s);
+    g_free (s);
+    gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+    if (from == _DONNA_CONFIG_COLUMN_FROM_COLUMN)
+        g_object_set (btn, "active", TRUE, NULL);
+    gtk_grid_attach (grid, w, 1, row, 1, 1);
+    g_object_set_data ((GObject *) btn, "_from",
+            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_COLUMN));
+    ++row;
+
+    btn = gtk_radio_button_new_from_widget (btn_grp);
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, "As a new <b>default</b>");
+    gtk_container_add ((GtkContainer *) btn, w);
+    if (!def_cat)
+    {
+        gtk_widget_set_sensitive (btn, FALSE);
+        gtk_grid_attach (grid, btn, 0, row, 2, 1);
+    }
+    else
+    {
+        gtk_grid_attach (grid, btn, 0, row, 1, 1);
+
+        w = gtk_label_new (NULL);
+        s = g_strdup_printf ("(<i>defaults/%s</i>)", def_cat);
+        gtk_label_set_markup ((GtkLabel *) w, s);
+        g_free (s);
+        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+        if (from == _DONNA_CONFIG_COLUMN_FROM_DEFAULT)
+            g_object_set (btn, "active", TRUE, NULL);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+    }
+    g_object_set_data ((GObject *) btn, "_from",
+            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT));
+
+    asl.win = win;
+    asl.list = gtk_radio_button_get_group ((GtkRadioButton *) btn);
+    asl.save_location = (guint) -1;
+
+    btn_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_pack_end ((GtkBox *) hbox, btn_box, FALSE, FALSE, 4);
+
+    w = gtk_button_new_with_label ("Save option");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
+    g_signal_connect_swapped (w, "clicked", (GCallback) btn_clicked, &asl);
+    gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
+
+    w = gtk_button_new_with_label ("Cancel");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
+    g_signal_connect_swapped (w, "clicked", (GCallback) gtk_widget_destroy, win);
+    gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
+
+
+    /* if the tree changes location, we need to abort. Because we start a main
+     * loop, the tree could change location, which could mean our arr_name and
+     * col_name will point to random memory location */
+    asl.tree = donna_app_get_treeview (app, tv_name);
+    asl.sid = g_signal_connect_swapped (asl.tree, "notify::location",
+            /* we don't connect gtk_widget_destroy in the off chance the tree
+             * would notify of multiple change of locations */
+            (GCallback) tree_changed_location, &asl);
+
+    loop = g_main_loop_new (NULL, TRUE);
+    g_signal_connect_swapped (win, "destroy", (GCallback) g_main_loop_quit, loop);
+
+    gtk_widget_show_all (win);
+    g_main_loop_run (loop);
+
+    if (asl.sid > 0)
+        g_signal_handler_disconnect (asl.tree, asl.sid);
+    g_object_unref (asl.tree);
+
+    return asl.save_location;
+}
+
+#define _cfg_set(type, value, location, ...)                                \
+    if (!donna_config_set_##type (config, value, __VA_ARGS__))              \
+    {                                                                       \
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,                         \
+                DONNA_COLUMNTYPE_ERROR_OTHER,                               \
+                "ColumnType '%s': Failed to save option '%s' in %s",        \
+                donna_columntype_get_name (ct), option, location);          \
+        g_object_unref (app);                                               \
+        return FALSE;                                                       \
+    }
+#define cfg_set(location, ...)                                              \
+    if (type == G_TYPE_STRING)                                              \
+    {                                                                       \
+        _cfg_set (string, * (gchar **) value, location, __VA_ARGS__);       \
+    }                                                                       \
+    else if (type == G_TYPE_BOOLEAN)                                        \
+    {                                                                       \
+        _cfg_set (boolean, * (gboolean *) value, location, __VA_ARGS__);    \
+    }                                                                       \
+    else if (type == G_TYPE_INT)                                            \
+    {                                                                       \
+        _cfg_set (int, * (gint *) value, location, __VA_ARGS__);            \
+    }                                                                       \
+    else /* G_TYPE_DOUBLE */                                                \
+    {                                                                       \
+        _cfg_set (double, * (gdouble *) value, location, __VA_ARGS__);      \
+    }
+static gboolean
+helper_set_option (DonnaColumnType    *ct,
+                   const gchar        *tv_name,
+                   const gchar        *col_name,
+                   const gchar        *arr_name,
+                   const gchar        *def_cat,
+                   DonnaColumnOptionSaveLocation save_location,
+                   const gchar        *option,
+                   GType               type,
+                   gpointer            current,
+                   gpointer            value,
+                   GError            **error)
+{
+    DonnaApp *app;
+    DonnaConfig *config;
+
+    g_return_val_if_fail (type == G_TYPE_STRING || type == G_TYPE_BOOLEAN
+            || type == G_TYPE_INT || type == G_TYPE_DOUBLE, FALSE);
+
+    g_object_get (ct, "app", &app, NULL);
+    config = donna_app_peek_config (app);
+
+    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_CURRENT
+            || save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
+    {
+        guint from;
+
+        if (type == G_TYPE_STRING)
+        {
+            gchar *s;
+
+            s = donna_config_get_string_column (config,
+                    tv_name, col_name, arr_name, def_cat, option, NULL, &from);
+            if (!streq (* (gchar ** ) current, s))
+            {
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "Values not matching: '%s' (config) vs '%s' (memory)",
+                        donna_columntype_get_name (ct), option,
+                        s, * (gchar **) current);
+                g_object_unref (app);
+                g_free (s);
+                return FALSE;
+            }
+            g_free (s);
+        }
+        else if (type == G_TYPE_BOOLEAN)
+        {
+            gboolean b;
+
+            b = donna_config_get_boolean_column (config,
+                    tv_name, col_name, arr_name, def_cat, option, FALSE, &from);
+            if (b != * (gboolean *) current)
+            {
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "Values not matching: '%s' (config) vs '%s' (memory)",
+                        donna_columntype_get_name (ct), option,
+                        (b) ? "true" : "false",
+                        (* (gboolean *) current) ? "true" : "false");
+                g_object_unref (app);
+                return FALSE;
+            }
+        }
+        else if (type == G_TYPE_INT)
+        {
+            gint i;
+
+            i = donna_config_get_int_column (config,
+                    tv_name, col_name, arr_name, def_cat, option, 0, &from);
+            if (i != * (gint *) current)
+            {
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "Values not matching: '%d' (config) vs '%d' (memory)",
+                        donna_columntype_get_name (ct), option,
+                        i, * (gint *) current);
+                g_object_unref (app);
+                return FALSE;
+            }
+        }
+        else /* G_TYPE_DOUBLE */
+        {
+            gdouble d;
+
+            d = donna_config_get_double_column (config,
+                    tv_name, col_name, arr_name, def_cat, option, 0.0, &from);
+            if (d != * (gdouble *) current)
+            {
+                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "Values not matching: '%f' (config) vs '%f' (memory)",
+                        donna_columntype_get_name (ct), option,
+                        d, * (gdouble *) current);
+                g_object_unref (app);
+                return FALSE;
+            }
+        }
+
+        if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
+        {
+            save_location = ask_save_location (app, tv_name, col_name, arr_name,
+                    def_cat, option, from, error);
+            if (save_location == (guint) -1)
+            {
+                g_object_unref (app);
+                return FALSE;
+            }
+        }
+        else
+        {
+            switch (from)
+            {
+                case _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT:
+                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT;
+                    break;
+                case _DONNA_CONFIG_COLUMN_FROM_TREE:
+                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_TREE;
+                    break;
+                case _DONNA_CONFIG_COLUMN_FROM_COLUMN:
+                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_COLUMN;
+                    break;
+                case _DONNA_CONFIG_COLUMN_FROM_DEFAULT:
+                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT;
+                    break;
+            }
+        }
+    }
+
+    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT && !arr_name)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_OTHER,
+                "ColumnType '%s': Cannot save option '%s' in arrangement: "
+                "No current arrangement available",
+                donna_columntype_get_name (ct), option);
+        g_object_unref (app);
+        return FALSE;
+    }
+    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT && !def_cat)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_OTHER,
+                "ColumnType '%s': Cannot save option '%s' in defaults: "
+                "No default location for option",
+                donna_columntype_get_name (ct), option);
+        g_object_unref (app);
+        return FALSE;
+    }
+
+    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT)
+    {
+        cfg_set ("arrangement", "%s/columns_options/%s/%s",
+                arr_name, col_name, option);
+    }
+    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_TREE)
+    {
+        cfg_set ("treeview", "treeviews/%s/columns/%s/%s",
+                tv_name, col_name, option);
+    }
+    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_COLUMN)
+    {
+        cfg_set ("column", "columns/%s/%s", col_name, option);
+    }
+    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT)
+    {
+        cfg_set ("defaults", "defaults/%s/%s", def_cat, option);
+    }
+
+    g_object_unref (app);
+    return TRUE;
+}
+#undef cfg_set
+#undef _cfg_set
+
 static void
 donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 {
     interface->helper_can_edit          = helper_can_edit;
     interface->helper_get_save_location = helper_get_save_location;
+    interface->helper_set_option        = helper_set_option;
 
     interface->get_default_sort_order   = default_get_default_sort_order;
     interface->can_edit                 = default_can_edit;
