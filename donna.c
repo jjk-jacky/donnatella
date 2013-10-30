@@ -104,6 +104,7 @@ struct status
 struct _DonnaDonnaPrivate
 {
     GtkWindow       *window;
+    GSList          *windows;
     GtkWidget       *floating_window;
     gboolean         just_focused;
     gboolean         exiting;
@@ -169,6 +170,9 @@ static void             donna_donna_finalize        (GObject        *object);
 
 /* DonnaApp */
 static void             donna_donna_ensure_focused  (DonnaApp       *app);
+static void             donna_donna_add_window      (DonnaApp       *app,
+                                                     GtkWindow      *window,
+                                                     gboolean        destroy_with_parent);
 static void             donna_donna_set_floating_window (
                                                      DonnaApp       *app,
                                                      GtkWindow      *window);
@@ -251,6 +255,7 @@ static void
 donna_donna_app_init (DonnaAppInterface *interface)
 {
     interface->ensure_focused       = donna_donna_ensure_focused;
+    interface->add_window           = donna_donna_add_window;
     interface->set_floating_window  = donna_donna_set_floating_window;
     interface->get_config           = donna_donna_get_config;
     interface->peek_config          = donna_donna_peek_config;
@@ -716,6 +721,30 @@ donna_donna_ensure_focused (DonnaApp *app)
 
     if (!gtk_window_has_toplevel_focus (priv->window))
         gtk_window_present_with_time (priv->window, GDK_CURRENT_TIME);
+}
+
+static void
+window_destroyed (GtkWindow *window, DonnaDonna *donna)
+{
+    donna->priv->windows = g_slist_remove (donna->priv->windows, window);
+}
+
+void
+donna_donna_add_window (DonnaApp       *app,
+                        GtkWindow      *window,
+                        gboolean        destroy_with_parent)
+{
+    DonnaDonnaPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_DONNA (app));
+    priv = ((DonnaDonna *) app)->priv;
+
+    gtk_window_set_transient_for (window, priv->window);
+    if (destroy_with_parent)
+    {
+        g_signal_connect (window, "destroy", (GCallback) window_destroyed, app);
+        priv->windows = g_slist_prepend (priv->windows, window);
+    }
 }
 
 static void
@@ -2948,7 +2977,16 @@ window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaDonna *donna)
     if (!donna_app_emit_event ((DonnaApp *) donna, "pre-exit", TRUE,
                 NULL, NULL, NULL, NULL))
     {
+        GSList *l;
+
         gtk_widget_hide (window);
+
+        /* our version of destroy_with_parent */
+        for (l = donna->priv->windows; l; l = l->next)
+            gtk_widget_destroy ((GtkWidget *) l->data);
+        g_slist_free (donna->priv->windows);
+        donna->priv->windows = NULL;
+
         gtk_main_quit ();
     }
 

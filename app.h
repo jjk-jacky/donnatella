@@ -45,6 +45,9 @@ struct _DonnaAppInterface
 
     /* virtual table */
     void                (*ensure_focused)           (DonnaApp       *app);
+    void                (*add_window)               (DonnaApp       *app,
+                                                     GtkWindow      *window,
+                                                     gboolean        destroy_with_parent);
     void                (*set_floating_window)      (DonnaApp       *app,
                                                      GtkWindow      *window);
     DonnaConfig *       (*get_config)               (DonnaApp       *app);
@@ -128,6 +131,9 @@ void                donna_app_treeview_loaded       (DonnaApp       *app,
 
 /* API */
 void                donna_app_ensure_focused        (DonnaApp       *app);
+void                donna_app_add_window            (DonnaApp       *app,
+                                                     GtkWindow      *window,
+                                                     gboolean        destroy_with_parent);
 void                donna_app_set_floating_window   (DonnaApp       *app,
                                                      GtkWindow      *window);
 DonnaConfig *       donna_app_get_config            (DonnaApp       *app);

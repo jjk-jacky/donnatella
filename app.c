@@ -123,6 +123,24 @@ donna_app_ensure_focused (DonnaApp       *app)
 }
 
 void
+donna_app_add_window (DonnaApp       *app,
+                      GtkWindow      *window,
+                      gboolean        destroy_with_parent)
+{
+    DonnaAppInterface *interface;
+
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (GTK_IS_WINDOW (window));
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_if_fail (interface != NULL);
+    g_return_if_fail (interface->add_window != NULL);
+
+    (*interface->add_window) (app, window, destroy_with_parent);
+}
+
+void
 donna_app_set_floating_window (DonnaApp       *app,
                                GtkWindow      *window)
 {
