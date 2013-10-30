@@ -862,6 +862,8 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
     struct tv_col_data *data = _data;
     const gchar *option = NULL;
     const gchar *value;
+    const gchar *ask_title;
+    const gchar *ask_current;
     const gchar *save_location;
     gboolean quote_value = FALSE;
 
@@ -900,7 +902,9 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
             }
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             option = "property";
-            value = "@ask_text (Enter the name of the property)";
+            value = NULL;
+            ask_title = "Enter the name of the property";
+            ask_current = data->property;
         }
         else
         {
@@ -926,7 +930,9 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
             info->desc = g_strconcat ("Format: ", data->format, NULL);
             info->free_desc = TRUE;
             option = "format";
-            value = "@ask_text (Enter the format for the column)";
+            value = NULL;
+            ask_title = "Enter the format for the column";
+            ask_current = data->format;
             if (b != buf)
                 g_free (b);
         }
@@ -942,7 +948,9 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
             info->desc = g_strconcat ("Current format: ", data->format, NULL);
             info->free_desc = TRUE;
             option = "format";
-            value = "@ask_text (Enter the format for the column)";
+            value = NULL;
+            ask_title = "Enter the format for the column";
+            ask_current = data->format;
         }
         else if (streqn (extra, "tt", 2))
         {
@@ -954,7 +962,9 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
                 info->desc = g_strconcat ("Format: ", data->format_tooltip, NULL);
                 info->free_desc = TRUE;
                 option = "format_tooltip";
-                value = "@ask_text (Enter the format for the tooltip)";
+                value = NULL;
+                ask_title = "Enter the format for the tooltip";
+                ask_current = data->format_tooltip;
                 if (b != buf)
                     g_free (b);
             }
@@ -970,7 +980,9 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
                 info->desc = g_strconcat ("Current format: ", data->format_tooltip, NULL);
                 info->free_desc = TRUE;
                 option = "format_tooltip";
-                value = "@ask_text (Enter the format for the tooltip)";
+                value = NULL;
+                ask_title = "Enter the format for the tooltip";
+                ask_current = data->format_tooltip;
             }
             else if (extra[2] == ':')
             {
@@ -1071,8 +1083,17 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
         g_string_append_c (str, ',');
         if (quote_value)
             donna_g_string_append_quoted (str, value, TRUE);
-        else
+        else if (value)
             g_string_append (str, value);
+        else
+        {
+            g_string_append (str, "@ask_text(");
+            g_string_append (str, ask_title);
+            g_string_append_c (str, ',');
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, ask_current, TRUE);
+            g_string_append_c (str, ')');
+        }
         if (*save_location != '\0')
         {
             g_string_append_c (str, ',');
