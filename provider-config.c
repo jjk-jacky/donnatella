@@ -1950,7 +1950,8 @@ _get_option_column (DonnaConfig  *config,
                     const gchar  *arr_name,
                     const gchar  *def_cat,
                     const gchar  *opt_name,
-                    guint         tree_col)
+                    guint         tree_col,
+                    guint        *from)
 {
     DonnaProviderConfigPrivate *priv = config->priv;
     GNode *node;
@@ -1981,6 +1982,8 @@ _get_option_column (DonnaConfig  *config,
     if (tree_col == TREE_COL_LIST_SELECTED)
         get_child_cat ("selected", 8, treeview);
     get_child_opt (opt_name, len_opt, type, treeview);
+    if (from)
+        *from = _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT;
     goto get_value;
 
 treeview:
@@ -1994,6 +1997,8 @@ treeview:
     if (tree_col == TREE_COL_LIST_SELECTED)
         get_child_cat ("selected", 8, treeview);
     get_child_opt (opt_name, len_opt, type, column);
+    if (from)
+        *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
     goto get_value;
 
 column:
@@ -2017,6 +2022,8 @@ column:
             get_child_cat (col_name, len_col, def);
             get_child_opt (opt_name, len_opt, type, def);
         }
+        if (from)
+            *from = _DONNA_CONFIG_COLUMN_FROM_COLUMN;
         goto get_value;
     }
     /* we need to check columns, and set the default if nothing found */
@@ -2024,7 +2031,11 @@ column:
     option = __get_option (config, type, TRUE, "columns/%s/%s",
             col_name, opt_name);
     if (option)
+    {
         g_value_copy (&option->value, value);
+        if (from)
+            *from = _DONNA_CONFIG_COLUMN_FROM_COLUMN;
+    }
     g_rw_lock_reader_unlock (&priv->lock);
     return option != NULL;
 
@@ -2059,7 +2070,11 @@ def:
             (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
             opt_name);
     if (option)
+    {
         g_value_copy (&option->value, value);
+        if (from)
+            *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+    }
     g_rw_lock_reader_unlock (&priv->lock);
     return option != NULL;
 
@@ -2072,20 +2087,23 @@ get_value:
 #undef get_child_opt
 #undef get_child_cat
 
-#define _get_cfg_column(type, gtype, cfg_set, gvalue_get, dup_def) do { \
+#define _get_cfg_column(type, gtype, cfg_set, gvalue_get, dup_def, from) do { \
     GValue value = G_VALUE_INIT;                                    \
     type ret;                                                       \
                                                                     \
     g_value_init (&value, G_TYPE_##gtype);                          \
     if (!_get_option_column (config, G_TYPE_##gtype, &value,        \
                 tv_name, col_name, arr_name,                        \
-                def_cat, opt_name, 0))                              \
+                def_cat, opt_name, 0, from))                        \
     {                                                               \
         g_value_unset (&value);                                     \
         donna_config_set_##cfg_set (config, def_val,                \
                 (def_cat) ? "defaults/%s/%s" : "columns/%s/%s",     \
                 (def_cat) ? def_cat : col_name,                     \
                 opt_name);                                          \
+        if (from)                                                   \
+            *from = (def_cat) ? _DONNA_CONFIG_COLUMN_FROM_DEFAULT   \
+                : _DONNA_CONFIG_COLUMN_FROM_COLUMN;                 \
         return dup_def (def_val);                                   \
     }                                                               \
     ret = g_value_##gvalue_get (&value);                            \
@@ -2100,9 +2118,10 @@ donna_config_get_boolean_column (DonnaConfig *config,
                                  const gchar *arr_name,
                                  const gchar *def_cat,
                                  const gchar *opt_name,
-                                 gboolean     def_val)
+                                 gboolean     def_val,
+                                 guint       *from)
 {
-    _get_cfg_column (gboolean, BOOLEAN, boolean, get_boolean, );
+    _get_cfg_column (gboolean, BOOLEAN, boolean, get_boolean, , from);
 }
 
 gint
@@ -2112,9 +2131,10 @@ donna_config_get_int_column (DonnaConfig *config,
                              const gchar *arr_name,
                              const gchar *def_cat,
                              const gchar *opt_name,
-                             gint         def_val)
+                             gint         def_val,
+                             guint       *from)
 {
-    _get_cfg_column (gint, INT, int, get_int, );
+    _get_cfg_column (gint, INT, int, get_int, , from);
 }
 
 gdouble
@@ -2124,9 +2144,10 @@ donna_config_get_double_column (DonnaConfig *config,
                                 const gchar *arr_name,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
-                                gdouble      def_val)
+                                gdouble      def_val,
+                                guint       *from)
 {
-    _get_cfg_column (gdouble, DOUBLE, double, get_double, );
+    _get_cfg_column (gdouble, DOUBLE, double, get_double, , from);
 }
 
 gchar *
@@ -2136,9 +2157,10 @@ donna_config_get_string_column (DonnaConfig *config,
                                 const gchar *arr_name,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
-                                gchar       *def_val)
+                                gchar       *def_val,
+                                guint       *from)
 {
-    _get_cfg_column (gchar *, STRING, string, dup_string, g_strdup);
+    _get_cfg_column (gchar *, STRING, string, dup_string, g_strdup, from);
 }
 
 gchar *
@@ -2158,7 +2180,7 @@ _donna_config_get_string_tree_column (DonnaConfig   *config,
 
     g_value_init (&value, G_TYPE_STRING);
     if (!_get_option_column (config, G_TYPE_STRING, &value,
-                tv_name, col_name, arr_name, def_cat, opt_name, tree_col))
+                tv_name, col_name, arr_name, def_cat, opt_name, tree_col, NULL))
     {
         g_value_unset (&value);
         if (!def_val)
@@ -2190,7 +2212,7 @@ _donna_config_get_boolean_tree_column (DonnaConfig   *config,
 
     g_value_init (&value, G_TYPE_BOOLEAN);
     if (!_get_option_column (config, G_TYPE_BOOLEAN, &value,
-                tv_name, col_name, arr_name, def_cat, opt_name, tree_col))
+                tv_name, col_name, arr_name, def_cat, opt_name, tree_col, NULL))
     {
         g_value_unset (&value);
         return FALSE;

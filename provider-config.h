@@ -45,6 +45,14 @@ typedef enum
     DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
 } DonnaConfigExtraType;
 
+enum
+{
+    _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT = 1,
+    _DONNA_CONFIG_COLUMN_FROM_TREE,
+    _DONNA_CONFIG_COLUMN_FROM_COLUMN,
+    _DONNA_CONFIG_COLUMN_FROM_DEFAULT,
+};
+
 struct _DonnaConfigExtraList
 {
     gchar *value;
@@ -143,28 +151,32 @@ gboolean    donna_config_get_boolean_column     (DonnaConfig            *config,
                                                  const gchar            *arr_name,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gboolean                def_val);
+                                                 gboolean                def_val,
+                                                 guint                  *from);
 gint        donna_config_get_int_column         (DonnaConfig            *config,
                                                  const gchar            *tv_name,
                                                  const gchar            *col_name,
                                                  const gchar            *arr_name,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gint                    def_val);
+                                                 gint                    def_val,
+                                                 guint                  *from);
 gdouble     donna_config_get_double_column      (DonnaConfig            *config,
                                                  const gchar            *tv_name,
                                                  const gchar            *col_name,
                                                  const gchar            *arr_name,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gdouble                 def_val);
+                                                 gdouble                 def_val,
+                                                 guint                  *from);
 gchar *     donna_config_get_string_column      (DonnaConfig            *config,
                                                  const gchar            *tv_name,
                                                  const gchar            *col_name,
                                                  const gchar            *arr_name,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gchar                  *def_val);
+                                                 gchar                  *def_val,
+                                                 guint                  *from);
 gboolean    donna_config_arr_load_columns       (DonnaConfig            *config,
                                                  DonnaArrangement       *arr,
                                                  const gchar            *fmt,

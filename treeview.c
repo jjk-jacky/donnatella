@@ -1655,7 +1655,7 @@ real_option_cb (struct option_data *data)
                     s = donna_config_get_string_column (config,
                             priv->name, _col->name,
                             priv->arrangement->columns_options,
-                            NULL, "title", s);
+                            NULL, "title", s, NULL);
                     gtk_tree_view_column_set_title (_col->column, s);
                     gtk_label_set_text ((GtkLabel *) _col->label, s);
                     g_free (s);
@@ -1670,7 +1670,7 @@ real_option_cb (struct option_data *data)
                     w = donna_config_get_int_column (config,
                             priv->name, _col->name,
                             priv->arrangement->columns_options,
-                            NULL, "width", w);
+                            NULL, "width", w, NULL);
                     gtk_tree_view_column_set_fixed_width (_col->column, w);
                 }
                 else
@@ -5725,7 +5725,7 @@ load_arrangement (DonnaTreeView     *tree,
         if (snprintf (buf, 64, "columntypes/%s", col_type) >= 64)
             b = g_strdup_printf ("columntypes/%s", col_type);
         width = donna_config_get_int_column (config, priv->name, col,
-                arrangement->columns_options, b, "width", 230);
+                arrangement->columns_options, b, "width", 230, NULL);
         gtk_tree_view_column_set_min_width (column, 23);
         gtk_tree_view_column_set_fixed_width (column, width);
         if (b != buf)
@@ -5736,7 +5736,7 @@ load_arrangement (DonnaTreeView     *tree,
 
         /* title */
         title = donna_config_get_string_column (config, priv->name, col,
-                arrangement->columns_options, NULL, "title", col);
+                arrangement->columns_options, NULL, "title", col, NULL);
         gtk_tree_view_column_set_title (column, title);
         gtk_label_set_text (GTK_LABEL (_col->label), title);
         g_free (title);
@@ -6117,7 +6117,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                             donna_columntype_get_renderers (_col->ct));
                 width = donna_config_get_int_column (config,
                         priv->name, _col->name, arr->columns_options, b,
-                        "width", 230);
+                        "width", 230, NULL);
                 gtk_tree_view_column_set_fixed_width (_col->column, width);
                 if (b != buf)
                 {
@@ -6128,7 +6128,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 /* title */
                 title = donna_config_get_string_column (config,
                         priv->name, _col->name, arr->columns_options, NULL,
-                        "title", _col->name);
+                        "title", _col->name, NULL);
                 gtk_tree_view_column_set_title (_col->column, title);
                 gtk_label_set_text (GTK_LABEL (_col->label), title);
                 g_free (title);
@@ -14464,14 +14464,15 @@ columntype_refresh_data (DonnaColumnType  *ct,
     config = donna_app_peek_config (priv->app);
 
     if (priv->ln_relative != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "line-number", "relative", FALSE))
+                tv_name, col_name, arr_name, "line-number", "relative", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_REDRAW;
         priv->ln_relative = !priv->ln_relative;
     }
 
     if (priv->ln_relative_focused != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "line-number", "relative_on_focus", TRUE))
+                tv_name, col_name, arr_name, "line-number", "relative_on_focus",
+                TRUE, NULL))
     {
         if (priv->ln_relative)
             need |= DONNA_COLUMNTYPE_NEED_REDRAW;

@@ -186,7 +186,7 @@ ct_text_get_renderers (DonnaColumnType   *ct)
 
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
     if (donna_config_get_boolean_column (config, tv_name, col_name, arr_name, \
-                "sort", opt_name_lower, def_val) == value)                    \
+                "sort", opt_name_lower, def_val, NULL) == value)              \
     {                                                                         \
         if (!(data->options & opt_name_upper))                                \
         {                                                                     \
@@ -220,7 +220,7 @@ ct_text_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "property", "name");
+            NULL, "property", "name", NULL);
     if (!streq (data->property, s))
     {
         g_free (data->property);

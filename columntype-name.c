@@ -203,7 +203,7 @@ ct_name_get_renderers (DonnaColumnType   *ct)
 
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
     if (donna_config_get_boolean_column (config, tv_name, col_name, arr_name, \
-                "sort", opt_name_lower, def_val) == value)                    \
+                "sort", opt_name_lower, def_val, NULL) == value)              \
     {                                                                         \
         if (!(data->options & opt_name_upper))                                \
         {                                                                     \
@@ -236,7 +236,7 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     if (data->is_locale_based != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "sort", "locale_based", FALSE))
+                tv_name, col_name, arr_name, "sort", "locale_based", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_RESORT;
         data->is_locale_based = !data->is_locale_based;
@@ -257,7 +257,7 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     if (data->is_locale_based)
     {
         if (data->sort_special_first != donna_config_get_boolean_column (config,
-                    tv_name, col_name, arr_name, "sort", "special_first", TRUE))
+                    tv_name, col_name, arr_name, "sort", "special_first", TRUE, NULL))
         {
             need |= DONNA_COLUMNTYPE_NEED_RESORT;
             data->sort_special_first = !data->sort_special_first;

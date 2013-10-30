@@ -197,14 +197,14 @@ ct_value_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     if (data->show_type != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, NULL, "show_type", FALSE))
+                tv_name, col_name, arr_name, NULL, "show_type", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
         data->show_type = !data->show_type;
     }
 
     s = donna_config_get_string_column (config,
-            tv_name, col_name, arr_name, NULL, "property_value", "option-value");
+            tv_name, col_name, arr_name, NULL, "property_value", "option-value", NULL);
     if (!streq (s, data->prop_value))
     {
         g_free (data->prop_value);
@@ -216,7 +216,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config,
-            tv_name, col_name, arr_name, NULL, "property_extra", "option-extra");
+            tv_name, col_name, arr_name, NULL, "property_extra", "option-extra", NULL);
     if (!streq (s, data->prop_extra))
     {
         g_free (data->prop_extra);

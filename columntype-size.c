@@ -234,7 +234,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/size", "property", "size");
+            "columntypes/size", "property", "size", NULL);
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -247,7 +247,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "size", "format", "%R");
+            "size", "format", "%R", NULL);
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -258,7 +258,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "format_tooltip", "%B");
+            NULL, "format_tooltip", "%B", NULL);
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -269,7 +269,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     i = donna_config_get_int_column (config, tv_name, col_name, arr_name,
-            "size", "digits", 1);
+            "size", "digits", 1, NULL);
     /* we enforce this, because that's all we support (we can't stote more in
      * data) and that's what makes sense */
     i = MIN (MAX (0, i), 2);
@@ -280,7 +280,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     }
 
     i = donna_config_get_boolean_column (config, tv_name, col_name, arr_name,
-            "size", "long_unit", FALSE);
+            "size", "long_unit", FALSE, NULL);
     if (data->long_unit != i)
     {
         data->long_unit = i;
@@ -670,7 +670,7 @@ ct_size_free_filter_data (DonnaColumnType    *ct,
 
 static gchar *
 ct_size_get_context_alias (DonnaColumnType   *ct,
-                           gpointer            data,
+                           gpointer           data,
                            const gchar       *alias,
                            const gchar       *extra,
                            DonnaContextReference reference,

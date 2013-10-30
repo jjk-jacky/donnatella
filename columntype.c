@@ -27,7 +27,7 @@ default_get_default_sort_order (DonnaColumnType    *ct,
         strcpy (stpcpy (buf, "columntypes/"), type);
 
     order = (donna_config_get_boolean_column (donna_app_peek_config (app),
-                tv_name, col_name, arr_name, b, "desc_first", FALSE))
+                tv_name, col_name, arr_name, b, "desc_first", FALSE, NULL))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
     if (G_UNLIKELY (b != buf))
