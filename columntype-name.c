@@ -248,7 +248,10 @@ ct_name_refresh_data (DonnaColumnType    *ct,
                         tv_name, col_name, arr_name);
         }
         else
+        {
             g_free (data->collate_key);
+            data->collate_key = NULL;
+        }
     }
 
     check_option ("natural_order",  DONNA_SORT_NATURAL_ORDER,   TRUE, TRUE);
