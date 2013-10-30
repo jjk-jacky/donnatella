@@ -799,7 +799,15 @@ donna_columntype_set_option (DonnaColumnType    *ct,
     interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (interface->set_option != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+
+    if (interface->set_option == NULL)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+                "ColumnType '%s': Setting column option not supported",
+                donna_columntype_get_name (ct));
+        return DONNA_COLUMNTYPE_NEED_NOTHING;
+    }
 
     return (*interface->set_option) (ct, tv_name, col_name, arr_name, data,
             option, value, save_location, error);
