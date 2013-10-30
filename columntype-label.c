@@ -5,6 +5,7 @@
 #include "columntype-label.h"
 #include "app.h"
 #include "node.h"
+#include "util.h"
 #include "macros.h"
 
 enum
@@ -67,17 +68,50 @@ static gint             ct_label_node_cmp           (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
+static DonnaColumnTypeNeed ct_label_set_option      (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     const gchar        *arr_name,
+                                                     gpointer            data,
+                                                     const gchar        *option,
+                                                     const gchar        *value,
+                                                     DonnaColumnOptionSaveLocation save_location,
+                                                     GError            **error);
+static gchar *          ct_label_get_context_alias  (DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *alias,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     const gchar       *prefix,
+                                                     GError           **error);
+static gboolean         ct_label_get_context_item_info (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *item,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     DonnaContextInfo  *info,
+                                                     GError           **error);
 
 static void
 ct_label_columntype_init (DonnaColumnTypeInterface *interface)
 {
-    interface->get_name         = ct_label_get_name;
-    interface->get_renderers    = ct_label_get_renderers;
-    interface->refresh_data     = ct_label_refresh_data;
-    interface->free_data        = ct_label_free_data;
-    interface->get_props        = ct_label_get_props;
-    interface->render           = ct_label_render;
-    interface->node_cmp         = ct_label_node_cmp;
+    interface->get_name              = ct_label_get_name;
+    interface->get_renderers         = ct_label_get_renderers;
+    interface->refresh_data          = ct_label_refresh_data;
+    interface->free_data             = ct_label_free_data;
+    interface->get_props             = ct_label_get_props;
+    interface->render                = ct_label_render;
+    interface->node_cmp              = ct_label_node_cmp;
+    interface->set_option            = ct_label_set_option;
+    interface->get_context_alias     = ct_label_get_context_alias;
+    interface->get_context_item_info = ct_label_get_context_item_info;
 }
 
 static void
@@ -160,6 +194,57 @@ ct_label_get_renderers (DonnaColumnType   *ct)
     return "t";
 }
 
+static void
+set_data_labels (struct tv_col_data *data)
+{
+    gint alloc, i;
+    gint id;
+    gchar *label;
+    gchar *l;
+    gchar *s;
+
+    g_free (data->defs);
+    data->defs = NULL;
+    alloc = i = 0;
+    l = data->labels;
+
+    for ( ; ; ++i)
+    {
+        if (i >= alloc)
+        {
+            alloc += 4;
+            data->defs = g_renew (struct label, data->defs, alloc);
+        }
+        s = strchr (l, '=');
+        if (!s)
+        {
+            g_warning ("ColumnType 'label': Invalid labels definition: %s",
+                    data->labels);
+            g_free (data->labels);
+            data->labels = NULL;
+            g_free (data->defs);
+            data->defs = NULL;
+            break;
+        }
+        data->defs[i].id = g_ascii_strtoll (l, NULL, 10);
+        *s = '=';
+        l = s + 1;
+        s = strchr (l, ',');
+        if (s)
+            *s = '\0';
+        data->defs[i].label = l;
+        data->defs[i].len   = (gint) strlen (l);
+        if (s)
+        {
+            *s = ',';
+            l = s + 1;
+        }
+        else
+            break;
+    }
+    data->nb = i + 1;
+}
+
 static DonnaColumnTypeNeed
 ct_label_refresh_data (DonnaColumnType    *ct,
                        const gchar        *tv_name,
@@ -195,55 +280,9 @@ ct_label_refresh_data (DonnaColumnType    *ct,
             NULL, "labels", "0=false,1=true", NULL);
     if (!streq (data->labels, s))
     {
-        gint alloc, i;
-        gint id;
-        gchar *label;
-        gchar *l;
-
         g_free (data->labels);
         data->labels = s;
-
-        g_free (data->defs);
-        data->defs = NULL;
-        alloc = i = 0;
-        l = data->labels;
-
-        for ( ; ; ++i)
-        {
-            if (i >= alloc)
-            {
-                alloc += 4;
-                data->defs = g_renew (struct label, data->defs, alloc);
-            }
-            s = strchr (l, '=');
-            if (!s)
-            {
-                g_warning ("ColumnType 'label': Invalid labels definition: %s",
-                        data->labels);
-                g_free (data->labels);
-                data->labels = NULL;
-                g_free (data->defs);
-                data->defs = NULL;
-                break;
-            }
-            data->defs[i].id = g_ascii_strtoll (l, NULL, 10);
-            *s = '=';
-            l = s + 1;
-            s = strchr (l, ',');
-            if (s)
-                *s = '\0';
-            data->defs[i].label = l;
-            data->defs[i].len   = (gint) strlen (l);
-            if (s)
-            {
-                *s = ',';
-                l = s + 1;
-            }
-            else
-                break;
-        }
-        data->nb = i + 1;
-
+        set_data_labels (data);
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
@@ -397,4 +436,171 @@ ct_label_node_cmp (DonnaColumnType    *ct,
         return 1;
 
     return (id1 > id2) ? 1 : (id1 < id2) ? -1 : 0;
+}
+
+static DonnaColumnTypeNeed
+ct_label_set_option (DonnaColumnType    *ct,
+                     const gchar        *tv_name,
+                     const gchar        *col_name,
+                     const gchar        *arr_name,
+                     gpointer            _data,
+                     const gchar        *option,
+                     const gchar        *value,
+                     DonnaColumnOptionSaveLocation save_location,
+                     GError            **error)
+{
+    struct tv_col_data *data = _data;
+
+    if (streq (option, "property"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->property, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->property);
+        data->property = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else if (streq (option, "labels"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->labels, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->labels);
+        data->labels = g_strdup (value);
+        set_data_labels (data);
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_OTHER,
+            "ColumnType 'label': Unknown option '%s'",
+            option);
+    return DONNA_COLUMNTYPE_NEED_NOTHING;
+}
+
+static gchar *
+ct_label_get_context_alias (DonnaColumnType   *ct,
+                            gpointer           _data,
+                            const gchar       *alias,
+                            const gchar       *extra,
+                            DonnaContextReference reference,
+                            DonnaNode         *node_ref,
+                            get_sel_fn         get_sel,
+                            gpointer           get_sel_data,
+                            const gchar       *prefix,
+                            GError           **error)
+{
+    const gchar *save_location;
+
+    if (!streq (alias, "options"))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType 'label': Unknown alias '%s'",
+                alias);
+        return NULL;
+    }
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, TRUE, error);
+    if (!save_location)
+        return NULL;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'label': Invalid extra '%s' for alias '%s' (none supported)",
+                extra, alias);
+        return NULL;
+    }
+
+    return g_strconcat (
+            prefix, "prop:@", save_location, ",",
+            prefix, "labels:@", save_location,
+            NULL);
+}
+
+static gboolean
+ct_label_get_context_item_info (DonnaColumnType   *ct,
+                                gpointer           _data,
+                                const gchar       *item,
+                                const gchar       *extra,
+                                DonnaContextReference reference,
+                                DonnaNode         *node_ref,
+                                get_sel_fn         get_sel,
+                                gpointer           get_sel_data,
+                                DonnaContextInfo  *info,
+                                GError           **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *option = NULL;
+    const gchar *title;
+    const gchar *current;
+    const gchar *save_location;
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, FALSE, error);
+    if (!save_location)
+        return FALSE;
+
+    if (streq (item, "prop"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strdup_printf ("Node Property: %s", data->property);
+        info->free_name = TRUE;
+        option = "property";
+        title = "Enter the name of the property";
+        current = data->property;
+    }
+    else if (streq (item, "labels"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (strlen (data->labels) > 23)
+            info->name = g_strdup_printf ("Labels: %.*s...", 20, data->labels);
+        else
+            info->name = g_strdup_printf ("Labels: %s", data->labels);
+        info->free_name = TRUE;
+        info->desc = g_strdup_printf ("Labels: %s", data->labels);
+        info->free_desc = TRUE;
+        option = "labels";
+        title = "Enter the labels definition";
+        current = data->labels;
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "ColumnType 'label': Unknown item '%s'",
+                item);
+        return FALSE;
+    }
+
+    if (option)
+    {
+        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+        g_string_append (str, option);
+        g_string_append (str, ", @ask_text(");
+        g_string_append (str, title);
+        g_string_append_c (str, ',');
+        g_string_append_c (str, ',');
+        donna_g_string_append_quoted (str, current, TRUE);
+        g_string_append_c (str, ')');
+        if (*save_location != '\0')
+        {
+            g_string_append_c (str, ',');
+            g_string_append (str, save_location);
+        }
+        g_string_append_c (str, ')');
+        info->trigger = g_string_free (str, FALSE);
+        info->free_trigger = TRUE;
+    }
+
+    return TRUE;
 }
