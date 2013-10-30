@@ -64,6 +64,11 @@ donna_print_size (gchar       *str,
                     need = snprintf (str, max, "%'.*lf %s",
                             (u > 0) ? digits : 0, dbl, unit[u]);
                     break;
+                case '%':
+                    need = 1;
+                    if (max > 0)
+                        *str = '%';
+                    break;
                 default:
                     need = 0;
                     break;
