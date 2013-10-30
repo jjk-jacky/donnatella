@@ -44,5 +44,5 @@ DonnaTreeView { -DonnaTreeView-highlighted-size: 4; }
 highlighted.blue:selected { background: blue; }
 highlighted.blue.focused-row:selected { background: blue; }
 
-#ask-text .title { font-size: 12px; font-weight: bold; }
-#ask-text .details { padding-top: 4px; }
+.title { font-size: 12px; font-weight: bold; }
+.details { padding-top: 4px; padding-bottom: 6px; }

@@ -2903,7 +2903,7 @@ donna_donna_ask_text (DonnaApp       *app,
 
     if (main_default)
         gtk_entry_set_text (data.entry, main_default);
-    gtk_box_pack_start (box, w, FALSE, FALSE, 10);
+    gtk_box_pack_start (box, w, FALSE, FALSE, 0);
 
 
     btn_box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
