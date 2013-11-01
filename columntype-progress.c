@@ -432,6 +432,8 @@ next:
                     if (pulse == -1)
                         g_string_append_printf (str, "%d%%", progress);
                 }
+                else if (s[1] == '%')
+                    g_string_append_c (str, '%');
                 else
                     --s;
                 ss = s + 2;
