@@ -2352,21 +2352,19 @@ load_menu (struct menu_click *mc)
         else
         {
             DonnaImageMenuItem *imi;
-            DonnaNodeType type;
             DonnaNodeHasValue has;
             GValue v = G_VALUE_INIT;
-            gchar *name;
+            gchar *s;
 
-            type = donna_node_get_node_type (node);
-            name = donna_node_get_name (node);
-            item = donna_image_menu_item_new_with_label (name);
+            s = donna_node_get_name (node);
+            item = donna_image_menu_item_new_with_label (s);
             imi  = (DonnaImageMenuItem *) item;
-            g_free (name);
+            g_free (s);
 
-            if (donna_node_get_desc (node, TRUE, &name) == DONNA_NODE_VALUE_SET)
+            if (donna_node_get_desc (node, TRUE, &s) == DONNA_NODE_VALUE_SET)
             {
-                gtk_widget_set_tooltip_text (item, name);
-                g_free (name);
+                gtk_widget_set_tooltip_text (item, s);
+                g_free (s);
             }
 
             donna_node_get (node, TRUE, "menu-is-sensitive", &has, &v, NULL);
@@ -2471,7 +2469,7 @@ load_menu (struct menu_click *mc)
                 }
             }
 
-            if (type == DONNA_NODE_CONTAINER)
+            if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
             {
                 DonnaEnabledTypes submenus = mc->submenus;
                 struct menu_click *sub_mc = NULL;
