@@ -37,6 +37,8 @@ typedef enum
     DONNA_CONTEXT_ICON_IS_RADIO,
 } DonnaContextIconSpecial;
 
+typedef void (*context_new_node_fn) (DonnaNode *node, gpointer data);
+
 typedef struct
 {
     DonnaNode   *node;
@@ -54,6 +56,11 @@ typedef struct
     gchar       *trigger;
     /* container only */
     gchar       *menu;
+
+    /* to allow adding extra/custom properties on the newly-created node */
+    context_new_node_fn new_node_fn;
+    gpointer            new_node_data;
+    GDestroyNotify      new_node_destroy;
 
     guint        icon_special       : 2; /* DonnaContextIconSpecial */
     guint        icon_is_pixbuf     : 1;

@@ -501,6 +501,9 @@ free_context_info (DonnaContextInfo *info)
         g_free (info->trigger);
     if (info->free_menu)
         g_free (info->menu);
+
+    if (info->new_node_destroy && info->new_node_data)
+        info->new_node_destroy (info->new_node_data);
 }
 
 static inline gchar *
@@ -1512,6 +1515,12 @@ parse_items (DonnaApp               *app,
                     g_value_unset (&v);
                 }
             }
+
+            if (info.new_node_fn)
+            {
+                info.new_node_fn (node, info.new_node_data);
+                info.new_node_destroy = NULL;
+            }
         }
         else /* not a submenu */
         {
@@ -1589,6 +1598,12 @@ parse_items (DonnaApp               *app,
             }
 
             load_menu_properties_to_node (&info, node, app, items);
+
+            if (info.new_node_fn)
+            {
+                info.new_node_fn (node, info.new_node_data);
+                info.new_node_destroy = NULL;
+            }
         }
 
         g_ptr_array_add (nodes, node);
