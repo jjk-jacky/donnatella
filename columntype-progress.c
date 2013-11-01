@@ -60,17 +60,52 @@ static gint             ct_progress_node_cmp        (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
+static DonnaColumnTypeNeed ct_progress_set_option   (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     const gchar        *arr_name,
+                                                     gpointer            data,
+                                                     const gchar        *option,
+                                                     const gchar        *value,
+                                                     DonnaColumnOptionSaveLocation save_location,
+                                                     GError            **error);
+static gchar *          ct_progress_get_context_alias (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *alias,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     const gchar       *prefix,
+                                                     GError           **error);
+static gboolean         ct_progress_get_context_item_info (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *item,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     DonnaContextInfo  *info,
+                                                     GError           **error);
+
 
 static void
 ct_progress_columntype_init (DonnaColumnTypeInterface *interface)
 {
-    interface->get_name         = ct_progress_get_name;
-    interface->get_renderers    = ct_progress_get_renderers;
-    interface->refresh_data     = ct_progress_refresh_data;
-    interface->free_data        = ct_progress_free_data;
-    interface->get_props        = ct_progress_get_props;
-    interface->render           = ct_progress_render;
-    interface->node_cmp         = ct_progress_node_cmp;
+    interface->get_name                 = ct_progress_get_name;
+    interface->get_renderers            = ct_progress_get_renderers;
+    interface->refresh_data             = ct_progress_refresh_data;
+    interface->free_data                = ct_progress_free_data;
+    interface->get_props                = ct_progress_get_props;
+    interface->render                   = ct_progress_render;
+    interface->node_cmp                 = ct_progress_node_cmp;
+    interface->set_option               = ct_progress_set_option;
+    interface->get_context_alias        = ct_progress_get_context_alias;
+    interface->get_context_item_info    = ct_progress_get_context_item_info;
 }
 
 static void
@@ -510,4 +545,232 @@ ct_progress_node_cmp (DonnaColumnType    *ct,
         return 1;
 
     return (p1 > p2) ? 1 : (p1 < p2) ? -1 : 0;
+}
+
+static DonnaColumnTypeNeed
+ct_progress_set_option (DonnaColumnType    *ct,
+                        const gchar        *tv_name,
+                        const gchar        *col_name,
+                        const gchar        *arr_name,
+                        gpointer            _data,
+                        const gchar        *option,
+                        const gchar        *value,
+                        DonnaColumnOptionSaveLocation save_location,
+                        GError            **error)
+{
+    struct tv_col_data *data = _data;
+    gint c;
+    gint v;
+
+    if (streq (option, "property"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->property, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->property);
+        data->property = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "property_lbl"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->property_lbl, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->property_lbl);
+        data->property_lbl = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "property_pulse"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->property_pulse, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->property_pulse);
+        data->property_pulse = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "label"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->label, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->label);
+        data->label = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_OTHER,
+            "ColumnType 'progress': Unknown option '%s'",
+            option);
+    return DONNA_COLUMNTYPE_NEED_NOTHING;
+}
+
+static gchar *
+ct_progress_get_context_alias (DonnaColumnType   *ct,
+                               gpointer           _data,
+                               const gchar       *alias,
+                               const gchar       *extra,
+                               DonnaContextReference reference,
+                               DonnaNode         *node_ref,
+                               get_sel_fn         get_sel,
+                               gpointer           get_sel_data,
+                               const gchar       *prefix,
+                               GError           **error)
+{
+    const gchar *save_location;
+
+    if (!streq (alias, "options"))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType 'progress': Unknown alias '%s'",
+                alias);
+        return NULL;
+    }
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, TRUE, error);
+    if (!save_location)
+        return NULL;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'progress': Invalid extra '%s' for alias '%s'",
+                extra, alias);
+        return NULL;
+    }
+
+    return g_strconcat (
+            prefix, "label:@", save_location, ",",
+            prefix, "prop:@", save_location, ",",
+            prefix, "prop_lbl:@", save_location, ",",
+            prefix, "prop_pulse:@", save_location,
+            NULL);
+}
+
+static gboolean
+ct_progress_get_context_item_info (DonnaColumnType   *ct,
+                                   gpointer           _data,
+                                   const gchar       *item,
+                                   const gchar       *extra,
+                                   DonnaContextReference reference,
+                                   DonnaNode         *node_ref,
+                                   get_sel_fn         get_sel,
+                                   gpointer           get_sel_data,
+                                   DonnaContextInfo  *info,
+                                   GError           **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *option = NULL;
+    const gchar *ask_title;
+    const gchar *ask_details = NULL;
+    const gchar *ask_current;
+    const gchar *save_location;
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, FALSE, error);
+    if (!save_location)
+        return FALSE;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'progress': Invalid extra '%s' for item '%s'",
+                extra, item);
+        return FALSE;
+    }
+
+    if (streq (item, "prop"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Property Progress: ", data->property, NULL);
+        info->desc = "The property containing the current progress value";
+        option = "property";
+        ask_title = "Enter the property name for the current progress value";
+        ask_current = data->property;
+    }
+    else if (streq (item, "prop_lbl"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Property Label: ", data->property_lbl, NULL);
+        info->desc = "The property containing the text to show as label";
+        option = "property_lbl";
+        ask_title = "Enter the property name for the label";
+        ask_current = data->property_lbl;
+    }
+    else if (streq (item, "prop_pulse"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Property Pulse: ", data->property_pulse, NULL);
+        info->desc = "The property containing the current pulse value (if no progress value)";
+        option = "property_pulse";
+        ask_title = "Enter the property name for the current pulse value";
+        ask_current = data->property_pulse;
+    }
+    else if (streq (item, "label"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Label: ", data->label, NULL);
+        info->desc = "The label (if no property label; can use %p/%P for progress value (w/ percent sign))";
+        option = "label";
+        ask_title = "Enter the label";
+        ask_details = "Use %p/%P for current progress value (without/with percent sign)";
+        ask_current = data->label;
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "ColumnType 'progress': Unknown item '%s'",
+                item);
+        return FALSE;
+    }
+
+    if (option)
+    {
+        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+        g_string_append (str, option);
+        g_string_append_c (str, ',');
+        g_string_append (str, "@ask_text(");
+        g_string_append (str, ask_title);
+        if (ask_details)
+        {
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, ask_details, TRUE);
+        }
+        else if (ask_current)
+            g_string_append_c (str, ',');
+        if (ask_current)
+        {
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, ask_current, TRUE);
+        }
+        g_string_append_c (str, ')');
+        if (*save_location != '\0')
+        {
+            g_string_append_c (str, ',');
+            g_string_append (str, save_location);
+        }
+        g_string_append_c (str, ')');
+        info->trigger = g_string_free (str, FALSE);
+        info->free_trigger = TRUE;
+    }
+
+    return TRUE;
 }
