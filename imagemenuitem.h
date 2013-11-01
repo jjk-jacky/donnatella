@@ -71,6 +71,11 @@ gboolean    donna_image_menu_item_get_is_combined_sensitive (
 void        donna_image_menu_item_set_is_label_bold (DonnaImageMenuItem *item,
                                                      gboolean            is_bold);
 gboolean    donna_image_menu_item_get_is_label_bold (DonnaImageMenuItem *item);
+void        donna_image_menu_item_set_is_label_markup (
+                                                     DonnaImageMenuItem *item,
+                                                     gboolean            is_markup);
+gboolean    donna_image_menu_item_get_is_label_markup (
+                                                     DonnaImageMenuItem *item);
 void        donna_image_menu_item_set_loading_submenu (
                                                      DonnaImageMenuItem   *item,
                                                      const gchar          *label);

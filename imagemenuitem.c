@@ -15,6 +15,7 @@ enum
     PROP_IS_COMBINED,
     PROP_IS_COMBINED_SENSITIVE,
     PROP_IS_LABEL_BOLD,
+    PROP_IS_LABEL_MARKUP,
 
     NB_PROPS
 };
@@ -36,6 +37,7 @@ struct _DonnaImageMenuItemPrivate
     guint        is_combined            : 1;
     guint        is_combined_sensitive  : 1;
     guint        is_label_bold          : 1;
+    guint        is_label_markup        : 1;
     gint         toggle_size;
 
     gint         item_width;
@@ -79,6 +81,9 @@ static void donna_image_menu_item_toggle_size_allocate  (GtkMenuItem    *menu_it
                                                          gint            allocation);
 static void donna_image_menu_item_select                (GtkMenuItem    *item);
 static void donna_image_menu_item_deselect              (GtkMenuItem    *item);
+static void donna_image_menu_item_set_label             (GtkMenuItem    *item,
+                                                         const gchar    *label);
+static const gchar * donna_image_menu_item_get_label    (GtkMenuItem    *item);
 
 static void donna_image_menu_item_forall                (GtkContainer   *container,
                                                          gboolean        include_internals,
@@ -133,6 +138,8 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
     mi_class->toggle_size_allocate  = donna_image_menu_item_toggle_size_allocate;
     mi_class->select                = donna_image_menu_item_select;
     mi_class->deselect              = donna_image_menu_item_deselect;
+    mi_class->set_label             = donna_image_menu_item_set_label;
+    mi_class->get_label             = donna_image_menu_item_get_label;
 
     /**
      * DonnaImageMenuItem:image:
@@ -230,6 +237,17 @@ donna_image_menu_item_class_init (DonnaImageMenuItemClass *klass)
     donna_image_menu_item_props[PROP_IS_LABEL_BOLD] =
         g_param_spec_boolean ("is-label-bold", "is-label-bold",
                 "Whether or not the label is shown in bold",
+                FALSE,  /* default */
+                G_PARAM_READWRITE);
+
+    /**
+     * DonnaImageMenuItem:is-label-markup:
+     *
+     * Whether or not the label is parsed as markup
+     */
+    donna_image_menu_item_props[PROP_IS_LABEL_MARKUP] =
+        g_param_spec_boolean ("is-label-markup", "is-label-markup",
+                "Whether or not the label is parsed as markup",
                 FALSE,  /* default */
                 G_PARAM_READWRITE);
 
@@ -349,6 +367,11 @@ donna_image_menu_item_set_property (GObject        *object,
                     g_value_get_boolean (value));
             break;
 
+        case PROP_IS_LABEL_MARKUP:
+            donna_image_menu_item_set_is_label_markup (item,
+                    g_value_get_boolean (value));
+            break;
+
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
             break;
@@ -394,6 +417,10 @@ donna_image_menu_item_get_property (GObject        *object,
 
         case PROP_IS_LABEL_BOLD:
             g_value_set_boolean (value, priv->is_label_bold);
+            break;
+
+        case PROP_IS_LABEL_MARKUP:
+            g_value_set_boolean (value, priv->is_label_markup);
             break;
 
         default:
@@ -875,6 +902,36 @@ donna_image_menu_item_deselect (GtkMenuItem          *menuitem)
     }
 
     ((GtkMenuItemClass *) donna_image_menu_item_parent_class)->deselect (menuitem);
+}
+
+static void
+donna_image_menu_item_set_label (GtkMenuItem    *item,
+                                 const gchar    *label)
+{
+    GtkWidget *child;
+
+    child = gtk_bin_get_child ((GtkBin *) item);
+    if (!child)
+    {
+        child = gtk_label_new (NULL);
+        gtk_misc_set_alignment ((GtkMisc *) child, 0.0, 0.5);
+        gtk_container_add ((GtkContainer *) item, child);
+        gtk_widget_show (child);
+    }
+
+    if (((DonnaImageMenuItem *) item)->priv->is_label_markup)
+        gtk_label_set_markup ((GtkLabel *) child, (label) ? label : "");
+    else
+        gtk_label_set_label ((GtkLabel *) child, (label) ? label : "");
+    g_object_notify ((GObject *) item, "label");
+}
+
+static const gchar * donna_image_menu_item_get_label (GtkMenuItem    *item)
+{
+    GtkWidget *child;
+
+    child = gtk_bin_get_child ((GtkBin *) item);
+    return (child) ? gtk_label_get_label ((GtkLabel *) child) : NULL;
 }
 
 /* the following is a copy/paste from gtkmenuitem.c
@@ -1481,6 +1538,57 @@ donna_image_menu_item_get_is_label_bold (DonnaImageMenuItem *item)
 {
     g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
     return item->priv->is_label_bold;
+}
+
+/**
+ * donna_image_menu_item_set_is_label_markup:
+ * @item: a #DonnaImageMenuItem
+ * @is_markup: Whether the label should be parsed as markup or not
+ *
+ * Sets whether the label of @item should be parsed as markup or not
+ */
+void
+donna_image_menu_item_set_is_label_markup (DonnaImageMenuItem *item,
+                                           gboolean            is_markup)
+{
+    DonnaImageMenuItemPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item));
+    priv = item->priv;
+
+    if (priv->is_label_markup != is_markup)
+    {
+        GtkLabel *label;
+
+        priv->is_label_markup = is_markup;
+        label = (GtkLabel *) gtk_bin_get_child ((GtkBin *) item);
+        if (GTK_IS_LABEL (label))
+        {
+            if (is_markup)
+                gtk_label_set_markup (label, gtk_label_get_label (label));
+            else
+                gtk_label_set_text (label, gtk_label_get_label (label));
+        }
+        else
+            g_warning ("ImageMenuItem: Cannot set label markup, child isn't a GtkLabel");
+
+        g_object_notify ((GObject *) item, "is-label-markup");
+    }
+}
+
+/**
+ * donna_image_menu_item_get_is_label_markup:
+ * @item: a #DonnaImageMenuItem
+ *
+ * Returns whether the label of @item is parsed as markup or not
+ *
+ * Returns: %TRUE is @item's label is parsed as markup, else %FALSE
+ */
+gboolean
+donna_image_menu_item_get_is_label_markup (DonnaImageMenuItem *item)
+{
+    g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
+    return item->priv->is_label_markup;
 }
 
 /**
