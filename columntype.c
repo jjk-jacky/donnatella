@@ -971,6 +971,11 @@ donna_columntype_get_context_alias (DonnaColumnType    *ct,
 
     if (interface->get_context_alias == NULL)
     {
+        /* all columntypes should support an alias "options" so let's resolve
+         * that to an empty string, i.e. nothing (but not an error) */
+        if (streq (alias, "options"))
+            return "";
+
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
                 "ColumnType '%s': No context alias supported",
