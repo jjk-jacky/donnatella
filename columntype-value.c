@@ -83,20 +83,53 @@ static gint             ct_value_node_cmp           (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
+static DonnaColumnTypeNeed ct_value_set_option      (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     const gchar        *arr_name,
+                                                     gpointer            data,
+                                                     const gchar        *option,
+                                                     const gchar        *value,
+                                                     DonnaColumnOptionSaveLocation save_location,
+                                                     GError            **error);
+static gchar *          ct_value_get_context_alias  (DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *alias,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     const gchar       *prefix,
+                                                     GError           **error);
+static gboolean         ct_value_get_context_item_info (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *item,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     DonnaContextInfo  *info,
+                                                     GError           **error);
 
 static void
 ct_value_columntype_init (DonnaColumnTypeInterface *interface)
 {
-    interface->get_name         = ct_value_get_name;
-    interface->get_renderers    = ct_value_get_renderers;
-    interface->refresh_data     = ct_value_refresh_data;
-    interface->free_data        = ct_value_free_data;
-    interface->get_props        = ct_value_get_props;
-    interface->can_edit         = ct_value_can_edit;
-    interface->edit             = ct_value_edit;
-    interface->render           = ct_value_render;
-    interface->set_tooltip      = ct_value_set_tooltip;
-    interface->node_cmp         = ct_value_node_cmp;
+    interface->get_name                 = ct_value_get_name;
+    interface->get_renderers            = ct_value_get_renderers;
+    interface->refresh_data             = ct_value_refresh_data;
+    interface->free_data                = ct_value_free_data;
+    interface->get_props                = ct_value_get_props;
+    interface->can_edit                 = ct_value_can_edit;
+    interface->edit                     = ct_value_edit;
+    interface->render                   = ct_value_render;
+    interface->set_tooltip              = ct_value_set_tooltip;
+    interface->node_cmp                 = ct_value_node_cmp;
+    interface->set_option               = ct_value_set_option;
+    interface->get_context_alias        = ct_value_get_context_alias;
+    interface->get_context_item_info    = ct_value_get_context_item_info;
 }
 
 static void
@@ -197,14 +230,16 @@ ct_value_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     if (data->show_type != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, NULL, "show_type", FALSE, NULL))
+                tv_name, col_name, arr_name,
+                "columntypes/value", "show_type", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
         data->show_type = !data->show_type;
     }
 
     s = donna_config_get_string_column (config,
-            tv_name, col_name, arr_name, NULL, "property_value", "option-value", NULL);
+            tv_name, col_name, arr_name,
+            "columntypes/value", "property_value", "option-value", NULL);
     if (!streq (s, data->prop_value))
     {
         g_free (data->prop_value);
@@ -216,7 +251,8 @@ ct_value_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config,
-            tv_name, col_name, arr_name, NULL, "property_extra", "option-extra", NULL);
+            tv_name, col_name, arr_name,
+            "columntypes/value", "property_extra", "option-extra", NULL);
     if (!streq (s, data->prop_extra))
     {
         g_free (data->prop_extra);
@@ -1203,4 +1239,210 @@ done:
     if (type2 != G_TYPE_INVALID)
         g_value_unset (&value2);
     return (ret > 0) ? 1 : ((ret < 0) ? -1 : 0);
+}
+
+static DonnaColumnTypeNeed
+ct_value_set_option (DonnaColumnType    *ct,
+                     const gchar        *tv_name,
+                     const gchar        *col_name,
+                     const gchar        *arr_name,
+                     gpointer            _data,
+                     const gchar        *option,
+                     const gchar        *value,
+                     DonnaColumnOptionSaveLocation save_location,
+                     GError            **error)
+{
+    struct tv_col_data *data = _data;
+
+    if (streq (option, "property_value"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "columntypes/value", save_location,
+                    option, G_TYPE_STRING, &data->prop_value, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->prop_value);
+        data->prop_value = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "property_extra"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "columntypes/value", save_location,
+                    option, G_TYPE_STRING, &data->prop_extra, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->prop_extra);
+        data->prop_extra = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "show_type"))
+    {
+        gboolean c, v;
+
+        if (!streq (value, "0") && !streq (value, "1")
+                && !streq (value, "false") && !streq (value, "true"))
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_OTHER,
+                    "ColumnType 'value': Invalid value for option '%s': "
+                    "Must be '0', 'false', '1' or 'true'",
+                    option);
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+        }
+
+        c = data->show_type;
+        v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "columntypes/value", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        data->show_type = v;
+        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_OTHER,
+            "ColumnType 'value': Unknown option '%s'",
+            option);
+    return DONNA_COLUMNTYPE_NEED_NOTHING;
+}
+
+static gchar *
+ct_value_get_context_alias (DonnaColumnType   *ct,
+                            gpointer           _data,
+                            const gchar       *alias,
+                            const gchar       *extra,
+                            DonnaContextReference reference,
+                            DonnaNode         *node_ref,
+                            get_sel_fn         get_sel,
+                            gpointer           get_sel_data,
+                            const gchar       *prefix,
+                            GError           **error)
+{
+    const gchar *save_location;
+
+    if (!streq (alias, "options"))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType 'value': Unknown alias '%s'",
+                alias);
+        return NULL;
+    }
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, TRUE, error);
+    if (!save_location)
+        return NULL;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'value': Invalid extra '%s' for alias '%s'",
+                extra, alias);
+        return NULL;
+    }
+
+    return g_strconcat (
+            prefix, "prop_value:@", save_location, ",",
+            prefix, "prop_extra:@", save_location, ",",
+            prefix, "show_type:@", save_location,
+            NULL);
+}
+
+static gboolean
+ct_value_get_context_item_info (DonnaColumnType   *ct,
+                                gpointer           _data,
+                                const gchar       *item,
+                                const gchar       *extra,
+                                DonnaContextReference reference,
+                                DonnaNode         *node_ref,
+                                get_sel_fn         get_sel,
+                                gpointer           get_sel_data,
+                                DonnaContextInfo  *info,
+                                GError           **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *option = NULL;
+    const gchar *value;
+    const gchar *ask_title= NULL;
+    const gchar *ask_current;
+    const gchar *save_location;
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, FALSE, error);
+    if (!save_location)
+        return FALSE;
+
+    if (streq (item, "prop_value"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Property Value: ", data->prop_value, NULL);
+        info->free_name = TRUE;
+        option = "property_value";
+        value = NULL;
+        ask_title = "Enter the name of the property holding the value";
+        ask_current = data->prop_value;
+    }
+    else if (streq (item, "prop_extra"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Property Extra: ", data->prop_extra, NULL);
+        info->free_name = TRUE;
+        option = "property_extra";
+        value = NULL;
+        ask_title = "Enter the name of the property holding the extra name";
+        ask_current = data->prop_extra;
+    }
+    else if (streq (item, "show_type"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = data->show_type;
+        info->name = "Show the type (instead of the value)";
+        option = "show_type";
+        value = (info->is_active) ? "0" : "1";
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "ColumnType 'value': Unknown item '%s'",
+                item);
+        return FALSE;
+    }
+
+    if (option)
+    {
+        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+        g_string_append (str, option);
+        g_string_append_c (str, ',');
+        if (value)
+            g_string_append (str, value);
+        else
+        {
+            g_string_append (str, "@ask_text(");
+            g_string_append (str, ask_title);
+            g_string_append_c (str, ',');
+            g_string_append_c (str, ',');
+            g_string_append (str, ask_current);
+            g_string_append_c (str, ')');
+        }
+        if (*save_location != '\0')
+        {
+            g_string_append_c (str, ',');
+            g_string_append (str, save_location);
+        }
+        g_string_append_c (str, ')');
+        info->trigger = g_string_free (str, FALSE);
+        info->free_trigger = TRUE;
+    }
+
+    return TRUE;
 }
