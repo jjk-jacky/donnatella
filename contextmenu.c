@@ -612,7 +612,7 @@ import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
         }
     }
 
-    if (!info->pixbuf_selected)
+    if ((import & IMPORT_DEFAULT) && !info->pixbuf_selected)
     {
         donna_node_get (node, FALSE, "menu-image-selected", &has, &v, NULL);
         if (has == DONNA_NODE_VALUE_SET)
