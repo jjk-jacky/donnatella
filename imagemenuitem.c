@@ -345,7 +345,7 @@ donna_image_menu_item_set_property (GObject        *object,
             break;
 
         case PROP_IS_LABEL_BOLD:
-            donna_image_menu_item_set_label_bold (item,
+            donna_image_menu_item_set_is_label_bold (item,
                     g_value_get_boolean (value));
             break;
 
@@ -1430,15 +1430,15 @@ donna_image_menu_item_get_is_combined_sensitive (DonnaImageMenuItem *item)
 }
 
 /**
- * donna_image_menu_item_set_label_bold:
+ * donna_image_menu_item_set_is_label_bold:
  * @item: a #DonnaImageMenuItem
  * @is_bold: Whether the label should be bold or not
  *
  * Sets whether the label of @item should be written in bold or not
  */
 void
-donna_image_menu_item_set_label_bold (DonnaImageMenuItem *item,
-                                      gboolean            is_bold)
+donna_image_menu_item_set_is_label_bold (DonnaImageMenuItem *item,
+                                         gboolean            is_bold)
 {
     DonnaImageMenuItemPrivate *priv;
 
@@ -1469,7 +1469,7 @@ donna_image_menu_item_set_label_bold (DonnaImageMenuItem *item,
 }
 
 /**
- * donna_image_menu_item_get_label_bold:
+ * donna_image_menu_item_get_is_label_bold:
  * @item: a #DonnaImageMenuItem
  *
  * Returns whether the label of @item is written in bold or not
@@ -1477,7 +1477,7 @@ donna_image_menu_item_set_label_bold (DonnaImageMenuItem *item,
  * Returns: %TRUE is @item's label is in bold, else %FALSE
  */
 gboolean
-donna_image_menu_item_get_label_bold (DonnaImageMenuItem *item)
+donna_image_menu_item_get_is_label_bold (DonnaImageMenuItem *item)
 {
     g_return_val_if_fail (DONNA_IS_IMAGE_MENU_ITEM (item), FALSE);
     return item->priv->is_label_bold;

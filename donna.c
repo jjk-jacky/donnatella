@@ -2390,7 +2390,7 @@ load_menu (struct menu_click *mc)
             if (has == DONNA_NODE_VALUE_SET)
             {
                 if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN)
-                    donna_image_menu_item_set_label_bold (imi,
+                    donna_image_menu_item_set_is_label_bold (imi,
                             g_value_get_boolean (&v));
                 g_value_unset (&v);
             }
