@@ -86,6 +86,36 @@ static gboolean         ct_text_is_match_filter     (DonnaColumnType    *ct,
                                                      GError            **error);
 static void             ct_text_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
+static DonnaColumnTypeNeed ct_text_set_option       (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     const gchar        *arr_name,
+                                                     gpointer            data,
+                                                     const gchar        *option,
+                                                     const gchar        *value,
+                                                     DonnaColumnOptionSaveLocation save_location,
+                                                     GError            **error);
+static gchar *          ct_text_get_context_alias   (DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *alias,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     const gchar       *prefix,
+                                                     GError           **error);
+static gboolean         ct_text_get_context_item_info (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer            data,
+                                                     const gchar       *item,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     DonnaContextInfo  *info,
+                                                     GError           **error);
 
 static void
 ct_text_columntype_init (DonnaColumnTypeInterface *interface)
@@ -102,6 +132,9 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
     interface->node_cmp                 = ct_text_node_cmp;
     interface->is_match_filter          = ct_text_is_match_filter;
     interface->free_filter_data         = ct_text_free_filter_data;
+    interface->set_option               = ct_text_set_option;
+    interface->get_context_alias        = ct_text_get_context_alias;
+    interface->get_context_item_info    = ct_text_get_context_item_info;
 }
 
 static void
@@ -575,4 +608,288 @@ ct_text_free_filter_data (DonnaColumnType    *ct,
                           gpointer            filter_data)
 {
     g_pattern_spec_free (filter_data);
+}
+
+static DonnaColumnTypeNeed
+ct_text_set_option (DonnaColumnType    *ct,
+                    const gchar        *tv_name,
+                    const gchar        *col_name,
+                    const gchar        *arr_name,
+                    gpointer            _data,
+                    const gchar        *option,
+                    const gchar        *value,
+                    DonnaColumnOptionSaveLocation save_location,
+                    GError            **error)
+{
+    struct tv_col_data *data = _data;
+    gboolean c;
+    gboolean v;
+
+    if (streq (option, "property"))
+    {
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, NULL, save_location,
+                    option, G_TYPE_STRING, &data->property, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        g_free (data->property);
+        data->property = g_strdup (value);
+        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    if (!streq (value, "0") && !streq (value, "1")
+            && !streq (value, "false") && !streq (value, "true"))
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_OTHER,
+                "ColumnType 'text': Invalid value for option '%s': "
+                "Must be '0', 'false', '1' or 'true'",
+                option);
+        return DONNA_COLUMNTYPE_NEED_NOTHING;
+    }
+    v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
+
+    if (streq (option, "natural_order"))
+    {
+        c = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "sort", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (v)
+            data->options |= DONNA_SORT_NATURAL_ORDER;
+        else
+            data->options &= ~DONNA_SORT_NATURAL_ORDER;
+        return DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else if (streq (option, "dot_first"))
+    {
+        c = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "sort", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (v)
+            data->options |= DONNA_SORT_DOT_FIRST;
+        else
+            data->options &= ~DONNA_SORT_DOT_FIRST;
+        return DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else if (streq (option, "case_sensitive"))
+    {
+        c = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE : TRUE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "sort", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (v)
+            data->options &= ~DONNA_SORT_CASE_INSENSITIVE;
+        else
+            data->options |= DONNA_SORT_CASE_INSENSITIVE;
+        return DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else if (streq (option, "dot_mixed"))
+    {
+        c = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "sort", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (v)
+            data->options |= DONNA_SORT_DOT_MIXED;
+        else
+            data->options &= ~DONNA_SORT_DOT_MIXED;
+        return DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+    else if (streq (option, "ignore_spunct"))
+    {
+        c = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "sort", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (v)
+            data->options |= DONNA_SORT_IGNORE_SPUNCT;
+        else
+            data->options &= ~DONNA_SORT_IGNORE_SPUNCT;
+        return DONNA_COLUMNTYPE_NEED_RESORT;
+    }
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_OTHER,
+            "ColumnType 'text': Unknown option '%s'",
+            option);
+    return DONNA_COLUMNTYPE_NEED_NOTHING;
+}
+
+static gchar *
+ct_text_get_context_alias (DonnaColumnType   *ct,
+                           gpointer           _data,
+                           const gchar       *alias,
+                           const gchar       *extra,
+                           DonnaContextReference reference,
+                           DonnaNode         *node_ref,
+                           get_sel_fn         get_sel,
+                           gpointer           get_sel_data,
+                           const gchar       *prefix,
+                           GError           **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *save_location;
+
+    if (!streq (alias, "options"))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType 'text': Unknown alias '%s'",
+                alias);
+        return NULL;
+    }
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, TRUE, error);
+    if (!save_location)
+        return NULL;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'text': Invalid extra '%s' for alias '%s'",
+                extra, alias);
+        return NULL;
+    }
+
+    return g_strconcat (
+            prefix, "prop:@", save_location, ",-,",
+            prefix, "natural_order:@", save_location, ",",
+            prefix, "dot_first:@", save_location, ",",
+            prefix, "case_sensitive:@", save_location, ",",
+            prefix, "dot_mixed:@", save_location, ",",
+            prefix, "ignore_spunct:@", save_location,
+            NULL);
+}
+
+static gboolean
+ct_text_get_context_item_info (DonnaColumnType   *ct,
+                               gpointer           _data,
+                               const gchar       *item,
+                               const gchar       *extra,
+                               DonnaContextReference reference,
+                               DonnaNode         *node_ref,
+                               get_sel_fn         get_sel,
+                               gpointer           get_sel_data,
+                               DonnaContextInfo  *info,
+                               GError           **error)
+{
+    struct tv_col_data *data = _data;
+    const gchar *option = NULL;
+    const gchar *ask_title = NULL;
+    const gchar *ask_current = NULL;
+    const gchar *save_location;
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, FALSE, error);
+    if (!save_location)
+        return FALSE;
+
+    if (streq (item, "prop"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Node Property: ", data->property, NULL);
+        info->free_name = TRUE;
+        option = "property";
+        ask_title = "Enter the name of the property";
+        ask_current = data->property;
+    }
+    else if (streq (item, "natural_order"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
+        info->name = "Natural Order";
+        option = item;
+    }
+    else if (streq (item, "dot_first"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
+        info->name = "Show \"dot files\" first";
+        option = item;
+    }
+    else if (streq (item, "case_sensitive"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE: TRUE;
+        info->name = "Case Sensitive";
+        option = item;
+    }
+    else if (streq (item, "dot_mixed"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
+        info->name = "Sort \"dot files\" amongst others";
+        option = item;
+    }
+    else if (streq (item, "ignore_spunct"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
+        info->name = "Ignore leading spunctuation characters";
+        option = item;
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "ColumnType 'text': Unknown item '%s'",
+                item);
+        return FALSE;
+    }
+
+    if (option)
+    {
+        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+        g_string_append (str, option);
+        g_string_append_c (str, ',');
+        if (ask_title)
+        {
+            g_string_append (str, "@ask_text(");
+            g_string_append (str, ask_title);
+            if (ask_current)
+            {
+                g_string_append_c (str, ',');
+                g_string_append_c (str, ',');
+                g_string_append (str, ask_current);
+            }
+            g_string_append_c (str, ')');
+        }
+        else
+            g_string_append_c (str, (info->is_active) ? '0' : '1');
+        if (*save_location != '\0')
+        {
+            g_string_append_c (str, ',');
+            g_string_append (str, save_location);
+        }
+        g_string_append_c (str, ')');
+        info->trigger = g_string_free (str, FALSE);
+        info->free_trigger = TRUE;
+    }
+
+    return TRUE;
 }
