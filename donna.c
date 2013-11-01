@@ -2361,6 +2361,14 @@ load_menu (struct menu_click *mc)
             imi  = (DonnaImageMenuItem *) item;
             g_free (s);
 
+            donna_node_get (node, TRUE, "menu-is-name-markup", &has, &v, NULL);
+            if (has == DONNA_NODE_VALUE_SET)
+            {
+                if (G_VALUE_TYPE (&v) == G_TYPE_BOOLEAN && g_value_get_boolean (&v))
+                    donna_image_menu_item_set_is_label_markup (imi, TRUE);
+                g_value_unset (&v);
+            }
+
             if (donna_node_get_desc (node, TRUE, &s) == DONNA_NODE_VALUE_SET)
             {
                 gtk_widget_set_tooltip_text (item, s);
