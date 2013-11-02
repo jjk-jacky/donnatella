@@ -77,3 +77,4 @@ type=list-int
 value=0:standard:Standard item
 value=1:trigger:Use trigger node
 value=2:container:Container item
+value=3:empty:Empty item (no trigger)

@@ -11432,6 +11432,28 @@ tree_context_get_alias (const gchar             *alias,
             g_free (b);
         return ret;
     }
+    else if (streq (alias, "sort_order") || streq (alias, "second_sort_order"))
+    {
+        GString *str;
+        GSList *l;
+
+        if (!priv->columns)
+            return "";
+
+        str = g_string_new (":");
+        g_string_append (str, alias);
+        g_string_append_c (str, '<');
+        for (l = priv->columns; l; l = l->next)
+        {
+            g_string_append_c (str, ':');
+            g_string_append (str, alias);
+            g_string_append_c (str, ':');
+            g_string_append (str, ((struct column *) l->data)->name);
+            g_string_append_c (str, ',');
+        }
+        str->str[str->len - 1] = '>';
+        return g_string_free (str, FALSE);
+    }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
@@ -11918,6 +11940,47 @@ tree_context_get_item_info (const gchar             *item,
         }
 
         g_object_unref (node);
+        return TRUE;
+    }
+    else if (streqn (item, "sort_order", 10)
+            || streqn (item, "second_sort_order", 17))
+    {
+        struct column *_col;
+        gboolean is_second = item[1] == 'e';
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+
+        if (!extra)
+        {
+            info->name = (is_second) ? "Secondary Sort By..." : "Sort By...";
+            info->submenus = 1;
+            return TRUE;
+        }
+
+        _col = get_column_by_name (tree, extra);
+        if (!_col)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No such item: '%s' (no such column)",
+                    priv->name, item);
+            return FALSE;
+        }
+
+        info->name = g_strdup (_col->name);
+        info->free_name = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+        if (is_second)
+            info->is_active = _col->column == priv->second_sort_column
+                && _col->column != priv->sort_column;
+        else
+            info->is_active = _col->column == priv->sort_column;
+        info->trigger = g_strconcat ("command:tree_set_",
+                (is_second) ? "second_" : "", "sort (%o,",
+                _col->name, ")", NULL);
+        info->free_trigger = TRUE;
+
         return TRUE;
     }
 
