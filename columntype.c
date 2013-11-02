@@ -603,18 +603,62 @@ helper_set_option (DonnaColumnType    *ct,
 #undef cfg_set
 #undef _cfg_set
 
+static gchar *
+helper_get_set_option_trigger (const gchar  *option,
+                               const gchar  *value,
+                               gboolean      quote_value,
+                               const gchar  *ask_title,
+                               const gchar  *ask_details,
+                               const gchar  *ask_current,
+                               const gchar  *save_location)
+{
+    GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+    g_string_append (str, option);
+    g_string_append_c (str, ',');
+    if (quote_value)
+        donna_g_string_append_quoted (str, value, TRUE);
+    else if (value)
+        g_string_append (str, value);
+    else
+    {
+        g_string_append (str, "@ask_text(");
+        g_string_append (str, ask_title);
+        if (ask_details)
+        {
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, ask_details, TRUE);
+        }
+        else if (ask_current)
+            g_string_append_c (str, ',');
+        if (ask_current)
+        {
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, ask_current, TRUE);
+        }
+        g_string_append_c (str, ')');
+    }
+    if (*save_location != '\0')
+    {
+        g_string_append_c (str, ',');
+        g_string_append (str, save_location);
+    }
+    g_string_append_c (str, ')');
+    return g_string_free (str, FALSE);
+}
+
 static void
 donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 {
-    interface->helper_can_edit          = helper_can_edit;
-    interface->helper_get_save_location = helper_get_save_location;
-    interface->helper_set_option        = helper_set_option;
+    interface->helper_can_edit                  = helper_can_edit;
+    interface->helper_get_save_location         = helper_get_save_location;
+    interface->helper_set_option                = helper_set_option;
+    interface->helper_get_set_option_trigger    = helper_get_set_option_trigger;
 
-    interface->get_default_sort_order   = default_get_default_sort_order;
-    interface->can_edit                 = default_can_edit;
-    interface->edit                     = default_edit;
-    interface->set_value                = default_set_value;
-    interface->set_tooltip              = default_set_tooltip;
+    interface->get_default_sort_order           = default_get_default_sort_order;
+    interface->can_edit                         = default_can_edit;
+    interface->edit                             = default_edit;
+    interface->set_value                        = default_set_value;
+    interface->set_tooltip                      = default_set_tooltip;
 
     g_object_interface_install_property (interface,
             g_param_spec_object ("app", "app", "Application",

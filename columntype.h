@@ -87,6 +87,14 @@ struct _DonnaColumnTypeInterface
                                              gpointer            current,
                                              gpointer            value,
                                              GError            **error);
+    gchar *             (*helper_get_set_option_trigger) (
+                                             const gchar  *option,
+                                             const gchar  *value,
+                                             gboolean      quote_value,
+                                             const gchar  *ask_title,
+                                             const gchar  *ask_details,
+                                             const gchar  *ask_current,
+                                             const gchar  *save_location);
 
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
