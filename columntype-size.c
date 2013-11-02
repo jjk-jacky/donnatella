@@ -878,9 +878,11 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
 
         if (!extra)
         {
-            info->name = "Node Property";
-            info->submenus = 1;
-            return TRUE;
+            info->name = g_strconcat ("Node Property: ", data->property, NULL);
+            info->free_name = TRUE;
+            value = NULL;
+            ask_title = "Enter the name of the property";
+            ask_current = data->property;
         }
         else if (streq (extra, "size"))
         {
@@ -891,15 +893,8 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
         }
         else if (streq (extra, "custom"))
         {
-            if (data->is_size)
-                info->name = "<Custom...>";
-            else
-            {
-                info->name = g_strdup_printf ("Custom: %s", data->property);
-                info->free_name = TRUE;
-                info->is_active = TRUE;
-            }
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->name = g_strconcat ("Custom: ", data->property, NULL);
+            info->free_name = TRUE;
             value = NULL;
             ask_title = "Enter the name of the property";
             ask_current = data->property;
