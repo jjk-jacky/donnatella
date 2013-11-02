@@ -71,7 +71,7 @@ static DonnaColumnTypeNeed ct_progress_set_option   (DonnaColumnType    *ct,
                                                      GError            **error);
 static gchar *          ct_progress_get_context_alias (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *alias,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -82,7 +82,7 @@ static gchar *          ct_progress_get_context_alias (
                                                      GError           **error);
 static gboolean         ct_progress_get_context_item_info (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *item,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -653,9 +653,9 @@ ct_progress_get_context_alias (DonnaColumnType   *ct,
 
     return g_strconcat (
             prefix, "label:@", save_location, ",",
-            prefix, "prop:@", save_location, ",",
-            prefix, "prop_lbl:@", save_location, ",",
-            prefix, "prop_pulse:@", save_location,
+            prefix, "property:@", save_location, ",",
+            prefix, "property_lbl:@", save_location, ",",
+            prefix, "property_pulse:@", save_location,
             NULL);
 }
 
@@ -672,7 +672,6 @@ ct_progress_get_context_item_info (DonnaColumnType   *ct,
                                    GError           **error)
 {
     struct tv_col_data *data = _data;
-    const gchar *option = NULL;
     const gchar *ask_title;
     const gchar *ask_details = NULL;
     const gchar *ask_current;
@@ -692,33 +691,30 @@ ct_progress_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (streq (item, "prop"))
+    if (streq (item, "property"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         info->name = g_strconcat ("Property Progress: ", data->property, NULL);
         info->desc = "The property containing the current progress value";
-        option = "property";
         ask_title = "Enter the property name for the current progress value";
         ask_current = data->property;
     }
-    else if (streq (item, "prop_lbl"))
+    else if (streq (item, "property_lbl"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         info->name = g_strconcat ("Property Label: ", data->property_lbl, NULL);
         info->desc = "The property containing the text to show as label";
-        option = "property_lbl";
         ask_title = "Enter the property name for the label";
         ask_current = data->property_lbl;
     }
-    else if (streq (item, "prop_pulse"))
+    else if (streq (item, "property_pulse"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         info->name = g_strconcat ("Property Pulse: ", data->property_pulse, NULL);
         info->desc = "The property containing the current pulse value (if no progress value)";
-        option = "property_pulse";
         ask_title = "Enter the property name for the current pulse value";
         ask_current = data->property_pulse;
     }
@@ -728,7 +724,6 @@ ct_progress_get_context_item_info (DonnaColumnType   *ct,
         info->is_sensitive = TRUE;
         info->name = g_strconcat ("Label: ", data->label, NULL);
         info->desc = "The label (if no property label; can use %p/%P for progress value (w/ percent sign))";
-        option = "label";
         ask_title = "Enter the label";
         ask_details = "Use %p/%P for current progress value (without/with percent sign)";
         ask_current = data->label;
@@ -742,35 +737,10 @@ ct_progress_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (option)
-    {
-        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
-        g_string_append (str, option);
-        g_string_append_c (str, ',');
-        g_string_append (str, "@ask_text(");
-        g_string_append (str, ask_title);
-        if (ask_details)
-        {
-            g_string_append_c (str, ',');
-            donna_g_string_append_quoted (str, ask_details, TRUE);
-        }
-        else if (ask_current)
-            g_string_append_c (str, ',');
-        if (ask_current)
-        {
-            g_string_append_c (str, ',');
-            donna_g_string_append_quoted (str, ask_current, TRUE);
-        }
-        g_string_append_c (str, ')');
-        if (*save_location != '\0')
-        {
-            g_string_append_c (str, ',');
-            g_string_append (str, save_location);
-        }
-        g_string_append_c (str, ')');
-        info->trigger = g_string_free (str, FALSE);
-        info->free_trigger = TRUE;
-    }
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item, NULL, FALSE,
+                ask_title, ask_details, ask_current, save_location);
+    info->free_trigger = TRUE;
 
     return TRUE;
 }

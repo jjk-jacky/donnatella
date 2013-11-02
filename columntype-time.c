@@ -155,7 +155,7 @@ static DonnaColumnTypeNeed ct_time_set_option       (DonnaColumnType    *ct,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_time_get_context_alias   (DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *alias,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -166,7 +166,7 @@ static gchar *          ct_time_get_context_alias   (DonnaColumnType   *ct,
                                                      GError           **error);
 static gboolean         ct_time_get_context_item_info (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *item,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -2070,61 +2070,61 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "format:@", save_location, ":%d/%m/%Y %T,",
                 prefix, "format:@", save_location, ":%d/%m/%Y,-,",
                 prefix, "format:@", save_location, ":=>,",
-            prefix, "agesec:@", save_location, "<",
-                prefix, "agesec:@", save_location, ":1h,",
-                prefix, "agesec:@", save_location, ":24h,",
-                prefix, "agesec:@", save_location, ":48h,",
-                prefix, "agesec:@", save_location, ":1w,-,",
-                prefix, "agesec:@", save_location, ":=>,",
-            prefix, "format:@", save_location, ":age<",
-                prefix, "format:@", save_location, ":age:%o,",
-                prefix, "format:@", save_location, ":age:%x %X,",
-                prefix, "format:@", save_location, ":age:%x,",
-                prefix, "format:@", save_location, ":age:%X,",
-                prefix, "format:@", save_location, ":age:%F %T,",
-                prefix, "format:@", save_location, ":age:%F,",
-                prefix, "format:@", save_location, ":age:%T,",
-                prefix, "format:@", save_location, ":age:%d/%m/%Y %T,",
-                prefix, "format:@", save_location, ":age:%d/%m/%Y,-,",
-                prefix, "format:@", save_location, ":age:=>,",
-            prefix, "prop:@", save_location, "<",
-                prefix, "prop:@", save_location, ":mtime,",
-                prefix, "prop:@", save_location, ":atime,",
-                prefix, "prop:@", save_location, ":ctime,-,",
-                prefix, "prop:@", save_location, ":custom>,-,",
-            prefix, "format:@", save_location, ":tt<",
-                prefix, "format:@", save_location, ":tt:%O,",
-                prefix, "format:@", save_location, ":tt:%x %X,",
-                prefix, "format:@", save_location, ":tt:%x,",
-                prefix, "format:@", save_location, ":tt:%X,",
-                prefix, "format:@", save_location, ":tt:%F %T,",
-                prefix, "format:@", save_location, ":tt:%F,",
-                prefix, "format:@", save_location, ":tt:%T,",
-                prefix, "format:@", save_location, ":tt:%d/%m/%Y %T,",
-                prefix, "format:@", save_location, ":tt:%d/%m/%Y,-,",
-                prefix, "format:@", save_location, ":tt:=>,",
-            prefix, "agesec:@", save_location, ":tt<",
-                prefix, "agesec:@", save_location, ":tt:1h,",
-                prefix, "agesec:@", save_location, ":tt:24h,",
-                prefix, "agesec:@", save_location, ":tt:48h,",
-                prefix, "agesec:@", save_location, ":tt:1w,-,",
-                prefix, "agesec:@", save_location, ":tt:=>,",
-            prefix, "format:@", save_location, ":agett<",
-                prefix, "format:@", save_location, ":agett:%o,",
-                prefix, "format:@", save_location, ":agett:%x %X,",
-                prefix, "format:@", save_location, ":agett:%x,",
-                prefix, "format:@", save_location, ":agett:%X,",
-                prefix, "format:@", save_location, ":agett:%F %T,",
-                prefix, "format:@", save_location, ":agett:%F,",
-                prefix, "format:@", save_location, ":agett:%T,",
-                prefix, "format:@", save_location, ":agett:%d/%m/%Y %T,",
-                prefix, "format:@", save_location, ":agett:%d/%m/%Y,-,",
-                prefix, "format:@", save_location, ":agett:=>,",
-            prefix, "prop:@", save_location, ":tt<",
-                prefix, "prop:@", save_location, ":tt:mtime,",
-                prefix, "prop:@", save_location, ":tt:atime,",
-                prefix, "prop:@", save_location, ":tt:ctime,-,",
-                prefix, "prop:@", save_location, ":tt:custom>",
+            prefix, "age_span_seconds:@", save_location, "<",
+                prefix, "age_span_seconds:@", save_location, ":1h,",
+                prefix, "age_span_seconds:@", save_location, ":24h,",
+                prefix, "age_span_seconds:@", save_location, ":48h,",
+                prefix, "age_span_seconds:@", save_location, ":1w,-,",
+                prefix, "age_span_seconds:@", save_location, ":=>,",
+            prefix, "age_fallback_format:@", save_location, "<",
+                prefix, "age_fallback_format:@", save_location, ":%o,",
+                prefix, "age_fallback_format:@", save_location, ":%x %X,",
+                prefix, "age_fallback_format:@", save_location, ":%x,",
+                prefix, "age_fallback_format:@", save_location, ":%X,",
+                prefix, "age_fallback_format:@", save_location, ":%F %T,",
+                prefix, "age_fallback_format:@", save_location, ":%F,",
+                prefix, "age_fallback_format:@", save_location, ":%T,",
+                prefix, "age_fallback_format:@", save_location, ":%d/%m/%Y %T,",
+                prefix, "age_fallback_format:@", save_location, ":%d/%m/%Y,-,",
+                prefix, "age_fallback_format:@", save_location, ":=>,",
+            prefix, "property:@", save_location, "<",
+                prefix, "property:@", save_location, ":mtime,",
+                prefix, "property:@", save_location, ":atime,",
+                prefix, "property:@", save_location, ":ctime,-,",
+                prefix, "property:@", save_location, ":custom>,-,",
+            prefix, "format_tooltip:@", save_location, "<",
+                prefix, "format_tooltip:@", save_location, ":%O,",
+                prefix, "format_tooltip:@", save_location, ":%x %X,",
+                prefix, "format_tooltip:@", save_location, ":%x,",
+                prefix, "format_tooltip:@", save_location, ":%X,",
+                prefix, "format_tooltip:@", save_location, ":%F %T,",
+                prefix, "format_tooltip:@", save_location, ":%F,",
+                prefix, "format_tooltip:@", save_location, ":%T,",
+                prefix, "format_tooltip:@", save_location, ":%d/%m/%Y %T,",
+                prefix, "format_tooltip:@", save_location, ":%d/%m/%Y,-,",
+                prefix, "format_tooltip:@", save_location, ":=>,",
+            prefix, "age_span_seconds_tooltip:@", save_location, "<",
+                prefix, "age_span_seconds_tooltip:@", save_location, ":1h,",
+                prefix, "age_span_seconds_tooltip:@", save_location, ":24h,",
+                prefix, "age_span_seconds_tooltip:@", save_location, ":48h,",
+                prefix, "age_span_seconds_tooltip:@", save_location, ":1w,-,",
+                prefix, "age_span_seconds_tooltip:@", save_location, ":=>,",
+            prefix, "age_fallback_format_tooltip:@", save_location, "<",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%o,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%x %X,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%x,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%X,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%F %T,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%F,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%T,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%d/%m/%Y %T,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":%d/%m/%Y,-,",
+                prefix, "age_fallback_format_tooltip:@", save_location, ":=>,",
+            prefix, "property_tooltip:@", save_location, "<",
+                prefix, "property_tooltip:@", save_location, ":mtime,",
+                prefix, "property_tooltip:@", save_location, ":atime,",
+                prefix, "property_tooltip:@", save_location, ":ctime,-,",
+                prefix, "property_tooltip:@", save_location, ":custom>",
             NULL);
 }
 
@@ -2142,67 +2142,36 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
 {
     struct tv_col_data *data = _data;
     gchar buf[10];
-    const gchar *option = NULL;
     const gchar *value;
     const gchar *ask_title;
     const gchar *ask_current;
     const gchar *save_location;
     gboolean quote_value = FALSE;
-    gboolean is_tt = FALSE;
-    guint which;
-    gchar *prop;
-    gchar *fmt;
 
     save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);
     if (!save_location)
         return FALSE;
 
-    if (streqn (extra, "tt", 2))
-    {
-        if (extra[2] == '\0')
-        {
-            is_tt = TRUE;
-            extra = NULL;
-        }
-        else if (extra[2] == ':')
-        {
-            is_tt = TRUE;
-            extra += 3;
-        }
-
-        which = data->which_tooltip;
-        prop  = data->property_tooltip;
-        fmt   = data->format_tooltip;
-    }
-    else
-    {
-        which = data->which;
-        prop  = data->property;
-        fmt   = data->format;
-    }
-
-    if (streq (item, "prop"))
+    if (streq (item, "property"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
-        option = (is_tt) ? "property_tooltip" : "property";
 
         if (!extra)
         {
-            if (is_tt)
-                info->name = "Tooltip: Node Property";
-            else
-                info->name = "Node Property";
-            info->submenus = 1;
-            option = NULL;
+            info->name = g_strconcat ("Node Property: ", data->property, NULL);
+            info->free_name = TRUE;
+            value = NULL;
+            ask_title = "Enter the name of the property";
+            ask_current = data->property;
         }
         else if (streq (extra, "mtime"))
         {
             info->name = "Modified Time";
             info->desc = "mtime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = which == WHICH_MTIME;
+            info->is_active = data->which == WHICH_MTIME;
             value = "mtime";
         }
         else if (streq (extra, "atime"))
@@ -2210,7 +2179,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Accessed Time";
             info->desc = "atime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = which == WHICH_ATIME;
+            info->is_active = data->which == WHICH_ATIME;
             value = "atime";
         }
         else if (streq (extra, "ctime"))
@@ -2218,26 +2187,90 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Status Change Time";
             info->desc = "ctime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = which == WHICH_CTIME;
+            info->is_active = data->which == WHICH_CTIME;
             value = "ctime";
         }
         else if (streq (extra, "custom"))
         {
-            if (which == WHICH_MTIME)
+            if (data->which == WHICH_MTIME)
                 info->name = "Custom: mtime";
-            else if (which == WHICH_ATIME)
+            else if (data->which == WHICH_ATIME)
                 info->name = "Custom: atime";
-            else if (which == WHICH_CTIME)
+            else if (data->which == WHICH_CTIME)
                 info->name = "Custom: ctime";
             else /* WHICH_OTHER */
             {
-                info->name = g_strconcat ("Custom: ", prop, NULL);
+                info->name = g_strconcat ("Custom: ", data->property, NULL);
                 info->free_name = TRUE;
             }
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             value = NULL;
             ask_title = "Enter the name of the property";
-            ask_current = prop;
+            ask_current = data->property;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "ColumnType 'time': Invalid extra '%s' for item '%s'",
+                    extra, item);
+            return FALSE;
+        }
+    }
+    else if (streq (item, "property_tooltip"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+
+        if (!extra)
+        {
+            info->name = g_strconcat ("Tooltip: Node Property: ",
+                    data->property_tooltip, NULL);
+            value = NULL;
+            ask_title = "Enter the name of the property";
+            ask_current = data->property_tooltip;
+        }
+        else if (streq (extra, "mtime"))
+        {
+            info->name = "Modified Time";
+            info->desc = "mtime";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->which == WHICH_MTIME;
+            value = "mtime";
+        }
+        else if (streq (extra, "atime"))
+        {
+            info->name = "Accessed Time";
+            info->desc = "atime";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->which == WHICH_ATIME;
+            value = "atime";
+        }
+        else if (streq (extra, "ctime"))
+        {
+            info->name = "Status Change Time";
+            info->desc = "ctime";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->which == WHICH_CTIME;
+            value = "ctime";
+        }
+        else if (streq (extra, "custom"))
+        {
+            if (data->which == WHICH_MTIME)
+                info->name = "Custom: mtime";
+            else if (data->which == WHICH_ATIME)
+                info->name = "Custom: atime";
+            else if (data->which == WHICH_CTIME)
+                info->name = "Custom: ctime";
+            else /* WHICH_OTHER */
+            {
+                info->name = g_strconcat ("Custom: ", data->property_tooltip, NULL);
+                info->free_name = TRUE;
+            }
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            value = NULL;
+            ask_title = "Enter the name of the property";
+            ask_current = data->property_tooltip;
         }
         else
         {
@@ -2250,65 +2283,21 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     }
     else if (streq (item, "format"))
     {
-        gchar *title;
         gchar *s;
         guint64 now = time (NULL);
-
-        if (is_tt)
-        {
-            title = "Tooltip: ";
-            option = "format_tooltip";
-            ask_title = "Enter the format for the tooltip";
-        }
-        else if (streqn (extra, "agett", 5))
-        {
-            if (extra[5] == '\0')
-            {
-                is_tt = TRUE;
-                extra = NULL;
-            }
-            else if (extra[5] == ':')
-            {
-                is_tt = TRUE;
-                extra += 6;
-            }
-
-            title = "Tooltip Fallback: ";
-            option = "age_fallback_format_tooltip";
-            ask_title = "Enter the fallback format for the tooltip";
-            fmt = (gchar *) data->options_tooltip.age_fallback_format;
-        }
-        else if (streqn (extra, "age", 3))
-        {
-            if (extra[3] == '\0')
-                extra = NULL;
-            else if (extra[3] == ':')
-                extra += 4;
-
-            title = "Fallback: ";
-            option = "age_fallback_format";
-            ask_title = "Enter the fallback format for the column";
-            fmt = (gchar *) data->options.age_fallback_format;
-        }
-        else
-        {
-            title = "Column: ";
-            option = "format";
-            ask_title = "Enter the format for the column";
-        }
 
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         if (!extra)
         {
-            s = donna_print_time (now, fmt,
-                    (is_tt) ? &data->options_tooltip : &data->options);
-            info->name = g_strconcat (title, s, NULL);
+            s = donna_print_time (now, data->format, &data->options);
+            info->name = g_strconcat ("Column: ", s, NULL);
             info->free_name = TRUE;
-            info->desc = g_strconcat ("Format: ", fmt, NULL);
+            info->desc = g_strconcat ("Format: ", data->format, NULL);
             info->free_desc = TRUE;
             value = NULL;
-            ask_current = fmt;
+            ask_title = "Enter the format for the column";
+            ask_current = data->format;
             g_free (s);
         }
         else if (*extra == '=')
@@ -2320,19 +2309,19 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                 info->name = g_strdup (extra + 1);
                 info->free_name = TRUE;
             }
-            info->desc = g_strconcat ("Current format: ", fmt, NULL);
+            info->desc = g_strconcat ("Current format: ", data->format, NULL);
             info->free_desc = TRUE;
             value = NULL;
-            ask_current = fmt;
+            ask_title = "Enter the format for the column";
+            ask_current = data->format;
         }
         else
         {
             if (*extra == ':')
                 ++extra;
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = streq (extra, fmt);
-            s = donna_print_time (now, extra,
-                    (is_tt) ? &data->options_tooltip : &data->options);
+            info->is_active = streq (extra, data->format);
+            s = donna_print_time (now, extra, &data->options);
             info->name = s;
             info->free_name = TRUE;
             info->desc = g_strconcat ("Format: ", extra, NULL);
@@ -2341,30 +2330,169 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             quote_value = TRUE;
         }
     }
-    else if (streq (item, "agesec"))
+    else if (streq (item, "format_tooltip"))
+    {
+        gchar *s;
+        guint64 now = time (NULL);
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            s = donna_print_time (now, data->format_tooltip, &data->options_tooltip);
+            info->name = g_strconcat ("Tooltip: ", s, NULL);
+            g_free (s);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", data->format_tooltip, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the format for the tooltip";
+            ask_current = data->format_tooltip;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current format: ", data->format_tooltip, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the format for the tooltip";
+            ask_current = data->format_tooltip;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->format_tooltip);
+            info->name = donna_print_time (now, extra, &data->options_tooltip);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "age_fallback_format"))
+    {
+        gchar *s;
+        guint64 now = time (NULL);
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            s = donna_print_time (now, data->options.age_fallback_format,
+                    &data->options);
+            info->name = g_strconcat ("Fallback: ", s, NULL);
+            g_free (s);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ",
+                    data->options.age_fallback_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fallback format for the column";
+            ask_current = data->options.age_fallback_format;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current format: ",
+                    data->options.age_fallback_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fallback format for the column";
+            ask_current = data->options.age_fallback_format;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->options.age_fallback_format);
+            info->name = donna_print_time (now, extra, &data->options);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "age_fallback_format_tooltip"))
+    {
+        gchar *s;
+        guint64 now = time (NULL);
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            s = donna_print_time (now, data->options_tooltip.age_fallback_format,
+                    &data->options_tooltip);
+            info->name = g_strconcat ("Tooltip Fallback: ", s, NULL);
+            g_free (s);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ",
+                    data->options_tooltip.age_fallback_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fallback format for the tooltip";
+            ask_current = data->options_tooltip.age_fallback_format;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current format: ",
+                    data->options_tooltip.age_fallback_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fallback format for the tooltip";
+            ask_current = data->options_tooltip.age_fallback_format;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->options_tooltip.age_fallback_format);
+            info->name = donna_print_time (now, extra, &data->options_tooltip);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "age_span_seconds"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         if (!extra)
         {
-            if (is_tt)
-            {
-                info->name = g_strdup_printf ("Tooltip: Age fallback after: %d seconds",
-                        data->options_tooltip.age_span_seconds);
-                option = "age_span_seconds_tooltip";
-                snprintf (buf, 10, "%d", data->options_tooltip.age_span_seconds);
-                ask_title = "Age fallback after how many seconds ? (toolip)";
-            }
-            else
-            {
-                info->name = g_strdup_printf ("Age fallback after: %d seconds",
-                        data->options.age_span_seconds);
-                option = "age_span_seconds";
-                snprintf (buf, 10, "%d", data->options.age_span_seconds);
-                ask_title = "Age fallback after how many seconds ?";
-            }
+            info->name = g_strdup_printf ("Age fallback after: %d seconds",
+                    data->options.age_span_seconds);
             info->free_name = TRUE;
-            value = buf;
+            value = NULL;
+            ask_title = "Age fallback after how many seconds ?";
+            snprintf (buf, 10, "%d", data->options.age_span_seconds);
+            ask_current = buf;
         }
         else if (*extra == '=')
         {
@@ -2377,32 +2505,15 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                 info->free_name = TRUE;
             }
 
-            if (is_tt)
-            {
-                option = "age_span_seconds_tooltip";
-                snprintf (buf, 10, "%d", data->options_tooltip.age_span_seconds);
-                ask_title = "Age fallback after how many seconds ? (toolip)";
-            }
-            else
-            {
-                option = "age_span_seconds";
-                snprintf (buf, 10, "%d", data->options.age_span_seconds);
-                ask_title = "Age fallback after how many seconds ?";
-            }
+            value = NULL;
+            ask_title = "Age fallback after how many seconds ?";
+            snprintf (buf, 10, "%d", data->options.age_span_seconds);
+            ask_current = buf;
         }
         else if (streq (extra, "1h"))
         {
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            if (is_tt)
-            {
-                info->is_active = data->options_tooltip.age_span_seconds == 3600;
-                option = "age_span_seconds_tooltip";
-            }
-            else
-            {
-                info->is_active = data->options.age_span_seconds == 3600;
-                option = "age_span_seconds";
-            }
+            info->is_active = data->options.age_span_seconds == 3600;
             info->name = g_strdup (extra);
             info->free_name = TRUE;
             value = "3600";
@@ -2410,16 +2521,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
         else if (streq (extra, "24h"))
         {
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            if (is_tt)
-            {
-                info->is_active = data->options_tooltip.age_span_seconds == 86400;
-                option = "age_span_seconds_tooltip";
-            }
-            else
-            {
-                info->is_active = data->options.age_span_seconds == 86400;
-                option = "age_span_seconds";
-            }
+            info->is_active = data->options.age_span_seconds == 86400;
             info->name = g_strdup (extra);
             info->free_name = TRUE;
             value = "86400";
@@ -2427,16 +2529,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
         else if (streq (extra, "48h"))
         {
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            if (is_tt)
-            {
-                info->is_active = data->options_tooltip.age_span_seconds == 172800;
-                option = "age_span_seconds_tooltip";
-            }
-            else
-            {
-                info->is_active = data->options.age_span_seconds == 172800;
-                option = "age_span_seconds";
-            }
+            info->is_active = data->options.age_span_seconds == 172800;
             info->name = g_strdup (extra);
             info->free_name = TRUE;
             value = "172800";
@@ -2444,16 +2537,78 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
         else if (streq (extra, "1w"))
         {
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            if (is_tt)
-            {
-                info->is_active = data->options_tooltip.age_span_seconds == 604800;
-                option = "age_span_seconds_tooltip";
-            }
+            info->is_active = data->options.age_span_seconds == 604800;
+            info->name = g_strdup (extra);
+            info->free_name = TRUE;
+            value = "604800";
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "ColumnType 'time': Invalid extra '%s' for item '%s'",
+                    extra, item);
+            return FALSE;
+        }
+    }
+    else if (streq (item, "age_span_seconds_tooltip"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            info->name = g_strdup_printf ("Tooltip: Age fallback after: %d seconds",
+                    data->options_tooltip.age_span_seconds);
+            info->free_name = TRUE;
+            value = NULL;
+            ask_title = "Age fallback after how many seconds ? (toolip)";
+            snprintf (buf, 10, "%d", data->options_tooltip.age_span_seconds);
+            ask_current = buf;
+        }
+        else if (*extra == '=')
+        {
+            ++extra;
+            if (*extra == '\0')
+                info->name = "Custom...";
             else
             {
-                info->is_active = data->options.age_span_seconds == 604800;
-                option = "age_span_seconds";
+                info->name = g_strdup (extra);
+                info->free_name = TRUE;
             }
+
+            value = NULL;
+            ask_title = "Age fallback after how many seconds ? (toolip)";
+            snprintf (buf, 10, "%d", data->options_tooltip.age_span_seconds);
+            ask_current = buf;
+        }
+        else if (streq (extra, "1h"))
+        {
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->options_tooltip.age_span_seconds == 3600;
+            info->name = g_strdup (extra);
+            info->free_name = TRUE;
+            value = "3600";
+        }
+        else if (streq (extra, "24h"))
+        {
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->options_tooltip.age_span_seconds == 86400;
+            info->name = g_strdup (extra);
+            info->free_name = TRUE;
+            value = "86400";
+        }
+        else if (streq (extra, "48h"))
+        {
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->options_tooltip.age_span_seconds == 172800;
+            info->name = g_strdup (extra);
+            info->free_name = TRUE;
+            value = "172800";
+        }
+        else if (streq (extra, "1w"))
+        {
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = data->options_tooltip.age_span_seconds == 604800;
             info->name = g_strdup (extra);
             info->free_name = TRUE;
             value = "604800";
@@ -2476,33 +2631,10 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (option)
-    {
-        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
-        g_string_append (str, option);
-        g_string_append_c (str, ',');
-        if (quote_value)
-            donna_g_string_append_quoted (str, value, TRUE);
-        else if (value)
-            g_string_append (str, value);
-        else
-        {
-            g_string_append (str, "@ask_text(");
-            g_string_append (str, ask_title);
-            g_string_append_c (str, ',');
-            g_string_append_c (str, ',');
-            donna_g_string_append_quoted (str, ask_current, TRUE);
-            g_string_append_c (str, ')');
-        }
-        if (*save_location != '\0')
-        {
-            g_string_append_c (str, ',');
-            g_string_append (str, save_location);
-        }
-        g_string_append_c (str, ')');
-        info->trigger = g_string_free (str, FALSE);
-        info->free_trigger = TRUE;
-    }
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item, value, quote_value,
+                ask_title, NULL, ask_current, save_location);
+    info->free_trigger = TRUE;
 
     return TRUE;
 }

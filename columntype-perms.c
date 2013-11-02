@@ -183,7 +183,7 @@ static DonnaColumnTypeNeed ct_perms_set_option      (DonnaColumnType    *ct,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_perms_get_context_alias  (DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *alias,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -194,7 +194,7 @@ static gchar *          ct_perms_get_context_alias  (DonnaColumnType   *ct,
                                                      GError           **error);
 static gboolean         ct_perms_get_context_item_info (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *item,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -2603,33 +2603,33 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
                 prefix, "format:@", save_location, ":%G,",
                 prefix, "format:@", save_location, ":%H,-,",
                 prefix, "format:@", save_location, ":=>,",
-            prefix, "format:@", save_location, ":tt<",
-                prefix, "format:@", save_location, ":tt:%S %V:%H,",
-                prefix, "format:@", save_location, ":tt:%p %V:%H,",
-                prefix, "format:@", save_location, ":tt:%S,",
-                prefix, "format:@", save_location, ":tt:%p,",
-                prefix, "format:@", save_location, ":tt:%o,",
-                prefix, "format:@", save_location, ":tt:%V:%H,",
-                prefix, "format:@", save_location, ":tt:%U:%G,",
-                prefix, "format:@", save_location, ":tt:%U,",
-                prefix, "format:@", save_location, ":tt:%V,",
-                prefix, "format:@", save_location, ":tt:%G,",
-                prefix, "format:@", save_location, ":tt:%H,-,",
-                prefix, "format:@", save_location, ":tt=>,",
-            prefix, "color:@", save_location, ":user<",
-                prefix, "color:@", save_location, ":user:blue,",
-                prefix, "color:@", save_location, ":user:green,",
-                prefix, "color:@", save_location, ":user:red,-,",
-                prefix, "color:@", save_location, ":user=>,",
-            prefix, "color:@", save_location, ":group<",
-                prefix, "color:@", save_location, ":group:blue,",
-                prefix, "color:@", save_location, ":group:green,",
-                prefix, "color:@", save_location, ":group:red,-,",
-                prefix, "color:@", save_location, ":group=>,",
-            prefix, "color:@", save_location, ":mixed<",
-                prefix, "color:@", save_location, ":mixed:#00aaaa,",
-                prefix, "color:@", save_location, ":mixed:orange,-,",
-                prefix, "color:@", save_location, ":mixed=>,-,",
+            prefix, "format_tooltip:@", save_location, "<",
+                prefix, "format_tooltip:@", save_location, ":%S %V:%H,",
+                prefix, "format_tooltip:@", save_location, ":%p %V:%H,",
+                prefix, "format_tooltip:@", save_location, ":%S,",
+                prefix, "format_tooltip:@", save_location, ":%p,",
+                prefix, "format_tooltip:@", save_location, ":%o,",
+                prefix, "format_tooltip:@", save_location, ":%V:%H,",
+                prefix, "format_tooltip:@", save_location, ":%U:%G,",
+                prefix, "format_tooltip:@", save_location, ":%U,",
+                prefix, "format_tooltip:@", save_location, ":%V,",
+                prefix, "format_tooltip:@", save_location, ":%G,",
+                prefix, "format_tooltip:@", save_location, ":%H,-,",
+                prefix, "format_tooltip:@", save_location, ":=>,",
+            prefix, "color_user:@", save_location, "<",
+                prefix, "color_user:@", save_location, ":blue,",
+                prefix, "color_user:@", save_location, ":green,",
+                prefix, "color_user:@", save_location, ":red,-,",
+                prefix, "color_user:@", save_location, ":=>,",
+            prefix, "color_group:@", save_location, "<",
+                prefix, "color_group:@", save_location, ":blue,",
+                prefix, "color_group:@", save_location, ":green,",
+                prefix, "color_group:@", save_location, ":red,-,",
+                prefix, "color_group:@", save_location, ":=>,",
+            prefix, "color_mixed:@", save_location, "<",
+                prefix, "color_mixed:@", save_location, ":#00aaaa,",
+                prefix, "color_mixed:@", save_location, ":orange,-,",
+                prefix, "color_mixed:@", save_location, ":=>,-,",
             prefix, "sort:@", save_location, "<",
                 prefix, "sort:@", save_location, ":perms,",
                 prefix, "sort:@", save_location, ":myperms,",
@@ -2676,7 +2676,6 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
 {
     DonnaColumnTypePermsPrivate *priv = ((DonnaColumnTypePerms *) ct)->priv;
     struct tv_col_data *data = _data;
-    const gchar *option = NULL;
     const gchar *value;
     const gchar *ask_title;
     const gchar *ask_current;
@@ -2706,7 +2705,6 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->new_node_fn = (context_new_node_fn) node_add_prop;
             info->desc = g_strconcat ("Format: ", data->format, NULL);
             info->free_desc = TRUE;
-            option = "format";
             value = NULL;
             ask_title = "Enter the format for the column";
             ask_current = data->format;
@@ -2724,75 +2722,9 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             }
             info->desc = g_strconcat ("Current format: ", data->format, NULL);
             info->free_desc = TRUE;
-            option = "format";
             value = NULL;
             ask_title = "Enter the format for the column";
             ask_current = data->format;
-        }
-        else if (streqn (extra, "tt", 2))
-        {
-            if (extra[2] == '\0')
-            {
-                if (data->format_tooltip)
-                    b = format_perms ((DonnaColumnTypePerms *) ct, data,
-                            data->format_tooltip, mode, uid, gid, b, 20);
-                else
-                    sprintf (b, "&lt;no tooltip&gt;");
-                info->name = g_strconcat ("Tooltip: ", b, NULL);
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                info->desc = g_strconcat ("Format: ", data->format_tooltip, NULL);
-                info->free_desc = TRUE;
-                option = "format_tooltip";
-                value = NULL;
-                ask_title = "Enter the format for the tooltip";
-                ask_current = data->format_tooltip;
-                if (b != buf)
-                    g_free (b);
-            }
-            else if (extra[2] == '=')
-            {
-                if (extra[3] == '\0')
-                    info->name = "Custom...";
-                else
-                {
-                    info->name = g_strdup (extra + 3);
-                    info->free_name = TRUE;
-                }
-                info->desc = g_strconcat ("Current format: ", data->format_tooltip, NULL);
-                info->free_desc = TRUE;
-                option = "format_tooltip";
-                value = NULL;
-                ask_title = "Enter the format for the tooltip";
-                ask_current = data->format_tooltip;
-            }
-            else if (extra[2] == ':')
-            {
-                extra += 3;
-                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-                info->is_active = streq (extra, data->format_tooltip);
-                b = format_perms ((DonnaColumnTypePerms *) ct, data, extra,
-                        mode, uid, gid, b, 20);
-                if (b == buf)
-                    info->name = g_strdup (b);
-                else
-                    info->name = b;
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                info->desc = g_strconcat ("Format: ", extra, NULL);
-                info->free_desc = TRUE;
-                option = "format_tooltip";
-                value = extra;
-                quote_value = TRUE;
-            }
-            else
-            {
-                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                        DONNA_CONTEXT_MENU_ERROR_OTHER,
-                        "ColumnType 'perms': Invalid extra '%s' for item 'format'",
-                        extra);
-                return FALSE;
-            }
         }
         else
         {
@@ -2810,162 +2742,200 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->new_node_fn = (context_new_node_fn) node_add_prop;
             info->desc = g_strconcat ("Format: ", extra, NULL);
             info->free_desc = TRUE;
-            option = "format";
             value = extra;
             quote_value = TRUE;
         }
     }
-    else if (streq (item, "color"))
+    else if (streq (item, "format_tooltip"))
     {
+        gchar buf[20], *b = buf;
+        mode_t mode = 0640;
+        uid_t uid = priv->user_id;
+        gid_t gid = getgid ();
+
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
-        if (streqn (extra, "user", 4))
+
+        if (!extra)
         {
-            option = "color_user";
-            if (extra[4] == '\0')
-            {
-                info->name = g_markup_printf_escaped ("User Color: "
-                        "<span color=\"%s\">%s</span>",
-                        data->color_user, data->color_user);
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                value = NULL;
-                ask_title = "Enter the color for the current user";
-                ask_current = data->color_user;
-            }
-            else if (extra[4] == ':')
-            {
-                extra += 5;
-                info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
-                        extra, extra);
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                value = extra;
-            }
-            else if (extra[4] == '=')
-            {
-                if (extra[5] == '\0')
-                    info->name = "Custom...";
-                else
-                {
-                    info->name = g_strdup (extra + 5);
-                    info->free_name = TRUE;
-                }
-                info->desc = g_strconcat ("Current color: ", data->color_user, NULL);
-                info->free_desc = TRUE;
-                value = NULL;
-                ask_title = "Enter the color for the current user";
-                ask_current = data->color_user;
-            }
+            if (data->format_tooltip)
+                b = format_perms ((DonnaColumnTypePerms *) ct, data,
+                        data->format_tooltip, mode, uid, gid, b, 20);
             else
-            {
-                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                        DONNA_CONTEXT_MENU_ERROR_OTHER,
-                        "ColumnType 'perms': Invalid extra '%s' for item 'color'",
-                        extra);
-                return FALSE;
-            }
+                sprintf (b, "&lt;no tooltip&gt;");
+            info->name = g_strconcat ("Tooltip: ", b, NULL);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            info->desc = g_strconcat ("Format: ", data->format_tooltip, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the format for the tooltip";
+            ask_current = data->format_tooltip;
+            if (b != buf)
+                g_free (b);
         }
-        else if (streqn (extra, "group", 5))
+        else if (*extra == '=')
         {
-            option = "color_group";
-            if (extra[5] == '\0')
-            {
-                info->name = g_markup_printf_escaped ("Group Color: "
-                        "<span color=\"%s\">%s</span>",
-                        data->color_group, data->color_group);
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                value = NULL;
-                ask_title = "Enter the color for a current group";
-                ask_current = data->color_group;
-            }
-            else if (extra[5] == ':')
-            {
-                extra += 6;
-                info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
-                        extra, extra);
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                value = extra;
-            }
-            else if (extra[5] == '=')
-            {
-                if (extra[6] == '\0')
-                    info->name = "Custom...";
-                else
-                {
-                    info->name = g_strdup (extra + 6);
-                    info->free_name = TRUE;
-                }
-                info->desc = g_strconcat ("Current color: ", data->color_group, NULL);
-                info->free_desc = TRUE;
-                value = NULL;
-                ask_title = "Enter the color for a current group";
-                ask_current = data->color_group;
-            }
+            if (extra[1] == '\0')
+                info->name = "Custom...";
             else
             {
-                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                        DONNA_CONTEXT_MENU_ERROR_OTHER,
-                        "ColumnType 'perms': Invalid extra '%s' for item 'color'",
-                        extra);
-                return FALSE;
-            }
-        }
-        else if (streqn (extra, "mixed", 5))
-        {
-            option = "color_mixed";
-            if (extra[5] == '\0')
-            {
-                info->name = g_markup_printf_escaped ("Mixed Color: "
-                        "<span color=\"%s\">%s</span>",
-                        data->color_mixed, data->color_mixed);
+                info->name = g_strdup (extra + 1);
                 info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                value = NULL;
-                ask_title = "Enter the color for mixed user & group";
-                ask_current = data->color_mixed;
             }
-            else if (extra[5] == ':')
-            {
-                extra += 6;
-                info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
-                        extra, extra);
-                info->free_name = TRUE;
-                info->new_node_fn = (context_new_node_fn) node_add_prop;
-                value = extra;
-            }
-            else if (extra[5] == '=')
-            {
-                if (extra[6] == '\0')
-                    info->name = "Custom...";
-                else
-                {
-                    info->name = g_strdup (extra + 6);
-                    info->free_name = TRUE;
-                }
-                info->desc = g_strconcat ("Current color: ", data->color_mixed, NULL);
-                info->free_desc = TRUE;
-                value = NULL;
-                ask_title = "Enter the color for mixed user & group";
-                ask_current = data->color_mixed;
-            }
-            else
-            {
-                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                        DONNA_CONTEXT_MENU_ERROR_OTHER,
-                        "ColumnType 'perms': Invalid extra '%s' for item 'color'",
-                        extra);
-                return FALSE;
-            }
+            info->desc = g_strconcat ("Current format: ", data->format_tooltip, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the format for the tooltip";
+            ask_current = data->format_tooltip;
         }
         else
         {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "ColumnType 'perms': Missing extra for item 'color'");
-            return FALSE;
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->format_tooltip);
+            b = format_perms ((DonnaColumnTypePerms *) ct, data, extra,
+                    mode, uid, gid, b, 20);
+            if (b == buf)
+                info->name = g_strdup (b);
+            else
+                info->name = b;
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "color_user"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            info->name = g_markup_printf_escaped ("User Color: "
+                    "<span color=\"%s\">%s</span>",
+                    data->color_user, data->color_user);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            value = NULL;
+            ask_title = "Enter the color for the current user";
+            ask_current = data->color_user;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current color: ", data->color_user, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the color for the current user";
+            ask_current = data->color_user;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->color_user);
+            info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
+                    extra, extra);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            value = extra;
+        }
+    }
+    else if (streq (item, "color_group"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            info->name = g_markup_printf_escaped ("Group Color: "
+                    "<span color=\"%s\">%s</span>",
+                    data->color_group, data->color_group);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            value = NULL;
+            ask_title = "Enter the color for a current group";
+            ask_current = data->color_group;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current color: ", data->color_group, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the color for a current group";
+            ask_current = data->color_group;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->color_group);
+            info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
+                    extra, extra);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            value = extra;
+        }
+    }
+    else if (streq (item, "color_mixed"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            info->name = g_markup_printf_escaped ("Mixed Color: "
+                    "<span color=\"%s\">%s</span>",
+                    data->color_mixed, data->color_mixed);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            value = NULL;
+            ask_title = "Enter the color for mixed user & group";
+            ask_current = data->color_mixed;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current color: ", data->color_mixed, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the color for mixed user & group";
+            ask_current = data->color_mixed;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->color_mixed);
+            info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
+                    extra, extra);
+            info->free_name = TRUE;
+            info->new_node_fn = (context_new_node_fn) node_add_prop;
+            value = extra;
         }
     }
     else if (streq (item, "sort"))
@@ -2976,13 +2946,13 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
         {
             info->name = "Sorting Criteria";
             info->submenus = 1;
+            return TRUE;
         }
         else if (streq (extra, "perms"))
         {
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             info->is_active = data->sort == SORT_PERMS;
             info->name = "Permissions";
-            option = "sort";
             value = extra;
         }
         else if (streq (extra, "myperms"))
@@ -2990,7 +2960,6 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             info->is_active = data->sort == SORT_MY_PERMS;
             info->name = "Own Permissions";
-            option = "sort";
             value = extra;
         }
         else if (streq (extra, "uid"))
@@ -2998,7 +2967,6 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             info->is_active = data->sort == SORT_USER_ID;
             info->name = "User ID";
-            option = "sort";
             value = extra;
         }
         else if (streq (extra, "user"))
@@ -3006,7 +2974,6 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             info->is_active = data->sort == SORT_USER_NAME;
             info->name = "User Name";
-            option = "sort";
             value = extra;
         }
         else if (streq (extra, "gid"))
@@ -3014,7 +2981,6 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             info->is_active = data->sort == SORT_GROUP_ID;
             info->name = "Group ID";
-            option = "sort";
             value = extra;
         }
         else if (streq (extra, "group"))
@@ -3022,15 +2988,14 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
             info->is_active = data->sort == SORT_GROUP_NAME;
             info->name = "Group Name";
-            option = "sort";
             value = extra;
         }
         else
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "ColumnType 'perms': Invalid extra '%s' for item 'sort'",
-                    extra);
+                    "ColumnType 'perms': Invalid extra '%s' for item '%s'",
+                    extra, item);
             return FALSE;
         }
     }
@@ -3043,36 +3008,10 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (option)
-    {
-        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
-        g_string_append (str, option);
-        g_string_append_c (str, ',');
-        if (quote_value)
-            donna_g_string_append_quoted (str, value, TRUE);
-        else if (value)
-            g_string_append (str, value);
-        else
-        {
-            g_string_append (str, "@ask_text(");
-            g_string_append (str, ask_title);
-            if (ask_current)
-            {
-                g_string_append_c (str, ',');
-                g_string_append_c (str, ',');
-                donna_g_string_append_quoted (str, ask_current, TRUE);
-            }
-            g_string_append_c (str, ')');
-        }
-        if (*save_location != '\0')
-        {
-            g_string_append_c (str, ',');
-            g_string_append (str, save_location);
-        }
-        g_string_append_c (str, ')');
-        info->trigger = g_string_free (str, FALSE);
-        info->free_trigger = TRUE;
-    }
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item, value, quote_value,
+                ask_title, NULL, ask_current, save_location);
+    info->free_trigger = TRUE;
 
     return TRUE;
 }

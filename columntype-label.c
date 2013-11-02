@@ -78,7 +78,7 @@ static DonnaColumnTypeNeed ct_label_set_option      (DonnaColumnType    *ct,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_label_get_context_alias  (DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *alias,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -89,7 +89,7 @@ static gchar *          ct_label_get_context_alias  (DonnaColumnType   *ct,
                                                      GError           **error);
 static gboolean         ct_label_get_context_item_info (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *item,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -520,7 +520,7 @@ ct_label_get_context_alias (DonnaColumnType   *ct,
     }
 
     return g_strconcat (
-            prefix, "prop:@", save_location, ",",
+            prefix, "property:@", save_location, ",",
             prefix, "labels:@", save_location,
             NULL);
 }
@@ -538,7 +538,6 @@ ct_label_get_context_item_info (DonnaColumnType   *ct,
                                 GError           **error)
 {
     struct tv_col_data *data = _data;
-    const gchar *option = NULL;
     const gchar *title;
     const gchar *current;
     const gchar *save_location;
@@ -548,13 +547,12 @@ ct_label_get_context_item_info (DonnaColumnType   *ct,
     if (!save_location)
         return FALSE;
 
-    if (streq (item, "prop"))
+    if (streq (item, "property"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         info->name = g_strdup_printf ("Node Property: %s", data->property);
         info->free_name = TRUE;
-        option = "property";
         title = "Enter the name of the property";
         current = data->property;
     }
@@ -569,7 +567,6 @@ ct_label_get_context_item_info (DonnaColumnType   *ct,
         info->free_name = TRUE;
         info->desc = g_strdup_printf ("Labels: %s", data->labels);
         info->free_desc = TRUE;
-        option = "labels";
         title = "Enter the labels definition";
         current = data->labels;
     }
@@ -582,25 +579,10 @@ ct_label_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (option)
-    {
-        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
-        g_string_append (str, option);
-        g_string_append (str, ", @ask_text(");
-        g_string_append (str, title);
-        g_string_append_c (str, ',');
-        g_string_append_c (str, ',');
-        donna_g_string_append_quoted (str, current, TRUE);
-        g_string_append_c (str, ')');
-        if (*save_location != '\0')
-        {
-            g_string_append_c (str, ',');
-            g_string_append (str, save_location);
-        }
-        g_string_append_c (str, ')');
-        info->trigger = g_string_free (str, FALSE);
-        info->free_trigger = TRUE;
-    }
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item, NULL, FALSE,
+                title, NULL, current, save_location);
+    info->free_trigger = TRUE;
 
     return TRUE;
 }

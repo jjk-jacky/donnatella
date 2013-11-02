@@ -93,7 +93,7 @@ static DonnaColumnTypeNeed ct_value_set_option      (DonnaColumnType    *ct,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_value_get_context_alias  (DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *alias,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -104,7 +104,7 @@ static gchar *          ct_value_get_context_alias  (DonnaColumnType   *ct,
                                                      GError           **error);
 static gboolean         ct_value_get_context_item_info (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *item,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -1347,8 +1347,8 @@ ct_value_get_context_alias (DonnaColumnType   *ct,
     }
 
     return g_strconcat (
-            prefix, "prop_value:@", save_location, ",",
-            prefix, "prop_extra:@", save_location, ",",
+            prefix, "property_value:@", save_location, ",",
+            prefix, "property_extra:@", save_location, ",",
             prefix, "show_type:@", save_location,
             NULL);
 }
@@ -1366,9 +1366,8 @@ ct_value_get_context_item_info (DonnaColumnType   *ct,
                                 GError           **error)
 {
     struct tv_col_data *data = _data;
-    const gchar *option = NULL;
     const gchar *value;
-    const gchar *ask_title= NULL;
+    const gchar *ask_title;
     const gchar *ask_current;
     const gchar *save_location;
 
@@ -1377,24 +1376,22 @@ ct_value_get_context_item_info (DonnaColumnType   *ct,
     if (!save_location)
         return FALSE;
 
-    if (streq (item, "prop_value"))
+    if (streq (item, "property_value"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         info->name = g_strconcat ("Property Value: ", data->prop_value, NULL);
         info->free_name = TRUE;
-        option = "property_value";
         value = NULL;
         ask_title = "Enter the name of the property holding the value";
         ask_current = data->prop_value;
     }
-    else if (streq (item, "prop_extra"))
+    else if (streq (item, "property_extra"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         info->name = g_strconcat ("Property Extra: ", data->prop_extra, NULL);
         info->free_name = TRUE;
-        option = "property_extra";
         value = NULL;
         ask_title = "Enter the name of the property holding the extra name";
         ask_current = data->prop_extra;
@@ -1403,10 +1400,9 @@ ct_value_get_context_item_info (DonnaColumnType   *ct,
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
+        info->name = "Show the type (instead of the value)";
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = data->show_type;
-        info->name = "Show the type (instead of the value)";
-        option = "show_type";
         value = (info->is_active) ? "0" : "1";
     }
     else
@@ -1418,31 +1414,10 @@ ct_value_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (option)
-    {
-        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
-        g_string_append (str, option);
-        g_string_append_c (str, ',');
-        if (value)
-            g_string_append (str, value);
-        else
-        {
-            g_string_append (str, "@ask_text(");
-            g_string_append (str, ask_title);
-            g_string_append_c (str, ',');
-            g_string_append_c (str, ',');
-            g_string_append (str, ask_current);
-            g_string_append_c (str, ')');
-        }
-        if (*save_location != '\0')
-        {
-            g_string_append_c (str, ',');
-            g_string_append (str, save_location);
-        }
-        g_string_append_c (str, ')');
-        info->trigger = g_string_free (str, FALSE);
-        info->free_trigger = TRUE;
-    }
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item, value, FALSE,
+                ask_title, NULL, ask_current, save_location);
+    info->free_trigger = TRUE;
 
     return TRUE;
 }

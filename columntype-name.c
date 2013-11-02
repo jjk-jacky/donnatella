@@ -110,7 +110,7 @@ static DonnaColumnTypeNeed ct_name_set_option       (DonnaColumnType    *ct,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_name_get_context_alias   (DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *alias,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -121,7 +121,7 @@ static gchar *          ct_name_get_context_alias   (DonnaColumnType   *ct,
                                                      GError           **error);
 static gboolean         ct_name_get_context_item_info (
                                                      DonnaColumnType   *ct,
-                                                     gpointer            data,
+                                                     gpointer           data,
                                                      const gchar       *item,
                                                      const gchar       *extra,
                                                      DonnaContextReference reference,
@@ -987,7 +987,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
                                GError           **error)
 {
     struct tv_col_data *data = _data;
-    const gchar *option = NULL;
     const gchar *save_location;
 
     save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
@@ -1002,7 +1001,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
         info->name = "Natural Order";
-        option = item;
     }
     else if (streq (item, "dot_first"))
     {
@@ -1011,7 +1009,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
         info->name = "Show \"dot files\" first";
-        option = item;
     }
     else if (streq (item, "locale_based"))
     {
@@ -1021,7 +1018,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->is_active = data->is_locale_based;
         info->name = "Use locale-based sort algorithm";
         info->desc = "Note that some options (e.g. case sensitive) are algorithm-dependent.";
-        option = item;
     }
     else if (streq (item, "special_first"))
     {
@@ -1030,7 +1026,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = data->sort_special_first;
         info->name = "Special Characters First";
-        option = item;
     }
     else if (streq (item, "case_sensitive"))
     {
@@ -1039,7 +1034,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE: TRUE;
         info->name = "Case Sensitive";
-        option = item;
     }
     else if (streq (item, "dot_mixed"))
     {
@@ -1048,7 +1042,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
         info->name = "Sort \"dot files\" amongst others";
-        option = item;
     }
     else if (streq (item, "ignore_spunct"))
     {
@@ -1057,7 +1050,6 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
         info->is_active = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
         info->name = "Ignore leading spunctuation characters";
-        option = item;
     }
     else
     {
@@ -1068,21 +1060,10 @@ ct_name_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    if (option)
-    {
-        GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
-        g_string_append (str, option);
-        g_string_append_c (str, ',');
-        g_string_append_c (str, (info->is_active) ? '0' : '1');
-        if (*save_location != '\0')
-        {
-            g_string_append_c (str, ',');
-            g_string_append (str, save_location);
-        }
-        g_string_append_c (str, ')');
-        info->trigger = g_string_free (str, FALSE);
-        info->free_trigger = TRUE;
-    }
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item, (info->is_active) ? "0" : "1", FALSE,
+                NULL, NULL, NULL, save_location);
+    info->free_trigger = TRUE;
 
     return TRUE;
 }
