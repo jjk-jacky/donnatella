@@ -612,7 +612,11 @@ helper_get_set_option_trigger (const gchar  *option,
                                const gchar  *ask_current,
                                const gchar  *save_location)
 {
-    GString *str = g_string_new ("command:tree_column_set_option (%o,%R,");
+    GString *str;
+
+    g_return_val_if_fail (value != NULL || ask_title != NULL, NULL);
+
+    str = g_string_new ("command:tree_column_set_option (%o,%R,");
     g_string_append (str, option);
     g_string_append_c (str, ',');
     if (quote_value)
