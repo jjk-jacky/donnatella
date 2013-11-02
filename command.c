@@ -140,7 +140,6 @@ show_err_on_task_failed (DonnaTask  *task,
 static DonnaTaskState
 cmd_ask (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    GError *er = NULL;
     gchar *title = args[0];
     gchar *details = args[1]; /* opt */
     gchar *btn1_icon = args[2]; /* opt */
