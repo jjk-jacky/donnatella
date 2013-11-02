@@ -490,10 +490,10 @@ cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
                 goto err;
             }
 
-            if (!donna_config_get_string (config, (gchar **) &timeopts.age_fallback_fmt,
-                        "%s/age_fallback_fmt", sce))
+            if (!donna_config_get_string (config, (gchar **) &timeopts.age_fallback_format,
+                        "%s/age_fallback_format", sce))
             {
-                errmsg = g_strdup_printf ("Failed to get option '%s/age_fallback_fmt'",
+                errmsg = g_strdup_printf ("Failed to get option '%s/age_fallback_format'",
                         sce);
                 goto err;
             }

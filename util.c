@@ -183,7 +183,7 @@ donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
                         d2 = g_date_time_ref (dt);
                     }
 
-                    if (s[1] == 'O' && options && options->age_fallback_fmt)
+                    if (s[1] == 'O' && options && options->age_fallback_format)
                     {
                         GDateTime *d;
 
@@ -191,7 +191,7 @@ donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
                         if (g_date_time_compare (d, d2) == -1)
                         {
                             /* not in span, use fallback format */
-                            age = g_date_time_format (dt, options->age_fallback_fmt);
+                            age = g_date_time_format (dt, options->age_fallback_format);
                             l = strlen (age);
                             g_date_time_unref (d);
                             goto age_done;

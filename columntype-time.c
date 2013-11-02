@@ -338,11 +338,11 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     }
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "time", "age_fallback_fmt", "%F %T", NULL);
-    if (!streq (data->options.age_fallback_fmt, s))
+            "time", "age_fallback_format", "%F %T", NULL);
+    if (!streq (data->options.age_fallback_format, s))
     {
-        g_free ((gchar *) data->options.age_fallback_fmt);
-        data->options.age_fallback_fmt = s;
+        g_free ((gchar *) data->options.age_fallback_format);
+        data->options.age_fallback_format = s;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
     else
@@ -385,11 +385,11 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     }
 
     s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "age_fallback_fmt_tooltip", "%F %T", NULL);
-    if (!streq (data->options_tooltip.age_fallback_fmt, s))
+            NULL, "age_fallback_format_tooltip", "%F %T", NULL);
+    if (!streq (data->options_tooltip.age_fallback_format, s))
     {
-        g_free ((gchar *) data->options_tooltip.age_fallback_fmt);
-        data->options_tooltip.age_fallback_fmt = s;
+        g_free ((gchar *) data->options_tooltip.age_fallback_format);
+        data->options_tooltip.age_fallback_format = s;
     }
     else
         g_free (s);
@@ -405,10 +405,10 @@ ct_time_free_data (DonnaColumnType    *ct,
 
     g_free (data->property);
     g_free (data->format);
-    g_free ((gchar *) data->options.age_fallback_fmt);
+    g_free ((gchar *) data->options.age_fallback_format);
     g_free (data->property_tooltip);
     g_free (data->format_tooltip);
-    g_free ((gchar *) data->options_tooltip.age_fallback_fmt);
+    g_free ((gchar *) data->options_tooltip.age_fallback_format);
     g_free (data);
 }
 
@@ -1942,18 +1942,18 @@ ct_time_set_option (DonnaColumnType    *ct,
         data->options.age_span_seconds = (guint) v;
         return DONNA_COLUMNTYPE_NEED_REDRAW;
     }
-    else if (streq (option, "age_fallback_fmt"))
+    else if (streq (option, "age_fallback_format"))
     {
         gchar *c;
 
-        c = (gchar *) data->options.age_fallback_fmt;
+        c = (gchar *) data->options.age_fallback_format;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "size", save_location,
                     option, G_TYPE_STRING, &c, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (c);
-        data->options.age_fallback_fmt = g_strdup (value);
+        data->options.age_fallback_format = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_tooltip"))
@@ -2002,18 +2002,18 @@ ct_time_set_option (DonnaColumnType    *ct,
         data->options_tooltip.age_span_seconds = (guint) v;
         return DONNA_COLUMNTYPE_NEED_NOTHING;
     }
-    else if (streq (option, "age_fallback_fmt_tooltip"))
+    else if (streq (option, "age_fallback_format_tooltip"))
     {
         gchar *c;
 
-        c = (gchar *) data->options_tooltip.age_fallback_fmt;
+        c = (gchar *) data->options_tooltip.age_fallback_format;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, NULL, save_location,
                     option, G_TYPE_STRING, &c, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (c);
-        data->options_tooltip.age_fallback_fmt = g_strdup (value);
+        data->options_tooltip.age_fallback_format = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_NOTHING;
     }
 
@@ -2277,9 +2277,9 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             }
 
             title = "Tooltip Fallback: ";
-            option = "age_fallback_fmt_tooltip";
+            option = "age_fallback_format_tooltip";
             ask_title = "Enter the fallback format for the tooltip";
-            fmt = (gchar *) data->options_tooltip.age_fallback_fmt;
+            fmt = (gchar *) data->options_tooltip.age_fallback_format;
         }
         else if (streqn (extra, "age", 3))
         {
@@ -2289,9 +2289,9 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                 extra += 4;
 
             title = "Fallback: ";
-            option = "age_fallback_fmt";
+            option = "age_fallback_format";
             ask_title = "Enter the fallback format for the column";
-            fmt = (gchar *) data->options.age_fallback_fmt;
+            fmt = (gchar *) data->options.age_fallback_format;
         }
         else
         {

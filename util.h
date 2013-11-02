@@ -10,7 +10,7 @@ G_BEGIN_DECLS
 typedef struct
 {
     guint        age_span_seconds;
-    const gchar *age_fallback_fmt;
+    const gchar *age_fallback_format;
 } DonnaTimeOptions;
 
 gssize          donna_print_size                (gchar              *str,
