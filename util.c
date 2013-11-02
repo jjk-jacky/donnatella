@@ -380,6 +380,8 @@ donna_g_string_append_quoted (GString            *str,
                               const gchar        *s,
                               gboolean            double_percent)
 {
+    g_return_if_fail (s != NULL);
+
     g_string_append_c (str, '"');
     for ( ; *s != '\0'; ++s)
     {
