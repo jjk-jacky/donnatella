@@ -556,7 +556,6 @@ get_ts (struct tv_col_data  *data,
         gboolean            *is_ts_fixed,
         GError             **error)
 {
-    gsize len = strlen (fmt);
     GDateTime *dt_ref;
     GDateTime *dt_cur = NULL;
     guint i;
@@ -1474,10 +1473,8 @@ ct_time_is_match_filter (DonnaColumnType    *ct,
     {
         gchar units[] = { UNIT_YEAR, UNIT_MONTH, UNIT_WEEK, UNIT_DAY, UNIT_HOUR,
             UNIT_MINUTE, UNIT_SECOND };
-        guint nb_units = sizeof (units) / sizeof (units[0]);
         gchar units_extra[] = { UNIT_DATE, UNIT_DAY_OF_YEAR, UNIT_DAY_OF_WEEK,
             UNIT_DAY_OF_WEEK_2, UNIT_AGE };
-        guint nb_units_extra = sizeof (units_extra) / sizeof (units_extra[0]);
         guint i;
         gchar *s;
 
