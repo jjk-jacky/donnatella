@@ -10513,7 +10513,7 @@ again:
         }
 
         if ((type == ROW_ID_ROW && itereq (&iter, &iter_last))
-                || !gtk_tree_model_iter_next (model, &iter))
+                || !donna_tree_model_iter_next (model, &iter))
             break;
     }
 
