@@ -143,6 +143,13 @@ post_node_deleted (DonnaNode *node)
     if (((GObject *) node)->ref_count <= 2)
         goto done;
 
+    /* in case the node has already been marked invalid. This can happen when
+     * e.g. a treeview triggered a refresh of all properties on a node, which
+     * didn't exist anymore. Then all refresh attempts (one for each property)
+     * will result in emitting a node-deleted */
+    if (streq (donna_node_get_domain (node), "invalid"))
+        goto done;
+
     interface = DONNA_PROVIDER_GET_INTERFACE (provider);
     if (G_UNLIKELY (!interface || !interface->unref_node))
         g_warning ("Provider '%s': post_node_deleted(): unref_node not implemented",
