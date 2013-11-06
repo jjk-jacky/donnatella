@@ -1609,9 +1609,20 @@ real_option_cb (struct option_data *data)
                     sw = donna_app_get_treeview (priv->app, s);
                 else
                     sw = NULL;
-                g_free (s);
+
                 if (priv->sync_with != sw)
                 {
+                    if (priv->sid_active_list_changed)
+                    {
+                        g_signal_handler_disconnect (priv->app,
+                                priv->sid_active_list_changed);
+                        priv->sid_active_list_changed = 0;
+                    }
+                    else if (streq (s, ":active"))
+                        priv->sid_active_list_changed = g_signal_connect (priv->app,
+                                "notify::active-list",
+                                (GCallback) active_list_changed_cb, tree);
+
                     if (priv->sync_with)
                     {
                         g_signal_handler_disconnect (priv->sync_with,
@@ -1633,8 +1644,27 @@ real_option_cb (struct option_data *data)
                         priv->sid_treeview_loaded = 0;
                     }
                 }
+                /* the same treeview could be set, but with a switch between
+                 * the treeview itself and the active list */
+                else if ((priv->sid_active_list_changed) ? TRUE : FALSE
+                        != (streq (s, ":active")) ? TRUE : FALSE)
+                {
+                    if (priv->sid_active_list_changed)
+                    {
+                        g_signal_handler_disconnect (priv->app,
+                                priv->sid_active_list_changed);
+                        priv->sid_active_list_changed = 0;
+                    }
+                    else
+                        priv->sid_active_list_changed = g_signal_connect (priv->app,
+                                "notify::active-list",
+                                (GCallback) active_list_changed_cb, tree);
+                    donna_g_object_unref (sw);
+                }
                 else
-                    g_object_unref (sw);
+                    donna_g_object_unref (sw);
+
+                g_free (s);
             }
             else if (streq (opt, "sync_scroll"))
             {
