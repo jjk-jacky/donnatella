@@ -11675,7 +11675,10 @@ tree_context_get_item_info (const gchar             *item,
                 }
             }
             else
+            {
                 t = tree;
+                extra = priv->name;
+            }
 
             /* no location or flat provider means no going up */
             info->is_visible = (priv->location && !(donna_provider_get_flags (
