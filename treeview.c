@@ -9747,7 +9747,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     priv = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
-    if (G_UNLIKELY (!priv->location))
+    if (G_UNLIKELY (!is_tree (tree) && !priv->location))
             return TRUE;
 
     if (mode == DONNA_TREE_REFRESH_VISIBLE || mode == DONNA_TREE_REFRESH_SIMPLE)
@@ -11745,7 +11745,8 @@ tree_context_get_item_info (const gchar             *item,
     }
     else if (streqn (item, "refresh", 7))
     {
-        info->is_visible = info->is_sensitive = G_LIKELY (priv->location != NULL);
+        info->is_visible = info->is_sensitive = G_LIKELY (is_tree (tree)
+                || priv->location != NULL);
         info->icon_name = "view-refresh";
 
         if (item[7] == '\0')
