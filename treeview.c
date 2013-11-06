@@ -445,7 +445,7 @@ struct _DonnaTreeViewPrivate
     guint                sync_scroll        : 1;
     guint                auto_focus_sync    : 1;
     /* mode List */
-    guint                draw_state         : 2;
+    guint                draw_state         : 2; /* state, NOT an option */
     guint                focusing_click     : 1;
     /* DonnaColumnType (line number) */
     guint                ln_relative        : 1; /* relative number */
@@ -14058,6 +14058,8 @@ check_statuses (DonnaTreeView *tree, enum changed_on changed)
                     status->id);
     }
 }
+
+/* DonnaStatusProvider */
 
 static guint
 status_provider_create_status (DonnaStatusProvider    *sp,
