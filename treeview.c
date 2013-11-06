@@ -447,8 +447,9 @@ struct _DonnaTreeViewPrivate
     /* mode List */
     guint                draw_state         : 2;
     guint                focusing_click     : 1;
-    guint                ln_relative        : 1; /* line column: relative number */
-    guint                ln_relative_focused: 1; /* line column: relative when focused */
+    /* DonnaColumnType (line number) */
+    guint                ln_relative        : 1; /* relative number */
+    guint                ln_relative_focused: 1; /* relative only when focused */
     /* from current arrangement */
     guint                second_sort_sticky : 1;
 };
@@ -658,6 +659,36 @@ static void         columntype_free_data            (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GPtrArray *  columntype_get_props            (DonnaColumnType    *ct,
                                                      gpointer            data);
+static DonnaColumnTypeNeed columntype_set_option    (DonnaColumnType    *ct,
+                                                     const gchar        *tv_name,
+                                                     const gchar        *col_name,
+                                                     const gchar        *arr_name,
+                                                     gpointer            data,
+                                                     const gchar        *option,
+                                                     const gchar        *value,
+                                                     DonnaColumnOptionSaveLocation save_location,
+                                                     GError            **error);
+static gchar *      columntype_get_context_alias    (DonnaColumnType   *ct,
+                                                     gpointer           data,
+                                                     const gchar       *alias,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     const gchar       *prefix,
+                                                     GError           **error);
+static gboolean     columntype_get_context_item_info (
+                                                     DonnaColumnType   *ct,
+                                                     gpointer           data,
+                                                     const gchar       *item,
+                                                     const gchar       *extra,
+                                                     DonnaContextReference reference,
+                                                     DonnaNode         *node_ref,
+                                                     get_sel_fn         get_sel,
+                                                     gpointer           get_sel_data,
+                                                     DonnaContextInfo  *info,
+                                                     GError           **error);
 
 
 #ifndef GTK_IS_JJK
@@ -747,11 +778,14 @@ donna_tree_view_status_provider_init (DonnaStatusProviderInterface *interface)
 static void
 donna_tree_view_column_type_init (DonnaColumnTypeInterface *interface)
 {
-    interface->get_name         = columntype_get_name;
-    interface->get_renderers    = columntype_get_renderers;
-    interface->refresh_data     = columntype_refresh_data;
-    interface->free_data        = columntype_free_data;
-    interface->get_props        = columntype_get_props;
+    interface->get_name                 = columntype_get_name;
+    interface->get_renderers            = columntype_get_renderers;
+    interface->refresh_data             = columntype_refresh_data;
+    interface->free_data                = columntype_free_data;
+    interface->get_props                = columntype_get_props;
+    interface->set_option               = columntype_set_option;
+    interface->get_context_alias        = columntype_get_context_alias;
+    interface->get_context_item_info    = columntype_get_context_item_info;
 }
 
 
@@ -14502,6 +14536,8 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
     return FALSE;
 }
 
+/* DonnaColumnType */
+
 static const gchar *
 columntype_get_name (DonnaColumnType    *ct)
 {
@@ -14528,15 +14564,16 @@ columntype_refresh_data (DonnaColumnType  *ct,
     config = donna_app_peek_config (priv->app);
 
     if (priv->ln_relative != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "line-number", "relative", FALSE, NULL))
+                tv_name, col_name, arr_name, "columntypes/line-numbers",
+                "relative", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_REDRAW;
         priv->ln_relative = !priv->ln_relative;
     }
 
     if (priv->ln_relative_focused != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "line-number", "relative_on_focus",
-                TRUE, NULL))
+                tv_name, col_name, arr_name, "columntypes/line-numbers",
+                "relative_focused", TRUE, NULL))
     {
         if (priv->ln_relative)
             need |= DONNA_COLUMNTYPE_NEED_REDRAW;
@@ -14558,6 +14595,173 @@ columntype_get_props (DonnaColumnType    *ct,
                       gpointer            data)
 {
     return NULL;
+}
+
+static DonnaColumnTypeNeed
+columntype_set_option (DonnaColumnType    *ct,
+                       const gchar        *tv_name,
+                       const gchar        *col_name,
+                       const gchar        *arr_name,
+                       gpointer            data,
+                       const gchar        *option,
+                       const gchar        *value,
+                       DonnaColumnOptionSaveLocation save_location,
+                       GError            **error)
+{
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) ct)->priv;
+    gboolean c, v;
+
+    if (streq (option, "relative"))
+    {
+        if (!streq (value, "0") && !streq (value, "1")
+                && !streq (value, "false") && !streq (value, "true"))
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_OTHER,
+                    "ColumnType 'line-numbers': Invalid value for option '%s': "
+                    "Must be '0', 'false', '1' or 'true'",
+                    option);
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+        }
+
+        c = priv->ln_relative;
+        v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "columntypes/line-numbers", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        priv->ln_relative = v;
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "relative_focused"))
+    {
+        if (!streq (value, "0") && !streq (value, "1")
+                && !streq (value, "false") && !streq (value, "true"))
+        {
+            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                    DONNA_COLUMNTYPE_ERROR_OTHER,
+                    "ColumnType 'line-numbers': Invalid value for option '%s': "
+                    "Must be '0', 'false', '1' or 'true'",
+                    option);
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+        }
+
+        c = priv->ln_relative_focused;
+        v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    tv_name, col_name, arr_name, "columntypes/line-numbers", save_location,
+                    option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        priv->ln_relative_focused = v;
+        return DONNA_COLUMNTYPE_NEED_REDRAW;
+    }
+
+    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+            DONNA_COLUMNTYPE_ERROR_OTHER,
+            "ColumnType 'line-numbers': Unknown option '%s'",
+            option);
+    return DONNA_COLUMNTYPE_NEED_NOTHING;
+}
+
+static gchar *
+columntype_get_context_alias (DonnaColumnType   *ct,
+                              gpointer           data,
+                              const gchar       *alias,
+                              const gchar       *extra,
+                              DonnaContextReference reference,
+                              DonnaNode         *node_ref,
+                              get_sel_fn         get_sel,
+                              gpointer           get_sel_data,
+                              const gchar       *prefix,
+                              GError           **error)
+{
+    const gchar *save_location;
+
+    if (!streq (alias, "options"))
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
+                "ColumnType 'line-numbers': Unknown alias '%s'",
+                alias);
+        return NULL;
+    }
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, TRUE, error);
+    if (!save_location)
+        return NULL;
+
+    if (extra)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "ColumnType 'line-numbers': Invalid extra '%s' for alias '%s'",
+                extra, alias);
+        return NULL;
+    }
+
+    return g_strconcat (
+            prefix, "relative:@", save_location, ",",
+            prefix, "relative_focused:@", save_location,
+            NULL);
+}
+
+static gboolean
+columntype_get_context_item_info (DonnaColumnType   *ct,
+                                  gpointer           data,
+                                  const gchar       *item,
+                                  const gchar       *extra,
+                                  DonnaContextReference reference,
+                                  DonnaNode         *node_ref,
+                                  get_sel_fn         get_sel,
+                                  gpointer           get_sel_data,
+                                  DonnaContextInfo  *info,
+                                  GError           **error)
+{
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) ct)->priv;
+    const gchar *save_location;
+
+    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_save_location (ct, &extra, FALSE, error);
+    if (!save_location)
+        return FALSE;
+
+    if (streq (item, "relative"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+
+        info->name = "Show Relative Line Numbers";
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = priv->ln_relative;
+    }
+    else if (streq (item, "relative_focused"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = priv->ln_relative;
+
+        info->name = "Show Relative Line Numbers Only When Focused";
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = priv->ln_relative_focused;
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                "ColumnType 'line-numbers': Unknown item '%s'",
+                item);
+        return FALSE;
+    }
+
+    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+        helper_get_set_option_trigger (item,
+                (info->is_active) ? "0" : "1", FALSE,
+                NULL, NULL, NULL, save_location);
+    info->free_trigger = TRUE;
+
+    return TRUE;
 }
 
 
