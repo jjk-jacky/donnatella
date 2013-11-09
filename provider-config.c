@@ -2655,7 +2655,6 @@ _set_option (DonnaConfig    *config,
     struct option *option;
     gchar  buf[255];
     gchar *b = buf;
-    gchar *st;
     gint len;
     va_list va_arg2;
     const gchar *s;
@@ -2665,22 +2664,32 @@ _set_option (DonnaConfig    *config,
     g_return_val_if_fail (fmt != NULL, FALSE);
 
     va_copy (va_arg2, va_arg);
-    len = vsnprintf (buf, 255, fmt, va_arg);
+    if (*fmt == '/')
+        len = vsnprintf (buf, 255, fmt, va_arg);
+    else
+    {
+        buf[0] = '/';
+        len = vsnprintf (buf + 1, 254, fmt, va_arg);
+    }
     if (len >= 255)
     {
         b = g_new (gchar, ++len); /* +1 for NUL */
-        vsnprintf (b, len, fmt, va_arg2);
+        if (*fmt == '/')
+            vsnprintf (b, len, fmt, va_arg2);
+        else
+        {
+            *b = '/';
+            vsnprintf (b + 1, len - 1, fmt, va_arg2);
+        }
     }
     va_end (va_arg2);
 
-    st = (*b == '/') ? b + 1 : b;
-
     priv = config->priv;
     g_rw_lock_writer_lock (&priv->lock);
-    s = strrchr (st, '/');
+    s = strrchr (b + 1, '/');
     if (s)
     {
-        parent = ensure_categories (config, st, s - st);
+        parent = ensure_categories (config, b + 1, s - b - 1);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -2690,7 +2699,7 @@ _set_option (DonnaConfig    *config,
     }
     else
     {
-        s = st;
+        s = b + 1;
         parent = priv->root;
     }
 
