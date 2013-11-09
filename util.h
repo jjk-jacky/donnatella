@@ -26,6 +26,9 @@ GValue *        duplicate_gvalue                (const GValue       *src);
 void            donna_g_string_append_quoted    (GString            *str,
                                                  const gchar        *s,
                                                  gboolean            double_percent);
+void            donna_g_string_append_concat    (GString            *str,
+                                                 const gchar        *string,
+                                                 ...);
 inline void     donna_g_object_unref            (gpointer            object);
 GSource *       donna_fd_source_new             (gint                fd,
                                                  GSourceFunc         callback,

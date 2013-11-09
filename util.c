@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include "util.h"
 
 gssize
@@ -393,6 +394,32 @@ donna_g_string_append_quoted (GString            *str,
         g_string_append_c (str, *s);
     }
     g_string_append_c (str, '"');
+}
+
+void
+donna_g_string_append_concat (GString            *str,
+                              const gchar        *string,
+                              ...)
+{
+    va_list va_args;
+
+    if (G_UNLIKELY (!string))
+        return;
+
+    g_string_append (str, string);
+
+    va_start (va_args, string);
+    for (;;)
+    {
+        const gchar *s;
+
+        s = va_arg (va_args, const gchar *);
+        if (s)
+            g_string_append (str, s);
+        else
+            break;
+    }
+    va_end (va_args);
 }
 
 inline void
