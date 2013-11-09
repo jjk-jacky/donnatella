@@ -461,7 +461,7 @@ helper_set_option (DonnaColumnType    *ct,
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
                         DONNA_COLUMNTYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%s' (config) vs '%s' (memory)",
                         donna_columntype_get_name (ct), option,
                         s, * (gchar **) current);
@@ -481,7 +481,7 @@ helper_set_option (DonnaColumnType    *ct,
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
                         DONNA_COLUMNTYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%s' (config) vs '%s' (memory)",
                         donna_columntype_get_name (ct), option,
                         (b) ? "true" : "false",
@@ -500,7 +500,7 @@ helper_set_option (DonnaColumnType    *ct,
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
                         DONNA_COLUMNTYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%d' (config) vs '%d' (memory)",
                         donna_columntype_get_name (ct), option,
                         i, * (gint *) current);
@@ -518,7 +518,7 @@ helper_set_option (DonnaColumnType    *ct,
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
                         DONNA_COLUMNTYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s' in current location: "
+                        "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%f' (config) vs '%f' (memory)",
                         donna_columntype_get_name (ct), option,
                         d, * (gdouble *) current);
