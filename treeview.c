@@ -627,6 +627,7 @@ static void     donna_tree_view_row_collapsed       (GtkTreeView    *treev,
 static void     donna_tree_view_row_expanded        (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
+static void     donna_tree_view_cursor_changed      (GtkTreeView    *treev);
 static void     donna_tree_view_get_property        (GObject        *object,
                                                      guint           prop_id,
                                                      GValue         *value,
@@ -821,6 +822,7 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     tv_class->row_collapsed         = donna_tree_view_row_collapsed;
     tv_class->test_collapse_row     = donna_tree_view_test_collapse_row;
     tv_class->test_expand_row       = donna_tree_view_test_expand_row;
+    tv_class->cursor_changed        = donna_tree_view_cursor_changed;
 
     w_class = GTK_WIDGET_CLASS (klass);
     w_class->draw = donna_tree_view_draw;
@@ -3705,7 +3707,6 @@ rend_func (GtkTreeViewColumn  *column,
         GtkTreePath *path;
         gchar buf[10];
         gint ln = 0;
-        gboolean refresh = FALSE;
 
         path = gtk_tree_model_get_path (model, iter);
         if (priv->ln_relative && (!priv->ln_relative_focused
@@ -3716,14 +3717,8 @@ rend_func (GtkTreeViewColumn  *column,
             gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_focus, NULL);
             if (path_focus)
             {
-                static gint last = 0;
-
-                /* get the focus number, and set refresh if it changed since
-                 * last time, so that the entire column gets refreshed, as all
-                 * relative numbers need to be updated */
+                /* get the focus number */
                 ln = gtk_tree_path_get_indices (path_focus)[0];
-                refresh = last != ln;
-                last = ln;
 
                 /* calculate the relative number. For current line that falls to
                  * 0, which will then be turned to the current line number */
@@ -3746,11 +3741,6 @@ rend_func (GtkTreeViewColumn  *column,
         snprintf (buf, 10, "%d", ln);
         g_object_set (renderer, "visible", TRUE, "text", buf, NULL);
         gtk_tree_path_free (path);
-
-        if (refresh)
-            gtk_widget_queue_draw_area ((GtkWidget *) tree, 0, 0,
-                    gtk_tree_view_column_get_width (column),
-                    gtk_widget_get_allocated_height ((GtkWidget*) tree));
 
         return;
     }
@@ -3976,6 +3966,33 @@ resort_tree (DonnaTreeView *tree)
     gtk_tree_sortable_set_sort_column_id (sortable,
             GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
     gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
+}
+
+static void
+donna_tree_view_cursor_changed (GtkTreeView    *treev)
+{
+    DonnaTreeView *tree = (DonnaTreeView *) treev;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GSList *l;
+
+    for (l = priv->columns; l; l = l->next)
+    {
+        struct column *_col = l->data;
+
+        /* if we are the ct, it means it's a line-numbers column */
+        if (_col->ct == (DonnaColumnType *) tree)
+        {
+            /* and if it shows relative numbers, we need to refresh the entire
+             * column. Maybe emitting row-changed on all rows in the model would
+             * be the "right thing to do" but it feels easier/faster to simply
+             * redraw the column. */
+            if (priv->ln_relative && (!priv->ln_relative_focused
+                        || gtk_widget_has_focus ((GtkWidget *) tree)))
+                gtk_widget_queue_draw_area ((GtkWidget *) tree, 0, 0,
+                        gtk_tree_view_column_get_width (_col->column),
+                        gtk_widget_get_allocated_height ((GtkWidget*) tree));
+        }
+    }
 }
 
 static void
