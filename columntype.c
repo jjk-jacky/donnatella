@@ -3,6 +3,7 @@
 #include "columntype.h"
 #include "app.h"
 #include "conf.h"
+#include "util.h"
 #include "macros.h"
 
 static GtkSortType
