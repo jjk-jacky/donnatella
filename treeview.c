@@ -1718,7 +1718,7 @@ real_option_cb (struct option_data *data)
                      * overridden by current arrangement, etc */
                     s = donna_config_get_string_column (config,
                             priv->name, _col->name,
-                            priv->arrangement->columns_options,
+                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
                             NULL, "title", s, NULL);
                     gtk_tree_view_column_set_title (_col->column, s);
                     gtk_label_set_text ((GtkLabel *) _col->label, s);
@@ -1733,7 +1733,7 @@ real_option_cb (struct option_data *data)
                      * overridden by current arrangement, etc */
                     w = donna_config_get_int_column (config,
                             priv->name, _col->name,
-                            priv->arrangement->columns_options,
+                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
                             NULL, "width", w, NULL);
                     gtk_tree_view_column_set_fixed_width (_col->column, w);
                 }
@@ -1744,7 +1744,8 @@ real_option_cb (struct option_data *data)
                     /* ask the ct if something needs to happen */
                     need = donna_columntype_refresh_data (_col->ct,
                             priv->name, _col->name,
-                            priv->arrangement->columns_options, &_col->ct_data);
+                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                            &_col->ct_data);
                     if (need & DONNA_COLUMNTYPE_NEED_RESORT)
                         resort_tree (data->tree);
                     if (need & DONNA_COLUMNTYPE_NEED_REDRAW)
