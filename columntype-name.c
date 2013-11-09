@@ -815,6 +815,9 @@ ct_name_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         if (v)
             data->options |= DONNA_SORT_NATURAL_ORDER;
         else
@@ -829,6 +832,9 @@ ct_name_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         if (v)
             data->options |= DONNA_SORT_DOT_FIRST;
         else
@@ -841,6 +847,9 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         data->is_locale_based = v;
@@ -865,6 +874,9 @@ ct_name_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         data->sort_special_first = v;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
@@ -874,6 +886,9 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         if (v)
@@ -890,6 +905,9 @@ ct_name_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         if (v)
             data->options |= DONNA_SORT_DOT_MIXED;
         else
@@ -902,6 +920,9 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         if (v)

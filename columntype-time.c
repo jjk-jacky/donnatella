@@ -1900,6 +1900,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->property);
         data->property = g_strdup (value);
 
@@ -1921,6 +1924,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->format);
         data->format = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_REDRAW;
@@ -1936,6 +1942,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         data->options.age_span_seconds = (guint) v;
         return DONNA_COLUMNTYPE_NEED_REDRAW;
     }
@@ -1949,6 +1958,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &c, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (c);
         data->options.age_fallback_format = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_REDRAW;
@@ -1958,6 +1970,9 @@ ct_time_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "columntypes/time", save_location,
                     option, G_TYPE_STRING, &data->property_tooltip, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (data->property_tooltip);
@@ -1981,6 +1996,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->format_tooltip);
         data->format_tooltip = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_NOTHING;
@@ -1996,6 +2014,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         data->options_tooltip.age_span_seconds = (guint) v;
         return DONNA_COLUMNTYPE_NEED_NOTHING;
     }
@@ -2007,6 +2028,9 @@ ct_time_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, NULL, save_location,
                     option, G_TYPE_STRING, &c, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (c);

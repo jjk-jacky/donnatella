@@ -15669,6 +15669,9 @@ columntype_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         priv->ln_relative = v;
         return DONNA_COLUMNTYPE_NEED_REDRAW;
     }
@@ -15690,6 +15693,9 @@ columntype_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "columntypes/line-numbers", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         priv->ln_relative_focused = v;

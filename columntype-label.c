@@ -458,6 +458,9 @@ ct_label_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->property);
         data->property = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
@@ -467,6 +470,9 @@ ct_label_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, NULL, save_location,
                     option, G_TYPE_STRING, &data->labels, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (data->labels);

@@ -2459,6 +2459,9 @@ ct_perms_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->format);
         data->format = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_REDRAW;
@@ -2472,6 +2475,9 @@ ct_perms_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->format_tooltip);
         data->format_tooltip = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_NOTHING;
@@ -2481,6 +2487,9 @@ ct_perms_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "columntypes/perms", save_location,
                     option, G_TYPE_STRING, &data->color_user, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (data->color_user);
@@ -2494,6 +2503,9 @@ ct_perms_set_option (DonnaColumnType    *ct,
                     option, G_TYPE_STRING, &data->color_group, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
         g_free (data->color_group);
         data->color_group = g_strdup (value);
         return DONNA_COLUMNTYPE_NEED_REDRAW;
@@ -2503,6 +2515,9 @@ ct_perms_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "columntypes/perms", save_location,
                     option, G_TYPE_STRING, &data->color_mixed, &value, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         g_free (data->color_mixed);
@@ -2538,6 +2553,9 @@ ct_perms_set_option (DonnaColumnType    *ct,
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "columntypes/perms", save_location,
                     option, G_TYPE_INT, &c, &v, error))
+            return DONNA_COLUMNTYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         data->sort = v;
