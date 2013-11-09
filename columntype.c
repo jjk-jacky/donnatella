@@ -212,17 +212,18 @@ tree_changed_location (struct asl *asl)
     gtk_widget_destroy (asl->win);
 }
 
-static DonnaColumnOptionSaveLocation
-ask_save_location (DonnaApp     *app,
-                   const gchar  *tv_name,
-                   const gchar  *col_name,
-                   const gchar  *arr_name,
-                   const gchar  *def_cat,
-                   const gchar  *option,
-                   guint         from,
-                   GError      **error)
+/* this is also used by treeview.c for treeview options. This is why we have a
+ * special handling when col_name is NULL */
+DonnaColumnOptionSaveLocation
+_donna_columntype_ask_save_location (DonnaApp     *app,
+                                     const gchar  *tv_name,
+                                     const gchar  *col_name,
+                                     const gchar  *arr_name,
+                                     const gchar  *def_cat,
+                                     const gchar  *option,
+                                     guint         from)
 {
-    struct asl asl;
+    struct asl asl = { NULL, };
     GMainLoop *loop;
     GtkStyleContext *context;
     GtkWidget *win;
@@ -236,7 +237,10 @@ ask_save_location (DonnaApp     *app,
     gint row;
 
     win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    gtk_widget_set_name (win, "columnoption-save-location");
+    if (col_name)
+        gtk_widget_set_name (win, "columnoption-save-location");
+    else
+        gtk_widget_set_name (win, "treeoption-save-location");
     donna_app_add_window (app, (GtkWindow *) win, TRUE);
     gtk_window_set_default_size ((GtkWindow *) win, 420, -1);
     gtk_window_set_decorated ((GtkWindow *) win, FALSE);
@@ -251,10 +255,16 @@ ask_save_location (DonnaApp     *app,
     gtk_style_context_add_class (context, "title");
     gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
 
-    s = g_strdup_printf ("Column options can be saved in different locations, "
-            "each with a different reach. Select where the new value for "
-            "option '%s' of column '%s' will be saved.",
-            option, col_name);
+    if (col_name)
+        s = g_strdup_printf ("Column options can be saved in different locations, "
+                "each with a different reach. Select where the new value for "
+                "option '%s' of column '%s' will be saved.",
+                option, col_name);
+    else
+        s = g_strdup_printf ("Tree options can be saved in two locations, "
+                "each with a different reach. Select where the new value for "
+                "option '%s' will be saved.",
+                option);
     w = gtk_label_new (s);
     g_object_set (w, "wrap", TRUE, NULL);
     g_free (s);
@@ -270,40 +280,51 @@ ask_save_location (DonnaApp     *app,
     gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
     row = 0;
 
-    btn = gtk_radio_button_new (NULL);
-    btn_grp = (GtkRadioButton *) btn;
-    w = gtk_label_new (NULL);
-    gtk_label_set_markup ((GtkLabel *) w, "In <b>current arrangement</b>");
-    gtk_container_add ((GtkContainer *) btn, w);
-    if (!arr_name)
+    if (col_name)
     {
-        gtk_widget_set_sensitive (btn, FALSE);
-        gtk_grid_attach (grid, btn, 0, row, 2, 1);
+        btn = gtk_radio_button_new (NULL);
+        btn_grp = (GtkRadioButton *) btn;
+        w = gtk_label_new (NULL);
+        gtk_label_set_markup ((GtkLabel *) w, "In <b>current arrangement</b>");
+        gtk_container_add ((GtkContainer *) btn, w);
+        if (!arr_name)
+        {
+            gtk_widget_set_sensitive (btn, FALSE);
+            gtk_grid_attach (grid, btn, 0, row, 2, 1);
+        }
+        else
+        {
+            gtk_grid_attach (grid, btn, 0, row, 1, 1);
+
+            w = gtk_label_new (NULL);
+            s = g_strdup_printf ("(<i>%s/columns_options/%s</i>)", arr_name, col_name);
+            gtk_label_set_markup ((GtkLabel *) w, s);
+            g_free (s);
+            gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+            if (from == _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT)
+                g_object_set (btn, "active", TRUE, NULL);
+            gtk_grid_attach (grid, w, 1, row, 1, 1);
+        }
+        g_object_set_data ((GObject *) btn, "_from",
+                GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT));
+        ++row;
+
+        btn = gtk_radio_button_new_from_widget (btn_grp);
     }
     else
     {
-        gtk_grid_attach (grid, btn, 0, row, 1, 1);
-
-        w = gtk_label_new (NULL);
-        s = g_strdup_printf ("(<i>%s/columns_options/%s</i>)", arr_name, col_name);
-        gtk_label_set_markup ((GtkLabel *) w, s);
-        g_free (s);
-        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
-        if (from == _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT)
-            g_object_set (btn, "active", TRUE, NULL);
-        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        btn = gtk_radio_button_new (NULL);
+        btn_grp = (GtkRadioButton *) btn;
     }
-    g_object_set_data ((GObject *) btn, "_from",
-            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT));
-    ++row;
-
-    btn = gtk_radio_button_new_from_widget (btn_grp);
     w = gtk_label_new (NULL);
     gtk_label_set_markup ((GtkLabel *) w, "As a <b>treeview</b> option");
     gtk_container_add ((GtkContainer *) btn, w);
     gtk_grid_attach (grid, btn, 0, row, 1, 1);
     w = gtk_label_new (NULL);
-    s = g_strdup_printf ("(<i>treeviews/%s/columns/%s</i>)", tv_name, col_name);
+    if (col_name)
+        s = g_strdup_printf ("(<i>treeviews/%s/columns/%s</i>)", tv_name, col_name);
+    else
+        s = g_strdup_printf ("(<i>treeviews/%s</i>)", tv_name);
     gtk_label_set_markup ((GtkLabel *) w, s);
     g_free (s);
     gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
@@ -314,22 +335,25 @@ ask_save_location (DonnaApp     *app,
             GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_TREE));
     ++row;
 
-    btn = gtk_radio_button_new_from_widget (btn_grp);
-    w = gtk_label_new (NULL);
-    gtk_label_set_markup ((GtkLabel *) w, "As a <b>column</b> option");
-    gtk_container_add ((GtkContainer *) btn, w);
-    gtk_grid_attach (grid, btn, 0, row, 1, 1);
-    w = gtk_label_new (NULL);
-    s = g_strdup_printf ("(<i>columns/%s</i>)", col_name);
-    gtk_label_set_markup ((GtkLabel *) w, s);
-    g_free (s);
-    gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
-    if (from == _DONNA_CONFIG_COLUMN_FROM_COLUMN)
-        g_object_set (btn, "active", TRUE, NULL);
-    gtk_grid_attach (grid, w, 1, row, 1, 1);
-    g_object_set_data ((GObject *) btn, "_from",
-            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_COLUMN));
-    ++row;
+    if (col_name)
+    {
+        btn = gtk_radio_button_new_from_widget (btn_grp);
+        w = gtk_label_new (NULL);
+        gtk_label_set_markup ((GtkLabel *) w, "As a <b>column</b> option");
+        gtk_container_add ((GtkContainer *) btn, w);
+        gtk_grid_attach (grid, btn, 0, row, 1, 1);
+        w = gtk_label_new (NULL);
+        s = g_strdup_printf ("(<i>columns/%s</i>)", col_name);
+        gtk_label_set_markup ((GtkLabel *) w, s);
+        g_free (s);
+        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+        if (from == _DONNA_CONFIG_COLUMN_FROM_COLUMN)
+            g_object_set (btn, "active", TRUE, NULL);
+        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        g_object_set_data ((GObject *) btn, "_from",
+                GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_COLUMN));
+        ++row;
+    }
 
     btn = gtk_radio_button_new_from_widget (btn_grp);
     w = gtk_label_new (NULL);
@@ -376,14 +400,17 @@ ask_save_location (DonnaApp     *app,
     gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
 
 
-    /* if the tree changes location, we need to abort. Because we start a main
-     * loop, the tree could change location, which could mean our arr_name and
-     * col_name will point to random memory location */
-    asl.tree = donna_app_get_treeview (app, tv_name);
-    asl.sid = g_signal_connect_swapped (asl.tree, "notify::location",
-            /* we don't connect gtk_widget_destroy in the off chance the tree
-             * would notify of multiple change of locations */
-            (GCallback) tree_changed_location, &asl);
+    if (col_name)
+    {
+        /* if the tree changes location, we need to abort. Because we start a
+         * main loop, the tree could change location, which could mean our
+         * arr_name and col_name will point to random memory location */
+        asl.tree = donna_app_get_treeview (app, tv_name);
+        asl.sid = g_signal_connect_swapped (asl.tree, "notify::location",
+                /* we don't connect gtk_widget_destroy in the off chance the
+                 * tree would notify of multiple change of locations */
+                (GCallback) tree_changed_location, &asl);
+    }
 
     loop = g_main_loop_new (NULL, TRUE);
     g_signal_connect_swapped (win, "destroy", (GCallback) g_main_loop_quit, loop);
@@ -393,7 +420,8 @@ ask_save_location (DonnaApp     *app,
 
     if (asl.sid > 0)
         g_signal_handler_disconnect (asl.tree, asl.sid);
-    g_object_unref (asl.tree);
+    if (asl.tree)
+        g_object_unref (asl.tree);
 
     return asl.save_location;
 }
@@ -530,8 +558,8 @@ helper_set_option (DonnaColumnType    *ct,
 
         if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
         {
-            save_location = ask_save_location (app, tv_name, col_name, arr_name,
-                    def_cat, option, from, error);
+            save_location = _donna_columntype_ask_save_location (app,
+                    tv_name, col_name, arr_name, def_cat, option, from);
             if (save_location == (guint) -1)
             {
                 g_object_unref (app);

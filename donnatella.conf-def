@@ -15,6 +15,21 @@ type=list-int
 value=0:list:List
 value=1:tree:Tree
 
+[sg]
+title=Sort Groups
+type=list-int
+value=0:first:First (Last when sorting descendingly)
+value=1:first-always:Always First
+value=2:mixed:Mixed with Items
+
+[highlight]
+title=Selection Highlight
+type=list-int
+value=0:fullrow:Full Row Highlight
+value=1:column:Column (Cell) Highlight
+value=2:underline:Full Row Underline
+value=3:column-underline:Column (Cell) Highlight + Full Row Underline
+
 [visuals]
 title=Tree Visuals
 type=list-flags
@@ -22,7 +37,7 @@ value=1:name:Custom Names
 value=2:icon:Custom Icons
 value=4:box:Boxed Branches
 value=8:highlight:Highlighted Folders
-value=16:click:Custom Click Definitions
+#value=16:click:Custom Click Definitions
 
 [sync]
 title=Synchronization Mode
@@ -58,12 +73,12 @@ value=0:loc:Location
 value=1:full:Full location (i.e. domain included)
 value=2:custom:Custom string
 
-[children]
+[node-type]
 title=Type of node
 type=list-int
-value=0:all:All (Item & Container)
-value=1:item:Item
-value=2:container:Container
+value=1:items:Items
+value=2:containers:Containers
+value=3:all:All (Items & Containers)
 
 [mark-type]
 title=Type of mark

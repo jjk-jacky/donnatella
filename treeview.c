@@ -521,6 +521,16 @@ gboolean _donna_app_filter_nodes (DonnaApp        *app,
                                   gpointer         data,
                                   GError         **error);
 
+/* internal from columntype.c */
+DonnaColumnOptionSaveLocation
+_donna_columntype_ask_save_location (DonnaApp     *app,
+                                     const gchar  *tv_name,
+                                     const gchar  *col_name,
+                                     const gchar  *arr_name,
+                                     const gchar  *def_cat,
+                                     const gchar  *option,
+                                     guint         from);
+
 static inline struct column *
                     get_column_by_column                (DonnaTreeView *tree,
                                                          GtkTreeViewColumn *column);
@@ -1277,6 +1287,7 @@ enum
     OPT_TREEVIEW,
     OPT_TREEVIEW_COLUMN,
     OPT_COLUMN,
+    OPT_IN_MEMORY   /* from set_option() when value in changed in memory */
 };
 
 struct option_data
@@ -1285,6 +1296,7 @@ struct option_data
     gchar *option;
     guint opt;
     gssize len;
+    gpointer val;
 };
 
 static gboolean
@@ -1362,13 +1374,22 @@ static gint
 config_get_int (DonnaTreeView   *tree,
                 DonnaConfig     *config,
                 const gchar     *option,
-                gint             def)
+                gint             def,
+                guint           *from)
 {
     gint val;
 
     if (donna_config_get_int (config, &val, "treeviews/%s/%s",
             tree->priv->name, option))
+    {
+        if (from)
+            *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
         return val;
+    }
+
+    if (from)
+        *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+
     if (donna_config_get_int (config, &val, "defaults/treeviews/%s/%s",
                 (is_tree (tree)) ? "tree" : "list", option))
         return val;
@@ -1383,13 +1404,22 @@ static gboolean
 config_get_boolean (DonnaTreeView   *tree,
                     DonnaConfig     *config,
                     const gchar     *option,
-                    gboolean         def)
+                    gboolean         def,
+                    guint           *from)
 {
     gboolean val;
 
     if (donna_config_get_boolean (config, &val, "treeviews/%s/%s",
             tree->priv->name, option))
+    {
+        if (from)
+            *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
         return val;
+    }
+
+    if (from)
+        *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+
     if (donna_config_get_boolean (config, &val, "defaults/treeviews/%s/%s",
                 (is_tree (tree)) ? "tree" : "list", option))
         return val;
@@ -1404,13 +1434,22 @@ static gchar *
 config_get_string (DonnaTreeView   *tree,
                    DonnaConfig     *config,
                    const gchar     *option,
-                   gchar           *def)
+                   gchar           *def,
+                   guint           *from)
 {
     gchar *val;
 
     if (donna_config_get_string (config, &val, "treeviews/%s/%s",
             tree->priv->name, option))
+    {
+        if (from)
+            *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
         return val;
+    }
+
+    if (from)
+        *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+
     if (donna_config_get_string (config, &val, "defaults/treeviews/%s/%s",
                 (is_tree (tree)) ? "tree" : "list", option))
         return val;
@@ -1423,41 +1462,41 @@ config_get_string (DonnaTreeView   *tree,
     return def;
 }
 
-#define cfg_get_mode(t,c) \
-    CLAMP (config_get_int (t, c, "mode", DONNA_TREE_VIEW_MODE_LIST), 0, 1)
-#define cfg_get_show_hidden(t,c) \
-    config_get_boolean (t, c, "show_hidden", TRUE)
-#define cfg_get_node_types(t,c) \
+#define cfg_get_mode(t,c,f) \
+    CLAMP (config_get_int (t, c, "mode", DONNA_TREE_VIEW_MODE_LIST, f), 0, 1)
+#define cfg_get_show_hidden(t,c,f) \
+    config_get_boolean (t, c, "show_hidden", TRUE, f)
+#define cfg_get_node_types(t,c,f) \
     CLAMP (config_get_int (t, c, "node_types", \
                 (is_tree (t)) ? DONNA_NODE_CONTAINER \
-                : DONNA_NODE_CONTAINER | DONNA_NODE_ITEM), \
+                : DONNA_NODE_CONTAINER | DONNA_NODE_ITEM, f), \
                 0, 3)
-#define cfg_get_sort_groups(t,c) \
-    CLAMP (config_get_int (t, c, "sort_groups", SORT_CONTAINER_FIRST), 0, 2)
+#define cfg_get_sort_groups(t,c,f) \
+    CLAMP (config_get_int (t, c, "sort_groups", SORT_CONTAINER_FIRST, f), 0, 2)
 #ifdef GTK_IS_JJK
-#define cfg_get_select_highlight(t,c) \
+#define cfg_get_select_highlight(t,c,f) \
     CLAMP (config_get_int (t, c, "select_highlight", \
                 (is_tree (tree)) ? SELECT_HIGHLIGHT_COLUMN \
-                : SELECT_HIGHLIGHT_COLUMN_UNDERLINE), 0, 3)
+                : SELECT_HIGHLIGHT_COLUMN_UNDERLINE, f), 0, 3)
 #else
-#define cfg_get_select_highlight(t,c) SELECT_HIGHLIGHT_FULL_ROW
+#define cfg_get_select_highlight(t,c,f) SELECT_HIGHLIGHT_FULL_ROW
 #endif
-#define cfg_get_node_visuals(t,c) \
-    CLAMP (config_get_int (t, c, "node_visuals", DONNA_TREE_VISUAL_NOTHING), 0, 31)
-#define cfg_get_is_minitree(t,c) \
-    config_get_boolean (t, c, "is_minitree", FALSE)
-#define cfg_get_sync_mode(t,c) \
-    CLAMP (config_get_int (t, c, "sync_mode", DONNA_TREE_SYNC_FULL), 0, 4)
-#define cfg_get_sync_with(t,c) \
-    config_get_string (t, c, "sync_with", NULL)
-#define cfg_get_sync_scroll(t,c) \
-    config_get_boolean (t, c, "sync_scroll", TRUE)
-#define cfg_get_auto_focus_sync(t,c) \
-    config_get_boolean (t, c, "auto_focus_sync", TRUE)
-#define cfg_get_focusing_click(t,c) \
-    config_get_boolean (t, c, "focusing_click", TRUE)
-#define cfg_get_history_max(t,c) \
-    config_get_int (t, c, "history_max", 100)
+#define cfg_get_node_visuals(t,c,f) \
+    CLAMP (config_get_int (t, c, "node_visuals", DONNA_TREE_VISUAL_NOTHING, f), 0, 31)
+#define cfg_get_is_minitree(t,c,f) \
+    config_get_boolean (t, c, "is_minitree", FALSE, f)
+#define cfg_get_sync_mode(t,c,f) \
+    CLAMP (config_get_int (t, c, "sync_mode", DONNA_TREE_SYNC_FULL, f), 0, 4)
+#define cfg_get_sync_with(t,c,f) \
+    config_get_string (t, c, "sync_with", NULL, f)
+#define cfg_get_sync_scroll(t,c,f) \
+    config_get_boolean (t, c, "sync_scroll", TRUE, f)
+#define cfg_get_auto_focus_sync(t,c,f) \
+    config_get_boolean (t, c, "auto_focus_sync", TRUE, f)
+#define cfg_get_focusing_click(t,c,f) \
+    config_get_boolean (t, c, "focusing_click", TRUE, f)
+#define cfg_get_history_max(t,c,f) \
+    config_get_int (t, c, "history_max", 100, f)
 
 static gboolean
 real_option_cb (struct option_data *data)
@@ -1471,7 +1510,8 @@ real_option_cb (struct option_data *data)
     config = donna_app_peek_config (priv->app);
     opt = data->option + data->len;
 
-    if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT)
+    if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT
+            || data->opt == OPT_IN_MEMORY)
     {
         gint val;
 
@@ -1479,18 +1519,24 @@ real_option_cb (struct option_data *data)
 
         if (streq (opt, "mode"))
         {
-            val = cfg_get_mode (tree, config);
+            /* cannot be OPT_IN_MEMORY */
+            val = cfg_get_mode (tree, config, NULL);
             if (priv->mode != val)
             {
                 donna_app_show_error (priv->app, NULL,
-                        "Treeview '%s': option 'mode' was changed; Please restart the application to have it applied.",
+                        "Treeview '%s': option 'mode' was changed; "
+                        "Please restart the application to have it applied.",
                         priv->name);
             }
         }
         else if (streq (opt, "show_hidden"))
         {
-            val = cfg_get_show_hidden (tree, config);
-            if (priv->show_hidden != val)
+            if (data->opt == OPT_IN_MEMORY)
+                val = (* (gboolean *) data->val) ? TRUE : FALSE;
+            else
+                val = cfg_get_show_hidden (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || priv->show_hidden != val)
             {
                 priv->show_hidden = val;
                 donna_tree_store_refilter (priv->store, NULL);
@@ -1499,8 +1545,12 @@ real_option_cb (struct option_data *data)
         }
         else if (streq (opt, "node_types"))
         {
-            val = cfg_get_node_types (tree, config);
-            if (priv->node_types != val)
+            if (data->opt == OPT_IN_MEMORY)
+                val = CLAMP (* (gint *) data->val, 0, 3);
+            else
+                val = cfg_get_node_types (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || priv->node_types != val)
             {
                 priv->node_types = val;
                 donna_tree_view_refresh (data->tree,
@@ -1509,8 +1559,12 @@ real_option_cb (struct option_data *data)
         }
         else if (streq (opt, "sort_groups"))
         {
-            val = cfg_get_sort_groups (tree, config);
-            if (priv->sort_groups != val)
+            if (data->opt == OPT_IN_MEMORY)
+                val = CLAMP (* (gint *) data->val, 0, 2);
+            else
+                val = cfg_get_sort_groups (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || priv->sort_groups != val)
             {
                 priv->sort_groups = val;
                 resort_tree (data->tree);
@@ -1518,8 +1572,12 @@ real_option_cb (struct option_data *data)
         }
         else if (streq (opt, "select_highlight"))
         {
-            val = cfg_get_select_highlight (tree, config);
-            if (priv->select_highlight != val)
+            if (data->opt == OPT_IN_MEMORY)
+                val = CLAMP (* (gint *) data->val, 0, 3);
+            else
+                val = cfg_get_select_highlight (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || priv->select_highlight != val)
             {
                 GtkTreeView *treev = (GtkTreeView *) data->tree;
 
@@ -1563,8 +1621,12 @@ real_option_cb (struct option_data *data)
         {
             if (streq (opt, "node_visuals"))
             {
-                val = cfg_get_node_visuals (tree, config);
-                if (priv->node_visuals != (guint) val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = CLAMP (* (guint *) data->val, 0, 31);
+                else
+                    val = cfg_get_node_visuals (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->node_visuals != (guint) val)
                 {
                     priv->node_visuals = (guint) val;
                     gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
@@ -1574,8 +1636,12 @@ real_option_cb (struct option_data *data)
             }
             else if (streq (opt, "is_minitree"))
             {
-                val = cfg_get_is_minitree (tree, config);
-                if (priv->is_minitree != val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                else
+                    val = cfg_get_is_minitree (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->is_minitree != val)
                 {
                     priv->is_minitree = val;
                     if (!val)
@@ -1589,8 +1655,12 @@ real_option_cb (struct option_data *data)
             }
             else if (streq (opt, "sync_mode"))
             {
-                val = cfg_get_sync_mode (tree, config);
-                if (priv->sync_mode != val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = CLAMP (* (gint *) data->val, 0, 4);
+                else
+                    val = cfg_get_sync_mode (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->sync_mode != val)
                 {
                     priv->sync_mode = val;
                     if (priv->sync_with)
@@ -1602,7 +1672,11 @@ real_option_cb (struct option_data *data)
             {
                 DonnaTreeView *sw;
 
-                s = cfg_get_sync_with (tree, config);
+                if (data->opt == OPT_IN_MEMORY)
+                    s = * (gchar **) data->val;
+                else
+                    s = cfg_get_sync_with (tree, config, NULL);
+
                 if (streq (s, ":active"))
                     g_object_get (priv->app, "active-list", &sw, NULL);
                 else if (s)
@@ -1664,18 +1738,27 @@ real_option_cb (struct option_data *data)
                 else
                     donna_g_object_unref (sw);
 
-                g_free (s);
+                if (data->opt != OPT_IN_MEMORY)
+                    g_free (s);
             }
             else if (streq (opt, "sync_scroll"))
             {
-                val = cfg_get_sync_scroll (tree, config);
-                if (priv->sync_scroll != val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                else
+                    val = cfg_get_sync_scroll (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->sync_scroll != val)
                     priv->sync_scroll = val;
             }
             else if (streq (opt, "auto_focus_sync"))
             {
-                val = cfg_get_auto_focus_sync (tree, config);
-                if (priv->auto_focus_sync != val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                else
+                    val = cfg_get_auto_focus_sync (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->auto_focus_sync != val)
                     priv->auto_focus_sync = val;
             }
         }
@@ -1683,14 +1766,23 @@ real_option_cb (struct option_data *data)
         {
             if (streq (opt, "focusing_click"))
             {
-                val = cfg_get_focusing_click (tree, config);
-                if (priv->focusing_click != val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                else
+                    val = cfg_get_focusing_click (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->focusing_click != val)
                     priv->focusing_click = val;
             }
             else if (streq (opt, "history_max"))
             {
-                val = cfg_get_history_max (tree, config);
-                if (donna_history_get_max (priv->history) != (guint) val)
+                if (data->opt == OPT_IN_MEMORY)
+                    val = * (gint *) data->val;
+                else
+                    val = cfg_get_history_max (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY ||
+                        donna_history_get_max (priv->history) != (guint) val)
                     donna_history_set_max (priv->history, (guint) val);
             }
         }
@@ -1755,7 +1847,8 @@ real_option_cb (struct option_data *data)
         }
     }
 
-    g_free (data);
+    if (data->opt != OPT_IN_MEMORY)
+        g_free (data);
     return FALSE;
 }
 
@@ -1833,7 +1926,7 @@ treeview_loaded_cb (DonnaApp *app, DonnaTreeView *loaded_tree, DonnaTreeView *tr
     DonnaTreeViewPrivate *priv = tree->priv;
     gchar *s;
 
-    s = cfg_get_sync_with (tree, donna_app_peek_config (priv->app));
+    s = cfg_get_sync_with (tree, donna_app_peek_config (priv->app), NULL);
     if (!priv->sync_with && streq (s, loaded_tree->priv->name))
     {
         g_signal_handler_disconnect (priv->app, priv->sid_treeview_loaded);
@@ -1873,32 +1966,32 @@ load_config (DonnaTreeView *tree)
         donna_config_set_int (config, 0, "treeviews/%s/mode", priv->name);
     }
 
-    val = cfg_get_show_hidden (tree, config);
+    val = cfg_get_show_hidden (tree, config, NULL);
     priv->show_hidden = val;
 
-    val = cfg_get_node_types (tree, config);
+    val = cfg_get_node_types (tree, config, NULL);
     priv->node_types = val;
 
-    val = cfg_get_sort_groups (tree, config);
+    val = cfg_get_sort_groups (tree, config, NULL);
     priv->sort_groups = val;
 
-    val = cfg_get_select_highlight (tree, config);
+    val = cfg_get_select_highlight (tree, config, NULL);
     priv->select_highlight = val;
 
     if (is_tree (tree))
     {
         gchar *s;
 
-        val = cfg_get_node_visuals (tree, config);
+        val = cfg_get_node_visuals (tree, config, NULL);
         priv->node_visuals = val;
 
-        val = cfg_get_is_minitree (tree, config);
+        val = cfg_get_is_minitree (tree, config, NULL);
         priv->is_minitree = val;
 
-        val = cfg_get_sync_mode (tree, config);
+        val = cfg_get_sync_mode (tree, config, NULL);
         priv->sync_mode = val;
 
-        s = cfg_get_sync_with (tree, config);
+        s = cfg_get_sync_with (tree, config, NULL);
         if (streq (s, ":active"))
         {
             g_object_get (priv->app, "active-list", &priv->sync_with, NULL);
@@ -1918,18 +2011,18 @@ load_config (DonnaTreeView *tree)
                     "treeview_loaded",
                     (GCallback) treeview_loaded_cb, tree);
 
-        val = cfg_get_sync_scroll (tree, config);
+        val = cfg_get_sync_scroll (tree, config, NULL);
         priv->sync_scroll = val;
 
-        val = cfg_get_auto_focus_sync (tree, config);
+        val = cfg_get_auto_focus_sync (tree, config, NULL);
         priv->auto_focus_sync = val;
     }
     else
     {
-        val = cfg_get_focusing_click (tree, config);
+        val = cfg_get_focusing_click (tree, config, NULL);
         priv->focusing_click = val;
 
-        val = cfg_get_history_max (tree, config);
+        val = cfg_get_history_max (tree, config, NULL);
         priv->history = donna_history_new (val);
     }
 
@@ -9657,6 +9750,314 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
     return ret;
 }
 
+static gboolean
+_convert_value (DonnaTreeView           *tree,
+                const gchar             *option,
+                const gchar             *value,
+                const gchar             *name,
+                DonnaConfigExtraType     type,
+                gpointer                 val,
+                GError                 **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    const DonnaConfigExtra *extras;
+
+    extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+            name, error);
+    if (!extras)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to set option '%s': "
+                "Unable to get definition of extra '%s': ",
+                priv->name, option, name);
+        return FALSE;
+    }
+    else if (extras->type != type)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Failed to set option '%s': "
+                "Extra '%s' not of expected type",
+                priv->name, option, name);
+        return FALSE;
+    }
+
+    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+    {
+        DonnaConfigExtraListInt **extra;
+
+        for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+        {
+            if (streq ((*extra)->in_file, value))
+            {
+                * (gint *) val = (*extra)->value;
+                break;
+            }
+        }
+        if (!*extra)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed to set option '%s': "
+                    "Invalid value '%s' (not in extra '%s')",
+                    priv->name, option, value, name);
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags **extra;
+
+        for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+        {
+            if (streq ((*extra)->in_file, value))
+            {
+                * (guint *) val |= (*extra)->value;
+                break;
+            }
+        }
+        if (!*extra)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed to set option '%s': "
+                    "Invalid value '%s' (not in extra '%s')",
+                    priv->name, option, value, name);
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+    {
+        DonnaConfigExtraList **extra;
+
+        for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+        {
+            if (streq ((*extra)->value, value))
+            {
+                * (gchar **) val = g_strdup ((*extra)->value);
+                break;
+            }
+        }
+        if (!*extra)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed to set option '%s': "
+                    "Invalid value '%s' (not in extra '%s')",
+                    priv->name, option, value, name);
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+#define handle_option_int_extra(option_name, extra_name, extra_type, lower) \
+    else if (streq (option, option_name))                                   \
+    {                                                                       \
+        type = G_TYPE_INT;                                                  \
+                                                                            \
+        if (!_convert_value (tree, option, value,                           \
+                    extra_name, DONNA_CONFIG_EXTRA_TYPE_LIST_##extra_type,  \
+                    &val, error))                                           \
+            return FALSE;                                                   \
+                                                                            \
+        if (DONNA_CONFIG_EXTRA_TYPE_LIST_##extra_type                       \
+                == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)                      \
+            val = priv->lower ^ val;                                        \
+                                                                            \
+        if (need_cur)                                                       \
+        {                                                                   \
+            cur = cfg_get_##lower (tree, config, &from);                    \
+            if (cur != priv->lower)                                         \
+            {                                                               \
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
+                        DONNA_TREE_VIEW_ERROR_OTHER,                        \
+                        "Treeview '%s': Cannot set option '%s'; "           \
+                        "Values not matching: '%d' (config) vs '%d' (memory)", \
+                        priv->name, option, cur, priv->lower);              \
+                return FALSE;                                               \
+            }                                                               \
+        }                                                                   \
+        else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)       \
+        {                                                                   \
+            od.val = &val;                                                  \
+            real_option_cb (&od);                                           \
+            return TRUE;                                                    \
+        }                                                                   \
+    }
+
+#define handle_option_boolean(option_name, lower)                           \
+    else if (streq (option, option_name))                                   \
+    {                                                                       \
+        type = G_TYPE_BOOLEAN;                                              \
+                                                                            \
+        if (streq (value, "1") || streq (value, "true"))                    \
+            val = TRUE;                                                     \
+        else if (streq (value, "0") || streq (value, "false"))              \
+            val = FALSE;                                                    \
+        else                                                                \
+        {                                                                   \
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,                      \
+                    DONNA_TREE_VIEW_ERROR_OTHER,                            \
+                    "Treeview '%s': Cannot set option '%s'; "               \
+                    "Invalid value '%s' (must be '1', 'true', '0' or 'false')", \
+                    priv->name, option, value);                             \
+            return FALSE;                                                   \
+        }                                                                   \
+                                                                            \
+        if (need_cur)                                                       \
+        {                                                                   \
+            cur = cfg_get_##lower (tree, config, &from);                    \
+            if (cur != priv->lower)                                         \
+            {                                                               \
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
+                        DONNA_TREE_VIEW_ERROR_OTHER,                        \
+                        "Treeview '%s': Cannot set option '%s'; "           \
+                        "Values not matching: '%d' (config) vs '%d' (memory)", \
+                        priv->name, option, cur, priv->lower);              \
+                return FALSE;                                               \
+            }                                                               \
+        }                                                                   \
+        else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)       \
+        {                                                                   \
+            od.val = &val;                                                  \
+            real_option_cb (&od);                                           \
+            return TRUE;                                                    \
+        }                                                                   \
+    }
+
+gboolean
+donna_tree_view_set_option (DonnaTreeView      *tree,
+                            const gchar        *option,
+                            const gchar        *value,
+                            DonnaTreeviewOptionSaveLocation save_location,
+                            GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaConfig *config;
+    const DonnaConfigExtra *extras;
+    DonnaConfigExtraListInt **ex_li;
+    struct option_data od;
+    GType type;
+    guint from;
+    gint cur;
+    gint val;
+    gboolean need_cur;
+    gchar *loc;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (option != NULL, FALSE);
+    g_return_val_if_fail (value != NULL, FALSE);
+    g_return_val_if_fail (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY
+            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT
+            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_TREE
+            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_DEFAULT
+            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK, FALSE);
+    priv = tree->priv;
+    config = donna_app_peek_config (priv->app);
+    od.tree = tree;
+    od.option = (gchar *) option;
+    od.opt = OPT_IN_MEMORY;
+    od.len = 0;
+
+    need_cur = save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT
+        || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK;
+
+    if (0)
+    {
+        /* void */
+    }
+    handle_option_int_extra ("node_types", "node-type", INT, node_types)
+    handle_option_boolean ("show_hidden", show_hidden)
+    handle_option_int_extra ("sort_groups", "sg", INT, sort_groups)
+    handle_option_int_extra ("select_highlight", "highlight", INT, select_highlight)
+    else if (is_tree (tree))
+    {
+        if (0)
+        {
+            /* void */
+        }
+        handle_option_boolean ("is_minitree", is_minitree)
+        handle_option_int_extra ("sync_mode", "sync", INT, sync_mode)
+        handle_option_boolean ("sync_scroll", sync_scroll)
+        handle_option_int_extra ("node_visuals", "visuals", FLAGS, node_visuals)
+        handle_option_boolean ("auto_focus_sync", auto_focus_sync)
+        else
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                    "Treeview '%s': Cannot set option '%s': No such option",
+                    priv->name, option);
+            return FALSE;
+        }
+    }
+    handle_option_boolean ("focusing_click", focusing_click)
+    else
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Cannot set option '%s': No such option",
+                priv->name, option);
+        return FALSE;
+    }
+
+    if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT)
+    {
+        if (from == _DONNA_CONFIG_COLUMN_FROM_TREE)
+            save_location = DONNA_COLUMN_OPTION_SAVE_IN_TREE;
+        else /* _DONNA_CONFIG_COLUMN_FROM_DEFAULT */
+            save_location = DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT;
+    }
+    else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK)
+    {
+        save_location = _donna_columntype_ask_save_location (priv->app,
+                priv->name, NULL, NULL,
+                (is_tree (tree)) ? "defaults/treeviews/tree" : "defaults/treeviews/list",
+                option, from);
+        if (save_location == (guint) -1)
+            /* user cancelled, not an error */
+            return TRUE;
+    }
+
+    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_TREE)
+        loc = g_strconcat ("treeviews/", priv->name, "/", option, NULL);
+    else /* DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT */
+        loc = g_strconcat ("defaults/treeviews/",
+                (is_tree (tree)) ? "tree" : "list", "/", option, NULL);
+
+    if (type == G_TYPE_INT)
+    {
+        if (!donna_config_set_int (config, val, loc))
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed to save option '%s'",
+                    priv->name, option);
+            g_free (loc);
+            return FALSE;
+        }
+    }
+    else if (type == G_TYPE_BOOLEAN)
+    {
+        if (!donna_config_set_boolean (config, val, loc))
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Failed to save option '%s'",
+                    priv->name, option);
+            g_free (loc);
+            return FALSE;
+        }
+    }
+    g_free (loc);
+
+    /* we don't "apply" anything, if if should be done it'll happen on the
+     * option-set signal handler from config */
+
+    return TRUE;
+}
+
+
 struct refresh_list
 {
     DonnaTreeView *tree;
@@ -11360,6 +11761,83 @@ context_get_selection (struct conv *conv, GError **error)
     return conv->selection;
 }
 
+static gboolean
+_add_items_for_extra (DonnaTreeView         *tree,
+                      GString               *str,
+                      const gchar           *name,
+                      DonnaConfigExtraType   type,
+                      const gchar           *item,
+                      const gchar           *save_location,
+                      GError               **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaConfig *config = donna_app_peek_config (priv->app);
+    const DonnaConfigExtra *extras;
+
+    extras = donna_config_get_extras (config, name, error);
+    if (!extras)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "Failed to get extras '%s' from config: ",
+                priv->name, name);
+        return FALSE;
+    }
+
+    if (extras->type != type)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "Invalid extra type for '%s' in config",
+                priv->name, name);
+        return FALSE;
+    }
+
+    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+    {
+        DonnaConfigExtraListInt **extra;
+
+        donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
+        for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+            donna_g_string_append_concat (str, ":tree_options.", item, ".",
+                    (*extra)->in_file, ":@", save_location, ",", NULL);
+        g_string_truncate (str, str->len - 1);
+        g_string_append_c (str, '>');
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags **extra;
+
+        donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
+        for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+            donna_g_string_append_concat (str, ":tree_options.", item, ".",
+                    (*extra)->in_file, ":@", save_location, ",", NULL);
+        g_string_truncate (str, str->len - 1);
+        g_string_append_c (str, '>');
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+    {
+        DonnaConfigExtraList **extra;
+
+        donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
+        for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+            donna_g_string_append_concat (str, ":tree_options.", item, ".",
+                    (*extra)->value, ":@", save_location, ",", NULL);
+        g_string_truncate (str, str->len - 1);
+        g_string_append_c (str, '>');
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "Unexpected extra type", priv->name);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 static gchar *
 tree_context_get_alias (const gchar             *alias,
                         const gchar             *extra,
@@ -11519,11 +11997,239 @@ tree_context_get_alias (const gchar             *alias,
         str->str[str->len - 1] = '>';
         return g_string_free (str, FALSE);
     }
+    else if (streq (alias, "tree_options"))
+    {
+        GString *str;
+
+        if (!extra)
+            extra = "";
+        else if (!(streq (extra, "memory") || streq (extra, "current")
+                || streq (extra, "ask") || streq (extra, "tree")
+                || streq (extra, "default")))
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Treeview '%s': Invalid extra (save_location) '%s' for alias '%s'",
+                    priv->name, extra, alias);
+            return FALSE;
+        }
+
+        str = g_string_new (NULL);
+        donna_g_string_append_concat (str,
+                ":tree_options.show_hidden:@", extra, ",", NULL);
+        if (!_add_items_for_extra (tree, str,
+                    "sg", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                    "sort_groups", extra, error))
+        {
+            g_string_free (str, TRUE);
+            return FALSE;
+        }
+#ifdef GTK_IS_JJK
+        g_string_append_c (str, ',');
+        if (!_add_items_for_extra (tree, str,
+                    "highlight", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                    "select_highlight", extra, error))
+        {
+            g_string_free (str, TRUE);
+            return FALSE;
+        }
+#endif
+        if (is_tree (tree))
+        {
+            donna_g_string_append_concat (str, ",-,"
+                    ":tree_options.is_minitree:@", extra, ","
+                    ":tree_options.sync<"
+                        ":tree_options.sync_with<"
+                            ":tree_options.sync_with.active:@", extra, ","
+                            ":tree_options.sync_with.custom:@", extra, ",-,"
+                            ":tree_options.auto_focus_sync:@", extra, ">,",
+                            NULL);
+            if (!_add_items_for_extra (tree, str,
+                        "sync", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                        "sync_mode", extra, error))
+            {
+                g_string_free (str, TRUE);
+                return FALSE;
+            }
+            /* add sync_scroll *inside* the submenu */
+            g_string_truncate (str, str->len - 1);
+            donna_g_string_append_concat (str, ",-,"
+                    ":tree_options.sync_scroll:@", extra, ">>", NULL);
+
+            g_string_append_c (str, ',');
+            if (!_add_items_for_extra (tree, str,
+                        "visuals", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
+                        "node_visuals", extra, error))
+            {
+                g_string_free (str, TRUE);
+                return FALSE;
+            }
+        }
+        else
+            donna_g_string_append_concat (str, ",-,"
+                    ":tree_options.focusing_click:@", extra, NULL);
+
+        g_string_append (str, ",-,");
+        if (!_add_items_for_extra (tree, str,
+                    "node-type", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                    "node_types", extra, error))
+        {
+            g_string_free (str, TRUE);
+            return FALSE;
+        }
+
+        return g_string_free (str, FALSE);
+    }
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
             "Unknown user alias '%s'", alias);
     return NULL;
+}
+
+static gboolean
+_set_item_from_extra (DonnaTreeView         *tree,
+                      DonnaContextInfo      *info,
+                      gintptr                current,
+                      const gchar           *name,
+                      DonnaConfigExtraType   type,
+                      const gchar           *parent,
+                      const gchar           *item,
+                      const gchar           *save_location,
+                      GError               **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaConfig *config = donna_app_peek_config (priv->app);
+    const DonnaConfigExtra *extras;
+
+    extras = donna_config_get_extras (config, name, error);
+    if (!extras)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to get item 'tree_options.%s.%s': "
+                "Failed to get extras '%s' from config: ",
+                priv->name, parent, item, name);
+        return FALSE;
+    }
+
+    if (extras->type != type)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Treeview '%s': Failed to get item 'tree_options.%s.%s': "
+                "Invalid extra type for '%s' in config",
+                priv->name, parent, item, name);
+        return FALSE;
+    }
+
+    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+    {
+        DonnaConfigExtraListInt **extra;
+
+        for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+        {
+            if (streq ((*extra)->in_file, item))
+            {
+                info->name = g_strdup (
+                        ((*extra)->label) ? (*extra)->label : (*extra)->in_file);
+                info->free_name = TRUE;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->trigger = g_strconcat (
+                        "command:tree_set_option (%o,", parent, ",",
+                        (*extra)->in_file, ",",
+                        (save_location) ? save_location : "", ")", NULL);
+                info->free_trigger = TRUE;
+                if (current == (*extra)->value)
+                    info->is_active = TRUE;
+                break;
+            }
+        }
+
+        if (!*extra)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item 'tree_options.%s.%s': "
+                    "No such value in extra '%s'",
+                    priv->name, parent, item, name);
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags **extra;
+
+        for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+        {
+            if (streq ((*extra)->in_file, item))
+            {
+                info->name = g_strdup (
+                        ((*extra)->label) ? (*extra)->label : (*extra)->in_file);
+                info->free_name = TRUE;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                info->trigger = g_strconcat (
+                        "command:tree_set_option (%o,", parent, ",",
+                        (*extra)->in_file, ",",
+                        (save_location) ? save_location : "", ")", NULL);
+                info->free_trigger = TRUE;
+                if (current & (*extra)->value)
+                    info->is_active = TRUE;
+                break;
+            }
+        }
+
+        if (!*extra)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item 'tree_options.%s.%s': "
+                    "No such value in extra '%s'",
+                    priv->name, parent, item, name);
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+    {
+        DonnaConfigExtraList **extra;
+
+        for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+        {
+            if (streq ((*extra)->value, item))
+            {
+                info->name = g_strdup (
+                        ((*extra)->label) ? (*extra)->label : (*extra)->value);
+                info->free_name = TRUE;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->trigger = g_strconcat (
+                        "command:tree_set_option (%o,", parent, ",",
+                        (*extra)->value, ",",
+                        (save_location) ? save_location : "", ")", NULL);
+                info->free_trigger = TRUE;
+                if (streq ((gchar *) current, (*extra)->value))
+                    info->is_active = TRUE;
+                break;
+            }
+        }
+
+        if (!*extra)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "Treeview '%s': No item 'tree_options.%s.%s': "
+                    "No such value in extra '%s'",
+                    priv->name, parent, item, name);
+            return FALSE;
+        }
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "Unexpected extra type", priv->name);
+        return FALSE;
+    }
+
+    return TRUE;
 }
 
 static gboolean
@@ -12051,6 +12757,285 @@ tree_context_get_item_info (const gchar             *item,
         info->free_trigger = TRUE;
 
         return TRUE;
+    }
+    else if (streqn (item, "tree_options.", 13))
+    {
+        if (extra && *extra != '@')
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Treeview '%s': Invalid extra '%s' for item '%s'",
+                    priv->name, extra, item);
+            return FALSE;
+        }
+        else if (extra)
+        {
+            ++extra;
+            if (*extra == '\0')
+                extra = NULL;
+            else if (!(streq (extra, "memory") || streq (extra, "current")
+                || streq (extra, "ask") || streq (extra, "tree")
+                || streq (extra, "default")))
+            {
+                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                        DONNA_CONTEXT_MENU_ERROR_OTHER,
+                        "Treeview '%s': Invalid save_location '%s' in extra for item '%s'",
+                        priv->name, extra, item);
+                return FALSE;
+            }
+        }
+
+        item += 13;
+#define set_trigger(option,value) do {                                      \
+        if (extra)                                                          \
+        {                                                                   \
+            info->trigger = g_strconcat (                                   \
+                    "command:tree_set_option (%o," option "," value ",",    \
+                    extra, ")", NULL);                                      \
+            info->free_trigger = TRUE;                                      \
+        }                                                                   \
+        else                                                                \
+            info->trigger = "command:tree_set_option (%o," option "," value ")"; \
+} while (0)
+
+        if (streqn (item, "node_types", 10))
+        {
+            if (item[10] == '\0')
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Nodes Shown...";
+                info->submenus = 1;
+                return TRUE;
+            }
+            else if (item[10] == '.')
+            {
+                if (!_set_item_from_extra (tree, info, priv->node_types,
+                            "node-type", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                            "node_types", item + 11, extra, error))
+                    return FALSE;
+
+                info->is_visible = info->is_sensitive = TRUE;
+                return TRUE;
+            }
+        }
+        else if (streq (item, "show_hidden"))
+        {
+            info->is_visible = info->is_sensitive = TRUE;
+            info->name = "Show \"dot\" files";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+            info->is_active = priv->show_hidden;
+            if (info->is_active)
+                set_trigger ("show_hidden", "0");
+            else
+                set_trigger ("show_hidden", "1");
+            return TRUE;
+        }
+        else if (streqn (item, "sort_groups", 11))
+        {
+            if (item[11] == '\0')
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Sort Containers...";
+                info->submenus = 1;
+                return TRUE;
+            }
+            else if (item[11] == '.')
+            {
+                if (!_set_item_from_extra (tree, info, priv->sort_groups,
+                            "sg", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                            "sort_groups", item + 12, extra, error))
+                    return FALSE;
+
+                info->is_visible = info->is_sensitive = TRUE;
+                return TRUE;
+            }
+        }
+#ifdef GTK_IS_JJK
+        else if (streqn (item, "select_highlight", 16))
+        {
+            if (item[16] == '\0')
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Selection Highlight...";
+                info->submenus = 1;
+                return TRUE;
+            }
+            else if (item[16] == '.')
+            {
+                if (!_set_item_from_extra (tree, info, priv->select_highlight,
+                            "highlight", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                            "select_highlight", item + 17, extra, error))
+                    return FALSE;
+
+                info->is_visible = info->is_sensitive = TRUE;
+                return TRUE;
+            }
+        }
+#endif
+        else if (is_tree (tree))
+        {
+            if (streq (item, "is_minitree"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Mini Tree";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                info->is_active = priv->is_minitree;
+                if (info->is_active)
+                    set_trigger ("is_minitree", "0");
+                else
+                    set_trigger ("is_minitree", "1");
+                return TRUE;
+            }
+            else if (streq (item, "sync"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Synchonization...";
+                info->submenus = 1;
+                return TRUE;
+            }
+            else if (streq (item, "sync_with"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Sync With...";
+                info->submenus = 1;
+                return TRUE;
+            }
+            else if (streq (item, "sync_with.active"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Active List";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                if (priv->sid_active_list_changed)
+                    info->is_active = TRUE;
+                set_trigger ("sync_with", ":active");
+                return TRUE;
+            }
+            else if (streq (item, "sync_with.custom"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                if (priv->sid_active_list_changed)
+                    info->name = "Custom...";
+                else if (priv->sync_with)
+                {
+                    info->name = g_strconcat ("Custom: ",
+                            donna_tree_view_get_name (priv->sync_with), NULL);
+                    info->free_name = TRUE;
+                }
+                else
+                    info->name = "Custom: <none>";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                if (priv->sid_active_list_changed == 0)
+                    info->is_active = TRUE;
+
+                info->trigger = g_strconcat ("command:tree_set_option (%o,sync_with,"
+                        "@ask_text(Enter the name of the list to sync with,,",
+                        (!priv->sid_active_list_changed && priv->sync_with)
+                        ? donna_tree_view_get_name (priv->sync_with) : "",
+                        "),", extra, ")", NULL);
+                info->free_trigger = TRUE;
+
+                return TRUE;
+            }
+            else if (streqn (item, "sync_mode", 9))
+            {
+                if (item[9] == '\0')
+                {
+                    info->is_visible = info->is_sensitive = TRUE;
+                    info->name = "Sync Mode...";
+                    info->submenus = 1;
+                    return TRUE;
+                }
+                else if (item[9] == '.')
+                {
+                    if (!_set_item_from_extra (tree, info, priv->sync_mode,
+                                "sync", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                                "sync_mode", item + 10, extra, error))
+                        return FALSE;
+
+                    item += 10;
+                    if (streq (item, "nodes"))
+                        info->desc = "Node must exists in tree and be accessible";
+                    else if (streq (item, "known-children"))
+                        info->desc = "Node must exists on tree (re-expand might occur)";
+                    else if (streq (item, "children"))
+                        info->desc = "Parent must exist on tree (fresh expand might occur)";
+                    else if (streq (item, "full"))
+                        info->desc = "New root might be added";
+
+                    info->is_visible = info->is_sensitive = TRUE;
+                    return TRUE;
+                }
+            }
+            else if (streq (item, "sync_scroll"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Scroll To Node";
+                info->desc = "Scrolling will occur only if needed";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                if (priv->sync_scroll)
+                    info->is_active = TRUE;
+                if (info->is_active)
+                    set_trigger ("sync_scroll", "0");
+                else
+                    set_trigger ("sync_scroll", "1");
+                return TRUE;
+            }
+            else if (streqn (item, "node_visuals", 12))
+            {
+                if (item[12] == '\0')
+                {
+                    info->is_visible = info->is_sensitive = TRUE;
+                    info->name = "Node Visuals...";
+                    info->submenus = 1;
+                    return TRUE;
+                }
+                else if (item[12] == '.')
+                {
+                    if (!_set_item_from_extra (tree, info, priv->node_visuals,
+                                "visuals", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
+                                "node_visuals", item + 13, extra, error))
+                        return FALSE;
+
+                    info->is_visible = info->is_sensitive = TRUE;
+                    return TRUE;
+                }
+            }
+            else if (streq (item, "auto_focus_sync"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Autofocus Sync List";
+                info->desc = "Send focus to sync list on selection/location change";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                if (priv->auto_focus_sync)
+                    info->is_active = TRUE;
+                if (info->is_active)
+                    set_trigger ("auto_focus_sync", "0");
+                else
+                    set_trigger ("auto_focus_sync", "1");
+                return TRUE;
+            }
+        }
+        else /* list */
+        {
+            if (streq (item, "focusing_click"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Ignore Focusing Left Click";
+                info->desc = "Single left click bringing the focus to the list will not be processed further";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                if (priv->focusing_click)
+                    info->is_active = TRUE;
+                if (info->is_active)
+                    set_trigger ("focusing_click", "0");
+                else
+                    set_trigger ("focusing_click", "1");
+                return TRUE;
+            }
+        }
+
+#undef set_trigger
+        /* for error message */
+        item -= 13;
     }
 
 err:

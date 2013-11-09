@@ -47,6 +47,7 @@ typedef enum
     DONNA_COLUMNTYPE_NEED_RESORT    = (1 << 1)
 } DonnaColumnTypeNeed;
 
+/* keep DonnaTreeviewOptionSaveLocation in sync */
 typedef enum
 {
     DONNA_COLUMN_OPTION_SAVE_IN_MEMORY = 0, /* i.e. don't save, only apply */

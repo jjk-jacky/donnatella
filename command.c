@@ -2248,6 +2248,50 @@ cmd_tree_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *option = args[1];
+    const gchar *value  = args[2];
+    const gchar *s_l    = args[3]; /* opt */
+
+    const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "default" };
+    DonnaTreeviewOptionSaveLocation save_location[] = {
+        DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
+        DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
+        DONNA_COLUMN_OPTION_SAVE_IN_ASK,
+        DONNA_COLUMN_OPTION_SAVE_IN_TREE,
+        DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT };
+    gint c;
+
+    if (s_l)
+    {
+        c = _get_choice (c_s_l, s_l);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Cannot set tree option, invalid save location: '%s'; "
+                    "Must be 'memory', 'current', 'ask', 'tree' or 'default'",
+                    s_l);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* default: IN_MEMORY */
+        c = 0;
+
+    if (!donna_tree_view_set_option (tree, option, value, save_location[c], &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2815,6 +2859,14 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
     add_command (tree_set_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

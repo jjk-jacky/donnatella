@@ -155,6 +155,18 @@ typedef enum
     DONNA_TREE_GOTO_PERCENT,
 } DonnaTreeGoto;
 
+/* must be same as DonnaColumnOptionSaveLocation */
+typedef enum
+{
+    DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY = 0, /* i.e. don't save, only apply */
+    DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT,
+    _DONNA_TREEVIEW_OPTION_SAVE_IN_ARRANGEMENT,
+    DONNA_TREEVIEW_OPTION_SAVE_IN_TREE,
+    _DONNA_TREEVIEW_OPTION_SAVE_IN_COLUMN,
+    DONNA_TREEVIEW_OPTION_SAVE_IN_DEFAULT,
+    DONNA_TREEVIEW_OPTION_SAVE_IN_ASK
+} DonnaTreeviewOptionSaveLocation;
+
 struct _DonnaTreeView
 {
     /*< private >*/
@@ -274,6 +286,11 @@ gboolean        donna_tree_view_set_second_sort_order (
                                                  DonnaTreeView      *tree,
                                                  const gchar        *column,
                                                  DonnaSortOrder      order,
+                                                 GError            **error);
+gboolean        donna_tree_view_set_option      (DonnaTreeView      *tree,
+                                                 const gchar        *option,
+                                                 const gchar        *value,
+                                                 DonnaTreeviewOptionSaveLocation save_location,
                                                  GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
