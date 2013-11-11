@@ -1,5 +1,4 @@
 
-#include <gtk/gtk.h>    /* see provider_base_set_property_icon() */
 #include <string.h>
 #include <stdlib.h>
 #include "provider-base.h"
@@ -46,12 +45,6 @@ static DonnaNode *      provider_base_get_cached_node (
 static void             provider_base_add_node_to_cache (
                                             DonnaProviderBase   *provider,
                                             DonnaNode           *node);
-static gboolean         provider_base_set_property_icon (
-                                             DonnaProviderBase  *provider,
-                                             DonnaNode          *node,
-                                             const gchar        *property,
-                                             const gchar        *icon,
-                                             GError            **error);
 
 /* DonnaProvider */
 static void             provider_base_node_updated (
@@ -137,7 +130,6 @@ donna_provider_base_class_init (DonnaProviderBaseClass *klass)
     klass->unlock_nodes         = provider_base_unlock_nodes;
     klass->get_cached_node      = provider_base_get_cached_node;
     klass->add_node_to_cache    = provider_base_add_node_to_cache;
-    klass->set_property_icon    = provider_base_set_property_icon;
 
     o_class = (GObjectClass *) klass;
     o_class->set_property   = provider_base_set_property;
@@ -373,70 +365,6 @@ provider_base_add_node_to_cache (DonnaProviderBase *provider,
 
     /* mark node ready */
     donna_node_mark_ready (node);
-}
-
-struct spi
-{
-    DonnaNode   *node;
-    const gchar *property;
-    const gchar *icon;
-    GError **error;
-};
-
-static DonnaTaskState
-set_property_icon (DonnaTask *task, struct spi *spi)
-{
-    GValue v = G_VALUE_INIT;
-    GdkPixbuf *pixbuf;
-
-    pixbuf = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-            spi->icon, /*FIXME*/16, 0, spi->error);
-    if (!pixbuf)
-        return DONNA_TASK_FAILED;
-
-    g_value_init (&v, GDK_TYPE_PIXBUF);
-    g_value_take_object (&v, pixbuf);
-    donna_node_set_property_value (spi->node, spi->property, &v);
-    g_value_unset (&v);
-
-    return DONNA_TASK_DONE;
-}
-
-gboolean
-_provider_base_set_property_icon (DonnaApp      *app,
-                                  DonnaNode     *node,
-                                  const gchar   *property,
-                                  const gchar   *icon,
-                                  GError       **error)
-{
-    DonnaTask *task;
-    struct spi data = { node, property, icon, error };
-    gboolean ret;
-
-    g_return_if_fail (DONNA_IS_APP (app));
-    g_return_if_fail (DONNA_IS_NODE (node));
-    g_return_if_fail (property != NULL);
-    g_return_if_fail (icon != NULL);
-
-    task = donna_task_new ((task_fn) set_property_icon, &data, NULL);
-    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_app_run_task (app, g_object_ref (task));
-    donna_task_wait_for_it (task, NULL, NULL);
-    ret = donna_task_get_state (task) == DONNA_TASK_DONE;
-    g_object_unref (task);
-    return ret;
-}
-
-static gboolean
-provider_base_set_property_icon (DonnaProviderBase  *provider,
-                                 DonnaNode          *node,
-                                 const gchar        *property,
-                                 const gchar        *icon,
-                                 GError            **error)
-{
-    g_return_if_fail (DONNA_IS_PROVIDER_BASE (provider));
-    return _provider_base_set_property_icon (provider->app, node,
-            property, icon, error);
 }
 
 struct get_node_data

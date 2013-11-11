@@ -40,13 +40,6 @@ static GdkAtom atom_gnome;
 static GdkAtom atom_kde;
 static GdkAtom atom_uris;
 
-/* internal from provider-base.c */
-gboolean _provider_base_set_property_icon (DonnaApp      *app,
-                                           DonnaNode     *node,
-                                           const gchar   *property,
-                                           const gchar   *icon,
-                                           GError       **error);
-
 
 static inline DonnaNode *   get_node_for            (DonnaProviderRegister  *pr,
                                                      const gchar            *name);
@@ -1773,8 +1766,10 @@ new_action_node (DonnaProviderRegister  *pr,
         return NULL;
     }
 
-    _provider_base_set_property_icon (((DonnaProviderBase *) pr)->app, node,
-            "icon", icon, NULL);
+    g_value_init (&v, G_TYPE_ICON);
+    g_value_take_object (&v, g_themed_icon_new (icon));
+    donna_node_set_property_value (node, "icon", &v);
+    g_value_unset (&v);
 
     g_value_init (&v, G_TYPE_BOOLEAN);
     g_value_set_boolean (&v, sensitive == SENSITIVE_YES);

@@ -847,8 +847,10 @@ new_node (DonnaProviderBase *_provider,
             desc, DONNA_NODE_ICON_EXISTS);
     g_free (desc);
 
-    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
-    klass->set_property_icon (_provider, node, "icon", "system-run", NULL);
+    g_value_init (&v, G_TYPE_ICON);
+    g_value_take_object (&v, g_themed_icon_new ("system-run"));
+    donna_node_set_property_value (node, "icon", &v);
+    g_value_unset (&v);
 
     g_value_init (&v, G_TYPE_INT);
     switch (state)
@@ -955,6 +957,7 @@ new_node (DonnaProviderBase *_provider,
     }
     g_value_unset (&v);
 
+    klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
     klass->lock_nodes (_provider);
     n = klass->get_cached_node (_provider, location);
     if (G_LIKELY (!n))

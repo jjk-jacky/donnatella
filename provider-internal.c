@@ -288,7 +288,7 @@ provider_internal_get_node_children_task (DonnaProvider       *provider,
 DonnaNode *
 donna_provider_internal_new_node (DonnaProviderInternal  *pi,
                                   const gchar            *name,
-                                  gboolean                icon_is_pixbuf,
+                                  gboolean                icon_is_gicon,
                                   gconstpointer           _icon,
                                   const gchar            *desc,
                                   DonnaNodeType           node_type,
@@ -303,7 +303,7 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
     DonnaProviderBase *pb;
     DonnaNodeFlags flags = 0;
     DonnaNode *node;
-    GdkPixbuf *pixbuf = NULL;
+    GIcon *icon = NULL;
     gchar location[64];
     GValue v = G_VALUE_INIT;
 
@@ -314,8 +314,10 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
 
     if (_icon)
     {
-        if (icon_is_pixbuf)
-            pixbuf = (GdkPixbuf *) _icon;
+        if (!icon_is_gicon)
+            icon = g_themed_icon_new ((const gchar *) _icon);
+        else
+            icon = (GIcon *) _icon;
         flags |= DONNA_NODE_ICON_EXISTS;
     }
     if (desc)
@@ -331,10 +333,13 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
         return NULL;
     }
 
-    if (pixbuf)
+    if (icon)
     {
-        g_value_init (&v, GDK_TYPE_PIXBUF);
-        g_value_set_object (&v, (GObject *) pixbuf);
+        g_value_init (&v, G_TYPE_ICON);
+        if (icon_is_gicon)
+            g_value_set_object (&v, icon);
+        else
+            g_value_take_object (&v, icon);
         donna_node_set_property_value (node, "icon", &v);
         g_value_unset (&v);
     }
@@ -394,17 +399,6 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
         return NULL;
     }
     g_value_unset (&v);
-
-    if ((flags & DONNA_NODE_ICON_EXISTS) && !pixbuf)
-    {
-        if (!klass->set_property_icon (pb, node, "icon", _icon, error))
-        {
-            g_prefix_error (error, "Provider 'internal': Cannot create new node, "
-                    "failed to set icon: ");
-            g_object_unref (node);
-            return NULL;
-        }
-    }
 
     if (!sensitive)
     {

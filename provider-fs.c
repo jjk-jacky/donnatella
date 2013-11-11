@@ -537,65 +537,30 @@ content_type_guess (const gchar *filename)
     return mt;
 }
 
-static DonnaTaskState
-set_icon_worker (DonnaTask *task, gpointer _data)
+static inline gboolean
+set_icon (DonnaApp *app, DonnaNode *node, const gchar *filename)
 {
-    struct {
-        DonnaNode *node;
-        const gchar *filename;
-    } *data = _data;
     gchar *mt;
     GIcon *icon;
-    GtkIconInfo *ii;
-    GValue value = G_VALUE_INIT;
+    GValue v = G_VALUE_INIT;
 
-    mt = content_type_guess (data->filename);
+    mt = content_type_guess (filename);
     if (!mt)
-        return DONNA_TASK_FAILED;
+        return FALSE;
 
     icon = g_content_type_get_icon (mt);
     if (!icon)
     {
         g_free (mt);
-        return DONNA_TASK_FAILED;
-    }
-    ii = gtk_icon_theme_lookup_by_gicon (gtk_icon_theme_get_default (),
-            icon,/* FIXME: get it from somewhere? */ 16, 0);
-    if (!ii)
-    {
-        g_object_unref (icon);
-        g_free (mt);
-        return DONNA_TASK_FAILED;
+        return FALSE;
     }
 
-    g_value_init (&value, G_TYPE_OBJECT);
-    g_value_take_object (&value, gtk_icon_info_load_icon (ii, NULL));
-    donna_node_set_property_value (data->node, "icon", &value);
-    g_value_unset (&value);
+    g_value_init (&v, G_TYPE_ICON);
+    g_value_take_object (&v, icon);
+    donna_node_set_property_value (node, "icon", &v);
+    g_value_unset (&v);
 
-    g_object_unref (ii);
-    g_object_unref (icon);
-    g_free (mt);
-    return DONNA_TASK_DONE;
-}
-
-static inline gboolean
-set_icon (DonnaApp *app, DonnaNode *node, const gchar *filename)
-{
-    DonnaTask *task;
-    struct {
-        DonnaNode *node;
-        const gchar *filename;
-    } data = { node, filename };
-    gboolean ret;
-
-    task = donna_task_new (set_icon_worker, &data, NULL);
-    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
-    donna_app_run_task (app, g_object_ref (task));
-    donna_task_wait_for_it (task, NULL, NULL);
-    ret = donna_task_get_state (task) == DONNA_TASK_DONE;
-    g_object_unref (task);
-    return ret;
+    return TRUE;
 }
 
 static gboolean

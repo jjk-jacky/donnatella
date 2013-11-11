@@ -143,7 +143,7 @@ gchar *             donna_node_get_filename         (DonnaNode          *node);
 gchar *             donna_node_get_name             (DonnaNode          *node);
 DonnaNodeHasValue   donna_node_get_icon             (DonnaNode          *node,
                                                      gboolean            is_blocking,
-                                                     GdkPixbuf         **icon);
+                                                     GIcon             **icon);
 DonnaNodeHasValue   donna_node_get_full_name        (DonnaNode          *node,
                                                      gboolean            is_blocking,
                                                      gchar             **full_name);

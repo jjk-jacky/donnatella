@@ -46,7 +46,7 @@
  * - node-type: (required): the #DonnaNodeType of the node
  * - filename (required): filename, in the filename encoding (gchar *)
  * - name: (required): the name of the item (gchar *)
- * - icon: pointer to a #GdkPixbuf of the item's icon
+ * - icon: pointer to a #GIcon of the item's icon
  * - full-name: the name of the item (e.g. /full/path/to/file -- often times
  *   will be the same as location) (gchar *)
  * - size: the size of the item (guint64)
@@ -243,7 +243,7 @@ donna_node_init (DonnaNode *node)
             g_free, (GDestroyNotify) free_node_prop);
     g_rw_lock_init (&priv->props_lock);
 
-    g_value_init (&priv->basic_props[BASIC_PROP_ICON].value,      G_TYPE_OBJECT);
+    g_value_init (&priv->basic_props[BASIC_PROP_ICON].value,      G_TYPE_ICON);
     g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
     g_value_init (&priv->basic_props[BASIC_PROP_SIZE].value,      G_TYPE_UINT64);
     g_value_init (&priv->basic_props[BASIC_PROP_CTIME].value,     G_TYPE_UINT64);
@@ -1089,9 +1089,9 @@ grab_basic_value:
 DonnaNodeHasValue
 donna_node_get_icon (DonnaNode  *node,
                      gboolean    is_blocking,
-                     GdkPixbuf **icon)
+                     GIcon     **icon)
 {
-    _get_basic_prop (BASIC_PROP_ICON, g_value_dup_object, GdkPixbuf *, icon);
+    _get_basic_prop (BASIC_PROP_ICON, g_value_dup_object, GIcon *, icon);
 }
 
 /**

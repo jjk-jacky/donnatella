@@ -46,11 +46,11 @@ typedef struct
     gchar       *name;
     union {
         gchar       *icon_name;
-        GdkPixbuf   *pixbuf;
+        GIcon       *icon;
     };
     union {
         gchar       *icon_name_selected;
-        GdkPixbuf   *pixbuf_selected;
+        GIcon       *icon_selected;
     };
     gchar       *desc;
     gchar       *trigger;
@@ -63,8 +63,8 @@ typedef struct
     GDestroyNotify      new_node_destroy;
 
     guint        icon_special       : 2; /* DonnaContextIconSpecial */
-    guint        icon_is_pixbuf     : 1;
-    guint        icon_is_pixbuf_selected : 1;
+    guint        icon_is_gicon      : 1;
+    guint        icon_is_gicon_selected : 1;
     guint        is_active          : 1;
     guint        is_inconsistent    : 1;
 

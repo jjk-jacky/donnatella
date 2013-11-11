@@ -49,7 +49,7 @@ GType       donna_provider_internal_get_type    (void) G_GNUC_CONST;
 
 DonnaNode * donna_provider_internal_new_node    (DonnaProviderInternal  *pi,
                                                  const gchar            *name,
-                                                 gboolean                icon_is_pixbuf,
+                                                 gboolean                icon_is_gicon,
                                                  gconstpointer           icon,
                                                  const gchar            *desc,
                                                  DonnaNodeType           node_type,

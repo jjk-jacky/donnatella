@@ -11060,7 +11060,6 @@ get_node_for_history (DonnaTreeView         *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaNode *node;
     GValue v = G_VALUE_INIT;
-    GdkPixbuf *pb;
 
     node = donna_provider_internal_new_node (pi, name, FALSE, NULL, NULL,
             DONNA_NODE_ITEM, TRUE, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
@@ -11091,16 +11090,11 @@ get_node_for_history (DonnaTreeView         *tree,
     /* no direction == node for current location */
     if (direction == 0)
     {
-        pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (), "view-refresh",
-                /*FIXME*/16, 0, NULL);
-        if (G_LIKELY (pb))
-        {
-            g_value_init (&v, GDK_TYPE_PIXBUF);
-            g_value_take_object (&v, pb);
-            donna_node_add_property (node, "menu-image-selected",
-                    GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, NULL);
-            g_value_unset (&v);
-        }
+        g_value_init (&v, G_TYPE_ICON);
+        g_value_take_object (&v, g_themed_icon_new ("view-refresh"));
+        donna_node_add_property (node, "menu-image-selected",
+                G_TYPE_ICON, &v, (refresher_fn) gtk_true, NULL, NULL);
+        g_value_unset (&v);
 
         g_value_init (&v, G_TYPE_BOOLEAN);
         g_value_set_boolean (&v, TRUE);
@@ -11137,17 +11131,12 @@ get_node_for_history (DonnaTreeView         *tree,
     }
     g_value_unset (&v);
 
-    pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-            (direction == DONNA_HISTORY_BACKWARD) ? "go-previous" : "go-next",
-            /*FIXME*/16, 0, NULL);
-    if (G_LIKELY (pb))
-    {
-        g_value_init (&v, GDK_TYPE_PIXBUF);
-        g_value_take_object (&v, pb);
-        donna_node_add_property (node, "menu-image-selected",
-                GDK_TYPE_PIXBUF, &v, (refresher_fn) gtk_true, NULL, NULL);
-        g_value_unset (&v);
-    }
+    g_value_init (&v, G_TYPE_ICON);
+    g_value_take_object (&v, g_themed_icon_new ((direction == DONNA_HISTORY_BACKWARD)
+                ? "go-previous" : "go-next"));
+    donna_node_add_property (node, "menu-image-selected",
+            G_TYPE_ICON, &v, (refresher_fn) gtk_true, NULL, NULL);
+    g_value_unset (&v);
 
     return node;
 }
@@ -12715,8 +12704,8 @@ tree_context_get_item_info (const gchar             *item,
         donna_node_get (node, FALSE, "icon", &has, &v, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
-            info->icon_is_pixbuf = TRUE;
-            info->pixbuf = g_value_dup_object (&v);
+            info->icon_is_gicon = TRUE;
+            info->icon = g_value_dup_object (&v);
             info->free_icon = TRUE;
             g_value_unset (&v);
         }

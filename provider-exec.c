@@ -548,6 +548,7 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
     DonnaNode *node;
     DonnaNode *n;
     GValue *value;
+    GValue v = G_VALUE_INIT;
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
 
@@ -563,7 +564,10 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    klass->set_property_icon (_provider, node, "icon", "application-x-executable", NULL);
+    g_value_init (&v, G_TYPE_ICON);
+    g_value_take_object (&v, g_themed_icon_new ("application-x-executable"));
+    donna_node_set_property_value (node, "icon", &v);
+    g_value_unset (&v);
 
     klass->lock_nodes (_provider);
     n = klass->get_cached_node (_provider, location);

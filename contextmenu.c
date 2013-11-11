@@ -8,14 +8,6 @@
 #include "imagemenuitem.h"  /* DonnaImageMenuItemImageSpecial */
 #include "debug.h"
 
-/* from provider-base.c */
-gboolean
-_provider_base_set_property_icon (DonnaApp      *app,
-                                  DonnaNode     *node,
-                                  const gchar   *property,
-                                  const gchar   *icon,
-                                  GError       **error);
-
 enum type
 {
     TYPE_STANDARD = 0,
@@ -483,15 +475,15 @@ free_context_info (DonnaContextInfo *info)
         g_free (info->name);
     if (info->free_icon)
     {
-        if (info->icon_is_pixbuf)
-            g_object_unref (info->pixbuf);
+        if (info->icon_is_gicon)
+            g_object_unref (info->icon);
         else
             g_free (info->icon_name);
     }
     if (info->free_icon_selected)
     {
-        if (info->icon_is_pixbuf_selected)
-            g_object_unref (info->pixbuf_selected);
+        if (info->icon_is_gicon_selected)
+            g_object_unref (info->icon_selected);
         else
             g_free (info->icon_name_selected);
     }
@@ -574,10 +566,10 @@ import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
         info->free_name = TRUE;
     }
 
-    if ((import & IMPORT_DEFAULT) && !info->pixbuf
-            && donna_node_get_icon (node, FALSE, &info->pixbuf) == DONNA_NODE_VALUE_SET)
+    if ((import & IMPORT_DEFAULT) && !info->icon
+            && donna_node_get_icon (node, FALSE, &info->icon) == DONNA_NODE_VALUE_SET)
     {
-        info->icon_is_pixbuf = TRUE;
+        info->icon_is_gicon = TRUE;
         info->free_icon = TRUE;
     }
 
@@ -615,14 +607,14 @@ import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
         }
     }
 
-    if ((import & IMPORT_DEFAULT) && !info->pixbuf_selected)
+    if ((import & IMPORT_DEFAULT) && !info->icon_selected)
     {
         donna_node_get (node, FALSE, "menu-image-selected", &has, &v, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
-            info->pixbuf_selected = g_value_dup_object (&v);
+            info->icon_selected = g_value_dup_object (&v);
             g_value_unset (&v);
-            info->icon_is_pixbuf_selected = TRUE;
+            info->icon_is_gicon_selected = TRUE;
             info->free_icon_selected = TRUE;
         }
     }
@@ -1003,25 +995,27 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
 
     if (info->icon_special == DONNA_CONTEXT_ICON_IS_IMAGE)
     {
-        if ((info->icon_is_pixbuf_selected && info->pixbuf_selected)
+        if ((info->icon_is_gicon_selected && info->icon_selected)
                 || info->icon_name_selected)
         {
-            if (info->icon_is_pixbuf_selected)
+            g_value_init (&v, G_TYPE_ICON);
+            if (info->icon_is_gicon_selected)
             {
-                g_value_init (&v, GDK_TYPE_PIXBUF);
                 if (info->free_icon_selected)
                 {
-                    g_value_take_object (&v, info->pixbuf_selected);
+                    g_value_take_object (&v, info->icon_selected);
                     info->free_icon_selected = FALSE;
                 }
                 else
-                    g_value_set_object (&v, info->pixbuf_selected);
+                    g_value_set_object (&v, info->icon_selected);
             }
+            else
+                g_value_take_object (&v, g_themed_icon_new (info->icon_name_selected));
 
             if (G_UNLIKELY (!donna_node_add_property (node,
                             "menu-image-selected",
-                            GDK_TYPE_PIXBUF,
-                            (info->icon_is_pixbuf_selected) ? &v : NULL,
+                            G_TYPE_ICON,
+                            &v,
                             (refresher_fn) gtk_true,
                             NULL,
                             &err)))
@@ -1033,18 +1027,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
                 g_clear_error (&err);
                 g_value_unset (&v);
             }
-            else if (!_provider_base_set_property_icon (app, node,
-                        "menu-image-selected", info->icon_name_selected,
-                        &err))
-            {
-                g_warning ("Context-menu: Failed to set image selected "
-                        "for item '%s': %s",
-                        item,
-                        (err) ? err->message : "(no error message)");
-                g_clear_error (&err);
-            }
-            else
-                g_value_unset (&v);
+            g_value_unset (&v);
         }
     }
     else
@@ -1411,8 +1394,8 @@ parse_items (DonnaApp               *app,
             }
 
             node = donna_provider_internal_new_node (pi, info.name,
-                    info.icon_is_pixbuf, (info.icon_is_pixbuf)
-                    ? (gconstpointer) info.pixbuf : info.icon_name,
+                    info.icon_is_gicon, (info.icon_is_gicon)
+                    ? (gconstpointer) info.icon : info.icon_name,
                     info.desc,
                     DONNA_NODE_CONTAINER,
                     /* ignore info.is_sensitive otherwise we couldn't get the
@@ -1577,8 +1560,8 @@ parse_items (DonnaApp               *app,
 
             node = donna_provider_internal_new_node (pi,
                     info.name,
-                    info.icon_is_pixbuf,
-                    (info.icon_is_pixbuf) ? (gconstpointer) info.pixbuf : info.icon_name,
+                    info.icon_is_gicon,
+                    (info.icon_is_gicon) ? (gconstpointer) info.icon : info.icon_name,
                     info.desc,
                     (info.is_container) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
                     info.is_sensitive,

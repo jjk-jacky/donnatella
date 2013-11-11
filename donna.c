@@ -2316,6 +2316,7 @@ load_mc (DonnaDonna *donna, const gchar *name, GPtrArray *nodes)
 static GtkWidget *
 load_menu (struct menu_click *mc)
 {
+    GtkIconTheme *theme;
     GtkWidget *menu;
     guint last_sep;
     guint i;
@@ -2333,11 +2334,11 @@ load_menu (struct menu_click *mc)
             --last_sep)
         ;
 
+    theme = gtk_icon_theme_get_default ();
     for (i = 0; i < mc->nodes->len; ++i)
     {
         DonnaNode *node = mc->nodes->pdata[i];
         GtkWidget *item;
-        GdkPixbuf *icon;
 
         if (!node)
         {
@@ -2444,12 +2445,29 @@ load_menu (struct menu_click *mc)
                 }
                 else /* DONNA_IMAGE_MENU_ITEM_IS_IMAGE */
                 {
-                    if (donna_node_get_icon (node, FALSE, &icon) == DONNA_NODE_VALUE_SET)
+                    GIcon *icon = NULL;
+
+                    if (donna_node_get_icon (node, TRUE, &icon) == DONNA_NODE_VALUE_SET)
                     {
-                        image = gtk_image_new_from_pixbuf (icon);
+                        GtkIconInfo *info;
+
+                        info = gtk_icon_theme_lookup_by_gicon (theme, icon, 16,
+                                GTK_ICON_LOOKUP_GENERIC_FALLBACK);
                         g_object_unref (icon);
+                        if (info)
+                        {
+                            g_object_unref (info);
+                            image = gtk_image_new_from_gicon (icon,
+                                    /*XXX*/GTK_ICON_SIZE_MENU);
+                        }
+                        else
+                            icon = NULL;
+
+                        /* if lookup failed, we'll default to the file/folder
+                         * icon instead of the "broken" one, much like
+                         * columntype-name does for treeview */
                     }
-                    else if (mc->use_default_icons)
+                    if (!icon && mc->use_default_icons)
                     {
                         if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
                             image = gtk_image_new_from_stock (GTK_STOCK_FILE,
@@ -2458,7 +2476,7 @@ load_menu (struct menu_click *mc)
                             image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY,
                                     GTK_ICON_SIZE_MENU);
                     }
-                    else
+                    else if (!icon)
                         image = NULL;
 
                     if (image)
@@ -2467,9 +2485,10 @@ load_menu (struct menu_click *mc)
                     donna_node_get (node, TRUE, "menu-image-selected", &has, &v, NULL);
                     if (has == DONNA_NODE_VALUE_SET)
                     {
-                        if (G_VALUE_TYPE (&v) == GDK_TYPE_PIXBUF)
+                        if (G_VALUE_TYPE (&v) == G_TYPE_ICON)
                         {
-                            image = gtk_image_new_from_pixbuf (g_value_get_object (&v));
+                            image = gtk_image_new_from_gicon (g_value_get_object (&v),
+                                    GTK_ICON_SIZE_MENU /* FIXME */);
                             donna_image_menu_item_set_image_selected (imi, image);
                         }
                         g_value_unset (&v);

@@ -220,7 +220,10 @@ provider_command_new_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    klass->set_property_icon (_provider, node, "icon", "applications-system", NULL);
+    g_value_init (&v, G_TYPE_ICON);
+    g_value_take_object (&v, g_themed_icon_new ("applications-system"));
+    donna_node_set_property_value (node, "icon", &v);
+    g_value_unset (&v);
 
     /* "preload" the type of visibility neede for the task trigger_node */
     g_value_init (&v, G_TYPE_UINT);

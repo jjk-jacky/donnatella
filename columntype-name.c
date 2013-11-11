@@ -531,39 +531,46 @@ ct_name_render (DonnaColumnType    *ct,
     if (index == 1)
     {
         DonnaNodeHasValue has_value;
-        GdkPixbuf *pixbuf;
+        DonnaNodeType node_type;
+        GIcon *icon;
 
-        has_value = donna_node_get_icon (node, FALSE, &pixbuf);
+        has_value = donna_node_get_icon (node, FALSE, &icon);
         if (has_value == DONNA_NODE_VALUE_SET)
         {
-            g_object_set (renderer, "visible", TRUE, "pixbuf", pixbuf, NULL);
-            g_object_unref (pixbuf);
-        }
-        else
-        {
-            DonnaNodeType node_type;
+            GtkIconInfo *info;
 
-            if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
-                g_object_set (renderer,
-                        "visible",  TRUE,
-                        "stock-id", GTK_STOCK_FILE,
-                        NULL);
-            else /* DONNA_NODE_CONTAINER */
-                g_object_set (renderer,
-                        "visible",  TRUE,
-                        "stock-id", GTK_STOCK_DIRECTORY,
-                        NULL);
-
-            return NULL; /* not done, so it never gets refreshed */
-            if (has_value == DONNA_NODE_VALUE_NEED_REFRESH)
+            info = gtk_icon_theme_lookup_by_gicon (gtk_icon_theme_get_default (),
+                    icon, 16, GTK_ICON_LOOKUP_GENERIC_FALLBACK);
+            g_object_unref (icon);
+            if (info)
             {
-                GPtrArray *arr;
-
-                arr = g_ptr_array_new ();
-                g_ptr_array_add (arr, "icon");
-                return arr;
+                g_object_unref (info);
+                g_object_set (renderer, "visible", TRUE, "gicon", icon, NULL);
+                return NULL;
             }
+
+            /* fallthrough if lookup failed, so instead of showing tke "broken"
+             * image, we can default to the file/folder one */
         }
+        else if (has_value == DONNA_NODE_VALUE_NEED_REFRESH)
+        {
+            GPtrArray *arr;
+
+            arr = g_ptr_array_sized_new (1);
+            g_ptr_array_add (arr, "icon");
+            return arr;
+        }
+
+        if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
+            g_object_set (renderer,
+                    "visible",  TRUE,
+                    "stock-id", GTK_STOCK_FILE,
+                    NULL);
+        else /* DONNA_NODE_CONTAINER */
+            g_object_set (renderer,
+                    "visible",  TRUE,
+                    "stock-id", GTK_STOCK_DIRECTORY,
+                    NULL);
     }
     else /* index == 2 */
     {

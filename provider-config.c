@@ -136,13 +136,6 @@ static DonnaTask *      provider_config_io_task (
                                             GError             **error);
 
 
-/* internal from provider-base.c */
-gboolean _provider_base_set_property_icon (DonnaApp      *app,
-                                           DonnaNode     *node,
-                                           const gchar   *property,
-                                           const gchar   *icon,
-                                           GError       **error);
-
 static gchar *get_option_full_name (GNode *root, GNode *gnode);
 static void free_extra  (DonnaConfigExtra  *extra);
 
@@ -3114,6 +3107,8 @@ ensure_option_has_node (DonnaProviderConfig *config,
     g_rec_mutex_lock (&priv->nodes_mutex);
     if (!option->node)
     {
+        GValue v = G_VALUE_INIT;
+
         /* we need to create the node */
         option->node = donna_node_new (DONNA_PROVIDER (config),
                 location,
@@ -3130,18 +3125,16 @@ ensure_option_has_node (DonnaProviderConfig *config,
             /* is this an extra? */
             if (option->extra)
             {
-                GValue val = G_VALUE_INIT;
-
-                g_value_init (&val, G_TYPE_STRING);
-                g_value_set_string (&val, option->extra);
+                g_value_init (&v, G_TYPE_STRING);
+                g_value_set_string (&v, option->extra);
                 donna_node_add_property (option->node,
                         "option-extra",
                         G_TYPE_STRING,
-                        &val,
+                        &v,
                         node_prop_refresher,
                         NULL /* no setter */,
                         NULL);
-                g_value_unset (&val);
+                g_value_unset (&v);
             }
 
             /* add the value of the option */
@@ -3165,10 +3158,13 @@ ensure_option_has_node (DonnaProviderConfig *config,
         /* set icon */
         if (option->extra != priv->root
                 || (location[0] == '/' && location [1] == '\0'))
-            /* takes care of handling GTK in the main/UI thread */
-            _provider_base_set_property_icon (priv->app, option->node, "icon",
-                    (option->extra != priv->root)
-                    ? "document-properties" : "preferences-desktop", NULL);
+        {
+            g_value_init (&v, G_TYPE_ICON);
+            g_value_take_object (&v, g_themed_icon_new ((option->extra != priv->root)
+                        ? "document-properties" : "preferences-desktop"));
+            donna_node_set_property_value (option->node, "icon", &v);
+            g_value_unset (&v);
+        }
 
         /* have provider emit the new_node signal */
         donna_provider_new_node (DONNA_PROVIDER (config), option->node);
