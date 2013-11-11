@@ -2,6 +2,9 @@
 #ifndef __DONNA_COMMON_H__
 #define __DONNA_COMMON_H__
 
+#include <glib.h>
+#include <glib-object.h>
+
 G_BEGIN_DECLS
 
 typedef enum
