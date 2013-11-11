@@ -12100,7 +12100,7 @@ tree_context_get_alias (const gchar             *alias,
 
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
-            "Unknown user alias '%s'", alias);
+            "Unknown internal alias '%s'", alias);
     return NULL;
 }
 
