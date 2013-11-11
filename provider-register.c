@@ -1789,6 +1789,7 @@ new_action_node (DonnaProviderRegister  *pr,
             g_free (b);
         return NULL;
     }
+    g_value_unset (&v);
 
     if (b != buf)
         g_free (b);
