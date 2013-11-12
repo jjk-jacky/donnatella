@@ -820,15 +820,24 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
 
         if (visuals->icon)
         {
-            GdkPixbuf *pb;
+            GIcon *icon;
 
-            pb = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                    visuals->icon, 16 /* FIXME */, 0, NULL);
-            if (pb)
+            if (*visuals->icon == '/')
             {
-                g_value_init (&value, GDK_TYPE_PIXBUF);
-                g_value_take_object (&value, pb);
-                donna_node_add_property (node, "visual-icon", GDK_TYPE_PIXBUF, &value,
+                GFile *file;
+
+                file = g_file_new_for_path (visuals->icon);
+                icon = g_file_icon_new (file);
+                g_object_unref (file);
+            }
+            else
+                icon = g_themed_icon_new (visuals->icon);
+
+            if (icon)
+            {
+                g_value_init (&value, G_TYPE_ICON);
+                g_value_take_object (&value, icon);
+                donna_node_add_property (node, "visual-icon", G_TYPE_ICON, &value,
                         visual_refresher, NULL, NULL);
                 g_value_unset (&value);
             }

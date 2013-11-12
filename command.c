@@ -1586,9 +1586,9 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *visual = args[2];
     gchar *source = args[3];
 
-    const gchar *c_visual[] = { "name", "box", "highlight", "clicks" };
-    DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_BOX,
-        DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+    const gchar *c_visual[] = { "name", "icon", "box", "highlight", "clicks" };
+    DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
     const gchar *c_source[] = { "any", "tree", "node" };
     DonnaTreeVisualSource sources[] = { DONNA_TREE_VISUAL_SOURCE_ANY,
         DONNA_TREE_VISUAL_SOURCE_TREE, DONNA_TREE_VISUAL_SOURCE_NODE };

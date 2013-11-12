@@ -190,7 +190,7 @@ struct visuals
      * number of the root, e.g. same as path_to_string */
     GtkTreeIter  root;
     gchar       *name;
-    GdkPixbuf   *icon;
+    GIcon       *icon;
     gchar       *box;
     gchar       *highlight;
     /* not a visual, but treated the same */
@@ -3780,15 +3780,15 @@ rend_func (GtkTreeViewColumn  *column,
         if (index == 1)
         {
             /* GtkRendererPixbuf */
-            GdkPixbuf *pixbuf;
+            GIcon *icon;
 
             gtk_tree_model_get (model, iter,
-                    DONNA_TREE_COL_ICON,    &pixbuf,
+                    DONNA_TREE_COL_ICON,    &icon,
                     -1);
-            if (pixbuf)
+            if (icon)
             {
-                g_object_set (renderer, "pixbuf", pixbuf, NULL);
-                g_object_unref (pixbuf);
+                g_object_set (renderer, "gicon", icon, NULL);
+                g_object_unref (icon);
             }
         }
         else /* index == 2 */
@@ -4787,7 +4787,7 @@ load_node_visuals (DonnaTreeView    *tree,
             -1);
 
     load_node_visual (NAME,      "name",      G_TYPE_STRING,   get_string, NAME);
-    load_node_visual (ICON,      "icon",      GDK_TYPE_PIXBUF, get_object, ICON);
+    load_node_visual (ICON,      "icon",      G_TYPE_ICON,     get_object, ICON);
     load_node_visual (BOX,       "box",       G_TYPE_STRING,   get_string, BOX);
     load_node_visual (HIGHLIGHT, "highlight", G_TYPE_STRING,   get_string, HIGHLIGHT);
 
@@ -9285,8 +9285,31 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     else if (visual == DONNA_TREE_VISUAL_ICON)
     {
         col = DONNA_TREE_COL_ICON;
-        value = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                    _value, 16 /* FIXME */, 0, NULL);
+        if (!_value)
+            value = NULL;
+        else
+        {
+            if (*_value == '/')
+            {
+                GFile *file;
+
+                file = g_file_new_for_path (_value);
+                value = g_file_icon_new (file);
+                g_object_unref (file);
+            }
+            else
+                value = g_themed_icon_new (_value);
+
+            if (!value)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': Cannot set visual 'icon', "
+                        "unable to get icon from '%s'",
+                        priv->name, _value);
+                return FALSE;
+            }
+        }
     }
     else if (visual == DONNA_TREE_VISUAL_BOX)
         col = DONNA_TREE_COL_BOX;
@@ -9313,7 +9336,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
             -1);
 
     if (visual == DONNA_TREE_VISUAL_ICON)
-        g_object_unref (value);
+        donna_g_object_unref (value);
 
     return TRUE;
 }
@@ -9360,6 +9383,8 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
 
     if (visual == DONNA_TREE_VISUAL_NAME)
         col = DONNA_TREE_COL_NAME;
+    else if (visual == DONNA_TREE_VISUAL_ICON)
+        col = DONNA_TREE_COL_ICON;
     else if (visual == DONNA_TREE_VISUAL_BOX)
         col = DONNA_TREE_COL_BOX;
     else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
@@ -9393,6 +9418,25 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
             col,    &value,
             -1);
+
+    if (col == DONNA_TREE_COL_ICON)
+    {
+        GIcon *icon = (GIcon *) value;
+
+        value = g_icon_to_string (icon);
+        g_object_unref (icon);
+        if (G_UNLIKELY (!value || *value == '.'))
+        {
+            /* since a visual is a user-set icon, it should always be either
+             * a /path/to/file.png or an icon-name, and never something like
+             * ". GThemedIcon icon-name1 icon-name2" */
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Treeview '%s': Cannot return visual 'icon', "
+                    "it doesn't have a straight-forward string value");
+            return NULL;
+        }
+    }
 
     return value;
 }
@@ -15835,12 +15879,12 @@ donna_tree_view_new (DonnaApp    *app,
         g_debug ("treeview '%s': setting up as tree", priv->name);
         /* store */
         priv->store = donna_tree_store_new (DONNA_TREE_NB_COLS,
-                G_TYPE_OBJECT,  /* DONNA_TREE_COL_NODE */
+                DONNA_TYPE_NODE,/* DONNA_TREE_COL_NODE */
                 G_TYPE_INT,     /* DONNA_TREE_COL_EXPAND_STATE */
                 G_TYPE_BOOLEAN, /* DONNA_TREE_COL_EXPAND_FLAG */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_ROW_CLASS */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_NAME */
-                G_TYPE_OBJECT,  /* DONNA_TREE_COL_ICON */
+                G_TYPE_ICON,    /* DONNA_TREE_COL_ICON */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_BOX */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_HIGHLIGHT */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_CLICKS */
@@ -15856,7 +15900,7 @@ donna_tree_view_new (DonnaApp    *app,
         g_debug ("treeview '%s': setting up as list", priv->name);
         /* store */
         priv->store = donna_tree_store_new (DONNA_LIST_NB_COLS,
-                G_TYPE_OBJECT); /* DONNA_LIST_COL_NODE */
+                DONNA_TYPE_NODE); /* DONNA_LIST_COL_NODE */
         model = GTK_TREE_MODEL (priv->store);
         /* some stylling */
         gtk_tree_view_set_rules_hint (treev, TRUE);
