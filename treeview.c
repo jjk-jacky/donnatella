@@ -13105,6 +13105,106 @@ tree_context_get_item_info (const gchar             *item,
         /* for error message */
         item -= 13;
     }
+    else if (streqn (item, "tree_visuals.", 13))
+    {
+        DonnaTreeVisual v, visuals;
+        GString *str;
+        guint col;
+        gchar *s;
+        const gchar *name;
+
+        item += 13;
+
+        if (streq (item, "name"))
+        {
+            name = "Name";
+            v = DONNA_TREE_VISUAL_NAME;
+            col = DONNA_TREE_COL_NAME;
+        }
+        else if (streq (item, "icon"))
+        {
+            name = "Icon";
+            v = DONNA_TREE_VISUAL_ICON;
+            col = DONNA_TREE_COL_ICON;
+        }
+        else if (streq (item, "box"))
+        {
+            name = "Box";
+            v = DONNA_TREE_VISUAL_BOX;
+            col = DONNA_TREE_COL_BOX;
+        }
+        else if (streq (item, "highlight"))
+        {
+            name = "Highlight";
+            v = DONNA_TREE_VISUAL_HIGHLIGHT;
+            col = DONNA_TREE_COL_HIGHLIGHT;
+        }
+        else if (streq (item, "clicks"))
+        {
+            name = "Clicks";
+            v = DONNA_TREE_VISUAL_CLICKS;
+            col = DONNA_TREE_COL_CLICKS;
+        }
+        else
+        {
+            /* for error message */
+            item -= 13;
+            goto err;
+        }
+
+        if (!conv->row)
+        {
+            info->name = (gchar *) name;
+            return TRUE;
+        }
+
+        gtk_tree_model_get ((GtkTreeModel *) priv->store, conv->row->iter,
+                DONNA_TREE_COL_VISUALS,     &visuals,
+                col,                        &s,
+                -1);
+
+        if (col == DONNA_TREE_COL_ICON && s)
+        {
+            GIcon *icon = (GIcon *) s;
+            s = g_icon_to_string (icon);
+            if (G_UNLIKELY (!s || *s == '.'))
+            {
+                /* since a visual is a user-set icon, it should always be either
+                 * a /path/to/file.png or an icon-name. In the off chance it's
+                 * not, e.g. a ". GThemedIcon icon-name1 icon-name2" kinda
+                 * string, we just ignore it. */
+                g_free (s);
+                s = NULL;
+            }
+            g_object_unref (icon);
+        }
+
+        info->is_visible = info->is_sensitive = TRUE;
+        if (visuals & v)
+            info->name = g_strconcat (name, ": ", (s) ? s : "<icon>", NULL);
+        else
+            info->name = g_strconcat (name, "...", NULL);
+        info->free_name = TRUE;
+
+        str = g_string_new ("command:tree_set_visual (%o,%r,");
+        g_string_append (str, name);
+        g_string_append (str, ",@ask_text (");
+        g_string_append_printf (str, "Enter the new '%s' value", name);
+        if ((visuals & v) && s)
+        {
+            g_string_append_c (str, ',');
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, s, FALSE);
+        }
+        g_string_append_c (str, ')');
+        g_string_append_c (str, ')');
+
+        info->trigger = g_string_free (str, FALSE);
+        info->free_trigger = TRUE;
+
+        g_free (s);
+        return TRUE;
+    }
 
 err:
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
