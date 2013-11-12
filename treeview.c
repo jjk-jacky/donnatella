@@ -9329,7 +9329,11 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
             DONNA_TREE_COL_VISUALS,     &v,
             -1);
-    v |= visual;
+    if (value)
+        v |= visual;
+    else
+        v &= ~visual;
+
     donna_tree_store_set (priv->store, &iter,
             DONNA_TREE_COL_VISUALS,     v,
             col,                        value,
@@ -9337,6 +9341,19 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
 
     if (visual == DONNA_TREE_VISUAL_ICON)
         donna_g_object_unref (value);
+
+    if (!value && (priv->node_visuals & visual))
+    {
+        DonnaNode *node;
+
+        /* if we show the node visual and there's one, restore it */
+
+        gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                DONNA_TREE_COL_NODE,    &node,
+                -1);
+        load_node_visuals (tree, &iter, node, FALSE);
+        g_object_unref (node);
+    }
 
     return TRUE;
 }
@@ -9430,6 +9447,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
             /* since a visual is a user-set icon, it should always be either
              * a /path/to/file.png or an icon-name, and never something like
              * ". GThemedIcon icon-name1 icon-name2" */
+            g_free (value);
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
                     "Treeview '%s': Cannot return visual 'icon', "

@@ -2393,6 +2393,10 @@ cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
+    /* empty string as value is turned into NULL to means unset the visual */
+    if (*value == '\0')
+        value = NULL;
+
     if (!donna_tree_view_set_visual (tree, rid, visuals[c], value, &err))
     {
         donna_task_take_error (task, err);
