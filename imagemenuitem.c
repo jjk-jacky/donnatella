@@ -40,9 +40,9 @@ struct _DonnaImageMenuItemPrivate
     guint        is_label_markup        : 1;
     gint         toggle_size;
 
-    gint         item_width;
-    guint        sid_button_release;
-    guint        sid_parent_button_release;
+    gdouble      item_width;
+    gulong       sid_button_release;
+    gulong       sid_parent_button_release;
     guint        sid_timeout;
 };
 
@@ -467,7 +467,7 @@ donna_image_menu_item_toggle_size_request (GtkMenuItem *menu_item,
             GtkWidget *parent;
             GtkPackDirection pack_dir;
             GtkRequisition image_requisition;
-            guint toggle_spacing;
+            gint toggle_spacing;
 
             parent = gtk_widget_get_parent (widget);
             if (GTK_IS_MENU_BAR (parent))
@@ -492,8 +492,8 @@ donna_image_menu_item_toggle_size_request (GtkMenuItem *menu_item,
     }
     else
     {
-        guint toggle_spacing;
-        guint indicator_size;
+        gint toggle_spacing;
+        gint indicator_size;
 
         gtk_widget_style_get ((GtkWidget *) menu_item,
                 "toggle-spacing",   &toggle_spacing,
@@ -631,7 +631,7 @@ donna_image_menu_item_size_allocate (GtkWidget     *widget,
         GtkBorder padding;
         GtkRequisition child_requisition;
         GtkAllocation child_allocation;
-        guint horizontal_padding, toggle_spacing;
+        gint horizontal_padding, toggle_spacing;
 
         parent = gtk_widget_get_parent (widget);
         if (GTK_IS_MENU_BAR (parent))
@@ -651,7 +651,7 @@ donna_image_menu_item_size_allocate (GtkWidget     *widget,
         context = gtk_widget_get_style_context (widget);
         state = gtk_widget_get_state_flags (widget);
         gtk_style_context_get_padding (context, state, &padding);
-        offset = gtk_container_get_border_width ((GtkContainer *) widget);
+        offset = (gint) gtk_container_get_border_width ((GtkContainer *) widget);
 
         if (pack_dir == GTK_PACK_DIRECTION_LTR || pack_dir == GTK_PACK_DIRECTION_RTL)
         {
@@ -762,7 +762,7 @@ menu_item_release_cb (GtkWidget             *widget,
     if (!priv->is_combined || !priv->is_combined_sensitive)
         return FALSE;
 
-    if ((gint) event->x <= priv->item_width)
+    if (event->x <= priv->item_width)
     {
         /* on the item part, make sure an event gets out & close the menu. We
          * "emit" the event blocking this handler instead of just returning
@@ -800,7 +800,7 @@ parent_button_release_cb (GtkWidget             *parent,
     if (!w || w != (GtkWidget *) item)
         return FALSE;
 
-    if ((gint) event->x <= priv->item_width
+    if (event->x <= priv->item_width
             && gtk_menu_item_get_submenu ((GtkMenuItem *) item))
     {
         /* on the item part while a submenu was attached. So we close the
@@ -871,7 +871,7 @@ donna_image_menu_item_select (GtkMenuItem        *menuitem)
                 "gtk-menu-popup-delay", &delay,
                 NULL);
         if (delay > 0)
-            priv->sid_timeout = g_timeout_add (delay,
+            priv->sid_timeout = g_timeout_add ((guint) delay,
                     (GSourceFunc) delayed_emit, (GtkWidget *) menuitem);
         else
             g_signal_emit (menuitem,
@@ -972,7 +972,7 @@ get_arrow_size (GtkWidget *widget,
 
     pango_font_metrics_unref (metrics);
 
-    *size = *size * arrow_scaling;
+    *size = (gint) ((gfloat) *size * arrow_scaling);
 }
 
 struct draw
@@ -1005,11 +1005,12 @@ donna_image_menu_item_draw (GtkWidget          *widget,
     GtkStyleContext *context;
     GtkBorder padding;
     GtkWidget *child, *parent;
-    gint x, y, w, h, width, height;
-    guint border_width = gtk_container_get_border_width (GTK_CONTAINER (widget));
+    gdouble x, y, w, h, width, height;
+    guint border_width;
     gint arrow_size;
     struct draw data;
 
+    border_width = gtk_container_get_border_width ((GtkContainer *) widget);
     state = gtk_widget_get_state_flags (widget);
     context = gtk_widget_get_style_context (widget);
     width = gtk_widget_get_allocated_width (widget);
@@ -1058,7 +1059,7 @@ donna_image_menu_item_draw (GtkWidget          *widget,
             || (gtk_menu_item_get_submenu ((GtkMenuItem *) widget)
                 && !GTK_IS_MENU_BAR (parent)))
     {
-        gint arrow_x, arrow_y;
+        gdouble arrow_x, arrow_y;
         GtkTextDirection direction;
         gdouble angle;
 
@@ -1110,7 +1111,6 @@ donna_image_menu_item_draw (GtkWidget          *widget,
         guint toggle_spacing;
         guint horizontal_padding;
         guint indicator_size;
-        guint border_width;
         guint offset;
 
         gtk_widget_style_get (widget,
@@ -1119,15 +1119,14 @@ donna_image_menu_item_draw (GtkWidget          *widget,
                 "indicator-size",       &indicator_size,
                 NULL);
 
-        border_width = gtk_container_get_border_width ((GtkContainer *) widget);
-        offset = border_width + padding.left + 2;
+        offset = border_width + (guint16) padding.left + 2;
 
         if (gtk_widget_get_direction (widget) == GTK_TEXT_DIR_LTR)
             x = offset + horizontal_padding
-                + (priv->toggle_size - toggle_spacing - indicator_size) / 2;
+                + ((guint) priv->toggle_size - toggle_spacing - indicator_size) / 2;
         else
             x = width - offset - horizontal_padding - priv->toggle_size + toggle_spacing
-                + (priv->toggle_size - toggle_spacing - indicator_size) / 2;
+                + ((guint) priv->toggle_size - toggle_spacing - indicator_size) / 2;
         y = (height - indicator_size) / 2;
 
         gtk_style_context_save (context);
@@ -1343,7 +1342,7 @@ donna_image_menu_item_set_is_active (DonnaImageMenuItem *item,
 
     if (priv->is_active != is_active)
     {
-        priv->is_active = is_active;
+        priv->is_active = (is_active) ? 1 : 0;
         g_object_notify ((GObject *) item, "is-active");
     }
 }
@@ -1386,7 +1385,7 @@ donna_image_menu_item_set_is_inconsistent (DonnaImageMenuItem *item,
 
     if (priv->is_inconsistent != is_inconsistent)
     {
-        priv->is_inconsistent = is_inconsistent;
+        priv->is_inconsistent = (is_inconsistent) ? 1 : 0;
         g_object_notify ((GObject *) item, "is-inconsistent");
     }
 }
@@ -1425,7 +1424,7 @@ donna_image_menu_item_set_is_combined (DonnaImageMenuItem *item,
 
     if (priv->is_combined != is_combined)
     {
-        priv->is_combined = is_combined;
+        priv->is_combined = (is_combined) ? 1 : 0;
         gtk_menu_item_set_reserve_indicator ((GtkMenuItem *) item, priv->is_combined);
         g_object_notify ((GObject *) item, "is-combined");
     }
@@ -1466,7 +1465,7 @@ donna_image_menu_item_set_is_combined_sensitive (DonnaImageMenuItem *item,
 
     if (priv->is_combined_sensitive != is_combined_sensitive)
     {
-        priv->is_combined_sensitive = is_combined_sensitive;
+        priv->is_combined_sensitive = (is_combined_sensitive) ? 1 : 0;
         g_object_notify ((GObject *) item, "is-combined-sensitive");
     }
 }
@@ -1506,7 +1505,7 @@ donna_image_menu_item_set_is_label_bold (DonnaImageMenuItem *item,
     {
         GtkWidget *child;
 
-        priv->is_label_bold = is_bold;
+        priv->is_label_bold = (is_bold) ? 1 : 0;
         child = gtk_bin_get_child ((GtkBin *) item);
         if (GTK_IS_LABEL (child))
         {
@@ -1560,7 +1559,7 @@ donna_image_menu_item_set_is_label_markup (DonnaImageMenuItem *item,
     {
         GtkLabel *label;
 
-        priv->is_label_markup = is_markup;
+        priv->is_label_markup = (is_markup) ? 1 : 0;
         label = (GtkLabel *) gtk_bin_get_child ((GtkBin *) item);
         if (GTK_IS_LABEL (label))
         {
