@@ -550,7 +550,7 @@ static GtkTreeIter *get_closest_iter_for_node           (DonnaTreeView *tree,
                                                          DonnaNode     *node,
                                                          DonnaProvider *provider,
                                                          const gchar   *location,
-                                                         GtkTreeIter   *skip_root,
+                                                         gboolean       skip_current_root,
                                                          gboolean      *is_match);
 static GtkTreeIter *get_best_existing_iter_for_node     (DonnaTreeView  *tree,
                                                          DonnaNode      *node,
@@ -1212,7 +1212,7 @@ sync_with_location_changed_cb (GObject       *object,
             location = donna_node_get_location (node);
             iter = get_closest_iter_for_node (tree, node,
                     donna_node_peek_provider (node), location,
-                    NULL, NULL);
+                    FALSE, NULL);
             g_free (location);
 
             /* see comment for same stuff above */
@@ -7060,7 +7060,7 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                            DonnaNode     *node,
                            DonnaProvider *provider,
                            const gchar   *location,
-                           GtkTreeIter   *skip_root,
+                           gboolean       skip_current_root,
                            gboolean      *is_match)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -7070,12 +7070,32 @@ get_closest_iter_for_node (DonnaTreeView *tree,
     DonnaNode *n;
     GdkRectangle rect_visible;
     GdkRectangle rect;
+    GtkTreeIter *cur_root;
     GtkTreeIter *last_iter = NULL;
     guint last_match = 0;
 #define LM_MATCH    (1 << 0)
 #define LM_VISIBLE  (1 << 1)
 
     model  = (GtkTreeModel *) priv->store;
+
+    cur_root = get_current_root_iter (tree);
+    if (!cur_root)
+    {
+        GtkTreePath *path;
+
+        /* no current root, nothing to skip */
+        skip_current_root = FALSE;
+
+        /* however, we'll consider the root of the focused row to be the current
+         * one, as far as precedence goes for results below */
+        gtk_tree_view_get_cursor (treev, &path, NULL);
+        if (path)
+        {
+            if (gtk_tree_model_get_iter (model, &iter, path))
+                cur_root = get_root_iter (tree, &iter);
+            gtk_tree_path_free (path);
+        }
+    }
 
     /* get visible area, so we can determine which iters are visible */
     gtk_tree_view_get_visible_rect (treev, &rect_visible);
@@ -7086,9 +7106,9 @@ get_closest_iter_for_node (DonnaTreeView *tree,
     if (gtk_tree_model_iter_children (model, &iter, NULL))
         do
         {
-            /* we might have a root to skip (likely the current one, already
-             * processed before calling this */
-            if (skip_root && itereq (&iter, skip_root))
+            /* we might have to skip current root (probably already processed
+             * before calling this */
+            if (skip_current_root && itereq (&iter, cur_root))
                 continue;
 
             gtk_tree_model_get (model, &iter, DONNA_TREE_COL_NODE, &n, -1);
@@ -7108,7 +7128,7 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                         break;
                     }
 
-                /* find the closest "accessible" iter */
+                /* find the closest "accessible" iter for node under i */
                 i = get_iter_expanding_if_needed (tree, i, node, TRUE, &match);
                 if (i)
                 {
@@ -7124,13 +7144,24 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                     {
                         if (match)
                         {
+                            /* visible match, this is it */
                             if (is_match)
                                 *is_match = match;
                             return get_iter_expanding_if_needed (tree, i, node,
                                     FALSE, NULL);
                         }
-                        else if ((last_match & (LM_MATCH | LM_VISIBLE)) == 0)
+                        else if (last_match == LM_VISIBLE
+                                && itereq (&iter, cur_root))
                         {
+                            /* we already have a visible non-match, but this one
+                             * is in the current root, so takes precedence */
+                            last_match = LM_VISIBLE;
+                            last_iter = i;
+                        }
+                        else if (last_match == 0)
+                        {
+                            /* first result, or we alreayd had a non-match, but
+                             * it was not visible */
                             last_match = LM_VISIBLE;
                             last_iter = i;
                         }
@@ -7139,14 +7170,31 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                     {
                         if (match)
                         {
-                            if (!(last_match & LM_MATCH))
+                            if (last_match != LM_MATCH)
                             {
+                                /* we didn't have a match (i.e. we had nothing,
+                                 * or a visible non-match) */
+                                last_match = LM_MATCH;
+                                last_iter = i;
+                            }
+                            else if (itereq (&iter, cur_root))
+                            {
+                                /* we already have a non-visible match, but this
+                                 * one is in the current root */
                                 last_match = LM_MATCH;
                                 last_iter = i;
                             }
                         }
                         else if (!last_iter)
                         {
+                            /* first result */
+                            last_match = 0;
+                            last_iter = i;
+                        }
+                        else if (last_match == 0 && itereq (&iter, cur_root))
+                        {
+                            /* we already had a non-visible non-match, but this
+                             * one is in the current root */
                             last_match = 0;
                             last_iter = i;
                         }
@@ -7214,7 +7262,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
     }
 
     last_iter = get_closest_iter_for_node (tree, node,
-            provider, location, iter_cur_root, &match);
+            provider, location, TRUE, &match);
     if (last_iter)
     {
         g_free (location);
