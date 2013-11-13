@@ -7074,6 +7074,38 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
     }
 }
 
+static gint
+_get_level (GtkTreeModel *model, GtkTreeIter *iter, DonnaNode *node)
+{
+    DonnaNode *n;
+    gint level = 0;
+    gchar *s;
+
+    if (iter)
+        gtk_tree_model_get (model, iter,
+                DONNA_TREE_COL_NODE, &n,
+                -1);
+    else
+        n = node;
+
+    s = donna_node_get_location (n);
+
+    if (iter)
+        g_object_unref (n);
+
+    if (!streq (s, "/"))
+    {
+        gchar *ss;
+
+        for (ss = s; *ss != '\0'; ++ss)
+            if (*ss == '/')
+                ++level;
+    }
+    g_free (s);
+
+    return level;
+}
+
 static GtkTreeIter *
 get_closest_iter_for_node (DonnaTreeView *tree,
                            DonnaNode     *node,
@@ -7094,6 +7126,8 @@ get_closest_iter_for_node (DonnaTreeView *tree,
     guint last_match = 0;
 #define LM_MATCH    (1 << 0)
 #define LM_VISIBLE  (1 << 1)
+    gboolean last_is_in_cur_root = FALSE;
+    gint last_level = -1;
 
     model  = (GtkTreeModel *) priv->store;
 
@@ -7169,20 +7203,47 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                             return get_iter_expanding_if_needed (tree, i, node,
                                     FALSE, NULL);
                         }
-                        else if (last_match == LM_VISIBLE
-                                && itereq (&iter, cur_root))
+                        else if (last_match == LM_VISIBLE)
                         {
-                            /* we already have a visible non-match, but this one
-                             * is in the current root, so takes precedence */
-                            last_match = LM_VISIBLE;
-                            last_iter = i;
+                            /* we already have a visible non-match... */
+
+                            if (itereq (&iter, cur_root))
+                            {
+                                /* ...but this one is in the current root, so
+                                 * takes precedence */
+                                last_level = -1;
+                                last_match = LM_VISIBLE;
+                                last_iter = i;
+                                last_is_in_cur_root = TRUE;
+                            }
+                            else if (!last_is_in_cur_root)
+                            {
+                                gint level;
+
+                                /* ...neither are in current root, check the
+                                 * "level" to use the closest one */
+
+                                if (last_level < 0)
+                                    last_level = _get_level (model, last_iter, NULL);
+                                level = _get_level (NULL, NULL, n);
+
+                                if (level > last_level)
+                                {
+                                    last_level = level;
+                                    last_match = LM_VISIBLE;
+                                    last_iter = i;
+                                    last_is_in_cur_root = FALSE;
+                                }
+                            }
                         }
                         else if (last_match == 0)
                         {
                             /* first result, or we alreayd had a non-match, but
                              * it was not visible */
+                            last_level = -1;
                             last_match = LM_VISIBLE;
                             last_iter = i;
+                            last_is_in_cur_root = itereq (&iter, cur_root);
                         }
                     }
                     else
@@ -7193,29 +7254,60 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                             {
                                 /* we didn't have a match (i.e. we had nothing,
                                  * or a visible non-match) */
+                                last_level = -1;
                                 last_match = LM_MATCH;
                                 last_iter = i;
+                                last_is_in_cur_root = itereq (&iter, cur_root);
                             }
                             else if (itereq (&iter, cur_root))
                             {
                                 /* we already have a non-visible match, but this
                                  * one is in the current root */
+                                last_level = -1;
                                 last_match = LM_MATCH;
                                 last_iter = i;
+                                last_is_in_cur_root = TRUE;
                             }
                         }
                         else if (!last_iter)
                         {
                             /* first result */
+                            last_level = -1;
                             last_match = 0;
                             last_iter = i;
+                            last_is_in_cur_root = itereq (&iter, cur_root);
                         }
-                        else if (last_match == 0 && itereq (&iter, cur_root))
+                        else if (last_match == 0)
                         {
-                            /* we already had a non-visible non-match, but this
-                             * one is in the current root */
-                            last_match = 0;
-                            last_iter = i;
+                            /* we already had a non-visible non-match... */
+
+                            if (itereq (&iter, cur_root))
+                            {
+                                /* ...but this one is in the current root */
+                                last_level = -1;
+                                last_match = 0;
+                                last_iter = i;
+                                last_is_in_cur_root = TRUE;
+                            }
+                            else if (!last_is_in_cur_root)
+                            {
+                                gint level;
+
+                                /* ...neither are in current root, check the
+                                 * "level" to use the closest one */
+
+                                if (last_level < 0)
+                                    last_level = _get_level (model, last_iter, NULL);
+                                level = _get_level (NULL, NULL, n);
+
+                                if (level > last_level)
+                                {
+                                    last_level = level;
+                                    last_match = LM_VISIBLE;
+                                    last_iter = i;
+                                    last_is_in_cur_root = FALSE;
+                                }
+                            }
                         }
                     }
                 }
