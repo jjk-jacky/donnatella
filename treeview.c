@@ -1197,13 +1197,9 @@ sync_with_location_changed_cb (GObject       *object,
     }
     else
     {
-        /* unselect, but allow a new selection to be made (will then switch
-         * automatically back to SELECTION_BROWSE) */
-        priv->changing_sel_mode = TRUE;
-        gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
-        priv->changing_sel_mode = FALSE;
-        gtk_tree_selection_unselect_all (sel);
-
+        /* let's try to move the focus on closest matching row. We do this
+         * before unselecting so the current location/iter are still set, so we
+         * know/can give precedence to the current root */
         if (priv->sync_mode == DONNA_TREE_SYNC_NODES
                 || priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
         {
@@ -1238,6 +1234,13 @@ sync_with_location_changed_cb (GObject       *object,
                     scroll_to_iter (tree, iter);
             }
         }
+
+        /* unselect, but allow a new selection to be made (will then switch
+         * automatically back to SELECTION_BROWSE) */
+        priv->changing_sel_mode = TRUE;
+        gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+        priv->changing_sel_mode = FALSE;
+        gtk_tree_selection_unselect_all (sel);
     }
 
     priv->future_location_iter.stamp = 0;
@@ -6823,6 +6826,22 @@ get_best_existing_iter_for_node (DonnaTreeView  *tree,
     }
 
     iter_cur_root = get_current_root_iter (tree);
+    if (!iter_cur_root)
+    {
+        GtkTreePath *path;
+        GtkTreeIter iter;
+
+        /* no current root, let's consider the root of the focused row to be the
+         * current one, as far as precedence goes */
+        gtk_tree_view_get_cursor (treev, &path, NULL);
+        if (path)
+        {
+            if (gtk_tree_model_get_iter (model, &iter, path))
+                iter_cur_root = get_root_iter (tree, &iter);
+            gtk_tree_path_free (path);
+        }
+    }
+
     /* get visible area, so we can determine which iters are visible */
     gtk_tree_view_get_visible_rect (treev, &rect_visible);
     gtk_tree_view_convert_tree_to_bin_window_coords (treev, 0, rect_visible.y,
