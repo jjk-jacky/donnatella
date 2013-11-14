@@ -13890,7 +13890,7 @@ static void
 check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
     DonnaNode *loc_node;
     DonnaProvider *loc_provider;
     gchar *loc_location;
@@ -13899,6 +13899,10 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
     /* don't do this when we're not sync, otherwise collapsing a row where we
      * put the focus would trigger a selection which we don't want */
     if (priv->sync_mode == DONNA_TREE_SYNC_NONE)
+        return;
+
+    /* no need to do anything if we do have a current location */
+    if (priv->location_iter.stamp != 0)
         return;
 
     if (G_UNLIKELY (!gtk_tree_model_iter_children (model, &child, iter)))
