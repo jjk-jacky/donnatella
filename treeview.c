@@ -11033,14 +11033,6 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
                 priv->name);
         return FALSE;
     }
-    else if (!priv->is_minitree)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot remove row, option is_minitree not enabled",
-                priv->name);
-        return FALSE;
-    }
 
     type = convert_row_id_to_iter (tree, rowid, &iter);
     if (type != ROW_ID_ROW)
@@ -11050,6 +11042,24 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
                 "Treeview '%s': Cannot remove row, invalid row-id",
                 priv->name);
         return FALSE;
+    }
+
+    if (!priv->is_minitree)
+    {
+        GtkTreePath *path;
+
+        /* on non-minitree we can only remove roots */
+        path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+        if (gtk_tree_path_get_depth (path) > 1)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                    "Treeview '%s': Cannot remove row, option is_minitree not enabled",
+                    priv->name);
+            gtk_tree_path_free (path);
+            return FALSE;
+        }
+        gtk_tree_path_free (path);
     }
 
     remove_row_from_tree (tree, &iter, FALSE);
