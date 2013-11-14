@@ -505,6 +505,7 @@ get_mark_node (DonnaTask            *task,
             return DONNA_TASK_FAILED;
         }
         g_object_unref (n);
+        n = NULL;
 
         state = donna_task_get_state (t);
         if (state == DONNA_TASK_DONE)
