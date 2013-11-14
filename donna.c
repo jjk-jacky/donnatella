@@ -1393,7 +1393,15 @@ donna_donna_parse_fl (DonnaApp       *app,
             else if (type & DONNA_ARG_TYPE_ROW)
             {
                 DonnaTreeRow *row = (DonnaTreeRow *) ptr;
-                g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
+                if (dereference)
+                {
+                    gchar *fl;
+                    fl = donna_node_get_full_location (row->node);
+                    donna_g_string_append_quoted (str, fl, FALSE);
+                    g_free (fl);
+                }
+                else
+                    g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
             }
             /* this will do nodes, array of nodes, array of strings */
             else if (type & (DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY))
