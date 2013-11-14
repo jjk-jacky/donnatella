@@ -7893,6 +7893,26 @@ change_location (DonnaTreeView *tree,
 
         if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
         {
+            if (donna_provider_get_flags (provider_future) == DONNA_PROVIDER_FLAG_FLAT)
+            {
+                gchar *fl;
+
+                /* special case: if this is a node from history_get_node() we
+                 * will process it as a move in history. This will allow e.g.
+                 * dynamic marks to move backward/forward/etc */
+                if (handle_history_move (tree, node))
+                    return TRUE;
+
+                fl = donna_node_get_full_location (node);
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
+                        "Treeview '%s': Cannot set node '%s' as current location, "
+                        "provider is flat (i.e. no parent to go to)",
+                        priv->name, fl);
+                g_free (fl);
+                return FALSE;
+            }
+
             child = node;
             node = donna_node_get_parent (node, error);
             if (!node)
