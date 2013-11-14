@@ -7223,7 +7223,7 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                         {
                             /* we already have a visible non-match... */
 
-                            if (itereq (&iter, cur_root))
+                            if (cur_root && itereq (&iter, cur_root))
                             {
                                 /* ...but this one is in the current root, so
                                  * takes precedence */
@@ -7259,7 +7259,7 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                             last_level = -1;
                             last_match = LM_VISIBLE;
                             last_iter = i;
-                            last_is_in_cur_root = itereq (&iter, cur_root);
+                            last_is_in_cur_root = cur_root && itereq (&iter, cur_root);
                         }
                     }
                     else
@@ -7275,7 +7275,7 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                                 last_iter = i;
                                 last_is_in_cur_root = itereq (&iter, cur_root);
                             }
-                            else if (itereq (&iter, cur_root))
+                            else if (cur_root && itereq (&iter, cur_root))
                             {
                                 /* we already have a non-visible match, but this
                                  * one is in the current root */
@@ -7291,13 +7291,13 @@ get_closest_iter_for_node (DonnaTreeView *tree,
                             last_level = -1;
                             last_match = 0;
                             last_iter = i;
-                            last_is_in_cur_root = itereq (&iter, cur_root);
+                            last_is_in_cur_root = cur_root && itereq (&iter, cur_root);
                         }
                         else if (last_match == 0)
                         {
                             /* we already had a non-visible non-match... */
 
-                            if (itereq (&iter, cur_root))
+                            if (cur_root && itereq (&iter, cur_root))
                             {
                                 /* ...but this one is in the current root */
                                 last_level = -1;
