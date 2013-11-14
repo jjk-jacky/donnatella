@@ -12945,6 +12945,27 @@ tree_context_get_item_info (const gchar             *item,
         g_object_unref (node);
         return TRUE;
     }
+    else if (streq (item, "remove_row"))
+    {
+        info->is_visible = is_tree (tree) && (reference & DONNA_CONTEXT_HAS_REF);
+        if (priv->is_minitree)
+            info->is_sensitive = TRUE;
+        else if (info->is_visible)
+        {
+            GtkTreePath *path;
+
+            /* on a non minitree we can remove roots */
+            path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store,
+                    conv->row->iter);
+            if (gtk_tree_path_get_depth (path) == 1)
+                info->is_sensitive = TRUE;
+            gtk_tree_path_free (path);
+        }
+        info->name = "Remove Row From Tree";
+        info->icon_name = "list-delete";
+        info->trigger = "command:tree_remove_row (%o,%r)";
+        return TRUE;
+    }
     else if (streqn (item, "sort_order", 10)
             || streqn (item, "second_sort_order", 17))
     {
