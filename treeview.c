@@ -5265,6 +5265,8 @@ donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node, GError **error)
     ret = add_node_to_tree (tree, NULL, node, NULL);
     if (!tree->priv->arrangement)
         donna_tree_view_build_arrangement (tree, FALSE);
+    else
+        check_children_post_expand (tree, NULL);
     return ret;
 }
 
