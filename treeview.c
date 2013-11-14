@@ -1054,30 +1054,24 @@ idle_scroll_to_iter (struct scroll_data *data)
     return FALSE;
 }
 
-static void
-sync_with_location_changed_cb (GObject       *object,
-                               GParamSpec    *pspec,
-                               DonnaTreeView *tree)
+/* this is obviously called when sync_with changes location, but also from
+ * donna_tree_view_set_location() when in tree mode. Because in mode tree, a
+ * set_location() is really just the following, only with FULL sync mode forced.
+ */
+static gboolean
+perform_sync_location (DonnaTreeView    *tree,
+                       DonnaNode        *node,
+                       enum tree_sync    sync_mode)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeView *treev;
     GtkTreeSelection *sel;
     GtkTreeIter *iter = NULL;
-    DonnaNode *node;
     static DonnaNode *node_ref;
 
-    g_object_get (object, "location", &node, NULL);
-    if (node == priv->location)
-    {
-        if (node)
-            g_object_unref (node);
-        return;
-    }
-    else if (!node)
-        return;
-
     node_ref = node;
-    switch (priv->sync_mode)
+
+    switch (sync_mode)
     {
         case DONNA_TREE_SYNC_NODES:
             iter = get_best_existing_iter_for_node (tree, node, FALSE);
@@ -1112,10 +1106,8 @@ sync_with_location_changed_cb (GObject       *object,
      * fast; IOW it shouldn't be easy to trigger it.)
      */
     if (node_ref != node)
-    {
-        g_object_unref (node);
-        return;
-    }
+        /* TRUE because this shouldn't be seen as an error */
+        return TRUE;
 
     treev = (GtkTreeView *) tree;
     sel = gtk_tree_view_get_selection (treev);
@@ -1200,8 +1192,8 @@ sync_with_location_changed_cb (GObject       *object,
         /* let's try to move the focus on closest matching row. We do this
          * before unselecting so the current location/iter are still set, so we
          * know/can give precedence to the current root */
-        if ((priv->sync_mode == DONNA_TREE_SYNC_NODES
-                    || priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
+        if ((sync_mode == DONNA_TREE_SYNC_NODES
+                    || sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
                 /* only supported in non-flat domain */
                 && !(donna_provider_get_flags (donna_node_peek_provider (node))
                         & DONNA_PROVIDER_FLAG_FLAT))
@@ -1216,10 +1208,8 @@ sync_with_location_changed_cb (GObject       *object,
 
             /* see comment for same stuff above */
             if (node_ref != node)
-            {
-                g_object_unref (node);
-                return;
-            }
+                /* TRUE because this shouldn't be seen as an error */
+                return TRUE;
 
             if (iter)
             {
@@ -1247,10 +1237,33 @@ sync_with_location_changed_cb (GObject       *object,
     }
 
     priv->future_location_iter.stamp = 0;
-    g_object_unref (node);
     /* it might have already happened on selection change, but this might have
      * not changed the selection, only the focus (if anything), so: */
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+
+    return !!iter;
+}
+
+static void
+sync_with_location_changed_cb (GObject       *object,
+                               GParamSpec    *pspec,
+                               DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+
+    g_object_get (object, "location", &node, NULL);
+    if (node == priv->location)
+    {
+        donna_g_object_unref (node);
+        return;
+    }
+
+    if (node)
+    {
+        perform_sync_location (tree, node, priv->sync_mode);
+        g_object_unref (node);
+    }
 }
 
 static void
@@ -8137,9 +8150,6 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
 
     if (is_tree (tree))
     {
-        static DonnaNode *node_ref;
-        GtkTreeIter *iter;
-
         if (!(priv->node_types & donna_node_get_node_type (node)))
         {
             gchar *location = donna_node_get_location (node);
@@ -8150,29 +8160,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
             return FALSE;
         }
 
-        node_ref = node;
-        iter = get_best_iter_for_node (tree, node, TRUE, error);
-        /* see comment in sync_with_location_changed_cb */
-        if (node_ref != node)
-            return TRUE;
-        if (iter)
-        {
-            GtkTreePath *path;
-
-            /* we select the new row and put the cursor on it (required to get
-             * things working when collapsing the parent) */
-            path = gtk_tree_model_get_path (GTK_TREE_MODEL (priv->store), iter);
-            gtk_tree_view_set_cursor (GTK_TREE_VIEW (tree), path, NULL, FALSE);
-            gtk_tree_path_free (path);
-
-            /* we want to scroll to this current row, but we do it in an idle
-             * source to make sure any pending drawing has been processed;
-             * specifically any expanding that might have been requested */
-            g_idle_add ((GSourceFunc) scroll_to_current, tree);
-        }
-
-        priv->future_location_iter.stamp = 0;
-        return !!iter;
+        return perform_sync_location (tree, node, DONNA_TREE_SYNC_FULL);
     }
     else
         return change_location (tree, CHANGING_LOCATION_ASKED, node, NULL, error);
