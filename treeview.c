@@ -1200,8 +1200,11 @@ sync_with_location_changed_cb (GObject       *object,
         /* let's try to move the focus on closest matching row. We do this
          * before unselecting so the current location/iter are still set, so we
          * know/can give precedence to the current root */
-        if (priv->sync_mode == DONNA_TREE_SYNC_NODES
-                || priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
+        if ((priv->sync_mode == DONNA_TREE_SYNC_NODES
+                    || priv->sync_mode == DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN)
+                /* only supported in non-flat domain */
+                && !(donna_provider_get_flags (donna_node_peek_provider (node))
+                        & DONNA_PROVIDER_FLAG_FLAT))
         {
             gchar *location;
 
