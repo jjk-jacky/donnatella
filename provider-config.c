@@ -3050,7 +3050,7 @@ node_prop_setter (DonnaTask     *task,
 
     /* should never happened, since the only WRITABLE properties on our nodes
      * are the ones dealt with above */
-    return DONNA_TASK_FAILED;
+    g_return_val_if_reached (DONNA_TASK_FAILED);
 }
 
 static void
