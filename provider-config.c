@@ -411,57 +411,72 @@ trim_line (gchar **line)
         ;
 }
 
-static gboolean
-is_valid_name_len (const gchar *name, gsize len, gboolean is_section)
+enum valid
 {
-    gint is_first = 1;
+    VALID_CONFIG_SECTION = 1,
+    VALID_CONFIG_OPTION,
+    VALID_CATEGORY_NAME,
+    VALID_OPTION_NAME
+};
+
+static gboolean
+is_valid_name_len (const gchar *name, gsize len, enum valid valid)
+{
+    gboolean is_first  = TRUE;
+    gboolean got_colon = FALSE;
+    gboolean is_number = FALSE;
+
+    g_return_val_if_fail (valid == VALID_CONFIG_SECTION
+            || valid == VALID_CONFIG_OPTION || valid == VALID_CATEGORY_NAME
+            || valid == VALID_OPTION_NAME, FALSE);
 
     for ( ; *name != '\0' && len != 0; ++name, --len)
     {
-        gint  match;
-        gchar c;
+        if (is_number && !(*name >= '0' && *name <= '9'))
+            return FALSE;
 
-        match = 0;
-        for (c = 'a'; c <= 'z'; ++c)
+        if (*name >= 'a' && *name <= 'z')
         {
-            if (*name == c)
-            {
-                match = 1;
-                break;
-            }
-        }
-        if (match)
-        {
-            is_first = 0;
+            is_first = FALSE;
             continue;
         }
         else if (is_first)
+        {
+            if (valid == VALID_CATEGORY_NAME && *name >= '0' && *name <= '9')
+            {
+                is_first  = FALSE;
+                is_number = TRUE;
+                continue;
+            }
             return FALSE;
-        for (c = 'A'; c <= 'Z'; ++c)
-        {
-            if (*name == c)
-            {
-                match = 1;
-                break;
-            }
         }
-        for (c = '0'; !match && c <= '9'; ++c)
-        {
-            if (*name == c)
-            {
-                match = 1;
-                break;
-            }
-        }
-        if (match || *name == '-' || *name == '_' || *name == ' '
-                || *name == ((is_section) ? '/' : ':'))
+
+        if ((*name >= 'A' && *name <= 'Z') || (*name >= '0' && *name <= '9')
+                || *name == '-' || *name == '_' || *name == ' ')
             continue;
+
+        if (valid == VALID_CONFIG_SECTION)
+        {
+            if (*name == '/')
+                continue;
+        }
+        else if (valid == VALID_CONFIG_OPTION)
+        {
+            /* option name can have a colon and then the type */
+            if (!got_colon && *name == ':')
+            {
+                got_colon = TRUE;
+                continue;
+            }
+        }
+
         return FALSE;
     }
+
     return TRUE;
 }
 
-#define is_valid_name(name, is_section)  is_valid_name_len (name, -1, is_section)
+#define is_valid_name(name, valid)  is_valid_name_len (name, -1, valid)
 
 static struct parsed_data *
 parse_data (gchar **_data)
@@ -516,7 +531,7 @@ parse_data (gchar **_data)
             *e = '\0';
             /* trim because spaces are allowed characters *within* the name */
             trim_line (&data);
-            if (!is_valid_name (data, TRUE))
+            if (!is_valid_name (data, VALID_CONFIG_SECTION))
             {
                 g_warning ("Invalid section name (%s) at line %d, "
                         "skipping to next section", data, line);
@@ -570,7 +585,7 @@ parse_data (gchar **_data)
             }
             *s = '\0';
             trim_line (&data);
-            if (!is_valid_name (data, FALSE))
+            if (!is_valid_name (data, VALID_CONFIG_OPTION))
             {
                 g_warning ("Invalid option name (%s) at line %d, "
                         "skipping to next line", data, line);
@@ -1012,7 +1027,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
                 /* create category/node */
                 struct option *option;
 
-                if (!is_valid_name_len (name, s - name, TRUE))
+                if (!is_valid_name_len (name, s - name, VALID_CONFIG_SECTION))
                     return NULL;
 
                 option = g_slice_new0 (struct option);
@@ -2639,7 +2654,7 @@ _set_option (DonnaConfig    *config,
         parent = priv->root;
     }
 
-    if (!is_valid_name ((gchar *) s, FALSE))
+    if (!is_valid_name ((gchar *) s, VALID_OPTION_NAME))
     {
         g_rw_lock_writer_unlock (&priv->lock);
         return FALSE;
