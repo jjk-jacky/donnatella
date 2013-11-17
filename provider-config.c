@@ -1679,27 +1679,18 @@ _get_option (DonnaConfig *config,
 {
     DonnaProviderConfigPrivate *priv;
     struct option *option;
-    gchar  buf[255];
-    gchar *b = buf;
-    gint len;
-    va_list va_arg2;
+    gchar *name;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (fmt != NULL, FALSE);
-
-    va_copy (va_arg2, va_arg);
-    len = vsnprintf (buf, 255, fmt, va_arg);
-    if (len >= 255)
-    {
-        b = g_new (gchar, ++len); /* +1 for NUL */
-        vsnprintf (b, len, fmt, va_arg2);
-    }
-    va_end (va_arg2);
-
     priv = config->priv;
+
+    name = g_strdup_vprintf (fmt, va_arg);
+
     g_rw_lock_reader_lock (&priv->lock);
-    option = get_option (priv->root, b);
+    option = get_option (priv->root, name);
+    g_free (name);
     if (option)
     {
         /* G_TYPE_INVALID means we want a category */
@@ -1716,9 +1707,6 @@ _get_option (DonnaConfig *config,
     /* allows caller to get the option value, then unlock */
     if (!leave_lock_on)
         g_rw_lock_reader_unlock (&priv->lock);
-
-    if (b != buf)
-        g_free (b);
 
     return (ret) ? option : NULL;
 }
@@ -1833,9 +1821,7 @@ donna_config_list_options (DonnaConfig               *config,
 {
     DonnaProviderConfigPrivate *priv;
     GNode *node;
-    gchar  buf[255];
-    gchar *b = buf;
-    gint len;
+    gchar *name;
     va_list va_arg;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
@@ -1847,18 +1833,12 @@ donna_config_list_options (DonnaConfig               *config,
     priv = config->priv;
 
     va_start (va_arg, fmt);
-    len = vsnprintf (buf, 255, fmt, va_arg);
-    if (len >= 255)
-    {
-        b = g_new (gchar, ++len); /* +1 for NUL */
-        va_end (va_arg);
-        va_start (va_arg, fmt);
-        vsnprintf (b, len, fmt, va_arg);
-    }
+    name = g_strdup_vprintf (fmt, va_arg);
     va_end (va_arg);
 
     g_rw_lock_reader_lock (&priv->lock);
-    node = get_option_node (priv->root, b);
+    node = get_option_node (priv->root, name);
+    g_free (name);
     if (node)
     {
         for (node = node->children; node; node = node->next)
@@ -1887,9 +1867,6 @@ donna_config_list_options (DonnaConfig               *config,
         }
     }
     g_rw_lock_reader_unlock (&priv->lock);
-
-    if (b != buf)
-        g_free (b);
 
     return (*options != NULL);
 }
@@ -2217,22 +2194,12 @@ _donna_config_get_boolean_tree_column (DonnaConfig   *config,
 
 
 #define get_node()  do {                                            \
-    if (*fmt == '/')                                                \
-        ++fmt;                                                      \
-                                                                    \
     va_start (va_arg, fmt);                                         \
-    len = vsnprintf (buf, 255, fmt, va_arg);                        \
-    if (len >= 255)                                                 \
-    {                                                               \
-        b = g_new (gchar, ++len); /* +1 for NUL */                  \
-        va_end (va_arg);                                            \
-        va_start (va_arg, fmt);                                     \
-        vsnprintf (b, len, fmt, va_arg);                            \
-    }                                                               \
+    name = g_strdup_vprintf (fmt, va_arg);                          \
     va_end (va_arg);                                                \
                                                                     \
     g_rw_lock_reader_lock (&priv->lock);                            \
-    node = get_option_node (priv->root, b);                         \
+    node = get_option_node (priv->root, name);                      \
     if (!node || !option_is_category (node->data, priv->root))      \
         goto done;                                                  \
 } while (0)
@@ -2271,8 +2238,7 @@ donna_config_arr_load_columns (DonnaConfig            *config,
     GNode   *node;
     GNode   *child;
     GValue  *value;
-    gchar    buf[255], *b = buf;
-    gsize    len;
+    gchar   *name;
     gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
@@ -2302,8 +2268,7 @@ donna_config_arr_load_columns (DonnaConfig            *config,
 
 done:
     g_rw_lock_reader_unlock (&priv->lock);
-    if (b != buf)
-        g_free (b);
+    g_free (name);
     return ret;
 }
 
@@ -2318,8 +2283,7 @@ donna_config_arr_load_sort (DonnaConfig            *config,
     GNode   *node;
     GNode   *child;
     GValue  *value;
-    gchar    buf[255], *b = buf;
-    gsize    len;
+    gchar   *name;
     gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
@@ -2349,8 +2313,7 @@ donna_config_arr_load_sort (DonnaConfig            *config,
 
 done:
     g_rw_lock_reader_unlock (&priv->lock);
-    if (b != buf)
-        g_free (b);
+    g_free (name);
     return ret;
 }
 
@@ -2365,8 +2328,7 @@ donna_config_arr_load_second_sort (DonnaConfig            *config,
     GNode   *node;
     GNode   *child;
     GValue  *value;
-    gchar    buf[255], *b = buf;
-    gsize    len;
+    gchar   *name;
     gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
@@ -2402,8 +2364,7 @@ donna_config_arr_load_second_sort (DonnaConfig            *config,
 
 done:
     g_rw_lock_reader_unlock (&priv->lock);
-    if (b != buf)
-        g_free (b);
+    g_free (name);
     return ret;
 }
 
@@ -2418,8 +2379,7 @@ donna_config_arr_load_columns_options (DonnaConfig          *config,
     GNode   *node;
     GNode   *child;
     GValue  *value;
-    gchar    buf[255], *b = buf;
-    gsize    len;
+    gchar   *name;
     gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
@@ -2441,7 +2401,8 @@ donna_config_arr_load_columns_options (DonnaConfig          *config,
 
     ret = TRUE;
     arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS;
-    arr->columns_options = g_strdup (b);
+    arr->columns_options = name;
+    name = NULL;
 
     get_child ("columns_options_always", 22, BOOLEAN, TRUE);
     if (g_value_get_boolean (value))
@@ -2449,8 +2410,7 @@ donna_config_arr_load_columns_options (DonnaConfig          *config,
 
 done:
     g_rw_lock_reader_unlock (&priv->lock);
-    if (b != buf)
-        g_free (b);
+    g_free (name);
     return ret;
 }
 
@@ -2466,8 +2426,7 @@ donna_config_arr_load_color_filters (DonnaConfig            *config,
     GNode       *node;
     GNode       *child;
     GValue      *value;
-    gchar        buf[255], *b = buf;
-    gsize        len;
+    gchar       *name;
     gboolean     ret = FALSE;
     enum types   type;
 
@@ -2526,7 +2485,7 @@ donna_config_arr_load_color_filters (DonnaConfig            *config,
 
         case TYPE_UNKNOWN:
         default:
-            g_warning ("Invalid option 'type' for '%s/color_filters'", b);
+            g_warning ("Invalid option 'type' for '%s/color_filters'", name);
             goto done;
     }
 
@@ -2627,8 +2586,7 @@ donna_config_arr_load_color_filters (DonnaConfig            *config,
 
 done:
     g_rw_lock_reader_unlock (&priv->lock);
-    if (b != buf)
-        g_free (b);
+    g_free (name);
     return ret;
 }
 
@@ -2646,43 +2604,28 @@ _set_option (DonnaConfig    *config,
     GNode *parent;
     GNode *node;
     struct option *option;
-    gchar  buf[255];
-    gchar *b = buf;
-    gint len;
-    va_list va_arg2;
+    gchar *name;
     const gchar *s;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (fmt != NULL, FALSE);
 
-    va_copy (va_arg2, va_arg);
-    if (*fmt == '/')
-        len = vsnprintf (buf, 255, fmt, va_arg);
-    else
+    name = g_strdup_vprintf (fmt, va_arg);
+    if (*name != '/')
     {
-        buf[0] = '/';
-        len = vsnprintf (buf + 1, 254, fmt, va_arg);
+        gchar *n;
+        n = g_strconcat ("/", name, NULL);
+        g_free (name);
+        name = n;
     }
-    if (len >= 255)
-    {
-        b = g_new (gchar, ++len); /* +1 for NUL */
-        if (*fmt == '/')
-            vsnprintf (b, len, fmt, va_arg2);
-        else
-        {
-            *b = '/';
-            vsnprintf (b + 1, len - 1, fmt, va_arg2);
-        }
-    }
-    va_end (va_arg2);
 
     priv = config->priv;
     g_rw_lock_writer_lock (&priv->lock);
-    s = strrchr (b + 1, '/');
+    s = strrchr (name + 1, '/');
     if (s)
     {
-        parent = ensure_categories (config, b + 1, s - b - 1);
+        parent = ensure_categories (config, name + 1, s - name - 1);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -2692,7 +2635,7 @@ _set_option (DonnaConfig    *config,
     }
     else
     {
-        s = b + 1;
+        s = name + 1;
         parent = priv->root;
     }
 
@@ -2724,16 +2667,14 @@ _set_option (DonnaConfig    *config,
      * any deadlocks */
     if (ret)
     {
-        config_option_set (DONNA_CONFIG (config), b);
+        config_option_set (DONNA_CONFIG (config), name);
         if (option->node)
             donna_node_set_property_value (option->node,
                     "option-value",
                     &option->value);
     }
 
-    if (b != buf)
-        g_free (b);
-
+    g_free (name);
     return ret;
 }
 
@@ -2853,7 +2794,7 @@ _remove_option (DonnaProviderConfig *config,
     g_rw_lock_writer_unlock (&priv->lock);
 
     /* signals after releasing the lock, to avoid dead locks */
-    /* config: we oly send one signal, e.g. only the category (no children) */
+    /* config: we only send one signal, e.g. only the category (no children) */
     config_option_deleted (DONNA_CONFIG (config), name);
     /* for provider: we must do it for all existing nodes, as it also serves as
      * a "destroy" i.e. to mean unref it, the node doesn't exist anymore */
@@ -2870,31 +2811,21 @@ _remove_option (DonnaProviderConfig *config,
 }
 
 #define __remove_option(is_category)    do {                    \
-    gchar  buf[255];                                            \
-    gchar *b = buf;                                             \
-    gint len;                                                   \
-    va_list  va_arg;                                            \
+    gchar *name;                                                \
+    va_list va_arg;                                             \
     gboolean ret;                                               \
                                                                 \
     g_return_val_if_fail (fmt != NULL, FALSE);                  \
                                                                 \
-    if (*fmt == '/')                                            \
-        ++fmt;                                                  \
+    va_start (va_arg, fmt);                                     \
+    name = g_strdup_vprintf (fmt, va_arg);                      \
+    va_end (va_arg);                                            \
                                                                 \
-    len = vsnprintf (buf, 255, fmt, va_arg);                    \
-    if (len >= 255)                                             \
-    {                                                           \
-        b = g_new (gchar, ++len); /* +1 for NUL */              \
-        va_end (va_arg);                                        \
-        va_start (va_arg, fmt);                                 \
-        vsnprintf (b, len, fmt, va_arg);                        \
-    }                                                           \
+    ret = _remove_option (config,                               \
+            (*name == '/') ? name + 1 : name,                   \
+            is_category);                                       \
                                                                 \
-    ret = _remove_option (config, b, is_category);              \
-                                                                \
-    if (b != buf)                                               \
-        g_free (b);                                             \
-                                                                \
+    g_free (name);                                              \
     return ret;                                                 \
 } while (0)
 
