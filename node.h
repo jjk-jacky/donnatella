@@ -202,6 +202,10 @@ void                donna_node_mark_invalid         (DonnaNode          *node,
 void                donna_node_set_property_value   (DonnaNode          *node,
                                                      const gchar        *name,
                                                      const GValue       *value);
+void                donna_node_set_property_value_no_signal (
+                                                     DonnaNode          *node,
+                                                     const gchar        *name,
+                                                     const GValue       *value);
 
 G_END_DECLS
 

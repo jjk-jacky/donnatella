@@ -2132,27 +2132,11 @@ donna_node_mark_invalid (DonnaNode          *node,
     g_rw_lock_writer_unlock (&priv->props_lock);
 }
 
-/**
- * donna_node_set_property_value:
- * @node: The node
- * @name: Name of the property
- * @value: New value of the property
- *
- * Updates the value of a property on a node. This should only be called by the
- * owner of the property, when the value has actually changed on the item.
- * It's usually called by the setter, or when some autorefresh is triggered.
- *
- * For properties which can have no value set (i.e. a refresh is needed, so all
- * properties but required ones) you can pass %NULL as @value to simply unset
- * whatever value is currently set.
- *
- * To (try to) change the value of a property, use
- * donna_node_set_property_task()
- */
-void
-donna_node_set_property_value (DonnaNode     *node,
-                               const gchar   *name,
-                               const GValue  *value)
+static void
+set_property_value (DonnaNode     *node,
+                    const gchar   *name,
+                    const GValue  *value,
+                    gboolean       can_emit)
 {
     DonnaNodeProp *prop;
     const gchar **s;
@@ -2248,6 +2232,54 @@ donna_node_set_property_value (DonnaNode     *node,
 finish:
     g_rw_lock_writer_unlock (&node->priv->props_lock);
 
-    if (emit && node->priv->ready)
+    if (can_emit && emit && node->priv->ready)
         donna_provider_node_updated (node->priv->provider, node, name);
+}
+
+/**
+ * donna_node_set_property_value:
+ * @node: The node
+ * @name: Name of the property
+ * @value: New value of the property
+ *
+ * Updates the value of a property on a node. This should only be called by the
+ * owner of the property, when the value has actually changed on the item.
+ * It's usually called by the setter, or when some autorefresh is triggered.
+ *
+ * For properties which can have no value set (i.e. a refresh is needed, so all
+ * properties but required ones) you can pass %NULL as @value to simply unset
+ * whatever value is currently set.
+ *
+ * To (try to) change the value of a property, use
+ * donna_node_set_property_task()
+ */
+void
+donna_node_set_property_value (DonnaNode     *node,
+                               const gchar   *name,
+                               const GValue  *value)
+{
+    set_property_value (node, name, value, TRUE);
+}
+
+/**
+ * donna_node_set_property_value_no_signal:
+ * @node: The node
+ * @name: Name of the property
+ * @value: New value of the property
+ *
+ * Same as donna_node_set_property_value() only will not trigger the emission of
+ * the node-updated signal on @node's provider.
+ *
+ * Note that if you use this, you should emit said signal (using
+ * donna_provider_node_updated()) when ready (e.g. outside a lock).
+ *
+ * To (try to) change the value of a property, use
+ * donna_node_set_property_task()
+ */
+void
+donna_node_set_property_value_no_signal (DonnaNode          *node,
+                                         const gchar        *name,
+                                         const GValue       *value)
+{
+    set_property_value (node, name, value, FALSE);
 }
