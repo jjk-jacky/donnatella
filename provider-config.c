@@ -3024,11 +3024,8 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
         }
         location = donna_node_get_location (node);
         gnode = get_option_node (config->priv->root, location);
-        if (G_UNLIKELY (!gnode))
-            g_critical ("Unable to find option '%s' while processing toggle_ref "
-                    "for the associated node",
-                    location);
-        else
+        if (gnode)
+            /* gnode might be NULL if the option has already been removed */
             ((struct option *) gnode->data)->node = NULL;
         g_object_unref (node);
         g_free (location);
