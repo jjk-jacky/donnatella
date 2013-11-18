@@ -2817,12 +2817,8 @@ _remove_option (DonnaProviderConfig *config,
     /* for provider: we must do it for all existing nodes, as it also serves as
      * a "destroy" i.e. to mean unref it, the node doesn't exist anymore */
     for (i = 0; i < data.nodes->len; ++i)
-    {
         donna_provider_node_deleted (DONNA_PROVIDER (config),
                 data.nodes->pdata[i]);
-        /* we should be the only ref left, and can let it go now */
-        g_object_unref (data.nodes->pdata[1]);
-    }
     g_ptr_array_free (data.nodes, TRUE);
 
     return TRUE;
