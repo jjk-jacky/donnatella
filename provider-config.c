@@ -3045,7 +3045,9 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
     g_rw_lock_reader_unlock (&config->priv->lock);
 }
 
-/* assumes a reader lock on config; will lock/unlock nodes_mutex as needed */
+/* assumes a reader lock on config; will lock/unlock nodes_mutex as needed.
+ * It will emit new_node under the reader lock, which means handlers should
+ * never try to write on the config, since that would deadlock. */
 static gboolean
 ensure_option_has_node (DonnaProviderConfig *config,
                         gchar               *location,
