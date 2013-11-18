@@ -203,8 +203,6 @@ struct _DonnaNodePrivate
     /* other properties */
     GHashTable      *props;
     GRWLock          props_lock; /* also applies to basic_props, name & icon */
-    /* toggle count (for provider's toggle reference) */
-    int              toggle_count;
 };
 
 typedef struct
@@ -253,8 +251,6 @@ donna_node_init (DonnaNode *node)
     g_value_init (&priv->basic_props[BASIC_PROP_UID].value,       G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_GID].value,       G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_DESC].value,      G_TYPE_STRING);
-
-    priv->toggle_count = 1;
 }
 
 G_DEFINE_TYPE (DonnaNode, donna_node, G_TYPE_OBJECT)
@@ -2254,55 +2250,4 @@ finish:
 
     if (emit && node->priv->ready)
         donna_provider_node_updated (node->priv->provider, node, name);
-}
-
-/**
- * donna_node_get_toggle_count:
- * @node: The node
- *
- * Returns the toggle count for that node. This should only be used by the
- * node's provider, to handle its toggle reference in multi-threaded
- * environment.
- *
- * Returns: The toggle count
- */
-int
-donna_node_get_toggle_count (DonnaNode *node)
-{
-    g_return_val_if_fail (DONNA_IS_NODE (node), -1);
-    return node->priv->toggle_count;
-}
-
-/**
- * donna_node_inc_toggle_count:
- * @node: The node
- *
- * Increments the toggle count for that node. This should only be used by the
- * node's provider, to handle its toggle reference in multi-threaded
- * environment.
- *
- * Returns: The new toggle count
- */
-int
-donna_node_inc_toggle_count (DonnaNode *node)
-{
-    g_return_val_if_fail (DONNA_IS_NODE (node), -1);
-    return ++node->priv->toggle_count;
-}
-
-/**
- * donna_node_dec_toggle_count:
- * @node: The node
- *
- * Decrements the toggle count for that node. This should only be used by the
- * node's provider, to handle its toggle reference in multi-threaded
- * environment.
- *
- * Returns: The new toggle count
- */
-int
-donna_node_dec_toggle_count (DonnaNode *node)
-{
-    g_return_val_if_fail (DONNA_IS_NODE (node), -1);
-    return --node->priv->toggle_count;
 }

@@ -202,9 +202,6 @@ void                donna_node_mark_invalid         (DonnaNode          *node,
 void                donna_node_set_property_value   (DonnaNode          *node,
                                                      const gchar        *name,
                                                      const GValue       *value);
-int                 donna_node_get_toggle_count     (DonnaNode          *node);
-int                 donna_node_inc_toggle_count     (DonnaNode          *node);
-int                 donna_node_dec_toggle_count     (DonnaNode          *node);
 
 G_END_DECLS
 

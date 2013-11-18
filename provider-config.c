@@ -3019,10 +3019,8 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
     {
         GNode *gnode;
         gchar *location;
-        int c;
 
-        c = donna_node_dec_toggle_count (node);
-        if (c > 0)
+        if (G_UNLIKELY (((GObject *) node)->ref_count > 1))
         {
             g_rec_mutex_unlock (&config->priv->nodes_mutex);
             g_rw_lock_reader_unlock (&config->priv->lock);
@@ -3031,15 +3029,14 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
         location = donna_node_get_location (node);
         gnode = get_option_node (config->priv->root, location);
         if (G_UNLIKELY (!gnode))
-            g_critical ("Unable to find option '%s' while processing toggle_ref for the associated node",
+            g_critical ("Unable to find option '%s' while processing toggle_ref "
+                    "for the associated node",
                     location);
         else
             ((struct option *) gnode->data)->node = NULL;
         g_object_unref (node);
         g_free (location);
     }
-    else
-        donna_node_inc_toggle_count (node);
 
     g_rec_mutex_unlock (&config->priv->nodes_mutex);
     g_rw_lock_reader_unlock (&config->priv->lock);

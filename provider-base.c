@@ -245,9 +245,9 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
      * T2: ask for node, lock rec_mutex
      * T1: toggle_ref waits for rec_mutex
      * T2: adds a ref, trigger toggle_ref (is_last=FALSE)
-     * T2: toggle_ref gets rec_mutex and calls node_inc (1->2)
+     * T2: toggle_ref gets rec_mutex, !is_last so does nothing
      * T2: unlocks rec_mutex (twice)
-     * T1: gets rec_mutex, calls node_dec (2->1) and does nothing
+     * T1: gets rec_mutex, node->ref_count > 1 so does nothing
      *
      * If T1 has locked rec_mutex, it would have unref-d the node, and by the
      * time T2 got the rec_mutex, the node would be gone, and would have to be
@@ -257,8 +257,7 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
      *
      * T1: toggle_ref when we own the last ref
      * - lock RM
-     * - flg_is_last--
-     * - if flg_is_last>0 unlock RM, abort
+     * - if ref_count>1 unlock RM, abort
      * - remove node
      * - unlock RM
      * - unref node
@@ -266,7 +265,7 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
      * T2: asking for the node
      * - lock RM
      * - get node
-     * - ref node --> toggle_ref: lock RM, flg_is_last++, unlock RM
+     * - ref node --> toggle_ref: lock RM, !is_last so nothing, unlock RM
      * - unlock RM
      */
 
@@ -274,10 +273,8 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
     if (is_last)
     {
         gchar *location;
-        int c;
 
-        c = donna_node_dec_toggle_count (node);
-        if (c > 0)
+        if (G_UNLIKELY (((GObject *) node)->ref_count > 1))
         {
             g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
             return;
@@ -288,7 +285,7 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
         if (DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node)
             DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node (_provider, node);
         /* sanity check */
-        if (G_UNLIKELY (donna_node_get_toggle_count (node) > 0))
+        if (G_UNLIKELY (((GObject *) node)->ref_count > 1))
         {
             g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
             return;
@@ -297,14 +294,9 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
         location = donna_node_get_location (node);
         /* this also removes our last ref on node */
         g_hash_table_remove (_provider->priv->nodes, location);
-        g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
         g_free (location);
     }
-    else
-    {
-        donna_node_inc_toggle_count (node);
-        g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
-    }
+    g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
 }
 
 static void
