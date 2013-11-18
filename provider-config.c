@@ -2622,6 +2622,7 @@ _set_option (DonnaConfig    *config,
     GNode *parent;
     GNode *node;
     struct option *option;
+    DonnaNode *option_node = NULL;
     gchar *name;
     const gchar *s;
     gboolean ret;
@@ -2678,18 +2679,36 @@ _set_option (DonnaConfig    *config,
         g_node_append_data (parent, option);
         ret = TRUE;
     }
-    if (ret)
-        g_value_copy (value, &option->value);
-    g_rw_lock_writer_unlock (&priv->lock);
-    /* signal & set value on node after releasing the lock, to avoid
-     * any deadlocks */
+
     if (ret)
     {
-        config_option_set (DONNA_CONFIG (config), name);
+        g_value_copy (value, &option->value);
         if (option->node)
-            donna_node_set_property_value (option->node,
-                    "option-value",
-                    &option->value);
+        {
+            /* update the value w/out emitting node-updated */
+            donna_node_set_property_value_no_signal (option->node,
+                    "option-value", &option->value);
+            /* make sure we can ref the node (to emit signal) without problem.
+             * That is, if ref_count == 1 it means we're holding the only ref
+             * left, i.e. we have a toggle_ref waiting for the lock to unref the
+             * node, and trying to add a ref would deadlock */
+            if (((GObject *) option->node)->ref_count > 1)
+                option_node = g_object_ref (option->node);
+        }
+    }
+
+    g_rw_lock_writer_unlock (&priv->lock);
+
+    /* signals after releasing the lock, to avoid any deadlocks */
+    if (ret)
+    {
+        config_option_set (config, name);
+        if (option_node)
+        {
+            donna_provider_node_updated ((DonnaProvider *) config, option_node,
+                    "option-value");
+            g_object_unref (option_node);
+        }
     }
 
     g_free (name);
