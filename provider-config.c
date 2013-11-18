@@ -959,7 +959,10 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
 
     /* skip the main root, if specified */
     if (*name == '/')
+    {
         ++name;
+        --len;
+    }
 
     parent = root = config->priv->root;
     /* if name is "/" there's nothing to check, the config root exists */
