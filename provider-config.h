@@ -218,6 +218,14 @@ gboolean    donna_config_take_string            (DonnaConfig            *config,
                                                  gchar                  *value,
                                                  const gchar            *fmt,
                                                  ...);
+gboolean    donna_config_rename_option          (DonnaConfig            *config,
+                                                 const gchar            *new_name,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_rename_category        (DonnaConfig            *config,
+                                                 const gchar            *new_name,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_remove_option          (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);

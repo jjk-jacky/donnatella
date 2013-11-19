@@ -2775,7 +2775,371 @@ donna_config_take_string (DonnaConfig        *config,
     _set_opt (G_TYPE_STRING, g_value_take_string);
 }
 
-static inline gboolean
+gboolean
+donna_config_rename_option (DonnaConfig            *config,
+                            const gchar            *new_name,
+                            const gchar            *fmt,
+                            ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    struct option *option;
+    DonnaNode *option_node = NULL;
+    gchar *new_location;
+    GNode *node;
+    GNode *parent;
+    const gchar *s;
+    gchar *name;
+    va_list va_arg;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (new_name != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+    priv = config->priv;
+
+    if (!is_valid_name (new_name, VALID_OPTION_NAME))
+        return FALSE;
+
+    va_start (va_arg, fmt);
+    name = g_strdup_vprintf (fmt, va_arg);
+    va_end (va_arg);
+
+    g_rw_lock_writer_lock (&priv->lock);
+    s = strrchr ((*name == '/') ? name + 1 : name, '/');
+    if (s)
+    {
+        parent = ensure_categories (config, name, s - name);
+        if (!parent)
+        {
+            g_rw_lock_writer_unlock (&priv->lock);
+            return FALSE;
+        }
+        ++s;
+    }
+    else
+    {
+        s = (*name == '/') ? name + 1 : name;
+        parent = priv->root;
+    }
+
+    /* make sure the option exists/isn't a category */
+    node = get_child_node (parent, s, strlen (s));
+    if (!node)
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        return FALSE;
+    }
+    if (option_is_category (node->data, priv->root))
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        g_free (name);
+        return FALSE;
+    }
+
+    /* make sure the new name is available */
+    if (get_child_node (parent, new_name, strlen (new_name)))
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        g_free (name);
+        return FALSE;
+    }
+
+    /* perform the rename */
+    option = (struct option *) node->data;
+    option->name = str_chunk (priv, new_name);
+
+    /* get the new location of the node */
+    new_location = get_option_full_name (priv->root, node);
+
+    /* if there's a node, we need to update it now, but without any signals
+     * emitted under the lock */
+    if (option->node)
+    {
+        GValue v = G_VALUE_INIT;
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_set_string (&v, new_location);
+        donna_node_set_property_value_no_signal (option->node, "location", &v);
+        g_value_unset (&v);
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_set_static_string (&v, option->name);
+        donna_node_set_property_value_no_signal (option->node, "name", &v);
+        g_value_unset (&v);
+
+        /* make sure we can ref the node (to emit signal) without problem.  That
+         * is, if ref_count == 1 it means we're holding the only ref left, i.e.
+         * we have a toggle_ref waiting for the lock to unref the node, and
+         * trying to add a ref would deadlock */
+        if (((GObject *) option->node)->ref_count > 1)
+            option_node = g_object_ref (option->node);
+    }
+
+    /* we're done with the writer lock, signals go after to avoid deadlocks */
+    g_rw_lock_writer_unlock (&priv->lock);
+
+    /* old name/option was deleted */
+    config_option_deleted (config, (*name == '/') ? name + 1 : name);
+    g_free (name);
+
+    /* new name/option was set */
+    config_option_set (config, new_location + 1); /* +1 to skip leading slash */
+    g_free (new_location);
+
+    /* emit signals on node outside of lock */
+    if (option_node)
+    {
+        donna_provider_node_updated ((DonnaProvider *) config, option_node,
+                "location");
+        donna_provider_node_updated ((DonnaProvider *) config, option_node,
+                "name");
+        g_object_unref (option_node);
+    }
+
+    return TRUE;
+}
+
+struct renaming_category
+{
+    GNode     *gnode;
+    GPtrArray *names;
+    GPtrArray *nodes;
+};
+
+static gboolean
+traverse_renaming_category (GNode *node, struct renaming_category *data)
+{
+    struct option *option = node->data;
+    GString *str;
+
+    /* skip the category we're renaming */
+    if (node == data->gnode)
+        /* keep iterating */
+        return FALSE;
+
+    str = g_string_new (option->name);
+    for (node = node->parent; node && node != data->gnode; node = node->parent)
+    {
+        g_string_prepend_c (str, '/');
+        g_string_prepend (str, ((struct option *) node->data)->name);
+    }
+    g_string_prepend_c (str, '/');
+    g_ptr_array_add (data->names, g_string_free (str, FALSE));
+
+    if (option->node)
+    {
+        g_ptr_array_add (data->nodes, option->node);
+        option->node = NULL;
+    }
+
+    /* keep iterating */
+    return FALSE;
+}
+
+gboolean
+donna_config_rename_category (DonnaConfig            *config,
+                              const gchar            *new_name,
+                              const gchar            *fmt,
+                              ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    struct renaming_category data;
+    GString *str_prefix;
+    const gchar *old_name;
+    struct option *option;
+    DonnaNode *option_node = NULL;
+    GNode *node;
+    GNode *parent;
+    GNode *n;
+    gchar *s;
+    gchar *name;
+    va_list va_arg;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (new_name != NULL, FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+    priv = config->priv;
+
+    if (!is_valid_name (new_name, VALID_CATEGORY_NAME))
+        return FALSE;
+
+    va_start (va_arg, fmt);
+    name = g_strdup_vprintf (fmt, va_arg);
+    va_end (va_arg);
+
+    g_rw_lock_writer_lock (&priv->lock);
+    s = strrchr ((*name == '/') ? name + 1 : name, '/');
+    if (s)
+    {
+        parent = ensure_categories (config, name, s - name);
+        if (!parent)
+        {
+            g_rw_lock_writer_unlock (&priv->lock);
+            return FALSE;
+        }
+        ++s;
+    }
+    else
+    {
+        s = (*name == '/') ? name + 1 : name;
+        parent = priv->root;
+    }
+
+    /* make sure the option exists/is a category */
+    node = get_child_node (parent, s, strlen (s));
+    if (!node)
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        return FALSE;
+    }
+    if (!option_is_category (node->data, priv->root))
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        g_free (name);
+        return FALSE;
+    }
+
+    /* make sure the new name is available */
+    if (get_child_node (parent, new_name, strlen (new_name)))
+    {
+        g_rw_lock_writer_unlock (&priv->lock);
+        g_free (name);
+        return FALSE;
+    }
+
+    /* perform the rename */
+    option = (struct option *) node->data;
+    old_name = option->name;
+    option->name = str_chunk (priv, new_name);
+
+    /* internal stuff: there's a rule about how options (GNode-s) are stored in
+     * the config, specifically for "numbered categories" : they must be in
+     * order. There's also the fact hat the parent category has an index of the
+     * next available number */
+    if (*new_name >= '1' && *new_name <= '9')
+    {
+        struct option *op = parent->data;
+        gint index;
+        gint num;
+
+        num = g_ascii_strtoll (new_name, NULL, 10);
+        index = g_value_get_int (&op->value);
+
+        /* is this the first numbered category? */
+        if (index == 1)
+            goto skip;
+
+        /* "remove" the node from the tree */
+        g_node_unlink (node);
+        /* and find the first numbered category with a higher number */
+        for (n = parent->children; n; n = n->next)
+        {
+            struct option *o = n->data;
+            gint idx;
+
+            /* skip options & "regular" categories */
+            if (!option_is_category (o, priv->root)
+                    || *o->name < '1' || *o->name > '9')
+                continue;
+
+            idx = g_ascii_strtoll (o->name, NULL, 10);
+            if (idx > num)
+                break;
+        }
+        /* re-insert node before, or as last children if none found */
+        g_node_insert_before (parent, n, node);
+skip:
+        if (num >= index)
+            g_value_set_int (&op->value, num + 1);
+    }
+
+    str_prefix = g_string_new (NULL);
+    for (n = node->parent; n && n != priv->root; n = n->parent)
+    {
+        g_string_prepend_c (str_prefix, '/');
+        g_string_prepend (str_prefix, ((struct option *) n->data)->name);
+    }
+
+    /* if there's a node, we need to update it now, but without any signals
+     * emitted under the lock */
+    if (option->node)
+    {
+        GValue v = G_VALUE_INIT;
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_take_string (&v, g_strconcat ("/", str_prefix->str, new_name, NULL));
+        donna_node_set_property_value_no_signal (option->node, "location", &v);
+        g_value_unset (&v);
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_set_static_string (&v, option->name);
+        donna_node_set_property_value_no_signal (option->node, "name", &v);
+        g_value_unset (&v);
+
+        /* make sure we can ref the node (to emit signal) without problem.  That
+         * is, if ref_count == 1 it means we're holding the only ref left, i.e.
+         * we have a toggle_ref waiting for the lock to unref the node, and
+         * trying to add a ref would deadlock */
+        if (((GObject *) option->node)->ref_count > 1)
+            option_node = g_object_ref (option->node);
+    }
+
+    data.gnode = node;
+    data.names = g_ptr_array_new ();
+    data.nodes = g_ptr_array_new ();
+    g_node_traverse (node, G_IN_ORDER, G_TRAVERSE_ALL, -1,
+            (GNodeTraverseFunc) traverse_renaming_category,
+            &data);
+
+    /* we're done with the writer lock, signals go after to avoid deadlocks */
+    g_rw_lock_writer_unlock (&priv->lock);
+
+    /* all option with the old name were deleted */
+    for (i = data.names->len; i > 0; --i)
+    {
+        s = g_strconcat (str_prefix->str, old_name, data.names->pdata[i - 1], NULL);
+        config_option_deleted (config, s);
+        g_free (s);
+    }
+    /* as was the category itself */
+    s = g_strconcat (str_prefix->str, old_name, NULL);
+    config_option_deleted (config, s);
+    g_free (s);
+
+    /* nodes are destroyed */
+    for (i = data.nodes->len; i > 0; --i)
+        donna_provider_node_deleted ((DonnaProvider *) config, data.nodes->pdata[i - 1]);
+    g_ptr_array_free (data.nodes, TRUE);
+
+    /* the new name/category was set */
+    s = g_strconcat (str_prefix->str, new_name, NULL);
+    config_option_set (config, s);
+    g_free (s);
+    /* and so were every option with the new name */
+    for (i = 1; i <= data.names->len; ++i)
+    {
+        s = g_strconcat (str_prefix->str, new_name, data.names->pdata[i - 1], NULL);
+        config_option_set (config, s);
+        g_free (s);
+        g_free (data.names->pdata[i - 1]);
+    }
+    g_ptr_array_free (data.names, TRUE);
+
+    /* emit signals on node outside of lock */
+    if (option_node)
+    {
+        donna_provider_node_updated ((DonnaProvider *) config, option_node,
+                "location");
+        donna_provider_node_updated ((DonnaProvider *) config, option_node,
+                "name");
+        g_object_unref (option_node);
+    }
+
+    g_string_free (str_prefix, TRUE);
+    return TRUE;
+}
+
+static gboolean
 _remove_option (DonnaProviderConfig *config,
                 const gchar         *name,
                 gboolean             category)
