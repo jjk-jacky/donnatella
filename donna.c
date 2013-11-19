@@ -321,7 +321,7 @@ load_arrangements (DonnaConfig *config, const gchar *sce)
         struct argmt *argmt;
         gchar *mask;
 
-        if (!donna_config_get_string (config, &mask,
+        if (!donna_config_get_string (config, NULL, &mask,
                     "%s/%s/mask", sce, arr->pdata[i]))
         {
             g_warning ("Arrangement '%s/%s' has no mask set, skipping",
@@ -1108,10 +1108,10 @@ tree_select_arrangement (DonnaTreeView  *tree,
         gchar *sce;
 
         sce = source[i];
-        if (donna_config_has_category (priv->config, sce))
+        if (donna_config_has_category (priv->config, NULL, sce))
         {
-            if (!donna_config_get_int (priv->config, (gint *) &type, "%s/type",
-                        sce))
+            if (!donna_config_get_int (priv->config, NULL, (gint *) &type,
+                        "%s/type", sce))
                 type = DONNA_ENABLED_TYPE_ENABLED;
             switch (type)
             {
@@ -1641,7 +1641,8 @@ trigger_event (DonnaDonna   *donna,
         GPtrArray *intrefs = NULL;
         gchar *fl;
 
-        if (donna_config_get_string (donna->priv->config, &fl, "%s/events/%s/%s",
+        if (donna_config_get_string (donna->priv->config, NULL, &fl,
+                    "%s/events/%s/%s",
                     source, event, arr->pdata[i]))
         {
             gboolean ret;
@@ -1925,9 +1926,9 @@ menuitem_button_release_cb (GtkWidget           *item,
 
     strcpy (b, "click");
 
-    if (!donna_config_get_string (priv->config, &fl, "menus/%s/%s",
+    if (!donna_config_get_string (priv->config, NULL, &fl, "menus/%s/%s",
                 mc->name, buf))
-        donna_config_get_string (priv->config, &fl, "defaults/menus/%s", buf);
+        donna_config_get_string (priv->config, NULL, &fl, "defaults/menus/%s", buf);
 
     if (!fl)
     {
@@ -2215,26 +2216,26 @@ load_submenu (struct load_submenu *ls)
     }
 }
 
-#define get_boolean(var, option, def_val)   do {            \
-    if (!donna_config_get_boolean (priv->config, &var,      \
-                "/menus/%s/" option, name))                 \
-        if (!donna_config_get_boolean (priv->config, &var,  \
-                    "/defaults/menus/" option))             \
-        {                                                   \
-            var = def_val;                                  \
-            donna_config_set_boolean (priv->config, var,    \
-                    "/defaults/menus/" option);             \
-        }                                                   \
+#define get_boolean(var, option, def_val)   do {                \
+    if (!donna_config_get_boolean (priv->config, NULL, &var,    \
+                "/menus/%s/" option, name))                     \
+        if (!donna_config_get_boolean (priv->config, NULL, &var,\
+                    "/defaults/menus/" option))                 \
+        {                                                       \
+            var = def_val;                                      \
+            donna_config_set_boolean (priv->config, NULL, var,  \
+                    "/defaults/menus/" option);                 \
+        }                                                       \
 } while (0)
 
 #define get_int(var, option, def_val)   do {                \
-    if (!donna_config_get_int (priv->config, &var,          \
+    if (!donna_config_get_int (priv->config, NULL, &var,    \
                 "/menus/%s/" option, name))                 \
-        if (!donna_config_get_int (priv->config, &var,      \
+        if (!donna_config_get_int (priv->config, NULL, &var,\
                     "/defaults/menus/" option))             \
         {                                                   \
             var = def_val;                                  \
-            donna_config_set_int (priv->config, var,        \
+            donna_config_set_int (priv->config, NULL, var,  \
                     "/defaults/menus/" option);             \
         }                                                   \
 } while (0)
@@ -2706,7 +2707,8 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
     gchar *type = NULL;
     guint i;
 
-    if (!donna_config_get_string (priv->config, &type, "columns/%s/type", col_name))
+    if (!donna_config_get_string (priv->config, NULL, &type,
+            "columns/%s/type", col_name))
         /* fallback to its name */
         type = g_strdup (col_name);
 
@@ -3088,7 +3090,7 @@ parse_string (DonnaDonna *donna, gchar *fmt)
                     gint type;
 
                     domain = donna_node_get_domain (node);
-                    if (!donna_config_get_int (priv->config, &type,
+                    if (!donna_config_get_int (priv->config, NULL, &type,
                                 "donna/domain_%s", domain))
                         type = (streq ("fs", domain))
                             ? TITLE_DOMAIN_LOCATION : TITLE_DOMAIN_FULL_LOCATION;
@@ -3098,7 +3100,7 @@ parse_string (DonnaDonna *donna, gchar *fmt)
                     else if (type == TITLE_DOMAIN_FULL_LOCATION)
                         ss = donna_node_get_full_location (node);
                     else if (type == TITLE_DOMAIN_CUSTOM)
-                        if (!donna_config_get_string (priv->config, &ss,
+                        if (!donna_config_get_string (priv->config, NULL, &ss,
                                     "donna/custom_%s", domain))
                             ss = donna_node_get_name (node);
 
@@ -3156,7 +3158,7 @@ refresh_window_title (DonnaDonna *donna)
     gchar *fmt;
     gchar *str;
 
-    if (!donna_config_get_string (priv->config, &fmt, "donna/title"))
+    if (!donna_config_get_string (priv->config, NULL, &fmt, "donna/title"))
         fmt = def;
 
     str = parse_string (donna, fmt);
@@ -3292,9 +3294,10 @@ window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
                 && (DonnaTreeView *) widget != priv->active_list)
         {
             gboolean skip;
-            if (donna_config_get_boolean (priv->config, &skip,
+            if (donna_config_get_boolean (priv->config, NULL, &skip,
                         "treeviews/%s/not_active_list",
-                        donna_tree_view_get_name ((DonnaTreeView *) widget)) && skip)
+                        donna_tree_view_get_name ((DonnaTreeView *) widget))
+                    && skip)
                 return;
 
             set_active_list (donna, (DonnaTreeView *) widget);
@@ -3443,9 +3446,10 @@ load_widget (DonnaDonna  *donna,
                 if (!donna_tree_view_is_tree (tree) && !priv->active_list)
                 {
                     gboolean skip;
-                    if (!donna_config_get_boolean (priv->config, &skip,
+                    if (!donna_config_get_boolean (priv->config, NULL, &skip,
                                 "treeviews/%s/not_active_list",
-                                donna_tree_view_get_name (tree)) || !skip)
+                                donna_tree_view_get_name (tree))
+                            || !skip)
                     {
                         if (streq (*active_list_name,
                                     donna_tree_view_get_name (tree)))
@@ -3480,6 +3484,7 @@ load_widget (DonnaDonna  *donna,
 static inline gint
 create_gui (DonnaDonna *donna)
 {
+    GError              *err = NULL;
     DonnaApp            *app = (DonnaApp *) donna;
     DonnaDonnaPrivate   *priv = donna->priv;
     GtkWindow           *window;
@@ -3501,25 +3506,29 @@ create_gui (DonnaDonna *donna)
     g_signal_connect (window, "delete-event",
             (GCallback) window_delete_event_cb, donna);
 
-    if (!donna_config_get_string (priv->config, &s, "donna/layout"))
+    if (!donna_config_get_string (priv->config, &err, &s, "donna/layout"))
     {
         w = gtk_message_dialog_new (NULL,
                 GTK_DIALOG_MODAL,
                 GTK_MESSAGE_ERROR,
                 GTK_BUTTONS_CLOSE,
-                "Unable to load interface: no layout set");
+                "Unable to load interface: no layout set (%s)",
+                (err) ? err->message : "no error message");
+        g_clear_error (&err);
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
         return 1;
     }
 
-    if (!donna_config_get_string (priv->config, &ss, "layouts/%s", s))
+    if (!donna_config_get_string (priv->config, &err, &ss, "layouts/%s", s))
     {
         w = gtk_message_dialog_new (NULL,
                 GTK_DIALOG_MODAL,
                 GTK_MESSAGE_ERROR,
                 GTK_BUTTONS_CLOSE,
-                "Unable to load interface: layout '%s' not defined", s);
+                "Unable to load interface: layout '%s' not defined (%s)",
+                s, (err) ? err->message : "no error message");
+        g_clear_error (&err);
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
         g_free (s);
@@ -3528,7 +3537,7 @@ create_gui (DonnaDonna *donna)
     g_free (s);
     s = ss;
 
-    if (!donna_config_get_string (priv->config, &active_list_name,
+    if (!donna_config_get_string (priv->config, NULL, &active_list_name,
                 "donna/active_list"))
         active_list_name = NULL;
 
@@ -3570,7 +3579,7 @@ create_gui (DonnaDonna *donna)
     priv->focused_tree = (DonnaTreeView *) active_list_widget;
 
     /* status bar */
-    if (donna_config_get_string (priv->config, &areas, "statusbar/areas"))
+    if (donna_config_get_string (priv->config, NULL, &areas, "statusbar/areas"))
     {
         GtkWidget *box;
 
@@ -3589,7 +3598,7 @@ create_gui (DonnaDonna *donna)
             if (e)
                 *e = '\0';
 
-            if (!donna_config_get_string (priv->config, &sce,
+            if (!donna_config_get_string (priv->config, NULL, &sce,
                         "statusbar/%s/source", s))
             {
                 g_warning ("Unable to load statusbar area '%s', no source specified",
@@ -3643,10 +3652,10 @@ create_gui (DonnaDonna *donna)
             }
             g_array_append_val (status->providers, provider);
 
-            if (!donna_config_get_int (priv->config, &width,
+            if (!donna_config_get_int (priv->config, NULL, &width,
                         "statusbar/%s/width", status->name))
                 width = -1;
-            if (!donna_config_get_boolean (priv->config, &expand,
+            if (!donna_config_get_boolean (priv->config, NULL, &expand,
                         "statusbar/%s/expand", status->name))
                 expand = TRUE;
             donna_status_bar_add_area (priv->sb, status->name,
@@ -3671,9 +3680,9 @@ next:
     }
 
     /* sizing */
-    if (!donna_config_get_int (priv->config, &width, "donna/width"))
+    if (!donna_config_get_int (priv->config, NULL, &width, "donna/width"))
         width = -1;
-    if (!donna_config_get_int (priv->config, &height, "donna/height"))
+    if (!donna_config_get_int (priv->config, NULL, &height, "donna/height"))
         height = -1;
     gtk_window_set_default_size (window, width, height);
 
@@ -3746,18 +3755,19 @@ init_donna (DonnaDonna *donna)
             struct visuals *visuals;
             gchar *s;
 
-            if (!donna_config_get_string (priv->config, &s, "visuals/%s/node",
-                    arr->pdata[i]))
+            if (!donna_config_get_string (priv->config, NULL, &s,
+                        "visuals/%s/node",
+                        arr->pdata[i]))
                 continue;
 
             visuals = g_slice_new0 (struct visuals);
-            donna_config_get_string (priv->config, &visuals->name,
+            donna_config_get_string (priv->config, NULL, &visuals->name,
                     "visuals/%s/name", arr->pdata[i]);
-            donna_config_get_string (priv->config, &visuals->icon,
+            donna_config_get_string (priv->config, NULL, &visuals->icon,
                     "visuals/%s/icon", arr->pdata[i]);
-            donna_config_get_string (priv->config, &visuals->box,
+            donna_config_get_string (priv->config, NULL, &visuals->box,
                     "visuals/%s/box", arr->pdata[i]);
-            donna_config_get_string (priv->config, &visuals->highlight,
+            donna_config_get_string (priv->config, NULL, &visuals->highlight,
                     "visuals/%s/highlight", arr->pdata[i]);
             g_hash_table_insert (priv->visuals, s, visuals);
         }

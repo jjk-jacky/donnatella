@@ -388,7 +388,7 @@ get_node_children_task (DonnaProvider      *provider,
 
         g_object_get (provider, "app", &app, NULL);
 
-        donna_config_get_string (donna_app_peek_config (app), &terminal,
+        donna_config_get_string (donna_app_peek_config (app), NULL, &terminal,
                     "providers/exec/terminal");
         if (terminal)
             cmdline = g_strdup_printf ("%s %s", terminal, location + 1);

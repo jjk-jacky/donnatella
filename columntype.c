@@ -427,12 +427,10 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
 }
 
 #define _cfg_set(type, value, location, ...)                                \
-    if (!donna_config_set_##type (config, value, __VA_ARGS__))              \
+    if (!donna_config_set_##type (config, error, value, __VA_ARGS__))       \
     {                                                                       \
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,                         \
-                DONNA_COLUMNTYPE_ERROR_OTHER,                               \
-                "ColumnType '%s': Failed to save option '%s' in %s",        \
-                donna_columntype_get_name (ct), option, location);          \
+        g_prefix_error ("ColumnType '%s': Failed to save option '%s': ",    \
+                donna_columntype_get_name (ct), option);                    \
         g_object_unref (app);                                               \
         return FALSE;                                                       \
     }

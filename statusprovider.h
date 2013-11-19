@@ -14,13 +14,6 @@ typedef struct _DonnaStatusProviderInterface    DonnaStatusProviderInterface;
 #define DONNA_IS_STATUS_PROVIDER(obj)           (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_STATUS_PROVIDER))
 #define DONNA_STATUS_PROVIDER_GET_INTERFACE(obj)(G_TYPE_INSTANCE_GET_INTERFACE ((obj), DONNA_TYPE_STATUS_PROVIDER, DonnaStatusProviderInterface))
 
-#define DONNA_STATUS_PROVIDER_ERROR             g_quark_from_static_string ("DonnaStatusProvider-Error")
-typedef enum
-{
-    DONNA_STATUS_PROVIDER_ERROR_INVALID_CONFIG,
-    DONNA_STATUS_PROVIDER_ERROR_OTHER,
-} DonnaStatusProviderError;
-
 
 GType donna_status_provider_get_type            (void) G_GNUC_CONST;
 

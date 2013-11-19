@@ -1690,6 +1690,7 @@ get_option_full_name (GNode *root, GNode *gnode)
 
 static struct option *
 _get_option (DonnaConfig *config,
+             GError     **error,
              GType        type,
              gboolean     leave_lock_on,
              const gchar *fmt,
@@ -1713,14 +1714,42 @@ _get_option (DonnaConfig *config,
     {
         /* G_TYPE_INVALID means we want a category */
         if (type == G_TYPE_INVALID)
+        {
             ret = option_is_category (option, priv->root);
+            if (!ret && error)
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_TYPE,
+                        "Config: '%s' is an option",
+                        name);
+        }
         else if (!option_is_category (option, priv->root))
+        {
             ret = G_VALUE_HOLDS (&option->value, type);
+            if (!ret && error)
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                        "Config: '%s' is of type %s, (expected %s)",
+                        name,
+                        G_VALUE_TYPE_NAME (&option->value),
+                        g_type_name (type));
+        }
         else
+        {
             ret = FALSE;
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_TYPE,
+                    "Config: '%s' is a category",
+                    name + 1);
+        }
     }
     else
+    {
         ret = FALSE;
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_NOT_FOUND,
+                "Config: '%s' doesn't exist",
+                name + 1);
+    }
 
     /* allows caller to get the option value, then unlock */
     if (!leave_lock_on)
@@ -1734,14 +1763,15 @@ _get_option (DonnaConfig *config,
     va_list va_arg;                         \
                                             \
     va_start (va_arg, fmt);                 \
-    option = _get_option (config, gtype,    \
-            FALSE, fmt, va_arg);            \
+    option = _get_option (config, error,    \
+            gtype, FALSE, fmt, va_arg);     \
     va_end (va_arg);                        \
     return option != NULL;                  \
 } while (0)
 
 gboolean
 donna_config_has_boolean (DonnaConfig *config,
+                          GError      **error,
                           const gchar *fmt,
                           ...)
 {
@@ -1750,6 +1780,7 @@ donna_config_has_boolean (DonnaConfig *config,
 
 gboolean
 donna_config_has_int (DonnaConfig *config,
+                      GError     **error,
                       const gchar *fmt,
                       ...)
 {
@@ -1758,6 +1789,7 @@ donna_config_has_int (DonnaConfig *config,
 
 gboolean
 donna_config_has_double (DonnaConfig *config,
+                         GError     **error,
                          const gchar *fmt,
                          ...)
 {
@@ -1766,6 +1798,7 @@ donna_config_has_double (DonnaConfig *config,
 
 gboolean
 donna_config_has_string (DonnaConfig *config,
+                         GError     **error,
                          const gchar *fmt,
                          ...)
 {
@@ -1774,6 +1807,7 @@ donna_config_has_string (DonnaConfig *config,
 
 gboolean
 donna_config_has_category (DonnaConfig *config,
+                           GError     **error,
                            const gchar *fmt,
                            ...)
 {
@@ -1785,7 +1819,7 @@ donna_config_has_category (DonnaConfig *config,
     va_list va_arg;                                     \
                                                         \
     va_start (va_arg, fmt);                             \
-    option = _get_option (config, gtype, TRUE,          \
+    option = _get_option (config, error, gtype, TRUE,   \
             fmt, va_arg);                               \
     va_end (va_arg);                                    \
     if (option)                                         \
@@ -1796,6 +1830,7 @@ donna_config_has_category (DonnaConfig *config,
 
 gboolean
 donna_config_get_boolean (DonnaConfig    *config,
+                          GError        **error,
                           gboolean       *value,
                           const gchar    *fmt,
                           ...)
@@ -1805,6 +1840,7 @@ donna_config_get_boolean (DonnaConfig    *config,
 
 gboolean
 donna_config_get_int (DonnaConfig    *config,
+                      GError        **error,
                       gint           *value,
                       const gchar    *fmt,
                       ...)
@@ -1814,6 +1850,7 @@ donna_config_get_int (DonnaConfig    *config,
 
 gboolean
 donna_config_get_double (DonnaConfig    *config,
+                         GError        **error,
                          gdouble        *value,
                          const gchar    *fmt,
                          ...)
@@ -1823,6 +1860,7 @@ donna_config_get_double (DonnaConfig    *config,
 
 gboolean
 donna_config_get_string (DonnaConfig          *config,
+                         GError              **error,
                          gchar               **value,
                          const gchar          *fmt,
                          ...)
@@ -1917,7 +1955,7 @@ __get_option (DonnaConfig   *config,
     va_list va_arg;
 
     va_start (va_arg, fmt);
-    option = _get_option (config, type, leave_lock_on, fmt, va_arg);
+    option = _get_option (config, NULL, type, leave_lock_on, fmt, va_arg);
     va_end (va_arg);
     return option;
 }
@@ -2085,7 +2123,7 @@ get_value:
                 def_cat, opt_name, 0, from))                        \
     {                                                               \
         g_value_unset (&value);                                     \
-        donna_config_set_##cfg_set (config, def_val,                \
+        donna_config_set_##cfg_set (config, NULL, def_val,          \
                 (def_cat) ? "defaults/%s/%s" : "columns/%s/%s",     \
                 (def_cat) ? def_cat : col_name,                     \
                 opt_name);                                          \
@@ -2173,7 +2211,7 @@ _donna_config_get_string_tree_column (DonnaConfig   *config,
         g_value_unset (&value);
         if (!def_val)
             return NULL;
-        donna_config_set_string (config, def_val, "defaults/%s/%s%s",
+        donna_config_set_string (config, NULL, def_val, "defaults/%s/%s%s",
                 def_cat,
                 (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
                 opt_name);
@@ -2613,6 +2651,7 @@ done:
 
 static gboolean
 _set_option (DonnaConfig    *config,
+             GError        **error,
              GType           type,
              GValue         *value,
              const gchar    *fmt,
@@ -2647,6 +2686,10 @@ _set_option (DonnaConfig    *config,
         parent = ensure_categories (config, name + 1, s - name - 1);
         if (!parent)
         {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_NOT_FOUND,
+                    "Config: Parent of option '%s' not found",
+                    name + 1);
             g_rw_lock_writer_unlock (&priv->lock);
             return FALSE;
         }
@@ -2660,6 +2703,10 @@ _set_option (DonnaConfig    *config,
 
     if (!is_valid_name ((gchar *) s, VALID_OPTION_NAME))
     {
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_NAME,
+                "Config: Cannot create option '%s': invalid name",
+                name + 1);
         g_rw_lock_writer_unlock (&priv->lock);
         return FALSE;
     }
@@ -2668,8 +2715,26 @@ _set_option (DonnaConfig    *config,
     if (node)
     {
         option = node->data;
-        ret = !option_is_category (option, priv->root)
-            && G_VALUE_HOLDS (&option->value, type);
+        if (option_is_category (option, priv->root))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_TYPE,
+                    "Config: Option '%s' is a category",
+                    name + 1);
+            ret = FALSE;
+        }
+        else if (!G_VALUE_HOLDS (&option->value, type))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                    "Config: Option '%s' is of type '%s' (expected '%s')",
+                    name + 1,
+                    G_VALUE_TYPE_NAME (&option->value),
+                    g_type_name (type));
+            ret = FALSE;
+        }
+        else
+            ret = TRUE;
     }
     else
     {
@@ -2723,8 +2788,8 @@ _set_option (DonnaConfig    *config,
     va_start (va_arg, fmt);                     \
     g_value_init (&gvalue, gtype);              \
     set_fn (&gvalue, value);                    \
-    ret = _set_option (config, gtype, &gvalue,  \
-            fmt, va_arg);                       \
+    ret = _set_option (config, error,           \
+            gtype, &gvalue,  fmt, va_arg);      \
     g_value_unset (&gvalue);                    \
     va_end (va_arg);                            \
     return ret;                                 \
@@ -2732,6 +2797,7 @@ _set_option (DonnaConfig    *config,
 
 gboolean
 donna_config_set_boolean (DonnaConfig   *config,
+                          GError       **error,
                           gboolean       value,
                           const gchar   *fmt,
                           ...)
@@ -2741,6 +2807,7 @@ donna_config_set_boolean (DonnaConfig   *config,
 
 gboolean
 donna_config_set_int (DonnaConfig   *config,
+                      GError       **error,
                       gint           value,
                       const gchar   *fmt,
                       ...)
@@ -2750,6 +2817,7 @@ donna_config_set_int (DonnaConfig   *config,
 
 gboolean
 donna_config_set_double (DonnaConfig    *config,
+                         GError        **error,
                          gdouble         value,
                          const gchar    *fmt,
                          ...)
@@ -2759,6 +2827,7 @@ donna_config_set_double (DonnaConfig    *config,
 
 gboolean
 donna_config_set_string (DonnaConfig         *config,
+                         GError             **error,
                          const gchar         *value,
                          const gchar         *fmt,
                          ...)
@@ -2768,6 +2837,7 @@ donna_config_set_string (DonnaConfig         *config,
 
 gboolean
 donna_config_take_string (DonnaConfig        *config,
+                          GError            **error,
                           gchar              *value,
                           const gchar        *fmt,
                           ...)
@@ -2777,6 +2847,7 @@ donna_config_take_string (DonnaConfig        *config,
 
 gboolean
 donna_config_rename_option (DonnaConfig            *config,
+                            GError                **error,
                             const gchar            *new_name,
                             const gchar            *fmt,
                             ...)
@@ -2797,7 +2868,13 @@ donna_config_rename_option (DonnaConfig            *config,
     priv = config->priv;
 
     if (!is_valid_name (new_name, VALID_OPTION_NAME))
+    {
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_NAME,
+                "Config: Cannot rename to '%s': Invalid name",
+                new_name);
         return FALSE;
+    }
 
     va_start (va_arg, fmt);
     name = g_strdup_vprintf (fmt, va_arg);
@@ -2811,6 +2888,11 @@ donna_config_rename_option (DonnaConfig            *config,
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_NOT_FOUND,
+                    "Config: Parent of option '%s' not found",
+                    (*name == '/') ? name + 1 : name);
+            g_free (name);
             return FALSE;
         }
         ++s;
@@ -2826,11 +2908,20 @@ donna_config_rename_option (DonnaConfig            *config,
     if (!node)
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_NOT_FOUND,
+                "Config: Cannot rename option '%s': Doesn't exist",
+                (*name == '/') ? name + 1 : name);
+        g_free (name);
         return FALSE;
     }
     if (option_is_category (node->data, priv->root))
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_TYPE,
+                "Config: Cannot rename option '%s': It is a category",
+                (*name == '/') ? name + 1 : name);
         g_free (name);
         return FALSE;
     }
@@ -2839,6 +2930,10 @@ donna_config_rename_option (DonnaConfig            *config,
     if (get_child_node (parent, new_name, strlen (new_name)))
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_ALREADY_EXISTS,
+                "Config: Cannot rename option '%s' to '%s': Option already exists",
+                (*name == '/') ? name + 1 : name, new_name);
         g_free (name);
         return FALSE;
     }
@@ -2937,6 +3032,7 @@ traverse_renaming_category (GNode *node, struct renaming_category *data)
 
 gboolean
 donna_config_rename_category (DonnaConfig            *config,
+                              GError                **error,
                               const gchar            *new_name,
                               const gchar            *fmt,
                               ...)
@@ -2961,7 +3057,13 @@ donna_config_rename_category (DonnaConfig            *config,
     priv = config->priv;
 
     if (!is_valid_name (new_name, VALID_CATEGORY_NAME))
+    {
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_NAME,
+                "Config: Cannot rename to '%s': Invalid name",
+                new_name);
         return FALSE;
+    }
 
     va_start (va_arg, fmt);
     name = g_strdup_vprintf (fmt, va_arg);
@@ -2975,6 +3077,11 @@ donna_config_rename_category (DonnaConfig            *config,
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_NOT_FOUND,
+                    "Config: Parent of category '%s' not found",
+                    (*name == '/') ? name + 1 : name);
+            g_free (name);
             return FALSE;
         }
         ++s;
@@ -2990,11 +3097,20 @@ donna_config_rename_category (DonnaConfig            *config,
     if (!node)
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_NOT_FOUND,
+                "Config: Cannot rename category '%s': Doesn't exist",
+                (*name == '/') ? name + 1 : name);
+        g_free (name);
         return FALSE;
     }
     if (!option_is_category (node->data, priv->root))
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_TYPE,
+                "Config: Cannot rename category '%s': It is an option",
+                (*name == '/') ? name + 1 : name);
         g_free (name);
         return FALSE;
     }
@@ -3003,6 +3119,10 @@ donna_config_rename_category (DonnaConfig            *config,
     if (get_child_node (parent, new_name, strlen (new_name)))
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_ALREADY_EXISTS,
+                "Config: Cannot rename category '%s' to '%s': Option already exists",
+                (*name == '/') ? name + 1 : name, new_name);
         g_free (name);
         return FALSE;
     }
@@ -3141,6 +3261,7 @@ skip:
 
 static gboolean
 _remove_option (DonnaProviderConfig *config,
+                GError             **error,
                 const gchar         *name,
                 gboolean             category)
 {
@@ -3162,6 +3283,11 @@ _remove_option (DonnaProviderConfig *config,
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_NOT_FOUND,
+                    "Config: Cannot remove '%s': %s not found",
+                    name,
+                    (category) ? "category" : "option");
             return FALSE;
         }
         ++s;
@@ -3175,12 +3301,23 @@ _remove_option (DonnaProviderConfig *config,
     if (!node)
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_NOT_FOUND,
+                "Config: Cannot remove '%s': %s not found",
+                name,
+                (category) ? "category" : "option");
         return FALSE;
     }
     if ((!category && option_is_category (node->data, priv->root))
             || (category && !option_is_category (node->data, priv->root)))
     {
         g_rw_lock_writer_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                (category)
+                ? "Config: Cannot remove '%s': Not a category"
+                : "Config: Cannot remove '%s': Not an option",
+                name);
         return FALSE;
     }
 
@@ -3218,7 +3355,7 @@ _remove_option (DonnaProviderConfig *config,
     name = g_strdup_vprintf (fmt, va_arg);                      \
     va_end (va_arg);                                            \
                                                                 \
-    ret = _remove_option (config,                               \
+    ret = _remove_option (config, error,                        \
             (*name == '/') ? name + 1 : name,                   \
             is_category);                                       \
                                                                 \
@@ -3228,6 +3365,7 @@ _remove_option (DonnaProviderConfig *config,
 
 gboolean
 donna_config_remove_option (DonnaConfig    *config,
+                            GError        **error,
                             const gchar    *fmt,
                             ...)
 {
@@ -3236,6 +3374,7 @@ donna_config_remove_option (DonnaConfig    *config,
 
 gboolean
 donna_config_remove_category (DonnaConfig    *config,
+                              GError        **error,
                               const gchar    *fmt,
                               ...)
 {
@@ -3274,6 +3413,7 @@ node_prop_setter (DonnaTask     *task,
                   const gchar   *name,
                   const GValue  *value)
 {
+    GError *err = NULL;
     DonnaProvider *provider;
     DonnaProviderConfigPrivate *priv;
     GNode *gnode;
@@ -3354,28 +3494,22 @@ node_prop_setter (DonnaTask     *task,
 
             if (is_category)
             {
-                if (!donna_config_rename_category ((DonnaConfig *) provider,
+                if (!donna_config_rename_category ((DonnaConfig *) provider, &err,
                             g_value_get_string (value),
                             "%s", location))
                 {
-                    donna_task_set_error (task, DONNA_NODE_ERROR,
-                            DONNA_NODE_ERROR_OTHER,
-                            "Failed to rename category '%s' to '%s'",
-                            location, g_value_get_string (value));
+                    donna_task_take_error (task, err);
                     g_free (location);
                     return DONNA_TASK_FAILED;
                 }
             }
             else
             {
-                if (!donna_config_rename_option ((DonnaConfig *) provider,
+                if (!donna_config_rename_option ((DonnaConfig *) provider, &err,
                             g_value_get_string (value),
                             "%s", location))
                 {
-                    donna_task_set_error (task, DONNA_NODE_ERROR,
-                            DONNA_NODE_ERROR_OTHER,
-                            "Failed to rename option '%s' to '%s'",
-                            location, g_value_get_string (value));
+                    donna_task_take_error (task, err);
                     g_free (location);
                     return DONNA_TASK_FAILED;
                 }
@@ -3798,12 +3932,12 @@ node_remove_options (DonnaTask *task, GPtrArray *arr)
         location = donna_node_get_location (node);
         if (donna_node_get_node_type (node) != DONNA_NODE_CONTAINER)
         {
-            if (!donna_config_remove_option (pcfg, location))
+            if (!donna_config_remove_option (pcfg, NULL, location))
                 ret = FALSE;
         }
         else
         {
-            if (!donna_config_remove_category (pcfg, location))
+            if (!donna_config_remove_category (pcfg, NULL, location))
                 ret = FALSE;
         }
         g_free (location);

@@ -1325,7 +1325,7 @@ provider_fs_new_child (DonnaProviderBase  *_provider,
     if (type == DONNA_NODE_CONTAINER)
     {
         gint i;
-        if (donna_config_get_int (config, &i, "providers/fs/mode_new_folder"))
+        if (donna_config_get_int (config, NULL, &i, "providers/fs/mode_new_folder"))
         {
             gchar buf[4];
 
@@ -1344,7 +1344,7 @@ provider_fs_new_child (DonnaProviderBase  *_provider,
     else /* DONNA_NODE_ITEM */
     {
         gint i;
-        if (donna_config_get_int (config, &i, "providers/fs/mode_new_file"))
+        if (donna_config_get_int (config, NULL, &i, "providers/fs/mode_new_file"))
         {
             gchar buf[4];
 

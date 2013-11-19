@@ -1231,11 +1231,11 @@ provider_task_create_status (DonnaStatusProvider    *sp,
     const gchar *name = _name;
 
     config = donna_app_peek_config (priv->app);
-    if (!donna_config_get_string (config, &status.fmt, "statusbar/%s/format", name))
+    if (!donna_config_get_string (config, error, &status.fmt,
+                "statusbar/%s/format", name))
     {
-        g_set_error (error, DONNA_STATUS_PROVIDER_ERROR,
-                DONNA_STATUS_PROVIDER_ERROR_INVALID_CONFIG,
-                "Task Manager: status '%s' has no format defined", name);
+        g_prefix_error (error, "Task Manager: status '%s' has no format defined: ",
+                name);
         return 0;
     }
 

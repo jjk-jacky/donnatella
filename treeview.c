@@ -1400,7 +1400,7 @@ config_get_int (DonnaTreeView   *tree,
 {
     gint val;
 
-    if (donna_config_get_int (config, &val, "treeviews/%s/%s",
+    if (donna_config_get_int (config, NULL, &val, "treeviews/%s/%s",
             tree->priv->name, option))
     {
         if (from)
@@ -1411,12 +1411,16 @@ config_get_int (DonnaTreeView   *tree,
     if (from)
         *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
 
-    if (donna_config_get_int (config, &val, "defaults/treeviews/%s/%s",
+    if (donna_config_get_int (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (is_tree (tree)) ? "tree" : "list", option))
         return val;
-    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, setting default (%d)",
-            tree->priv->name, (is_tree (tree)) ? "tree" : "list", option, def);
-    donna_config_set_int (config, def, "defaults/treeviews/%s/%s",
+    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, "
+            "setting default (%d)",
+            tree->priv->name,
+            (is_tree (tree)) ? "tree" : "list",
+            option,
+            def);
+    donna_config_set_int (config, NULL, def, "defaults/treeviews/%s/%s",
             (is_tree (tree)) ? "tree" : "list", option);
     return def;
 }
@@ -1430,7 +1434,7 @@ config_get_boolean (DonnaTreeView   *tree,
 {
     gboolean val;
 
-    if (donna_config_get_boolean (config, &val, "treeviews/%s/%s",
+    if (donna_config_get_boolean (config, NULL, &val, "treeviews/%s/%s",
             tree->priv->name, option))
     {
         if (from)
@@ -1441,12 +1445,16 @@ config_get_boolean (DonnaTreeView   *tree,
     if (from)
         *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
 
-    if (donna_config_get_boolean (config, &val, "defaults/treeviews/%s/%s",
+    if (donna_config_get_boolean (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (is_tree (tree)) ? "tree" : "list", option))
         return val;
-    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, setting default (%d)",
-            tree->priv->name, (is_tree (tree)) ? "tree" : "list", option, def);
-    donna_config_set_boolean (config, def, "defaults/treeviews/%s/%s",
+    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, "
+            "setting default (%d)",
+            tree->priv->name,
+            (is_tree (tree)) ? "tree" : "list",
+            option,
+            def);
+    donna_config_set_boolean (config, NULL, def, "defaults/treeviews/%s/%s",
             (is_tree (tree)) ? "tree" : "list", option);
     return def;
 }
@@ -1460,7 +1468,7 @@ config_get_string (DonnaTreeView   *tree,
 {
     gchar *val;
 
-    if (donna_config_get_string (config, &val, "treeviews/%s/%s",
+    if (donna_config_get_string (config, NULL, &val, "treeviews/%s/%s",
             tree->priv->name, option))
     {
         if (from)
@@ -1471,14 +1479,18 @@ config_get_string (DonnaTreeView   *tree,
     if (from)
         *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
 
-    if (donna_config_get_string (config, &val, "defaults/treeviews/%s/%s",
+    if (donna_config_get_string (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (is_tree (tree)) ? "tree" : "list", option))
         return val;
     if (!def)
         return NULL;
-    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, setting default (%s)",
-            tree->priv->name, (is_tree (tree)) ? "tree" : "list", option, def);
-    donna_config_set_string (config, def, "defaults/treeviews/%s/%s",
+    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, "
+            "setting default (%s)",
+            tree->priv->name,
+            (is_tree (tree)) ? "tree" : "list",
+            option,
+            def);
+    donna_config_set_string (config, NULL, def, "defaults/treeviews/%s/%s",
             (is_tree (tree)) ? "tree" : "list", option);
     return def;
 }
@@ -1977,14 +1989,14 @@ load_config (DonnaTreeView *tree)
 
     /* we don't use cfg_get_mode() so we can set a default if option doesn't
      * exist -- obviously, we can't go to the mode-based default */
-    if (donna_config_get_int (config, &val, "treeviews/%s/mode", priv->name))
+    if (donna_config_get_int (config, NULL, &val, "treeviews/%s/mode", priv->name))
         priv->mode = CLAMP (val, 0, 1);
     else
     {
         priv->mode = DONNA_TREE_VIEW_MODE_LIST;
         g_warning ("Treeview '%s': no mode specified, defaulting to list",
                 priv->name);
-        donna_config_set_int (config, 0, "treeviews/%s/mode", priv->name);
+        donna_config_set_int (config, NULL, 0, "treeviews/%s/mode", priv->name);
     }
 
     val = cfg_get_show_hidden (tree, config, NULL);
@@ -3509,8 +3521,8 @@ get_ct_data (const gchar *col_name, DonnaTreeView *tree)
 
         cf = g_new0 (struct column_filter, 1);
         cf->name = g_strdup (col_name);
-        donna_config_get_string (donna_app_peek_config (priv->app), &col_type,
-                "columns/%s/type", col_name);
+        donna_config_get_string (donna_app_peek_config (priv->app), NULL,
+                &col_type, "columns/%s/type", col_name);
         cf->ct   = donna_app_get_columntype (priv->app,
                 (col_type) ? col_type : col_name);
         g_free (col_type);
@@ -5715,9 +5727,11 @@ load_arrangement (DonnaTreeView     *tree,
         if (!is_last_col)
             *e = '\0';
 
-        if (!donna_config_get_string (config, &col_type, "columns/%s/type", col))
+        if (!donna_config_get_string (config, NULL, &col_type,
+                    "columns/%s/type", col))
         {
-            g_warning ("Treeview '%s': No type defined for column '%s', fallback to its name",
+            g_warning ("Treeview '%s': No type defined for column '%s', "
+                    "fallback to its name",
                     priv->name, col);
             col_type = NULL;
         }
@@ -10278,10 +10292,9 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
     if (type == G_TYPE_INT)
     {
-        if (!donna_config_set_int (config, val, loc))
+        if (!donna_config_set_int (config, error, val, loc))
         {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
+            g_prefix_error (error, "Treeview '%s': Failed to save option '%s': ",
                     "Treeview '%s': Failed to save option '%s'",
                     priv->name, option);
             g_free (loc);
@@ -10290,11 +10303,9 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     }
     else if (type == G_TYPE_BOOLEAN)
     {
-        if (!donna_config_set_boolean (config, val, loc))
+        if (!donna_config_set_boolean (config, error, val, loc))
         {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed to save option '%s'",
+            g_prefix_error (error, "Treeview '%s': Failed to save option '%s'",
                     priv->name, option);
             g_free (loc);
             return FALSE;
@@ -13486,20 +13497,20 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
         domain = (priv->location) ? donna_node_get_domain (priv->location) : NULL;
 
         /* if no domain or no domain-specific, try basic definition */
-        if (!domain || !donna_config_get_string (config, &items,
+        if (!domain || !donna_config_get_string (config, NULL, &items,
                     "treeviews/%s/context_menu_%s",
                     priv->name, domain))
-            donna_config_get_string (config, &items,
+            donna_config_get_string (config, NULL, &items,
                     "treeviews/%s/context_menu", priv->name);
 
         /* still nothing, use defaults */
         if (!items)
         {
-            if (!domain || !donna_config_get_string (config, &items,
+            if (!domain || !donna_config_get_string (config, NULL, &items,
                         "defaults/treeviews/%s/context_menu_%s",
                         (is_tree (tree)) ? "tree": "list",
                         domain))
-                donna_config_get_string (config, &items,
+                donna_config_get_string (config, NULL, &items,
                         "defaults/treeviews/%s/context_menu",
                         (is_tree (tree)) ? "tree": "list");
         }
@@ -13559,9 +13570,10 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
         menus = (gchar *) _menus;
     else
     {
-        if (!donna_config_get_string (config, &menus, "treeviews/%s/context_menu_menus",
+        if (!donna_config_get_string (config, NULL, &menus,
+                    "treeviews/%s/context_menu_menus",
                     priv->name))
-            donna_config_get_string (config, &menus,
+            donna_config_get_string (config, NULL, &menus,
                     "defaults/treeviews/%s/context_menu_menus",
                     (is_tree (tree)) ? "tree" : "list");
     }
@@ -14802,13 +14814,15 @@ donna_tree_view_rubber_banding_active (GtkTreeView *treev)
 static inline gchar *
 find_key_config (DonnaTreeView *tree, DonnaConfig *config, gchar *key)
 {
-    if (donna_config_has_category (config, "treeviews/%s/keys%s%s/key_%s",
+    if (donna_config_has_category (config, NULL,
+                "treeviews/%s/keys%s%s/key_%s",
                 tree->priv->name,
                 (tree->priv->key_mode) ? "/" : "",
                 (tree->priv->key_mode) ? tree->priv->key_mode : "",
                 key))
         return g_strdup_printf ("treeviews/%s/keys/key_%s", tree->priv->name, key);
-    if (donna_config_has_category (config, "defaults/treeviews/%s/keys%s%s/key_%s",
+    if (donna_config_has_category (config, NULL,
+                "defaults/treeviews/%s/keys%s%s/key_%s",
                 (is_tree (tree)) ? "tree" : "list",
                 (tree->priv->key_mode) ? "/" : "",
                 (tree->priv->key_mode) ? tree->priv->key_mode : "",
@@ -14837,7 +14851,7 @@ find_key_from (DonnaTreeView *tree,
         return -1;
 
 repeat:
-    if (!donna_config_get_int (config, &type, "%s/type", *from))
+    if (!donna_config_get_int (config, NULL, &type, "%s/type", *from))
         /* default */
         type = KEY_DIRECT;
 
@@ -14845,7 +14859,7 @@ repeat:
         return -1;
     else if (type == KEY_ALIAS)
     {
-        if (!donna_config_get_string (config, alias, "%s/key", *from))
+        if (!donna_config_get_string (config, NULL, alias, "%s/key", *from))
         {
             g_warning ("Treeview '%s': Key '%s' of type ALIAS without alias set",
                     priv->name, *key);
@@ -14960,7 +14974,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         key = gdk_keyval_name (priv->key_motion);
         if (G_UNLIKELY (find_key_from (tree, config, &key, &alias, &from) == -1))
             wrong_key (TRUE);
-        if (!donna_config_get_string (config, &fl, "%s/trigger", from))
+        if (!donna_config_get_string (config, NULL, &fl, "%s/trigger", from))
             wrong_key (TRUE);
 
         parse_specs (fl, spec, 0);
@@ -14981,7 +14995,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     key = gdk_keyval_name (priv->key_val);
     if (G_UNLIKELY (find_key_from (tree, config, &key, &alias, &from) == -1))
         wrong_key (TRUE);
-    if (!donna_config_get_string (config, &fl, "%s/trigger", from))
+    if (!donna_config_get_string (config, NULL, &fl, "%s/trigger", from))
         wrong_key (TRUE);
 
     if (!conv.row)
@@ -15086,7 +15100,8 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
             if (find_key_from (tree, config, &key, &alias, &from) == -1)
                 wrong_key (TRUE);
 
-            donna_config_get_boolean (config, &is_motion, "%s/is_motion", from);
+            donna_config_get_boolean (config, NULL, &is_motion,
+                    "%s/is_motion", from);
             if (is_motion)
                 goto next;
         }
@@ -15118,7 +15133,7 @@ next:
                 trigger_key (tree, 0);
             else if (type == KEY_SPEC)
             {
-                if (!donna_config_get_int (config, &i, "%s/spec", from))
+                if (!donna_config_get_int (config, NULL, &i, "%s/spec", from))
                     /* defaults */
                     i = SPEC_LOWER | SPEC_UPPER;
                 if (i & SPEC_MOTION)
@@ -15164,14 +15179,14 @@ next:
                 if (priv->key_m > 0 || priv->key_combine_name)
                     /* no COMBINE with a modifier; only one at a time */
                     wrong_key (TRUE);
-                if (!donna_config_get_string (config, &priv->key_combine_name,
+                if (!donna_config_get_string (config, NULL, &priv->key_combine_name,
                             "%s/combine", from))
                 {
                     g_warning ("Treeview '%s': Key '%s' missing its name as COMBINE",
                             priv->name, key);
                     wrong_key (TRUE);
                 }
-                if (!donna_config_get_int (config, &i, "%s/spec", from))
+                if (!donna_config_get_int (config, NULL, &i, "%s/spec", from))
                     /* defaults */
                     i = SPEC_LOWER | SPEC_UPPER;
                 if (i & SPEC_MOTION)
@@ -15191,7 +15206,7 @@ next:
 
             case KEY_SPEC:
                 priv->key_val = event->keyval;
-                if (!donna_config_get_int (config, &i, "%s/spec", from))
+                if (!donna_config_get_int (config, NULL, &i, "%s/spec", from))
                     /* defaults */
                     i = SPEC_LOWER | SPEC_UPPER;
                 if (i & SPEC_MOTION)
@@ -15213,7 +15228,7 @@ next:
         {
             gchar *s;
 
-            if (!donna_config_get_string (config, &s, "%s/combine", from))
+            if (!donna_config_get_string (config, NULL, &s, "%s/combine", from))
                 wrong_key (TRUE);
             if (!streq (s, priv->key_combine_name))
             {
@@ -15467,11 +15482,9 @@ status_provider_create_status (DonnaStatusProvider    *sp,
     gchar *s;
 
     config = donna_app_peek_config (priv->app);
-    if (!donna_config_get_string (config, &s, "statusbar/%s/format", name))
+    if (!donna_config_get_string (config, error, &s, "statusbar/%s/format", name))
     {
-        g_set_error (error, DONNA_STATUS_PROVIDER_ERROR,
-                DONNA_STATUS_PROVIDER_ERROR_INVALID_CONFIG,
-                "Treeview '%s': Status '%s': Option 'format' not found",
+        g_prefix_error (error, "Treeview '%s': Status '%s': No format: ",
                 priv->name, name);
         return 0;
     }
@@ -15480,16 +15493,18 @@ status_provider_create_status (DonnaStatusProvider    *sp,
     status.fmt = s;
     status.changed_on = 0;
 
-    if (!donna_config_get_int (config, &status.digits, "statusbar/%s/digits", name))
-        if (!donna_config_get_int (config, &status.digits, "defaults/size/digits"))
+    if (!donna_config_get_int (config, NULL, &status.digits,
+                "statusbar/%s/digits", name))
+        if (!donna_config_get_int (config, NULL, &status.digits,
+                    "defaults/size/digits"))
             status.digits = 1;
-    if (!donna_config_get_boolean (config, &status.long_unit,
+    if (!donna_config_get_boolean (config, NULL, &status.long_unit,
                 "statusbar/%s/long_unit", name))
-        if (!donna_config_get_boolean (config, &status.long_unit,
+        if (!donna_config_get_boolean (config, NULL, &status.long_unit,
                     "defaults/size/long_unit"))
             status.long_unit = FALSE;
 
-    if (!donna_config_get_boolean (config, &status.keymode_colors,
+    if (!donna_config_get_boolean (config, NULL, &status.keymode_colors,
                 "statusbar/%s/keymode_colors", name))
         status.keymode_colors = FALSE;
     if (status.keymode_colors)
@@ -15862,7 +15877,7 @@ status_provider_render (DonnaStatusProvider    *sp,
         config = donna_app_peek_config (priv->app);
         if (priv->key_mode)
         {
-            if (donna_config_get_string (config, &s,
+            if (donna_config_get_string (config, NULL, &s,
                         "statusbar/%s/keymode_%s_background",
                         status->name, priv->key_mode))
             {
@@ -15873,7 +15888,7 @@ status_provider_render (DonnaStatusProvider    *sp,
                 donna_renderer_set (renderer, "background-set", NULL);
                 g_free (s);
             }
-            else if (donna_config_get_string (config, &s,
+            else if (donna_config_get_string (config, NULL, &s,
                         "statusbar/%s/keymode_%s_background-rgba",
                         status->name, priv->key_mode))
             {
@@ -15890,7 +15905,7 @@ status_provider_render (DonnaStatusProvider    *sp,
                 g_free (s);
             }
 
-            if (donna_config_get_string (config, &s,
+            if (donna_config_get_string (config, NULL, &s,
                         "statusbar/%s/keymode_%s_foreground",
                         status->name, priv->key_mode))
             {
@@ -15901,7 +15916,7 @@ status_provider_render (DonnaStatusProvider    *sp,
                 donna_renderer_set (renderer, "foreground-set", NULL);
                 g_free (s);
             }
-            else if (donna_config_get_string (config, &s,
+            else if (donna_config_get_string (config, NULL, &s,
                         "statusbar/%s/keymode_%s_foreground-rgba",
                         status->name, priv->key_mode))
             {

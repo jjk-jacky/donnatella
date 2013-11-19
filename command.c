@@ -208,12 +208,17 @@ cmd_ask_text (DonnaTask *task, DonnaApp *app, gpointer *args)
 static DonnaTaskState
 cmd_config_get_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    GError *err = NULL;
     gchar *name = args[0];
     GValue *v;
     gboolean val;
 
-    if (!donna_config_get_boolean (donna_app_peek_config (app), &val, "%s", name))
+    if (!donna_config_get_boolean (donna_app_peek_config (app), &err,
+                &val, "%s", name))
+    {
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
 
     v = donna_task_grab_return_value (task);
     g_value_init (v, G_TYPE_BOOLEAN);
@@ -225,12 +230,17 @@ cmd_config_get_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 static DonnaTaskState
 cmd_config_get_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    GError *err = NULL;
     gchar *name = args[0];
     GValue *v;
     gint val;
 
-    if (!donna_config_get_int (donna_app_peek_config (app), &val, "%s", name))
+    if (!donna_config_get_int (donna_app_peek_config (app), &err,
+                &val, "%s", name))
+    {
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
 
     v = donna_task_grab_return_value (task);
     g_value_init (v, G_TYPE_INT);
@@ -242,12 +252,17 @@ cmd_config_get_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 static DonnaTaskState
 cmd_config_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    GError *err = NULL;
     gchar *name = args[0];
     GValue *v;
     gchar *val;
 
-    if (!donna_config_get_string (donna_app_peek_config (app), &val, "%s", name))
+    if (!donna_config_get_string (donna_app_peek_config (app), &err,
+                &val, "%s", name))
+    {
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
 
     v = donna_task_grab_return_value (task);
     g_value_init (v, G_TYPE_STRING);
@@ -259,33 +274,51 @@ cmd_config_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 static DonnaTaskState
 cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    GError *err = NULL;
     gchar *name = args[0];
     gint value = GPOINTER_TO_INT (args[1]);
 
-    if (!donna_config_set_boolean (donna_app_peek_config (app), value, "%s", name))
+    if (!donna_config_set_boolean (donna_app_peek_config (app), &err,
+                value, "%s", name))
+    {
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
+
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
 cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    GError *err = NULL;
     gchar *name = args[0];
     gint value = GPOINTER_TO_INT (args[1]);
 
-    if (!donna_config_set_int (donna_app_peek_config (app), value, "%s", name))
+    if (!donna_config_set_int (donna_app_peek_config (app), &err,
+                value, "%s", name))
+    {
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
+
     return DONNA_TASK_DONE;
 }
 
 static DonnaTaskState
 cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
-    gchar *name = args[0];
+    GError *err  = NULL;
+    gchar *name  = args[0];
     gchar *value = args[1];
 
-    if (!donna_config_set_string (donna_app_peek_config (app), value, "%s", name))
+    if (!donna_config_set_string (donna_app_peek_config (app), &err,
+                value, "%s", name))
+    {
+        donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
+    }
+
     return DONNA_TASK_DONE;
 }
 
@@ -309,6 +342,7 @@ cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 static DonnaTaskState
 cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
+    GError *err = NULL;
     DonnaNode *node = args[0];
     const gchar *name = args[1];
     gchar *options = args[2]; /* opt */
@@ -443,7 +477,6 @@ cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
     {
         DonnaConfig *config = donna_app_peek_config (app);
         gboolean is_time = streqn (options, "time", 4);
-        gchar *errmsg = NULL;
 
         if ((!is_time && !streqn (options, "size", 4))
                 || (options[4] != '=' && options[4] != '@' && options[4] != '\0'))
@@ -473,29 +506,19 @@ cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
             if (options[4] == '=')
                 fmt = options + 5;
             else
-                if (!donna_config_get_string (config, &fmt,
+                if (!donna_config_get_string (config, &err, &fmt,
                             "%s/format", sce))
-                {
-                    errmsg = g_strdup_printf ("Failed to get option '%s/format'",
-                            sce);
                     goto err;
-                }
 
-            if (!donna_config_get_int (config, (gint *) &timeopts.age_span_seconds,
+            if (!donna_config_get_int (config, &err,
+                        (gint *) &timeopts.age_span_seconds,
                         "%s/age_span_seconds", sce))
-            {
-                errmsg = g_strdup_printf ("Failed to get option '%s/age_span_seconds'",
-                        sce);
                 goto err;
-            }
 
-            if (!donna_config_get_string (config, (gchar **) &timeopts.age_fallback_format,
+            if (!donna_config_get_string (config, &err,
+                        (gchar **) &timeopts.age_fallback_format,
                         "%s/age_fallback_format", sce))
-            {
-                errmsg = g_strdup_printf ("Failed to get option '%s/age_fallback_format'",
-                        sce);
                 goto err;
-            }
 
             s = donna_print_time (nb, fmt, &timeopts);
         }
@@ -515,46 +538,31 @@ cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
             if (options[4] == '=')
                 fmt = options + 5;
             else
-                if (!donna_config_get_string (config, &fmt,
+                if (!donna_config_get_string (config, &err, &fmt,
                             "%s/format", sce))
-                {
-                    errmsg = g_strdup_printf ("Failed to get option '%s/format'",
-                            sce);
                     goto err;
-                }
 
-            if (!donna_config_get_int (config, &digits,
+            if (!donna_config_get_int (config, &err, &digits,
                         "%s/digits", sce))
-            {
-                errmsg = g_strdup_printf ("Failed to get option '%s/digits'",
-                        sce);
                 goto err;
-            }
 
-            if (!donna_config_get_boolean (config, &long_unit,
+            if (!donna_config_get_boolean (config, &err, &long_unit,
                         "%s/long_unit", sce))
-            {
-                errmsg = g_strdup_printf ("Failed to get option '%s/long_unit'",
-                        sce);
                 goto err;
-            }
 
             len = donna_print_size (NULL, 0, fmt, nb, digits, long_unit);
             s = g_new (gchar, ++len);
             donna_print_size (s, len, fmt, nb, digits, long_unit);
         }
 
-        if (errmsg)
+        if (err)
         {
 err:
             s = donna_node_get_full_location (node);
-            donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                    DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'node_get_property': "
-                    "Failed to format property '%s' on node '%s': %s",
-                    name, s, errmsg);
-            g_free (s);
-            g_free (errmsg);
+            g_prefix_error (&err, "Command 'node_get_property': "
+                    "Failed to format property '%s' on node '%s': ",
+                    name, s);
+            donna_task_take_error (task, err);
             return DONNA_TASK_FAILED;
         }
     }

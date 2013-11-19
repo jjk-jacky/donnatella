@@ -29,6 +29,17 @@ typedef struct _DonnaConfigExtraList            DonnaConfigExtraList;
 typedef struct _DonnaConfigExtraListInt         DonnaConfigExtraListInt;
 typedef struct _DonnaConfigExtraListFlags       DonnaConfigExtraListFlags;
 
+#define DONNA_CONFIG_ERROR      g_quark_from_static_string ("DonnaConfig-Error")
+typedef enum
+{
+    DONNA_CONFIG_ERROR_NOT_FOUND,
+    DONNA_CONFIG_ERROR_INVALID_TYPE,
+    DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+    DONNA_CONFIG_ERROR_INVALID_NAME,
+    DONNA_CONFIG_ERROR_ALREADY_EXISTS,
+    DONNA_CONFIG_ERROR_OTHER
+} DonnaConfigError;
+
 typedef enum
 {
     DONNA_CONFIG_OPTION_TYPE_OPTION    = (1 << 0),
@@ -110,33 +121,42 @@ const DonnaConfigExtra *
                                                  const gchar            *extra,
                                                  GError                **error);
 gboolean    donna_config_has_boolean            (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_has_int                (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_has_double             (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_has_string             (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_has_category           (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_get_boolean            (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gboolean               *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_get_int                (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gint                   *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_get_double             (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gdouble                *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_get_string             (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gchar                 **value,
                                                  const gchar            *fmt,
                                                  ...);
@@ -199,37 +219,46 @@ gboolean    donna_config_arr_load_color_filters (DonnaConfig            *config,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gboolean                value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_set_int                (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gint                    value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_set_double             (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gdouble                 value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_set_string             (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_take_string            (DonnaConfig            *config,
+                                                 GError                **error,
                                                  gchar                  *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_rename_option          (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *new_name,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_rename_category        (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *new_name,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_remove_option          (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_remove_category        (DonnaConfig            *config,
+                                                 GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
 

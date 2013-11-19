@@ -505,15 +505,17 @@ get_user_alias (const gchar *alias,
                 const gchar *source,
                 GError     **error)
 {
+    GError *err = NULL;
     gchar *s;
 
-    if (!donna_config_get_string (donna_app_peek_config (app), &s,
+    if (!donna_config_get_string (donna_app_peek_config (app), &err, &s,
                 "context_menus/%s/aliases/%s", source, alias))
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
-                "Unknown user alias '%s' for '%s'",
-                alias, source);
+                "Unknown user alias '%s' for '%s': %s",
+                alias, source, (err) ? err->message : "no error message");
+        g_clear_error (&err);
         return NULL;
     }
 
@@ -673,6 +675,7 @@ get_user_item_info (const gchar             *item,
                     DonnaContextInfo        *info,
                     GError                 **error)
 {
+    GError *err = NULL;
     DonnaConfig *config = donna_app_peek_config (app);
     DonnaNode *node_trigger = NULL;
     GPtrArray *triggers = NULL;
@@ -684,17 +687,19 @@ get_user_item_info (const gchar             *item,
     const gchar *s_C;
     gchar *s;
 
-    if (!donna_config_has_category (config, "context_menus/%s/%s",
+    if (!donna_config_has_category (config, &err, "context_menus/%s/%s",
                 source, item))
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                "Unknown user item '%s' for '%s'",
-                item, source);
+                "Unknown user item '%s' for '%s': %s",
+                item, source, (err) ? err->message : "no error message");
+        g_clear_error (&err);
         return FALSE;
     }
 
-    if (donna_config_get_string (config, &s, "context_menus/%s/%s/is_visible",
+    if (donna_config_get_string (config, NULL, &s,
+                "context_menus/%s/%s/is_visible",
                 source, item))
     {
         enum expr expr;
@@ -714,7 +719,8 @@ get_user_item_info (const gchar             *item,
     else
         info->is_visible = TRUE;
 
-    if (donna_config_get_string (config, &s, "context_menus/%s/%s/is_sensitive",
+    if (donna_config_get_string (config, NULL, &s,
+                "context_menus/%s/%s/is_sensitive",
                 source, item))
     {
         enum expr expr;
@@ -747,7 +753,7 @@ get_user_item_info (const gchar             *item,
     }
 
     /* type of item */
-    if (donna_config_get_int (config, (gint *) &type,
+    if (donna_config_get_int (config, NULL, (gint *) &type,
                 "context_menus/%s/%s/type", source, item))
         type = CLAMP (type, TYPE_STANDARD, NB_TYPES - 1);
     else
@@ -758,7 +764,7 @@ get_user_item_info (const gchar             *item,
 
     /* shall we import non-specified stuff from node trigger? */
     if (type != TYPE_EMPTY)
-        donna_config_get_boolean (config, &import_from_trigger,
+        donna_config_get_boolean (config, NULL, &import_from_trigger,
                 "context_menus/%s/%s/import_from_trigger",
                 source, item);
 
@@ -783,7 +789,8 @@ get_user_item_info (const gchar             *item,
             if (len < 13 || !streq (t + len - 5, "_when"))
                 continue;
             /* get the triggerXXX_when expr to see if it's a match */
-            if (donna_config_get_string (config, &s, "context_menus/%s/%s/%s",
+            if (donna_config_get_string (config, NULL, &s,
+                        "context_menus/%s/%s/%s",
                         source, item, t))
             {
                 enum expr expr;
@@ -802,7 +809,7 @@ get_user_item_info (const gchar             *item,
                 else if (expr == EXPR_TRUE)
                 {
                     /* get the actual trigger */
-                    if (!donna_config_get_string (config, &info->trigger,
+                    if (!donna_config_get_string (config, NULL, &info->trigger,
                                 "context_menus/%s/%s/%.*s",
                                 source, item, (gint) (len - 5), t))
                     {
@@ -815,19 +822,19 @@ get_user_item_info (const gchar             *item,
                     g_free (s);
 
                     /* try to get the name under the same suffix */
-                    if (donna_config_get_string (config, &info->name,
+                    if (donna_config_get_string (config, NULL, &info->name,
                             "context_menus/%s/%s/name%.*s",
                             source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_name = TRUE;
 
                     /* try to get the icon under the same suffix */
-                    if (donna_config_get_string (config, &info->icon_name,
+                    if (donna_config_get_string (config, NULL, &info->icon_name,
                             "context_menus/%s/%s/icon%.*s",
                             source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_icon = TRUE;
 
                     /* try to get the icon selected under the same suffix */
-                    if (donna_config_get_string (config, &info->icon_name_selected,
+                    if (donna_config_get_string (config, NULL, &info->icon_name_selected,
                             "context_menus/%s/%s/icon_selected%.*s",
                             source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_icon_selected = TRUE;
@@ -842,7 +849,7 @@ get_user_item_info (const gchar             *item,
     }
 
     /* last chance: the default "trigger" */
-    if (!info->trigger && !donna_config_get_string (config, &info->trigger,
+    if (!info->trigger && !donna_config_get_string (config, NULL, &info->trigger,
                 "context_menus/%s/%s/trigger", source, item))
     {
         if ((!(info->is_visible && info->is_sensitive) && !import_from_trigger)
@@ -898,7 +905,7 @@ get_user_item_info (const gchar             *item,
     /* name */
     if (!info->name)
     {
-        if (donna_config_get_string (config, &info->name,
+        if (donna_config_get_string (config, NULL, &info->name,
                     "context_menus/%s/%s/name", source, item))
             info->free_name = TRUE;
         else if (import_from_trigger)
@@ -908,7 +915,7 @@ get_user_item_info (const gchar             *item,
     /* icon */
     if (!info->icon_name)
     {
-        if (donna_config_get_string (config, &info->icon_name,
+        if (donna_config_get_string (config, NULL, &info->icon_name,
                     "context_menus/%s/%s/icon", source, item))
             info->free_icon = TRUE;
         else if (import_from_trigger)
@@ -918,14 +925,14 @@ get_user_item_info (const gchar             *item,
     /* icon selected */
     if (!info->icon_name_selected)
     {
-        if (donna_config_get_string (config, &info->icon_name_selected,
+        if (donna_config_get_string (config, NULL, &info->icon_name_selected,
                     "context_menus/%s/%s/icon_selected", source, item))
             info->free_icon_selected = TRUE;
         else if (import_from_trigger)
             import |= IMPORT_DEFAULT;
     }
 
-    if (donna_config_get_boolean (config, &b,
+    if (donna_config_get_boolean (config, NULL, &b,
                 "context_menus/%s/%s/menu_is_label_bold",
                 source, item))
         info->is_menu_bold = b;
@@ -940,7 +947,7 @@ get_user_item_info (const gchar             *item,
     {
         gint submenus;
 
-        if (donna_config_get_int (config, &submenus,
+        if (donna_config_get_int (config, NULL, &submenus,
                     "context_menus/%s/%s/submenus",
                     source, item))
             info->submenus = CLAMP (submenus, 0, 3);
@@ -948,7 +955,7 @@ get_user_item_info (const gchar             *item,
             import |= IMPORT_SUBEMNUS;
     }
 
-    if (donna_config_get_string (config, &info->menu,
+    if (donna_config_get_string (config, NULL, &info->menu,
                 "context_menus/%s/%s/menu", source, item))
         info->free_menu = TRUE;
     else if (import_from_trigger)
