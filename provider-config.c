@@ -1865,7 +1865,7 @@ donna_config_list_options (DonnaConfig               *config,
                     || ((type & (DONNA_CONFIG_OPTION_TYPE_CATEGORY
                             | DONNA_CONFIG_OPTION_TYPE_NUMBERED))
                         && option_is_category (node->data, priv->root))
-                    || (type & DONNA_CONFIG_OPTION_TYPE_OPTION
+                    || ((type & DONNA_CONFIG_OPTION_TYPE_OPTION)
                         && !option_is_category (node->data, priv->root)))
             {
                 if (type & DONNA_CONFIG_OPTION_TYPE_NUMBERED)
