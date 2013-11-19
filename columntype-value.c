@@ -437,8 +437,15 @@ key_press_event_cb (GtkWidget *w, GdkEventKey *event, struct editing_data *ed)
 {
     gunichar c = gdk_keyval_to_unicode (event->keyval);
 
-    if (event->keyval == GDK_KEY_Return || event->keyval == GDK_KEY_KP_Enter
-            || event->keyval == GDK_KEY_Escape)
+    if (event->keyval == GDK_KEY_Return
+            || event->keyval == GDK_KEY_KP_Enter
+            || event->keyval == GDK_KEY_Escape
+            || event->keyval == GDK_KEY_Up
+            || event->keyval == GDK_KEY_Down
+            || event->keyval == GDK_KEY_Left
+            || event->keyval == GDK_KEY_Right
+            || event->keyval == GDK_KEY_Delete
+            || event->keyval == GDK_KEY_BackSpace)
         return FALSE;
     else if (g_unichar_isdigit (c))
         return FALSE;
