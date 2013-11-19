@@ -442,7 +442,7 @@ is_valid_name_len (const gchar *name, gsize len, enum valid valid)
         }
         else if (is_first)
         {
-            if (valid == VALID_CATEGORY_NAME && *name >= '0' && *name <= '9')
+            if (valid == VALID_CATEGORY_NAME && *name >= '1' && *name <= '9')
             {
                 is_first  = FALSE;
                 is_number = TRUE;
@@ -1871,7 +1871,7 @@ donna_config_list_options (DonnaConfig               *config,
                 if (type & DONNA_CONFIG_OPTION_TYPE_NUMBERED)
                 {
                     const gchar *s = ((struct option *) node->data)->name;
-                    if (*s < '0' || *s > '9')
+                    if (*s < '1' || *s > '9')
                         continue;
                 }
 
