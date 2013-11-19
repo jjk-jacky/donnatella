@@ -3278,15 +3278,14 @@ node_prop_setter (DonnaTask     *task,
     DonnaProviderConfigPrivate *priv;
     GNode *gnode;
     struct option *option;
-    GValue v = G_VALUE_INIT;
     gchar *location;
-    gchar *fl;
-    gchar *old;
     gboolean is_set_value;
 
     is_set_value = streq (name, "option-value");
     if (is_set_value || streq (name, "name"))
     {
+        gboolean is_category;
+
         provider = donna_node_peek_provider (node);
         location = donna_node_get_location (node);
         if (G_UNLIKELY (!DONNA_IS_PROVIDER_CONFIG (provider)))
@@ -3314,6 +3313,7 @@ node_prop_setter (DonnaTask     *task,
             return DONNA_TASK_FAILED;
         }
         option = (struct option *) gnode->data;
+        is_category = option_is_category (option, priv->root);
 
         if (G_UNLIKELY (!G_VALUE_HOLDS (value,
                         (is_set_value) ? G_VALUE_TYPE (&option->value)
@@ -3333,44 +3333,55 @@ node_prop_setter (DonnaTask     *task,
         }
 
         if (is_set_value)
+        {
             /* set the new value */
             g_value_copy (value, &option->value);
+            donna_node_set_property_value_no_signal (node, name, value);
+
+            g_rw_lock_writer_unlock (&priv->lock);
+
+            /* emit signal, +1 to skip leading slash */
+            config_option_set ((DonnaConfig *) provider, location + 1);
+
+            /* we can now emit the signal, outside or the lock */
+            donna_provider_node_updated (provider, node, name);
+        }
         else
         {
-            gchar *s;
+            /* rename */
 
-            /* rename option */
+            g_rw_lock_writer_unlock (&priv->lock);
 
-            s = (gchar *) g_value_get_string (value);
-            if (!is_valid_name (s, option_is_category (option, priv->root)))
+            if (is_category)
             {
-                donna_task_set_error (task, DONNA_NODE_ERROR,
-                        DONNA_NODE_ERROR_OTHER,
-                        "Cannot rename '%s' to '%s': Invalid name",
-                        location, s);
-                g_free (location);
-                g_rw_lock_writer_unlock (&priv->lock);
-                return DONNA_TASK_FAILED;
+                if (!donna_config_rename_category ((DonnaConfig *) provider,
+                            g_value_get_string (value),
+                            "%s", location))
+                {
+                    donna_task_set_error (task, DONNA_NODE_ERROR,
+                            DONNA_NODE_ERROR_OTHER,
+                            "Failed to rename category '%s' to '%s'",
+                            location, g_value_get_string (value));
+                    g_free (location);
+                    return DONNA_TASK_FAILED;
+                }
             }
-            old = get_option_full_name (priv->root, gnode);
-            option->name = str_chunk (priv, s);
-        }
-        g_rw_lock_writer_unlock (&priv->lock);
+            else
+            {
+                if (!donna_config_rename_option ((DonnaConfig *) provider,
+                            g_value_get_string (value),
+                            "%s", location))
+                {
+                    donna_task_set_error (task, DONNA_NODE_ERROR,
+                            DONNA_NODE_ERROR_OTHER,
+                            "Failed to rename option '%s' to '%s'",
+                            location, g_value_get_string (value));
+                    g_free (location);
+                    return DONNA_TASK_FAILED;
+                }
+            }
 
-        if (!is_set_value)
-        {
-            config_option_deleted ((DonnaConfig *) provider, old);
-            g_free (old);
         }
-        fl = get_option_full_name (priv->root, gnode);
-        config_option_set ((DonnaConfig *) provider, fl);
-
-        /* update the node */
-        g_value_init (&v, G_TYPE_STRING);
-        g_value_take_string (&v, fl);
-        donna_node_set_property_value (node, "location", &v);
-        g_value_unset (&v);
-        donna_node_set_property_value (node, name, value);
 
         g_free (location);
         return DONNA_TASK_DONE;
