@@ -2706,7 +2706,9 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
     gchar *type = NULL;
     guint i;
 
-    donna_config_get_string (priv->config, &type, "columns/%s/type", col_name);
+    if (!donna_config_get_string (priv->config, &type, "columns/%s/type", col_name))
+        /* fallback to its name */
+        type = g_strdup (col_name);
 
     g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < NB_COL_TYPES; ++i)
