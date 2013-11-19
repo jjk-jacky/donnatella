@@ -1125,12 +1125,13 @@ ct_value_node_cmp (DonnaColumnType    *ct,
 
     if (* (gboolean *) data)
     {
-        DonnaNodeHasValue has;
+        DonnaNodeHasValue has1;
+        DonnaNodeHasValue has2;
         const gchar *t1;
         const gchar *t2;
 
-        donna_node_get (node1, TRUE, data->prop_extra, &has, &value1, NULL);
-        if (has == DONNA_NODE_VALUE_SET)
+        donna_node_get (node1, TRUE, data->prop_extra, &has1, &value1, NULL);
+        if (has1 == DONNA_NODE_VALUE_SET)
         {
             const DonnaConfigExtra *extras;
 
@@ -1141,8 +1142,8 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         }
         else
         {
-            donna_node_get (node1, TRUE, data->prop_value, &has, &value1, NULL);
-            if (has == DONNA_NODE_VALUE_SET)
+            donna_node_get (node1, TRUE, data->prop_value, &has1, &value1, NULL);
+            if (has1 == DONNA_NODE_VALUE_SET)
             {
                 type1 = G_VALUE_TYPE (&value1);
                 if (type1 == G_TYPE_BOOLEAN)
@@ -1158,8 +1159,8 @@ ct_value_node_cmp (DonnaColumnType    *ct,
                 t1 = "<unknown>";
         }
 
-        donna_node_get (node2, TRUE, data->prop_extra, &has, &value2, NULL);
-        if (has == DONNA_NODE_VALUE_SET)
+        donna_node_get (node2, TRUE, data->prop_extra, &has2, &value2, NULL);
+        if (has2 == DONNA_NODE_VALUE_SET)
         {
             const DonnaConfigExtra *extras;
 
@@ -1170,8 +1171,8 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         }
         else
         {
-            donna_node_get (node2, TRUE, data->prop_value, &has, &value2, NULL);
-            if (has == DONNA_NODE_VALUE_SET)
+            donna_node_get (node2, TRUE, data->prop_value, &has2, &value2, NULL);
+            if (has2 == DONNA_NODE_VALUE_SET)
             {
                 type2 = G_VALUE_TYPE (&value2);
                 if (type2 == G_TYPE_BOOLEAN)
@@ -1188,8 +1189,10 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         }
 
         ret = donna_strcmp (t1, t2, DONNA_SORT_CASE_INSENSITIVE);
-        g_value_unset (&value1);
-        g_value_unset (&value2);
+        if (has1 == DONNA_NODE_VALUE_SET)
+            g_value_unset (&value1);
+        if (has2 == DONNA_NODE_VALUE_SET)
+            g_value_unset (&value2);
         return ret;
     }
 
