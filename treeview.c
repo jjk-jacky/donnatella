@@ -13546,7 +13546,7 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
     DonnaTreeViewPrivate *priv;
     DonnaConfig *config;
     GPtrArray *nodes;
-    gchar *menus;
+    gchar *menus = NULL;
 
     nodes = donna_tree_view_context_get_nodes (tree, rowid, column, items, error);
     if (!nodes)
