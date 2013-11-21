@@ -59,6 +59,14 @@ enum
     NB_COL_TYPES
 };
 
+enum rc
+{
+    RC_OK = 0,
+    RC_LAYOUT_MISSING,
+    RC_LAYOUT_INVALID,
+    RC_ACTIVE_LIST_MISSING
+};
+
 enum
 {
     TITLE_DOMAIN_LOCATION,
@@ -3481,7 +3489,7 @@ load_widget (DonnaDonna  *donna,
     return NULL;
 }
 
-static inline gint
+static inline enum rc
 create_gui (DonnaDonna *donna)
 {
     GError              *err = NULL;
@@ -3517,7 +3525,7 @@ create_gui (DonnaDonna *donna)
         g_clear_error (&err);
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
-        return 1;
+        return RC_LAYOUT_MISSING;
     }
 
     if (!donna_config_get_string (priv->config, &err, &ss, "layouts/%s", s))
@@ -3532,7 +3540,7 @@ create_gui (DonnaDonna *donna)
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
         g_free (s);
-        return 1;
+        return RC_LAYOUT_MISSING;
     }
     g_free (s);
     s = ss;
@@ -3553,7 +3561,7 @@ create_gui (DonnaDonna *donna)
                 "Unable to load interface: invalid layout");
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
-        return 2;
+        return RC_LAYOUT_INVALID;
     }
     gtk_container_add ((GtkContainer *) window, w);
 
@@ -3571,7 +3579,7 @@ create_gui (DonnaDonna *donna)
                     "You need at least one treeview in mode List to be defined in your layout.");
             gtk_dialog_run ((GtkDialog *) w);
             gtk_widget_destroy (w);
-            return 3;
+            return RC_ACTIVE_LIST_MISSING;
         }
     }
     priv->active_list = NULL;
@@ -3692,7 +3700,7 @@ next:
     g_signal_connect (window, "set-focus",
             (GCallback) window_set_focus_cb, app);
 
-    return 0;
+    return RC_OK;
 }
 
 static inline void
@@ -3778,7 +3786,7 @@ int
 main (int argc, char *argv[])
 {
     DonnaDonna *donna;
-    gint rc;
+    enum rc rc;
 
     setlocale (LC_ALL, "");
     gtk_init (&argc, &argv);
