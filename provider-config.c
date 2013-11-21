@@ -138,6 +138,9 @@ static DonnaTask *      provider_config_io_task (
 
 static gchar *get_option_full_name (GNode *root, GNode *gnode);
 static void free_extra  (DonnaConfigExtra  *extra);
+static gboolean ensure_option_has_node (DonnaProviderConfig *config,
+                                        gchar               *location,
+                                        struct option       *option);
 
 static void
 provider_config_provider_init (DonnaProviderInterface *interface)
@@ -2543,6 +2546,7 @@ _set_option (DonnaConfig    *config,
     GNode *parent;
     GNode *node;
     struct option *option;
+    DonnaNode *parent_node = NULL;
     DonnaNode *option_node = NULL;
     gchar *name;
     const gchar *s;
@@ -2620,11 +2624,17 @@ _set_option (DonnaConfig    *config,
     }
     else
     {
+        struct option *po = parent->data;
+
         option = g_slice_new0 (struct option);
         option->name = str_chunk (priv, s);
         g_value_init (&option->value, type);
         g_node_append_data (parent, option);
         ret = TRUE;
+
+        /* see below re: option_node for more */
+        if (po->node && ((GObject *) po->node)->ref_count > 1)
+            parent_node = g_object_ref (po->node);
     }
 
     if (ret)
@@ -2709,7 +2719,15 @@ _set_option (DonnaConfig    *config,
         }
 
         g_value_copy (value, &option->value);
-        if (option->node)
+        if (parent_node)
+        {
+            /* if we have a parent node it means we created the option, so we
+             * should also create the node to emit node-new-child */
+            ensure_option_has_node (config, name, option);
+            /* a ref was added already for us */
+            option_node = option->node;
+        }
+        else if (option->node)
         {
             /* update the value w/out emitting node-updated */
             donna_node_set_property_value_no_signal (option->node,
@@ -2730,7 +2748,14 @@ done:
     if (ret)
     {
         config_option_set (config, name + 1);
-        if (option_node)
+        if (parent_node)
+        {
+            donna_provider_node_new_child ((DonnaProvider *) config,
+                    parent_node, option_node);
+            g_object_unref (parent_node);
+            g_object_unref (option_node);
+        }
+        else if (option_node)
         {
             donna_provider_node_updated ((DonnaProvider *) config, option_node,
                     "option-value");
