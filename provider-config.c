@@ -2568,6 +2568,85 @@ _set_option (DonnaConfig    *config,
 
     if (ret)
     {
+        /* it is an option, so can't be priv->root (for categories) */
+        if (option->extra)
+        {
+            DonnaConfigExtra *extra;
+            gint i;
+
+            extra = g_hash_table_lookup (priv->extras, option->extra);
+            if (G_UNLIKELY (!extra))
+            {
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                        "Config: Failed to set option '%s': Extra '%s' not found",
+                        name + 1, (gchar *) option->extra);
+                ret = FALSE;
+                goto done;
+            }
+
+            if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+            {
+                DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
+                gint v = g_value_get_int (value);
+
+                for (i = 0; i < e->nb_items; ++i)
+                {
+                    if (v == e->items[i].value)
+                        break;
+                }
+                if (i >= e->nb_items)
+                {
+                    g_set_error (error, DONNA_CONFIG_ERROR,
+                            DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                            "Config: Failed to set option '%s': "
+                            "Value '%d' not found in extra '%s'",
+                            name + 1, v, (gchar *) option->extra);
+                    ret = FALSE;
+                    goto done;
+                }
+            }
+            else if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+            {
+                DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
+                gint v = 0;
+
+                for (i = 0; i < e->nb_items; ++i)
+                    v |= e->items[i].value;
+                if (g_value_get_int (value) & ~v)
+                {
+                    g_set_error (error, DONNA_CONFIG_ERROR,
+                            DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                            "Config: Failed to set option '%s': "
+                            "Value '%d' not matching extra '%s'",
+                            name + 1, g_value_get_int (value), (gchar *) option->extra);
+                    ret = FALSE;
+                    goto done;
+                }
+            }
+            else /* DONNA_CONFIG_EXTRA_TYPE_LIST */
+            {
+                DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
+                const gchar *s = g_value_get_string (value);
+
+                for (i = 0; i < e->nb_items; ++i)
+                {
+                    if (streq (s, e->items[i].value))
+                        break;
+                }
+                if (i >= e->nb_items)
+                {
+                    g_set_error (error, DONNA_CONFIG_ERROR,
+                            DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                            "Config: Failed to set option '%s': "
+                            "Value '%s' not found in extra '%s'",
+                            name + 1, s, (gchar *) option->extra);
+                    ret = FALSE;
+                    goto done;
+                }
+            }
+        }
+
         g_value_copy (value, &option->value);
         if (option->node)
         {
@@ -2583,6 +2662,7 @@ _set_option (DonnaConfig    *config,
         }
     }
 
+done:
     g_rw_lock_writer_unlock (&priv->lock);
 
     /* signals after releasing the lock, to avoid any deadlocks */
