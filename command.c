@@ -272,6 +272,129 @@ cmd_config_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_config_has_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    GValue *v;
+
+    if (!donna_config_has_boolean (donna_app_peek_config (app), &err,
+            "%s", name))
+    {
+        /* this allows to know why: wrong type, is a category, etc */
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, TRUE);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_has_category (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    GValue *v;
+
+    if (!donna_config_has_category (donna_app_peek_config (app), &err,
+            "%s", name))
+    {
+        /* this allows to know why: wrong type, is a category, etc */
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, TRUE);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_has_int (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    GValue *v;
+
+    if (!donna_config_has_int (donna_app_peek_config (app), &err,
+            "%s", name))
+    {
+        /* this allows to know why: wrong type, is a category, etc */
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, TRUE);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_has_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err  = NULL;
+    gchar *name  = args[0];
+    gchar *extra = args[1]; /* opt */
+
+    const gchar *extra_name;
+    GValue *v;
+
+    if (!donna_config_has_option (donna_app_peek_config (app), &err,
+                NULL, &extra_name, NULL, "%s", name))
+    {
+        /* this allows to know why: wrong type, is a category, etc */
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    /* there's an option, do we need to check the extra as well? */
+    if (extra && !streq (extra, extra_name))
+    {
+        donna_task_set_error (task, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_OTHER,
+                "Option '%s' isn't of extra '%s' (%s)",
+                name, extra, (extra_name) ? extra_name : "not an extra");
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, TRUE);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_has_string (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    GValue *v;
+
+    if (!donna_config_has_string (donna_app_peek_config (app), &err,
+            "%s", name))
+    {
+        /* this allows to know why: wrong type, is a category, etc */
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, TRUE);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2514,6 +2637,32 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_get_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_has_boolean, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_has_category, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_has_int, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (config_has_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_has_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
