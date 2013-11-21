@@ -254,6 +254,31 @@ gboolean    donna_config_arr_load_color_filters (DonnaConfig            *config,
                                                  DonnaArrangement       *arr,
                                                  const gchar            *fmt,
                                                  ...);
+gboolean    donna_config_new_boolean            (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 gboolean                value,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_new_int                (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 gint                    value,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_new_double             (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 gdouble                 value,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_new_string             (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 const gchar            *value,
+                                                 const gchar            *fmt,
+                                                 ...);
+gboolean    donna_config_new_string_take        (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 gchar                  *value,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
                                                  GError                **error,
                                                  gboolean                value,

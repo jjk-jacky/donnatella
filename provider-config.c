@@ -2539,6 +2539,7 @@ _set_option (DonnaConfig    *config,
              GError        **error,
              GType           type,
              GValue         *value,
+             gboolean        allow_overwrite,
              const gchar    *fmt,
              va_list         va_arg)
 {
@@ -2606,6 +2607,14 @@ _set_option (DonnaConfig    *config,
             g_set_error (error, DONNA_CONFIG_ERROR,
                     DONNA_CONFIG_ERROR_INVALID_TYPE,
                     "Config: Option '%s' is a category",
+                    name + 1);
+            ret = FALSE;
+        }
+        else if (!allow_overwrite)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_ALREADY_EXISTS,
+                    "Config: Option '%s' already exists",
                     name + 1);
             ret = FALSE;
         }
@@ -2767,7 +2776,7 @@ done:
     return ret;
 }
 
-#define _set_opt(gtype, set_fn)  do {           \
+#define _set_opt(gtype, over, set_fn)  do {     \
     va_list va_arg;                             \
     GValue gvalue = G_VALUE_INIT;               \
     gboolean ret;                               \
@@ -2776,11 +2785,62 @@ done:
     g_value_init (&gvalue, gtype);              \
     set_fn (&gvalue, value);                    \
     ret = _set_option (config, error,           \
-            gtype, &gvalue,  fmt, va_arg);      \
+            gtype, &gvalue, over, fmt, va_arg); \
     g_value_unset (&gvalue);                    \
     va_end (va_arg);                            \
     return ret;                                 \
 } while (0)
+
+gboolean
+donna_config_new_boolean (DonnaConfig            *config,
+                          GError                **error,
+                          gboolean                value,
+                          const gchar            *fmt,
+                          ...)
+
+{
+    _set_opt (G_TYPE_BOOLEAN, FALSE, g_value_set_boolean);
+}
+
+gboolean
+donna_config_new_int (DonnaConfig            *config,
+                      GError                **error,
+                      gint                    value,
+                      const gchar            *fmt,
+                      ...)
+{
+    _set_opt (G_TYPE_INT, FALSE, g_value_set_int);
+}
+
+gboolean
+donna_config_new_double (DonnaConfig            *config,
+                         GError                **error,
+                         gdouble                 value,
+                         const gchar            *fmt,
+                         ...)
+{
+    _set_opt (G_TYPE_DOUBLE, FALSE, g_value_set_double);
+}
+
+gboolean
+donna_config_new_string (DonnaConfig            *config,
+                         GError                **error,
+                         const gchar            *value,
+                         const gchar            *fmt,
+                         ...)
+{
+    _set_opt (G_TYPE_STRING, FALSE, g_value_set_string);
+}
+
+gboolean
+donna_config_new_string_take (DonnaConfig            *config,
+                              GError                **error,
+                              gchar                  *value,
+                              const gchar            *fmt,
+                              ...)
+{
+    _set_opt (G_TYPE_STRING, FALSE, g_value_take_string);
+}
 
 gboolean
 donna_config_set_boolean (DonnaConfig   *config,
@@ -2789,7 +2849,7 @@ donna_config_set_boolean (DonnaConfig   *config,
                           const gchar   *fmt,
                           ...)
 {
-    _set_opt (G_TYPE_BOOLEAN, g_value_set_boolean);
+    _set_opt (G_TYPE_BOOLEAN, TRUE, g_value_set_boolean);
 }
 
 gboolean
@@ -2799,7 +2859,7 @@ donna_config_set_int (DonnaConfig   *config,
                       const gchar   *fmt,
                       ...)
 {
-    _set_opt (G_TYPE_INT, g_value_set_int);
+    _set_opt (G_TYPE_INT, TRUE, g_value_set_int);
 }
 
 gboolean
@@ -2809,7 +2869,7 @@ donna_config_set_double (DonnaConfig    *config,
                          const gchar    *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_DOUBLE, g_value_set_double);
+    _set_opt (G_TYPE_DOUBLE, TRUE, g_value_set_double);
 }
 
 gboolean
@@ -2819,7 +2879,7 @@ donna_config_set_string (DonnaConfig         *config,
                          const gchar         *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_STRING, g_value_set_string);
+    _set_opt (G_TYPE_STRING, TRUE, g_value_set_string);
 }
 
 gboolean
@@ -2829,7 +2889,7 @@ donna_config_take_string (DonnaConfig        *config,
                           const gchar        *fmt,
                           ...)
 {
-    _set_opt (G_TYPE_STRING, g_value_take_string);
+    _set_opt (G_TYPE_STRING, TRUE, g_value_take_string);
 }
 
 gboolean
