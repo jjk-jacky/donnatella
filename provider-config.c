@@ -1635,6 +1635,67 @@ donna_config_has_category (DonnaConfig *config,
     _has_opt (G_TYPE_INVALID /* i.e. category */);
 }
 
+gboolean
+donna_config_has_option (DonnaConfig             *config,
+                         GError                 **error,
+                         GType                   *type,
+                         const gchar            **extra_name,
+                         const DonnaConfigExtra **extra,
+                         const gchar             *fmt,
+                         ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    struct option *option;
+    va_list va_arg;
+    gchar *name;
+    gboolean ret = FALSE;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+    g_return_val_if_fail (extra_name == NULL || *extra_name == NULL, FALSE);
+    g_return_val_if_fail (extra == NULL || *extra == NULL, FALSE);
+    priv = config->priv;
+
+    va_start (va_arg, fmt);
+    name = g_strdup_vprintf (fmt, va_arg);
+    va_end (va_arg);
+
+    g_rw_lock_reader_lock (&priv->lock);
+    option = get_option (priv->root, name);
+    g_free (name);
+    if (option)
+    {
+        if (option_is_category (option, priv->root))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_TYPE,
+                    "Config: '%s' is a category",
+                    name);
+        }
+        else
+        {
+            ret = TRUE;
+
+            if (type)
+                *type = G_VALUE_TYPE (&option->value);
+
+            if (extra_name && option->extra)
+                *extra_name = option->extra;
+
+            if (extra && option->extra)
+                *extra = g_hash_table_lookup (priv->extras, option->extra);
+        }
+    }
+    else
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_NOT_FOUND,
+                "Config: Option '%s' doesn't exist",
+                name);
+
+    g_rw_lock_reader_unlock (&priv->lock);
+    return ret;
+}
+
 #define _get_opt(gtype, get_fn)  do {                   \
     struct option *option;                              \
     va_list va_arg;                                     \

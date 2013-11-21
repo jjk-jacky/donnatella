@@ -169,6 +169,13 @@ gboolean    donna_config_has_category           (DonnaConfig            *config,
                                                  GError                **error,
                                                  const gchar            *fmt,
                                                  ...);
+gboolean    donna_config_has_option             (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 GType                  *type,
+                                                 const gchar           **extra_name,
+                                                 const DonnaConfigExtra**extra,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_get_boolean            (DonnaConfig            *config,
                                                  GError                **error,
                                                  gboolean               *value,
