@@ -2729,7 +2729,7 @@ done:
     /* signals after releasing the lock, to avoid any deadlocks */
     if (ret)
     {
-        config_option_set (config, name);
+        config_option_set (config, name + 1);
         if (option_node)
         {
             donna_provider_node_updated ((DonnaProvider *) config, option_node,
