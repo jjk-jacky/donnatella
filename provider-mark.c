@@ -1452,14 +1452,32 @@ static void
 provider_mark_contructed (GObject *object)
 {
     GError *err = NULL;
+    DonnaApp *app = ((DonnaProviderBase *) object)->app;
+
+    DonnaConfigItemExtraListInt it[2];
+
     DonnaProviderCommand *pc;
     DonnaArgType arg_type[8];
     gint i;
 
     G_OBJECT_CLASS (donna_provider_mark_parent_class)->constructed (object);
 
-    pc = (DonnaProviderCommand *) donna_app_get_provider (
-            ((DonnaProviderBase *) object)->app, "command");
+    it[0].value     = DONNA_MARK_STANDARD;
+    it[0].in_file   = "standard";
+    it[0].label     = "Standard mark";
+    it[1].value     = DONNA_MARK_DYNAMIC;
+    it[1].in_file   = "dynamic";
+    it[1].label     = "Dynamic Mark";
+    if (G_UNLIKELY (!donna_config_add_extra (donna_app_peek_config (app),
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "mark-type", "Type of mark",
+                    2, it, &err)))
+    {
+        g_warning ("Provider 'mark': Failed to set up configuration extra 'mark-type': %s",
+                err->message);
+        g_clear_error (&err);
+    }
+
+    pc = (DonnaProviderCommand *) donna_app_get_provider (app, "command");
     if (G_UNLIKELY (!pc))
     {
         g_warning ("Provider 'mark': Failed to add commands, "

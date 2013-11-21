@@ -24,10 +24,16 @@ typedef struct _DonnaProviderConfigPrivate      DonnaProviderConfigPrivate;
 
 typedef DonnaProviderConfig     DonnaConfig;
 
-typedef struct _DonnaConfigExtra                DonnaConfigExtra;
+typedef union  _DonnaConfigExtra                DonnaConfigExtra;
+typedef struct _DonnaConfigExtraAny             DonnaConfigExtraAny;
 typedef struct _DonnaConfigExtraList            DonnaConfigExtraList;
 typedef struct _DonnaConfigExtraListInt         DonnaConfigExtraListInt;
-typedef struct _DonnaConfigExtraListFlags       DonnaConfigExtraListFlags;
+/* flags & int have the same struct */
+typedef struct _DonnaConfigExtraListInt         DonnaConfigExtraListFlags;
+
+typedef struct _DonnaConfigItemExtraList        DonnaConfigItemExtraList;
+typedef struct _DonnaConfigItemExtraListInt     DonnaConfigItemExtraListInt;
+typedef struct _DonnaConfigItemExtraListInt     DonnaConfigItemExtraListFlags;
 
 #define DONNA_CONFIG_ERROR      g_quark_from_static_string ("DonnaConfig-Error")
 typedef enum
@@ -64,31 +70,49 @@ enum
     _DONNA_CONFIG_COLUMN_FROM_DEFAULT,
 };
 
-struct _DonnaConfigExtraList
+struct _DonnaConfigExtraAny
+{
+    DonnaConfigExtraType type;
+    gchar               *title;
+    gint                 nb_items;
+    gpointer             items;
+};
+
+struct _DonnaConfigItemExtraList
 {
     gchar *value;
     gchar *label;
 };
 
+struct _DonnaConfigExtraList
+{
+    DonnaConfigExtraType     type;
+    gchar                   *title;
+    gint                     nb_items;
+    DonnaConfigItemExtraList items[];
+};
+
+struct _DonnaConfigItemExtraListInt
+{
+    gint   value;
+    gchar *in_file;
+    gchar *label;
+};
+
 struct _DonnaConfigExtraListInt
 {
-    gint     value;
-    gchar   *in_file;
-    gchar   *label;
+    DonnaConfigExtraType         type;
+    gchar                       *title;
+    gint                         nb_items;
+    DonnaConfigItemExtraListInt items[];
 };
 
-struct _DonnaConfigExtraListFlags
+union _DonnaConfigExtra
 {
-    gint     value;
-    gchar   *in_file;
-    gchar   *label;
-};
-
-struct _DonnaConfigExtra
-{
-    DonnaConfigExtraType type;
-    gchar               *title;
-    gpointer            *values;
+    DonnaConfigExtraAny         any;
+    DonnaConfigExtraList        list;
+    DonnaConfigExtraListInt     list_int;
+    DonnaConfigExtraListFlags   list_flags;
 };
 
 struct _DonnaProviderConfig
@@ -111,13 +135,18 @@ struct _DonnaProviderConfigClass
 
 GType       donna_provider_config_get_type      (void) G_GNUC_CONST;
 /* config manager */
-gboolean    donna_config_load_config_def        (DonnaConfig            *config,
-                                                 gchar                  *data);
+gboolean    donna_config_add_extra              (DonnaConfig          *config,
+                                                 DonnaConfigExtraType  type,
+                                                 const gchar          *name,
+                                                 const gchar          *title,
+                                                 gint                  nb_items,
+                                                 gpointer              items,
+                                                 GError              **error);
 gboolean    donna_config_load_config            (DonnaConfig            *config,
                                                  gchar                  *data);
 gchar *     donna_config_export_config          (DonnaConfig            *config);
 const DonnaConfigExtra *
-            donna_config_get_extras             (DonnaConfig            *config,
+            donna_config_get_extra              (DonnaConfig            *config,
                                                  const gchar            *extra,
                                                  GError                **error);
 gboolean    donna_config_has_boolean            (DonnaConfig            *config,

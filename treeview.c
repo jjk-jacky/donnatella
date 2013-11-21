@@ -1040,6 +1040,194 @@ donna_tree_view_finalize (GObject *object)
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
 
+gboolean
+_donna_tree_view_register_extras (DonnaConfig *config, GError **error)
+{
+    DonnaConfigItemExtraListInt it_int[8];
+    guint i;
+
+    i = 0;
+    it_int[i].value     = DONNA_TREE_VIEW_MODE_LIST;
+    it_int[i].in_file   = "list";
+    it_int[i].label     = "List";
+    ++i;
+    it_int[i].value     = DONNA_TREE_VIEW_MODE_TREE;
+    it_int[i].in_file   = "tree";
+    it_int[i].label     = "Tree";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "tm", "Tree Mode",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = SORT_CONTAINER_FIRST;
+    it_int[i].in_file   = "first";
+    it_int[i].label     = "First (Last when sorting descendingly)";
+    ++i;
+    it_int[i].value     = SORT_CONTAINER_FIRST_ALWAYS;
+    it_int[i].in_file   = "first-always";
+    it_int[i].label     = "Always First";
+    ++i;
+    it_int[i].value     = SORT_CONTAINER_MIXED;
+    it_int[i].in_file   = "mixed";
+    it_int[i].label     = "Mixed with Items";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "sg", "Sort Groups",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = SELECT_HIGHLIGHT_FULL_ROW;
+    it_int[i].in_file   = "fullrow";
+    it_int[i].label     = "Full Row Highlight";
+    ++i;
+    it_int[i].value     = SELECT_HIGHLIGHT_COLUMN;
+    it_int[i].in_file   = "column";
+    it_int[i].label     = "Column (Cell) Highlight";
+    ++i;
+    it_int[i].value     = SELECT_HIGHLIGHT_UNDERLINE;
+    it_int[i].in_file   = "underline";
+    it_int[i].label     = "Full Row Underline";
+    ++i;
+    it_int[i].value     = SELECT_HIGHLIGHT_COLUMN_UNDERLINE;
+    it_int[i].in_file   = "column-underline";
+    it_int[i].label     = "Column (Cell) Highlight + Full Row Underline";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "highlight", "Selection Highlight",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = DONNA_TREE_VISUAL_NAME;
+    it_int[i].in_file   = "name";
+    it_int[i].label     = "Custom Names";
+    ++i;
+    it_int[i].value     = DONNA_TREE_VISUAL_ICON;
+    it_int[i].in_file   = "icon";
+    it_int[i].label     = "Custom Icons";
+    ++i;
+    it_int[i].value     = DONNA_TREE_VISUAL_BOX;
+    it_int[i].in_file   = "box";
+    it_int[i].label     = "Boxed Branches";
+    ++i;
+    it_int[i].value     = DONNA_TREE_VISUAL_HIGHLIGHT;
+    it_int[i].in_file   = "highlight";
+    it_int[i].label     = "Highlighted Folders";
+    ++i;
+    it_int[i].value     = DONNA_TREE_VISUAL_CLICKS;
+    it_int[i].in_file   = "click";
+    it_int[i].label     = "Custom Click Definitions";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS, "visuals", "Tree Visuals",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = DONNA_TREE_SYNC_NONE;
+    it_int[i].in_file   = "none";
+    it_int[i].label     = "None";
+    ++i;
+    it_int[i].value     = DONNA_TREE_SYNC_NODES;
+    it_int[i].in_file   = "nodes";
+    it_int[i].label     = "Only with accessible nodes";
+    ++i;
+    it_int[i].value     = DONNA_TREE_SYNC_NODES_KNOWN_CHILDREN;
+    it_int[i].in_file   = "known-children";
+    it_int[i].label     = "Expand nodes only if children are known";
+    ++i;
+    it_int[i].value     = DONNA_TREE_SYNC_NODES_CHILDREN;
+    it_int[i].in_file   = "children";
+    it_int[i].label     = "Expand nodes";
+    ++i;
+    it_int[i].value     = DONNA_TREE_SYNC_FULL;
+    it_int[i].in_file   = "full";
+    it_int[i].label     = "Full";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "sync", "Synchronization Mode",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = KEY_DISABLED;
+    it_int[i].in_file   = "disabled";
+    it_int[i].label     = "Disabled";
+    ++i;
+    it_int[i].value     = KEY_COMBINE;
+    it_int[i].in_file   = "combine";
+    it_int[i].label     = "Combine";
+    ++i;
+    it_int[i].value     = KEY_DIRECT;
+    it_int[i].in_file   = "direct";
+    it_int[i].label     = "Direct";
+    ++i;
+    it_int[i].value     = KEY_SPEC;
+    it_int[i].in_file   = "spec";
+    it_int[i].label     = "Spec";
+    ++i;
+    it_int[i].value     = KEY_ALIAS;
+    it_int[i].in_file   = "alias";
+    it_int[i].label     = "Alias";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "key", "Key",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = SPEC_LOWER;
+    it_int[i].in_file   = "lower";
+    it_int[i].label     = "Lowercase letter (a-z)";
+    ++i;
+    it_int[i].value     = SPEC_UPPER;
+    it_int[i].in_file   = "upper";
+    it_int[i].label     = "Uppercase latter (A-Z)";
+    ++i;
+    it_int[i].value     = SPEC_DIGITS;
+    it_int[i].in_file   = "digits";
+    it_int[i].label     = "Digit (0-9)";
+    ++i;
+    it_int[i].value     = SPEC_EXTRA;
+    it_int[i].in_file   = "extra";
+    it_int[i].label     = "Extra chars (see doc)";
+    ++i;
+    it_int[i].value     = SPEC_MOTION;
+    it_int[i].in_file   = "motion";
+    it_int[i].label     = "Motion Key";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS, "spec", "Spec Type",
+                    i, it_int, error)))
+        return FALSE;
+
+    /* this looks like it should be FLAGS, but we use INT so we can have three
+     * options (items, containes, all) instead of two that can be added, and
+     * would allow the invalid "nothing" */
+    i = 0;
+    it_int[i].value     = DONNA_NODE_ITEM;
+    it_int[i].in_file   = "items";
+    it_int[i].label     = "Items";
+    ++i;
+    it_int[i].value     = DONNA_NODE_CONTAINER;
+    it_int[i].in_file   = "containers";
+    it_int[i].label     = "Containers";
+    ++i;
+    it_int[i].value     = DONNA_NODE_ITEM | DONNA_NODE_CONTAINER;
+    it_int[i].in_file   = "all";
+    it_int[i].label     = "All (Items & Containers)";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "node-type", "Type of node",
+                    i, it_int, error)))
+        return FALSE;
+
+    return TRUE;
+}
+
 struct scroll_data
 {
     DonnaTreeView   *tree;
@@ -10025,18 +10213,19 @@ _convert_value (DonnaTreeView           *tree,
                 GError                 **error)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    const DonnaConfigExtra *extras;
+    const DonnaConfigExtra *extra;
+    gint i;
 
-    extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+    extra = donna_config_get_extra (donna_app_peek_config (priv->app),
             name, error);
-    if (!extras)
+    if (!extra)
     {
         g_prefix_error (error, "Treeview '%s': Failed to set option '%s': "
                 "Unable to get definition of extra '%s': ",
                 priv->name, option, name);
         return FALSE;
     }
-    else if (extras->type != type)
+    else if (extra->any.type != type)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
@@ -10048,17 +10237,17 @@ _convert_value (DonnaTreeView           *tree,
 
     if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
     {
-        DonnaConfigExtraListInt **extra;
+        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
 
-        for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
         {
-            if (streq ((*extra)->in_file, value))
+            if (streq (e->items[i].in_file, value))
             {
-                * (gint *) val = (*extra)->value;
+                * (gint *) val = e->items[i].value;
                 break;
             }
         }
-        if (!*extra)
+        if (i >= e->nb_items)
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
@@ -10070,17 +10259,17 @@ _convert_value (DonnaTreeView           *tree,
     }
     else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
     {
-        DonnaConfigExtraListFlags **extra;
+        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
 
-        for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
         {
-            if (streq ((*extra)->in_file, value))
+            if (streq (e->items[i].in_file, value))
             {
-                * (guint *) val |= (*extra)->value;
+                * (guint *) val |= e->items[i].value;
                 break;
             }
         }
-        if (!*extra)
+        if (i >= e->nb_items)
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
@@ -10092,17 +10281,17 @@ _convert_value (DonnaTreeView           *tree,
     }
     else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
     {
-        DonnaConfigExtraList **extra;
+        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
 
-        for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
         {
-            if (streq ((*extra)->value, value))
+            if (streq (e->items[i].value, value))
             {
-                * (gchar **) val = g_strdup ((*extra)->value);
+                * (gchar **) val = g_strdup (e->items[i].value);
                 break;
             }
         }
-        if (!*extra)
+        if (i >= e->nb_items)
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
@@ -12033,10 +12222,11 @@ _add_items_for_extra (DonnaTreeView         *tree,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config = donna_app_peek_config (priv->app);
-    const DonnaConfigExtra *extras;
+    const DonnaConfigExtra *extra;
+    gint i;
 
-    extras = donna_config_get_extras (config, name, error);
-    if (!extras)
+    extra = donna_config_get_extra (config, name, error);
+    if (!extra)
     {
         g_prefix_error (error, "Treeview '%s': Failed to resolve alias 'tree_options': "
                 "Failed to get extras '%s' from config: ",
@@ -12044,7 +12234,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
         return FALSE;
     }
 
-    if (extras->type != type)
+    if (extra->any.type != type)
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
@@ -12056,34 +12246,34 @@ _add_items_for_extra (DonnaTreeView         *tree,
 
     if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
     {
-        DonnaConfigExtraListInt **extra;
+        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
 
         donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
-        for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
             donna_g_string_append_concat (str, ":tree_options.", item, ".",
-                    (*extra)->in_file, ":@", save_location, ",", NULL);
+                    e->items[i].in_file, ":@", save_location, ",", NULL);
         g_string_truncate (str, str->len - 1);
         g_string_append_c (str, '>');
     }
     else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
     {
-        DonnaConfigExtraListFlags **extra;
+        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
 
         donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
-        for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
             donna_g_string_append_concat (str, ":tree_options.", item, ".",
-                    (*extra)->in_file, ":@", save_location, ",", NULL);
+                    e->items[i].in_file, ":@", save_location, ",", NULL);
         g_string_truncate (str, str->len - 1);
         g_string_append_c (str, '>');
     }
     else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
     {
-        DonnaConfigExtraList **extra;
+        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
 
         donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
-        for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
             donna_g_string_append_concat (str, ":tree_options.", item, ".",
-                    (*extra)->value, ":@", save_location, ",", NULL);
+                    e->items[i].value, ":@", save_location, ",", NULL);
         g_string_truncate (str, str->len - 1);
         g_string_append_c (str, '>');
     }
@@ -12361,10 +12551,11 @@ _set_item_from_extra (DonnaTreeView         *tree,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config = donna_app_peek_config (priv->app);
-    const DonnaConfigExtra *extras;
+    const DonnaConfigExtra *extra;
+    gint i;
 
-    extras = donna_config_get_extras (config, name, error);
-    if (!extras)
+    extra = donna_config_get_extra (config, name, error);
+    if (!extra)
     {
         g_prefix_error (error, "Treeview '%s': Failed to get item 'tree_options.%s.%s': "
                 "Failed to get extras '%s' from config: ",
@@ -12372,7 +12563,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         return FALSE;
     }
 
-    if (extras->type != type)
+    if (extra->any.type != type)
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
@@ -12384,28 +12575,28 @@ _set_item_from_extra (DonnaTreeView         *tree,
 
     if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
     {
-        DonnaConfigExtraListInt **extra;
+        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
 
-        for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
         {
-            if (streq ((*extra)->in_file, item))
+            if (streq (e->items[i].in_file, item))
             {
                 info->name = g_strdup (
-                        ((*extra)->label) ? (*extra)->label : (*extra)->in_file);
+                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
                 info->free_name = TRUE;
                 info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
                 info->trigger = g_strconcat (
                         "command:tree_set_option (%o,", parent, ",",
-                        (*extra)->in_file, ",",
+                        e->items[i].in_file, ",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
-                if (current == (*extra)->value)
+                if (current == e->items[i].value)
                     info->is_active = TRUE;
                 break;
             }
         }
 
-        if (!*extra)
+        if (i >= e->nb_items)
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
@@ -12417,28 +12608,28 @@ _set_item_from_extra (DonnaTreeView         *tree,
     }
     else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
     {
-        DonnaConfigExtraListFlags **extra;
+        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
 
-        for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
         {
-            if (streq ((*extra)->in_file, item))
+            if (streq (e->items[i].in_file, item))
             {
                 info->name = g_strdup (
-                        ((*extra)->label) ? (*extra)->label : (*extra)->in_file);
+                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
                 info->free_name = TRUE;
                 info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
                 info->trigger = g_strconcat (
                         "command:tree_set_option (%o,", parent, ",",
-                        (*extra)->in_file, ",",
+                        e->items[i].in_file, ",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
-                if (current & (*extra)->value)
+                if (current & e->items[i].value)
                     info->is_active = TRUE;
                 break;
             }
         }
 
-        if (!*extra)
+        if (i >= e->nb_items)
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
@@ -12450,28 +12641,28 @@ _set_item_from_extra (DonnaTreeView         *tree,
     }
     else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
     {
-        DonnaConfigExtraList **extra;
+        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
 
-        for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+        for (i = 0; i < e->nb_items; ++i)
         {
-            if (streq ((*extra)->value, item))
+            if (streq (e->items[i].value, item))
             {
                 info->name = g_strdup (
-                        ((*extra)->label) ? (*extra)->label : (*extra)->value);
+                        (e->items[i].label) ? e->items[i].label : e->items[i].value);
                 info->free_name = TRUE;
                 info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
                 info->trigger = g_strconcat (
                         "command:tree_set_option (%o,", parent, ",",
-                        (*extra)->value, ",",
+                        e->items[i].value, ",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
-                if (streq ((gchar *) current, (*extra)->value))
+                if (streq ((gchar *) current, e->items[i].value))
                     info->is_active = TRUE;
                 break;
             }
         }
 
-        if (!*extra)
+        if (i >= e->nb_items)
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,

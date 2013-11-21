@@ -559,6 +559,7 @@ ct_value_edit (DonnaColumnType    *ct,
     GValue value = G_VALUE_INIT;
     GValue extra = G_VALUE_INIT;
     GType type;
+    gint i;
     gint rnd;
 
     if (!ct_value_can_edit (ct, _data, node, error))
@@ -586,13 +587,13 @@ ct_value_edit (DonnaColumnType    *ct,
     if (has == DONNA_NODE_VALUE_SET)
     {
         GtkListStore *store;
-        const DonnaConfigExtra *extras;
+        const DonnaConfigExtra *_e;
 
         /* extra, so we show a list of possible values via RND_COMBO */
 
-        extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+        _e = donna_config_get_extra (donna_app_peek_config (priv->app),
                 g_value_get_string (&extra), error);
-        if (!extras)
+        if (!_e)
         {
             gchar *fl = donna_node_get_full_location (node);
             g_prefix_error (error,
@@ -602,33 +603,33 @@ ct_value_edit (DonnaColumnType    *ct,
             return FALSE;
         }
 
-        if (type == G_TYPE_STRING && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+        if (type == G_TYPE_STRING && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
         {
-            DonnaConfigExtraList **extra;
+            DonnaConfigExtraList *e = (DonnaConfigExtraList *) _e;
 
             store = gtk_list_store_new (2, G_TYPE_STRING, G_TYPE_STRING);
-            for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
+            for (i = 0; i < e->nb_items; ++i)
                 gtk_list_store_insert_with_values (store, NULL, -1,
-                        0,  ((*extra)->label) ? (*extra)->label : (*extra)->value,
-                        1,  (*extra)->value,
+                        0,  (e->items[i].label) ? e->items[i].label : e->items[i].value,
+                        1,  e->items[i].value,
                         -1);
         }
-        else if (type == G_TYPE_INT && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+        else if (type == G_TYPE_INT && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
         {
-            DonnaConfigExtraListInt **extra;
+            DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) _e;
 
             store = gtk_list_store_new (2, G_TYPE_STRING, G_TYPE_INT);
-            for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
+            for (i = 0; i < e->nb_items; ++i)
             {
                 gtk_list_store_insert_with_values (store, NULL, -1,
-                        0,  ((*extra)->label) ? (*extra)->label : (*extra)->in_file,
-                        1,  (*extra)->value,
+                        0,  (e->items[i].label) ? e->items[i].label : e->items[i].in_file,
+                        1,  e->items[i].value,
                         -1);
             }
         }
-        else if (type == G_TYPE_INT && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+        else if (type == G_TYPE_INT && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
         {
-            DonnaConfigExtraListFlags **extra;
+            DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) _e;
             GtkWindow *win;
             GtkBox *box;
             GtkWidget *w;
@@ -647,13 +648,13 @@ ct_value_edit (DonnaColumnType    *ct,
             box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
             gtk_container_add ((GtkContainer *) win, (GtkWidget *) box);
 
-            for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
+            for (i = 0; i < e->nb_items; ++i)
             {
                 w = gtk_check_button_new_with_label (
-                        ((*extra)->label) ? (*extra)->label : (*extra)->in_file);
+                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
                 g_object_set_data ((GObject *) w, "flag-value",
-                        GINT_TO_POINTER ((*extra)->value));
-                g_object_set (w, "active", !!(cur & (*extra)->value), NULL);
+                        GINT_TO_POINTER (e->items[i].value));
+                g_object_set (w, "active", !!(cur & e->items[i].value), NULL);
                 gtk_box_pack_start (box, w, 0, 0, FALSE);
             }
 
@@ -776,14 +777,14 @@ get_text_for_type (DonnaColumnType      *ct,
     donna_node_get (node, FALSE, data->prop_extra, &has, &extra, NULL);
     if (has == DONNA_NODE_VALUE_SET)
     {
-        const DonnaConfigExtra *extras;
+        const DonnaConfigExtra *_e;
 
-        extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+        _e = donna_config_get_extra (donna_app_peek_config (priv->app),
                 g_value_get_string (&extra), NULL);
-        if (extras)
+        if (_e)
         {
-            if (extras->title)
-                *text = extras->title;
+            if (_e->any.title)
+                *text = _e->any.title;
             else
                 *text = *free = g_value_dup_string (&extra);
         }
@@ -845,20 +846,21 @@ get_text_for_value (DonnaColumnType     *ct,
             *text = (gchar *) g_value_get_string (value);
         else if (has == DONNA_NODE_VALUE_SET && index == RND_COMBO)
         {
-            const DonnaConfigExtra *extras;
+            const DonnaConfigExtra *_e;
 
             *text = (gchar *) g_value_get_string (value);
-            extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+            _e = donna_config_get_extra (donna_app_peek_config (priv->app),
                         g_value_get_string (&extra), NULL);
-            if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+            if (_e && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
             {
-                DonnaConfigExtraList **extra;
+                DonnaConfigExtraList *e = (DonnaConfigExtraList *) _e;
+                gint i;
 
-                for (extra = (DonnaConfigExtraList **) extras->values; *extra; ++extra)
-                    if (streq ((*extra)->value, *text))
+                for (i = 0; i < e->nb_items; ++i)
+                    if (streq (e->items[i].value, *text))
                     {
-                        if ((*extra)->label)
-                            *text = (*extra)->label;
+                        if (e->items[i].label)
+                            *text = e->items[i].label;
                         break;
                     }
             }
@@ -870,38 +872,39 @@ get_text_for_value (DonnaColumnType     *ct,
             *text = *free = g_strdup_printf ("%d", g_value_get_int (value));
         else if (has == DONNA_NODE_VALUE_SET && index == RND_COMBO)
         {
-            const DonnaConfigExtra *extras;
+            const DonnaConfigExtra *_e;
             gint id;
+            gint i;
 
             *text = "<failed to get label>";
-            extras = donna_config_get_extras (donna_app_peek_config (priv->app),
+            _e = donna_config_get_extra (donna_app_peek_config (priv->app),
                         g_value_get_string (&extra), NULL);
-            if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+            if (_e && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
             {
-                DonnaConfigExtraListInt **extra;
+                DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) _e;
 
                 id = g_value_get_int (value);
-                for (extra = (DonnaConfigExtraListInt **) extras->values; *extra; ++extra)
-                    if ((*extra)->value == id)
+                for (i = 0; i < e->nb_items; ++i)
+                    if (e->items[i].value == id)
                     {
-                        if ((*extra)->label)
-                            *text = (*extra)->label;
+                        if (e->items[i].label)
+                            *text = e->items[i].label;
                         else
-                            *text = (*extra)->in_file;
+                            *text = e->items[i].in_file;
                         break;
                     }
             }
-            else if (extras && extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+            else if (_e && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
             {
-                DonnaConfigExtraListFlags **extra;
+                DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) _e;
                 GString *str;
 
                 id = g_value_get_int (value);
                 str = g_string_sized_new (23 /* random */);
-                for (extra = (DonnaConfigExtraListFlags **) extras->values; *extra; ++extra)
-                    if (id & (*extra)->value)
-                        g_string_append_printf (str, "%s, ", ((*extra)->label)
-                                ? (*extra)->label : (*extra)->in_file);
+                for (i = 0; i < e->nb_items; ++i)
+                    if (id & e->items[i].value)
+                        g_string_append_printf (str, "%s, ", (e->items[i].label)
+                                ? e->items[i].label : e->items[i].in_file);
                 if (G_LIKELY (str->len > 0))
                 {
                     /* remove trailing comma & space */
@@ -1025,7 +1028,8 @@ load_val (struct tv_col_data *data,
         donna_node_get (node, TRUE, data->prop_extra, &has, &extra, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
-            const DonnaConfigExtra *extras;
+            const DonnaConfigExtra *_e;
+            gint i;
 
             if (type == G_TYPE_STRING)
                 val->s = g_value_get_string (value);
@@ -1033,60 +1037,56 @@ load_val (struct tv_col_data *data,
                 val->s = "<failed to get label>";
             type = G_TYPE_STRING;
 
-            extras = donna_config_get_extras (config,
-                    g_value_get_string (&extra), NULL);
-            if (extras)
+            _e = donna_config_get_extra (config, g_value_get_string (&extra), NULL);
+            if (_e)
             {
-                if (extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+                if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
                 {
-                    DonnaConfigExtraList **extra;
+                    DonnaConfigExtraList *e = (DonnaConfigExtraList *) _e;
 
-                    for (extra = (DonnaConfigExtraList **) extras->values;
-                            *extra; ++extra)
-                        if (streq ((*extra)->value, val->s))
+                    for (i = 0; i < e->nb_items; ++i)
+                        if (streq (e->items[i].value, val->s))
                         {
-                            if ((*extra)->label)
-                                val->s = (*extra)->label;
+                            if (e->items[i].label)
+                                val->s = e->items[i].label;
                             break;
                         }
                 }
-                else if (extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+                else if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
                 {
-                    DonnaConfigExtraListInt **extra;
+                    DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) _e;
                     gint id;
 
                     id = g_value_get_int (value);
-                    for (extra = (DonnaConfigExtraListInt **) extras->values;
-                            *extra; ++extra)
-                        if ((*extra)->value == id)
+                    for (i = 0; i < e->nb_items; ++i)
+                        if (e->items[i].value == id)
                         {
-                            if ((*extra)->label)
-                                val->s = (*extra)->label;
+                            if (e->items[i].label)
+                                val->s = e->items[i].label;
                             else
-                                val->s = (*extra)->in_file;
+                                val->s = e->items[i].in_file;
                             break;
                         }
                 }
-                else if (extras->type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+                else if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
                 {
-                    DonnaConfigExtraListFlags **extra;
+                    DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) _e;
                     gint id;
 
                     id = g_value_get_int (value);
-                    for (extra = (DonnaConfigExtraListFlags **) extras->values;
-                            *extra; ++extra)
-                        if (id & (*extra)->value)
+                    for (i = 0; i < e->nb_items; ++i)
+                        if (id & e->items[i].value)
                         {
-                            if ((*extra)->label)
-                                val->s = (*extra)->label;
+                            if (e->items[i].label)
+                                val->s = e->items[i].label;
                             else
-                                val->s = (*extra)->in_file;
+                                val->s = e->items[i].in_file;
                             break;
                         }
                 }
                 else
                     g_warning ("ColumnType 'value': Unknown extra type %d",
-                            extras->type);
+                            _e->any.type);
             }
             g_value_unset (&extra);
         }
@@ -1133,11 +1133,10 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         donna_node_get (node1, TRUE, data->prop_extra, &has1, &value1, NULL);
         if (has1 == DONNA_NODE_VALUE_SET)
         {
-            const DonnaConfigExtra *extras;
+            const DonnaConfigExtra *_e;
 
-            extras = donna_config_get_extras (config,
-                    g_value_get_string (&value1), NULL);
-            t1 = (extras) ? ((extras->title) ? extras->title
+            _e = donna_config_get_extra (config, g_value_get_string (&value1), NULL);
+            t1 = (_e) ? ((_e->any.title) ? _e->any.title
                     : g_value_get_string (&value1)) : "<unknown extra>";
         }
         else
@@ -1162,11 +1161,10 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         donna_node_get (node2, TRUE, data->prop_extra, &has2, &value2, NULL);
         if (has2 == DONNA_NODE_VALUE_SET)
         {
-            const DonnaConfigExtra *extras;
+            const DonnaConfigExtra *_e;
 
-            extras = donna_config_get_extras (config,
-                    g_value_get_string (&value2), NULL);
-            t2 = (extras) ? ((extras->title) ? extras->title
+            _e = donna_config_get_extra (config, g_value_get_string (&value2), NULL);
+            t2 = (_e) ? ((_e->any.title) ? _e->any.title
                     : g_value_get_string (&value2)) : "<unknown extra>";
         }
         else

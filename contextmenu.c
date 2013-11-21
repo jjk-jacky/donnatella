@@ -40,6 +40,38 @@ struct node_internal
     gboolean     free_fl;
 };
 
+gboolean
+_donna_context_register_extras (DonnaConfig *config, GError **error)
+{
+    DonnaConfigItemExtraListInt it[4];
+    guint i;
+
+    i = 0;
+    it[i].value     = TYPE_STANDARD;
+    it[i].in_file   = "standard";
+    it[i].label     = "Standard item";
+    ++i;
+    it[i].value     = TYPE_TRIGGER;
+    it[i].in_file   = "trigger";
+    it[i].label     = "Use trigger node";
+    ++i;
+    it[i].value     = TYPE_CONTAINER;
+    it[i].in_file   = "container";
+    it[i].label     = "Container item";
+    ++i;
+    it[i].value     = TYPE_EMPTY;
+    it[i].in_file   = "empty";
+    it[i].label     = "Empty item (no trigger)";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "context-type",
+                    "Type of context item",
+                    i, it, error)))
+        return FALSE;
+
+    return TRUE;
+}
+
 static inline void
 free_intrefs (DonnaApp *app, GPtrArray *intrefs)
 {

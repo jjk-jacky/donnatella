@@ -62,6 +62,7 @@ enum
 enum rc
 {
     RC_OK = 0,
+    RC_PREPARE_FAILED,
     RC_LAYOUT_MISSING,
     RC_LAYOUT_INVALID,
     RC_ACTIVE_LIST_MISSING
@@ -139,6 +140,7 @@ struct _DonnaDonnaPrivate
     struct col_type
     {
         const gchar     *name;
+        gchar           *desc; /* i.e. config extra label */
         GType            type;
         DonnaColumnType *ct;
         gpointer         ct_data;
@@ -158,6 +160,15 @@ struct argmt
 static GThread *mt;
 static GLogLevelFlags show_log = G_LOG_LEVEL_DEBUG;
 guint donna_debug_flags = 0;
+
+/* internal from treeview.c */
+gboolean
+_donna_tree_view_register_extras (DonnaConfig *config, GError **error);
+
+/* internal from contextmenu.c */
+gboolean
+_donna_context_register_extras (DonnaConfig *config, GError **error);
+
 
 static inline void      set_active_list             (DonnaDonna     *donna,
                                                      DonnaTreeView  *list);
@@ -465,7 +476,7 @@ copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
 
 /* returns TRUE if file existed (even if loading failed), else FALSE */
 static gboolean
-load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
+load_conf (DonnaConfig *config, const gchar *dir)
 {
     GError *err = NULL;
     gchar buf[255], *b = buf;
@@ -473,10 +484,8 @@ load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
     gchar *data;
     gboolean file_exists = FALSE;
 
-    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf%s",
-                dir, (is_def) ? "-def" : "") >= 255)
-        b = g_strdup_printf ("%s/donnatella/donnatella.conf%s",
-                dir, (is_def) ? "-def" : "");
+    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf", dir) >= 255)
+        b = g_strdup_printf ("%s/donnatella/donnatella.conf", dir);
 
     if (!g_get_filename_charsets (NULL))
         file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
@@ -486,18 +495,13 @@ load_conf (DonnaConfig *config, const gchar *dir, gboolean is_def)
     if (g_file_get_contents ((file) ? file : b, &data, NULL, &err))
     {
         file_exists = TRUE;
-        if (is_def)
-            donna_config_load_config_def (config, data);
-        else
-            donna_config_load_config (config, data);
+        donna_config_load_config (config, data);
     }
     else
     {
         file_exists = !g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT);
         if (file_exists)
-            g_warning ((is_def)
-                    ? "Unable to load configuration definition from '%s': %s"
-                    : "Unable to load configuration from '%s': %s",
+            g_warning ("Unable to load configuration from '%s': %s",
                     b, err->message);
         g_clear_error (&err);
     }
@@ -558,20 +562,28 @@ donna_donna_init (DonnaDonna *donna)
 
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", donna, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
+    priv->column_types[COL_TYPE_NAME].desc = "Name (and Icon)";
     priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMNTYPE_NAME;
     priv->column_types[COL_TYPE_SIZE].name = "size";
+    priv->column_types[COL_TYPE_SIZE].desc = "Size";
     priv->column_types[COL_TYPE_SIZE].type = DONNA_TYPE_COLUMNTYPE_SIZE;
     priv->column_types[COL_TYPE_TIME].name = "time";
+    priv->column_types[COL_TYPE_TIME].desc = "Date/Time";
     priv->column_types[COL_TYPE_TIME].type = DONNA_TYPE_COLUMNTYPE_TIME;
     priv->column_types[COL_TYPE_PERMS].name = "perms";
+    priv->column_types[COL_TYPE_PERMS].desc = "Permissions";
     priv->column_types[COL_TYPE_PERMS].type = DONNA_TYPE_COLUMNTYPE_PERMS;
     priv->column_types[COL_TYPE_TEXT].name = "text";
+    priv->column_types[COL_TYPE_TEXT].desc = "Text";
     priv->column_types[COL_TYPE_TEXT].type = DONNA_TYPE_COLUMNTYPE_TEXT;
     priv->column_types[COL_TYPE_LABEL].name = "label";
+    priv->column_types[COL_TYPE_LABEL].desc = "Label";
     priv->column_types[COL_TYPE_LABEL].type = DONNA_TYPE_COLUMNTYPE_LABEL;
     priv->column_types[COL_TYPE_PROGRESS].name = "progress";
+    priv->column_types[COL_TYPE_PROGRESS].desc = "Progress bar";
     priv->column_types[COL_TYPE_PROGRESS].type = DONNA_TYPE_COLUMNTYPE_PROGRESS;
     priv->column_types[COL_TYPE_VALUE].name = "value";
+    priv->column_types[COL_TYPE_VALUE].desc = "Value (of config option)";
     priv->column_types[COL_TYPE_VALUE].type = DONNA_TYPE_COLUMNTYPE_VALUE;
 
     priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", donna, NULL);
@@ -3703,6 +3715,62 @@ next:
     return RC_OK;
 }
 
+static inline gboolean
+prepare_donna (DonnaDonna *donna, GError **error)
+{
+    DonnaConfig *config = donna->priv->config;
+    DonnaConfigItemExtraList    it_lst[8];
+    DonnaConfigItemExtraListInt it_int[8];
+    guint i;
+
+    for (i = 0; i < NB_COL_TYPES; ++i)
+    {
+        it_lst[i].value = (gchar *) donna->priv->column_types[i].name;
+        it_lst[i].label = donna->priv->column_types[i].desc;
+    }
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST, "ct", "Column Type",
+                    i, it_lst, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = TITLE_DOMAIN_LOCATION;
+    it_int[i].in_file   = "loc";
+    it_int[i].label     = "Location";
+    ++i;
+    it_int[i].value     = TITLE_DOMAIN_FULL_LOCATION;
+    it_int[i].in_file   = "full";
+    it_int[i].label     = "Full Location (i.e. domain included)";
+    ++i;
+    it_int[i].value     = TITLE_DOMAIN_CUSTOM;
+    it_int[i].in_file   = "custom";
+    it_int[i].label     = "Custom string";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "title-domain",
+                    "Type of title for a domain",
+                    i, it_int, error)))
+        return FALSE;
+
+    /* have treeview register its extras */
+    if (G_UNLIKELY (!_donna_tree_view_register_extras (config, error)))
+        return FALSE;
+
+    /* have context register its extras */
+    if (G_UNLIKELY (!_donna_context_register_extras (config, error)))
+        return FALSE;
+
+    /* "preload" mark & register so they can add their own extras/commands. We
+     * could use a "prepare" function so they only do that without having to
+     * load the providers, but since for the commands the providers need to be
+     * there, and they'll probably be used often, let's do this (instead of
+     * having to ref/unref on each command call) */
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "register"));
+    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "mark"));
+
+    return TRUE;
+}
+
 static inline void
 init_donna (DonnaDonna *donna)
 {
@@ -3717,14 +3785,9 @@ init_donna (DonnaDonna *donna)
     main_dir = g_get_user_config_dir ();
     extra_dirs = g_get_system_config_dirs ();
 
-    /* load config definitions: merge user & system ones */
-    load_conf (priv->config, main_dir, TRUE);
-    for (dir = extra_dirs; *dir; ++dir)
-        load_conf (priv->config, *dir, TRUE);
-
     /* load config: load user one. If there's none, copy the system one over,
      * and keep another copy as "reference" for future merging */
-    if (!load_conf (priv->config, main_dir, FALSE))
+    if (!load_conf (priv->config, main_dir))
     {
         for (dir = extra_dirs; *dir; ++dir)
             if (copy_and_load_conf (priv->config, *dir, main_dir))
@@ -3746,12 +3809,6 @@ init_donna (DonnaDonna *donna)
 
     /* compile patterns of arrangements' masks */
     priv->arrangements = load_arrangements (priv->config, "arrangements");
-
-    /* preload some required providers */
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "command"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "register"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "internal"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "mark"));
 
     if (donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_NUMBERED, "visuals"))
@@ -3785,6 +3842,7 @@ init_donna (DonnaDonna *donna)
 int
 main (int argc, char *argv[])
 {
+    GError *err = NULL;
     DonnaDonna *donna;
     enum rc rc;
 
@@ -3794,8 +3852,24 @@ main (int argc, char *argv[])
     g_main_context_acquire (g_main_context_default ());
     donna = g_object_new (DONNA_TYPE_DONNA, NULL);
 
+    /* load config extras, registers commands, etc */
+    if (G_UNLIKELY (!prepare_donna (donna, &err)))
+    {
+        GtkWidget *w = gtk_message_dialog_new (NULL,
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_CLOSE,
+                "Failed to prepare application: %s",
+                (err) ? err->message : "no error message");
+        g_clear_error (&err);
+        gtk_dialog_run ((GtkDialog *) w);
+        gtk_widget_destroy (w);
+        return RC_PREPARE_FAILED;
+    }
+
     /* load config, css arrangements, required providers, etc */
     init_donna (donna);
+
     /* create & show the main window */
     rc = create_gui (donna);
     if (G_UNLIKELY (rc != 0))
