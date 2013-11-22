@@ -399,8 +399,10 @@ donna_config_add_extra (DonnaConfig          *config,
         return FALSE;
     }
 
+    g_rw_lock_writer_lock (&priv->lock);
     if (g_hash_table_contains (priv->extras, name))
     {
+        g_rw_lock_writer_unlock (&priv->lock);
         g_set_error (error, DONNA_CONFIG_ERROR,
                 DONNA_CONFIG_ERROR_ALREADY_EXISTS,
                 "Config: Cannot add extra '%s': One already exists",
@@ -421,6 +423,7 @@ donna_config_add_extra (DonnaConfig          *config,
             {
                 if (streq (it[i].value, it[j].value))
                 {
+                    g_rw_lock_writer_unlock (&priv->lock);
                     g_set_error (error, DONNA_CONFIG_ERROR,
                             DONNA_CONFIG_ERROR_OTHER,
                             "Config: Cannot add extra '%s': "
@@ -444,6 +447,7 @@ donna_config_add_extra (DonnaConfig          *config,
             {
                 if (it[i].value == it[j].value)
                 {
+                    g_rw_lock_writer_unlock (&priv->lock);
                     g_set_error (error, DONNA_CONFIG_ERROR,
                             DONNA_CONFIG_ERROR_OTHER,
                             "Config: Cannot add extra '%s': "
@@ -466,6 +470,7 @@ donna_config_add_extra (DonnaConfig          *config,
             if (it[i].value <= 0
                     || (it[i].value & (~it[i].value + 1)) != it[i].value)
             {
+                g_rw_lock_writer_unlock (&priv->lock);
                 g_set_error (error, DONNA_CONFIG_ERROR,
                         DONNA_CONFIG_ERROR_OTHER,
                         "Config: Cannot add extra '%s': Invalid value (%d) for item #%d; "
@@ -478,6 +483,7 @@ donna_config_add_extra (DonnaConfig          *config,
             {
                 if (it[i].value == it[j].value)
                 {
+                    g_rw_lock_writer_unlock (&priv->lock);
                     g_set_error (error, DONNA_CONFIG_ERROR,
                             DONNA_CONFIG_ERROR_OTHER,
                             "Config: Cannot add extra '%s': "
@@ -496,6 +502,7 @@ donna_config_add_extra (DonnaConfig          *config,
     memcpy (&extra->items, items, size_items);
 
     g_hash_table_insert (priv->extras, str_chunk (priv, name), extra);
+    g_rw_lock_writer_unlock (&priv->lock);
 
     return TRUE;
 }
@@ -1455,7 +1462,9 @@ donna_config_get_extra (DonnaConfig            *config,
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), NULL);
     priv = config->priv;
 
+    g_rw_lock_reader_lock (&priv->lock);
     extra = g_hash_table_lookup (priv->extras, name);
+    g_rw_lock_reader_unlock (&priv->lock);
     if (!extra)
     {
         g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
