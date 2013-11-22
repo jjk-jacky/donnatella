@@ -2534,10 +2534,127 @@ done:
 #undef get_node
 #undef get_child
 
+/* assumes reader lock */
+static gboolean
+is_value_valid_for_extra (DonnaConfig   *config,
+                          const gchar   *extra_name,
+                          GValue        *value,
+                          GError       **error)
+{
+    DonnaProviderConfigPrivate *priv = config->priv;
+    DonnaConfigExtra *extra;
+    gint i;
+
+    extra = g_hash_table_lookup (priv->extras, extra_name);
+    if (G_UNLIKELY (!extra))
+    {
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
+                "Extra '%s' not found",
+                extra_name);
+        return FALSE;
+    }
+
+    if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+    {
+        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
+        gint v;
+
+        if (!G_VALUE_HOLDS (value, G_TYPE_INT))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Invalid type for extra '%s': expects '%s', given '%s'",
+                    extra_name,
+                    g_type_name (G_TYPE_INT),
+                    G_VALUE_TYPE_NAME (value));
+            return FALSE;
+        }
+
+        v = g_value_get_int (value);
+
+        for (i = 0; i < e->nb_items; ++i)
+        {
+            if (v == e->items[i].value)
+                break;
+        }
+        if (i >= e->nb_items)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Value '%d' not found in extra '%s'",
+                    v, extra_name);
+            return FALSE;
+        }
+    }
+    else if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
+        gint v = 0;
+
+        if (!G_VALUE_HOLDS (value, G_TYPE_INT))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Invalid type for extra '%s': expects '%s', given '%s'",
+                    extra_name,
+                    g_type_name (G_TYPE_INT),
+                    G_VALUE_TYPE_NAME (value));
+            return FALSE;
+        }
+
+        for (i = 0; i < e->nb_items; ++i)
+            v |= e->items[i].value;
+        if (g_value_get_int (value) & ~v)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Value '%d' not matching extra '%s'",
+                    g_value_get_int (value), extra_name);
+            return FALSE;
+        }
+    }
+    else /* DONNA_CONFIG_EXTRA_TYPE_LIST */
+    {
+        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
+        const gchar *s;
+
+        if (!G_VALUE_HOLDS (value, G_TYPE_STRING))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Invalid type for extra '%s': expects '%s', given '%s'",
+                    extra_name,
+                    g_type_name (G_TYPE_STRING),
+                    G_VALUE_TYPE_NAME (value));
+            return FALSE;
+        }
+
+        s = g_value_get_string (value);
+
+        for (i = 0; i < e->nb_items; ++i)
+        {
+            if (streq (s, e->items[i].value))
+                break;
+        }
+        if (i >= e->nb_items)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Value '%s' not found in extra '%s'",
+                    s, extra_name);
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
 static gboolean
 _set_option (DonnaConfig    *config,
              GError        **error,
              GType           type,
+             const gchar    *extra,
              GValue         *value,
              gboolean        allow_overwrite,
              const gchar    *fmt,
@@ -2653,6 +2770,9 @@ _set_option (DonnaConfig    *config,
         g_node_append_data (parent, option);
         ret = TRUE;
 
+        if (extra)
+            option->extra = str_chunk (priv, extra);
+
         /* see below re: option_node for more */
         if (po->node && ((GObject *) po->node)->ref_count > 1)
             parent_node = g_object_ref (po->node);
@@ -2660,83 +2780,16 @@ _set_option (DonnaConfig    *config,
 
     if (ret && type != G_TYPE_INVALID)
     {
-        /* it is an option, so can't be priv->root (for categories) */
-        if (option->extra)
+        /* if extra is non NULL then we assume the check of value was done prior
+         * to calling is. And since we know this is an option, so option->extra
+         * can't be priv->root (for categories) */
+        if (!extra && option->extra
+                && !is_value_valid_for_extra (config, option->extra, value, error))
         {
-            DonnaConfigExtra *extra;
-            gint i;
-
-            extra = g_hash_table_lookup (priv->extras, option->extra);
-            if (G_UNLIKELY (!extra))
-            {
-                g_set_error (error, DONNA_CONFIG_ERROR,
-                        DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
-                        "Config: Failed to set option '%s': Extra '%s' not found",
-                        name + 1, (gchar *) option->extra);
-                ret = FALSE;
-                goto done;
-            }
-
-            if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
-            {
-                DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
-                gint v = g_value_get_int (value);
-
-                for (i = 0; i < e->nb_items; ++i)
-                {
-                    if (v == e->items[i].value)
-                        break;
-                }
-                if (i >= e->nb_items)
-                {
-                    g_set_error (error, DONNA_CONFIG_ERROR,
-                            DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
-                            "Config: Failed to set option '%s': "
-                            "Value '%d' not found in extra '%s'",
-                            name + 1, v, (gchar *) option->extra);
-                    ret = FALSE;
-                    goto done;
-                }
-            }
-            else if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
-            {
-                DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
-                gint v = 0;
-
-                for (i = 0; i < e->nb_items; ++i)
-                    v |= e->items[i].value;
-                if (g_value_get_int (value) & ~v)
-                {
-                    g_set_error (error, DONNA_CONFIG_ERROR,
-                            DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
-                            "Config: Failed to set option '%s': "
-                            "Value '%d' not matching extra '%s'",
-                            name + 1, g_value_get_int (value), (gchar *) option->extra);
-                    ret = FALSE;
-                    goto done;
-                }
-            }
-            else /* DONNA_CONFIG_EXTRA_TYPE_LIST */
-            {
-                DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
-                const gchar *s = g_value_get_string (value);
-
-                for (i = 0; i < e->nb_items; ++i)
-                {
-                    if (streq (s, e->items[i].value))
-                        break;
-                }
-                if (i >= e->nb_items)
-                {
-                    g_set_error (error, DONNA_CONFIG_ERROR,
-                            DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
-                            "Config: Failed to set option '%s': "
-                            "Value '%s' not found in extra '%s'",
-                            name + 1, s, (gchar *) option->extra);
-                    ret = FALSE;
-                    goto done;
-                }
-            }
+            g_prefix_error (error, "Config: Failed to set option '%s': ",
+                    name + 1);
+            ret = FALSE;
+            goto done;
         }
 
         g_value_copy (value, &option->value);
@@ -2788,19 +2841,25 @@ done:
     return ret;
 }
 
-#define _set_opt(gtype, over, set_fn)  do {     \
+#define _set_opt(gtype, extra, over, set_fn)    do { \
     va_list va_arg;                             \
     GValue gvalue = G_VALUE_INIT;               \
     gboolean ret;                               \
                                                 \
-    va_start (va_arg, fmt);                     \
     if (gtype != G_TYPE_INVALID)                \
     {                                           \
         g_value_init (&gvalue, gtype);          \
         set_fn (&gvalue, value);                \
+        if (extra && !is_value_valid_for_extra (config, \
+                    extra, &gvalue, error))     \
+        {                                       \
+            g_value_unset (&gvalue);            \
+            return FALSE;                       \
+        }                                       \
     }                                           \
-    ret = _set_option (config, error,           \
-            gtype, &gvalue, over, fmt, va_arg); \
+    va_start (va_arg, fmt);                     \
+    ret = _set_option (config, error, gtype,    \
+            extra, &gvalue, over, fmt, va_arg); \
     if (gtype != G_TYPE_INVALID)                \
         g_value_unset (&gvalue);                \
     va_end (va_arg);                            \
@@ -2815,17 +2874,18 @@ donna_config_new_boolean (DonnaConfig            *config,
                           ...)
 
 {
-    _set_opt (G_TYPE_BOOLEAN, FALSE, g_value_set_boolean);
+    _set_opt (G_TYPE_BOOLEAN, NULL, FALSE, g_value_set_boolean);
 }
 
 gboolean
 donna_config_new_int (DonnaConfig            *config,
                       GError                **error,
+                      const gchar            *extra,
                       gint                    value,
                       const gchar            *fmt,
                       ...)
 {
-    _set_opt (G_TYPE_INT, FALSE, g_value_set_int);
+    _set_opt (G_TYPE_INT, extra, FALSE, g_value_set_int);
 }
 
 gboolean
@@ -2835,27 +2895,29 @@ donna_config_new_double (DonnaConfig            *config,
                          const gchar            *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_DOUBLE, FALSE, g_value_set_double);
+    _set_opt (G_TYPE_DOUBLE, NULL, FALSE, g_value_set_double);
 }
 
 gboolean
 donna_config_new_string (DonnaConfig            *config,
                          GError                **error,
+                         const gchar            *extra,
                          const gchar            *value,
                          const gchar            *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_STRING, FALSE, g_value_set_string);
+    _set_opt (G_TYPE_STRING, extra, FALSE, g_value_set_string);
 }
 
 gboolean
 donna_config_new_string_take (DonnaConfig            *config,
                               GError                **error,
+                              const gchar            *extra,
                               gchar                  *value,
                               const gchar            *fmt,
                               ...)
 {
-    _set_opt (G_TYPE_STRING, FALSE, g_value_take_string);
+    _set_opt (G_TYPE_STRING, extra, FALSE, g_value_take_string);
 }
 
 gboolean
@@ -2865,7 +2927,7 @@ donna_config_new_category (DonnaConfig            *config,
                            ...)
 {
     gint value; /* unused, for the the macro to work */
-    _set_opt (G_TYPE_INVALID, FALSE, g_value_set_int);
+    _set_opt (G_TYPE_INVALID, NULL, FALSE, g_value_set_int);
 }
 
 gboolean
@@ -2875,7 +2937,7 @@ donna_config_set_boolean (DonnaConfig   *config,
                           const gchar   *fmt,
                           ...)
 {
-    _set_opt (G_TYPE_BOOLEAN, TRUE, g_value_set_boolean);
+    _set_opt (G_TYPE_BOOLEAN, NULL, TRUE, g_value_set_boolean);
 }
 
 gboolean
@@ -2885,7 +2947,7 @@ donna_config_set_int (DonnaConfig   *config,
                       const gchar   *fmt,
                       ...)
 {
-    _set_opt (G_TYPE_INT, TRUE, g_value_set_int);
+    _set_opt (G_TYPE_INT, NULL, TRUE, g_value_set_int);
 }
 
 gboolean
@@ -2895,7 +2957,7 @@ donna_config_set_double (DonnaConfig    *config,
                          const gchar    *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_DOUBLE, TRUE, g_value_set_double);
+    _set_opt (G_TYPE_DOUBLE, NULL, TRUE, g_value_set_double);
 }
 
 gboolean
@@ -2905,7 +2967,7 @@ donna_config_set_string (DonnaConfig         *config,
                          const gchar         *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_STRING, TRUE, g_value_set_string);
+    _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_set_string);
 }
 
 gboolean
@@ -2915,7 +2977,7 @@ donna_config_take_string (DonnaConfig        *config,
                           const gchar        *fmt,
                           ...)
 {
-    _set_opt (G_TYPE_STRING, TRUE, g_value_take_string);
+    _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_take_string);
 }
 
 gboolean

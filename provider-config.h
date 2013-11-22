@@ -261,6 +261,7 @@ gboolean    donna_config_new_boolean            (DonnaConfig            *config,
                                                  ...);
 gboolean    donna_config_new_int                (DonnaConfig            *config,
                                                  GError                **error,
+                                                 const gchar            *extra,
                                                  gint                    value,
                                                  const gchar            *fmt,
                                                  ...);
@@ -271,11 +272,13 @@ gboolean    donna_config_new_double             (DonnaConfig            *config,
                                                  ...);
 gboolean    donna_config_new_string             (DonnaConfig            *config,
                                                  GError                **error,
+                                                 const gchar            *extra,
                                                  const gchar            *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_new_string_take        (DonnaConfig            *config,
                                                  GError                **error,
+                                                 const gchar            *extra,
                                                  gchar                  *value,
                                                  const gchar            *fmt,
                                                  ...);
