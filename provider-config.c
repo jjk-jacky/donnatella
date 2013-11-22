@@ -2588,11 +2588,15 @@ _set_option (DonnaConfig    *config,
         parent = priv->root;
     }
 
-    if (!is_valid_name ((gchar *) s, VALID_OPTION_NAME))
+    /* G_TYPE_INVALID means category */
+    if (!is_valid_name ((gchar *) s,
+                (type == G_TYPE_INVALID) ? VALID_CATEGORY_NAME : VALID_OPTION_NAME))
     {
         g_set_error (error, DONNA_CONFIG_ERROR,
                 DONNA_CONFIG_ERROR_INVALID_NAME,
-                "Config: Cannot create option '%s': invalid name",
+                (type == G_TYPE_INVALID)
+                ? "Config: Cannot create category '%s': invalid name"
+                : "Config: Cannot create option '%s': invalid name",
                 name + 1);
         g_rw_lock_writer_unlock (&priv->lock);
         return FALSE;
@@ -2602,19 +2606,19 @@ _set_option (DonnaConfig    *config,
     if (node)
     {
         option = node->data;
-        if (option_is_category (option, priv->root))
-        {
-            g_set_error (error, DONNA_CONFIG_ERROR,
-                    DONNA_CONFIG_ERROR_INVALID_TYPE,
-                    "Config: Option '%s' is a category",
-                    name + 1);
-            ret = FALSE;
-        }
-        else if (!allow_overwrite)
+        if (type == G_TYPE_INVALID || !allow_overwrite)
         {
             g_set_error (error, DONNA_CONFIG_ERROR,
                     DONNA_CONFIG_ERROR_ALREADY_EXISTS,
                     "Config: Option '%s' already exists",
+                    name + 1);
+            ret = FALSE;
+        }
+        else if (option_is_category (option, priv->root))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_TYPE,
+                    "Config: Option '%s' is a category",
                     name + 1);
             ret = FALSE;
         }
@@ -2637,7 +2641,15 @@ _set_option (DonnaConfig    *config,
 
         option = g_slice_new0 (struct option);
         option->name = str_chunk (priv, s);
-        g_value_init (&option->value, type);
+        if (type == G_TYPE_INVALID)
+        {
+            option->extra = priv->root;
+            /* next index for auto-numbered categories */
+            g_value_init (&option->value, G_TYPE_INT);
+            g_value_set_int (&option->value, 1);
+        }
+        else
+            g_value_init (&option->value, type);
         g_node_append_data (parent, option);
         ret = TRUE;
 
@@ -2646,7 +2658,7 @@ _set_option (DonnaConfig    *config,
             parent_node = g_object_ref (po->node);
     }
 
-    if (ret)
+    if (ret && type != G_TYPE_INVALID)
     {
         /* it is an option, so can't be priv->root (for categories) */
         if (option->extra)
@@ -2782,11 +2794,15 @@ done:
     gboolean ret;                               \
                                                 \
     va_start (va_arg, fmt);                     \
-    g_value_init (&gvalue, gtype);              \
-    set_fn (&gvalue, value);                    \
+    if (gtype != G_TYPE_INVALID)                \
+    {                                           \
+        g_value_init (&gvalue, gtype);          \
+        set_fn (&gvalue, value);                \
+    }                                           \
     ret = _set_option (config, error,           \
             gtype, &gvalue, over, fmt, va_arg); \
-    g_value_unset (&gvalue);                    \
+    if (gtype != G_TYPE_INVALID)                \
+        g_value_unset (&gvalue);                \
     va_end (va_arg);                            \
     return ret;                                 \
 } while (0)
@@ -2840,6 +2856,16 @@ donna_config_new_string_take (DonnaConfig            *config,
                               ...)
 {
     _set_opt (G_TYPE_STRING, FALSE, g_value_take_string);
+}
+
+gboolean
+donna_config_new_category (DonnaConfig            *config,
+                           GError                **error,
+                           const gchar            *fmt,
+                           ...)
+{
+    gint value; /* unused, for the the macro to work */
+    _set_opt (G_TYPE_INVALID, FALSE, g_value_set_int);
 }
 
 gboolean

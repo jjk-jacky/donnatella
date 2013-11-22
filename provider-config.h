@@ -279,6 +279,10 @@ gboolean    donna_config_new_string_take        (DonnaConfig            *config,
                                                  gchar                  *value,
                                                  const gchar            *fmt,
                                                  ...);
+gboolean    donna_config_new_category           (DonnaConfig            *config,
+                                                 GError                **error,
+                                                 const gchar            *fmt,
+                                                 ...);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
                                                  GError                **error,
                                                  gboolean                value,
