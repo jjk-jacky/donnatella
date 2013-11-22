@@ -270,8 +270,9 @@ free_option (DonnaProviderConfig *config,
     if (option->node)
     {
         if (nodes)
-            /* add for later removal, outside of the lock */
-            g_ptr_array_add (nodes, option->node);
+            /* add for later removal, outside of the lock.
+             * Add a ref so it doesn't go away before we sent the signal */
+            g_ptr_array_add (nodes, g_object_ref (option->node));
         else
             g_object_unref (option->node);
     }
@@ -3241,7 +3242,8 @@ traverse_renaming_category (GNode *node, struct renaming_category *data)
 
     if (option->node)
     {
-        g_ptr_array_add (data->nodes, option->node);
+        /* add a ref to make sure it doesn't go aay before we sent the signal */
+        g_ptr_array_add (data->nodes, g_object_ref (option->node));
         option->node = NULL;
     }
 
@@ -3429,7 +3431,7 @@ skip:
 
     data.gnode = node;
     data.names = g_ptr_array_new ();
-    data.nodes = g_ptr_array_new ();
+    data.nodes = g_ptr_array_new_with_free_func (g_object_unref);
     g_node_traverse (node, G_IN_ORDER, G_TRAVERSE_ALL, -1,
             (GNodeTraverseFunc) traverse_renaming_category,
             &data);
@@ -3560,7 +3562,7 @@ _remove_option (DonnaProviderConfig *config,
 
     /* actually remove the nodes/options */
     data.config = config;
-    data.nodes  = g_ptr_array_new ();
+    data.nodes  = g_ptr_array_new_with_free_func (g_object_unref);
     g_node_traverse (node, G_IN_ORDER, G_TRAVERSE_ALL, -1,
             (GNodeTraverseFunc) free_node_data_removing,
             &data);
