@@ -768,9 +768,14 @@ get_child_node (GNode *parent, const gchar *name, gsize len)
     return NULL;
 }
 
-/* assumes a writer lock on config */
+/* assumes a writer lock on config. If parent_node/child_node are set, the
+ * caller must emit node-new-child once the lock is released */
 static GNode *
-ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
+ensure_categories (DonnaProviderConfig  *config,
+                   const gchar          *name,
+                   gsize                 len,
+                   DonnaNode           **parent_node,
+                   DonnaNode           **child_node)
 {
     GNode *root;
     GNode *parent;
@@ -795,14 +800,15 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
         if (*name == '\0')
         {
             struct option *option;
+            struct option *po;
             gint i;
 
             s = name;
             /* the GValue for categories hold an integer value with the next
              * index to use for such cases */
-            option = parent->data;
-            i = g_value_get_int (&option->value);
-            g_value_set_int (&option->value, i + 1);
+            po = parent->data;
+            i = g_value_get_int (&po->value);
+            g_value_set_int (&po->value, i + 1);
 
             option = g_slice_new0 (struct option);
             option->name = str_chunk_len (config->priv, NULL, i);
@@ -810,6 +816,19 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             g_value_init (&option->value, G_TYPE_INT);
             g_value_set_int (&option->value, 1);
             node = g_node_append_data (parent, option);
+
+            /* avoid deadlock -- see _set_option() for more */
+            if (parent_node && !*parent_node && po->node
+                    && ((GObject *) po->node)->ref_count > 1)
+            {
+                gchar *fn;
+
+                *parent_node = g_object_ref (po->node);
+                fn = get_option_full_name (root, node);
+                ensure_option_has_node (config, fn, option);
+                g_free (fn);
+                *child_node = option->node;
+            }
         }
         else
         {
@@ -849,6 +868,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
             {
                 /* create category/node */
                 struct option *option;
+                struct option *po = parent->data;
 
                 if (!is_valid_name_len (name, s - name, VALID_CATEGORY_NAME))
                     return NULL;
@@ -861,6 +881,19 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
                 g_value_init (&option->value, G_TYPE_INT);
                 g_value_set_int (&option->value, 1);
                 node = g_node_append_data (parent, option);
+
+                /* avoid deadlock -- see _set_option() for more */
+                if (parent_node && !*parent_node && po->node
+                        && ((GObject *) po->node)->ref_count > 1)
+                {
+                    gchar *fn;
+
+                    *parent_node = g_object_ref (po->node);
+                    fn = get_option_full_name (root, node);
+                    ensure_option_has_node (config, fn, option);
+                    g_free (fn);
+                    *child_node = option->node;
+                }
             }
         }
 
@@ -985,7 +1018,9 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
         {
             parent = ensure_categories (config,
                     section->name,
-                    strlen (section->name));
+                    strlen (section->name),
+                    /* no need to bother w/ node-new-child at this point */
+                    NULL, NULL);
             if (!parent)
             {
                 g_warning ("Invalid category '%s'; skipping to next section",
@@ -2666,10 +2701,11 @@ _set_option (DonnaConfig    *config,
     GNode *node;
     struct option *option;
     DonnaNode *parent_node = NULL;
+    DonnaNode *child_node  = NULL;
     DonnaNode *option_node = NULL;
     gchar *name;
     const gchar *s;
-    gboolean ret;
+    gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (fmt != NULL, FALSE);
@@ -2688,15 +2724,15 @@ _set_option (DonnaConfig    *config,
     s = strrchr (name + 1, '/');
     if (s)
     {
-        parent = ensure_categories (config, name + 1, s - name - 1);
+        parent = ensure_categories (config, name + 1, s - name - 1,
+                &parent_node, &child_node);
         if (!parent)
         {
             g_set_error (error, DONNA_CONFIG_ERROR,
                     DONNA_CONFIG_ERROR_NOT_FOUND,
                     "Config: Parent of option '%s' not found",
                     name + 1);
-            g_rw_lock_writer_unlock (&priv->lock);
-            return FALSE;
+            goto done;
         }
         ++s;
     }
@@ -2716,8 +2752,7 @@ _set_option (DonnaConfig    *config,
                 ? "Config: Cannot create category '%s': invalid name"
                 : "Config: Cannot create option '%s': invalid name",
                 name + 1);
-        g_rw_lock_writer_unlock (&priv->lock);
-        return FALSE;
+        goto done;
     }
 
     node = get_child_node (parent, s, strlen (s));
@@ -2730,7 +2765,6 @@ _set_option (DonnaConfig    *config,
                     DONNA_CONFIG_ERROR_ALREADY_EXISTS,
                     "Config: Option '%s' already exists",
                     name + 1);
-            ret = FALSE;
         }
         else if (option_is_category (option, priv->root))
         {
@@ -2738,7 +2772,6 @@ _set_option (DonnaConfig    *config,
                     DONNA_CONFIG_ERROR_INVALID_TYPE,
                     "Config: Option '%s' is a category",
                     name + 1);
-            ret = FALSE;
         }
         else if (!G_VALUE_HOLDS (&option->value, type))
         {
@@ -2748,7 +2781,6 @@ _set_option (DonnaConfig    *config,
                     name + 1,
                     G_VALUE_TYPE_NAME (&option->value),
                     g_type_name (type));
-            ret = FALSE;
         }
         else
             ret = TRUE;
@@ -2775,7 +2807,7 @@ _set_option (DonnaConfig    *config,
             option->extra = str_chunk (priv, extra);
 
         /* see below re: option_node for more */
-        if (po->node && ((GObject *) po->node)->ref_count > 1)
+        if (!child_node && po->node && ((GObject *) po->node)->ref_count > 1)
             parent_node = g_object_ref (po->node);
     }
 
@@ -2791,38 +2823,41 @@ _set_option (DonnaConfig    *config,
             {
                 g_prefix_error (error, "Config: Failed to set option '%s': ",
                         name + 1);
-                ret = FALSE;
                 goto done;
             }
 
             g_value_copy (value, &option->value);
         }
 
-        if (parent_node)
+        if (!child_node)
         {
-            /* if we have a parent node it means we created the option, so we
-             * should also create the node to emit node-new-child */
-            ensure_option_has_node (config, name, option);
-            /* a ref was added already for us */
-            option_node = option->node;
-        }
-        else if (option->node)
-        {
-            /* update the value w/out emitting node-updated */
-            donna_node_set_property_value_no_signal (option->node,
-                    "option-value", &option->value);
-            /* make sure we can ref the node (to emit signal) without problem.
-             * That is, if ref_count == 1 it means we're holding the only ref
-             * left, i.e. we have a toggle_ref waiting for the lock to unref the
-             * node, and trying to add a ref would deadlock */
-            if (((GObject *) option->node)->ref_count > 1)
-                option_node = g_object_ref (option->node);
+            if (parent_node)
+            {
+                /* if we have a parent node it means we created the option, so
+                 * we should also create the node to emit node-new-child */
+                ensure_option_has_node (config, name, option);
+                /* a ref was added already for us */
+                option_node = option->node;
+            }
+            else if (option->node)
+            {
+                /* update the value w/out emitting node-updated */
+                donna_node_set_property_value_no_signal (option->node,
+                        "option-value", &option->value);
+                /* make sure we can ref the node (to emit signal) without
+                 * problem.  That is, if ref_count == 1 it means we're holding
+                 * the only ref left, i.e. we have a toggle_ref waiting for the
+                 * lock to unref the node, and trying to add a ref would
+                 * deadlock */
+                if (((GObject *) option->node)->ref_count > 1)
+                    option_node = g_object_ref (option->node);
+            }
         }
 
         if (new_node)
         {
-            /* new_node is used when creation an option/category, so there's no
-             * risk of deadlock due to the node existing w/ a pending
+            /* new_node is used when creation an option/category, so there's
+             * no risk of deadlock due to the node existing w/ a pending
              * toggle_ref.
              * However, option_node might stil already have been created, if
              * parent_node existed (for node-new-child) */
@@ -2840,7 +2875,14 @@ done:
     g_rw_lock_writer_unlock (&priv->lock);
 
     /* signals after releasing the lock, to avoid any deadlocks */
-    if (ret)
+    if (child_node)
+    {
+        donna_provider_node_new_child ((DonnaProvider *) config,
+                parent_node, child_node);
+        g_object_unref (parent_node);
+        g_object_unref (child_node);
+    }
+    else if (ret)
     {
         config_option_set (config, name + 1);
         if (parent_node)
@@ -3016,6 +3058,8 @@ donna_config_rename_option (DonnaConfig            *config,
 {
     DonnaProviderConfigPrivate *priv;
     struct option *option;
+    DonnaNode *parent_node = NULL;
+    DonnaNode *child_node  = NULL;
     DonnaNode *option_node = NULL;
     gchar *new_location;
     GNode *node;
@@ -3023,6 +3067,7 @@ donna_config_rename_option (DonnaConfig            *config,
     const gchar *s;
     gchar *name;
     va_list va_arg;
+    gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (new_name != NULL, FALSE);
@@ -3046,7 +3091,8 @@ donna_config_rename_option (DonnaConfig            *config,
     s = strrchr ((*name == '/') ? name + 1 : name, '/');
     if (s)
     {
-        parent = ensure_categories (config, name, s - name);
+        parent = ensure_categories (config, name, s - name,
+                &parent_node, &child_node);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -3055,7 +3101,7 @@ donna_config_rename_option (DonnaConfig            *config,
                     "Config: Parent of option '%s' not found",
                     (*name == '/') ? name + 1 : name);
             g_free (name);
-            return FALSE;
+            goto done;
         }
         ++s;
     }
@@ -3075,7 +3121,7 @@ donna_config_rename_option (DonnaConfig            *config,
                 "Config: Cannot rename option '%s': Doesn't exist",
                 (*name == '/') ? name + 1 : name);
         g_free (name);
-        return FALSE;
+        goto done;
     }
     if (option_is_category (node->data, priv->root))
     {
@@ -3085,7 +3131,7 @@ donna_config_rename_option (DonnaConfig            *config,
                 "Config: Cannot rename option '%s': It is a category",
                 (*name == '/') ? name + 1 : name);
         g_free (name);
-        return FALSE;
+        goto done;
     }
 
     /* make sure the new name is available */
@@ -3097,7 +3143,7 @@ donna_config_rename_option (DonnaConfig            *config,
                 "Config: Cannot rename option '%s' to '%s': Option already exists",
                 (*name == '/') ? name + 1 : name, new_name);
         g_free (name);
-        return FALSE;
+        goto done;
     }
 
     /* perform the rename */
@@ -3152,7 +3198,18 @@ donna_config_rename_option (DonnaConfig            *config,
         g_object_unref (option_node);
     }
 
-    return TRUE;
+    ret = TRUE;
+
+done:
+    if (child_node)
+    {
+        donna_provider_node_new_child ((DonnaProvider *) config,
+                parent_node, child_node);
+        g_object_unref (parent_node);
+        g_object_unref (child_node);
+    }
+
+    return ret;
 }
 
 struct renaming_category
@@ -3204,6 +3261,8 @@ donna_config_rename_category (DonnaConfig            *config,
     GString *str_prefix;
     const gchar *old_name;
     struct option *option;
+    DonnaNode *parent_node = NULL;
+    DonnaNode *child_node  = NULL;
     DonnaNode *option_node = NULL;
     GNode *node;
     GNode *parent;
@@ -3212,6 +3271,7 @@ donna_config_rename_category (DonnaConfig            *config,
     gchar *name;
     va_list va_arg;
     guint i;
+    gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
     g_return_val_if_fail (new_name != NULL, FALSE);
@@ -3235,7 +3295,8 @@ donna_config_rename_category (DonnaConfig            *config,
     s = strrchr ((*name == '/') ? name + 1 : name, '/');
     if (s)
     {
-        parent = ensure_categories (config, name, s - name);
+        parent = ensure_categories (config, name, s - name,
+                &parent_node, &child_node);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -3244,7 +3305,7 @@ donna_config_rename_category (DonnaConfig            *config,
                     "Config: Parent of category '%s' not found",
                     (*name == '/') ? name + 1 : name);
             g_free (name);
-            return FALSE;
+            goto done;
         }
         ++s;
     }
@@ -3264,7 +3325,7 @@ donna_config_rename_category (DonnaConfig            *config,
                 "Config: Cannot rename category '%s': Doesn't exist",
                 (*name == '/') ? name + 1 : name);
         g_free (name);
-        return FALSE;
+        goto done;
     }
     if (!option_is_category (node->data, priv->root))
     {
@@ -3274,7 +3335,7 @@ donna_config_rename_category (DonnaConfig            *config,
                 "Config: Cannot rename category '%s': It is an option",
                 (*name == '/') ? name + 1 : name);
         g_free (name);
-        return FALSE;
+        goto done;
     }
 
     /* make sure the new name is available */
@@ -3286,7 +3347,7 @@ donna_config_rename_category (DonnaConfig            *config,
                 "Config: Cannot rename category '%s' to '%s': Option already exists",
                 (*name == '/') ? name + 1 : name, new_name);
         g_free (name);
-        return FALSE;
+        goto done;
     }
 
     /* perform the rename */
@@ -3418,7 +3479,17 @@ skip:
     }
 
     g_string_free (str_prefix, TRUE);
-    return TRUE;
+    ret = TRUE;
+
+done:
+    if (child_node)
+    {
+        donna_provider_node_new_child ((DonnaProvider *) config,
+                parent_node, child_node);
+        g_object_unref (parent_node);
+        g_object_unref (child_node);
+    }
+    return ret;
 }
 
 static gboolean
@@ -3428,11 +3499,14 @@ _remove_option (DonnaProviderConfig *config,
                 gboolean             category)
 {
     DonnaProviderConfigPrivate *priv;
+    DonnaNode *parent_node = NULL;
+    DonnaNode *child_node  = NULL;
     GNode *parent;
     GNode *node;
     const gchar *s;
     struct removing_data data;
     guint i;
+    gboolean ret = FALSE;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
 
@@ -3441,7 +3515,8 @@ _remove_option (DonnaProviderConfig *config,
     s = strrchr (name, '/');
     if (s)
     {
-        parent = ensure_categories (config, name, s - name);
+        parent = ensure_categories (config, name, s - name,
+                &parent_node, &child_node);
         if (!parent)
         {
             g_rw_lock_writer_unlock (&priv->lock);
@@ -3450,7 +3525,7 @@ _remove_option (DonnaProviderConfig *config,
                     "Config: Cannot remove '%s': %s not found",
                     name,
                     (category) ? "category" : "option");
-            return FALSE;
+            goto done;
         }
         ++s;
     }
@@ -3468,7 +3543,7 @@ _remove_option (DonnaProviderConfig *config,
                 "Config: Cannot remove '%s': %s not found",
                 name,
                 (category) ? "category" : "option");
-        return FALSE;
+        goto done;
     }
     if ((!category && option_is_category (node->data, priv->root))
             || (category && !option_is_category (node->data, priv->root)))
@@ -3480,7 +3555,7 @@ _remove_option (DonnaProviderConfig *config,
                 ? "Config: Cannot remove '%s': Not a category"
                 : "Config: Cannot remove '%s': Not an option",
                 name);
-        return FALSE;
+        goto done;
     }
 
     /* actually remove the nodes/options */
@@ -3502,8 +3577,17 @@ _remove_option (DonnaProviderConfig *config,
         donna_provider_node_deleted (DONNA_PROVIDER (config),
                 data.nodes->pdata[i]);
     g_ptr_array_free (data.nodes, TRUE);
+    ret = TRUE;
 
-    return TRUE;
+done:
+    if (child_node)
+    {
+        donna_provider_node_new_child ((DonnaProvider *) config,
+                parent_node, child_node);
+        g_object_unref (parent_node);
+        g_object_unref (child_node);
+    }
+    return ret;
 }
 
 #define __remove_option(is_category)    do {                    \
