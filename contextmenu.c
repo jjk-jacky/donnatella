@@ -1487,7 +1487,7 @@ parse_items (DonnaApp               *app,
                     /* we do the parsing, but ignore intrefs since the trigger is
                      * just a string property, so they'll be cleaned via GC */
                     info.trigger = donna_app_parse_fl (app,
-                            (info.free_trigger) ? g_strdup (info.trigger) : info.trigger,
+                            (!info.free_trigger) ? g_strdup (info.trigger) : info.trigger,
                             conv_flags, conv_fn, conv_data, NULL);
 
                     g_value_init (&v, G_TYPE_STRING);
