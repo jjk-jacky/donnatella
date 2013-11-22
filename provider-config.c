@@ -2778,21 +2778,25 @@ _set_option (DonnaConfig    *config,
             parent_node = g_object_ref (po->node);
     }
 
-    if (ret && type != G_TYPE_INVALID)
+    if (ret)
     {
-        /* if extra is non NULL then we assume the check of value was done prior
-         * to calling is. And since we know this is an option, so option->extra
-         * can't be priv->root (for categories) */
-        if (!extra && option->extra
-                && !is_value_valid_for_extra (config, option->extra, value, error))
+        if (type != G_TYPE_INVALID)
         {
-            g_prefix_error (error, "Config: Failed to set option '%s': ",
-                    name + 1);
-            ret = FALSE;
-            goto done;
+            /* if extra is non NULL then we assume the check of value was done
+             * prior to calling is. And since we know this is an option, so
+             * option->extra can't be priv->root (for categories) */
+            if (!extra && option->extra
+                    && !is_value_valid_for_extra (config, option->extra, value, error))
+            {
+                g_prefix_error (error, "Config: Failed to set option '%s': ",
+                        name + 1);
+                ret = FALSE;
+                goto done;
+            }
+
+            g_value_copy (value, &option->value);
         }
 
-        g_value_copy (value, &option->value);
         if (parent_node)
         {
             /* if we have a parent node it means we created the option, so we
