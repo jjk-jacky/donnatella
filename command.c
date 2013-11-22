@@ -496,6 +496,72 @@ cmd_config_new_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_config_remove_category (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+
+    if (!donna_config_remove_category (donna_app_peek_config (app), &err,
+                "%s", name))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_remove_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+
+    if (!donna_config_remove_option (donna_app_peek_config (app), &err,
+                "%s", name))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_rename_category (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    gchar *new_name = args[1];
+
+    if (!donna_config_rename_category (donna_app_peek_config (app), &err,
+                new_name, "%s", name))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_config_rename_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    gchar *new_name = args[1];
+
+    if (!donna_config_rename_option (donna_app_peek_config (app), &err,
+                new_name, "%s", name))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2789,6 +2855,28 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_new_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_remove_category, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_remove_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_rename_category, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_rename_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
