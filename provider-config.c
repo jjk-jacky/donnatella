@@ -3216,8 +3216,10 @@ done:
 struct renaming_category
 {
     GNode     *gnode;
+    gchar     *parent_name;
     GPtrArray *names;
     GPtrArray *nodes;
+    GString   *str_prefix;
 };
 
 static gboolean
@@ -3238,14 +3240,24 @@ traverse_renaming_category (GNode *node, struct renaming_category *data)
         g_string_prepend (str, ((struct option *) node->data)->name);
     }
     g_string_prepend_c (str, '/');
-    g_ptr_array_add (data->names, g_string_free (str, FALSE));
+    /* takes ownership of str->str */
+    g_ptr_array_add (data->names, str->str);
 
     if (option->node)
     {
-        /* add a ref to make sure it doesn't go aay before we sent the signal */
+        GValue v = G_VALUE_INIT;
+
+        g_value_init (&v, G_TYPE_STRING);
+        g_value_take_string (&v, g_strconcat ("/", data->str_prefix->str,
+                    data->parent_name, str->str, NULL));
+        donna_node_set_property_value_no_signal (option->node, "location", &v);
+        g_value_unset (&v);
+
+        /* add a ref to make sure it doesn't go away before we sent the signal */
         g_ptr_array_add (data->nodes, g_object_ref (option->node));
-        option->node = NULL;
     }
+
+    g_string_free (str, FALSE);
 
     /* keep iterating */
     return FALSE;
@@ -3260,7 +3272,6 @@ donna_config_rename_category (DonnaConfig            *config,
 {
     DonnaProviderConfigPrivate *priv;
     struct renaming_category data;
-    GString *str_prefix;
     const gchar *old_name;
     struct option *option;
     DonnaNode *parent_node = NULL;
@@ -3398,11 +3409,11 @@ skip:
             g_value_set_int (&op->value, num + 1);
     }
 
-    str_prefix = g_string_new (NULL);
+    data.str_prefix = g_string_new (NULL);
     for (n = node->parent; n && n != priv->root; n = n->parent)
     {
-        g_string_prepend_c (str_prefix, '/');
-        g_string_prepend (str_prefix, ((struct option *) n->data)->name);
+        g_string_prepend_c (data.str_prefix, '/');
+        g_string_prepend (data.str_prefix, ((struct option *) n->data)->name);
     }
 
     /* if there's a node, we need to update it now, but without any signals
@@ -3412,7 +3423,7 @@ skip:
         GValue v = G_VALUE_INIT;
 
         g_value_init (&v, G_TYPE_STRING);
-        g_value_take_string (&v, g_strconcat ("/", str_prefix->str, new_name, NULL));
+        g_value_take_string (&v, g_strconcat ("/", data.str_prefix->str, new_name, NULL));
         donna_node_set_property_value_no_signal (option->node, "location", &v);
         g_value_unset (&v);
 
@@ -3430,6 +3441,7 @@ skip:
     }
 
     data.gnode = node;
+    data.parent_name = option->name;
     data.names = g_ptr_array_new ();
     data.nodes = g_ptr_array_new_with_free_func (g_object_unref);
     g_node_traverse (node, G_IN_ORDER, G_TRAVERSE_ALL, -1,
@@ -3442,28 +3454,23 @@ skip:
     /* all option with the old name were deleted */
     for (i = data.names->len; i > 0; --i)
     {
-        s = g_strconcat (str_prefix->str, old_name, data.names->pdata[i - 1], NULL);
+        s = g_strconcat (data.str_prefix->str, old_name, data.names->pdata[i - 1], NULL);
         config_option_deleted (config, s);
         g_free (s);
     }
     /* as was the category itself */
-    s = g_strconcat (str_prefix->str, old_name, NULL);
+    s = g_strconcat (data.str_prefix->str, old_name, NULL);
     config_option_deleted (config, s);
     g_free (s);
 
-    /* nodes are destroyed */
-    for (i = data.nodes->len; i > 0; --i)
-        donna_provider_node_deleted ((DonnaProvider *) config, data.nodes->pdata[i - 1]);
-    g_ptr_array_free (data.nodes, TRUE);
-
     /* the new name/category was set */
-    s = g_strconcat (str_prefix->str, new_name, NULL);
+    s = g_strconcat (data.str_prefix->str, new_name, NULL);
     config_option_set (config, s);
     g_free (s);
     /* and so were every option with the new name */
     for (i = 1; i <= data.names->len; ++i)
     {
-        s = g_strconcat (str_prefix->str, new_name, data.names->pdata[i - 1], NULL);
+        s = g_strconcat (data.str_prefix->str, new_name, data.names->pdata[i - 1], NULL);
         config_option_set (config, s);
         g_free (s);
         g_free (data.names->pdata[i - 1]);
@@ -3471,6 +3478,11 @@ skip:
     g_ptr_array_free (data.names, TRUE);
 
     /* emit signals on node outside of lock */
+    for (i = data.nodes->len; i > 0; --i)
+        donna_provider_node_updated ((DonnaProvider *) config,
+                data.nodes->pdata[i - 1], "location");
+    g_ptr_array_free (data.nodes, TRUE);
+
     if (option_node)
     {
         donna_provider_node_updated ((DonnaProvider *) config, option_node,
@@ -3480,7 +3492,7 @@ skip:
         g_object_unref (option_node);
     }
 
-    g_string_free (str_prefix, TRUE);
+    g_string_free (data.str_prefix, TRUE);
     ret = TRUE;
 
 done:
