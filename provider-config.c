@@ -850,7 +850,7 @@ ensure_categories (DonnaProviderConfig *config, const gchar *name, gsize len)
                 /* create category/node */
                 struct option *option;
 
-                if (!is_valid_name_len (name, s - name, VALID_CONFIG_SECTION))
+                if (!is_valid_name_len (name, s - name, VALID_CATEGORY_NAME))
                     return NULL;
 
                 option = g_slice_new0 (struct option);
