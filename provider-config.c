@@ -2653,6 +2653,7 @@ is_value_valid_for_extra (DonnaConfig   *config,
 static gboolean
 _set_option (DonnaConfig    *config,
              GError        **error,
+             DonnaNode     **new_node,
              GType           type,
              const gchar    *extra,
              GValue         *value,
@@ -2817,6 +2818,22 @@ _set_option (DonnaConfig    *config,
             if (((GObject *) option->node)->ref_count > 1)
                 option_node = g_object_ref (option->node);
         }
+
+        if (new_node)
+        {
+            /* new_node is used when creation an option/category, so there's no
+             * risk of deadlock due to the node existing w/ a pending
+             * toggle_ref.
+             * However, option_node might stil already have been created, if
+             * parent_node existed (for node-new-child) */
+            if (!option_node)
+            {
+                ensure_option_has_node (config, name, option);
+                *new_node = option->node;
+            }
+            else
+                *new_node = g_object_ref (option_node);
+        }
     }
 
 done:
@@ -2845,93 +2862,99 @@ done:
     return ret;
 }
 
-#define _set_opt(gtype, extra, over, set_fn)    do { \
-    va_list va_arg;                             \
-    GValue gvalue = G_VALUE_INIT;               \
-    gboolean ret;                               \
-                                                \
-    if (gtype != G_TYPE_INVALID)                \
-    {                                           \
-        g_value_init (&gvalue, gtype);          \
-        set_fn (&gvalue, value);                \
+#define _set_opt(gtype, extra, over, set_fn, node) do { \
+    va_list va_arg;                                     \
+    GValue gvalue = G_VALUE_INIT;                       \
+    gboolean ret;                                       \
+                                                        \
+    if (gtype != G_TYPE_INVALID)                        \
+    {                                                   \
+        g_value_init (&gvalue, gtype);                  \
+        set_fn (&gvalue, value);                        \
         if (extra && !is_value_valid_for_extra (config, \
-                    extra, &gvalue, error))     \
-        {                                       \
-            g_value_unset (&gvalue);            \
-            return FALSE;                       \
-        }                                       \
-    }                                           \
-    va_start (va_arg, fmt);                     \
-    ret = _set_option (config, error, gtype,    \
-            extra, &gvalue, over, fmt, va_arg); \
-    if (gtype != G_TYPE_INVALID)                \
-        g_value_unset (&gvalue);                \
-    va_end (va_arg);                            \
-    return ret;                                 \
+                    extra, &gvalue, error))             \
+        {                                               \
+            g_value_unset (&gvalue);                    \
+            return FALSE;                               \
+        }                                               \
+    }                                                   \
+    va_start (va_arg, fmt);                             \
+    ret = _set_option (config, error, node, gtype,      \
+            extra, &gvalue, over, fmt, va_arg);         \
+    if (gtype != G_TYPE_INVALID)                        \
+        g_value_unset (&gvalue);                        \
+    va_end (va_arg);                                    \
+    return ret;                                         \
 } while (0)
 
 gboolean
 donna_config_new_boolean (DonnaConfig            *config,
                           GError                **error,
+                          DonnaNode             **new_node,
                           gboolean                value,
                           const gchar            *fmt,
                           ...)
 
 {
-    _set_opt (G_TYPE_BOOLEAN, NULL, FALSE, g_value_set_boolean);
+    _set_opt (G_TYPE_BOOLEAN, NULL, FALSE, g_value_set_boolean, new_node);
 }
 
 gboolean
 donna_config_new_int (DonnaConfig            *config,
                       GError                **error,
+                      DonnaNode             **new_node,
                       const gchar            *extra,
                       gint                    value,
                       const gchar            *fmt,
                       ...)
 {
-    _set_opt (G_TYPE_INT, extra, FALSE, g_value_set_int);
+    _set_opt (G_TYPE_INT, extra, FALSE, g_value_set_int, new_node);
 }
 
 gboolean
 donna_config_new_double (DonnaConfig            *config,
                          GError                **error,
+                         DonnaNode             **new_node,
                          gdouble                 value,
                          const gchar            *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_DOUBLE, NULL, FALSE, g_value_set_double);
+    _set_opt (G_TYPE_DOUBLE, NULL, FALSE, g_value_set_double, new_node);
 }
 
 gboolean
 donna_config_new_string (DonnaConfig            *config,
                          GError                **error,
+                         DonnaNode             **new_node,
                          const gchar            *extra,
                          const gchar            *value,
                          const gchar            *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_STRING, extra, FALSE, g_value_set_string);
+    _set_opt (G_TYPE_STRING, extra, FALSE, g_value_set_string, new_node);
 }
 
 gboolean
 donna_config_new_string_take (DonnaConfig            *config,
                               GError                **error,
+                              DonnaNode             **new_node,
                               const gchar            *extra,
                               gchar                  *value,
                               const gchar            *fmt,
                               ...)
 {
-    _set_opt (G_TYPE_STRING, extra, FALSE, g_value_take_string);
+    _set_opt (G_TYPE_STRING, extra, FALSE, g_value_take_string, new_node);
 }
 
 gboolean
 donna_config_new_category (DonnaConfig            *config,
                            GError                **error,
+                           DonnaNode             **new_node,
                            const gchar            *fmt,
                            ...)
 {
     gint value; /* unused, for the the macro to work */
-    _set_opt (G_TYPE_INVALID, NULL, FALSE, g_value_set_int);
+    _set_opt (G_TYPE_INVALID, NULL, FALSE, g_value_set_int, new_node);
 }
 
 gboolean
@@ -2941,7 +2964,7 @@ donna_config_set_boolean (DonnaConfig   *config,
                           const gchar   *fmt,
                           ...)
 {
-    _set_opt (G_TYPE_BOOLEAN, NULL, TRUE, g_value_set_boolean);
+    _set_opt (G_TYPE_BOOLEAN, NULL, TRUE, g_value_set_boolean, NULL);
 }
 
 gboolean
@@ -2951,7 +2974,7 @@ donna_config_set_int (DonnaConfig   *config,
                       const gchar   *fmt,
                       ...)
 {
-    _set_opt (G_TYPE_INT, NULL, TRUE, g_value_set_int);
+    _set_opt (G_TYPE_INT, NULL, TRUE, g_value_set_int, NULL);
 }
 
 gboolean
@@ -2961,7 +2984,7 @@ donna_config_set_double (DonnaConfig    *config,
                          const gchar    *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_DOUBLE, NULL, TRUE, g_value_set_double);
+    _set_opt (G_TYPE_DOUBLE, NULL, TRUE, g_value_set_double, NULL);
 }
 
 gboolean
@@ -2971,7 +2994,7 @@ donna_config_set_string (DonnaConfig         *config,
                          const gchar         *fmt,
                          ...)
 {
-    _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_set_string);
+    _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_set_string, NULL);
 }
 
 gboolean
@@ -2981,7 +3004,7 @@ donna_config_take_string (DonnaConfig        *config,
                           const gchar        *fmt,
                           ...)
 {
-    _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_take_string);
+    _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_take_string, NULL);
 }
 
 gboolean

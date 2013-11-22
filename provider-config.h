@@ -2,6 +2,8 @@
 #ifndef __DONNA_PROVIDER_CONFIG_H__
 #define __DONNA_PROVIDER_CONFIG_H__
 
+#include "common.h"
+
 typedef struct _DonnaArrangement    DonnaArrangement;
 typedef struct _DonnaApp            DonnaApp;
 
@@ -256,34 +258,40 @@ gboolean    donna_config_arr_load_color_filters (DonnaConfig            *config,
                                                  ...);
 gboolean    donna_config_new_boolean            (DonnaConfig            *config,
                                                  GError                **error,
+                                                 DonnaNode             **new_node,
                                                  gboolean                value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_new_int                (DonnaConfig            *config,
                                                  GError                **error,
+                                                 DonnaNode             **new_node,
                                                  const gchar            *extra,
                                                  gint                    value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_new_double             (DonnaConfig            *config,
                                                  GError                **error,
+                                                 DonnaNode             **new_node,
                                                  gdouble                 value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_new_string             (DonnaConfig            *config,
                                                  GError                **error,
+                                                 DonnaNode             **new_node,
                                                  const gchar            *extra,
                                                  const gchar            *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_new_string_take        (DonnaConfig            *config,
                                                  GError                **error,
+                                                 DonnaNode             **new_node,
                                                  const gchar            *extra,
                                                  gchar                  *value,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_new_category           (DonnaConfig            *config,
                                                  GError                **error,
+                                                 DonnaNode             **new_node,
                                                  const gchar            *fmt,
                                                  ...);
 gboolean    donna_config_set_boolean            (DonnaConfig            *config,
