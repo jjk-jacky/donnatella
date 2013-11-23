@@ -363,6 +363,74 @@ str_chunk_len (DonnaProviderConfigPrivate   *priv,
     return s;
 }
 
+enum valid
+{
+    VALID_CONFIG_SECTION = 1,
+    VALID_CONFIG_OPTION,
+    VALID_CATEGORY_NAME,
+    VALID_OPTION_NAME,
+    VALID_EXTRA_NAME
+};
+
+static gboolean
+is_valid_name_len (const gchar *name, gsize len, enum valid valid)
+{
+    gboolean is_first  = TRUE;
+    gboolean got_colon = valid == VALID_EXTRA_NAME;
+    gboolean is_number = FALSE;
+
+    g_return_val_if_fail (valid == VALID_CONFIG_SECTION
+            || valid == VALID_CONFIG_OPTION || valid == VALID_CATEGORY_NAME
+            || valid == VALID_OPTION_NAME || valid == VALID_EXTRA_NAME, FALSE);
+
+    for ( ; *name != '\0' && len != 0; ++name, --len)
+    {
+        if (is_number && !(*name >= '0' && *name <= '9'))
+            return FALSE;
+
+        if (*name >= 'a' && *name <= 'z')
+        {
+            is_first = FALSE;
+            continue;
+        }
+        else if (is_first)
+        {
+            if (valid == VALID_CATEGORY_NAME && *name >= '1' && *name <= '9')
+            {
+                is_first  = FALSE;
+                is_number = TRUE;
+                continue;
+            }
+            return FALSE;
+        }
+
+        if ((*name >= 'A' && *name <= 'Z') || (*name >= '0' && *name <= '9')
+                || *name == '-' || *name == '_' || (!got_colon && *name == ' '))
+            continue;
+
+        if (valid == VALID_CONFIG_SECTION)
+        {
+            if (*name == '/')
+                continue;
+        }
+        else if (valid == VALID_CONFIG_OPTION)
+        {
+            /* option name can have a colon and then the type */
+            if (!got_colon && *name == ':')
+            {
+                got_colon = TRUE;
+                continue;
+            }
+        }
+
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+#define is_valid_name(name, valid)  is_valid_name_len (name, -1, valid)
+
 gboolean
 donna_config_add_extra (DonnaConfig          *config,
                         DonnaConfigExtraType  type,
@@ -389,12 +457,11 @@ donna_config_add_extra (DonnaConfig          *config,
     g_return_val_if_fail (items != NULL, FALSE);
     priv = config->priv;
 
-    if (G_UNLIKELY (streq (name, "int") || streq (name, "boolean")
-                || streq (name, "string") || streq (name, "double")))
+    if (G_UNLIKELY (!is_valid_name (name, VALID_EXTRA_NAME)))
     {
         g_set_error (error, DONNA_CONFIG_ERROR,
                 DONNA_CONFIG_ERROR_ALREADY_EXISTS,
-                "Config: Cannot add extra '%s': Reserved name",
+                "Config: Cannot add extra '%s': Invalid name",
                 name);
         return FALSE;
     }
@@ -523,73 +590,6 @@ trim_line (gchar **line)
     for ( ; isblank (**line); ++*line)
         ;
 }
-
-enum valid
-{
-    VALID_CONFIG_SECTION = 1,
-    VALID_CONFIG_OPTION,
-    VALID_CATEGORY_NAME,
-    VALID_OPTION_NAME
-};
-
-static gboolean
-is_valid_name_len (const gchar *name, gsize len, enum valid valid)
-{
-    gboolean is_first  = TRUE;
-    gboolean got_colon = FALSE;
-    gboolean is_number = FALSE;
-
-    g_return_val_if_fail (valid == VALID_CONFIG_SECTION
-            || valid == VALID_CONFIG_OPTION || valid == VALID_CATEGORY_NAME
-            || valid == VALID_OPTION_NAME, FALSE);
-
-    for ( ; *name != '\0' && len != 0; ++name, --len)
-    {
-        if (is_number && !(*name >= '0' && *name <= '9'))
-            return FALSE;
-
-        if (*name >= 'a' && *name <= 'z')
-        {
-            is_first = FALSE;
-            continue;
-        }
-        else if (is_first)
-        {
-            if (valid == VALID_CATEGORY_NAME && *name >= '1' && *name <= '9')
-            {
-                is_first  = FALSE;
-                is_number = TRUE;
-                continue;
-            }
-            return FALSE;
-        }
-
-        if ((*name >= 'A' && *name <= 'Z') || (*name >= '0' && *name <= '9')
-                || *name == '-' || *name == '_' || *name == ' ')
-            continue;
-
-        if (valid == VALID_CONFIG_SECTION)
-        {
-            if (*name == '/')
-                continue;
-        }
-        else if (valid == VALID_CONFIG_OPTION)
-        {
-            /* option name can have a colon and then the type */
-            if (!got_colon && *name == ':')
-            {
-                got_colon = TRUE;
-                continue;
-            }
-        }
-
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
-#define is_valid_name(name, valid)  is_valid_name_len (name, -1, valid)
 
 static struct parsed_data *
 parse_data (gchar **_data)
