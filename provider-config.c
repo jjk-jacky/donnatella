@@ -2695,6 +2695,52 @@ is_value_valid_for_extra (DonnaConfig   *config,
     return TRUE;
 }
 
+static void
+move_numbered_category (GNode *root, GNode *node)
+{
+    GNode *parent = node->parent;
+    struct option *op = parent->data;
+    struct option *option = node->data;
+    GNode *n;
+    gint index;
+    gint num;
+
+    /* internal stuff: there's a rule about how options (GNode-s) are stored in
+     * the config, specifically for "numbered categories" : they must be in
+     * order. There's also the fact hat the parent category has an index of the
+     * next available number */
+
+    num = g_ascii_strtoll (option->name, NULL, 10);
+    index = g_value_get_int (&op->value);
+
+    /* is this the first numbered category? */
+    if (index == 1)
+        goto skip;
+
+    /* "remove" the node from the tree */
+    g_node_unlink (node);
+    /* and find the first numbered category with a higher number */
+    for (n = parent->children; n; n = n->next)
+    {
+        struct option *o = n->data;
+        gint idx;
+
+        /* skip options & "regular" categories */
+        if (!option_is_category (o, root)
+                || *o->name < '1' || *o->name > '9')
+            continue;
+
+        idx = g_ascii_strtoll (o->name, NULL, 10);
+        if (idx > num)
+            break;
+    }
+    /* re-insert node before, or as last children if none found */
+    g_node_insert_before (parent, n, node);
+skip:
+    if (num >= index)
+        g_value_set_int (&op->value, num + 1);
+}
+
 static gboolean
 _set_option (DonnaConfig    *config,
              GError        **error,
@@ -2810,11 +2856,16 @@ _set_option (DonnaConfig    *config,
         }
         else
             g_value_init (&option->value, type);
-        g_node_append_data (parent, option);
+
+        node = g_node_append_data (parent, option);
         ret = TRUE;
 
         if (extra)
             option->extra = str_chunk (priv, extra);
+
+        /* numbered category special handling */
+        if (type == G_TYPE_INVALID && *s >= '1' && *s <= '9')
+            move_numbered_category (priv->root, node);
 
         /* see below re: option_node for more */
         if (!child_node && po->node && ((GObject *) po->node)->ref_count > 1)
@@ -3377,46 +3428,9 @@ donna_config_rename_category (DonnaConfig            *config,
     old_name = option->name;
     option->name = str_chunk (priv, new_name);
 
-    /* internal stuff: there's a rule about how options (GNode-s) are stored in
-     * the config, specifically for "numbered categories" : they must be in
-     * order. There's also the fact hat the parent category has an index of the
-     * next available number */
+    /* numbered category special handling */
     if (*new_name >= '1' && *new_name <= '9')
-    {
-        struct option *op = parent->data;
-        gint index;
-        gint num;
-
-        num = g_ascii_strtoll (new_name, NULL, 10);
-        index = g_value_get_int (&op->value);
-
-        /* is this the first numbered category? */
-        if (index == 1)
-            goto skip;
-
-        /* "remove" the node from the tree */
-        g_node_unlink (node);
-        /* and find the first numbered category with a higher number */
-        for (n = parent->children; n; n = n->next)
-        {
-            struct option *o = n->data;
-            gint idx;
-
-            /* skip options & "regular" categories */
-            if (!option_is_category (o, priv->root)
-                    || *o->name < '1' || *o->name > '9')
-                continue;
-
-            idx = g_ascii_strtoll (o->name, NULL, 10);
-            if (idx > num)
-                break;
-        }
-        /* re-insert node before, or as last children if none found */
-        g_node_insert_before (parent, n, node);
-skip:
-        if (num >= index)
-            g_value_set_int (&op->value, num + 1);
-    }
+        move_numbered_category (priv->root, node);
 
     data.str_prefix = g_string_new (NULL);
     for (n = node->parent; n && n != priv->root; n = n->parent)
