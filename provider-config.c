@@ -2830,14 +2830,15 @@ _set_option (DonnaConfig    *config,
                     "Config: Option '%s' is a category",
                     name + 1);
         }
-        else if (!G_VALUE_HOLDS (&option->value, type))
+        else if (!G_VALUE_HOLDS (&option->value, type)
+                || (extra && !streq (extra, option->extra)))
         {
             g_set_error (error, DONNA_CONFIG_ERROR,
                     DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
                     "Config: Option '%s' is of type '%s' (expected '%s')",
                     name + 1,
-                    G_VALUE_TYPE_NAME (&option->value),
-                    g_type_name (type));
+                    (option->extra) ? option->extra : G_VALUE_TYPE_NAME (&option->value),
+                    (extra) ? extra : g_type_name (type));
         }
         else
             ret = TRUE;
