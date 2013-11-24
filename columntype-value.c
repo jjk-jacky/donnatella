@@ -663,16 +663,17 @@ ct_value_edit (DonnaColumnType    *ct,
             gtk_box_pack_start (box, w, 0, 0, FALSE);
             box = (GtkBox *) w;
 
-            w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
-            g_object_set (gtk_button_get_image ((GtkButton *) w),
-                    "icon-size", GTK_ICON_SIZE_MENU, NULL);
+            w = gtk_button_new_with_label ("Apply");
+            gtk_button_set_image ((GtkButton *) w,
+                    gtk_image_new_from_icon_name ("gtk-apply", GTK_ICON_SIZE_MENU));
+            g_signal_connect (w, "clicked", (GCallback) apply_cb, ed);
+            gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+            w = gtk_button_new_with_label ("Cancel");
+            gtk_button_set_image ((GtkButton *) w,
+                    gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
             g_signal_connect_swapped (w, "clicked",
                     (GCallback) gtk_widget_destroy, win);
-            gtk_box_pack_end (box, w, FALSE, FALSE, 3);
-            w = gtk_button_new_from_stock (GTK_STOCK_APPLY);
-            g_object_set (gtk_button_get_image ((GtkButton *) w),
-                    "icon-size", GTK_ICON_SIZE_MENU, NULL);
-            g_signal_connect (w, "clicked", (GCallback) apply_cb, ed);
             gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
             gtk_widget_show_all (ed->window);
