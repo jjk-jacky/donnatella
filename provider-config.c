@@ -134,6 +134,22 @@ static DonnaTask *      provider_config_io_task (
                                             DonnaNode           *dest,
                                             const gchar         *new_name,
                                             GError             **error);
+static gchar *          provider_config_get_context_alias_new_nodes (
+                                            DonnaProvider      *provider,
+                                            const gchar        *extra,
+                                            DonnaNode          *location,
+                                            const gchar        *prefix,
+                                            GError            **error);
+static gboolean         provider_config_get_context_item_info (
+                                            DonnaProvider      *provider,
+                                            const gchar        *item,
+                                            const gchar        *extra,
+                                            DonnaContextReference reference,
+                                            DonnaNode          *node_ref,
+                                            get_sel_fn          get_sel,
+                                            gpointer            get_sel_data,
+                                            DonnaContextInfo   *info,
+                                            GError            **error);
 
 
 static gchar *get_option_full_name (GNode *root, GNode *gnode);
@@ -153,6 +169,8 @@ provider_config_provider_init (DonnaProviderInterface *interface)
     interface->get_node_children_task = provider_config_get_node_children_task;
     interface->trigger_node_task      = provider_config_trigger_node_task;
     interface->io_task                = provider_config_io_task;
+    interface->get_context_alias_new_nodes  = provider_config_get_context_alias_new_nodes;
+    interface->get_context_item_info        = provider_config_get_context_item_info;
 }
 
 static void
@@ -5076,4 +5094,193 @@ provider_config_trigger_node_task (DonnaProvider       *provider,
     g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
             "Options cannot be triggered -- What would it even do?");
     return NULL;
+}
+
+struct cmp_extra
+{
+    const gchar *name;
+    const gchar *title;
+    gboolean is_int;
+};
+
+static gint
+cmp_extra (struct cmp_extra **extra1, struct cmp_extra **extra2)
+{
+    return strcmp ((*extra1)->title, (*extra2)->title);
+}
+
+static gchar *
+provider_config_get_context_alias_new_nodes (DonnaProvider      *provider,
+                                             const gchar        *extra,
+                                             DonnaNode          *location,
+                                             const gchar        *prefix,
+                                             GError            **error)
+{
+    DonnaProviderConfigPrivate *priv = ((DonnaProviderConfig *) provider)->priv;
+    GString *str;
+    GHashTableIter iter;
+    const gchar *name;
+    DonnaConfigExtra *_e;
+    GPtrArray *arr;
+    guint i;
+
+    str = g_string_new (NULL);
+    donna_g_string_append_concat (str,
+            prefix, "new_category,",
+            prefix, "new_string<",
+                prefix, "new_boolean,",
+                prefix, "new_int,",
+                prefix, "new_string,-,",
+            NULL);
+
+    arr = g_ptr_array_new_with_free_func (g_free);
+
+    g_rw_lock_reader_lock (&priv->lock);
+    g_hash_table_iter_init (&iter, priv->extras);
+    while (g_hash_table_iter_next (&iter, (gpointer) &name, (gpointer) &_e))
+    {
+        struct cmp_extra *cmp;
+
+        cmp = g_new (struct cmp_extra, 1);
+        cmp->name   = name;
+        cmp->title  = _e->any.title;
+        cmp->is_int = _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT
+            || _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS;
+        g_ptr_array_add (arr, cmp);
+    }
+
+    g_ptr_array_sort (arr, (GCompareFunc) cmp_extra);
+    for (i = 0; i < arr->len; ++i)
+    {
+        struct cmp_extra *cmp = arr->pdata[i];
+
+        if (cmp->is_int)
+            donna_g_string_append_concat (str, prefix, "new_int:", cmp->name, NULL);
+        else
+            donna_g_string_append_concat (str, prefix, "new_string:", cmp->name, NULL);
+        g_string_append_c (str, ',');
+    }
+    g_rw_lock_reader_unlock (&priv->lock);
+
+    /* remove trailing ',' */
+    g_string_truncate (str, str->len - 1);
+
+    g_ptr_array_free (arr, TRUE);
+    return g_string_free (str, FALSE);
+}
+
+static gboolean
+provider_config_get_context_item_info (DonnaProvider      *provider,
+                                       const gchar        *item,
+                                       const gchar        *extra,
+                                       DonnaContextReference reference,
+                                       DonnaNode          *node_ref,
+                                       get_sel_fn          get_sel,
+                                       gpointer            get_sel_data,
+                                       DonnaContextInfo   *info,
+                                       GError            **error)
+{
+    DonnaProviderConfigPrivate *priv = ((DonnaProviderConfig *) provider)->priv;
+    DonnaConfigExtra *_e;
+
+    if (streq (item, "new_category"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->name = "New Category";
+        info->icon_name = "folder-new";
+        info->trigger = "command:tree_goto_line (%o, f+s, "
+            "@config_set_option ("
+            "@node_get_property (@tree_get_location (%o), location),"
+            ":category,,,1,1))";
+        return TRUE;
+    }
+    else if (streq (item, "new_boolean"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->name = "New Boolean Option";
+        info->icon_name = "document-new";
+        info->trigger = "command:tree_goto_line (%o, f+s, "
+            "@config_set_option ("
+            "@node_get_property (@tree_get_location (%o), location),"
+            ":boolean,,,1,1))";
+        return TRUE;
+    }
+    else if (streq (item, "new_int"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->icon_name = "document-new";
+        if (extra)
+        {
+            g_rw_lock_reader_lock (&priv->lock);
+            _e = g_hash_table_lookup (priv->extras, extra);
+            g_rw_lock_reader_unlock (&priv->lock);
+            if (!_e || !(_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT
+                        || _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS))
+            {
+                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                        DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                        "Provider 'config': Invalid extra '%s' for item '%s'",
+                        extra, item);
+                return FALSE;
+            }
+            info->name = g_strconcat ("New '", _e->any.title, "' Option", NULL);
+            info->free_name = TRUE;
+            info->trigger = g_strconcat ("command:tree_goto_line (%o, f+s, "
+                    "@config_set_option ("
+                    "@node_get_property (@tree_get_location (%o), location),",
+                    extra, ",,,1,1))", NULL);
+            info->free_trigger = TRUE;
+        }
+        else
+        {
+            info->name = "New Integer Option";
+            info->trigger = "command:tree_goto_line (%o, f+s, "
+                "@config_set_option ("
+                "@node_get_property (@tree_get_location (%o), location),"
+                ":int,,,1,1))";
+        }
+
+        return TRUE;
+    }
+    else if (streq (item, "new_string"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->icon_name = "document-new";
+        if (extra)
+        {
+            g_rw_lock_reader_lock (&priv->lock);
+            _e = g_hash_table_lookup (priv->extras, extra);
+            g_rw_lock_reader_unlock (&priv->lock);
+            if (!_e || _e->any.type != DONNA_CONFIG_EXTRA_TYPE_LIST)
+            {
+                g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                        DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                        "Provider 'config': Invalid extra '%s' for item '%s'",
+                        extra, item);
+                return FALSE;
+            }
+            info->name = g_strconcat ("New '", _e->any.title, "' Option", NULL);
+            info->free_name = TRUE;
+            info->trigger = g_strconcat ("command:tree_goto_line (%o, f+s, "
+                    "@config_set_option ("
+                    "@node_get_property (@tree_get_location (%o), location),",
+                    extra, ",,,1,1))", NULL);
+            info->free_trigger = TRUE;
+        }
+        else
+        {
+            info->name = "New String Option";
+            info->trigger = "command:tree_goto_line (%o, f+s, "
+                "@config_set_option ("
+                "@node_get_property (@tree_get_location (%o), location),"
+                ":string,,,1,1))";
+        }
+
+        return TRUE;
+    }
+
+    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+            DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+            "Provider 'config': No such context item: '%s'", item);
+    return FALSE;
 }
