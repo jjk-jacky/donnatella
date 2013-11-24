@@ -383,6 +383,9 @@ is_valid_name_len (const gchar *name, gsize len, enum valid valid)
             || valid == VALID_CONFIG_OPTION || valid == VALID_CATEGORY_NAME
             || valid == VALID_OPTION_NAME || valid == VALID_EXTRA_NAME, FALSE);
 
+    if (*name == '\0')
+        return FALSE;
+
     for ( ; *name != '\0' && len != 0; ++name, --len)
     {
         if (is_number && !(*name >= '0' && *name <= '9'))
