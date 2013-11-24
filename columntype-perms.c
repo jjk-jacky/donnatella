@@ -519,6 +519,9 @@ struct editing_data
     GtkComboBox     *box_g;
     GtkButton       *btn_set;
     GtkToggleButton *set_perms;
+    gulong           sid_spn_u;
+    gulong           sid_spn_g;
+    gulong           sid_spn_o;
     /* struct box_changed */
     GtkToggleButton *set_uid;
     gulong           sid_uid;
@@ -542,6 +545,15 @@ spin_cb (GtkSpinButton *spin, GtkToggleButton *tgl[])
     gtk_toggle_button_set_active (tgl[0], c & 4);
     gtk_toggle_button_set_active (tgl[1], c & 2);
     gtk_toggle_button_set_active (tgl[2], c & 1);
+}
+
+static void
+perms_cb (struct editing_data *ed)
+{
+    g_signal_handler_disconnect (ed->spn_u, ed->sid_spn_u);
+    g_signal_handler_disconnect (ed->spn_g, ed->sid_spn_g);
+    g_signal_handler_disconnect (ed->spn_o, ed->sid_spn_o);
+    gtk_toggle_button_set_active (ed->set_perms, TRUE);
 }
 
 static void
@@ -987,6 +999,13 @@ ct_perms_edit (DonnaColumnType    *ct,
             (GCallback) spin_cb, &ed->tgl_g);
     g_signal_connect (ed->spn_o, "value-changed",
             (GCallback) spin_cb, &ed->tgl_o);
+
+    ed->sid_spn_u = g_signal_connect_swapped (ed->spn_u, "value-changed",
+            (GCallback) perms_cb, ed);
+    ed->sid_spn_g = g_signal_connect_swapped (ed->spn_g, "value-changed",
+            (GCallback) perms_cb, ed);
+    ed->sid_spn_o = g_signal_connect_swapped (ed->spn_o, "value-changed",
+            (GCallback) perms_cb, ed);
 
     g_object_set_data ((GObject *) ed->tgl_u[0], "perm", GINT_TO_POINTER (4));
     g_signal_connect (ed->tgl_u[0], "toggled",
