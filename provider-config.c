@@ -2743,15 +2743,15 @@ skip:
 }
 
 static gboolean
-_set_option (DonnaConfig    *config,
-             GError        **error,
-             DonnaNode     **new_node,
-             GType           type,
-             const gchar    *extra,
-             GValue         *value,
-             gboolean        allow_overwrite,
-             const gchar    *fmt,
-             va_list         va_arg)
+_set_option_va (DonnaConfig    *config,
+               GError        **error,
+               DonnaNode     **new_node,
+               GType           type,
+               const gchar    *extra,
+               GValue         *value,
+               gboolean        allow_overwrite,
+               const gchar    *fmt,
+               va_list         va_arg)
 {
     DonnaProviderConfigPrivate *priv;
     GNode *parent;
@@ -2967,6 +2967,27 @@ done:
     return ret;
 }
 
+static gboolean
+_set_option (DonnaConfig    *config,
+             GError        **error,
+             DonnaNode     **new_node,
+             GType           type,
+             const gchar    *extra,
+             GValue         *value,
+             gboolean        allow_overwrite,
+             const gchar    *fmt,
+             ...)
+{
+    va_list va_args;
+    gboolean ret;
+
+    va_start (va_args, fmt);
+    ret = _set_option_va (config, error, new_node, type, extra, value,
+            allow_overwrite, fmt, va_args);
+    va_end (va_args);
+    return ret;
+}
+
 #define _set_opt(gtype, extra, over, set_fn, node) do { \
     va_list va_arg;                                     \
     GValue gvalue = G_VALUE_INIT;                       \
@@ -2984,7 +3005,7 @@ done:
         }                                               \
     }                                                   \
     va_start (va_arg, fmt);                             \
-    ret = _set_option (config, error, node, gtype,      \
+    ret = _set_option_va (config, error, node, gtype,   \
             extra, &gvalue, over, fmt, va_arg);         \
     if (gtype != G_TYPE_INVALID)                        \
         g_value_unset (&gvalue);                        \
