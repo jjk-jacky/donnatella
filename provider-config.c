@@ -923,13 +923,14 @@ next:
 }
 
 static gboolean
-add_flag_value (DonnaConfigExtra *extra, gchar *str, gint *val)
+add_flag_value (DonnaConfigExtra *extra, const gchar *str, gsize len, gint *val)
 {
     DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
     gint i;
 
     for (i = 0; i < e->nb_items; ++i)
-        if (streq (str, e->items[i].in_file))
+        if (streqn (str, e->items[i].in_file, len)
+                && (str[len] == '\0' || str[len] == ','))
         {
             *val += e->items[i].value;
             return TRUE;
@@ -938,7 +939,7 @@ add_flag_value (DonnaConfigExtra *extra, gchar *str, gint *val)
 }
 
 static gboolean
-get_extra_value (DonnaConfigExtra *extra, gchar *str, gpointer value)
+get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value)
 {
     gint i;
 
@@ -968,23 +969,20 @@ get_extra_value (DonnaConfigExtra *extra, gchar *str, gpointer value)
     {
         gint val = 0;
         gchar *s;
+        gsize len;
 
         for (;;)
         {
             s = strchr (str, ',');
             if (s)
-                *s = '\0';
-            if (!add_flag_value (extra, str, &val))
-            {
-                if (s)
-                    *s = ',';
+                len = s - str;
+            else
+                len = strlen (str);
+            if (!add_flag_value (extra, str, len, &val))
                 return FALSE;
-            }
+
             if (s)
-            {
-                *s = ',';
                 str = s + 1;
-            }
             else
                 break;
         }
