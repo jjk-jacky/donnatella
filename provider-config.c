@@ -3133,6 +3133,789 @@ donna_config_take_string (DonnaConfig        *config,
     _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_take_string, NULL);
 }
 
+struct extra
+{
+    const gchar *name;
+    DonnaConfigExtra *extra;
+};
+
+enum
+{
+    SO_INIT,
+    SO_INIT_WITH_DEFAULT_VALUE,
+    SO_RUNNING,
+    SO_CONFIRMED
+};
+
+struct set_option
+{
+    GtkWidget *win;
+    GtkInfoBar *infobar;
+    GtkLabel *lblerr;
+    GtkGrid *grid;
+    GtkComboBox *combo;
+    GtkEntry *entry;
+    gint row_value;
+    guint state;
+    const gchar *type;
+    gchar *name;
+    GValue *value;
+    GArray *extras;
+};
+
+static void
+btn_clicked (struct set_option *so)
+{
+    GtkWidget *w;
+    const gchar *type;
+
+    w = gtk_grid_get_child_at (so->grid, 1, so->row_value);
+
+    type = gtk_combo_box_get_active_id (so->combo);
+    if (!is_valid_name (gtk_entry_get_text (so->entry),
+                (streq (type, ":category")) ? VALID_CATEGORY_NAME : VALID_OPTION_NAME))
+    {
+        gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+        gtk_label_set_text (so->lblerr, "Invalid name");
+        gtk_widget_show ((GtkWidget *) so->infobar);
+        return;
+    }
+
+    if (streq (type, ":string"))
+    {
+        if (streq (gtk_entry_get_text ((GtkEntry *) w), ""))
+        {
+            gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+            gtk_label_set_text (so->lblerr, "Value missing");
+            gtk_widget_show ((GtkWidget *) so->infobar);
+            return;
+        }
+
+        if (!G_VALUE_HOLDS (so->value, G_TYPE_STRING))
+        {
+            g_value_unset (so->value);
+            g_value_init (so->value, G_TYPE_STRING);
+        }
+        g_value_set_string (so->value, gtk_entry_get_text ((GtkEntry *) w));
+    }
+    else if (streq (type, ":int"))
+    {
+        if (streq (gtk_entry_get_text ((GtkEntry *) w), ""))
+        {
+            gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+            gtk_label_set_text (so->lblerr, "Value missing");
+            gtk_widget_show ((GtkWidget *) so->infobar);
+            return;
+        }
+
+        if (!G_VALUE_HOLDS (so->value, G_TYPE_INT))
+        {
+            g_value_unset (so->value);
+            g_value_init (so->value, G_TYPE_INT);
+        }
+        g_value_set_int (so->value, g_ascii_strtoll (
+                    gtk_entry_get_text ((GtkEntry *) w), NULL, 10));
+    }
+    else if (streq (type, ":boolean"))
+    {
+        if (!gtk_combo_box_get_active_id ((GtkComboBox *) w))
+        {
+            gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+            gtk_label_set_text (so->lblerr, "Value missing");
+            gtk_widget_show ((GtkWidget *) so->infobar);
+            return;
+        }
+
+        if (!G_VALUE_HOLDS (so->value, G_TYPE_BOOLEAN))
+        {
+            g_value_unset (so->value);
+            g_value_init (so->value, G_TYPE_BOOLEAN);
+        }
+        g_value_set_boolean (so->value, streq ("t",
+                    gtk_combo_box_get_active_id ((GtkComboBox *) w)));
+    }
+    else
+    {
+        DonnaConfigExtra *_e;
+        guint i;
+
+        for (i = 0; i < so->extras->len; ++i)
+        {
+            struct extra *e = &g_array_index (so->extras, struct extra, i);
+            if (streq (type, e->name))
+            {
+                _e = e->extra;
+                break;
+            }
+        }
+
+        if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+        {
+            const gchar *id = gtk_combo_box_get_active_id ((GtkComboBox *) w);
+            if (!id)
+            {
+                gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+                gtk_label_set_text (so->lblerr, "Value missing");
+                gtk_widget_show ((GtkWidget *) so->infobar);
+                return;
+            }
+
+            if (!G_VALUE_HOLDS (so->value, G_TYPE_STRING))
+            {
+                g_value_unset (so->value);
+                g_value_init (so->value, G_TYPE_STRING);
+            }
+            g_value_set_string (so->value, id);
+        }
+        else if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+        {
+            const gchar *id = gtk_combo_box_get_active_id ((GtkComboBox *) w);
+            guint i;
+
+            if (!id)
+            {
+                gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+                gtk_label_set_text (so->lblerr, "Value missing");
+                gtk_widget_show ((GtkWidget *) so->infobar);
+                return;
+            }
+
+            if (!G_VALUE_HOLDS (so->value, G_TYPE_INT))
+            {
+                g_value_unset (so->value);
+                g_value_init (so->value, G_TYPE_INT);
+            }
+            /* XXX if we made the model ourselves, we could get the active
+             * iter and have the value on that row, no loop required */
+            for (i = 0; i < _e->any.nb_items; ++i)
+            {
+                DonnaConfigItemExtraListInt *it;
+
+                it = &_e->list_int.items[i];
+                if (streq (id, it->in_file))
+                {
+                    g_value_set_int (so->value, it->value);
+                    break;
+                }
+            }
+        }
+        else if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+        {
+            GList *list;
+            GList *l;
+            gint val = 0;
+
+            if (!G_VALUE_HOLDS (so->value, G_TYPE_INT))
+            {
+                g_value_unset (so->value);
+                g_value_init (so->value, G_TYPE_INT);
+            }
+
+            list = gtk_container_get_children ((GtkContainer *) w);
+            for (l = list; l; l = l->next)
+            {
+                GtkToggleButton *tb = l->data;
+
+                if (gtk_toggle_button_get_active (tb))
+                    val |= GPOINTER_TO_INT (g_object_get_data ((GObject *) tb,
+                                "flag-value"));
+            }
+            g_list_free (list);
+            g_value_set_int (so->value, val);
+        }
+    }
+
+    so->state = SO_CONFIRMED;
+    so->type = type;
+    so->name = g_strdup (gtk_entry_get_text (so->entry));
+    gtk_widget_destroy (so->win);
+}
+
+static gboolean
+combo_is_row_sep (GtkTreeModel *model, GtkTreeIter *iter, gpointer data)
+{
+    gchar *s;
+    gboolean ret;
+
+    gtk_tree_model_get (model, iter, 1, &s, -1);
+    ret = streq (s, ":-");
+    g_free (s);
+    return ret;
+}
+
+static void
+combo_changed (struct set_option *so)
+{
+    GtkWidget *w;
+    const gchar *type;
+
+    w = gtk_grid_get_child_at (so->grid, 1, so->row_value);
+    if (w)
+        gtk_widget_destroy (w);
+
+    type = gtk_combo_box_get_active_id (so->combo);
+    if (G_UNLIKELY (!type))
+        return;
+
+    if (streq (type, ":category"))
+        w = NULL;
+    else if (streq (type, ":string"))
+    {
+        w = gtk_entry_new ();
+        if (so->state == SO_INIT_WITH_DEFAULT_VALUE
+                && G_VALUE_HOLDS (so->value, G_TYPE_STRING)
+                && g_value_get_string (so->value))
+            gtk_entry_set_text ((GtkEntry *) w, g_value_get_string (so->value));
+    }
+    else if (streq (type, ":int"))
+    {
+        w = gtk_entry_new ();
+        if (so->state == SO_INIT_WITH_DEFAULT_VALUE
+                && G_VALUE_HOLDS (so->value, G_TYPE_INT))
+        {
+            gchar *s = g_strdup_printf ("%d", g_value_get_int (so->value));
+            gtk_entry_set_text ((GtkEntry *) w, s);
+            g_free (s);
+        }
+    }
+    else if (streq (type, ":boolean"))
+    {
+        w = gtk_combo_box_text_new ();
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, "t", "True");
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, "f", "False");
+
+        if (so->state == SO_INIT_WITH_DEFAULT_VALUE
+                && G_VALUE_HOLDS (so->value, G_TYPE_BOOLEAN))
+            gtk_combo_box_set_active_id ((GtkComboBox *) w,
+                    (g_value_get_boolean (so->value)) ? "t" : "f");
+        else
+            gtk_combo_box_set_active_id ((GtkComboBox *) w, "t");
+    }
+    else
+    {
+        DonnaConfigExtra *_e;
+        guint i;
+
+        for (i = 0; i < so->extras->len; ++i)
+        {
+            struct extra *e = &g_array_index (so->extras, struct extra, i);
+            if (streq (type, e->name))
+            {
+                _e = e->extra;
+                break;
+            }
+        }
+
+        if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+        {
+            w = gtk_combo_box_text_new ();
+            for (i = 0; i < _e->any.nb_items; ++i)
+            {
+                DonnaConfigItemExtraList *it;
+
+                it = &_e->list.items[i];
+                gtk_combo_box_text_append ((GtkComboBoxText *) w,
+                        it->value,
+                        (it->label) ? it->label : it->value);
+            }
+
+            if (so->state == SO_INIT_WITH_DEFAULT_VALUE
+                    && G_VALUE_HOLDS (so->value, G_TYPE_STRING))
+                gtk_combo_box_set_active_id ((GtkComboBox *) w,
+                        g_value_get_string (so->value));
+            else
+                gtk_combo_box_set_active ((GtkComboBox *) w, 0);
+        }
+        else if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+        {
+            w = gtk_combo_box_text_new ();
+            for (i = 0; i < _e->any.nb_items; ++i)
+            {
+                DonnaConfigItemExtraListInt *it;
+
+                it = &_e->list_int.items[i];
+                gtk_combo_box_text_append ((GtkComboBoxText *) w,
+                        it->in_file,
+                        (it->label) ? it->label : it->in_file);
+                if (so->state == SO_INIT_WITH_DEFAULT_VALUE
+                        && G_VALUE_HOLDS (so->value, G_TYPE_INT)
+                        && it->value == g_value_get_int (so->value))
+                    gtk_combo_box_set_active_id ((GtkComboBox *) w, it->in_file);
+            }
+
+            if (!(so->state == SO_INIT_WITH_DEFAULT_VALUE
+                        && G_VALUE_HOLDS (so->value, G_TYPE_INT)))
+                gtk_combo_box_set_active ((GtkComboBox *) w, 0);
+        }
+        else /* DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS */
+        {
+            w = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+
+            for (i = 0; i < _e->any.nb_items; ++i)
+            {
+                DonnaConfigItemExtraListFlags *it;
+                GtkWidget *cb;
+
+                it = &_e->list_int.items[i];
+                cb = gtk_check_button_new_with_label (
+                        (it->label) ? it->label : it->in_file);
+                g_object_set_data ((GObject *) cb, "flag-value",
+                        GINT_TO_POINTER (it->value));
+                gtk_box_pack_start ((GtkBox *) w, cb, 0, 0, FALSE);
+
+                if (so->state == SO_INIT_WITH_DEFAULT_VALUE
+                        && G_VALUE_HOLDS (so->value, G_TYPE_INT)
+                        && (it->value & g_value_get_int (so->value)))
+                    gtk_toggle_button_set_active ((GtkToggleButton *) cb, TRUE);
+            }
+        }
+    }
+
+    if (w)
+    {
+        gtk_grid_attach (so->grid, w, 1, so->row_value, 1, 1);
+        gtk_widget_show_all (w);
+    }
+
+    if (so->state != SO_RUNNING)
+        so->state = SO_RUNNING;
+
+    /* the grid will grow when needed, but it won't shrink. Event in a box w/
+     * both expand & fill, it'll always shrink if it can. So, because that
+     * doesn't look good, let's have the window reduced to its minimum size as
+     * well */
+    gtk_window_resize ((GtkWindow *) so->win, 1, 1);
+}
+
+static gint
+arr_extras_cmp (gconstpointer extra1, gconstpointer extra2)
+{
+    const struct extra *e1 = extra1;
+    const struct extra *e2 = extra2;
+
+    return strcmp (e1->extra->any.title, e2->extra->any.title);
+}
+
+gboolean
+donna_config_set_option (DonnaConfig            *config,
+                         GError                **error,
+                         DonnaNode             **node,
+                         gboolean                create_only,
+                         gboolean                ask_user,
+                         const gchar            *type,
+                         const gchar            *name,
+                         const gchar            *value,
+                         const gchar            *fmt,
+                         ...)
+{
+    DonnaProviderConfigPrivate *priv;
+    DonnaConfigExtra *_e = NULL;
+    GNode *parent;
+    GNode *gnode;
+    GValue v = G_VALUE_INIT;
+    va_list va_args;
+    gchar *parent_name;
+    gboolean value_imported = FALSE;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (fmt != NULL, FALSE);
+    priv = config->priv;
+
+    va_start (va_args, fmt);
+    parent_name = g_strdup_vprintf (fmt, va_args);
+    va_end (va_args);
+
+    g_rw_lock_reader_lock (&priv->lock);
+
+    /* make sure the parent option exists & is a category */
+    parent = get_option_node (priv->root, parent_name);
+    if (!parent)
+    {
+        g_rw_lock_reader_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_NOT_FOUND,
+                "Config: Parent option '%s' not found",
+                parent_name);
+        g_free (parent_name);
+        return FALSE;
+    }
+    else if (!option_is_category (parent->data, priv->root))
+    {
+        g_rw_lock_reader_unlock (&priv->lock);
+        g_set_error (error, DONNA_CONFIG_ERROR,
+                DONNA_CONFIG_ERROR_INVALID_TYPE,
+                "Config: Parent option '%s' isn't a category",
+                parent_name);
+        g_free (parent_name);
+        return FALSE;
+    }
+
+    if (type)
+    {
+        if (*type == ':')
+        {
+            if (streq (type + 1, "category"))
+                /* we need v to be init */
+                g_value_init (&v, G_TYPE_POINTER);
+            else if (streq (type + 1, "int"))
+                g_value_init (&v, G_TYPE_INT);
+            else if (streq (type + 1, "string"))
+                g_value_init (&v, G_TYPE_STRING);
+            else if (streq (type + 1, "boolean"))
+                g_value_init (&v, G_TYPE_BOOLEAN);
+            else
+            {
+                g_rw_lock_reader_unlock (&priv->lock);
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_TYPE,
+                        "Config: Invalid type '%s'",
+                        type);
+                g_free (parent_name);
+                return FALSE;
+            }
+        }
+        else /* extra */
+        {
+            _e = g_hash_table_lookup (priv->extras, type);
+            if (!_e)
+            {
+                g_rw_lock_reader_unlock (&priv->lock);
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_TYPE,
+                        "Config: Invalid type '%s'",
+                        type);
+                g_free (parent_name);
+                return FALSE;
+            }
+
+            if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+                g_value_init (&v, G_TYPE_STRING);
+            else
+                g_value_init (&v, G_TYPE_INT);
+        }
+    }
+
+    /* get current option, if exists & we're not in "new" mode */
+    if (!create_only && name && (is_valid_name (name, VALID_OPTION_NAME)
+                || is_valid_name (name, VALID_CATEGORY_NAME)))
+    {
+        gnode = get_child_node (parent, name, strlen (name));
+        if (gnode)
+        {
+            struct option *option = gnode->data;
+
+            /* load default type from current option if none given */
+            if (!type)
+            {
+                if (option_is_category (option, priv->root))
+                {
+                    type = ":category";
+                    /* we need v to be init */
+                    g_value_init (&v, G_TYPE_POINTER);
+                }
+                else
+                {
+                    if (option->extra)
+                        type = option->extra;
+                    else if (G_VALUE_HOLDS (&option->value, G_TYPE_STRING))
+                        type = ":string";
+                    else if (G_VALUE_HOLDS (&option->value, G_TYPE_INT))
+                        type = ":int";
+                    else if (G_VALUE_HOLDS (&option->value, G_TYPE_BOOLEAN))
+                        type = ":boolean";
+                    g_value_init (&v, G_VALUE_TYPE (&option->value));
+                }
+            }
+
+            /* if ask_user & no value, we can load default from current option.
+             * Only if it's an option of the same type, ofc */
+            if (ask_user && !value && !option_is_category (option, priv->root)
+                    && G_VALUE_TYPE (&v) == G_VALUE_TYPE (&option->value))
+            {
+                g_value_copy (&option->value, &v);
+                value_imported = TRUE;
+            }
+        }
+    }
+    else
+        gnode = NULL;
+
+    /* is a value was provided, make sure it fits the type & convert it */
+    if (value)
+    {
+        if (type && *type != ':')
+        {
+            gpointer ptr;
+            gchar *s;
+            gint i;
+
+            if (!_e)
+                _e = g_hash_table_lookup (priv->extras, type);
+
+            if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+                ptr = &s;
+            else
+                ptr = &i;
+
+            if (!get_extra_value (_e, value, ptr))
+            {
+                g_rw_lock_reader_unlock (&priv->lock);
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_NAME,
+                        "Config: Cannot set option '%s', invalid value '%s' for extra '%s'",
+                        name, value, type);
+                g_value_unset (&v);
+                g_free (parent_name);
+                return FALSE;
+            }
+
+            if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+                g_value_set_string (&v, s);
+            else
+                g_value_set_int (&v, i);
+        }
+        else if (G_VALUE_HOLDS (&v, G_TYPE_STRING))
+            g_value_set_string (&v, value);
+        else if (G_VALUE_HOLDS (&v, G_TYPE_INT))
+            g_value_set_int (&v, g_ascii_strtoll (value, NULL, 10));
+        else if (G_VALUE_HOLDS (&v, G_TYPE_BOOLEAN))
+        {
+            if (streq (value, "true") || streq (value, "1"))
+                g_value_set_boolean (&v, TRUE);
+            else if (streq (value, "false") || streq (value, "0"))
+                g_value_set_boolean (&v, FALSE);
+            else
+            {
+                g_rw_lock_reader_unlock (&priv->lock);
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_NAME,
+                        "Config: Cannot set option '%s', invalid value '%s'; "
+                        "Expected 'true', '1', 'false' or '0'",
+                        name);
+                g_value_unset (&v);
+                g_free (parent_name);
+                return FALSE;
+            }
+        }
+    }
+
+    /* time to show the UI and ask user */
+    if (ask_user)
+    {
+        GMainLoop *loop;
+        GtkWidget *btn_box;
+        GtkBox *box;
+        GtkWidget *w;
+        struct set_option so;
+        struct extra so_extra;
+        GHashTableIter iter;
+        guint i = 0;
+        guint nb;
+
+        so.state = (value || value_imported) ? SO_INIT_WITH_DEFAULT_VALUE : SO_INIT;
+        so.value = &v;
+        so.extras = g_array_sized_new (FALSE, FALSE, sizeof (struct extra),
+                g_hash_table_size (priv->extras));
+        g_hash_table_iter_init (&iter, priv->extras);
+        while (g_hash_table_iter_next (&iter,
+                    (gpointer) &so_extra.name, (gpointer) &so_extra.extra))
+            g_array_append_val (so.extras, so_extra);
+        g_array_sort (so.extras, arr_extras_cmp);
+
+        g_rw_lock_reader_unlock (&priv->lock);
+
+        so.win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+        gtk_widget_set_name (so.win, "config-set-option");
+        donna_app_add_window (priv->app, (GtkWindow *) so.win, TRUE);
+        gtk_window_set_default_size ((GtkWindow *) so.win, 230, -1);
+        gtk_window_set_decorated ((GtkWindow *) so.win, FALSE);
+        gtk_window_set_has_resize_grip ((GtkWindow *) so.win, FALSE);
+        gtk_container_set_border_width ((GtkContainer *) so.win, 4);
+
+        w = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+        box = (GtkBox *) w;
+        gtk_container_add ((GtkContainer *) so.win, w);
+
+        so.infobar = (GtkInfoBar *) gtk_info_bar_new ();
+        so.lblerr = (GtkLabel *) gtk_label_new (NULL);
+        gtk_widget_show ((GtkWidget *) so.lblerr);
+        gtk_container_add ((GtkContainer *) gtk_info_bar_get_content_area (so.infobar),
+                (GtkWidget *) so.lblerr);
+        gtk_widget_set_no_show_all ((GtkWidget *) so.infobar, TRUE);
+        gtk_box_pack_start (box, (GtkWidget *) so.infobar, TRUE, TRUE, 0);
+
+        so.grid = (GtkGrid *) gtk_grid_new ();
+        g_object_set (so.grid, "expand", TRUE, NULL);
+        gtk_grid_set_column_spacing (so.grid, 4);
+        gtk_box_pack_start (box, (GtkWidget *) so.grid, TRUE, TRUE, 0);
+
+        i = 0;
+
+        w = gtk_label_new ((create_only) ? "New option" : "Set option");
+        gtk_style_context_add_class (gtk_widget_get_style_context (w), "title");
+        gtk_grid_attach (so.grid, w, 0, i, 2, 1);
+        ++i;
+
+        w = gtk_label_new ("Parent:");
+        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
+        gtk_grid_attach (so.grid, w, 0, i, 1, 1);
+        w = gtk_label_new (parent_name);
+        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+        gtk_grid_attach (so.grid, w, 1, i, 1, 1);
+        ++i;
+
+        w = gtk_label_new ("Type:");
+        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
+        gtk_grid_attach (so.grid, w, 0, i, 1, 1);
+        w = gtk_combo_box_text_new ();
+        so.combo = (GtkComboBox *) w;
+        gtk_combo_box_set_row_separator_func (so.combo, combo_is_row_sep, NULL, NULL);
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, ":category", "Category");
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, ":-", "-");
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, ":boolean", "Boolean");
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, ":int", "Integer");
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, ":string", "String");
+        gtk_combo_box_text_append ((GtkComboBoxText *) w, ":-", "-");
+        for (nb = 0; nb < so.extras->len; ++nb)
+        {
+            struct extra *e = &g_array_index (so.extras, struct extra, nb);
+            gtk_combo_box_text_append ((GtkComboBoxText *) w,
+                    e->name, e->extra->any.title);
+        }
+        gtk_grid_attach (so.grid, w, 1, i, 1, 1);
+        ++i;
+
+        w = gtk_label_new ("Name:");
+        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
+        gtk_grid_attach (so.grid, w, 0, i, 1, 1);
+        w = gtk_entry_new ();
+        so.entry = (GtkEntry *) w;
+        if (name)
+            gtk_entry_set_text ((GtkEntry *) w, name);
+        gtk_grid_attach (so.grid, w, 1, i, 1, 1);
+        ++i;
+
+        w = gtk_label_new ("Value:");
+        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.0);
+        gtk_misc_set_padding ((GtkMisc *) w, 0, 4);
+        gtk_grid_attach (so.grid, w, 0, i, 1, 1);
+        so.row_value = i;
+        ++i;
+
+        btn_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+        gtk_box_pack_start (box, btn_box, FALSE, FALSE, 4);
+
+        w = gtk_button_new_with_label ("Ok");
+        gtk_button_set_image ((GtkButton *) w,
+                gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
+        g_signal_connect_swapped (w, "clicked", (GCallback) btn_clicked, &so);
+        gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
+
+        w = gtk_button_new_with_label ("Cancel");
+        gtk_button_set_image ((GtkButton *) w,
+                gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
+        g_signal_connect_swapped (w, "clicked", (GCallback) gtk_widget_destroy, so.win);
+        gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
+
+        g_signal_connect_swapped (so.combo, "changed",
+                (GCallback) combo_changed, &so);
+        gtk_combo_box_set_active_id (so.combo, (type) ? type : ":string");
+
+        loop = g_main_loop_new (NULL, TRUE);
+        g_signal_connect_swapped (so.win, "destroy", (GCallback) g_main_loop_quit, loop);
+
+        gtk_widget_show_all (so.win);
+        g_main_loop_run (loop);
+        g_array_free (so.extras, TRUE);
+
+        if (so.state != SO_CONFIRMED)
+        {
+            /* user cancelled */
+            g_free (parent_name);
+            return FALSE;
+        }
+
+        type = so.type;
+        name = so.name;
+    }
+    else
+    {
+        g_rw_lock_reader_unlock (&priv->lock);
+
+        if (!type)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Config: Cannot set option, no type specified");
+            g_free (parent_name);
+            return FALSE;
+        }
+
+        if (!name)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_OTHER,
+                    "Config: Cannot set option, no name specified");
+            g_value_unset (&v);
+            g_free (parent_name);
+            return FALSE;
+        }
+        else if (streq (type, ":category"))
+        {
+            if (!is_valid_name (name, VALID_CATEGORY_NAME))
+            {
+                g_set_error (error, DONNA_CONFIG_ERROR,
+                        DONNA_CONFIG_ERROR_INVALID_NAME,
+                        "Config: Cannot set category '%s', invalid name",
+                        name);
+                g_value_unset (&v);
+                g_free (parent_name);
+                return FALSE;
+            }
+        }
+        else if (!is_valid_name (name, VALID_OPTION_NAME))
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_NAME,
+                    "Config: Cannot set option '%s', invalid name",
+                    name);
+            g_value_unset (&v);
+            g_free (parent_name);
+            return FALSE;
+        }
+
+        if (!value)
+        {
+            g_set_error (error, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_INVALID_NAME,
+                    "Config: Cannot set option '%s', no value specified",
+                    name);
+            g_value_unset (&v);
+            g_free (parent_name);
+            return FALSE;
+        }
+    }
+
+    /* except for category, type is the extra (if any) */
+    if (type && *type == ':' && !streq (type + 1, "category"))
+        type = NULL;
+
+    ret = _set_option (config, error, node,
+            /* G_TYPE_INVALID means category */
+            (type && *type == ':') ? G_TYPE_INVALID : G_VALUE_TYPE (&v),
+            (!type || *type == ':') ? NULL : type,
+            &v,
+            !create_only,
+            "%s/%s", (streq (parent_name, "/")) ? "" : parent_name, name);
+
+    if (ask_user)
+        g_free ((gchar *) name);
+    g_value_unset (&v);
+    g_free (parent_name);
+    return ret;
+}
+
 gboolean
 donna_config_rename_option (DonnaConfig            *config,
                             GError                **error,

@@ -594,6 +594,39 @@ cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     return DONNA_TASK_DONE;
 }
+static DonnaTaskState
+cmd_config_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *parent = args[0];
+    gchar *type = args[1]; /* opt */
+    gchar *name = args[2]; /* opt */
+    gchar *value = args[3]; /* opt */
+    gboolean create_only = GPOINTER_TO_INT (args[4]); /* opt */
+    gboolean ask_user = GPOINTER_TO_INT (args[5]); /* opt */
+
+    DonnaNode *node;
+    GValue *v;
+
+    if (!donna_config_set_option (donna_app_peek_config (app), &err, &node,
+                create_only, ask_user, type, name, value, "%s", parent))
+    {
+        if (err)
+        {
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+        else
+            return DONNA_TASK_CANCELLED;
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, DONNA_TYPE_NODE);
+    g_value_take_object (v, node);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
 
 static DonnaTaskState
 cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
@@ -2889,6 +2922,16 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_INT;
     add_command (config_set_int, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (config_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
