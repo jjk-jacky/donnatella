@@ -2490,32 +2490,6 @@ remove_row_from_tree (DonnaTreeView *tree,
             }
         }
 
-        /* remove iter for that row in hashtable */
-        l = list = g_hash_table_lookup (priv->hashtable, node);
-        while (l)
-        {
-            if (itereq (iter, (GtkTreeIter *) l->data))
-            {
-                if (prev)
-                    prev->next = l->next;
-                else
-                    list = l->next;
-
-                gtk_tree_iter_free (l->data);
-                g_slist_free_1 (l);
-                break;
-            }
-            else
-            {
-                prev = l;
-                l = l->next;
-            }
-        }
-        if (list)
-            g_hash_table_insert (priv->hashtable, node, list);
-        else
-            g_hash_table_remove (priv->hashtable, node);
-
         if (is_tree (tree))
         {
             /* removing a root? */
@@ -2607,6 +2581,34 @@ remove_row_from_tree (DonnaTreeView *tree,
             }
         }
 
+        /* remove iter for that row from hashtable -- must be done after
+         * everything needing the iter (from hashtable, which is also used in
+         * priv->roots) is done, since it will be free-d */
+        l = list = g_hash_table_lookup (priv->hashtable, node);
+        while (l)
+        {
+            if (itereq (iter, (GtkTreeIter *) l->data))
+            {
+                if (prev)
+                    prev->next = l->next;
+                else
+                    list = l->next;
+
+                gtk_tree_iter_free (l->data);
+                g_slist_free_1 (l);
+                break;
+            }
+            else
+            {
+                prev = l;
+                l = l->next;
+            }
+        }
+        if (list)
+            g_hash_table_insert (priv->hashtable, node, list);
+        else
+            g_hash_table_remove (priv->hashtable, node);
+
         g_object_unref (node);
     }
 
@@ -2630,10 +2632,8 @@ remove_row_from_tree (DonnaTreeView *tree,
                         /* we pretend it's a removal (node's item (e.g. file)
                          * deleted) when removing a root, so tree visuals are
                          * skipped.
-                         * This isn't just an optimization, because otherwise
-                         * when it tries to save the visuals into tree_visuals
-                         * it would segfault after failing to get the iter of
-                         * the root, since we've already removed it! */
+                         * Makes sure it doesn't save them only so we can drop
+                         * them right after */
                         || donna_tree_store_iter_depth (priv->store, iter) == 0))
                 ;
 
