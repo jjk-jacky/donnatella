@@ -1597,7 +1597,6 @@ _get_option (DonnaConfig *config,
 
     g_rw_lock_reader_lock (&priv->lock);
     option = get_option (priv->root, name);
-    g_free (name);
     if (option)
     {
         /* G_TYPE_INVALID means we want a category */
@@ -1608,7 +1607,7 @@ _get_option (DonnaConfig *config,
                 g_set_error (error, DONNA_CONFIG_ERROR,
                         DONNA_CONFIG_ERROR_INVALID_TYPE,
                         "Config: '%s' is an option",
-                        name);
+                        (*name == '/') ? name + 1 : name);
         }
         else if (!option_is_category (option, priv->root))
         {
@@ -1617,7 +1616,7 @@ _get_option (DonnaConfig *config,
                 g_set_error (error, DONNA_CONFIG_ERROR,
                         DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
                         "Config: '%s' is of type %s, (expected %s)",
-                        name,
+                        (*name == '/') ? name + 1 : name,
                         G_VALUE_TYPE_NAME (&option->value),
                         g_type_name (type));
         }
@@ -1627,7 +1626,7 @@ _get_option (DonnaConfig *config,
             g_set_error (error, DONNA_CONFIG_ERROR,
                     DONNA_CONFIG_ERROR_INVALID_TYPE,
                     "Config: '%s' is a category",
-                    name + 1);
+                    (*name == '/') ? name + 1 : name);
         }
     }
     else
@@ -1636,13 +1635,14 @@ _get_option (DonnaConfig *config,
         g_set_error (error, DONNA_CONFIG_ERROR,
                 DONNA_CONFIG_ERROR_NOT_FOUND,
                 "Config: '%s' doesn't exist",
-                name + 1);
+                (*name == '/') ? name + 1 : name);
     }
 
     /* allows caller to get the option value, then unlock */
     if (!leave_lock_on)
         g_rw_lock_reader_unlock (&priv->lock);
 
+    g_free (name);
     return (ret) ? option : NULL;
 }
 
