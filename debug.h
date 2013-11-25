@@ -32,7 +32,7 @@ typedef enum
 /* shorthand for G_BREAKPOINT() but also takes a boolean, if TRUE it will ungrab
  * the mouse/keyboard, which allows one to actually switch to GDB and debug even
  * if say a menu was poped up and had grabbed things */
-#define GDB(ungrab)                                                         \
+#define GDB(ungrab) do {                                                    \
     if (ungrab)                                                             \
     {                                                                       \
         GdkDeviceManager *devmngr;                                          \
@@ -54,7 +54,8 @@ typedef enum
         }                                                                   \
         g_list_free (list);                                                 \
     }                                                                       \
-    G_BREAKPOINT();
+    G_BREAKPOINT();                                                         \
+} while (0)
 
 #else
 
