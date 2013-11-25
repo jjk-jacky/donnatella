@@ -10509,6 +10509,105 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     return TRUE;
 }
 
+gboolean
+donna_tree_view_move_root (DonnaTreeView     *tree,
+                           DonnaTreeRowId    *rowid,
+                           gint               move,
+                           GError           **error)
+{
+    DonnaTreeViewPrivate *priv;
+    row_id_type type;
+    GtkTreeIter iter;
+    GSList *l, *prev, *ll;
+    gint pos;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (!is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot move rows in List mode",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot move row, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    if (donna_tree_store_iter_depth (priv->store, &iter) != 0)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot move row, not a root",
+                priv->name);
+        return FALSE;
+    }
+
+    prev = NULL;
+    for (pos = 0, l = priv->roots; l; ++pos, prev = l, l = l->next)
+        if (itereq ((GtkTreeIter *) l->data, &iter))
+            break;
+    if (G_UNLIKELY (!l))
+    {
+        g_warning ("Treeview '%s': Failed to find a root iter in list of roots",
+                priv->name);
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Row not found in internal list of roots. This is a bug!",
+                priv->name);
+        return FALSE;
+    }
+
+    /* remove it from the list */
+    if (prev)
+        prev->next = l->next;
+    else
+        priv->roots = l->next;
+
+    if (move < 0)
+    {
+        pos += move - 1;
+        if (pos < 0)
+        {
+            /* new first element */
+            l->next = priv->roots;
+            priv->roots = l;
+        }
+        else
+        {
+            /* find element before where we need to insert l */
+            for (ll = priv->roots; pos > 0; --pos, ll = ll->next)
+                ;
+            l->next  = ll->next;
+            ll->next = l;
+        }
+    }
+    else
+    {
+        /* -1 because we're removed l from the list */
+        pos += move - 1;
+        /* find element before where we need to insert l */
+        for (ll = priv->roots; pos > 0; --pos, ll = ll->next)
+            if (!ll->next)
+                break;
+        l->next  = ll->next;
+        ll->next = l;
+    }
+
+    resort_tree (tree);
+    return TRUE;
+}
+
 
 struct refresh_list
 {

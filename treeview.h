@@ -326,6 +326,10 @@ gboolean        donna_tree_view_go_root         (DonnaTreeView      *tree,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_node_root   (DonnaTreeView      *tree,
                                                  GError            **error);
+gboolean        donna_tree_view_move_root       (DonnaTreeView      *tree,
+                                                 DonnaTreeRowId     *rowid,
+                                                 gint                move,
+                                                 GError            **error);
 /* Mini-Tree */
 gboolean        donna_tree_view_maxi_expand     (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
