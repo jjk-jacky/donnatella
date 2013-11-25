@@ -2626,7 +2626,15 @@ remove_row_from_tree (DonnaTreeView *tree,
         /* we need to remove all children before we remove the row, so we can
          * have said children processed correctly (through here) as well */
         if (donna_tree_store_iter_children (priv->store, &child, iter))
-            while (remove_row_from_tree (tree, &child, is_removal))
+            while (remove_row_from_tree (tree, &child, is_removal
+                        /* we pretend it's a removal (node's item (e.g. file)
+                         * deleted) when removing a root, so tree visuals are
+                         * skipped.
+                         * This isn't just an optimization, because otherwise
+                         * when it tries to save the visuals into tree_visuals
+                         * it would segfault after failing to get the iter of
+                         * the root, since we've already removed it! */
+                        || donna_tree_store_iter_depth (priv->store, iter) == 0))
                 ;
 
         if (priv->row_has_child_toggled_sid)
