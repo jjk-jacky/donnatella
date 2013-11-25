@@ -4,6 +4,7 @@
 #include <stdlib.h>     /* free() */
 #include <ctype.h>      /* isblank() */
 #include <string.h>
+#include <errno.h>
 #include "donna.h"
 #include "debug.h"
 #include "app.h"
@@ -62,6 +63,7 @@ enum
 enum rc
 {
     RC_OK = 0,
+    RC_PARSE_CMDLINE_FAILED,
     RC_PREPARE_FAILED,
     RC_LAYOUT_MISSING,
     RC_LAYOUT_INVALID,
@@ -3841,6 +3843,48 @@ init_donna (DonnaDonna *donna)
     }
 }
 
+static gboolean
+parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
+{
+    DonnaDonnaPrivate *priv = donna->priv;
+    gchar *config_dir = NULL;
+    GOptionContext *context;
+    GOptionEntry entries[] = 
+    {
+        { "config-dir", 'c', 0, G_OPTION_ARG_STRING, &config_dir,
+            "Use DIR as configuration directory", "DIR" },
+        { NULL }
+    };
+
+    context = g_option_context_new ("- file manager");
+    g_option_context_add_main_entries (context, entries, /*FIXME*/"GETTEXT_PACKAGE");
+    g_option_context_add_group (context, gtk_get_option_group (TRUE));
+    if (!g_option_context_parse (context, argc, argv, error))
+        return FALSE;
+
+    /* set up config dir */
+    if (!config_dir)
+        priv->config_dir = g_strconcat (g_get_user_config_dir (), "/donnatella", NULL);
+    else
+    {
+        char *s;
+        s = realpath (config_dir, NULL);
+        if (!s)
+        {
+            gint _errno = errno;
+            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                    "Failed to get realpath for config-dir '%s': %s",
+                    config_dir, g_strerror (_errno));
+            g_free (config_dir);
+            return FALSE;
+        }
+        priv->config_dir = g_strdup (s);
+        free (s);
+    }
+
+    return TRUE;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -3854,9 +3898,13 @@ main (int argc, char *argv[])
     g_main_context_acquire (g_main_context_default ());
     donna = g_object_new (DONNA_TYPE_DONNA, NULL);
 
-    /* set up config dir */
-    donna->priv->config_dir = g_strconcat (g_get_user_config_dir (),
-            "/donnatella", NULL);
+    if (!parse_cmdline (donna, &argc, &argv, &err))
+    {
+        fputs (err->message, stderr);
+        fputc ('\n', stderr);
+        g_clear_error (&err);
+        return RC_PARSE_CMDLINE_FAILED;
+    }
 
     /* load config extras, registers commands, etc */
     if (G_UNLIKELY (!prepare_donna (donna, &err)))
