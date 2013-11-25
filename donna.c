@@ -127,6 +127,7 @@ struct _DonnaDonnaPrivate
     DonnaTreeView   *focused_tree;
     gulong           sid_active_location;
     GSList          *statuses;
+    gchar           *config_dir;
     gchar           *cur_dirname;
     /* visuals are under a RW lock so everyone can read them at the same time
      * (e.g. creating nodes, get_children() & the likes). The write operation
@@ -397,155 +398,6 @@ free_intref (struct intref *ir)
     g_free (ir);
 }
 
-static gboolean
-copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
-{
-    GError *err = NULL;
-    gchar buf[255], *b = buf;
-    gchar *file = NULL;
-    gchar *data;
-
-    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf", sce) >= 255)
-        b = g_strdup_printf ("%s/donnatella/donnatella.conf", sce);
-
-    if (!g_get_filename_charsets (NULL))
-        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
-
-    DONNA_DEBUG (APP,
-            g_debug3 ("Reading '%s'", b));
-    if (!g_file_get_contents ((file) ? file : b, &data, NULL, &err))
-    {
-        g_warning ("Failed to copy configuration from '%s': %s",
-                sce, err->message);
-        g_clear_error (&err);
-        if (b != buf)
-            g_free (b);
-        g_free (file);
-        return FALSE;
-    }
-    if (b != buf)
-        g_free (b);
-    g_free (file);
-
-    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf-ref", dst) >= 255)
-        b = g_strdup_printf ("%s/donnatella/donnatella.conf-ref", dst);
-
-    if (!g_get_filename_charsets (NULL))
-        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
-
-    DONNA_DEBUG (APP,
-            g_debug3 ("Writing '%s'", b));
-    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
-    {
-        g_warning ("Failed to import configuration to '%s': %s",
-                dst, err->message);
-        g_clear_error (&err);
-        if (b != buf)
-            g_free (b);
-        g_free (file);
-        g_free (data);
-        return FALSE;
-    }
-
-    /* remove the "-ref" bit */
-    b[strlen (b) - 4] = '\0';
-    if (file)
-        file[strlen (file) - 4] = '\0';
-
-    DONNA_DEBUG (APP,
-            g_debug3 ("Writing '%s'", b));
-    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
-    {
-        g_warning ("Failed to write new configuration to '%s': %s",
-                dst, err->message);
-        g_clear_error (&err);
-        if (b != buf)
-            g_free (b);
-        g_free (file);
-        g_free (data);
-        return FALSE;
-    }
-    if (b != buf)
-        g_free (b);
-    g_free (file);
-
-    /* takes ownership/will free data */
-    donna_config_load_config (config, data);
-    return TRUE;
-}
-
-/* returns TRUE if file existed (even if loading failed), else FALSE */
-static gboolean
-load_conf (DonnaConfig *config, const gchar *dir)
-{
-    GError *err = NULL;
-    gchar buf[255], *b = buf;
-    gchar *file = NULL;
-    gchar *data;
-    gboolean file_exists = FALSE;
-
-    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf", dir) >= 255)
-        b = g_strdup_printf ("%s/donnatella/donnatella.conf", dir);
-
-    if (!g_get_filename_charsets (NULL))
-        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
-
-    DONNA_DEBUG (APP,
-            g_debug3 ("Try loading '%s'", b));
-    if (g_file_get_contents ((file) ? file : b, &data, NULL, &err))
-    {
-        file_exists = TRUE;
-        donna_config_load_config (config, data);
-    }
-    else
-    {
-        file_exists = !g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT);
-        if (file_exists)
-            g_warning ("Unable to load configuration from '%s': %s",
-                    b, err->message);
-        g_clear_error (&err);
-    }
-
-    if (b != buf)
-        g_free (b);
-    g_free (file);
-    return file_exists;
-}
-
-static void
-load_css (const gchar *dir)
-{
-    GtkCssProvider *css_provider;
-    gchar buf[255], *b = buf;
-    gchar *file = NULL;
-
-    if (snprintf (buf, 255, "%s/donnatella/donnatella.css", dir) >= 255)
-        b = g_strdup_printf ("%s/donnatella/donnatella.css", dir);
-
-    if (!g_get_filename_charsets (NULL))
-        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
-
-    if (!g_file_test ((file) ? file : b, G_FILE_TEST_IS_REGULAR))
-    {
-        if (b != buf)
-            g_free (b);
-        g_free (file);
-        return;
-    }
-
-    DONNA_DEBUG (APP,
-            g_debug3 ("Load '%s'", b));
-    css_provider = gtk_css_provider_new ();
-    gtk_css_provider_load_from_path (css_provider, (file) ? file : b, NULL);
-    gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
-            (GtkStyleProvider *) css_provider,
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-
-    if (b != buf)
-        g_free (b);
-    g_free (file);
-}
-
 static void
 donna_donna_init (DonnaDonna *donna)
 {
@@ -656,6 +508,7 @@ donna_donna_finalize (GObject *object)
 
     priv = DONNA_DONNA (object)->priv;
 
+    g_free (priv->config_dir);
     g_rw_lock_clear (&priv->lock);
     g_rec_mutex_clear (&priv->rec_mutex);
     g_object_unref (priv->config);
@@ -1341,8 +1194,8 @@ donna_donna_get_conf_filename (DonnaApp       *app,
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
 
-    str = g_string_new (g_get_user_config_dir ());
-    g_string_append (str, "/donnatella/");
+    str = g_string_new (((DonnaDonna *) app)->priv->config_dir);
+    g_string_append_c (str, '/');
     g_string_append_vprintf (str, fmt, va_args);
 
     if (!g_get_filename_charsets (NULL))
@@ -3771,6 +3624,155 @@ prepare_donna (DonnaDonna *donna, GError **error)
     return TRUE;
 }
 
+static gboolean
+copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
+{
+    GError *err = NULL;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+    gchar *data;
+
+    if (snprintf (buf, 255, "%s/donnatella/donnatella.conf", sce) >= 255)
+        b = g_strdup_printf ("%s/donnatella/donnatella.conf", sce);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Reading '%s'", b));
+    if (!g_file_get_contents ((file) ? file : b, &data, NULL, &err))
+    {
+        g_warning ("Failed to copy configuration from '%s': %s",
+                sce, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        return FALSE;
+    }
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+
+    if (snprintf (buf, 255, "%s/donnatella.conf-ref", dst) >= 255)
+        b = g_strdup_printf ("%s/donnatella.conf-ref", dst);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Writing '%s'", b));
+    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+    {
+        g_warning ("Failed to import configuration to '%s': %s",
+                dst, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        g_free (data);
+        return FALSE;
+    }
+
+    /* remove the "-ref" bit */
+    b[strlen (b) - 4] = '\0';
+    if (file)
+        file[strlen (file) - 4] = '\0';
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Writing '%s'", b));
+    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+    {
+        g_warning ("Failed to write new configuration to '%s': %s",
+                dst, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        g_free (data);
+        return FALSE;
+    }
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+
+    /* takes ownership/will free data */
+    donna_config_load_config (config, data);
+    return TRUE;
+}
+
+/* returns TRUE if file existed (even if loading failed), else FALSE */
+static gboolean
+load_conf (DonnaConfig *config, const gchar *dir)
+{
+    GError *err = NULL;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+    gchar *data;
+    gboolean file_exists = FALSE;
+
+    if (snprintf (buf, 255, "%s/donnatella.conf", dir) >= 255)
+        b = g_strdup_printf ("%s/donnatella.conf", dir);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Try loading '%s'", b));
+    if (g_file_get_contents ((file) ? file : b, &data, NULL, &err))
+    {
+        file_exists = TRUE;
+        donna_config_load_config (config, data);
+    }
+    else
+    {
+        file_exists = !g_error_matches (err, G_FILE_ERROR, G_FILE_ERROR_NOENT);
+        if (file_exists)
+            g_warning ("Unable to load configuration from '%s': %s",
+                    b, err->message);
+        g_clear_error (&err);
+    }
+
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+    return file_exists;
+}
+
+static void
+load_css (const gchar *dir)
+{
+    GtkCssProvider *css_provider;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+
+    if (snprintf (buf, 255, "%s/donnatella.css", dir) >= 255)
+        b = g_strdup_printf ("%s/donnatella.css", dir);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    if (!g_file_test ((file) ? file : b, G_FILE_TEST_IS_REGULAR))
+    {
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        return;
+    }
+
+    DONNA_DEBUG (APP,
+            g_debug3 ("Load '%s'", b));
+    css_provider = gtk_css_provider_new ();
+    gtk_css_provider_load_from_path (css_provider, (file) ? file : b, NULL);
+    gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
+            (GtkStyleProvider *) css_provider,
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+}
+
 static inline void
 init_donna (DonnaDonna *donna)
 {
@@ -3782,7 +3784,7 @@ init_donna (DonnaDonna *donna)
     const gchar * const *first;
 
     /* get config dirs */
-    main_dir = g_get_user_config_dir ();
+    main_dir = priv->config_dir;
     extra_dirs = g_get_system_config_dirs ();
 
     /* load config: load user one. If there's none, copy the system one over,
@@ -3851,6 +3853,10 @@ main (int argc, char *argv[])
 
     g_main_context_acquire (g_main_context_default ());
     donna = g_object_new (DONNA_TYPE_DONNA, NULL);
+
+    /* set up config dir */
+    donna->priv->config_dir = g_strconcat (g_get_user_config_dir (),
+            "/donnatella", NULL);
 
     /* load config extras, registers commands, etc */
     if (G_UNLIKELY (!prepare_donna (donna, &err)))
