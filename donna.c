@@ -542,10 +542,13 @@ donna_donna_log_handler (const gchar    *domain,
     time_t now;
     struct tm *tm;
     gchar buf[12];
+    gboolean colors;
     GString *str;
 
     if (log_level > show_log)
         return;
+
+    colors = isatty (fileno (stdout));
 
     now = time (NULL);
     tm = localtime (&now);
@@ -553,17 +556,29 @@ donna_donna_log_handler (const gchar    *domain,
     str = g_string_new (buf);
 
     if (g_main_context_is_owner (g_main_context_default ()))
-        g_string_append_printf (str, "[UI] ");
+        g_string_append (str, "[UI] ");
 
     if (thread != mt)
         g_string_append_printf (str, "[thread %p] ", thread);
 
     if (log_level & G_LOG_LEVEL_ERROR)
-        g_string_append (str, "** ERROR: ");
+        donna_g_string_append_concat (str,
+                (colors) ? "\x1b[31m" : "** ",
+                "ERROR: ",
+                (colors) ? "\x1b[0m" : "",
+                NULL);
     if (log_level & G_LOG_LEVEL_CRITICAL)
-        g_string_append (str, "** CRITICAL: ");
+        donna_g_string_append_concat (str,
+                (colors) ? "\x1b[1;31m" : "** ",
+                "CRITICAL: ",
+                (colors) ? "\x1b[0m" : "",
+                NULL);
     if (log_level & G_LOG_LEVEL_WARNING)
-        g_string_append (str, "WARNING: ");
+        donna_g_string_append_concat (str,
+                (colors) ? "\x1b[33m" : "",
+                "WARNING: ",
+                (colors) ? "\x1b[0m" : "",
+                NULL);
     if (log_level & G_LOG_LEVEL_MESSAGE)
         g_string_append (str, "MESSAGE: ");
     if (log_level & G_LOG_LEVEL_INFO)
@@ -579,9 +594,9 @@ donna_donna_log_handler (const gchar    *domain,
         g_string_append (str, "DEBUG: ");
 
     if (domain)
-        g_string_append_printf (str, "[%s] ", domain);
+        donna_g_string_append_concat (str, "[", domain, "] ", NULL);
 
-    g_string_append (str,message);
+    g_string_append (str, message);
     puts (str->str);
     g_string_free (str, TRUE);
 }
