@@ -13069,6 +13069,106 @@ tree_context_get_item_info (const gchar             *item,
 
         return TRUE;
     }
+    else if (streq (item, "move_root"))
+    {
+        GSList *l;
+        gint n;
+
+        if (!is_tree (tree))
+        {
+            /* minimum required, but it's not visible or anything */
+            info->name = "Move Root";
+            return TRUE;
+        }
+
+        info->is_visible = TRUE;
+        info->is_sensitive = (reference & DONNA_CONTEXT_HAS_REF)
+            /* only for roots */
+            && donna_tree_store_iter_depth (priv->store, conv->row->iter) == 0;
+
+        /* we can compare pointers from priv->roots & conv because both use
+         * iters from our hashtable */
+
+        if (!extra || streq (extra, "up"))
+        {
+            info->name = "Move Root Up";
+            info->trigger = "command:tree_move_root (%o,%r,-1)";
+            /* not sensitive if first */
+            if (info->is_sensitive
+                    && (GtkTreeIter *) priv->roots->data == conv->row->iter)
+                info->is_sensitive = FALSE;
+        }
+        else if (streq (extra, "down"))
+        {
+            info->name = "Move Root Down";
+            info->trigger = "command:tree_move_root (%o,%r,1)";
+            /* not sensitive if last */
+            if (info->is_sensitive)
+            {
+                for (l = priv->roots; l; l = l->next)
+                    if (!l->next
+                            && (GtkTreeIter *) l->data == conv->row->iter)
+                    {
+                        info->is_sensitive = FALSE;
+                        break;
+                    }
+            }
+        }
+        else if (streq (extra, "first"))
+        {
+            info->name = "Move Root First";
+            /* not sensitive if first */
+            if (info->is_sensitive
+                    && (GtkTreeIter *) priv->roots->data == conv->row->iter)
+                info->is_sensitive = FALSE;
+            if (info->is_sensitive)
+            {
+                n = 0;
+                for (l = priv->roots; l; --n, l = l->next)
+                    if ((GtkTreeIter *) l->data == conv->row->iter)
+                        break;
+                info->trigger = g_strdup_printf (
+                        "command:tree_move_root (%%o,%%r,%d)", n);
+                info->free_trigger = TRUE;
+            }
+        }
+        else if (streq (extra, "last"))
+        {
+            info->name = "Move Root Last";
+            if (info->is_sensitive)
+            {
+                n = 0;
+                for (l = priv->roots; l; ++n, l = l->next)
+                {
+                    /* not sensitive if last */
+                    if (!l->next
+                            && (GtkTreeIter *) l->data == conv->row->iter)
+                    {
+                        info->is_sensitive = FALSE;
+                        break;
+                    }
+                    if ((GtkTreeIter *) l->data == conv->row->iter)
+                        n = 0;
+                }
+                if (info->is_sensitive)
+                {
+                    info->trigger = g_strdup_printf (
+                            "command:tree_move_root (%%o,%%r,%d)", n);
+                    info->free_trigger = TRUE;
+                }
+            }
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Treeview '%s': Invalid extra '%s' for item '%s'",
+                    priv->name, extra, item);
+            return FALSE;
+        }
+
+        return TRUE;
+    }
     else if (streqn (item, "refresh", 7))
     {
         info->is_visible = info->is_sensitive = G_LIKELY (is_tree (tree)
