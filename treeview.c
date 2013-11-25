@@ -4098,7 +4098,8 @@ sort_func (GtkTreeModel      *model,
     }
 
     /* are iters roots? */
-    if (is_tree (tree) && donna_tree_store_iter_depth (priv->store, iter1) == 0)
+    if (is_tree (tree) && donna_tree_store_iter_depth (priv->store, iter1) == 0
+        && donna_tree_store_iter_depth (priv->store, iter2) == 0)
     {
         GSList *l;
 
