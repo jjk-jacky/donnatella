@@ -2375,6 +2375,45 @@ cmd_tree_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *file = args[1];
+    gchar *s_elements = args[2]; /* opt */
+
+    const gchar *_s_elements[] = { "focus", "sort", "scroll", "selection" };
+    DonnaListFileElements _elements[] = { DONNA_LIST_FILE_FOCUS,
+        DONNA_LIST_FILE_SORT, DONNA_LIST_FILE_SCROLL, DONNA_LIST_FILE_SELECTION };
+    guint elements;
+
+    if (s_elements)
+    {
+        elements = _get_flags (_s_elements, _elements, s_elements);
+        if (elements == (guint) -1)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'tree_load_list_file': Invalid elements : '%s'; "
+                    "Must be (a '+'-separated combination of) 'focus', 'sort', "
+                    "'scroll', and/or 'selection'",
+                    s_elements);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        elements = 0;
+
+    if (!donna_tree_view_load_list_file (tree, file, elements, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2477,6 +2516,45 @@ cmd_tree_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
 
     donna_tree_view_reset_keys (tree);
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *file = args[1];
+    gchar *s_elements = args[2]; /* opt */
+
+    const gchar *_s_elements[] = { "focus", "sort", "scroll", "selection" };
+    DonnaListFileElements _elements[] = { DONNA_LIST_FILE_FOCUS,
+        DONNA_LIST_FILE_SORT, DONNA_LIST_FILE_SCROLL, DONNA_LIST_FILE_SELECTION };
+    guint elements;
+
+    if (s_elements)
+    {
+        elements = _get_flags (_s_elements, _elements, s_elements);
+        if (elements == (guint) -1)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'tree_save_list_file': Invalid elements : '%s'; "
+                    "Must be (a '+'-separated combination of) 'focus', 'sort', "
+                    "'scroll', and/or 'selection'",
+                    s_elements);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        elements = 0;
+
+    if (!donna_tree_view_save_list_file (tree, file, elements, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
     return DONNA_TASK_DONE;
 }
 
@@ -3241,6 +3319,13 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_load_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     add_command (tree_maxi_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
@@ -3273,6 +3358,13 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     add_command (tree_reset_keys, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_save_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

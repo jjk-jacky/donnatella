@@ -10724,6 +10724,499 @@ donna_tree_view_move_root (DonnaTreeView     *tree,
     return TRUE;
 }
 
+/* assumes ownership of str */
+static gboolean
+save_to_file (DonnaTreeView *tree,
+              const gchar   *filename,
+              GString       *str,
+              GError       **error)
+{
+    gchar *file;
+
+    if (*filename == '/')
+    {
+        if (!g_get_filename_charsets (NULL))
+            file = g_filename_from_utf8 (filename, -1, NULL, NULL, NULL);
+        else
+            file = (gchar *) filename;
+    }
+    else
+        file = donna_app_get_conf_filename (tree->priv->app, filename);
+
+    if (!g_file_set_contents (file, str->str, str->len, error))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to save to file '%s': ",
+                tree->priv->name, filename);
+        g_string_free (str, TRUE);
+        if (file != filename)
+            g_free (file);
+        return FALSE;
+    }
+
+    g_string_free (str, TRUE);
+    if (file != filename)
+        g_free (file);
+    return TRUE;
+}
+
+gboolean
+donna_tree_view_save_list_file (DonnaTreeView      *tree,
+                                const gchar        *filename,
+                                DonnaListFileElements elements,
+                                GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaTreeRowId rid = { DONNA_ARG_TYPE_PATH, NULL };
+    GtkTreeModel *model;
+    GtkTreeIter iter;
+    DonnaNode *node;
+    GString *str;
+    gchar *s;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (filename != NULL, FALSE);
+    priv = tree->priv;
+
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot save list file in mode Tree",
+                priv->name);
+        return FALSE;
+    }
+
+    if (G_UNLIKELY (!priv->location))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Cannot save to file, no current location",
+                priv->name);
+        return FALSE;
+    }
+
+    model = (GtkTreeModel *) priv->store;
+
+    /* 1. current location */
+    s = donna_node_get_full_location (priv->location);
+    str = g_string_new (s);
+    g_string_append_c (str, '\n');
+    g_free (s);
+
+    /* 2. focused row */
+    if (elements & DONNA_LIST_FILE_FOCUS)
+    {
+        rid.ptr = ":focused";
+        if (convert_row_id_to_iter (tree, &rid, &iter) == ROW_ID_ROW)
+        {
+            gtk_tree_model_get (model, &iter,
+                    DONNA_TREE_VIEW_COL_NODE,   &node,
+                    -1);
+            if (node)
+            {
+                s = donna_node_get_full_location (node);
+                g_string_append (str, s);
+                g_free (s);
+                g_object_unref (node);
+            }
+        }
+    }
+    g_string_append_c (str, '\n');
+
+    /* 3. sort */
+    if (elements & DONNA_LIST_FILE_SORT)
+    {
+        struct column *_col;
+
+        _col = get_column_by_column (tree, priv->sort_column);
+        if (G_LIKELY (_col))
+        {
+            g_string_append (str, _col->name);
+            g_string_append_c (str, ':');
+            g_string_append_c (str,
+                    (gtk_tree_view_column_get_sort_order (priv->sort_column)
+                     == GTK_SORT_ASCENDING) ? 'a' : 'd');
+        }
+
+        _col = (priv->second_sort_column)
+            ? get_column_by_column (tree, priv->second_sort_column) : NULL;
+        if (_col)
+        {
+            g_string_append_c (str, ',');
+            g_string_append (str, _col->name);
+            g_string_append_c (str, ':');
+            g_string_append_c (str, (priv->second_sort_order == GTK_SORT_ASCENDING)
+                    ? 'a' : 'd');
+        }
+    }
+    g_string_append_c (str, '\n');
+
+    /* 4. scroll */
+    if (elements & DONNA_LIST_FILE_SCROLL)
+    {
+        gdouble lower;
+        gdouble upper;
+        gdouble value;
+
+        g_object_get (gtk_scrollable_get_vadjustment ((GtkScrollable *) tree),
+                "lower", &lower, "upper", &upper, "value", &value, NULL);
+        g_string_append_printf (str, "%f", value / (upper - lower));
+    }
+    g_string_append_c (str, '\n');
+
+    /* 5. selection (if any) */
+    if (elements & DONNA_LIST_FILE_SELECTION)
+    {
+        if (gtk_tree_model_iter_children (model, &iter, NULL))
+        {
+            GtkTreeSelection *sel;
+
+            sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+            do
+            {
+                if (gtk_tree_selection_iter_is_selected (sel, &iter))
+                {
+                    gtk_tree_model_get (model, &iter,
+                            DONNA_TREE_VIEW_COL_NODE,   &node,
+                            -1);
+                    if (node)
+                    {
+                        s = donna_node_get_full_location (node);
+                        g_string_append (str, s);
+                        g_string_append_c (str, '\n');
+                        g_free (s);
+                        g_object_unref (node);
+                    }
+                }
+            } while (gtk_tree_model_iter_next (model, &iter));
+        }
+    }
+
+    return save_to_file (tree, filename, str, error);
+}
+
+static gboolean
+load_from_file (DonnaTreeView   *tree,
+                const gchar     *filename,
+                gchar          **data,
+                GError         **error)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    gchar *file;
+
+    if (*filename == '/')
+    {
+        if (!g_get_filename_charsets (NULL))
+            file = g_filename_from_utf8 (filename, -1, NULL, NULL, NULL);
+        else
+            file = (gchar *) filename;
+    }
+    else
+        file = donna_app_get_conf_filename (priv->app, filename);
+
+    if (!g_file_get_contents (file, data, NULL, error))
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to load from file; "
+                "Error reading '%s': ",
+                priv->name, filename);
+        if (file != filename)
+            g_free (file);
+        return FALSE;
+    }
+    if (file != filename)
+        g_free (file);
+    return TRUE;
+}
+
+struct load_list
+{
+    enum cl_extra type;
+    change_location_callback_fn callback;
+    gpointer data;
+    GDestroyNotify destroy;
+
+    gchar *content;
+    DonnaListFileElements elements;
+};
+
+static void
+free_load_list (struct load_list *ll)
+{
+    g_free (ll->content);
+    g_free (ll);
+}
+
+static void
+load_list (DonnaTreeView *tree, struct load_list *ll)
+{
+    GError *err = NULL;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+    GString *errmsg = NULL;
+    GSList *l;
+    gchar *data;
+    gchar *s;
+
+    /* move past the location */
+    data = strchr (ll->content, '\0') + 1;
+
+    s = strchr (data, '\n');
+    if (!s)
+    {
+        donna_app_show_error (priv->app, NULL,
+                "Treeview '%s': Failed to finish loading list from file: "
+                "Invalid data",
+                priv->name);
+        goto free;
+    }
+    if (ll->elements & DONNA_LIST_FILE_FOCUS)
+    {
+        GtkTreePath *path;
+
+        *s = '\0';
+        node = donna_app_get_node (priv->app, data, &err);
+        if (!node)
+        {
+            if (!errmsg)
+                errmsg = g_string_new (NULL);
+            g_string_append (errmsg, "- Failed to get node to focus: ");
+            g_string_append (errmsg, (err) ? err->message : "(no error message)");
+            g_string_append_c (errmsg, '\n');
+            g_clear_error (&err);
+            goto sort;
+        }
+
+        /* we don't need the node, only its address to find the iter (besides,
+         * if we find it, then the treeview has a ref on it anyways) */
+        g_object_unref (node);
+        l = g_hash_table_lookup (priv->hashtable, node);
+        if (G_UNLIKELY (!l))
+        {
+            if (!errmsg)
+                errmsg = g_string_new (NULL);
+            g_string_append_printf (errmsg, "- Failed to get node to focus: "
+                    "'%s' not found in treeview", data);
+            g_string_append_c (errmsg, '\n');
+            g_clear_error (&err);
+            goto sort;
+        }
+
+        path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, l->data);
+        gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+        gtk_tree_path_free (path);
+    }
+
+sort:
+    data = s + 1;
+    s = strchr (data, '\n');
+    if (!s)
+    {
+        if (!errmsg)
+            errmsg = g_string_new (NULL);
+        g_string_append_printf (errmsg, "- Failed to get sort order: "
+                "Invalid data");
+        g_string_append_c (errmsg, '\n');
+        g_clear_error (&err);
+        goto scroll;
+    }
+    if (ll->elements & DONNA_LIST_FILE_SORT)
+    {
+        struct column *_col;
+
+        *s = '\0';
+
+        s = strchr (data, ':');
+        if (!s)
+        {
+            if (!errmsg)
+                errmsg = g_string_new (NULL);
+            g_string_append_printf (errmsg, "- Failed to get sort order: "
+                    "Invalid data");
+            g_string_append_c (errmsg, '\n');
+            g_clear_error (&err);
+            goto scroll;
+        }
+        *s = '\0';
+        _col = get_column_by_name (tree, data);
+        if (_col)
+            set_sort_column (tree, _col->column,
+                    (s[1] == 'd') ? DONNA_SORT_DESC : DONNA_SORT_ASC, FALSE);
+
+        data = s + 2;
+        s = strchr (data, ':');
+        if (!s)
+        {
+            if (!errmsg)
+                errmsg = g_string_new (NULL);
+            g_string_append_printf (errmsg, "- Failed to get secondary sort order: "
+                    "Invalid data");
+            g_string_append_c (errmsg, '\n');
+            g_clear_error (&err);
+            goto scroll;
+        }
+        *s = '\0';
+        _col = get_column_by_name (tree, data);
+        if (_col)
+            set_second_sort_column (tree, _col->column,
+                    (s[1] == 'd') ? DONNA_SORT_DESC : DONNA_SORT_ASC, FALSE);
+        s = strchr (data, '\0');
+    }
+
+scroll:
+    data = s + 1;
+    s = strchr (data, '\n');
+    if (!s)
+    {
+        if (!errmsg)
+            errmsg = g_string_new (NULL);
+        g_string_append_printf (errmsg, "- Failed to get scroll position: "
+                "Invalid data");
+        g_string_append_c (errmsg, '\n');
+        g_clear_error (&err);
+        goto selection;
+    }
+    if (ll->elements & DONNA_LIST_FILE_SCROLL)
+    {
+        GtkAdjustment *adj;
+        gdouble lower;
+        gdouble upper;
+
+        *s = '\0';
+
+        adj = gtk_scrollable_get_vadjustment ((GtkScrollable *) tree);
+        g_object_get (adj, "lower", &lower, "upper", &upper, NULL);
+        g_object_set (adj, "value", g_strtod (data, NULL) * (upper - lower), NULL);
+    }
+
+selection:
+    data = s + 1;
+    if (ll->elements & DONNA_LIST_FILE_SELECTION)
+    {
+        GtkTreeSelection *sel;
+
+        sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+        while ((s = strchr (data, '\n')))
+        {
+            *s = '\0';
+            node = donna_app_get_node (priv->app, data, &err);
+            if (!node)
+            {
+                if (!errmsg)
+                    errmsg = g_string_new (NULL);
+                g_string_append (errmsg, "- Failed to get node to select: ");
+                g_string_append (errmsg, (err) ? err->message : "(no error message)");
+                g_string_append_c (errmsg, '\n');
+                g_clear_error (&err);
+                goto next;
+            }
+
+            /* we don't need the node, only its address to find the iter (besides,
+             * if we find it, then the treeview has a ref on it anyways) */
+            g_object_unref (node);
+            l = g_hash_table_lookup (priv->hashtable, node);
+            if (G_UNLIKELY (!l))
+            {
+                if (!errmsg)
+                    errmsg = g_string_new (NULL);
+                g_string_append_printf (errmsg, "- Failed to get node to select: "
+                        "'%s' not found in treeview", data);
+                g_string_append_c (errmsg, '\n');
+                g_clear_error (&err);
+                goto next;
+            }
+
+            gtk_tree_selection_select_iter (sel, l->data);
+next:
+            data = s + 1;
+        }
+    }
+
+free:
+    if (errmsg)
+    {
+        donna_app_show_error (priv->app, NULL,
+                "Treeview '%s': Failed to finish loading list from file:\n\n%s",
+                priv->name, errmsg->str);
+        g_string_free (errmsg, TRUE);
+    }
+    free_load_list (ll);
+}
+
+gboolean
+donna_tree_view_load_list_file (DonnaTreeView      *tree,
+                                const gchar        *filename,
+                                DonnaListFileElements elements,
+                                GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    struct load_list *ll;
+    DonnaNode *node;
+    gchar *data;
+    gchar *s;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (filename != NULL, FALSE);
+    priv = tree->priv;
+
+    if (is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot load list file in mode Tree",
+                priv->name);
+        return FALSE;
+    }
+
+    if (!load_from_file (tree, filename, &data, error))
+        return FALSE;
+
+    s = strchr (data, '\n');
+    if (!s)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Failed to load from file; "
+                "Invalid data in '%s' (no current location)",
+                priv->name, filename);
+        g_free (data);
+        return FALSE;
+    }
+
+    *s = '\0';
+    node = donna_app_get_node (priv->app, data, error);
+    if (!node)
+    {
+        g_prefix_error (error, "Treeview '%s': Failed to load from file; "
+                "Unable to get node of current location: ",
+                priv->name);
+        g_free (data);
+        return FALSE;
+    }
+
+    if (elements == 0)
+    {
+        g_free (data);
+        ll = NULL;
+    }
+    else
+    {
+        ll = g_new0 (struct load_list, 1);
+
+        ll->type        = CL_EXTRA_CALLBACK;
+        ll->callback    = (change_location_callback_fn) load_list;
+        ll->data        = ll;
+        ll->destroy     = (GDestroyNotify) free_load_list;
+
+        ll->content     = data;
+        ll->elements    = elements;
+    }
+
+    ret = change_location (tree, CHANGING_LOCATION_ASKED, node, ll, error);
+    g_object_unref (node);
+    return ret;
+}
+
 
 struct refresh_list
 {

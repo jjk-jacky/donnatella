@@ -167,6 +167,14 @@ typedef enum
     DONNA_TREEVIEW_OPTION_SAVE_IN_ASK
 } DonnaTreeviewOptionSaveLocation;
 
+typedef enum
+{
+    DONNA_LIST_FILE_FOCUS       = (1 << 0),
+    DONNA_LIST_FILE_SORT        = (1 << 1),
+    DONNA_LIST_FILE_SCROLL      = (1 << 2),
+    DONNA_LIST_FILE_SELECTION   = (1 << 3)
+} DonnaListFileElements;
+
 struct _DonnaTreeView
 {
     /*< private >*/
@@ -339,6 +347,14 @@ gboolean        donna_tree_view_maxi_collapse   (DonnaTreeView      *tree,
                                                  DonnaTreeRowId     *rowid,
                                                  GError            **error);
 /* Mode List */
+gboolean        donna_tree_view_save_list_file  (DonnaTreeView      *tree,
+                                                 const gchar        *filename,
+                                                 DonnaListFileElements elements,
+                                                 GError            **error);
+gboolean        donna_tree_view_load_list_file  (DonnaTreeView      *tree,
+                                                 const gchar        *filename,
+                                                 DonnaListFileElements elements,
+                                                 GError            **error);
 gboolean        donna_tree_view_selection_nodes (DonnaTreeView      *tree,
                                                  DonnaTreeSelAction  action,
                                                  GPtrArray          *nodes,
