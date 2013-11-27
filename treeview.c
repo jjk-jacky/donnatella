@@ -7870,8 +7870,7 @@ no_task:
         goto free;
     }
 
-    changed_location = priv->location && donna_node_peek_provider (data->node)
-        != donna_node_peek_provider (priv->location);
+    changed_location = priv->location && priv->location != data->node;
     check_dupes = priv->cl == CHANGING_LOCATION_GOT_CHILD;
 
     if (!change_location (data->tree, CHANGING_LOCATION_NOT, data->node, NULL, NULL))
