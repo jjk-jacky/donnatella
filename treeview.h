@@ -264,6 +264,7 @@ DonnaNode *     donna_tree_view_get_node_up     (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
                                                  gint                level,
+                                                 DonnaTreeSet        set,
                                                  GError            **error);
 GPtrArray *     donna_tree_view_context_get_nodes (
                                                  DonnaTreeView      *tree,

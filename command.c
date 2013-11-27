@@ -2093,6 +2093,12 @@ cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     gint level = GPOINTER_TO_INT (args[1]); /* opt */
+    gchar *s_set = args[2]; /* opt */
+
+    const gchar *c_set[] = { "scroll", "focus", "cursor" };
+    DonnaTreeSet sets[] = { DONNA_TREE_SET_SCROLL, DONNA_TREE_SET_FOCUS,
+        DONNA_TREE_SET_CURSOR };
+    DonnaTreeSet set;
 
     /* we cannot differentiate between the level arg being set to 0, and not
      * specified. So, we assume not set and default to 1.
@@ -2100,7 +2106,12 @@ cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     if (level == 0)
         level = 1;
 
-    if (!donna_tree_view_go_up (tree, level, &err))
+    if (s_set)
+        set = _get_flags (c_set, sets, s_set);
+    else
+        set = 0;
+
+    if (!donna_tree_view_go_up (tree, level, set, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -3186,6 +3197,7 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_go_up, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 

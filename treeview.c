@@ -8104,6 +8104,17 @@ struct cl_cb
     GDestroyNotify destroy;
 };
 
+struct cl_go_up
+{
+    enum cl_extra type;
+    change_location_callback_fn callback;
+    gpointer data;
+    GDestroyNotify destroy;
+
+    DonnaNode *node;
+    DonnaTreeSet set;
+};
+
 static inline gboolean
 handle_history_move (DonnaTreeView *tree, DonnaNode *node)
 {
@@ -12170,9 +12181,49 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
     return node;
 }
 
+static void
+free_go_up (struct cl_go_up *data)
+{
+    g_object_unref (data->node);
+    g_free (data);
+}
+
+static void
+go_up_cb (DonnaTreeView *tree, struct cl_go_up *data)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GSList *l;
+
+    l = g_hash_table_lookup (priv->hashtable, data->node);
+    if (G_LIKELY (l))
+    {
+        /* we're in list, so there's only one iter */
+        GtkTreeIter *iter = l->data;
+        GtkTreePath *path;
+
+        path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, iter);
+
+        if (data->set & DONNA_TREE_SET_FOCUS)
+            gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+        if (data->set & DONNA_TREE_SET_SCROLL)
+            scroll_to_iter (tree, iter);
+        if (data->set & DONNA_TREE_SET_CURSOR)
+        {
+            if (!(data->set & DONNA_TREE_SET_FOCUS))
+                    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+            gtk_tree_selection_select_path (
+                    gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
+        }
+
+        gtk_tree_path_free (path);
+    }
+    free_go_up (data);
+}
+
 gboolean
 donna_tree_view_go_up (DonnaTreeView      *tree,
                        gint                level,
+                       DonnaTreeSet        set,
                        GError            **error)
 {
     GError *err = NULL;
@@ -12196,7 +12247,28 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    ret = donna_tree_view_set_location (tree, node, error);
+    if (!is_tree (tree))
+    {
+        struct cl_go_up *data;
+
+        data = g_new0 (struct cl_go_up, 1);
+        data->type      = CL_EXTRA_CALLBACK;
+        data->callback  = (change_location_callback_fn) go_up_cb;
+        data->data      = data;
+        data->destroy   = (GDestroyNotify) free_go_up;
+
+        data->set       = set;
+        if (level > 1)
+            data->node  = donna_tree_view_get_node_up (tree, level - 1, NULL);
+        else
+            data->node  = g_object_ref (tree->priv->location);
+
+        /* same as donna_tree_view_set_location() only with our callback */
+        ret = change_location (tree, CHANGING_LOCATION_ASKED, node, data, error);
+    }
+    else
+        ret = donna_tree_view_set_location (tree, node, error);
+
     g_object_unref (node);
     return ret;
 }
@@ -13085,7 +13157,11 @@ tree_context_get_item_info (const gchar             *item,
 
             info->name = "Go Up";
             info->icon_name = "go-up";
-            info->trigger = "command:tree_go_up (%o)";
+            if (extra)
+                info->trigger = g_strconcat (
+                        "command:tree_go_up (%o,,", extra, ")", NULL);
+            else
+                info->trigger = "command:tree_go_up (%o)";
         }
         else if (streq (item, "down"))
         {
