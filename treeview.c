@@ -12977,8 +12977,8 @@ tree_context_get_item_info (const gchar             *item,
         info->free_name = TRUE;
 
         if (info->is_visible && info->is_sensitive)
-            info->trigger = g_strdup_printf (
-                    "command:tree_column_edit (%%o, %%r, %s)", _col->name);
+            info->trigger = g_strconcat (
+                    "command:tree_column_edit (%o,%r,", _col->name, ")", NULL);
 
         return TRUE;
     }
@@ -13031,7 +13031,8 @@ tree_context_get_item_info (const gchar             *item,
                 if (t != tree)
                     g_object_unref (t);
 
-                info->trigger = g_strdup_printf ("command:tree_go_root (%s)", extra);
+                info->trigger = g_strconcat (
+                        "command:tree_go_root (", extra, ")", NULL);
                 info->free_trigger = TRUE;
             }
         }
@@ -13053,11 +13054,7 @@ tree_context_get_item_info (const gchar             *item,
 
             info->name = "Go Up";
             info->icon_name = "go-up";
-            if (info->is_visible)
-            {
-                info->trigger = g_strdup ("command:tree_go_up (%o)");
-                info->free_trigger = TRUE;
-            }
+            info->trigger = "command:tree_go_up (%o)";
         }
         else if (streq (item, "down"))
         {
@@ -13070,11 +13067,7 @@ tree_context_get_item_info (const gchar             *item,
 
             info->name = "Go Down";
             info->icon_name = "go-down";
-            if (info->is_visible)
-            {
-                info->trigger = g_strdup ("command:tree_go_down (%o)");
-                info->free_trigger = TRUE;
-            }
+            info->trigger = "command:tree_go_down (%o)";
         }
         else if (streq (item, "back"))
         {
@@ -13086,8 +13079,7 @@ tree_context_get_item_info (const gchar             *item,
             info->icon_name = "go-previous";
             info->is_sensitive = donna_history_get_item (priv->history,
                     DONNA_HISTORY_BACKWARD, 1, NULL) != NULL;
-            info->trigger = g_strdup ("command:tree_history_move (%o)");
-            info->free_trigger = TRUE;
+            info->trigger = "command:tree_history_move (%o)";
         }
         else if (streq (item, "forward"))
         {
@@ -13099,8 +13091,7 @@ tree_context_get_item_info (const gchar             *item,
             info->icon_name = "go-next";
             info->is_sensitive = donna_history_get_item (priv->history,
                     DONNA_HISTORY_FORWARD, 1, NULL) != NULL;
-            info->trigger = g_strdup ("command:tree_history_move (%o, forward)");
-            info->free_trigger = TRUE;
+            info->trigger = "command:tree_history_move (%o, forward)";
         }
         else
             goto err;
@@ -13257,8 +13248,7 @@ tree_context_get_item_info (const gchar             *item,
         if (item[7] == '\0')
         {
             info->name = "Refresh";
-            info->trigger = g_strdup ("command:tree_refresh (%o, normal)");
-            info->free_trigger = TRUE;
+            info->trigger = "command:tree_refresh (%o, normal)";
             return TRUE;
         }
         else if (item[7] != '.')
@@ -13268,20 +13258,17 @@ tree_context_get_item_info (const gchar             *item,
         if (streq (item, "visible"))
         {
             info->name = "Refresh (Visible)";
-            info->trigger = g_strdup ("command:tree_refresh (%o, visible)");
-            info->free_trigger = TRUE;
+            info->trigger = "command:tree_refresh (%o, visible)";
         }
         else if (streq (item, "simple"))
         {
             info->name = "Refresh (Simple)";
-            info->trigger = g_strdup ("command:tree_refresh (%o, simple)");
-            info->free_trigger = TRUE;
+            info->trigger = "command:tree_refresh (%o, simple)";
         }
         else if (streq (item, "reload"))
         {
             info->name = "Refresh (Reload)";
-            info->trigger = g_strdup ("command:tree_refresh (%o, reload)");
-            info->free_trigger = TRUE;
+            info->trigger = "command:tree_refresh (%o, reload)";
         }
         else
             goto err;
@@ -13338,43 +13325,37 @@ tree_context_get_item_info (const gchar             *item,
         {
             info->is_sensitive = on != ON_NOTHING;
             if (on == ON_SEL)
-                info->trigger = g_strdup_printf (
-                        "command:register_set (%s, cut, "
-                        "@tree_get_nodes (%%o, :selected))",
-                        extra);
+                info->trigger = g_strconcat (
+                        "command:register_set (", extra, ",cut,"
+                        "@tree_get_nodes (%o, :selected))", NULL);
             else if (on == ON_REF)
-                info->trigger = g_strdup_printf (
-                        "command:register_set (%s, cut, "
-                        "@tree_get_nodes (%%o, %r))",
-                        extra);
+                info->trigger = g_strconcat (
+                        "command:register_set (", extra, ",cut,"
+                        "@tree_get_nodes (%o, %r))", NULL);
         }
         else if (streq (item, "copy"))
         {
             info->is_sensitive = on != ON_NOTHING;
             if (on == ON_SEL)
-                info->trigger = g_strdup_printf (
-                        "command:register_set (%s, copy, "
-                        "@tree_get_nodes (%%o, :selected))",
-                        extra);
+                info->trigger = g_strconcat (
+                        "command:register_set (", extra, ",copy,"
+                        "@tree_get_nodes (%o, :selected))", NULL);
             else if (on == ON_REF)
-                info->trigger = g_strdup_printf (
-                        "command:register_set (%s, copy, "
-                        "@tree_get_nodes (%%o, %r))",
-                        extra);
+                info->trigger = g_strconcat (
+                        "command:register_set (", extra, ",copy,"
+                        "@tree_get_nodes (%o, %r))", NULL);
         }
         else if (streq (item, "append"))
         {
             info->is_sensitive = on != ON_NOTHING;
             if (on == ON_SEL)
-                info->trigger = g_strdup_printf (
-                        "command:register_add_nodes (%s, "
-                        "@tree_get_nodes (%%o, :selected))",
-                        extra);
+                info->trigger = g_strconcat (
+                        "command:register_add_nodes (", extra, ","
+                        "@tree_get_nodes (%o, :selected))", NULL);
             else if (on == ON_REF)
-                info->trigger = g_strdup_printf (
-                        "command:register_add_nodes (%s, "
-                        "@tree_get_nodes (%%o, %%r))",
-                        extra);
+                info->trigger = g_strconcat (
+                        "command:register_add_nodes (", extra, ","
+                        "@tree_get_nodes (%o, %r))", NULL);
         }
         else if (streq (item, "paste") || streq (item, "paste_copy")
                 || streq (item, "paste_move") || streq (item, "paste_new_folder"))
@@ -13392,13 +13373,12 @@ tree_context_get_item_info (const gchar             *item,
 
             if (dest)
             {
-                info->trigger = g_strdup_printf (
-                        "command:register_nodes_io (%s, %s, %s, %d)",
-                        extra,
+                info->trigger = g_strconcat (
+                        "command:register_nodes_io (", extra, ",",
                         (streq (item, "paste_copy")) ? "copy"
                         : (streq (item, "paste_move")) ? "move" : "auto",
-                        dest,
-                        (streq (item, "paste_new_folder")) ? 1 : 0);
+                        ",", dest, ",",
+                        (streq (item, "paste_new_folder")) ? "1)" : "0)", NULL);
 
                 g_free (dest);
             }
@@ -13417,6 +13397,7 @@ tree_context_get_item_info (const gchar             *item,
                     priv->name, item, extra, b);
             if (b != buf)
                 g_free (b);
+            g_free (info->trigger);
             return FALSE;
         }
 
@@ -13446,6 +13427,7 @@ tree_context_get_item_info (const gchar             *item,
         }
 
         g_object_unref (node);
+        info->free_trigger = TRUE;
         return TRUE;
     }
     else if (streq (item, "remove_row"))
