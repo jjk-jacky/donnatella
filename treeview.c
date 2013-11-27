@@ -8063,8 +8063,20 @@ switch_provider (DonnaTreeView *tree,
     }
 }
 
+enum cl_extra
+{
+    CL_EXTRA_NONE = 0,
+    CL_EXTRA_HISTORY_MOVE
+};
+
+struct change_location_extra
+{
+    enum cl_extra type;
+};
+
 struct history_move
 {
+    enum cl_extra type;
     DonnaHistoryDirection direction;
     guint nb;
 };
@@ -8224,12 +8236,18 @@ change_location (DonnaTreeView *tree,
          * period of time, and will only use it to compare (the pointer) in the
          * task's timeout/cb, to make sure the new location is still valid */
         priv->future_location = node;
-        /* we might have gotten extra info if this is a move in history */
+        /* we might have gotten extra info */
         if (_data)
         {
-            struct history_move *hm = _data;
-            priv->future_history_direction = hm->direction;
-            priv->future_history_nb = hm->nb;
+            struct change_location_extra *cle = _data;
+
+            /* is this a move in history? */
+            if (cle->type == CL_EXTRA_HISTORY_MOVE)
+            {
+                struct history_move *hm = _data;
+                priv->future_history_direction = hm->direction;
+                priv->future_history_nb = hm->nb;
+            }
         }
         else
         {
@@ -11973,7 +11991,7 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
     DonnaTreeViewPrivate *priv;
     DonnaNode *node;
     const gchar *fl;
-    struct history_move hm = { direction, nb };
+    struct history_move hm = { CL_EXTRA_HISTORY_MOVE, direction, nb };
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     priv = tree->priv;
