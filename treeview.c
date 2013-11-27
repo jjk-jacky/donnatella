@@ -7721,11 +7721,15 @@ scroll_to_current (DonnaTreeView *tree)
     return FALSE;
 }
 
+typedef void (*change_location_callback_fn) (DonnaTreeView *tree, gpointer data);
 struct node_get_children_list_data
 {
     DonnaTreeView *tree;
     DonnaNode     *node;
     DonnaNode     *child; /* item to goto_item_set */
+    change_location_callback_fn callback;
+    gpointer cb_data;
+    GDestroyNotify cb_destroy;
 };
 
 static inline void
@@ -7734,6 +7738,8 @@ free_node_get_children_list_data (struct node_get_children_list_data *data)
     g_object_unref (data->node);
     if (data->child)
         g_object_unref (data->child);
+    if (data->cb_destroy && data->cb_data)
+        data->cb_destroy (data->cb_data);
     g_slice_free (struct node_get_children_list_data, data);
 }
 
@@ -7987,6 +7993,14 @@ no_task:
     priv->location_task = (donna_task_can_be_duplicated (task))
         ? g_object_ref (task) : NULL;
 
+    /* if there's a post-CL callback, trigger it */
+    if (data->callback)
+    {
+        data->callback (data->tree, data->cb_data);
+        /* no need to free cb_data anymore (callback had to do it) */
+        data->cb_destroy = NULL;
+    }
+
 free:
     free_node_get_children_list_data (data);
 }
@@ -8066,7 +8080,8 @@ switch_provider (DonnaTreeView *tree,
 enum cl_extra
 {
     CL_EXTRA_NONE = 0,
-    CL_EXTRA_HISTORY_MOVE
+    CL_EXTRA_HISTORY_MOVE,
+    CL_EXTRA_CALLBACK
 };
 
 struct change_location_extra
@@ -8079,6 +8094,14 @@ struct history_move
     enum cl_extra type;
     DonnaHistoryDirection direction;
     guint nb;
+};
+
+struct cl_cb
+{
+    enum cl_extra type;
+    change_location_callback_fn callback;
+    gpointer data;
+    GDestroyNotify destroy;
 };
 
 static inline gboolean
@@ -8247,6 +8270,14 @@ change_location (DonnaTreeView *tree,
                 struct history_move *hm = _data;
                 priv->future_history_direction = hm->direction;
                 priv->future_history_nb = hm->nb;
+            }
+            /* is this a callback? */
+            else if (cle->type == CL_EXTRA_CALLBACK)
+            {
+                struct cl_cb *cb = _data;
+                data->callback = cb->callback;
+                data->cb_data = cb->data;
+                data->cb_destroy = cb->destroy;
             }
         }
         else
