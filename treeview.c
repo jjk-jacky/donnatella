@@ -447,6 +447,7 @@ struct _DonnaTreeViewPrivate
     /* mode List */
     guint                draw_state         : 2; /* state, NOT an option */
     guint                focusing_click     : 1;
+    guint                goto_item_set      : 3; /* DonnaTreeSet */
     /* DonnaColumnType (line number) */
     guint                ln_relative        : 1; /* relative number */
     guint                ln_relative_focused: 1; /* relative only when focused */
@@ -1153,6 +1154,24 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
         return FALSE;
 
     i = 0;
+    it_int[i].value     = DONNA_TREE_SET_SCROLL;
+    it_int[i].in_file   = "scroll";
+    it_int[i].label     = "Scroll";
+    ++i;
+    it_int[i].value     = DONNA_TREE_SET_FOCUS;
+    it_int[i].in_file   = "focus";
+    it_int[i].label     = "Focus";
+    ++i;
+    it_int[i].value     = DONNA_TREE_SET_CURSOR;
+    it_int[i].in_file   = "cursor";
+    it_int[i].label     = "Cursor";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS, "tree-set", "Tree Set",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
     it_int[i].value     = KEY_DISABLED;
     it_int[i].in_file   = "disabled";
     it_int[i].label     = "Disabled";
@@ -1716,6 +1735,9 @@ config_get_string (DonnaTreeView   *tree,
     config_get_boolean (t, c, "auto_focus_sync", TRUE, f)
 #define cfg_get_focusing_click(t,c,f) \
     config_get_boolean (t, c, "focusing_click", TRUE, f)
+#define cfg_get_goto_item_set(t,c,f) \
+    CLAMP (config_get_int (t, c, "goto_item_set", \
+            DONNA_TREE_SET_SCROLL | DONNA_TREE_SET_FOCUS, f), 0, 7)
 #define cfg_get_history_max(t,c,f) \
     config_get_int (t, c, "history_max", 100, f)
 
@@ -1995,6 +2017,16 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY || priv->focusing_click != val)
                     priv->focusing_click = val;
             }
+            else if (streq (opt, "goto_item_set"))
+            {
+                if (data->opt == OPT_IN_MEMORY)
+                    val = * (gint *) data->val;
+                else
+                    val = cfg_get_goto_item_set (tree, config, NULL);
+
+                if (data->opt == OPT_IN_MEMORY || priv->goto_item_set != val)
+                    priv->goto_item_set = val;
+            }
             else if (streq (opt, "history_max"))
             {
                 if (data->opt == OPT_IN_MEMORY)
@@ -2002,8 +2034,8 @@ real_option_cb (struct option_data *data)
                 else
                     val = cfg_get_history_max (tree, config, NULL);
 
-                if (data->opt == OPT_IN_MEMORY ||
-                        donna_history_get_max (priv->history) != (guint) val)
+                if (data->opt == OPT_IN_MEMORY
+                        || donna_history_get_max (priv->history) != (guint) val)
                     donna_history_set_max (priv->history, (guint) val);
             }
         }
@@ -2242,6 +2274,9 @@ load_config (DonnaTreeView *tree)
     {
         val = cfg_get_focusing_click (tree, config, NULL);
         priv->focusing_click = val;
+
+        val = cfg_get_goto_item_set (tree, config, NULL);
+        priv->goto_item_set = val;
 
         val = cfg_get_history_max (tree, config, NULL);
         priv->history = donna_history_new (val);
@@ -7690,7 +7725,7 @@ struct node_get_children_list_data
 {
     DonnaTreeView *tree;
     DonnaNode     *node;
-    DonnaNode     *child; /* item to scroll to & select */
+    DonnaNode     *child; /* item to goto_item_set */
 };
 
 static inline void
@@ -7898,20 +7933,33 @@ no_task:
         {
             GtkTreePath *path;
 
-            /* we bring the row into view as needed, then focus it only. If not
-             * patched, we can just set_cursor() & then unselect, since we know
-             * there are no selection */
-
             path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
-            if (changed_location)
-                scroll_to_iter (data->tree, &iter);
-            else
-                gtk_tree_view_scroll_to_cell ((GtkTreeView *) data->tree, path,
-                        NULL, FALSE, 0.0, 0.0);
-            gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
+
+            if (priv->goto_item_set & DONNA_TREE_SET_SCROLL)
+            {
+                if (changed_location)
+                    scroll_to_iter (data->tree, &iter);
+                else
+                    gtk_tree_view_scroll_to_cell ((GtkTreeView *) data->tree,
+                            path, NULL, FALSE, 0.0, 0.0);
+            }
+
+            if (priv->goto_item_set & DONNA_TREE_SET_FOCUS)
+                gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
+
+            if (priv->goto_item_set & DONNA_TREE_SET_CURSOR)
+            {
+                if (!(priv->goto_item_set & DONNA_TREE_SET_FOCUS))
+                    gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
+                gtk_tree_selection_select_path (
+                        gtk_tree_view_get_selection ((GtkTreeView *) data->tree),
+                        path);
+            }
+
             gtk_tree_path_free (path);
         }
-        else
+        if (!(priv->goto_item_set & DONNA_TREE_SET_SCROLL)
+                || it || iter.stamp == 0)
             /* scroll to top-left */
             gtk_tree_view_scroll_to_point ((GtkTreeView *) data->tree, 0, 0);
 
@@ -10455,6 +10503,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         }
     }
     handle_option_boolean ("focusing_click", focusing_click)
+    handle_option_int_extra ("goto_item_set", "tree-set", FLAGS, goto_item_set)
     else
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
@@ -12626,7 +12675,12 @@ tree_context_get_alias (const gchar             *alias,
         }
         else
             donna_g_string_append_concat (str, ",-,"
-                    ":tree_options.focusing_click:@", extra, NULL);
+                    ":tree_options.focusing_click:@", extra, ",",
+                    ":tree_options.goto_item_set<"
+                        ":tree_options.goto_item_set.scroll:@", extra, ",",
+                        ":tree_options.goto_item_set.focus:@", extra, ",",
+                        ":tree_options.goto_item_set.cursor:@", extra, ">",
+                        NULL);
 
         g_string_append (str, ",-,");
         if (!_add_items_for_extra (tree, str,
@@ -13711,6 +13765,28 @@ tree_context_get_item_info (const gchar             *item,
                 else
                     set_trigger ("focusing_click", "1");
                 return TRUE;
+            }
+            else if (streqn (item, "goto_item_set", 13))
+            {
+                if (item[13] == '\0')
+                {
+                    info->is_visible = info->is_sensitive = TRUE;
+                    info->name = "On Item As Location...";
+                    info->desc = "When an item is set as location, after going "
+                        "to its parent, what should be set on the item...";
+                    info->submenus = 1;
+                    return TRUE;
+                }
+                else if (item[13] == '.')
+                {
+                    if (!_set_item_from_extra (tree, info, priv->goto_item_set,
+                                "tree-set", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
+                                "goto_item_set", item + 14, extra, error))
+                        return FALSE;
+
+                    info->is_visible = info->is_sensitive = TRUE;
+                    return TRUE;
+                }
             }
         }
 
