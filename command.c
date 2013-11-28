@@ -111,7 +111,7 @@ _donna_get_flags_from_list (gint             nb,
             *end = e;
 
         if (c < 0)
-            return 0;
+            return (guint) -1;
         ret |= flags[c];
 
         if (ss)
@@ -1163,7 +1163,7 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
     if (on_container)
     {
         trg_container = _get_flags (s_container, trigger, on_container);
-        if (trg_container == 0)
+        if (trg_container == (guint) -1)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
@@ -2111,6 +2111,16 @@ cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         set = 0;
 
+    if (set == (guint) -1)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
+                "Command 'tree_go_up': Invalid set argument '%s': "
+                "Must be (a '+'-separated list of) 'scroll', 'focus' and/or 'cursor'",
+                s_set);
+        return DONNA_TASK_FAILED;
+    }
+
     if (!donna_tree_view_go_up (tree, level, set, &err))
     {
         donna_task_take_error (task, err);
@@ -2146,7 +2156,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     gint c_a;
 
     set = _get_flags (c_set, sets, s_set);
-    if (set == 0)
+    if (set == (guint) -1)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
@@ -2212,7 +2222,7 @@ cmd_tree_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
     if (direction)
     {
         dir = _get_flags (s_directions, directions, direction);
-        if (dir == 0)
+        if (dir == (guint) -1)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
@@ -2253,7 +2263,7 @@ cmd_tree_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
     if (direction)
     {
         dir = _get_flags (s_directions, directions, direction);
-        if (dir == 0)
+        if (dir == (guint) -1)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
@@ -2347,7 +2357,7 @@ cmd_tree_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
     if (direction)
     {
         dir = _get_flags (s_directions, directions, direction);
-        if (dir == 0)
+        if (dir == (guint) -1)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
