@@ -302,9 +302,6 @@ gboolean        donna_tree_view_set_option      (DonnaTreeView      *tree,
                                                  DonnaTreeviewOptionSaveLocation save_location,
                                                  GError            **error);
 /* mode Tree */
-gboolean        donna_tree_view_load_tree       (DonnaTreeView      *tree,
-                                                 const gchar        *data);
-gchar *         donna_tree_view_export_tree     (DonnaTreeView      *tree);
 gboolean        donna_tree_view_add_root        (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  GError            **error);
