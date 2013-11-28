@@ -2726,26 +2726,37 @@ remove_row_from_tree (DonnaTreeView *tree,
     /* now we can remove the row */
     ret = donna_tree_store_remove (priv->store, iter);
 
-    /* we have a parent, it has no more children, update expand state */
-    if (is_tree (tree) && parent.stamp != 0
-            && !donna_tree_store_iter_has_child (priv->store, &parent))
+    /* we have a parent on tree, let's check/update its expand state */
+    if (is_tree (tree) && parent.stamp != 0)
     {
         enum tree_expand es;
 
         gtk_tree_model_get (model, &parent,
                 DONNA_TREE_COL_EXPAND_STATE,    &es,
                 -1);
-        if (es == DONNA_TREE_EXPAND_PARTIAL)
+
+        if (!donna_tree_store_iter_has_child (priv->store, &parent))
         {
-            es = DONNA_TREE_EXPAND_UNKNOWN;
-            /* add a fake row */
-            donna_tree_store_insert_with_values (priv->store, NULL, &parent, 0,
-                    DONNA_TREE_COL_NODE,    NULL,
-                    -1);
+            if (es == DONNA_TREE_EXPAND_PARTIAL || !is_removal)
+            {
+                es = DONNA_TREE_EXPAND_UNKNOWN;
+                /* add a fake row */
+                donna_tree_store_insert_with_values (priv->store, NULL, &parent, 0,
+                        DONNA_TREE_COL_NODE,    NULL,
+                        -1);
+            }
+            else
+                es = DONNA_TREE_EXPAND_NONE;
+            set_es (priv, &parent, es);
         }
         else
-            es = DONNA_TREE_EXPAND_NONE;
-        set_es (priv, &parent, es);
+        {
+            if (es == DONNA_TREE_EXPAND_MAXI && !is_removal)
+            {
+                es = DONNA_TREE_EXPAND_PARTIAL;
+                set_es (priv, &parent, es);
+            }
+        }
     }
     else if (!is_tree (tree)
             && (donna_tree_model_get_count ((GtkTreeModel *) priv->store) == 0))
@@ -3362,18 +3373,6 @@ maxi_collapse_row (DonnaTreeView    *tree,
         if (donna_tree_store_iter_children (priv->store, &it, iter))
             while (remove_row_from_tree (tree, &it, FALSE))
                 ;
-        /* remove_row_from_tree will add a fake node & set expand_state to
-         * UNKNOWN if it was partial. However, if not it won't add the fake node
-         * and set expand_state to NONE so we need to adjust things */
-        if (es == DONNA_TREE_EXPAND_MAXI)
-        {
-            /* add fake node */
-            donna_tree_store_insert_with_values (priv->store, NULL, iter, 0,
-                    DONNA_TREE_COL_NODE,    NULL,
-                    -1);
-            /* update expand state */
-            set_es (priv, iter, DONNA_TREE_EXPAND_UNKNOWN);
-        }
     }
 
     return ret;
