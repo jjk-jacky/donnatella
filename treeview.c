@@ -9798,42 +9798,18 @@ donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
     return TRUE;
 }
 
-gboolean
-donna_tree_view_set_visual (DonnaTreeView      *tree,
-                            DonnaTreeRowId     *rowid,
-                            DonnaTreeVisual     visual,
-                            const gchar        *_value,
-                            GError            **error)
+/* mode tree only */
+static gboolean
+set_tree_visual (DonnaTreeView  *tree,
+                 GtkTreeIter    *iter,
+                 DonnaTreeVisual visual,
+                 const gchar    *_value,
+                 GError        **error)
 {
-    DonnaTreeViewPrivate *priv;
-    GtkTreeIter  iter;
-    row_id_type  type;
+    DonnaTreeViewPrivate *priv = tree->priv;
     DonnaTreeVisual v;
     gpointer value = (gpointer) _value;
     guint col;
-
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    g_return_val_if_fail (rowid != NULL, FALSE);
-    g_return_val_if_fail (visual != 0, FALSE);
-    priv = tree->priv;
-
-    if (G_UNLIKELY (!is_tree (tree)))
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': set_visual() doesn't apply in mode list",
-                priv->name);
-        return FALSE;
-    }
-
-    type = convert_row_id_to_iter (tree, rowid, &iter);
-    if (type != ROW_ID_ROW)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot set visual, invalid row-id",
-                priv->name);
-        return FALSE;
-    }
 
     if (visual == DONNA_TREE_VISUAL_NAME)
         col = DONNA_TREE_COL_NAME;
@@ -9881,7 +9857,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
             DONNA_TREE_COL_VISUALS,     &v,
             -1);
     if (value)
@@ -9889,7 +9865,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     else
         v &= ~visual;
 
-    donna_tree_store_set (priv->store, &iter,
+    donna_tree_store_set (priv->store, iter,
             DONNA_TREE_COL_VISUALS,     v,
             col,                        value,
             -1);
@@ -9903,14 +9879,51 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
 
         /* if we show the node visual and there's one, restore it */
 
-        gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+        gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
                 DONNA_TREE_COL_NODE,    &node,
                 -1);
-        load_node_visuals (tree, &iter, node, FALSE);
+        load_node_visuals (tree, iter, node, FALSE);
         g_object_unref (node);
     }
 
     return TRUE;
+}
+
+gboolean
+donna_tree_view_set_visual (DonnaTreeView      *tree,
+                            DonnaTreeRowId     *rowid,
+                            DonnaTreeVisual     visual,
+                            const gchar        *value,
+                            GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    g_return_val_if_fail (visual != 0, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!is_tree (tree)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': set_visual() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "Treeview '%s': Cannot set visual, invalid row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    return set_tree_visual (tree, &iter, visual, value, error);
 }
 
 gchar *
