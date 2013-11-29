@@ -2647,6 +2647,30 @@ remove_row_from_tree (DonnaTreeView *tree,
         g_object_unref (node);
     }
 
+    /* removing the row with the focus will have GTK do a set_cursor(), this
+     * isn't the best of behaviors, so let's see if we can do "better" */
+    if (donna_tree_model_get_count (model) > 1)
+    {
+        GtkTreePath *path_cursor;
+
+        gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_cursor, NULL);
+        if (path_cursor)
+        {
+            GtkTreeIter  iter_cursor;
+
+            gtk_tree_model_get_iter (model, &iter_cursor, path_cursor);
+            if (itereq (iter, &iter_cursor))
+                handle_removing_row (tree, iter, TRUE);
+            gtk_tree_path_free (path_cursor);
+        }
+    }
+
+    /* tree: if removing the current location, let's move it */
+    if (is_tree (tree) && gtk_tree_selection_get_selected (
+                gtk_tree_view_get_selection ((GtkTreeView *) tree), NULL, &it)
+            && itereq (iter, &it))
+        handle_removing_row (tree, &it, FALSE);
+
     if (is_tree (tree))
     {
         GtkTreeIter child;
@@ -2675,30 +2699,6 @@ remove_row_from_tree (DonnaTreeView *tree,
         if (priv->row_has_child_toggled_sid)
             g_signal_handler_unblock (priv->store, priv->row_has_child_toggled_sid);
     }
-
-    /* removing the row with the focus will have GTK do a set_cursor(), this
-     * isn't the best of behaviors, so let's see if we can do "better" */
-    if (donna_tree_model_get_count (model) > 1)
-    {
-        GtkTreePath *path_cursor;
-
-        gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_cursor, NULL);
-        if (path_cursor)
-        {
-            GtkTreeIter  iter_cursor;
-
-            gtk_tree_model_get_iter (model, &iter_cursor, path_cursor);
-            if (itereq (iter, &iter_cursor))
-                handle_removing_row (tree, iter, TRUE);
-            gtk_tree_path_free (path_cursor);
-        }
-    }
-
-    /* tree: if removing the current location, let's move it */
-    if (is_tree (tree) && gtk_tree_selection_get_selected (
-                gtk_tree_view_get_selection ((GtkTreeView *) tree), NULL, &it)
-            && itereq (iter, &it))
-        handle_removing_row (tree, &it, FALSE);
 
     /* remove all watched_iters to this row */
     l = priv->watched_iters;
