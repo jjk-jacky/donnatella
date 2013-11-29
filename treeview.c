@@ -2511,9 +2511,10 @@ remove_row_from_tree (DonnaTreeView *tree,
     DonnaNode *node;
     DonnaProvider *provider;
     guint i;
-    GSList *l, *prev = NULL;
+    GSList *l, *prev;
     GtkTreeIter parent;
     GtkTreeIter it;
+    gboolean is_root = FALSE;
     gboolean ret;
 
     /* get the node */
@@ -2522,8 +2523,6 @@ remove_row_from_tree (DonnaTreeView *tree,
             -1);
     if (node)
     {
-        GSList *list;
-
         /* get its provider */
         provider = donna_node_peek_provider (node);
         /* and update the nb of nodes we have for this provider */
@@ -2544,36 +2543,10 @@ remove_row_from_tree (DonnaTreeView *tree,
 
         if (is_tree (tree))
         {
-            /* removing a root? */
-            if (donna_tree_store_iter_depth (priv->store, iter) == 0)
-            {
-                GSList *l;
+            /* we'll need that info post_removal, i.e. once iter isn't valid anymore */
+            is_root = donna_tree_store_iter_depth (priv->store, iter) == 0;
 
-                for (l = priv->roots; l; l = l->next)
-                    if (itereq (iter, (GtkTreeIter *) l->data))
-                    {
-                        priv->roots = g_slist_delete_link (priv->roots, l);
-                        break;
-                    }
-
-                /* also means we need to clean tree_visuals for anything that
-                 * was under that root. Removing a root means forgetting any and
-                 * all tree visuals under there. */
-
-                if (priv->tree_visuals)
-                {
-                    struct ctv_data data = { .tree = tree, .iter = iter };
-
-                    g_hash_table_foreach_remove (priv->tree_visuals,
-                            (GHRFunc) clean_tree_visuals, &data);
-                    if (g_hash_table_size (priv->tree_visuals) == 0)
-                    {
-                        g_hash_table_unref (priv->tree_visuals);
-                        priv->tree_visuals = NULL;
-                    }
-                }
-            }
-            else if (!is_removal)
+            if (!is_removal)
             {
                 DonnaTreeVisual v;
 
@@ -2632,36 +2605,6 @@ remove_row_from_tree (DonnaTreeView *tree,
                 }
             }
         }
-
-        /* remove iter for that row from hashtable -- must be done after
-         * everything needing the iter (from hashtable, which is also used in
-         * priv->roots) is done, since it will be free-d */
-        l = list = g_hash_table_lookup (priv->hashtable, node);
-        while (l)
-        {
-            if (itereq (iter, (GtkTreeIter *) l->data))
-            {
-                if (prev)
-                    prev->next = l->next;
-                else
-                    list = l->next;
-
-                gtk_tree_iter_free (l->data);
-                g_slist_free_1 (l);
-                break;
-            }
-            else
-            {
-                prev = l;
-                l = l->next;
-            }
-        }
-        if (list)
-            g_hash_table_insert (priv->hashtable, node, list);
-        else
-            g_hash_table_remove (priv->hashtable, node);
-
-        g_object_unref (node);
     }
 
     /* removing the row with the focus will have GTK do a set_cursor(), this
@@ -2723,6 +2666,7 @@ remove_row_from_tree (DonnaTreeView *tree,
     }
 
     /* remove all watched_iters to this row */
+    prev = NULL;
     l = priv->watched_iters;
     while (l)
     {
@@ -2745,8 +2689,84 @@ remove_row_from_tree (DonnaTreeView *tree,
         }
     }
 
+    /* for post-removal processing */
+    it = *iter;
+
     /* now we can remove the row */
     ret = donna_tree_store_remove (priv->store, iter);
+
+    /* if there was a node, we have some extra work to do. We must do it now,
+     * after removal, because otherwise there are all kinds of issues, since
+     * we'll free & remove the iter from our hashtable & list of roots, but it's
+     * needed e.g. for sorting reasons and whatnot.
+     * Just remember: iter is either invalid or pointed to the next row, hence a
+     * local copy in it. And that one doesn't link to a, actual row anymore */
+    if (node)
+    {
+        GSList *list;
+
+        if (is_root)
+        {
+            GSList *l;
+
+            /* need to be prior removal, to ensure sorting remains valid until
+             * the end */
+            for (l = priv->roots; l; l = l->next)
+                if (itereq (&it, (GtkTreeIter *) l->data))
+                {
+                    priv->roots = g_slist_delete_link (priv->roots, l);
+                    break;
+                }
+
+            /* also means we need to clean tree_visuals for anything that
+             * was under that root. Removing a root means forgetting any and
+             * all tree visuals under there. */
+
+            if (priv->tree_visuals)
+            {
+                struct ctv_data data = { .tree = tree, .iter = &it };
+
+                g_hash_table_foreach_remove (priv->tree_visuals,
+                        (GHRFunc) clean_tree_visuals, &data);
+                if (g_hash_table_size (priv->tree_visuals) == 0)
+                {
+                    g_hash_table_unref (priv->tree_visuals);
+                    priv->tree_visuals = NULL;
+                }
+            }
+        }
+
+        /* remove iter for that row from hashtable -- must be done after
+         * everything needing the iter (from hashtable, which is also used in
+         * priv->roots) is done, since it will be free-d */
+        prev = NULL;
+        l = list = g_hash_table_lookup (priv->hashtable, node);
+        while (l)
+        {
+            if (itereq (&it, (GtkTreeIter *) l->data))
+            {
+                if (prev)
+                    prev->next = l->next;
+                else
+                    list = l->next;
+
+                gtk_tree_iter_free (l->data);
+                g_slist_free_1 (l);
+                break;
+            }
+            else
+            {
+                prev = l;
+                l = l->next;
+            }
+        }
+        if (list)
+            g_hash_table_insert (priv->hashtable, node, list);
+        else
+            g_hash_table_remove (priv->hashtable, node);
+
+        g_object_unref (node);
+    }
 
     /* we have a parent on tree, let's check/update its expand state */
     if (is_tree (tree) && parent.stamp != 0)
