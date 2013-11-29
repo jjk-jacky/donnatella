@@ -8657,6 +8657,10 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
         for ( ; list; list = list->next)
             if ((GtkTreeIter *) list->data == row->iter)
             {
+                if (is_tree (tree)
+                        && (!donna_tree_store_iter_is_visible (priv->store, list->data)
+                            || !is_row_accessible (tree, row->iter)))
+                    return ROW_ID_INVALID;
                 *iter = *row->iter;
                 return ROW_ID_ROW;
             }
@@ -8666,6 +8670,10 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
     {
         list = g_hash_table_lookup (priv->hashtable, rowid->ptr);
         if (!list)
+            return ROW_ID_INVALID;
+        if (is_tree (tree)
+                && (!donna_tree_store_iter_is_visible (priv->store, list->data)
+                    || !is_row_accessible (tree, list->data)))
             return ROW_ID_INVALID;
         *iter = * (GtkTreeIter *) list->data;
         return ROW_ID_ROW;
