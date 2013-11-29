@@ -2441,13 +2441,12 @@ handle_removing_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean is_focus)
 
     if (!is_focus)
     {
+        GtkTreeSelection *sel = gtk_tree_view_get_selection ((GtkTreeView *) tree);
+
         if (found)
-            gtk_tree_selection_select_iter (
-                    gtk_tree_view_get_selection ((GtkTreeView *) tree), &it);
+            gtk_tree_selection_select_iter (sel, &it);
         else
         {
-            GtkTreePath *path;
-
             if (donna_tree_model_get_count (model) == 0)
             {
                 /* if there's no more rows on tree, let's make sure we don't
@@ -2460,10 +2459,28 @@ handle_removing_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean is_focus)
                 }
                 return;
             }
-            path = gtk_tree_path_new_from_string ("0");
-            gtk_tree_selection_select_path (
-                    gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
-            gtk_tree_path_free (path);
+
+            /* then move to the first root */
+            gtk_tree_model_iter_children (model, &it, NULL);
+            /* but make sure this isn't the row we're moving away from
+             * (might be a row about to be removed) */
+            while (itereq (&it, iter))
+            {
+                if (!gtk_tree_model_iter_next (model, &it))
+                    break;
+            }
+            if (it.stamp != 0)
+                gtk_tree_selection_select_iter (sel, &it);
+            else
+            {
+                /* nowhere to go, no more current location: unselect, but allow
+                 * a new selection to be made (will then switch automatically
+                 * back to SELECTION_BROWSE) */
+                tree->priv->changing_sel_mode = TRUE;
+                gtk_tree_selection_set_mode (sel, GTK_SELECTION_SINGLE);
+                tree->priv->changing_sel_mode = FALSE;
+                gtk_tree_selection_unselect_all (sel);
+            }
         }
     }
     else if (found)
@@ -2659,7 +2676,9 @@ remove_row_from_tree (DonnaTreeView *tree,
             GtkTreeIter  iter_cursor;
 
             gtk_tree_model_get_iter (model, &iter_cursor, path_cursor);
-            if (itereq (iter, &iter_cursor))
+            if (itereq (iter, &iter_cursor)
+                    /* if the cursor is on a children, same deal */
+                    || donna_tree_store_is_ancestor (priv->store, iter, &iter_cursor))
                 handle_removing_row (tree, iter, TRUE);
             gtk_tree_path_free (path_cursor);
         }
@@ -2668,9 +2687,12 @@ remove_row_from_tree (DonnaTreeView *tree,
     /* tree: if removing the current location, let's move it */
     if (is_tree (tree) && gtk_tree_selection_get_selected (
                 gtk_tree_view_get_selection ((GtkTreeView *) tree), NULL, &it)
-            && itereq (iter, &it))
-        handle_removing_row (tree, &it, FALSE);
+            && (itereq (iter, &it)
+                /* also handles when location is on a (soon to be gone) children */
+                || donna_tree_store_is_ancestor (priv->store, iter, &it)))
+        handle_removing_row (tree, iter, FALSE);
 
+    /* now we can remove all children */
     if (is_tree (tree))
     {
         GtkTreeIter child;
