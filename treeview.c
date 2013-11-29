@@ -2360,6 +2360,7 @@ struct node_children_data
 {
     DonnaTreeView           *tree;
     GtkTreeIter              iter;
+    gboolean                 expand_row;
     gboolean                 scroll_to_current;
     node_children_extra_cb   extra_callback;
 };
@@ -3170,7 +3171,7 @@ node_get_children_tree_cb (DonnaTask                   *task,
 
     set_children (data->tree, &data->iter,
             g_value_get_boxed (donna_task_get_return_value (task)),
-            TRUE /* expand row */,
+            data->expand_row, /* expand row */
             FALSE /* no refresh */);
 
     if (data->scroll_to_current)
@@ -3189,6 +3190,7 @@ node_get_children_tree_cb (DonnaTask                   *task,
 static gboolean
 expand_row (DonnaTreeView           *tree,
             GtkTreeIter             *iter,
+            gboolean                 expand_row,
             gboolean                 scroll_current,
             node_children_extra_cb   extra_callback)
 {
@@ -3228,7 +3230,6 @@ expand_row (DonnaTreeView           *tree,
             if (es == DONNA_TREE_EXPAND_MAXI)
             {
                 GtkTreeIter child;
-                GtkTreePath *path;
 
                 /* let's import the children */
 
@@ -3254,10 +3255,14 @@ expand_row (DonnaTreeView           *tree,
                 /* update expand state */
                 set_es (priv, iter, DONNA_TREE_EXPAND_MAXI);
 
-                /* expand node */
-                path = gtk_tree_model_get_path (model, iter);
-                gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
-                gtk_tree_path_free (path);
+                if (expand_row)
+                {
+                    GtkTreePath *path;
+
+                    path = gtk_tree_model_get_path (model, iter);
+                    gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
+                    gtk_tree_path_free (path);
+                }
 
                 if (scroll_current)
                     scroll_to_current (tree);
@@ -3281,7 +3286,6 @@ expand_row (DonnaTreeView           *tree,
         if (arr)
         {
             guint i;
-            GtkTreePath *path;
 
             /* quite unlikely, but still */
             if (arr->len == 0)
@@ -3308,10 +3312,14 @@ expand_row (DonnaTreeView           *tree,
             /* update expand state */
             set_es (priv, iter, DONNA_TREE_EXPAND_MAXI);
 
-            /* expand node */
-            path = gtk_tree_model_get_path (model, iter);
-            gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
-            gtk_tree_path_free (path);
+            if (expand_row)
+            {
+                GtkTreePath *path;
+
+                path = gtk_tree_model_get_path (model, iter);
+                gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
+                gtk_tree_path_free (path);
+            }
 
             if (scroll_current)
                 scroll_to_current (tree);
@@ -3327,16 +3335,18 @@ expand_row (DonnaTreeView           *tree,
 
     data = g_slice_new0 (struct node_children_data);
     data->tree  = tree;
+    data->expand_row = expand_row;
     data->scroll_to_current = scroll_current;
     data->iter = *iter;
     watch_iter (tree, &data->iter);
     data->extra_callback = extra_callback;
 
-    /* FIXME: timeout_delay must be an option */
-    donna_task_set_timeout (task, 800,
-            (task_timeout_fn) node_get_children_tree_timeout,
-            data,
-            NULL);
+    if (expand_row)
+        /* FIXME: timeout_delay must be an option */
+        donna_task_set_timeout (task, 800,
+                (task_timeout_fn) node_get_children_tree_timeout,
+                data,
+                NULL);
     donna_task_set_callback (task,
             (task_callback_fn) node_get_children_tree_cb,
             data,
@@ -3374,7 +3384,7 @@ maxi_expand_row (DonnaTreeView  *tree,
         return ret;
     }
 
-    expand_row (tree, iter, FALSE,
+    expand_row (tree, iter, TRUE /* expand */, FALSE /* scroll to current */,
             /* if we're not "in sync" with our list (i.e. there's no row
              * for it) we attach the extra callback to check for it once
              * children will have been added.
@@ -3491,7 +3501,11 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
         case DONNA_TREE_EXPAND_NEVER:
             /* this will add an idle source import_children, or start a new task
              * get_children */
-            expand_row (tree, iter, FALSE,
+            expand_row (tree, iter,
+                    /* expand row */
+                    TRUE,
+                    /* scroll to current */
+                    FALSE,
                     /* if we're not "in sync" with our list (i.e. there's no row
                      * for it) we attach the extra callback to check for it once
                      * children will have been added.
@@ -7366,7 +7380,8 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                     /* this will take care of the import/get-children, we'll
                      * scroll (if sync_scroll) to make sure to scroll to current
                      * once children are added */
-                    expand_row (tree, prev_iter, priv->sync_scroll, NULL);
+                    expand_row (tree, prev_iter, /* expand */ TRUE,
+                            priv->sync_scroll, NULL);
                     /* now that the thread is started, we need to trigger it
                      * again, so the row actually gets expanded this time, which
                      * we require to be able to continue adding children &
@@ -9574,7 +9589,8 @@ full_expand (DonnaTreeView *tree, GtkTreeIter *iter)
         case DONNA_TREE_EXPAND_NEVER:
             /* will import/create get_children task. Will also call ourself
              * on iter, or make sure it gets called from the task's cb */
-            expand_row (tree, iter, FALSE, full_expand_children);
+            expand_row (tree, iter, /* expand */ TRUE,
+                    /* scroll to current */ FALSE, full_expand_children);
             break;
 
         case DONNA_TREE_EXPAND_PARTIAL:
