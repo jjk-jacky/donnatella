@@ -2424,6 +2424,45 @@ cmd_tree_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
+cmd_tree_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *file = args[1];
+    gchar *s_visuals = args[2]; /* opt */
+
+    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "clicks" };
+    DonnaTreeVisual _visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+    guint visuals;
+
+    if (s_visuals)
+    {
+        visuals = _get_flags (_s_visuals, _visuals, s_visuals);
+        if (visuals == (guint) -1)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'tree_save_tree_file': Invalid visuals : '%s'; "
+                    "Must be (a '+'-separated combination of) 'name', 'icon', "
+                    "'box',' highlight', and/or 'clicks'",
+                    s_visuals);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        visuals = 0;
+
+    if (!donna_tree_view_load_tree_file (tree, file, visuals, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
 cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
@@ -2560,6 +2599,45 @@ cmd_tree_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
         elements = 0;
 
     if (!donna_tree_view_save_list_file (tree, file, elements, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+static DonnaTaskState
+cmd_tree_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *file = args[1];
+    gchar *s_visuals = args[2]; /* opt */
+
+    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "clicks" };
+    DonnaTreeVisual _visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+    guint visuals;
+
+    if (s_visuals)
+    {
+        visuals = _get_flags (_s_visuals, _visuals, s_visuals);
+        if (visuals == (guint) -1)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'tree_save_tree_file': Invalid visuals : '%s'; "
+                    "Must be (a '+'-separated combination of) 'name', 'icon', "
+                    "'box',' highlight', and/or 'clicks'",
+                    s_visuals);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        visuals = 0;
+
+    if (!donna_tree_view_save_tree_file (tree, file, visuals, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -3336,6 +3414,13 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_load_tree_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     add_command (tree_maxi_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
@@ -3375,6 +3460,13 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tree_save_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREEVIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tree_save_tree_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

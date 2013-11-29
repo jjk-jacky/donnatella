@@ -11295,6 +11295,571 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
     return ret;
 }
 
+static void
+save_row (DonnaTreeView     *tree,
+          GString           *str,
+          GtkTreeIter       *iter,
+          guint              level,
+          gboolean           is_in_tree,
+          DonnaTreeVisual    visuals)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaNode *node;
+    DonnaTreeVisual v;
+    enum tree_expand es;
+    gboolean expand_flag;
+    GtkTreeModel *model = (GtkTreeModel *) priv->store;
+    GtkTreeIter child;
+    guint i;
+    gboolean need_space = level > 0;
+    gchar *s;
+
+    gtk_tree_model_get (model, iter,
+            DONNA_TREE_COL_NODE,            &node,
+            DONNA_TREE_COL_VISUALS,         &v,
+            DONNA_TREE_COL_EXPAND_STATE,    &es,
+            DONNA_TREE_COL_EXPAND_FLAG,     &expand_flag,
+            -1);
+
+    /* fake node, nothing to do */
+    if (!node)
+        return;
+
+    /* override is_in_tree if there are visuals, it's in partial/maxi expand,
+     * or is expanded, as we need to include such rows even when they're
+     * children on a non-partially expanded parent */
+    is_in_tree = is_in_tree || expand_flag
+        || es == DONNA_TREE_EXPAND_PARTIAL || es == DONNA_TREE_EXPAND_MAXI
+        || (visuals & v);
+
+    if (is_in_tree)
+    {
+        /* level indentation */
+        for (i = level; i > 0; --i)
+            g_string_append_c (str, '-');
+
+        /* visuals */
+        if ((visuals & DONNA_TREE_VISUAL_NAME) && (v & DONNA_TREE_VISUAL_NAME))
+        {
+            gtk_tree_model_get (model, iter, DONNA_TREE_COL_NAME, &s, -1);
+            if (need_space)
+                g_string_append_c (str, ' ');
+            g_string_append_c (str, '"');
+            g_string_append (str, s);
+            g_string_append_c (str, '"');
+            g_free (s);
+            need_space = TRUE;
+        }
+        if ((visuals & DONNA_TREE_VISUAL_ICON) && (v & DONNA_TREE_VISUAL_ICON))
+        {
+            GIcon *icon;
+
+            gtk_tree_model_get (model, iter, DONNA_TREE_COL_ICON, &icon, -1);
+            s = g_icon_to_string (icon);
+            if (G_LIKELY (s && *s != '.'))
+            {
+                if (need_space)
+                    g_string_append_c (str, ' ');
+                g_string_append_c (str, '@');
+                g_string_append (str, s);
+                g_string_append_c (str, '@');
+                need_space = TRUE;
+            }
+            g_free (s);
+            g_object_unref (icon);
+        }
+        if ((visuals & DONNA_TREE_VISUAL_BOX) && (v & DONNA_TREE_VISUAL_BOX))
+        {
+            gtk_tree_model_get (model, iter, DONNA_TREE_COL_BOX, &s, -1);
+            if (need_space)
+                g_string_append_c (str, ' ');
+            g_string_append_c (str, '{');
+            g_string_append (str, s);
+            g_string_append_c (str, '}');
+            g_free (s);
+            need_space = TRUE;
+        }
+        if ((visuals & DONNA_TREE_VISUAL_HIGHLIGHT) && (v & DONNA_TREE_VISUAL_HIGHLIGHT))
+        {
+            gtk_tree_model_get (model, iter, DONNA_TREE_COL_HIGHLIGHT, &s, -1);
+            if (need_space)
+                g_string_append_c (str, ' ');
+            g_string_append_c (str, '[');
+            g_string_append (str, s);
+            g_string_append_c (str, ']');
+            g_free (s);
+            need_space = TRUE;
+        }
+        if ((visuals & DONNA_TREE_VISUAL_CLICKS) && (v & DONNA_TREE_VISUAL_CLICKS))
+        {
+            gtk_tree_model_get (model, iter, DONNA_TREE_COL_CLICKS, &s, -1);
+            if (need_space)
+                g_string_append_c (str, ' ');
+            g_string_append_c (str, '(');
+            g_string_append (str, s);
+            g_string_append_c (str, ')');
+            g_free (s);
+            need_space = TRUE;
+        }
+
+        /* current location, prefixed with some flags */
+        if (need_space)
+            g_string_append_c (str, ' ');
+        /* flag current location */
+        if (itereq (iter, &priv->location_iter))
+            g_string_append_c (str, '!');
+        /* flag expanded (else collapsed) */
+        if (expand_flag)
+            g_string_append_c (str, '<');
+        /* flag expand state */
+        if (es == DONNA_TREE_EXPAND_PARTIAL)
+            g_string_append_c (str, '+');
+        else if (es == DONNA_TREE_EXPAND_MAXI)
+            g_string_append_c (str, '*');
+        /* actual FL */
+        s = donna_node_get_full_location (node);
+        g_string_append (str, s);
+        g_free (s);
+
+        /* done */
+        g_string_append_c (str, '\n');
+
+        /* process children */
+        if (donna_tree_store_iter_children (priv->store, &child, iter))
+            do save_row (tree, str, &child, level + 1,
+                    es == DONNA_TREE_EXPAND_PARTIAL,
+                    visuals);
+            while (donna_tree_store_iter_next (priv->store, &child));
+    }
+    /* Note that there cannot be any children if !is_in_tree, since the only
+     * ways for children to exists (PARTIAL/MAXI) are covered */
+
+    g_object_unref (node);
+}
+
+gboolean
+donna_tree_view_save_tree_file (DonnaTreeView      *tree,
+                                const gchar        *filename,
+                                DonnaTreeVisual     visuals,
+                                GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter iter;
+    GString *str;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (filename != NULL, FALSE);
+    priv = tree->priv;
+
+    if (!is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot save tree file in mode List",
+                priv->name);
+        return FALSE;
+    }
+
+    /* we use donna_tree_store_* API so that we also process non-visible rows,
+     * in the off chance some rows are hidden (via option show_hidden or a
+     * visual filter), as those still need to be included in the export */
+
+    if (G_UNLIKELY (!donna_tree_store_iter_children (priv->store, &iter, NULL)))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Treeview '%s': Cannot save to file, nothing in tree",
+                priv->name);
+        return FALSE;
+    }
+
+    str = g_string_new (NULL);
+
+    do
+    {
+        /* export the root, and all its children (recursively) */
+        save_row (tree, str, &iter, 0, TRUE, visuals);
+        /* export visuals not (yet) loaded */
+        if (priv->tree_visuals)
+        {
+            GHashTableIter it;
+            const gchar *fl;
+            GSList *l;
+
+            g_hash_table_iter_init (&it, priv->tree_visuals);
+            while (g_hash_table_iter_next (&it, (gpointer) &fl, (gpointer) &l))
+            {
+                for ( ; l; l = l->next)
+                {
+                    struct visuals *visual = l->data;
+                    gboolean added = FALSE;
+
+                    if (!itereq (&visual->root, &iter))
+                        continue;
+
+                    if ((visuals & DONNA_TREE_VISUAL_NAME) && visual->name)
+                    {
+                        if (!added)
+                        {
+                            g_string_append_c (str, '=');
+                            added = TRUE;
+                        }
+                        g_string_append_c (str, ' ');
+                        g_string_append_c (str, '"');
+                        g_string_append (str, visual->name);
+                        g_string_append_c (str, '"');
+                    }
+
+                    if ((visuals & DONNA_TREE_VISUAL_ICON) && visual->icon)
+                    {
+                        gchar *s = g_icon_to_string (visual->icon);
+                        if (G_LIKELY (s && *s != '.'))
+                        {
+                            /* since a visual is a user-set icon, it should
+                             * always be either a /path/to/file.png or an
+                             * icon-name. In the off chance it's not, e.g. a
+                             * ". GThemedIcon icon-name1 icon-name2" kinda
+                             * string, we just ignore it. */
+                            if (!added)
+                            {
+                                g_string_append_c (str, '=');
+                                added = TRUE;
+                            }
+                            g_string_append_c (str, ' ');
+                            g_string_append_c (str, '@');
+                            g_string_append (str, s);
+                            g_string_append_c (str, '@');
+                        }
+                        g_free (s);
+                    }
+
+                    if ((visuals & DONNA_TREE_VISUAL_BOX) && visual->box)
+                    {
+                        if (!added)
+                        {
+                            g_string_append_c (str, '=');
+                            added = TRUE;
+                        }
+                        g_string_append_c (str, ' ');
+                        g_string_append_c (str, '{');
+                        g_string_append (str, visual->box);
+                        g_string_append_c (str, '}');
+                    }
+
+                    if ((visuals & DONNA_TREE_VISUAL_HIGHLIGHT) && visual->highlight)
+                    {
+                        if (!added)
+                        {
+                            g_string_append_c (str, '=');
+                            added = TRUE;
+                        }
+                        g_string_append_c (str, ' ');
+                        g_string_append_c (str, '[');
+                        g_string_append (str, visual->highlight);
+                        g_string_append_c (str, ']');
+                    }
+
+                    if ((visuals & DONNA_TREE_VISUAL_CLICKS) && visual->clicks)
+                    {
+                        if (!added)
+                        {
+                            g_string_append_c (str, '=');
+                            added = TRUE;
+                        }
+                        g_string_append_c (str, ' ');
+                        g_string_append_c (str, '(');
+                        g_string_append (str, visual->clicks);
+                        g_string_append_c (str, ')');
+                    }
+
+                    if (added)
+                    {
+                        g_string_append_c (str, ' ');
+                        g_string_append (str, fl);
+                        g_string_append_c (str, '\n');
+                    }
+                }
+            }
+        }
+    }
+    while (donna_tree_store_iter_next (priv->store, &iter));
+
+    return save_to_file (tree, filename, str, error);
+}
+
+gboolean
+donna_tree_view_load_tree_file (DonnaTreeView      *tree,
+                                const gchar        *filename,
+                                DonnaTreeVisual     visuals,
+                                GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter *root;
+    GtkTreeIter iter;
+    gchar *data;
+    gchar *e;
+    gchar *s;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (filename != NULL, FALSE);
+    priv = tree->priv;
+
+    if (!is_tree (tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "Treeview '%s': Cannot load tree file in mode List",
+                priv->name);
+        return FALSE;
+    }
+
+    if (!load_from_file (tree, filename, &data, error))
+        return FALSE;
+
+    e = strchr (data, '\n');
+    if (!e)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Treeview '%s': Failed to load from file; "
+                "Invalid data in '%s'",
+                priv->name, filename);
+        g_free (data);
+        return FALSE;
+    }
+
+    /* first off, let's clear the tree. We get the current root iter to make
+     * sure we remove the current branch (if any) last, to avoid having the
+     * location be changed for no reason (which would affect sync_with, and also
+     * therefore (via sync) could lead to the root being re-added. */
+    if (priv->location_iter.stamp != 0)
+        root = get_root_iter (tree, &priv->location_iter);
+    else
+        root = NULL;
+
+    if (donna_tree_store_iter_children (priv->store, &iter, NULL))
+        for (;;)
+        {
+            if (itereq (&iter, root))
+            {
+                if (!donna_tree_store_iter_next (priv->store, &iter))
+                    break;
+            }
+            else
+            {
+                if (!remove_row_from_tree (tree, &iter, FALSE))
+                    break;
+            }
+        }
+    if (root)
+    {
+        iter = *root; /* we must own the iter */
+        remove_row_from_tree (tree, &iter, FALSE);
+    }
+
+#define load_visual(c_open, c_close, UPPER, var)    \
+    if (*s == c_open)                               \
+    {                                               \
+        gchar *d;                                   \
+        d = s + 1;                                  \
+        s = strchr (d, c_close);                    \
+        if (!s)                                     \
+        {                                           \
+        }                                           \
+        if (visuals & DONNA_TREE_VISUAL_##UPPER)    \
+        {                                           \
+            *s = '\0';                              \
+            var = d;                                \
+        }                                           \
+        if (*++s == ' ')                            \
+            ++s;                                    \
+    }
+
+    s = data;
+    do
+    {
+        GError *err = NULL;
+        GtkTreeIter parent;
+        DonnaNode *node;
+        gint level       = 0;
+        gchar *name      = NULL;
+        gchar *icon      = NULL;
+        gchar *box       = NULL;
+        gchar *highlight = NULL;
+        gchar *clicks    = NULL;
+        gboolean is_in_tree;
+        gboolean is_future_location = FALSE;
+        gboolean expand = FALSE;
+        enum tree_expand es = DONNA_TREE_EXPAND_UNKNOWN;
+
+        *e = '\0';
+
+        /* visuals only? */
+        if (*s == '=')
+        {
+            is_in_tree = FALSE;
+            ++s;
+            if (*s == ' ')
+                ++s;
+        }
+        else
+        {
+            is_in_tree = TRUE;
+            /* get the level */
+            for ( ; *s == '-'; ++s, ++level)
+                ;
+            if (level > 0 && *s == ' ')
+                ++s;
+        }
+
+        /* visuals */
+        load_visual ('"', '"', NAME, name)
+        load_visual ('@', '@', ICON, icon)
+        load_visual ('{', '}', BOX, box)
+        load_visual ('[', ']', HIGHLIGHT, highlight)
+        load_visual ('(', ')', CLICKS, clicks)
+
+        /* flags */
+        if (*s == '!')
+        {
+            is_future_location = TRUE;
+            ++s;
+        }
+        if (*s == '<')
+        {
+            expand = TRUE;
+            ++s;
+        }
+        if (*s == '+')
+        {
+            es = DONNA_TREE_EXPAND_PARTIAL;
+            ++s;
+        }
+        else if (*s == '*')
+        {
+            es = DONNA_TREE_EXPAND_MAXI;
+            ++s;
+        }
+
+        if (is_in_tree)
+        {
+            /* get node */
+            node = donna_app_get_node (priv->app, s, &err);
+            if (!node)
+            {
+            }
+
+            /* get parent iter */
+            parent.stamp = 0;
+            while (level > 0)
+            {
+                if (!donna_tree_store_iter_nth_child (priv->store, &iter,
+                            (parent.stamp != 0) ? &parent : NULL,
+                            donna_tree_store_iter_n_children (priv->store,
+                                (parent.stamp != 0) ? &parent : NULL) - 1))
+                {
+                }
+                parent = iter;
+                --level;
+            }
+
+            /* add to tree */
+            add_node_to_tree (tree, (parent.stamp != 0) ? &parent : NULL, node, &iter);
+
+            /* set visuals */
+            if (name)
+                set_tree_visual (tree, &iter,
+                        DONNA_TREE_VISUAL_NAME, name, NULL);
+            if (icon)
+                set_tree_visual (tree, &iter,
+                        DONNA_TREE_VISUAL_ICON, icon, NULL);
+            if (box)
+                set_tree_visual (tree, &iter,
+                        DONNA_TREE_VISUAL_BOX, box, NULL);
+            if (highlight)
+                set_tree_visual (tree, &iter,
+                        DONNA_TREE_VISUAL_HIGHLIGHT, highlight, NULL);
+            if (clicks)
+                set_tree_visual (tree, &iter,
+                        DONNA_TREE_VISUAL_CLICKS, clicks, NULL);
+
+            if (es == DONNA_TREE_EXPAND_PARTIAL && priv->is_minitree)
+                /* XXX if we don't actually add any child, this will be buggy.
+                 * Meaning, it will have one single row, the "Please Wait" one.
+                 * Easy enough to work around: maxi-collapse then expand as you
+                 * please. Still, invalid tree file (or since-then-deleted
+                 * folders might get us there, so... */
+                set_es (priv, &iter, es);
+            else if (es == DONNA_TREE_EXPAND_MAXI && !expand)
+                /* only get the children & load them, no expansion */
+                expand_row (tree, &iter, FALSE, FALSE, NULL);
+
+            if (expand)
+            {
+                GtkTreePath *path;
+
+                path = gtk_tree_model_get_path ((GtkTreeModel*) priv->store, &iter);
+                gtk_tree_view_expand_row ((GtkTreeView *) tree, path, FALSE);
+                gtk_tree_path_free (path);
+            }
+
+            if (is_future_location)
+                gtk_tree_selection_select_iter (
+                        gtk_tree_view_get_selection ((GtkTreeView *) tree),
+                        &iter);
+        }
+        /* add visuals for non-loaded row */
+        else if (name || icon || box || highlight || clicks)
+        {
+            GSList *l;
+            struct visuals *visual;
+
+            /* get current root */
+            if (!donna_tree_store_iter_nth_child (priv->store, &iter, NULL,
+                        donna_tree_store_iter_n_children (priv->store, NULL)))
+            {
+            }
+
+            visual = g_slice_new0 (struct visuals);
+            visual->root = iter;
+            visual->name = g_strdup (name);
+            if (icon)
+            {
+                if (*icon == '/')
+                {
+                    GFile *file;
+
+                    file = g_file_new_for_path (icon);
+                    visual->icon = g_file_icon_new (file);
+                    g_object_unref (file);
+                }
+                else
+                    visual->icon = g_themed_icon_new (icon);
+            }
+            visual->box = g_strdup (box);
+            visual->highlight = g_strdup (highlight);
+            visual->clicks = g_strdup (clicks);
+
+            if (priv->tree_visuals)
+                l = g_hash_table_lookup (priv->tree_visuals, s);
+            else
+                priv->tree_visuals = g_hash_table_new_full (
+                        g_str_hash, g_str_equal,
+                        g_free, NULL);
+
+            l = g_slist_prepend (l, visual);
+            g_hash_table_insert (priv->tree_visuals, g_strdup (s), l);
+        }
+
+        s = e + 1;
+    } while ((e = strchr (s, '\n')));
+
+#undef load_visual
+
+    g_free (data);
+    return TRUE;
+}
+
 
 struct refresh_list
 {
