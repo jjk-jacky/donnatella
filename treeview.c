@@ -15093,6 +15093,9 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
         gtk_tree_model_get (model, &child,
                 DONNA_TREE_COL_NODE,    &n,
                 -1);
+        if (G_UNLIKELY (!n))
+            continue;
+
         /* did we just revealed the node or one of its parent? */
         if (n == loc_node || is_node_ancestor (n, loc_node,
                     loc_provider, loc_location))
