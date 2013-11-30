@@ -2639,6 +2639,7 @@ remove_row_from_tree (DonnaTreeView *tree,
     /* now we can remove all children */
     if (is_tree (tree))
     {
+        enum tree_expand es;
         GtkTreeIter child;
 
         /* this signal is used to possibly "undo" the removal of expander (see
@@ -2647,6 +2648,14 @@ remove_row_from_tree (DonnaTreeView *tree,
          * might as well avoid useless processing */
         if (priv->row_has_child_toggled_sid)
             g_signal_handler_block (priv->store, priv->row_has_child_toggled_sid);
+
+        /* if we were PARTIAL, set it to none so that removing children doesn't
+         * result in adding a fake node */
+        gtk_tree_model_get (model, iter,
+                DONNA_TREE_COL_EXPAND_STATE,    &es,
+                -1);
+        if (es == DONNA_TREE_EXPAND_PARTIAL)
+            set_es (priv, iter, DONNA_TREE_EXPAND_NONE);
 
         /* get the parent, in case we're removing its last child */
         donna_tree_store_iter_parent (priv->store, &parent, iter);
