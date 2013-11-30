@@ -3180,7 +3180,11 @@ node_get_children_tree_cb (DonnaTask                   *task,
 
     set_children (data->tree, &data->iter,
             g_value_get_boxed (donna_task_get_return_value (task)),
-            data->expand_row, /* expand row */
+            /* expand row: only if asked, and the timeout hasn't been called. If
+             * it has, either the row is already expanded (so we're good) or the
+             * user closed it (when it had the fake/"please wait" node) and we
+             * shoudln't force it back open */
+            data->expand_row && !timeout_called,
             FALSE /* no refresh */);
 
     if (data->scroll_to_current)
