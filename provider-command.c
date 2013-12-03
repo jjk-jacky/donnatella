@@ -599,6 +599,11 @@ parse_arg (struct run_command    *rc,
                 {
                     str = g_string_new (NULL);
 
+                    /* FIXME this should simply create an intref for the array,
+                     * and put that as string in s. Only if (when supported) the
+                     * return value was to be dereferenced (e.g. @*command) than
+                     * we convert to a "full string" that way */
+
                     for (i = 0; i < arr->len; ++i)
                     {
                         gchar *ss;
