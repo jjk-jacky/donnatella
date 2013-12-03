@@ -15331,7 +15331,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     nodes = donna_context_menu_get_nodes (priv->app, items, reference, "treeviews",
                 (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
-                "olLrRnN", (conv_flag_fn) tree_conv_flag, &conv, error);
+                "olrRn", (conv_flag_fn) tree_conv_flag, &conv, error);
 
     if (conv.row)
         g_free (conv.row);
@@ -15811,17 +15811,6 @@ tree_conv_flag (const gchar      c,
             *ptr = conv->tree;
             return TRUE;
 
-        case 'L':
-            if (G_UNLIKELY (!priv->location))
-                return FALSE;
-            *type = DONNA_ARG_TYPE_STRING;
-            if (streq ("fs", donna_node_get_domain (priv->location)))
-                *ptr = donna_node_get_location (priv->location);
-            else
-                *ptr = donna_node_get_full_location (priv->location);
-            *destroy = g_free;
-            return TRUE;
-
         case 'l':
             if (G_UNLIKELY (!priv->location))
                 return FALSE;
@@ -15841,14 +15830,6 @@ tree_conv_flag (const gchar      c,
                 return FALSE;
             *type = DONNA_ARG_TYPE_ROW;
             *ptr = conv->row;
-            return TRUE;
-
-        case 'N':
-            if (G_UNLIKELY (!conv->row))
-                return FALSE;
-            *type = DONNA_ARG_TYPE_STRING;
-            *ptr = donna_node_get_location (conv->row->node);
-            *destroy = g_free;
             return TRUE;
 
         case 'n':
@@ -16066,7 +16047,7 @@ handle_click (DonnaTreeView     *tree,
     if (iter)
         conv.row = get_row_for_iter (tree, iter);
 
-    fl = donna_app_parse_fl (priv->app, fl, "olLrRnN",
+    fl = donna_app_parse_fl (priv->app, fl, "olrRn",
             (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
 
     if (iter)
@@ -16787,7 +16768,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         conv.key_m = priv->key_motion_m;
         conv.row = get_row_for_iter (tree, &iter);
 
-        fl = donna_app_parse_fl (priv->app, fl, "olLrnNm",
+        fl = donna_app_parse_fl (priv->app, fl, "olrnm",
                 (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
         if (!donna_app_trigger_fl (priv->app, fl, intrefs, TRUE, NULL))
         {
@@ -16817,7 +16798,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     parse_specs (fl, spec, priv->key_combine_spec);
     conv.key_m = priv->key_m;
-    fl = donna_app_parse_fl (priv->app, fl, "olLrnNm",
+    fl = donna_app_parse_fl (priv->app, fl, "olrnm",
             (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
     g_free (conv.row);
     donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
