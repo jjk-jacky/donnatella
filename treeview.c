@@ -8955,6 +8955,79 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 gtk_tree_path_free (path);
                 return ROW_ID_INVALID;
             }
+            else if (streq ("other", s) || streq ("item", s) || streq ("container", s))
+            {
+                GtkTreeIter focused;
+                GtkTreeIter it;
+                GtkTreePath *path;
+                DonnaNodeType nt;
+
+                /* first we need to get the focused row */
+                gtk_tree_view_get_cursor (treev, &path, NULL);
+                if (!path)
+                    return ROW_ID_INVALID;
+                else if (!gtk_tree_model_get_iter (model, &focused, path))
+                {
+                    gtk_tree_path_free (path);
+                    return ROW_ID_INVALID;
+                }
+                gtk_tree_path_free (path);
+
+                /* what are we looking for */
+                if (*s == 'i')
+                    nt = DONNA_NODE_ITEM;
+                else if (*s == 'c')
+                    nt = DONNA_NODE_CONTAINER;
+                else /* 'o' */
+                {
+                    DonnaNode *n;
+                    gtk_tree_model_get (model, &focused,
+                            DONNA_TREE_VIEW_COL_NODE,   &n,
+                            -1);
+                    if (G_UNLIKELY (!n))
+                        return ROW_ID_INVALID;
+                    if (donna_node_get_node_type (n) == DONNA_NODE_ITEM)
+                        nt = DONNA_NODE_CONTAINER;
+                    else
+                        nt = DONNA_NODE_ITEM;
+                    g_object_unref (n);
+                }
+
+                /* now moving next */
+                it = focused;
+                for (;;)
+                {
+                    if (!donna_tree_model_iter_next (model, &it))
+                    {
+                        /* reached bottom, go back from the top */
+                        if (!gtk_tree_model_iter_children (model, &it, NULL))
+                            return ROW_ID_INVALID;
+                    }
+
+                    if (itereq (&it, &focused))
+                        /* we looped back to the focus, i.e. no match */
+                        return ROW_ID_INVALID;
+                    else if (!is_tree (tree) || is_row_accessible (tree, &it))
+                    {
+                        DonnaNode *n;
+
+                        gtk_tree_model_get (model, &it,
+                                DONNA_TREE_VIEW_COL_NODE,   &n,
+                                -1);
+                        if (n)
+                        {
+                            /* it's okay, since the tree obviously has one */
+                            g_object_unref (n);
+                            if (donna_node_get_node_type (n) == nt)
+                            {
+                                *iter = it;
+                                return ROW_ID_ROW;
+                            }
+                        }
+                    }
+                }
+                return ROW_ID_INVALID;
+            }
             else
                 return ROW_ID_INVALID;
         }
