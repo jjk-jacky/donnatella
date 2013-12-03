@@ -13699,12 +13699,17 @@ context_get_selection (struct conv *conv, GError **error)
         GError *err = NULL;
 
         conv->selection = donna_tree_view_get_selected_nodes (tree, &err);
-        if (!conv->selection && !err)
-            /* it returns NULL if there's no selection, but sets an error.
-             * Neither means no selection, which here is an error */
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': No selection", tree->priv->name);
+        if (!conv->selection)
+        {
+            if (err)
+                g_propagate_error (error, err);
+            else
+                /* it returns NULL if there's no selection, but sets an error.
+                 * Neither means no selection, which here is an error */
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Treeview '%s': No selection", tree->priv->name);
+        }
     }
 
     return conv->selection;
