@@ -15336,7 +15336,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     nodes = donna_context_menu_get_nodes (priv->app, items, reference, "treeviews",
                 (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
-                "olrRn", (conv_flag_fn) tree_conv_flag, &conv, error);
+                "olrRnfsS", (conv_flag_fn) tree_conv_flag, &conv, error);
 
     if (conv.row)
         g_free (conv.row);
@@ -15844,7 +15844,54 @@ tree_conv_flag (const gchar      c,
             *ptr = conv->row->node;
             return TRUE;
 
-        /* keys only */
+        case 'f':
+            {
+                GtkTreePath *path;
+                GtkTreeIter iter;
+
+focused:
+                gtk_tree_view_get_cursor ((GtkTreeView *) conv->tree, &path, NULL);
+                if (G_UNLIKELY (!path))
+                    return FALSE;
+                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            &iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return FALSE;
+                }
+                gtk_tree_path_free (path);
+                gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                        DONNA_TREE_VIEW_COL_NODE,   ptr,
+                        -1);
+                if (G_UNLIKELY (!*ptr))
+                    return FALSE;
+                *type = DONNA_ARG_TYPE_NODE;
+                *destroy = g_object_unref;
+                return TRUE;
+            }
+
+        /* mode list only */
+        case 's':
+        case 'S':
+            if (is_tree (conv->tree))
+                return FALSE;
+            *ptr = donna_tree_view_get_selected_nodes (conv->tree, NULL);
+            if (!*ptr)
+            {
+                if (c == 'S')
+                    /* fallback to focused node */
+                    goto focused;
+                else
+                    /* empty array */
+                    *ptr = g_ptr_array_sized_new (0);
+            }
+            *type = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+            *destroy = (GDestroyNotify) g_ptr_array_unref;
+            return TRUE;
+
+        /* keys only -- Note that keys also parse 'k' & 'c' on its own,
+         * because they are signle-letter replacement (and going through here
+         * would mean STRING, and get them quoted) */
 
         case 'm':
             *type = DONNA_ARG_TYPE_INT;
@@ -16052,7 +16099,7 @@ handle_click (DonnaTreeView     *tree,
     if (iter)
         conv.row = get_row_for_iter (tree, iter);
 
-    fl = donna_app_parse_fl (priv->app, fl, "olrRn",
+    fl = donna_app_parse_fl (priv->app, fl, "olrRnfsS",
             (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
 
     if (iter)
@@ -16773,7 +16820,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         conv.key_m = priv->key_motion_m;
         conv.row = get_row_for_iter (tree, &iter);
 
-        fl = donna_app_parse_fl (priv->app, fl, "olrnm",
+        fl = donna_app_parse_fl (priv->app, fl, "olrnmfsS",
                 (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
         if (!donna_app_trigger_fl (priv->app, fl, intrefs, TRUE, NULL))
         {
@@ -16803,7 +16850,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     parse_specs (fl, spec, priv->key_combine_spec);
     conv.key_m = priv->key_m;
-    fl = donna_app_parse_fl (priv->app, fl, "olrnm",
+    fl = donna_app_parse_fl (priv->app, fl, "olrnmfsS",
             (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
     g_free (conv.row);
     donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
