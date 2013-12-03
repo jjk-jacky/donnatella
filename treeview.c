@@ -16707,7 +16707,7 @@ parse_specs (gchar *str, gchar spec, gchar combine)
         gchar *s;
         gint n = 1;
 
-        if (str[1] == 's')
+        if (str[1] == 'k')
         {
             if (spec > 0)
                 *str = spec;
