@@ -1229,6 +1229,12 @@ donna_donna_get_conf_filename (DonnaApp       *app,
     return g_string_free (str, FALSE);
 }
 
+enum
+{
+    DEREFERENCE_NONE = 0,
+    DEREFERENCE_FULL,
+    DEREFERENCE_FS
+};
 static gchar *
 donna_donna_parse_fl (DonnaApp       *app,
                       gchar          *_fl,
@@ -1246,10 +1252,17 @@ donna_donna_parse_fl (DonnaApp       *app,
 
     while ((s = strchr (s, '%')))
     {
-        gboolean dereference = s[1] == '*';
+        guint dereference;
         gboolean match;
 
-        if (!dereference)
+        if (s[1] == '*')
+            dereference = DEREFERENCE_FULL;
+        else if (s[1] == ':')
+            dereference = DEREFERENCE_FS;
+        else
+            dereference = DEREFERENCE_NONE;
+
+        if (dereference == DEREFERENCE_NONE)
             match = s[1] != '\0' && strchr (conv_flags, s[1]) != NULL;
         else
             match = s[2] != '\0' && strchr (conv_flags, s[2]) != NULL;
@@ -1263,7 +1276,7 @@ donna_donna_parse_fl (DonnaApp       *app,
             if (!str)
                 str = g_string_new (NULL);
             g_string_append_len (str, fl, s - fl);
-            if (dereference)
+            if (dereference != DEREFERENCE_NONE)
                 ++s;
 
             if (G_UNLIKELY (!conv_fn (s[1], &type, &ptr, &destroy, conv_data)))
@@ -1283,12 +1296,28 @@ donna_donna_parse_fl (DonnaApp       *app,
             else if (type & DONNA_ARG_TYPE_ROW)
             {
                 DonnaTreeRow *row = (DonnaTreeRow *) ptr;
-                if (dereference)
+                if (dereference != DEREFERENCE_NONE)
                 {
-                    gchar *fl;
-                    fl = donna_node_get_full_location (row->node);
-                    donna_g_string_append_quoted (str, fl, FALSE);
-                    g_free (fl);
+                    gchar *l = NULL;
+
+                    if (dereference == DEREFERENCE_FULL)
+                        /* FULL = full location */
+                        l = donna_node_get_full_location (row->node);
+                    else if (streq (donna_node_get_domain (row->node), "fs"))
+                        /* FS && domain "fs" = location */
+                        l = donna_node_get_location (row->node);
+                    else
+                    {
+                        /* FS && another domain == empty string */
+                        g_string_append_c (str, '"');
+                        g_string_append_c (str, '"');
+                    }
+
+                    if (l)
+                    {
+                        donna_g_string_append_quoted (str, l, FALSE);
+                        g_free (l);
+                    }
                 }
                 else
                     g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
@@ -1296,46 +1325,84 @@ donna_donna_parse_fl (DonnaApp       *app,
             /* this will do nodes, array of nodes, array of strings */
             else if (type & (DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY))
             {
-                if (dereference)
+                if (dereference != DEREFERENCE_NONE)
                 {
                     if (type & DONNA_ARG_IS_ARRAY)
                     {
+                        GString *string;
                         GString *str_arr;
                         GPtrArray *arr = (GPtrArray *) ptr;
+                        gchar sep;
                         guint i;
 
-                        str_arr = g_string_new (NULL);
+                        if (dereference == DEREFERENCE_FS)
+                        {
+                            string = str;
+                            sep = ' ';
+                        }
+                        else
+                        {
+                            string = str_arr = g_string_new (NULL);
+                            sep = ',';
+                        }
+
                         if (type & DONNA_ARG_TYPE_NODE)
                             for (i = 0; i < arr->len; ++i)
                             {
-                                gchar *fl;
-                                fl = donna_node_get_full_location (
-                                        (DonnaNode *) arr->pdata[i]);
-                                donna_g_string_append_quoted (str_arr, fl, FALSE);
-                                g_string_append_c (str_arr, ',');
-                                g_free (fl);
+                                DonnaNode *node = arr->pdata[i];
+                                gchar *l = NULL;
+
+                                if (dereference == DEREFERENCE_FULL)
+                                    l = donna_node_get_full_location (node);
+                                else if (streq (donna_node_get_domain (node), "fs"))
+                                    l = donna_node_get_location (node);
+                                /* no need to add a bunch of empty strings here */
+
+                                if (l)
+                                {
+                                    donna_g_string_append_quoted (string, l, FALSE);
+                                    g_string_append_c (string, sep);
+                                    g_free (l);
+                                }
                             }
                         else
                             for (i = 0; i < arr->len; ++i)
                             {
-                                donna_g_string_append_quoted (str_arr,
+                                donna_g_string_append_quoted (string,
                                         (gchar *) arr->pdata[i], FALSE);
-                                g_string_append_c (str_arr, ',');
+                                g_string_append_c (string, sep);
                             }
 
-                        /* remove last comma */
-                        g_string_truncate (str_arr, str_arr->len - 1);
-                        /* str_arr is a list of quoted strings/FL, but we also
-                         * need to quote the list itself */
-                        donna_g_string_append_quoted (str, str_arr->str, FALSE);
-                        g_string_free (str_arr, TRUE);
+                        /* remove last sep */
+                        g_string_truncate (string, string->len - 1);
+                        if (dereference != DEREFERENCE_FS)
+                        {
+                            /* str_arr is a list of quoted strings/FL, but we
+                             * also need to quote the list itself */
+                            donna_g_string_append_quoted (str, str_arr->str, FALSE);
+                            g_string_free (str_arr, TRUE);
+                        }
                     }
                     else
                     {
-                        gchar *fl;
-                        fl = donna_node_get_full_location ((DonnaNode *) ptr);
-                        donna_g_string_append_quoted (str, fl, FALSE);
-                        g_free (fl);
+                        DonnaNode *node = ptr;
+                        gchar *l = NULL;
+
+                        if (dereference == DEREFERENCE_FULL)
+                            l = donna_node_get_full_location (node);
+                        else if (streq (donna_node_get_domain (node), "fs"))
+                            l = donna_node_get_location (node);
+                        else
+                        {
+                            g_string_append_c (str, '"');
+                            g_string_append_c (str, '"');
+                        }
+
+                        if (l)
+                        {
+                            donna_g_string_append_quoted (str, l, FALSE);
+                            g_free (l);
+                        }
                     }
                 }
                 else
