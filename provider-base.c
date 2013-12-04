@@ -229,9 +229,10 @@ provider_base_get_cached_node (DonnaProviderBase *provider,
 }
 
 static void
-node_toggle_ref_cb (DonnaProviderBase   *_provider,
-                    DonnaNode           *node,
-                    gboolean             is_last)
+real_node_toggle_ref_cb (DonnaProviderBase   *_provider,
+                         DonnaNode           *node,
+                         gboolean             is_last,
+                         gboolean             force)
 {
     /* Here's why we use a recursive mutex for nodes: in case at the same time
      * (i.e. in 2 threads) we have someone unref-ing the node making us the
@@ -274,7 +275,13 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
     {
         gchar *location;
 
-        if (G_UNLIKELY (((GObject *) node)->ref_count > 1))
+        /* under normal circumstances, ref_count should be 1, and if not it's
+         * because, as explained in the comments above, another ref was taken
+         * and thus we should do nothing.
+         * However, when this is called with force it means we want to
+         * unref/release the node regardless, as it's been deleted, and will
+         * move to provider-invalid. See post_node_deleted() in provider.c */
+        if (G_UNLIKELY (!force && ((GObject *) node)->ref_count > 1))
         {
             g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
             return;
@@ -285,7 +292,7 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
         if (DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node)
             DONNA_PROVIDER_BASE_GET_CLASS (_provider)->unref_node (_provider, node);
         /* sanity check */
-        if (G_UNLIKELY (((GObject *) node)->ref_count > 1))
+        if (G_UNLIKELY (!force && ((GObject *) node)->ref_count > 1))
         {
             g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
             return;
@@ -297,6 +304,14 @@ node_toggle_ref_cb (DonnaProviderBase   *_provider,
         g_free (location);
     }
     g_rec_mutex_unlock (&_provider->priv->nodes_mutex);
+}
+
+static void
+node_toggle_ref_cb (DonnaProviderBase   *_provider,
+                    DonnaNode           *node,
+                    gboolean             is_last)
+{
+    real_node_toggle_ref_cb (_provider, node, is_last, FALSE);
 }
 
 static void
@@ -497,11 +512,12 @@ static void
 provider_base_unref_node (DonnaProvider       *provider,
                           DonnaNode           *node)
 {
-    /* node_toggle_ref_cb() will remove the node from our hashmap, and as such
-     * remove our reference to the node (amongst other things), but since we
-     * want to actually remove the toggle_ref, we need to add a ref to node here
-     * (that will be removed right after, in node_toggle_ref_cb()) */
-    node_toggle_ref_cb ((DonnaProviderBase *) provider, g_object_ref (node), TRUE);
+    /* real_node_toggle_ref_cb() will remove the node from our hashmap, and as
+     * such remove our reference to the node (amongst other things), but since
+     * we want to actually remove the toggle_ref, we need to add a ref to node
+     * here (that will be removed right after, in node_toggle_ref_cb()) */
+    real_node_toggle_ref_cb ((DonnaProviderBase *) provider, g_object_ref (node),
+            TRUE, TRUE);
     /* this will remove our actual (strong) ref to the node, as well the
      * toggle_ref */
     g_object_remove_toggle_ref (G_OBJECT (node),

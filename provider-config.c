@@ -4634,9 +4634,10 @@ node_prop_setter (DonnaTask     *task,
 }
 
 static void
-node_toggle_ref_cb (DonnaProviderConfig *config,
-                    DonnaNode           *node,
-                    gboolean             is_last)
+real_node_toggle_ref_cb (DonnaProviderConfig *config,
+                         DonnaNode           *node,
+                         gboolean             is_last,
+                         gboolean             force)
 {
     /* we need to lock the config before we can lock the nodes. We need to lock
      * the nodes here in case this is triggered w/ is_last=TRUE while at the
@@ -4651,7 +4652,7 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
         GNode *gnode;
         gchar *location;
 
-        if (G_UNLIKELY (((GObject *) node)->ref_count > 1))
+        if (G_UNLIKELY (!force && ((GObject *) node)->ref_count > 1))
         {
             g_rec_mutex_unlock (&config->priv->nodes_mutex);
             g_rw_lock_reader_unlock (&config->priv->lock);
@@ -4668,6 +4669,14 @@ node_toggle_ref_cb (DonnaProviderConfig *config,
 
     g_rec_mutex_unlock (&config->priv->nodes_mutex);
     g_rw_lock_reader_unlock (&config->priv->lock);
+}
+
+static void
+node_toggle_ref_cb (DonnaProviderConfig *config,
+                    DonnaNode           *node,
+                    gboolean             is_last)
+{
+    real_node_toggle_ref_cb (config, node, is_last, FALSE);
 }
 
 /* assumes a reader lock on config; will lock/unlock nodes_mutex as needed.
@@ -4803,11 +4812,12 @@ static void
 provider_config_unref_node (DonnaProvider       *provider,
                             DonnaNode           *node)
 {
-    /* node_toggle_ref_cb() will remove the node from our hashmap, and as such
-     * remove our reference to the node (amongst other things), but since we
-     * want to actually remove the toggle_ref, we need to add a ref to node here
-     * (that will be removed right after, in node_toggle_ref_cb()) */
-    node_toggle_ref_cb ((DonnaProviderConfig *) provider, g_object_ref (node), TRUE);
+    /* real_node_toggle_ref_cb() will remove the node from our hashmap, and as
+     * such remove our reference to the node (amongst other things), but since
+     * we want to actually remove the toggle_ref, we need to add a ref to node
+     * here (that will be removed right after, in node_toggle_ref_cb()) */
+    real_node_toggle_ref_cb ((DonnaProviderConfig *) provider, g_object_ref (node),
+            TRUE, TRUE);
     /* this will remove our actual (strong) ref to the node, as well the
      * toggle_ref */
     g_object_remove_toggle_ref (G_OBJECT (node),
