@@ -72,16 +72,26 @@ tui_messages_finalize (GObject *object)
     G_OBJECT_CLASS (donna_task_ui_messages_parent_class)->finalize (object);
 }
 
+static gboolean
+refresh_window_title (DonnaTaskUiMessages *tmsg)
+{
+    DonnaTaskUiMessagesPrivate *priv = tmsg->priv;
+    gtk_window_set_title ((GtkWindow *) priv->window, priv->title);
+    return G_SOURCE_REMOVE;
+}
+
 static void
 tui_messages_take_title (DonnaTaskUi        *tui,
                          gchar              *title)
 {
     DonnaTaskUiMessagesPrivate *priv = ((DonnaTaskUiMessages *) tui)->priv;
+    gchar *old;
 
-    g_free (priv->title);
+    old = priv->title;
     priv->title = title;
+    g_free (old);
     if (priv->window)
-        gtk_window_set_title ((GtkWindow *) priv->window, priv->title);
+        g_idle_add ((GSourceFunc) refresh_window_title, tui);
 }
 
 static void
@@ -143,19 +153,21 @@ tui_messages_show (DonnaTaskUi        *tui)
         gtk_window_present ((GtkWindow *) priv->window);
 }
 
-void
-donna_task_ui_messages_add (DonnaTaskUiMessages    *tui,
-                            GLogLevelFlags          level,
-                            const gchar            *message)
+struct message
 {
-    DonnaTaskUiMessagesPrivate *priv;
+    DonnaTaskUiMessages *tmsg;
+    GLogLevelFlags level;
+    gchar *message;
+    gboolean is_heap;
+};
+
+static gboolean
+real_messages_add (struct message *m)
+{
+    DonnaTaskUiMessagesPrivate *priv = m->tmsg->priv;
     GtkTextIter iter;
     GDateTime *dt;
     gchar *s;
-
-    g_return_if_fail (DONNA_IS_TASKUI_MESSAGES (tui));
-    g_return_if_fail (level == G_LOG_LEVEL_INFO || level == G_LOG_LEVEL_ERROR);
-    priv = tui->priv;
 
     gtk_text_buffer_get_end_iter (priv->buffer, &iter);
 
@@ -165,7 +177,42 @@ donna_task_ui_messages_add (DonnaTaskUiMessages    *tui,
             "timestamp", NULL);
     g_free (s);
 
-    gtk_text_buffer_insert_with_tags_by_name (priv->buffer, &iter, message, -1,
-            (level == G_LOG_LEVEL_ERROR) ? "error" : "info", NULL);
+    gtk_text_buffer_insert_with_tags_by_name (priv->buffer, &iter, m->message, -1,
+            (m->level == G_LOG_LEVEL_ERROR) ? "error" : "info", NULL);
     gtk_text_buffer_insert (priv->buffer, &iter, "\n", -1);
+
+    if (m->is_heap)
+    {
+        g_free (m->message);
+        g_free (m);
+    }
+
+    return G_SOURCE_REMOVE;
+}
+
+void
+donna_task_ui_messages_add (DonnaTaskUiMessages    *tui,
+                            GLogLevelFlags          level,
+                            const gchar            *message)
+{
+    g_return_if_fail (DONNA_IS_TASKUI_MESSAGES (tui));
+    g_return_if_fail (level == G_LOG_LEVEL_INFO || level == G_LOG_LEVEL_ERROR);
+
+    /* if the window doesn't exists, let's assume it won't be created while we
+     * add the message (or that if it does it won't cause any issue) */
+    if (!tui->priv->window)
+    {
+        struct message m = { tui, level, (gchar *) message, FALSE };
+        real_messages_add (&m);
+    }
+    else
+    {
+        struct message *m;
+        m = g_new (struct message, 1);
+        m->tmsg = tui;
+        m->level = level;
+        m->message = g_strdup (message);
+        m->is_heap = TRUE;
+        g_idle_add ((GSourceFunc) real_messages_add, m);
+    }
 }

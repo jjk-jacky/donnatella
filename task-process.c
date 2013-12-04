@@ -204,29 +204,13 @@ donna_task_process_finalize (GObject *object)
     G_OBJECT_CLASS (donna_task_process_parent_class)->finalize (object);
 }
 
-struct set_taskui_title
-{
-    DonnaTaskUi *taskui;
-    gchar *title;
-};
-
-static gboolean
-real_set_taskui_title (struct set_taskui_title *stt)
-{
-    donna_taskui_take_title (stt->taskui, stt->title);
-    g_free (stt);
-    return FALSE;
-}
-
 static void
 set_taskui_title (DonnaTaskUi *taskui, gchar *title, gboolean need_dup)
 {
-    struct set_taskui_title *stt;
-
-    stt = g_new (struct set_taskui_title, 1);
-    stt->taskui = taskui;
-    stt->title = (need_dup) ? g_strdup (title) : title;
-    g_main_context_invoke (NULL, (GSourceFunc) real_set_taskui_title, stt);
+    if (need_dup)
+        donna_taskui_set_title (taskui, title);
+    else
+        donna_taskui_take_title (taskui, title);
 }
 
 static void
@@ -925,36 +909,14 @@ donna_task_process_set_default_closer (DonnaTaskProcess   *taskp)
     return TRUE;
 }
 
-struct new_line_data
-{
-    DonnaTaskProcess *tp;
-    DonnaPipe pipe;
-    gchar *line;
-};
-
-static gboolean
-real_pipe_new_line_cb (struct new_line_data *data)
-{
-    donna_task_ui_messages_add (data->tp->priv->tuimsg,
-            (data->pipe == DONNA_PIPE_OUTPUT) ? G_LOG_LEVEL_INFO : G_LOG_LEVEL_ERROR,
-            data->line);
-    g_free (data->line);
-    g_free (data);
-    return FALSE;
-}
-
 static void
 pipe_new_line_cb (DonnaTaskProcess   *taskp,
                   DonnaPipe           pipe,
                   gchar              *line)
 {
-    struct new_line_data *data;
-
-    data = g_new (struct new_line_data, 1);
-    data->tp = taskp;
-    data->pipe = pipe;
-    data->line = g_strdup (line);
-    g_main_context_invoke (NULL, (GSourceFunc) real_pipe_new_line_cb, data);
+    donna_task_ui_messages_add (taskp->priv->tuimsg,
+            (pipe == DONNA_PIPE_OUTPUT) ? G_LOG_LEVEL_INFO : G_LOG_LEVEL_ERROR,
+            line);
 }
 
 gboolean
