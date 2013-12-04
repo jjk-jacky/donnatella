@@ -118,6 +118,21 @@ static DonnaTaskState   provider_task_get_children  (DonnaProviderBase  *provide
 static DonnaTaskState   provider_task_trigger_node  (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      DonnaNode          *node);
+static gboolean         provider_task_support_io    (DonnaProviderBase  *provider,
+                                                     DonnaIoType         type,
+                                                     gboolean            is_source,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     const gchar        *new_name,
+                                                     GError            **error);
+static DonnaTaskState   provider_task_io            (DonnaProviderBase  *provider,
+                                                     DonnaTask          *task,
+                                                     DonnaIoType         type,
+                                                     gboolean            is_source,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     const gchar        *new_name);
+
 /* DonnaStatusProvider */
 static guint            provider_task_create_status (DonnaStatusProvider    *sp,
                                                      gpointer                config,
@@ -186,6 +201,8 @@ donna_provider_task_class_init (DonnaProviderTaskClass *klass)
     pb_class->has_children  = provider_task_has_children;
     pb_class->get_children  = provider_task_get_children;
     pb_class->trigger_node  = provider_task_trigger_node;
+    pb_class->support_io    = provider_task_support_io;
+    pb_class->io            = provider_task_io;
 
     o_class = (GObjectClass *) klass;
     o_class->get_property   = provider_task_get_property;
@@ -283,7 +300,6 @@ provider_task_finalize (GObject *object)
     g_mutex_clear (&priv->mutex);
     g_cond_clear (&priv->cond);
     g_array_free (priv->tasks, TRUE);
-    /* FIXME: stop all running tasks */
     g_thread_pool_free (priv->pool, TRUE, FALSE);
     g_array_free (priv->statuses, TRUE);
 
@@ -1213,6 +1229,97 @@ provider_task_trigger_node (DonnaProviderBase  *_provider,
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    return DONNA_TASK_DONE;
+}
+
+static gboolean
+provider_task_support_io (DonnaProviderBase     *_provider,
+                          DonnaIoType            type,
+                          gboolean               is_source,
+                          GPtrArray             *sources,
+                          DonnaNode             *dest,
+                          const gchar           *new_name,
+                          GError               **error)
+{
+    if (type != DONNA_IO_DELETE)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider 'task': Doesn't support IO operations other than DELETE");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static DonnaTaskState
+provider_task_io (DonnaProviderBase             *_provider,
+                  DonnaTask                     *task,
+                  DonnaIoType                    type,
+                  gboolean                       is_source,
+                  GPtrArray                     *sources,
+                  DonnaNode                     *dest,
+                  const gchar                   *new_name)
+{
+    DonnaProviderTask *tm = (DonnaProviderTask *) _provider;
+    DonnaProviderTaskPrivate *priv = tm->priv;
+    guint i;
+
+    /* first we make sure all tasks are valid/in POST_RUN state */
+    for (i = 0; i < sources->len; ++i)
+    {
+        DonnaNode *node = sources->pdata[i];
+        DonnaTask *t;
+        gchar *location;
+
+        location = donna_node_get_location (node);
+        if (G_UNLIKELY (sscanf (location, "/%p", &t) != 1))
+        {
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Provider 'task': invalid location '%s'", location);
+            g_free (location);
+            return DONNA_TASK_FAILED;
+        }
+        g_free (location);
+
+        if (!(donna_task_get_state (t) & DONNA_TASK_POST_RUN))
+        {
+            donna_task_set_error (task, DONNA_TASK_MANAGER_ERROR,
+                    DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE,
+                    "Task Manager: Cannot delete task, invalid state. "
+                    "Only tasks that finished running (successful or not) "
+                    "or were cancelled can be deleted.");
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    /* then we do the removals */
+    lock_manager (tm, TM_BUSY_WRITE);
+    for (i = 0; i < sources->len; ++i)
+    {
+        DonnaNode *node = sources->pdata[i];
+        DonnaTask *_task;
+        gchar *location;
+        guint j;
+
+        location = donna_node_get_location (node);
+        sscanf (location, "/%p", &_task);
+        g_free (location);
+
+        for (j = 0; j < priv->tasks->len; ++j)
+        {
+            struct task *t = &g_array_index (priv->tasks, struct task, j);
+            if (t->task == _task)
+            {
+                g_array_remove_index_fast (priv->tasks, j);
+                donna_provider_node_deleted ((DonnaProvider *) _provider, node);
+                break;
+            }
+        }
+    }
+    unlock_manager (tm, TM_BUSY_WRITE);
 
     return DONNA_TASK_DONE;
 }
