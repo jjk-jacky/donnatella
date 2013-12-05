@@ -1820,10 +1820,78 @@ run_task_refresh_tm (DonnaProviderTask *tm)
     donna_app_run_task (priv->app, task);
 }
 
+struct conv
+{
+    DonnaTaskManager *tm;
+    DonnaNode *node;
+};
+
+static gboolean
+tm_conv_fn (const gchar      c,
+            DonnaArgType    *type,
+            gpointer        *ptr,
+            GDestroyNotify  *destroy,
+            struct conv     *conv)
+{
+    switch (c)
+    {
+        case 'o':
+            *ptr = donna_app_get_node (conv->tm->priv->app, "task:/", NULL);
+            if (G_UNLIKELY (!*ptr))
+                return FALSE;
+            *type = DONNA_ARG_TYPE_NODE;
+            *destroy = g_object_unref;
+            return TRUE;
+
+        case 'n':
+            *type = DONNA_ARG_TYPE_NODE;
+            *ptr = conv->node;
+            return TRUE;
+
+        case 'N':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = donna_node_get_name (conv->node);
+            *destroy = g_free;
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+struct emit_event
+{
+    DonnaTaskManager *tm;
+    DonnaNode *node;
+    DonnaTaskState state;
+};
+
+static gboolean
+emit_event (struct emit_event *ee)
+{
+    struct conv conv = { ee->tm, ee->node };
+
+    if (ee->state == DONNA_TASK_DONE)
+        donna_app_emit_event (ee->tm->priv->app, "task_done", FALSE,
+                "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+    else if (ee->state == DONNA_TASK_FAILED)
+        donna_app_emit_event (ee->tm->priv->app, "task_failed", FALSE,
+                "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+    else /* DONNA_TASK_CANCELLED */
+        donna_app_emit_event (ee->tm->priv->app, "task_cancelled", FALSE,
+                "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+
+    g_object_unref (ee->node);
+    g_slice_free (struct emit_event, ee);
+    return G_SOURCE_REMOVE;
+}
+
 static void
 notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
 {
     DonnaProviderTaskPrivate *priv = tm->priv;
+    DonnaTaskState state;
+    DonnaNode *node = NULL;
+    gchar location[32];
     gboolean is_state;
     gboolean is_progress;
     gboolean is_pulse;
@@ -1839,9 +1907,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
     {
         DonnaProviderBaseClass *klass;
         DonnaProviderBase *pb = (DonnaProviderBase *) tm;
-        DonnaNode *node;
         const gchar *name;
-        gchar location[32];
         GValue v = G_VALUE_INIT;
 
         snprintf (location, 32, "/%p", task);
@@ -1857,7 +1923,8 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
         if (is_state)
         {
             g_value_init (&v, G_TYPE_INT);
-            switch (donna_task_get_state (task))
+            state = donna_task_get_state (task);
+            switch (state)
             {
                 case DONNA_TASK_STOPPED:
                     g_value_set_int (&v, ST_STOPPED);
@@ -1942,7 +2009,6 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
         }
         donna_node_set_property_value (node, name, &v);
         g_value_unset (&v);
-        g_object_unref (node);
 
         check_refresh = is_state;
     }
@@ -1952,7 +2018,34 @@ next:
             || streq (pspec->name, "devices")))
         run_task_refresh_tm (tm);
      if (is_state)
+     {
          refresh_statuses (tm);
+         if (!node)
+         {
+             state = donna_task_get_state (task);
+             /* if task is in POST_RUN, we need to get the node for the event */
+             if (!(state & DONNA_TASK_POST_RUN))
+                 return;
+             node = new_node ((DonnaProviderBase *) tm, location, task, FALSE, NULL);
+         }
+
+         /* we do the event in an idle source to avoid any possible deadlock,
+          * because this notify might come from cancelling a task from the
+          * real_refresh_exit_waiting() with a lock held, or similarly from the
+          * cancel_all() */
+         if (state & DONNA_TASK_POST_RUN)
+         {
+             struct emit_event *ee;
+
+             ee = g_slice_new (struct emit_event);
+             ee->tm = tm;
+             ee->state = state;
+             ee->node = g_object_ref (node);
+
+             g_idle_add ((GSourceFunc) emit_event, ee);
+         }
+     }
+    donna_g_object_unref (node);
 }
 
 gboolean
