@@ -1314,12 +1314,15 @@ provider_task_io (DonnaProviderBase             *_provider,
             if (t->task == _task)
             {
                 g_array_remove_index_fast (priv->tasks, j);
-                donna_provider_node_deleted ((DonnaProvider *) _provider, node);
                 break;
             }
         }
     }
     unlock_manager (tm, TM_BUSY_WRITE);
+
+    /* and now, outside the lock, we emit signals */
+    for (i = 0; i < sources->len; ++i)
+        donna_provider_node_deleted ((DonnaProvider *) _provider, sources->pdata[i]);
 
     return DONNA_TASK_DONE;
 }
