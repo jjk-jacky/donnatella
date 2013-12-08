@@ -545,6 +545,7 @@ static inline void load_node_visuals                    (DonnaTreeView *tree,
 static gboolean add_node_to_tree                        (DonnaTreeView *tree,
                                                          GtkTreeIter   *parent,
                                                          DonnaNode     *node,
+                                                         gboolean       keep_fake_node,
                                                          GtkTreeIter   *row);
 static GtkTreeIter *get_current_root_iter               (DonnaTreeView *tree);
 static GtkTreeIter *get_closest_iter_for_node           (DonnaTreeView *tree,
@@ -2990,7 +2991,7 @@ set_children (DonnaTreeView *tree,
             }
 
             /* add_node_to_tree() shouldn't be able to fail/return FALSE */
-            if (row.stamp == 0 && !add_node_to_tree (tree, iter, node, &row))
+            if (row.stamp == 0 && !add_node_to_tree (tree, iter, node, FALSE, &row))
             {
                 gchar *location = donna_node_get_location (node);
                 g_critical ("Treeview '%s': failed to add node for '%s:%s'",
@@ -3261,7 +3262,7 @@ expand_row (DonnaTreeView           *tree,
                     gtk_tree_model_get (model, &child,
                             DONNA_TREE_COL_NODE,    &node,
                             -1);
-                    add_node_to_tree (tree, iter, node, NULL);
+                    add_node_to_tree (tree, iter, node, FALSE, NULL);
                     g_object_unref (node);
                 } while (donna_tree_store_iter_next (priv->store, &child));
 
@@ -3319,7 +3320,7 @@ expand_row (DonnaTreeView           *tree,
             }
 
             for (i = 0; i < arr->len; ++i)
-                add_node_to_tree (tree, iter, arr->pdata[i], NULL);
+                add_node_to_tree (tree, iter, arr->pdata[i], FALSE, NULL);
             g_ptr_array_unref (arr);
 
             /* update expand state */
@@ -4944,7 +4945,7 @@ real_new_child_cb (struct new_child_data *data)
          * where we get children via new-child signals first (e.g. search
          * results) */
         if (!g_hash_table_lookup (priv->hashtable, data->child)
-                && add_node_to_tree (data->tree, NULL, data->child, NULL)
+                && add_node_to_tree (data->tree, NULL, data->child, FALSE, NULL)
                 && was_empty)
         {
             GtkWidget *w;
@@ -4967,7 +4968,7 @@ real_new_child_cb (struct new_child_data *data)
         goto free;
 
     for ( ; list; list = list->next)
-        add_node_to_tree (data->tree, list->data, data->child, NULL);
+        add_node_to_tree (data->tree, list->data, data->child, FALSE, NULL);
 
 free:
     g_object_unref (data->node);
@@ -5274,6 +5275,7 @@ static gboolean
 add_node_to_tree (DonnaTreeView *tree,
                   GtkTreeIter   *parent,
                   DonnaNode     *node,
+                  gboolean       keep_fake_node,
                   GtkTreeIter   *iter_row)
 {
     const gchar             *domain;
@@ -5371,7 +5373,8 @@ add_node_to_tree (DonnaTreeView *tree,
     /* check if the parent has a "fake" node as child, in which case we'll
      * re-use it instead of adding a new node */
     added = FALSE;
-    if (parent && donna_tree_store_iter_children (priv->store, &iter, parent))
+    if (parent && !keep_fake_node
+            && donna_tree_store_iter_children (priv->store, &iter, parent))
     {
         DonnaNode *n;
 
@@ -5578,7 +5581,7 @@ donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node, GError **error)
         return FALSE;
     }
 
-    ret = add_node_to_tree (tree, NULL, node, NULL);
+    ret = add_node_to_tree (tree, NULL, node, FALSE, NULL);
     if (!tree->priv->arrangement)
         donna_tree_view_build_arrangement (tree, FALSE);
     else
@@ -7331,7 +7334,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
                 GSList *list;
 
                 /* we need to add a new row */
-                if (!add_node_to_tree (tree, prev_iter, n,
+                if (!add_node_to_tree (tree, prev_iter, n, FALSE,
                             &priv->future_location_iter))
                 {
                     /* TODO */
@@ -7734,7 +7737,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
         n = donna_provider_get_node (provider, location, NULL);
         g_free (location);
 
-        add_node_to_tree (tree, NULL, n, &priv->future_location_iter);
+        add_node_to_tree (tree, NULL, n, FALSE, &priv->future_location_iter);
         /* first root added, so we might need to load an arrangement */
         if (!priv->arrangement)
             donna_tree_view_build_arrangement (tree, FALSE);
@@ -7985,10 +7988,10 @@ no_task:
                 if (l)
                     it = l->data;
                 else
-                    add_node_to_tree (data->tree, NULL, arr->pdata[i], it);
+                    add_node_to_tree (data->tree, NULL, arr->pdata[i], FALSE, it);
             }
             else
-                add_node_to_tree (data->tree, NULL, arr->pdata[i], it);
+                add_node_to_tree (data->tree, NULL, arr->pdata[i], FALSE, it);
 
             if (data->child == arr->pdata[i])
                 /* don't change iter no more */
@@ -11689,6 +11692,14 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
     gchar *data;
     gchar *e;
     gchar *s;
+    struct tf_row
+    {
+        GtkTreeIter iter;
+        GtkTreeIter watched;
+    };
+    GArray *array;
+    gint last_level = -1;
+    guint i;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (filename != NULL, FALSE);
@@ -11765,6 +11776,10 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             ++s;                                    \
     }
 
+    array = g_array_sized_new (FALSE, TRUE, sizeof (struct tf_row), 8);
+    /* so we can actually use those directly */
+    g_array_set_size (array, 8);
+
     s = data;
     do
     {
@@ -11831,8 +11846,24 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             ++s;
         }
 
+        /* last_level was same/deeper down, which means we can process its
+         * watched iter (if any) */
+        if (last_level >= level && last_level >= 0)
+        {
+            struct tf_row *tf_row;
+            tf_row = &g_array_index (array, struct tf_row, level);
+            if (tf_row->watched.stamp != 0)
+            {
+                if (is_watched_iter_valid (tree, &tf_row->watched, TRUE))
+                    remove_row_from_tree (tree, &tf_row->watched, FALSE);
+            }
+            tf_row->iter.stamp = tf_row->watched.stamp = 0;
+        }
+
         if (is_in_tree)
         {
+            struct tf_row *tf_row;
+
             /* get node */
             node = donna_app_get_node (priv->app, s, &err);
             if (!node)
@@ -11840,24 +11871,31 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             }
 
             /* get parent iter */
-            parent.stamp = 0;
-            while (level > 0)
+            if (level > 0)
             {
-                if (!donna_tree_store_iter_nth_child (priv->store, &iter,
-                            (parent.stamp != 0) ? &parent : NULL,
-                            donna_tree_store_iter_n_children (priv->store,
-                                (parent.stamp != 0) ? &parent : NULL) - 1))
-                {
-                }
-                parent = iter;
-                --level;
+                tf_row = &g_array_index (array, struct tf_row, level - 1);
+                parent = tf_row->iter;
+            }
+            else
+            {
+                tf_row = NULL;
+                parent.stamp = 0;
             }
 
             /* add to tree */
             add_node_to_tree (tree, (parent.stamp != 0) ? &parent : NULL, node,
+                    tf_row && tf_row->watched.stamp != 0,
                     (is_future_location) ? &priv->future_location_iter : &iter);
             if (is_future_location)
                 iter = priv->future_location_iter;
+
+            /* set up the iter for this level (so we can add children) */
+            if (level >= array->len)
+                g_array_set_size (array, level + 2);
+            tf_row = &g_array_index (array, struct tf_row, level);
+            tf_row->iter = iter;
+            tf_row->watched.stamp = 0;
+            last_level = level;
 
             /* set visuals */
             if (name)
@@ -11877,12 +11915,24 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
                         DONNA_TREE_VISUAL_CLICKS, clicks, NULL);
 
             if (es == DONNA_TREE_EXPAND_PARTIAL && priv->is_minitree)
-                /* XXX if we don't actually add any child, this will be buggy.
-                 * Meaning, it will have one single row, the "Please Wait" one.
-                 * Easy enough to work around: maxi-collapse then expand as you
-                 * please. Still, invalid tree file (or since-then-deleted
-                 * folders might get us there, so... */
+            {
                 set_es (priv, &iter, es);
+                /* if we just add children as usual, the first one will replace
+                 * the fake node, and if it isn't visible then the parent would
+                 * be collapsed (if expended) and its expand state updated.
+                 * Event adding more (visible) children later would have its
+                 * expand state be NEVER instead of PARTIAL.
+                 * So, to avoid this, we take a (watched) iter on the fake node,
+                 * that will be kept when adding children. That way the PARTIAL
+                 * expand state can be preserved.
+                 * We use a watched iter to make sure the iter remains valid
+                 * when we're done (and want to remove that row/fake node), just
+                 * in case nothing was added (e.g. children do not exist
+                 * anymore) and the iter was removed by the has_children task.
+                 * */
+                donna_tree_store_iter_children (priv->store, &tf_row->watched, &iter);
+                watch_iter (tree, &tf_row->watched);
+            }
             else if (es == DONNA_TREE_EXPAND_MAXI && !expand)
                 /* only get the children & load them, no expansion */
                 expand_row (tree, &iter, FALSE, FALSE, NULL);
@@ -11951,6 +12001,18 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
     } while ((e = strchr (s, '\n')));
 
 #undef load_visual
+
+    for (i = 0; i < array->len; ++i)
+    {
+        struct tf_row *tf_row;
+        tf_row = &g_array_index (array, struct tf_row, i);
+        if (tf_row->watched.stamp != 0)
+        {
+            if (is_watched_iter_valid (tree, &tf_row->watched, TRUE))
+                remove_row_from_tree (tree, &tf_row->watched, FALSE);
+        }
+    }
+    g_array_free (array, TRUE);
 
     g_free (data);
     return TRUE;
