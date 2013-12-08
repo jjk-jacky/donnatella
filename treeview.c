@@ -11776,6 +11776,10 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             ++s;                                    \
     }
 
+    /* if the tree was fresh, we might need to load an arrangement */
+    if (!priv->arrangement)
+        donna_tree_view_build_arrangement (tree, FALSE);
+
     array = g_array_sized_new (FALSE, TRUE, sizeof (struct tf_row), 8);
     /* so we can actually use those directly */
     g_array_set_size (array, 8);
