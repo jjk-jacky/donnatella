@@ -3454,6 +3454,7 @@ create_gui (DonnaDonna *donna)
     gchar               *areas;
     gint                 width;
     gint                 height;
+    gboolean             maximized;
 
     window = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
     priv->window = g_object_ref (window);
@@ -3642,6 +3643,10 @@ next:
     if (!donna_config_get_int (priv->config, NULL, &height, "donna/height"))
         height = -1;
     gtk_window_set_default_size (window, width, height);
+
+    if (donna_config_get_boolean (priv->config, NULL, &maximized, "donna/maximized")
+            && maximized)
+        gtk_window_maximize (window);
 
     refresh_window_title ((DonnaDonna *) app);
     gtk_widget_show_all ((GtkWidget *) window);
