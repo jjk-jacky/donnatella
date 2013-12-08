@@ -17228,8 +17228,6 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
                 n = donna_tree_view_get_location (priv->sync_with);
                 if (n)
                     g_object_unref (n);
-                else
-                    return;
                 if (n == node)
                     return;
 
