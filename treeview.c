@@ -11943,11 +11943,21 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
 
                 path = gtk_tree_model_get_path ((GtkTreeModel*) priv->store, &iter);
                 gtk_tree_view_expand_row ((GtkTreeView *) tree, path, FALSE);
+                if (is_future_location)
+                    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
                 gtk_tree_path_free (path);
             }
 
             if (is_future_location)
             {
+                if (!expand)
+                {
+                    GtkTreePath *path;
+
+                    path = gtk_tree_model_get_path ((GtkTreeModel*) priv->store, &iter);
+                    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+                    gtk_tree_path_free (path);
+                }
                 gtk_tree_selection_select_iter (
                         gtk_tree_view_get_selection ((GtkTreeView *) tree),
                         &iter);
