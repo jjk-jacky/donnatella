@@ -5385,6 +5385,10 @@ add_node_to_tree (DonnaTreeView *tree,
                     DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                     -1);
             set_es (priv, &iter, DONNA_TREE_EXPAND_UNKNOWN);
+            /* do this now in case this is priv->future_location_iter (i.e.
+             * impacts the row's visibility) */
+            if (iter_row)
+                *iter_row = iter;
             donna_tree_store_refresh_visibility (priv->store, &iter, NULL);
             added = TRUE;
         }
@@ -5398,14 +5402,14 @@ add_node_to_tree (DonnaTreeView *tree,
                 DONNA_TREE_COL_EXPAND_STATE,    DONNA_TREE_EXPAND_UNKNOWN,
                 -1);
         set_es (priv, &iter, DONNA_TREE_EXPAND_UNKNOWN);
-    }
-    if (iter_row)
-    {
-        *iter_row = iter;
-        if (iter_row == &priv->future_location_iter)
-            /* this means this is (a parent of) the future current location, and
-             * we shall now ensure its visibility */
-            donna_tree_store_refresh_visibility (priv->store, &iter, NULL);
+        if (iter_row)
+        {
+            *iter_row = iter;
+            if (iter_row == &priv->future_location_iter)
+                /* this means this is (a parent of) the future current location,
+                 * and we shall now ensure its visibility */
+                donna_tree_store_refresh_visibility (priv->store, &iter, NULL);
+        }
     }
     /* add it to our hashtable */
     it   = gtk_tree_iter_copy (&iter);
