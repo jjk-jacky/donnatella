@@ -185,6 +185,8 @@ free_element (struct element *element)
         g_slice_free (struct element, element);
         if (!next)
             break;
+        else
+            element = next;
     }
 }
 
