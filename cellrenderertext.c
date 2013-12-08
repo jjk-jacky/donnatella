@@ -151,18 +151,20 @@ donna_cell_renderer_text_render (GtkCellRenderer        *cell,
                                  cairo_t                *cr,
                                  GtkWidget              *widget,
                                  const GdkRectangle     *background_area,
-                                 const GdkRectangle     *cell_area,
+                                 const GdkRectangle     *_cell_area,
                                  GtkCellRendererState    flags)
 {
     gchar *highlight = ((DonnaCellRendererText *) cell)->priv->highlight;
     GtkStyleContext *context;
+    GdkRectangle cell_area = *_cell_area;
 
     if (highlight)
     {
-        gint width;
+        gint pref_width;
+        gint highlighted_size = get_highlighted_size (widget);
 
         ((GtkCellRendererClass *) donna_cell_renderer_text_parent_class)
-            ->get_preferred_width (cell, widget, NULL, &width);
+            ->get_preferred_width (cell, widget, NULL, &pref_width);
 
         context = gtk_widget_get_style_context (widget);
         gtk_style_context_save (context);
@@ -171,19 +173,31 @@ donna_cell_renderer_text_render (GtkCellRenderer        *cell,
 
         /* draw background */
         gtk_render_background (context, cr,
-                cell_area->x, cell_area->y, width, cell_area->height);
+                cell_area.x,
+                cell_area.y,
+                (pref_width + highlighted_size <= cell_area.width)
+                ? pref_width + highlighted_size : cell_area.width,
+                cell_area.height);
 
         /* we now add a region for the overflow, so it can be made to still be
          * visible even when selected */
         gtk_style_context_save (context);
         gtk_style_context_add_region (context, REGION_HIGHLIGHT_OVERFLOW, 0);
         gtk_render_background (context, cr,
-                cell_area->x + width, cell_area->y,
-                get_highlighted_size (widget), cell_area->height);
+                (pref_width + highlighted_size <= cell_area.width)
+                ? cell_area.x + pref_width
+                : cell_area.x + cell_area.width - highlighted_size,
+                cell_area.y,
+                highlighted_size,
+                cell_area.height);
         gtk_style_context_restore (context);
+
+        /* make sure it doesn't overwrite the overflow */
+        if (pref_width + highlighted_size > cell_area.width)
+            cell_area.width -= highlighted_size;
     }
     ((GtkCellRendererClass *) donna_cell_renderer_text_parent_class)->render (
-            cell, cr, widget, background_area, cell_area, flags);
+            cell, cr, widget, background_area, &cell_area, flags);
     if (highlight)
         /* remove class */
         gtk_style_context_restore (context);
