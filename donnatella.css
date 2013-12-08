@@ -5,44 +5,354 @@ DonnaTreeView row.minitree-partial.expander { color: blue; }
 DonnaTreeView.domain-config row:nth-child(odd) { background: #ffcd96; }
 DonnaTreeView.domain-config row:nth-child(even) { background: #ffc882; }
 DonnaTreeView.domain-config row.focused-row  { background: #ffb450; }
-DonnaTreeView.domain-config row:focused  { background: #ffaa46; }
-DonnaTreeView.domain-config row:selected  { background: @selected_bg_color; }
+DonnaTreeView.domain-config row.focused-row:focused  { background: #ffaa46; }
+DonnaTreeView.domain-config row.focused-row:selected  { background: @selected_bg_color; }
 
 DonnaTreeView.domain-exec row:nth-child(odd) { background: #96cdff; }
 DonnaTreeView.domain-exec row:nth-child(even) { background: #82c8ff; }
 DonnaTreeView.domain-exec row.focused-row  { background: #50b4ff; }
-DonnaTreeView.domain-exec row:focused  { background: #46aaff; }
-DonnaTreeView.domain-exec row:selected  { background: @selected_bg_color; }
+DonnaTreeView.domain-exec row.focused-row:focused  { background: #46aaff; }
+DonnaTreeView.domain-exec row.focused-row:selected  { background: @selected_bg_color; }
 
 DonnaTreeView row.focused-row  { background: #BBB; }
-DonnaTreeView row:focused  { background: #a0a0a0; }
-DonnaTreeView row:selected  { background: @selected_bg_color; }
+DonnaTreeView row.focused-row:focused  { background: #a0a0a0; }
+DonnaTreeView row.focused-row:selected  { background: @selected_bg_color; }
 
 DonnaTreeView.select-row-underline row:selected { background: blue; }
 
-.yellow { background: #ffc; }
-boxed.focused-row.yellow { background: #ff6; }
-.focused-row.yellow { background: #ff6; }
-.focused-row.yellow:selected { background: @selected_bg_color; }
-.focused-row.yellow:focused { background: #ff0; }
-.focused-row.yellow.blue { background: blue; color: white; }
-.focused-row.yellow.blue:selected { background: @selected_bg_color; color: @selected_fg_color; }
-.focused-row.yellow highlighted.blue { background: blue; }
-.focused-row.yellow highlighted.blue:selected { background: blue; }
+DonnaTreeView row.box-pink:selected,
+DonnaTreeView row.box-pink.focused-row:selected,
+DonnaTreeView row.box-pink.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-pink,
+DonnaTreeView row boxed.box-pink,
+DonnaTreeView row boxed.box-pink:selected
+{ background: #fac; }
+DonnaTreeView row.box-pink.focused-row,
+DonnaTreeView row boxed.box-pink.focused-row,
+DonnaTreeView row boxed.box-pink.focused-row:selected
+{ background: #f8c; }
+DonnaTreeView row.box-pink.focused-row:focused,
+DonnaTreeView row boxed.box-pink.focused-row:focused,
+DonnaTreeView row boxed.box-pink.focused-row:selected:focused
+{ background: #f6c; }
 
-.green { background: #cff; }
-boxed.focused-row.green { background: #8ff; }
-.focused-row.green { background: #8ff; }
-.focused-row.green:selected { background: @selected_bg_color; }
-.focused-row.green:focused { background: #0ff; }
+DonnaTreeView row.box-violet:selected,
+DonnaTreeView row.box-violet.focused-row:selected,
+DonnaTreeView row.box-violet.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-violet,
+DonnaTreeView row boxed.box-violet,
+DonnaTreeView row boxed.box-violet:selected
+{ background: #9370db; }
+DonnaTreeView row.box-violet.focused-row,
+DonnaTreeView row boxed.box-violet.focused-row,
+DonnaTreeView row boxed.box-violet.focused-row:selected
+{ background: #8a2cee; }
+DonnaTreeView row.box-violet.focused-row:focused,
+DonnaTreeView row boxed.box-violet.focused-row:focused,
+DonnaTreeView row boxed.box-violet.focused-row:selected:focused
+{ background: #9400d3; }
+
+DonnaTreeView row.box-black:selected,
+DonnaTreeView row.box-black.focused-row:selected,
+DonnaTreeView row.box-black.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-black,
+DonnaTreeView row boxed.box-black,
+DonnaTreeView row boxed.box-black:selected
+{ background: #333; }
+DonnaTreeView row.box-black.focused-row,
+DonnaTreeView row boxed.box-black.focused-row,
+DonnaTreeView row boxed.box-black.focused-row:selected
+{ background: #222; }
+DonnaTreeView row.box-black.focused-row:focused,
+DonnaTreeView row boxed.box-black.focused-row:focused,
+DonnaTreeView row boxed.box-black.focused-row:selected:focused
+{ background: #000; }
+
+DonnaTreeView row.box-white:selected,
+DonnaTreeView row.box-white.focused-row:selected,
+DonnaTreeView row.box-white.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-white,
+DonnaTreeView row boxed.box-white,
+DonnaTreeView row boxed.box-white:selected
+{ background: #efefef; }
+DonnaTreeView row.box-white.focused-row,
+DonnaTreeView row boxed.box-white.focused-row,
+DonnaTreeView row boxed.box-white.focused-row:selected
+{ background: #fafafa; }
+DonnaTreeView row.box-white.focused-row:focused,
+DonnaTreeView row boxed.box-white.focused-row:focused,
+DonnaTreeView row boxed.box-white.focused-row:selected:focused
+{ background: #fff; }
+
+DonnaTreeView row.box-red:selected,
+DonnaTreeView row.box-red.focused-row:selected,
+DonnaTreeView row.box-red.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-red,
+DonnaTreeView row boxed.box-red,
+DonnaTreeView row boxed.box-red:selected
+{ background: #ee8080; }
+DonnaTreeView row.box-red.focused-row,
+DonnaTreeView row boxed.box-red.focused-row,
+DonnaTreeView row boxed.box-red.focused-row:selected
+{ background: #dc143c; }
+DonnaTreeView row.box-red.focused-row:focused,
+DonnaTreeView row boxed.box-red.focused-row:focused,
+DonnaTreeView row boxed.box-red.focused-row:selected:focused
+{ background: #f00; }
+
+DonnaTreeView row.box-orange:selected,
+DonnaTreeView row.box-orange.focused-row:selected,
+DonnaTreeView row.box-orange.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-orange,
+DonnaTreeView row boxed.box-orange,
+DonnaTreeView row boxed.box-orange:selected
+{ background: #fc0; }
+DonnaTreeView row.box-orange.focused-row,
+DonnaTreeView row boxed.box-orange.focused-row,
+DonnaTreeView row boxed.box-orange.focused-row:selected
+{ background: #fa0; }
+DonnaTreeView row.box-orange.focused-row:focused,
+DonnaTreeView row boxed.box-orange.focused-row:focused,
+DonnaTreeView row boxed.box-orange.focused-row:selected:focused
+{ background: #f80; }
+
+DonnaTreeView row.box-lime:selected,
+DonnaTreeView row.box-lime.focused-row:selected,
+DonnaTreeView row.box-lime.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-lime,
+DonnaTreeView row boxed.box-lime,
+DonnaTreeView row boxed.box-lime:selected
+{ background: #af9; }
+DonnaTreeView row.box-lime.focused-row,
+DonnaTreeView row boxed.box-lime.focused-row,
+DonnaTreeView row boxed.box-lime.focused-row:selected
+{ background: #7f0; }
+DonnaTreeView row.box-lime.focused-row:focused,
+DonnaTreeView row boxed.box-lime.focused-row:focused,
+DonnaTreeView row boxed.box-lime.focused-row:selected:focused
+{ background: #0f0; }
+
+DonnaTreeView row.box-green:selected,
+DonnaTreeView row.box-green.focused-row:selected,
+DonnaTreeView row.box-green.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-green,
+DonnaTreeView row boxed.box-green,
+DonnaTreeView row boxed.box-green:selected
+{ background: #3cb371; }
+DonnaTreeView row.box-green.focused-row,
+DonnaTreeView row boxed.box-green.focused-row,
+DonnaTreeView row boxed.box-green.focused-row:selected
+{ background: #228b22; }
+DonnaTreeView row.box-green.focused-row:focused,
+DonnaTreeView row boxed.box-green.focused-row:focused,
+DonnaTreeView row boxed.box-green.focused-row:selected:focused
+{ background: #008000; }
+
+DonnaTreeView row.box-yellow:selected,
+DonnaTreeView row.box-yellow.focused-row:selected,
+DonnaTreeView row.box-yellow.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-yellow,
+DonnaTreeView row boxed.box-yellow,
+DonnaTreeView row boxed.box-yellow:selected
+{ background: #ffb; }
+DonnaTreeView row.box-yellow.focused-row,
+DonnaTreeView row boxed.box-yellow.focused-row,
+DonnaTreeView row boxed.box-yellow.focused-row:selected
+{ background: #ff6; }
+DonnaTreeView row.box-yellow.focused-row:focused,
+DonnaTreeView row boxed.box-yellow.focused-row:focused,
+DonnaTreeView row boxed.box-yellow.focused-row:selected:focused
+{ background: #ff0; }
+
+DonnaTreeView row.box-cyan:selected,
+DonnaTreeView row.box-cyan.focused-row:selected,
+DonnaTreeView row.box-cyan.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-cyan,
+DonnaTreeView row boxed.box-cyan,
+DonnaTreeView row boxed.box-cyan:selected
+{ background: #bff; }
+DonnaTreeView row.box-cyan.focused-row,
+DonnaTreeView row boxed.box-cyan.focused-row,
+DonnaTreeView row boxed.box-cyan.focused-row:selected
+{ background: #8ff; }
+DonnaTreeView row.box-cyan.focused-row:focused,
+DonnaTreeView row boxed.box-cyan.focused-row:focused,
+DonnaTreeView row boxed.box-cyan.focused-row:selected:focused
+{ background: #0ff; }
+
+DonnaTreeView row.box-blue:selected,
+DonnaTreeView row.box-blue.focused-row:selected,
+DonnaTreeView row.box-blue.focused-row:selected:focused
+{ background: @selected_bg_color; }
+DonnaTreeView row.box-blue,
+DonnaTreeView row boxed.box-blue,
+DonnaTreeView row boxed.box-blue:selected
+{ background: #0bf; }
+DonnaTreeView row.box-blue.focused-row,
+DonnaTreeView row boxed.box-blue.focused-row,
+DonnaTreeView row boxed.box-blue.focused-row:selected
+{ background: #08f; }
+DonnaTreeView row.box-blue.focused-row:focused,
+DonnaTreeView row boxed.box-blue.focused-row:focused,
+DonnaTreeView row boxed.box-blue.focused-row:selected:focused
+{ background: #00f; }
+
 
 DonnaTreeView { -DonnaTreeView-highlighted-size: 4; }
-.blue { background: blue; color: white; }
-.blue:selected { color: @selected_fg_color; }
-.focused-row.blue { background: blue; color: white; }
-.focused-row.blue:selected { background: @selected_bg_color; color: @selected_fg_color; }
-highlighted.blue:selected { background: blue; }
-highlighted.blue.focused-row:selected { background: blue; }
+
+DonnaTreeView row.hl-pink:selected,
+DonnaTreeView row.hl-pink.focused-row:selected,
+DonnaTreeView row.hl-pink.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-pink,
+DonnaTreeView row.hl-pink.focused-row,
+DonnaTreeView row.hl-pink.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-pink:selected,
+DonnaTreeView row highlight-overflow.hl-pink.focused-row,
+DonnaTreeView row highlight-overflow.hl-pink.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-pink.focused-row:selected:focused
+{ background: #ff66cc; color: black; }
+
+DonnaTreeView row.hl-violet:selected,
+DonnaTreeView row.hl-violet.focused-row:selected,
+DonnaTreeView row.hl-violet.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-violet,
+DonnaTreeView row.hl-violet.focused-row,
+DonnaTreeView row.hl-violet.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-violet:selected,
+DonnaTreeView row highlight-overflow.hl-violet.focused-row,
+DonnaTreeView row highlight-overflow.hl-violet.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-violet.focused-row:selected:focused
+{ background: #9400d3; color: white; }
+
+DonnaTreeView row.hl-black:selected,
+DonnaTreeView row.hl-black.focused-row:selected,
+DonnaTreeView row.hl-black.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-black,
+DonnaTreeView row.hl-black.focused-row,
+DonnaTreeView row.hl-black.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-black:selected,
+DonnaTreeView row highlight-overflow.hl-black.focused-row,
+DonnaTreeView row highlight-overflow.hl-black.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-black.focused-row:selected:focused
+{ background: black; color: white; }
+
+DonnaTreeView row.hl-white:selected,
+DonnaTreeView row.hl-white.focused-row:selected,
+DonnaTreeView row.hl-white.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-white,
+DonnaTreeView row.hl-white.focused-row,
+DonnaTreeView row.hl-white.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-white:selected,
+DonnaTreeView row highlight-overflow.hl-white.focused-row,
+DonnaTreeView row highlight-overflow.hl-white.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-white.focused-row:selected:focused
+{ background: white; color: black; }
+
+DonnaTreeView row.hl-red:selected,
+DonnaTreeView row.hl-red.focused-row:selected,
+DonnaTreeView row.hl-red.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-red,
+DonnaTreeView row.hl-red.focused-row,
+DonnaTreeView row.hl-red.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-red:selected,
+DonnaTreeView row highlight-overflow.hl-red.focused-row,
+DonnaTreeView row highlight-overflow.hl-red.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-red.focused-row:selected:focused
+{ background: red; color: black; }
+
+DonnaTreeView row.hl-orange:selected,
+DonnaTreeView row.hl-orange.focused-row:selected,
+DonnaTreeView row.hl-orange.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-orange,
+DonnaTreeView row.hl-orange.focused-row,
+DonnaTreeView row.hl-orange.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-orange:selected,
+DonnaTreeView row highlight-overflow.hl-orange.focused-row,
+DonnaTreeView row highlight-overflow.hl-orange.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-orange.focused-row:selected:focused
+{ background: orange; color: black; }
+
+DonnaTreeView row.hl-lime:selected,
+DonnaTreeView row.hl-lime.focused-row:selected,
+DonnaTreeView row.hl-lime.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-lime,
+DonnaTreeView row.hl-lime.focused-row,
+DonnaTreeView row.hl-lime.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-lime:selected,
+DonnaTreeView row highlight-overflow.hl-lime.focused-row,
+DonnaTreeView row highlight-overflow.hl-lime.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-lime.focused-row:selected:focused
+{ background: lime; color: black; }
+
+DonnaTreeView row.hl-green:selected,
+DonnaTreeView row.hl-green.focused-row:selected,
+DonnaTreeView row.hl-green.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-green,
+DonnaTreeView row.hl-green.focused-row,
+DonnaTreeView row.hl-green.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-green:selected,
+DonnaTreeView row highlight-overflow.hl-green.focused-row,
+DonnaTreeView row highlight-overflow.hl-green.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-green.focused-row:selected:focused
+{ background: green; color: white; }
+
+DonnaTreeView row.hl-yellow:selected,
+DonnaTreeView row.hl-yellow.focused-row:selected,
+DonnaTreeView row.hl-yellow.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-yellow,
+DonnaTreeView row.hl-yellow.focused-row,
+DonnaTreeView row.hl-yellow.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-yellow:selected,
+DonnaTreeView row highlight-overflow.hl-yellow.focused-row,
+DonnaTreeView row highlight-overflow.hl-yellow.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-yellow.focused-row:selected:focused
+{ background: yellow; color: black; }
+
+DonnaTreeView row.hl-cyan:selected,
+DonnaTreeView row.hl-cyan.focused-row:selected,
+DonnaTreeView row.hl-cyan.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-cyan,
+DonnaTreeView row.hl-cyan.focused-row,
+DonnaTreeView row.hl-cyan.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-cyan:selected,
+DonnaTreeView row highlight-overflow.hl-cyan.focused-row,
+DonnaTreeView row highlight-overflow.hl-cyan.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-cyan.focused-row:selected:focused
+{ background: cyan; color: black; }
+
+DonnaTreeView row.hl-blue:selected,
+DonnaTreeView row.hl-blue.focused-row:selected,
+DonnaTreeView row.hl-blue.focused-row:selected:focused
+{ background: @selected_bg_color; color: @selected_fg_color; }
+DonnaTreeView row.hl-blue,
+DonnaTreeView row.hl-blue.focused-row,
+DonnaTreeView row.hl-blue.focused-row:focused,
+DonnaTreeView row highlight-overflow.hl-blue:selected,
+DonnaTreeView row highlight-overflow.hl-blue.focused-row,
+DonnaTreeView row highlight-overflow.hl-blue.focused-row:selected,
+DonnaTreeView row highlight-overflow.hl-blue.focused-row:selected:focused
+{ background: blue; color: white; }
+
 
 .title { font-size: 12px; font-weight: bold; }
 .details { padding-top: 4px; padding-bottom: 6px; }

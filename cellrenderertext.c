@@ -2,7 +2,7 @@
 #include <gtk/gtk.h>
 #include "cellrenderertext.h"
 
-#define REGION_HIGHLIGHTED  "highlighted"
+#define REGION_HIGHLIGHT_OVERFLOW     "highlight-overflow"
 
 enum
 {
@@ -166,16 +166,17 @@ donna_cell_renderer_text_render (GtkCellRenderer        *cell,
 
         context = gtk_widget_get_style_context (widget);
         gtk_style_context_save (context);
-
-        /* add highlight class & draw background */
+        /* we add the class (for the color) */
         gtk_style_context_add_class (context, highlight);
+
+        /* draw background */
         gtk_render_background (context, cr,
                 cell_area->x, cell_area->y, width, cell_area->height);
 
-        /* set region "highlight" for extra bit on the right (allows CSS to keep
-         * extra bit highlighted even when focused/selected) */
+        /* we now add a region for the overflow, so it can be made to still be
+         * visible even when selected */
         gtk_style_context_save (context);
-        gtk_style_context_add_region (context, REGION_HIGHLIGHTED, 0);
+        gtk_style_context_add_region (context, REGION_HIGHLIGHT_OVERFLOW, 0);
         gtk_render_background (context, cr,
                 cell_area->x + width, cell_area->y,
                 get_highlighted_size (widget), cell_area->height);
@@ -184,7 +185,7 @@ donna_cell_renderer_text_render (GtkCellRenderer        *cell,
     ((GtkCellRendererClass *) donna_cell_renderer_text_parent_class)->render (
             cell, cr, widget, background_area, cell_area, flags);
     if (highlight)
-        /* remove highlight class */
+        /* remove class */
         gtk_style_context_restore (context);
 }
 
