@@ -11854,7 +11854,10 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             }
 
             /* add to tree */
-            add_node_to_tree (tree, (parent.stamp != 0) ? &parent : NULL, node, &iter);
+            add_node_to_tree (tree, (parent.stamp != 0) ? &parent : NULL, node,
+                    (is_future_location) ? &priv->future_location_iter : &iter);
+            if (is_future_location)
+                iter = priv->future_location_iter;
 
             /* set visuals */
             if (name)
@@ -11894,9 +11897,12 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             }
 
             if (is_future_location)
+            {
                 gtk_tree_selection_select_iter (
                         gtk_tree_view_get_selection ((GtkTreeView *) tree),
                         &iter);
+                priv->future_location_iter.stamp = 0;
+            }
         }
         /* add visuals for non-loaded row */
         else if (name || icon || box || highlight || clicks)
