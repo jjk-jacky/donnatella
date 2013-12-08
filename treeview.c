@@ -11726,7 +11726,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
     if (donna_tree_store_iter_children (priv->store, &iter, NULL))
         for (;;)
         {
-            if (itereq (&iter, root))
+            if (root && itereq (&iter, root))
             {
                 if (!donna_tree_store_iter_next (priv->store, &iter))
                     break;
