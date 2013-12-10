@@ -1,4 +1,3 @@
-#define DONNA_DEBUG_ENABLED
 
 #ifndef __DONNA_DEBUG_H__
 #define __DONNA_DEBUG_H__
