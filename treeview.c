@@ -14867,7 +14867,7 @@ tree_context_get_item_info (const gchar             *item,
             gtk_tree_path_free (path);
         }
         info->name = "Remove Row From Tree";
-        info->icon_name = "list-delete";
+        info->icon_name = "list-remove";
         info->trigger = "command:tree_remove_row (%o,%r)";
         return TRUE;
     }
