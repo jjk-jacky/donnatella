@@ -2862,7 +2862,7 @@ refresh_node_cb (DonnaTask              *task,
         g_mutex_unlock (&data->mutex);
         g_mutex_clear (&data->mutex);
         data->tree->priv->refresh_on_hold = FALSE;
-        gtk_widget_queue_draw ((GtkWidget *) data->tree);
+        resort_tree (data->tree);
         /* in case any name or size changed, since it was refresh_on_hold */
         check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
         g_free (data);
