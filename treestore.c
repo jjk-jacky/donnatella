@@ -216,7 +216,7 @@ donna_tree_store_finalize (GObject *object)
 
 #define chain_up_if_possible(fn, model, ...)  do {          \
     if (!priv->is_visible)                                  \
-        return gtk_tree_model_##fn (model, __VA_ARGS__);    \
+        return gtk_tree_model_##fn ((GtkTreeModel *) (model), __VA_ARGS__); \
 } while (0)
 
 /* works because the value is a gboolean of visibility */
@@ -256,7 +256,7 @@ tree_store_get_iter (GtkTreeModel   *model,
     gint *indices;
     gint depth, i;
 
-    chain_up_if_possible (get_iter, model, iter, path);
+    chain_up_if_possible (get_iter, priv->store, iter, path);
 
     indices = gtk_tree_path_get_indices_with_depth (path, &depth);
     g_return_val_if_fail (depth > 0, FALSE);
@@ -287,7 +287,7 @@ tree_store_get_path (GtkTreeModel   *model,
 
     g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
-    chain_up_if_possible (get_path, model, iter);
+    chain_up_if_possible (get_path, priv->store, iter);
 
     path = gtk_tree_path_new ();
 
@@ -329,7 +329,7 @@ tree_store_iter_next (GtkTreeModel   *model,
 
     g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
-    chain_up_if_possible (iter_next, model, iter);
+    chain_up_if_possible (iter_next, priv->store, iter);
 
     while (gtk_tree_model_iter_next (_model, iter))
         if (iter_is_visible (iter))
@@ -348,7 +348,7 @@ tree_store_iter_previous (GtkTreeModel   *model,
 
     g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
-    chain_up_if_possible (iter_previous, model, iter);
+    chain_up_if_possible (iter_previous, priv->store, iter);
 
     while (gtk_tree_model_iter_previous (_model, iter))
         if (iter_is_visible (iter))
@@ -369,7 +369,7 @@ tree_store_iter_children (GtkTreeModel   *model,
     if (parent)
         g_return_val_if_fail (iter_is_visible (parent), FALSE);
 
-    chain_up_if_possible (iter_children, model, iter, parent);
+    chain_up_if_possible (iter_children, priv->store, iter, parent);
 
     /* get the first children from store */
     if (gtk_tree_model_iter_children (_model, iter, parent))
@@ -394,7 +394,7 @@ tree_store_iter_has_child (GtkTreeModel   *model,
 
     g_return_val_if_fail (iter_is_visible (iter), FALSE);
 
-    chain_up_if_possible (iter_has_child, model, iter);
+    chain_up_if_possible (iter_has_child, priv->store, iter);
 
     /* if we can get the first child, it has children */
     return tree_store_iter_children (model, &child, iter);
@@ -412,7 +412,7 @@ tree_store_iter_n_children (GtkTreeModel   *model,
     if (iter)
         g_return_val_if_fail (iter_is_visible (iter), 0);
 
-    chain_up_if_possible (iter_n_children, model, iter);
+    chain_up_if_possible (iter_n_children, priv->store, iter);
 
     if (!tree_store_iter_children (model, &child, iter))
         return 0;
@@ -435,7 +435,7 @@ tree_store_iter_nth_child (GtkTreeModel   *model,
     if (parent)
         g_return_val_if_fail (iter_is_visible (parent), FALSE);
 
-    chain_up_if_possible (iter_nth_child, model, iter, parent, n);
+    chain_up_if_possible (iter_nth_child, priv->store, iter, parent, n);
 
     if (!tree_store_iter_children (model, iter, parent))
         return FALSE;
