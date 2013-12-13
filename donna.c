@@ -3943,7 +3943,7 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
         { NULL }
     };
 
-    context = g_option_context_new ("- file manager");
+    context = g_option_context_new ("- your file manager");
     g_option_context_add_main_entries (context, entries, /*FIXME*/"GETTEXT_PACKAGE");
     g_option_context_add_group (context, gtk_get_option_group (TRUE));
     if (!g_option_context_parse (context, argc, argv, error))
