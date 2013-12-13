@@ -2138,6 +2138,7 @@ set_property_value (DonnaNode     *node,
                     const GValue  *value,
                     gboolean       can_emit)
 {
+    DonnaNodePrivate *priv;
     DonnaNodeProp *prop;
     const gchar **s;
     gint i;
@@ -2145,32 +2146,33 @@ set_property_value (DonnaNode     *node,
 
     g_return_if_fail (DONNA_IS_NODE (node));
     g_return_if_fail (name != NULL);
+    priv = node->priv;
 
-    g_rw_lock_writer_lock (&node->priv->props_lock);
+    g_rw_lock_writer_lock (&priv->props_lock);
     DONNA_DEBUG (NODE,
             g_debug3 ("set_property_value(%s) on '%s:%s'",
                 name,
-                donna_provider_get_domain (node->priv->provider),
-                node->priv->location));
+                donna_provider_get_domain (priv->provider),
+                priv->location));
 
     if (streq (name, "name"))
     {
-        g_free (node->priv->name);
-        node->priv->name = g_value_dup_string (value);
+        g_free (priv->name);
+        priv->name = g_value_dup_string (value);
         emit = TRUE;
         goto finish;
     }
     else if (streq (name, "filename"))
     {
-        g_free (node->priv->filename);
-        node->priv->filename = g_value_dup_string (value);
+        g_free (priv->filename);
+        priv->filename = g_value_dup_string (value);
         emit = TRUE;
         goto finish;
     }
     else if (streq (name, "location"))
     {
-        g_free (node->priv->location);
-        node->priv->location = g_value_dup_string (value);
+        g_free (priv->location);
+        priv->location = g_value_dup_string (value);
         emit = TRUE;
         goto finish;
     }
@@ -2183,21 +2185,21 @@ set_property_value (DonnaNode     *node,
             if (value)
             {
                 /* copy the new value over */
-                g_value_copy (value, &node->priv->basic_props[i].value);
+                g_value_copy (value, &priv->basic_props[i].value);
                 /* we assume it worked, w/out checking types, etc because this
                  * should only be used by providers and such, on properties they
                  * are handling, so if they get it wrong, they're seriously
                  * bugged */
-                node->priv->basic_props[i].has_value = DONNA_NODE_VALUE_SET;
+                priv->basic_props[i].has_value = DONNA_NODE_VALUE_SET;
             }
             else
             {
                 GType type;
 
-                type = G_VALUE_TYPE (&node->priv->basic_props[i].value);
-                g_value_unset (&node->priv->basic_props[i].value);
-                g_value_init (&node->priv->basic_props[i].value, type);
-                node->priv->basic_props[i].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
+                type = G_VALUE_TYPE (&priv->basic_props[i].value);
+                g_value_unset (&priv->basic_props[i].value);
+                g_value_init (&priv->basic_props[i].value, type);
+                priv->basic_props[i].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
             }
             emit = TRUE;
             goto finish;
@@ -2205,7 +2207,7 @@ set_property_value (DonnaNode     *node,
     }
 
     /* other prop? */
-    prop = g_hash_table_lookup (node->priv->props, (gpointer) name);
+    prop = g_hash_table_lookup (priv->props, (gpointer) name);
     if (prop)
     {
         if (value)
@@ -2230,10 +2232,10 @@ set_property_value (DonnaNode     *node,
     }
 
 finish:
-    g_rw_lock_writer_unlock (&node->priv->props_lock);
+    g_rw_lock_writer_unlock (&priv->props_lock);
 
-    if (can_emit && emit && node->priv->ready)
-        donna_provider_node_updated (node->priv->provider, node, name);
+    if (can_emit && emit && priv->ready)
+        donna_provider_node_updated (priv->provider, node, name);
 }
 
 /**
