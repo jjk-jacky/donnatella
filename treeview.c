@@ -16506,11 +16506,19 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
             ->button_press_event (widget, event);
 
 #ifdef GTK_IS_JJK
-    gint x, y;
-
-    /* rubber band only happens on left click */
-    if (event->button == 1)
+    /* rubber band only happens on left click. We also only "start" it if there
+     * was no last_event (unless it expired already) to avoid starting a rubber
+     * band during a dbl-click.
+     * It might not be wrong in itself, but for some reason we/GTK would get a
+     * motion between this start and the corresponding btn_rls, thus resulting
+     * in some unwanted rubber band. This seems to be quite common/easy to get
+     * (just move the mouse quickly after the dbl-click) and would get the
+     * selection be way off (e.g. in a long scrolled list, go back up to the
+     * first rows or something). This isn't a fix, but "fixes" the issue. */
+    if (event->button == 1 && (!priv->last_event || priv->last_event_expired))
     {
+        gint x, y;
+
         /* make sure we're over a row, i.e. not on blank space after the last
          * row, because that would cause trouble/is unsupported by GTK */
         gtk_tree_view_convert_bin_window_to_widget_coords ((GtkTreeView *) tree,
