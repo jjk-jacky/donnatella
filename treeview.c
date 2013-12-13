@@ -16637,8 +16637,31 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 NULL);
 
         priv->last_event = (GdkEventButton *) gdk_event_copy ((GdkEvent *) event);
-        priv->last_event_timeout = g_timeout_add (delay,
-                (GSourceFunc) single_click_cb, tree);
+        /* Here's why we use a special priority, a little lower than default. In
+         * case of a double click, if there was e.g. a repaint of the treeview
+         * that was to take place after this processing of the click, and before
+         * that of the second click, it might take a little while. If it took
+         * something around the dbl-click-time delay, the timeout will expire/be
+         * triggered, and then we would have two events in the main loop queue:
+         * the timeout callback, and the event for the second click.
+         * In such a case, because both would have the same priority (GDK events
+         * for X stuff are G_PRIORITY_DEFAULT) which one goes in first is
+         * random, and when it's the timeout, that means the dbl-click isn't
+         * seen as such, leading to either the wrong click being processed, or
+         * seeming like the dbl-click was ignored (if e.g. nothing was set for
+         * slow_click).
+         * Using a lower priority, we ensure the second click is always
+         * processed first, which solves the issue.
+         * This might seem like a rare case (usually whichever event is first
+         * gets processed before the second one is added to the queue) but it
+         * might actually happen in case of a left click, since the click was
+         * processed right away (before we set up the timeout) and could have
+         * resulted in a redraw being queued (e.g. if focus/selection was
+         * affected).
+         */
+        priv->last_event_timeout = g_timeout_add_full (G_PRIORITY_DEFAULT + 10,
+                delay,
+                (GSourceFunc) single_click_cb, tree, NULL);
         priv->last_event_expired = FALSE;
     }
 
