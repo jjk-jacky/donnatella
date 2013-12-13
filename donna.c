@@ -3967,6 +3967,7 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
         }
         priv->config_dir = g_strdup (s);
         free (s);
+        g_free (config_dir);
     }
 
     return TRUE;
