@@ -1232,7 +1232,7 @@ run_command (DonnaTask *task, struct run_command *rc)
         rc->task = task;
 
         cmd_task = donna_task_new ((task_fn) task_run_command, rc, NULL);
-        DONNA_DEBUG (TASK,
+        DONNA_DEBUG (TASK, NULL,
                 donna_task_take_desc (cmd_task, g_strdup_printf (
                         "run command: %s", rc->cmdline)));
         donna_task_set_visibility (cmd_task, rc->command->visibility);
@@ -1273,7 +1273,7 @@ provider_command_trigger_node_task (DonnaProvider      *provider,
     donna_task_set_visibility (task, g_value_get_uint (&v));
     g_value_unset (&v);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "trigger_node() for node '%s'", fl));

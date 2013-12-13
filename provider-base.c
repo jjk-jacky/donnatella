@@ -498,7 +498,7 @@ provider_base_get_node (DonnaProvider    *provider,
             (GDestroyNotify) free_get_node_data);
     set_task_visibility (task, provider, new_node);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             donna_task_take_desc (task, g_strdup_printf ("get_node() for '%s:%s'",
                     donna_provider_get_domain (provider),
                     location)));
@@ -573,7 +573,7 @@ provider_base_has_node_children_task (DonnaProvider *provider,
             (GDestroyNotify) free_node_children_data);
     set_task_visibility (task, provider, has_children);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "has_children() for node '%s:%s'",
@@ -626,7 +626,7 @@ provider_base_get_node_children_task (DonnaProvider  *provider,
             (GDestroyNotify) free_node_children_data);
     set_task_visibility (task, provider, get_children);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "get_children() for node '%s:%s'",
@@ -664,7 +664,7 @@ provider_base_trigger_node_task (DonnaProvider       *provider,
             g_object_unref);
     set_task_visibility (task, provider, trigger_node);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "trigger_node() for node '%s'", fl));
@@ -745,7 +745,7 @@ provider_base_io_task (DonnaProvider       *provider,
     task = donna_task_new ((task_fn) perform_io, io, (GDestroyNotify) free_io);
     set_task_visibility (task, provider, io);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (dest);
             donna_task_take_desc (task, g_strdup_printf (
                     "io() %s (from %s as %s) with %d sources to '%s'",
@@ -818,7 +818,7 @@ provider_base_new_child_task (DonnaProvider       *provider,
     task = donna_task_new ((task_fn) new_child, nc, (GDestroyNotify) free_new_child);
     set_task_visibility (task, provider, new_child);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (parent);
             donna_task_take_desc (task, g_strdup_printf (
                     "new_child() '%s' (%s) on '%s'",
@@ -883,7 +883,7 @@ provider_base_remove_from_task (DonnaProvider  *provider,
             (GDestroyNotify) free_remove_from);
     set_task_visibility (task, provider, remove_from);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (source);
             donna_task_take_desc (task, g_strdup_printf (
                     "remove_from() %d node(s) from '%s'",

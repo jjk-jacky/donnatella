@@ -185,7 +185,7 @@ provider_internal_trigger_node_task (DonnaProvider       *provider,
     donna_task_set_visibility (task, g_value_get_uint (&v));
     g_value_unset (&v);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "trigger_node() for node '%s'", fl));
@@ -256,7 +256,7 @@ has_get_children_task (DonnaProvider    *provider,
     donna_task_set_visibility (task, g_value_get_uint (&v));
     g_value_unset (&v);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *fl = donna_node_get_full_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "%s_children() for node '%s'",

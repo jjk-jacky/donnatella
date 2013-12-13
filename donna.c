@@ -1,10 +1,16 @@
 
+//#include "config.h"
+
 #include <locale.h>
 #include <gtk/gtk.h>
 #include <stdlib.h>     /* free() */
 #include <ctype.h>      /* isblank() */
 #include <string.h>
 #include <errno.h>
+//#ifdef DONNA_DEBUG_ENABLED
+//#include <unistd.h>
+//#include <stdio.h>
+//#endif
 #include "donna.h"
 #include "debug.h"
 #include "app.h"
@@ -161,7 +167,7 @@ struct argmt
 };
 
 static GThread *mt;
-static GLogLevelFlags show_log = G_LOG_LEVEL_DEBUG;
+static GLogLevelFlags show_log = G_LOG_LEVEL_WARNING;
 guint donna_debug_flags = 0;
 
 /* internal from treeview.c */
@@ -3727,7 +3733,7 @@ copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
     if (!g_get_filename_charsets (NULL))
         file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
 
-    DONNA_DEBUG (APP,
+    DONNA_DEBUG (APP, NULL,
             g_debug3 ("Reading '%s'", b));
     if (!g_file_get_contents ((file) ? file : b, &data, NULL, &err))
     {
@@ -3749,7 +3755,7 @@ copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
     if (!g_get_filename_charsets (NULL))
         file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
 
-    DONNA_DEBUG (APP,
+    DONNA_DEBUG (APP, NULL,
             g_debug3 ("Writing '%s'", b));
     if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
     {
@@ -3768,7 +3774,7 @@ copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
     if (file)
         file[strlen (file) - 4] = '\0';
 
-    DONNA_DEBUG (APP,
+    DONNA_DEBUG (APP, NULL,
             g_debug3 ("Writing '%s'", b));
     if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
     {
@@ -3806,7 +3812,7 @@ load_conf (DonnaConfig *config, const gchar *dir)
     if (!g_get_filename_charsets (NULL))
         file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
 
-    DONNA_DEBUG (APP,
+    DONNA_DEBUG (APP, NULL,
             g_debug3 ("Try loading '%s'", b));
     if (g_file_get_contents ((file) ? file : b, &data, NULL, &err))
     {
@@ -3849,7 +3855,7 @@ load_css (const gchar *dir)
         return;
     }
 
-    DONNA_DEBUG (APP,
+    DONNA_DEBUG (APP, NULL,
             g_debug3 ("Load '%s'", b));
     css_provider = gtk_css_provider_new ();
     gtk_css_provider_load_from_path (css_provider, (file) ? file : b, NULL);
@@ -4042,5 +4048,8 @@ main (int argc, char *argv[])
     g_main_context_release (g_main_context_default ());
 
     g_object_unref (donna);
+#ifdef DONNA_DEBUG_ENABLED
+    donna_debug_reset_valid ();
+#endif
     return rc;
 }

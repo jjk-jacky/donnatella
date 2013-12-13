@@ -1760,7 +1760,7 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
             if (!g_slist_find (should, l->data))
             {
                 struct task *t = (struct task *) l->data;
-                DONNA_DEBUG (TASK_MANAGER,
+                DONNA_DEBUG (TASK_MANAGER, NULL,
                         gchar *d = donna_task_get_desc (t->task);
                         g_debug ("TaskManager: auto-pause task '%s' (%p)",
                             d, t->task);
@@ -1778,7 +1778,7 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
             DonnaTaskState state = donna_task_get_state (t->task);
             if (state == DONNA_TASK_PAUSED)
             {
-                DONNA_DEBUG (TASK_MANAGER,
+                DONNA_DEBUG (TASK_MANAGER, NULL,
                         gchar *d = donna_task_get_desc (t->task);
                         g_debug ("TaskManager: auto-resume task '%s' (%p)",
                             d, t->task);
@@ -1790,7 +1790,7 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
              * it's still WAITING (i.e. about to go RUNNING, nothing to do) */
             else if (state == DONNA_TASK_WAITING && !t->in_pool)
             {
-                DONNA_DEBUG (TASK_MANAGER,
+                DONNA_DEBUG (TASK_MANAGER, NULL,
                         gchar *d = donna_task_get_desc (t->task);
                         g_debug ("TaskManager: auto-start task '%s' (%p)",
                             d, t->task);
@@ -1815,7 +1815,7 @@ run_task_refresh_tm (DonnaProviderTask *tm)
     DonnaTask *task;
 
     task = donna_task_new ((task_fn) refresh_tm, tm, NULL);
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             donna_task_set_desc (task, "Refresh Task Manager"));
     donna_app_run_task (priv->app, task);
 }
@@ -2072,7 +2072,7 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
         return FALSE;
     }
 
-    DONNA_DEBUG (TASK_MANAGER,
+    DONNA_DEBUG (TASK_MANAGER, NULL,
             gchar *d = donna_task_get_desc (task);
             g_debug ("TaskManager: add task '%s' (%p)", d, task);
             g_free (d));
@@ -2157,7 +2157,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
 
     cur_state = donna_task_get_state (task);
 
-    DONNA_DEBUG (TASK_MANAGER,
+    DONNA_DEBUG (TASK_MANAGER, NULL,
             gchar *d = donna_task_get_desc (task);
             g_debug ("TaskManager: switch task '%s' (%p) from %s to %s",
                 d, task, state_name (cur_state), state_name (state));

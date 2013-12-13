@@ -4988,7 +4988,7 @@ provider_config_has_node_children_task (DonnaProvider       *provider,
             (GDestroyNotify) free_node_children_data);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "has_children() for node '%s:%s'",
@@ -5021,7 +5021,7 @@ provider_config_get_node_children_task (DonnaProvider       *provider,
             (GDestroyNotify) free_node_children_data);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf (
                     "get_children() for node '%s:%s'",
@@ -5088,7 +5088,7 @@ provider_config_io_task (DonnaProvider       *provider,
             (GDestroyNotify) g_ptr_array_unref);
     donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             donna_task_take_desc (task, g_strdup_printf (
                     "config_io_task() to remove %d option(s)",
                     sources->len)));

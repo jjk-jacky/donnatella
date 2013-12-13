@@ -262,7 +262,7 @@ donna_node_finalize (GObject *object)
     gint i;
 
     priv = DONNA_NODE (object)->priv;
-    DONNA_DEBUG (NODE,
+    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
             g_debug ("Finalizing node '%s:%s'",
                 donna_provider_get_domain (priv->provider),
                 priv->location));
@@ -367,7 +367,7 @@ donna_node_new (DonnaProvider       *provider,
     if (flags & DONNA_NODE_DESC_EXISTS)
         priv->basic_props[BASIC_PROP_DESC].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
 
-    DONNA_DEBUG (NODE,
+    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
             g_debug ("Created new node '%s:%s'",
                 donna_provider_get_domain (priv->provider),
                 priv->location));
@@ -464,7 +464,7 @@ donna_node_new_from_node (DonnaProvider     *provider,
     }
     g_rw_lock_reader_unlock (&sce->priv->props_lock);
 
-    DONNA_DEBUG (NODE,
+    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
             gchar *fl_sce = donna_node_get_full_location (sce);
             g_debug ("Created new node '%s:%s' from node '%s'",
                 donna_provider_get_domain (priv->provider),
@@ -557,7 +557,7 @@ donna_node_add_property (DonnaNode       *node,
     }
     /* add prop to the hash table */
     g_hash_table_insert (priv->props, (gpointer) prop->name, prop);
-    DONNA_DEBUG (NODE,
+    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
             g_debug2 ("Node '%s:%s': added property '%s'",
                 donna_provider_get_domain (priv->provider),
                 priv->location,
@@ -724,7 +724,7 @@ grab_basic_value:
                 {
                     if (*has_value == DONNA_NODE_VALUE_NEED_REFRESH && is_blocking)
                     {
-                        DONNA_DEBUG (NODE,
+                        DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
                                 g_debug2 ("node_get() for '%s:%s': refreshing %s",
                                     donna_provider_get_domain (priv->provider),
                                     priv->location,
@@ -758,7 +758,7 @@ grab_basic_value:
         {
             if (is_blocking)
             {
-                DONNA_DEBUG (NODE,
+                DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
                         g_debug2 ("node_get() for '%s:%s': refreshing %s",
                             donna_provider_get_domain (priv->provider),
                             priv->location,
@@ -1030,7 +1030,7 @@ grab_basic_value:
     }
     else if (has_value == DONNA_NODE_VALUE_NEED_REFRESH && is_blocking)
     {
-        DONNA_DEBUG (NODE,
+        DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
                 g_debug2 ("node_get_*() for '%s:%s': refreshing %s",
                     donna_provider_get_domain (priv->provider),
                     priv->location,
@@ -1506,7 +1506,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
         if (done)
             continue;
 
-        DONNA_DEBUG (NODE,
+        DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
                 g_debug2 ("node_refresh() for '%s:%s': refreshing %s",
                     donna_provider_get_domain (priv->provider),
                     priv->location,
@@ -1675,7 +1675,7 @@ donna_node_refresh_task (DonnaNode   *node,
     task = donna_task_new ((task_fn) node_refresh, data,
             (GDestroyNotify) free_refresh_data);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf ("refresh() for %d properties on node '%s:%s'",
                     names->len,
@@ -1723,7 +1723,7 @@ donna_node_refresh_arr_task (DonnaNode *node,
     task = donna_task_new ((task_fn) node_refresh, data,
             (GDestroyNotify) free_refresh_data);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf ("refresh_arr() for %d properties on node '%s:%s'",
                 names->len,
@@ -1770,7 +1770,7 @@ set_property (DonnaTask *task, struct set_property *data)
     GValue value = G_VALUE_INIT;
     DonnaTaskState ret;
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             g_debug3 ("set_property(%s) for '%s:%s'",
                 data->prop->name,
                 donna_provider_get_domain (data->node->priv->provider),
@@ -1955,7 +1955,7 @@ donna_node_set_property_task (DonnaNode     *node,
     task = donna_task_new ((task_fn) set_property, data,
             (GDestroyNotify) free_set_property);
 
-    DONNA_DEBUG (TASK,
+    DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
             donna_task_take_desc (task, g_strdup_printf ("set_property(%s) on node '%s:%s'",
                     name,
@@ -2099,7 +2099,7 @@ donna_node_mark_invalid (DonnaNode          *node,
     priv = node->priv;
 
     g_rw_lock_writer_lock (&priv->props_lock);
-    DONNA_DEBUG (NODE,
+    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
             g_debug ("mark_invalid() on '%s:%s'",
                 donna_provider_get_domain (priv->provider),
                 priv->location));
@@ -2149,7 +2149,7 @@ set_property_value (DonnaNode     *node,
     priv = node->priv;
 
     g_rw_lock_writer_lock (&priv->props_lock);
-    DONNA_DEBUG (NODE,
+    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
             g_debug3 ("set_property_value(%s) on '%s:%s'",
                 name,
                 donna_provider_get_domain (priv->provider),

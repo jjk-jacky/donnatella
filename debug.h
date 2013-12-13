@@ -1,4 +1,4 @@
-#define DONNA_ENABLE_DEBUG
+#define DONNA_DEBUG_ENABLED
 
 #ifndef __DONNA_DEBUG_H__
 #define __DONNA_DEBUG_H__
@@ -20,48 +20,46 @@ typedef enum
         | DONNA_DEBUG_PROVIDER | DONNA_DEBUG_CONFIG | DONNA_DEBUG_APP
 } DonnaDebugFlags;
 
-#ifdef DONNA_ENABLE_DEBUG
+#ifdef DONNA_DEBUG_ENABLED
 
-#define DONNA_DEBUG(type,action)    do {         \
-    if (donna_debug_flags & DONNA_DEBUG_##type)  \
-    {                                            \
-        action;                                  \
-    }                                            \
+#define DONNA_DEBUG(type, name, action) do {                        \
+    const gchar *n = name;                                          \
+    if ((donna_debug_flags & DONNA_DEBUG_##type)                    \
+            && (n == NULL                                           \
+                || _donna_debug_is_valid (DONNA_DEBUG_##type, n)))  \
+    {                                                               \
+        action;                                                     \
+    }                                                               \
 } while (0)
 
 /* shorthand for G_BREAKPOINT() but also takes a boolean, if TRUE it will ungrab
  * the mouse/keyboard, which allows one to actually switch to GDB and debug even
  * if say a menu was poped up and had grabbed things */
-#define GDB(ungrab) do {                                                    \
-    if (ungrab)                                                             \
-    {                                                                       \
-        GdkDeviceManager *devmngr;                                          \
-        GList *list, *l;                                                    \
-                                                                            \
-        devmngr = gdk_display_get_device_manager (                          \
-                gdk_display_get_default ());                                \
-        list = gdk_device_manager_list_devices (devmngr,                    \
-                GDK_DEVICE_TYPE_MASTER);                                    \
-        for (l = list; l; l = l->next)                                      \
-        {                                                                   \
-            GdkDevice *dev = l->data;                                       \
-                                                                            \
-            if (gdk_device_get_source (dev) != GDK_SOURCE_MOUSE             \
-                    && gdk_device_get_source (dev) != GDK_SOURCE_KEYBOARD)  \
-                continue;                                                   \
-                                                                            \
-            gdk_device_ungrab (dev, GDK_CURRENT_TIME);                      \
-        }                                                                   \
-        g_list_free (list);                                                 \
-    }                                                                       \
-    G_BREAKPOINT();                                                         \
+#define GDB(ungrab) do {        \
+    if (ungrab)                 \
+        _donna_debug_ungrab (); \
+    G_BREAKPOINT ();            \
 } while (0)
+
+/* internal, used by GDB() */
+void        _donna_debug_ungrab     (void);
+
+/* internal, used by DONNA_DEBUG() */
+gboolean    _donna_debug_is_valid   (DonnaDebugFlags flag, const gchar *name);
+
+gboolean    donna_debug_set_valid   (gchar *def, GError **error);
+void        donna_debug_reset_valid (void);
+
+
 
 #else
 
-#define DONNA_DEBUG(type, action)
 
-#endif /* DONNA_ENABLE_DEBUG */
+
+#define DONNA_DEBUG(type, name, action)
+#define GDB(ungrab)
+
+#endif /* DONNA_DEBUG_ENABLED */
 
 extern guint donna_debug_flags;
 
