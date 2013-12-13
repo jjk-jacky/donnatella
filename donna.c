@@ -3936,21 +3936,82 @@ init_donna (DonnaDonna *donna)
     }
 }
 
+struct cmdline_opt
+{
+    guint loglevel;
+};
+
+static gboolean
+cmdline_cb (const gchar         *option,
+            const gchar         *value,
+            struct cmdline_opt  *data,
+            GError             **error)
+{
+    if (streq (option, "-v") || streq (option, "--verbose"))
+    {
+        switch (data->loglevel)
+        {
+            case G_LOG_LEVEL_WARNING:
+                data->loglevel = G_LOG_LEVEL_MESSAGE;
+                break;
+            case G_LOG_LEVEL_MESSAGE:
+                data->loglevel = G_LOG_LEVEL_INFO;
+                break;
+            case G_LOG_LEVEL_INFO:
+                data->loglevel = G_LOG_LEVEL_DEBUG;
+                break;
+            case G_LOG_LEVEL_DEBUG:
+                data->loglevel = DONNA_LOG_LEVEL_DEBUG2;
+                break;
+            case DONNA_LOG_LEVEL_DEBUG2:
+                data->loglevel = DONNA_LOG_LEVEL_DEBUG3;
+                break;
+            case DONNA_LOG_LEVEL_DEBUG3:
+                data->loglevel = DONNA_LOG_LEVEL_DEBUG4;
+                break;
+        }
+        return TRUE;
+    }
+#ifdef DONNA_DEBUG_ENABLED
+    else if (streq (option, "-d") || streq (option, "--debug"))
+        return donna_debug_set_valid (g_strdup (value), error);
+#endif
+
+    g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+            "Cannot parse unknown option '%s'", option);
+    return FALSE;
+}
+
 static gboolean
 parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
 {
     DonnaDonnaPrivate *priv = donna->priv;
+    struct cmdline_opt data = { G_LOG_LEVEL_WARNING, };
     gchar *config_dir = NULL;
+    gchar *log_level = NULL;
     GOptionContext *context;
-    GOptionEntry entries[] = 
+    GOptionEntry entries[] =
     {
         { "config-dir", 'c', 0, G_OPTION_ARG_STRING, &config_dir,
             "Use DIR as configuration directory", "DIR" },
+        { "log-level",  'L', 0, G_OPTION_ARG_STRING, &log_level,
+            "Set LEVEL as the minimum log level to show", "LEVEL" },
+        { "verbose",    'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
+            "Increase verbosity of log; Repeat multiple times as needed.", NULL },
+#ifdef DONNA_DEBUG_ENABLED
+        { "debug",      'd', 0, G_OPTION_ARG_CALLBACK, cmdline_cb,
+            "Define \"filters\" for the debug log messages", "FILTERS" },
+#endif
         { NULL }
     };
+    GOptionGroup *group;
 
     context = g_option_context_new ("- your file manager");
-    g_option_context_add_main_entries (context, entries, /*FIXME*/"GETTEXT_PACKAGE");
+    group = g_option_group_new ("donna", "Donnatella", "Donnatella options",
+            &data, NULL);
+    g_option_group_add_entries (group, entries);
+    //g_option_group_set_translation_domain (group, "domain");
+    g_option_context_set_main_group (context, group);
     g_option_context_add_group (context, gtk_get_option_group (TRUE));
     if (!g_option_context_parse (context, argc, argv, error))
         return FALSE;
@@ -3975,6 +4036,43 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
         free (s);
         g_free (config_dir);
     }
+
+    /* log level (default/init to G_LOG_LEVEL_WARNING) */
+    if (log_level)
+    {
+        if (streq (log_level, "debug4"))
+            show_log = DONNA_LOG_LEVEL_DEBUG4;
+        else if (streq (log_level, "debug3"))
+            show_log = DONNA_LOG_LEVEL_DEBUG3;
+        else if (streq (log_level, "debug2"))
+            show_log = DONNA_LOG_LEVEL_DEBUG2;
+        else if (streq (log_level, "debug"))
+            show_log = G_LOG_LEVEL_DEBUG;
+        else if (streq (log_level, "info"))
+            show_log = G_LOG_LEVEL_INFO;
+        else if (streq (log_level, "message"))
+            show_log = G_LOG_LEVEL_MESSAGE;
+        else if (streq (log_level, "warning"))
+            show_log = G_LOG_LEVEL_WARNING;
+        else if (streq (log_level, "critical"))
+            show_log = G_LOG_LEVEL_CRITICAL;
+        else if (streq (log_level, "error"))
+            show_log = G_LOG_LEVEL_ERROR;
+        else
+        {
+            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                    "Invalid minimum log level '%s': Must be one of "
+                    "'debug4', 'debug3', 'debug2', 'debug', 'info', 'message' "
+                    "'warning', 'critical' or 'error'",
+                    log_level);
+            g_free (log_level);
+            return FALSE;
+        }
+
+        g_free (log_level);
+    }
+    else
+        show_log = data.loglevel;
 
     return TRUE;
 }
