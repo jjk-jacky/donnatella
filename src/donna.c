@@ -1,5 +1,5 @@
 
-//#include "config.h"
+#include "config.h"
 
 #include <locale.h>
 #include <gtk/gtk.h>
@@ -7,10 +7,10 @@
 #include <ctype.h>      /* isblank() */
 #include <string.h>
 #include <errno.h>
-//#ifdef DONNA_DEBUG_ENABLED
-//#include <unistd.h>
-//#include <stdio.h>
-//#endif
+#ifdef DONNA_DEBUG_AUTOBREAK
+#include <unistd.h>
+#include <stdio.h>
+#endif
 #include "donna.h"
 #include "debug.h"
 #include "app.h"
@@ -605,6 +605,42 @@ donna_donna_log_handler (const gchar    *domain,
     g_string_append (str, message);
     puts (str->str);
     g_string_free (str, TRUE);
+
+#ifdef DONNA_DEBUG_AUTOBREAK
+    if (log_level & G_LOG_LEVEL_CRITICAL)
+    {
+        gboolean under_gdb = FALSE;
+        FILE *f;
+        gchar buf[64];
+
+        /* try to determine if we're running under GDB or not, and if so we
+         * break. This is done by reading our /proc/PID/status and checking if
+         * TracerPid if non-zero or not.
+         * This doesn't guarantee GDB, and we don't check the name of that PID,
+         * because this is a dev thing and good enough for me.
+         * We also don't cache this info so we can attach/detach without
+         * worries, and when attached it will break automagically.
+         */
+
+        snprintf (buf, 64, "/proc/%d/status", getpid ());
+        f = fopen (buf, "r");
+        if (f)
+        {
+            while ((fgets (buf, 64, f)))
+            {
+                if (streqn ("TracerPid:\t", buf, 11))
+                {
+                    under_gdb = buf[11] != '0';
+                    break;
+                }
+            }
+            fclose (f);
+        }
+
+        if (under_gdb)
+            GDB (1);
+    }
+#endif
 }
 
 void
