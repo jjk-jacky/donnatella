@@ -1,5 +1,6 @@
 
-#define _GNU_SOURCE             /* strchrnul() in string.h */
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include <string.h>             /* strchr(), strncmp() */
 #include "treeview.h"
@@ -104,7 +105,7 @@ enum
     NB_RENDERERS
 };
 
-enum
+enum sort_container
 {
     SORT_CONTAINER_FIRST = 0,
     SORT_CONTAINER_FIRST_ALWAYS,
@@ -118,7 +119,7 @@ enum
     DRAW_EMPTY
 };
 
-enum
+enum select_highlight
 {
     SELECT_HIGHLIGHT_FULL_ROW = 0,
     SELECT_HIGHLIGHT_COLUMN,
@@ -391,8 +392,8 @@ struct _DonnaTreeViewPrivate
     /* in case the trigger must happen on button-release instead */
     DonnaClick           on_release_click;
     /* used to make sure the release is within distance of the press */
-    gint                 on_release_x;
-    gint                 on_release_y;
+    gdouble              on_release_x;
+    gdouble              on_release_y;
     /* because middle/right click have a delay, and release could happen before
      * the timeout for the click is triggered */
     gboolean             on_release_triggered;
@@ -408,12 +409,12 @@ struct _DonnaTreeViewPrivate
     guint                key_motion;        /* motion's key */
     /* when a renderer goes edit-mode, we need the editing-started signal to get
      * the editable */
-    guint                renderer_editing_started_sid;
+    gulong               renderer_editing_started_sid;
     /* editable is kept so we can make it abort editing when the user clicks
      * away (e.g. blank space, another row, etc) */
     GtkCellEditable     *renderer_editable;
     /* this one is needed to clear/disconnect when editing is done */
-    guint                renderer_editable_remove_widget_sid;
+    gulong               renderer_editable_remove_widget_sid;
 
     /* Tree: keys are ful locations, values are GSList of struct visuals. The
      * idea is that the list of loaded when loading for a tree file, so we can
@@ -427,33 +428,39 @@ struct _DonnaTreeViewPrivate
     GArray              *statuses;
     guint                last_status_id;
 
+    /* "cached" options */
+
+    /* tree + list */
+    gboolean                 mode;
+    DonnaNodeType            node_types;
+    gboolean                 show_hidden;
+    enum sort_container      sort_groups; /* containers (always) first/mixed */
+    enum select_highlight    select_highlight; /* only used if GTK_IS_JJK */
+    /* mode Tree */
+    gboolean                 is_minitree;
+    enum tree_sync           sync_mode;
+    gboolean                 sync_scroll;
+    gboolean                 auto_focus_sync;
+    /* mode List */
+    gboolean                 focusing_click;
+    DonnaTreeSet             goto_item_set;
+    /* DonnaColumnType (line number) */
+    gboolean                 ln_relative; /* relative number */
+    gboolean                 ln_relative_focused; /* relative only when focused */
+    /* from current arrangement */
+    DonnaSecondSortSticky    second_sort_sticky;
+
+    /* internal flags */
+
+    /* whether to draw "Please wait"/"Location empty" messages */
+    guint                    draw_state         : 2;
     /* ignore any & all node-updated signals */
-    guint                refresh_on_hold    : 1;
+    guint                    refresh_on_hold    : 1;
     /* when filling list, some things can be disabled; e.g. check_statuses()
      * will not be triggered when adding nodes, etc */
-    guint                filling_list       : 1;
+    guint                    filling_list       : 1;
     /* tree is switching selection mode (see selection_changed_cb()) */
-    guint                changing_sel_mode  : 1;
-    /* "cached" options */
-    guint                mode               : 1;
-    guint                node_types         : 2;
-    guint                show_hidden        : 1;
-    guint                sort_groups        : 2; /* containers (always) first/mixed */
-    guint                select_highlight   : 2; /* only used if GTK_IS_JJK */
-    /* mode Tree */
-    guint                is_minitree        : 1;
-    guint                sync_mode          : 3;
-    guint                sync_scroll        : 1;
-    guint                auto_focus_sync    : 1;
-    /* mode List */
-    guint                draw_state         : 2; /* state, NOT an option */
-    guint                focusing_click     : 1;
-    guint                goto_item_set      : 3; /* DonnaTreeSet */
-    /* DonnaColumnType (line number) */
-    guint                ln_relative        : 1; /* relative number */
-    guint                ln_relative_focused: 1; /* relative only when focused */
-    /* from current arrangement */
-    guint                second_sort_sticky : 1;
+    guint                    changing_sel_mode  : 1;
 };
 
 static GParamSpec * donna_tree_view_props[NB_PROPS] = { NULL, };
@@ -532,6 +539,9 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
                                      const gchar  *def_cat,
                                      const gchar  *option,
                                      guint         from);
+
+/* internal; used by donna.c */
+gboolean _donna_tree_view_register_extras (DonnaConfig *config, GError **error);
 
 static inline struct column *
                     get_column_by_column                (DonnaTreeView *tree,
@@ -1047,7 +1057,7 @@ gboolean
 _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
 {
     DonnaConfigItemExtraListInt it_int[8];
-    guint i;
+    gint i;
 
     i = 0;
     it_int[i].value     = DONNA_TREE_VIEW_MODE_LIST;
@@ -1297,6 +1307,10 @@ perform_sync_location (DonnaTreeView    *tree,
         case DONNA_TREE_SYNC_FULL:
             iter = get_best_iter_for_node (tree, node, TRUE, NULL);
             break;
+
+        case DONNA_TREE_SYNC_NONE:
+            /* silence warning */
+            break;
     }
 
     /* Here's the thing: those functions probably had to call some get_node()
@@ -1525,7 +1539,7 @@ struct option_data
     DonnaTreeView *tree;
     gchar *option;
     guint opt;
-    gssize len;
+    gsize len;
     gpointer val;
 };
 
@@ -1795,7 +1809,7 @@ real_option_cb (struct option_data *data)
             else
                 val = cfg_get_node_types (tree, config, NULL);
 
-            if (data->opt == OPT_IN_MEMORY || priv->node_types != val)
+            if (data->opt == OPT_IN_MEMORY || priv->node_types != (guint) val)
             {
                 priv->node_types = val;
                 donna_tree_view_refresh (data->tree,
@@ -1809,7 +1823,7 @@ real_option_cb (struct option_data *data)
             else
                 val = cfg_get_sort_groups (tree, config, NULL);
 
-            if (data->opt == OPT_IN_MEMORY || priv->sort_groups != val)
+            if (data->opt == OPT_IN_MEMORY || priv->sort_groups != (guint) val)
             {
                 priv->sort_groups = val;
                 resort_tree (data->tree);
@@ -1822,7 +1836,7 @@ real_option_cb (struct option_data *data)
             else
                 val = cfg_get_select_highlight (tree, config, NULL);
 
-            if (data->opt == OPT_IN_MEMORY || priv->select_highlight != val)
+            if (data->opt == OPT_IN_MEMORY || priv->select_highlight != (guint) val)
             {
                 GtkTreeView *treev = (GtkTreeView *) data->tree;
 
@@ -1867,7 +1881,7 @@ real_option_cb (struct option_data *data)
             if (streq (opt, "node_visuals"))
             {
                 if (data->opt == OPT_IN_MEMORY)
-                    val = CLAMP (* (guint *) data->val, 0, 31);
+                    val = CLAMP (* (gint *) data->val, 0, 31);
                 else
                     val = cfg_get_node_visuals (tree, config, NULL);
 
@@ -1905,7 +1919,7 @@ real_option_cb (struct option_data *data)
                 else
                     val = cfg_get_sync_mode (tree, config, NULL);
 
-                if (data->opt == OPT_IN_MEMORY || priv->sync_mode != val)
+                if (data->opt == OPT_IN_MEMORY || priv->sync_mode != (guint) val)
                 {
                     priv->sync_mode = val;
                     if (priv->sync_with)
@@ -2026,7 +2040,7 @@ real_option_cb (struct option_data *data)
                 else
                     val = cfg_get_goto_item_set (tree, config, NULL);
 
-                if (data->opt == OPT_IN_MEMORY || priv->goto_item_set != val)
+                if (data->opt == OPT_IN_MEMORY || priv->goto_item_set != (guint) val)
                     priv->goto_item_set = val;
             }
             else if (streq (opt, "history_max"))
@@ -2058,18 +2072,18 @@ real_option_cb (struct option_data *data)
             {
                 if (streq (s + 1, "title"))
                 {
-                    gchar *s = NULL;
+                    gchar *ss = NULL;
 
                     /* we know we will get a value, but it might not be from the
                      * config changed that occured, since the value might be
                      * overridden by current arrangement, etc */
-                    s = donna_config_get_string_column (config,
+                    ss = donna_config_get_string_column (config,
                             priv->name, _col->name,
                             (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            NULL, "title", s, NULL);
-                    gtk_tree_view_column_set_title (_col->column, s);
-                    gtk_label_set_text ((GtkLabel *) _col->label, s);
-                    g_free (s);
+                            NULL, "title", ss, NULL);
+                    gtk_tree_view_column_set_title (_col->column, ss);
+                    gtk_label_set_text ((GtkLabel *) _col->label, ss);
+                    g_free (ss);
                 }
                 else if (streq (s + 1, "width"))
                 {
@@ -2111,7 +2125,7 @@ static void
 option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
 {
     gchar buf[255], *b = buf;
-    gsize len;
+    gssize len;
     guint opt = OPT_NONE;
 
     /* options we care about are ones for the tree (in "/treeviews/<NAME>" or
@@ -2129,7 +2143,7 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
     if (len >= 255)
         b = g_strdup_printf ("/treeviews/%s/", tree->priv->name);
 
-    if (streqn (option, b, len))
+    if (streqn (option, b, (size_t) len))
     {
         opt = OPT_TREEVIEW;
         if (streqn (option + len, "columns/", 8))
@@ -2156,7 +2170,7 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
                     (is_tree (tree)) ? "tree" : "list");
         else
             b = buf;
-        if (streqn (option, b, len))
+        if (streqn (option, b, (size_t) len))
             opt = OPT_DEFAULT;
         if (b != buf)
             g_free (b);
@@ -2170,7 +2184,7 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
         data->tree = tree;
         data->option = g_strdup (option);
         data->opt = opt;
-        data->len = len;
+        data->len = (gsize) len;
         g_main_context_invoke (NULL, (GSourceFunc) real_option_cb, data);
     }
 }
@@ -2281,7 +2295,7 @@ load_config (DonnaTreeView *tree)
         priv->goto_item_set = val;
 
         val = cfg_get_history_max (tree, config, NULL);
-        priv->history = donna_history_new (val);
+        priv->history = donna_history_new ((guint) val);
     }
 
     /* listen to config changes */
@@ -2564,7 +2578,6 @@ remove_row_from_tree (DonnaTreeView *tree,
                     struct visuals *visuals;
                     GtkTreeIter *root;
                     gchar *fl;
-                    GSList *l = NULL;
 
                     visuals = g_slice_new0 (struct visuals);
                     root = get_root_iter (tree, iter);
@@ -2596,6 +2609,7 @@ remove_row_from_tree (DonnaTreeView *tree,
 
                     fl = donna_node_get_full_location (node);
 
+                    l = NULL;
                     if (priv->tree_visuals)
                         l = g_hash_table_lookup (priv->tree_visuals, fl);
                     else
@@ -2706,7 +2720,7 @@ remove_row_from_tree (DonnaTreeView *tree,
 
     /* now we can remove the row */
     DONNA_DEBUG (TREEVIEW, priv->name,
-            gchar *fl = (node) ? donna_node_get_full_location (node) : "-";
+            gchar *fl = (node) ? donna_node_get_full_location (node) : (gchar *) "-";
             g_debug2 ("Treeview '%s': remove node '%s'",
                 priv->name, fl);
             if (node)
@@ -2725,8 +2739,6 @@ remove_row_from_tree (DonnaTreeView *tree,
 
         if (is_root)
         {
-            GSList *l;
-
             /* need to be prior removal, to ensure sorting remains valid until
              * the end */
             for (l = priv->roots; l; l = l->next)
@@ -2957,14 +2969,14 @@ set_children (DonnaTreeView *tree,
 
         if (es == DONNA_TREE_EXPAND_MAXI || es == DONNA_TREE_EXPAND_PARTIAL)
         {
-            GtkTreeIter i;
+            GtkTreeIter it;
 
-            if (donna_tree_store_iter_children (priv->store, &i, iter))
+            if (donna_tree_store_iter_children (priv->store, &it, iter))
             {
                 do
                 {
-                    list = g_slist_prepend (list, gtk_tree_iter_copy (&i));
-                } while (donna_tree_store_iter_next (priv->store, &i));
+                    list = g_slist_prepend (list, gtk_tree_iter_copy (&it));
+                } while (donna_tree_store_iter_next (priv->store, &it));
                 list = g_slist_reverse (list);
             }
         }
@@ -3264,13 +3276,13 @@ expand_row (DonnaTreeView           *tree,
 
                 do
                 {
-                    DonnaNode *node;
+                    DonnaNode *n;
 
                     gtk_tree_model_get (model, &child,
-                            DONNA_TREE_COL_NODE,    &node,
+                            DONNA_TREE_COL_NODE,    &n,
                             -1);
-                    add_node_to_tree (tree, iter, node, FALSE, NULL);
-                    g_object_unref (node);
+                    add_node_to_tree (tree, iter, n, FALSE, NULL);
+                    g_object_unref (n);
                 } while (donna_tree_store_iter_next (priv->store, &child));
 
                 /* update expand state */
@@ -3952,7 +3964,6 @@ rend_func (GtkTreeViewColumn  *column,
     if (index == INTERNAL_RENDERER_SPINNER || index == INTERNAL_RENDERER_PIXBUF)
     {
         struct active_spinners *as;
-        DonnaNode *node;
 
         if (!priv->active_spinners->len)
         {
@@ -3970,8 +3981,6 @@ rend_func (GtkTreeViewColumn  *column,
         g_object_unref (node);
         if (as)
         {
-            guint i;
-
             for (i = 0; i < as->as_cols->len; ++i)
             {
                 struct as_col *as_col;
@@ -4002,7 +4011,7 @@ rend_func (GtkTreeViewColumn  *column,
                         {
                             g_object_set (renderer,
                                     "visible",      TRUE,
-                                    "stock-id",     GTK_STOCK_DIALOG_WARNING,
+                                    "icon-name",    "dialog-warning",
                                     "follow-state", TRUE,
                                     NULL);
                             return;
@@ -4155,22 +4164,22 @@ rend_func (GtkTreeViewColumn  *column,
     if (arr)
     {
         DonnaTask *task;
-        struct refresh_node_props_data *data;
+        struct refresh_node_props_data *rnpd;
 
         /* ct wants some properties refreshed on node. See refresh_node_prop_cb */
-        data = g_new0 (struct refresh_node_props_data, 1);
-        data->tree  = tree;
-        data->node  = g_object_ref (node);
-        data->props = g_ptr_array_ref (arr);
+        rnpd = g_new0 (struct refresh_node_props_data, 1);
+        rnpd->tree  = tree;
+        rnpd->node  = g_object_ref (node);
+        rnpd->props = g_ptr_array_ref (arr);
 
         g_mutex_lock (&priv->refresh_node_props_mutex);
-        priv->refresh_node_props = g_slist_append (priv->refresh_node_props, data);
+        priv->refresh_node_props = g_slist_append (priv->refresh_node_props, rnpd);
         g_mutex_unlock (&priv->refresh_node_props_mutex);
 
         task = donna_node_refresh_arr_task (node, arr, NULL);
         donna_task_set_callback (task,
                 (task_callback_fn) refresh_node_prop_cb,
-                data,
+                rnpd,
                 (GDestroyNotify) free_refresh_node_props_data);
         donna_app_run_task (priv->app, task);
     }
@@ -5067,10 +5076,10 @@ node_refresh_visuals_cb (DonnaTask                  *task,
     free_node_visuals_data (data);
 }
 
-#define add_prop(arr, prop) do {    \
-    if (!arr)                       \
-        arr = g_ptr_array_new ();   \
-    g_ptr_array_add (arr, prop);    \
+#define add_prop(arr, prop) do {            \
+    if (!arr)                               \
+        arr = g_ptr_array_new ();           \
+    g_ptr_array_add (arr, (gpointer) prop); \
 } while (0)
 #define load_node_visual(UPPER, lower, GTYPE, get_fn, COLUMN)   do {                \
     if ((priv->node_visuals & DONNA_TREE_VISUAL_##UPPER)                            \
@@ -5309,14 +5318,14 @@ add_node_to_tree (DonnaTreeView *tree,
     /* is there already a row for this node at that level? */
     if (parent)
     {
-        GtkTreeIter *i;
+        GtkTreeIter *_it;
 
-        i = get_child_iter_for_node (tree, parent, node);
-        if (i)
+        _it = get_child_iter_for_node (tree, parent, node);
+        if (_it)
         {
             /* already exists under the same parent, nothing to do */
             if (iter_row)
-                *iter_row = *i;
+                *iter_row = *_it;
             return TRUE;
         }
     }
@@ -5436,13 +5445,13 @@ add_node_to_tree (DonnaTreeView *tree,
     added = FALSE;
     for (l = list; l; l = l->next)
     {
-        GtkTreeIter *i = l->data;
+        GtkTreeIter *_iter = l->data;
         enum tree_expand es;
 
-        if (itereq (&iter, i))
+        if (itereq (&iter, _iter))
             continue;
 
-        gtk_tree_model_get (model, i,
+        gtk_tree_model_get (model, _iter,
                 DONNA_TREE_COL_EXPAND_STATE,    &es,
                 -1);
         switch (es)
@@ -6047,7 +6056,7 @@ load_arrangement (DonnaTreeView     *tree,
         gboolean           is_last_col;
         DonnaColumnType   *ct;
         DonnaColumnType   *col_ct;
-        guint              width;
+        gint               width;
         gchar             *title;
         GSList            *l;
         GtkTreeViewColumn *column;
@@ -6168,7 +6177,7 @@ load_arrangement (DonnaTreeView     *tree,
             }
             /* load renderers */
             rend = donna_columntype_get_renderers (ct);
-            _col->renderers = g_ptr_array_sized_new (strlen (rend));
+            _col->renderers = g_ptr_array_sized_new ((guint) strlen (rend));
             for ( ; *rend; ++index, ++rend)
             {
                 GtkCellRenderer **r;
@@ -6546,7 +6555,8 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
             /* we can't find anything, default to first column */
             s = strchr (arr->columns, ',');
             if (s)
-                arr->sort_column = g_strndup (arr->columns, s - arr->columns);
+                arr->sort_column = g_strndup (arr->columns,
+                        (gsize) (s - arr->columns));
             else
                 arr->sort_column = g_strdup (arr->columns);
             arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
@@ -6652,7 +6662,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
             if (need_columns_options)
             {
                 gchar buf[64], *b = buf;
-                guint width;
+                gint width;
                 gchar *title;
 
                 /* ctdata */
@@ -7338,7 +7348,7 @@ get_iter_expanding_if_needed (DonnaTreeView *tree,
         g_object_unref (n);
         s = strchr (location + len + 1, '/');
         if (s)
-            s = g_strndup (location, s - location);
+            s = g_strndup (location, (gsize) (s - location));
         else
             s = (gchar *) location;
 
@@ -7946,22 +7956,22 @@ node_get_children_list_cb (DonnaTask                            *task,
                 if (priv->location_task)
                 {
                     struct node_get_children_list_data *d;
-                    DonnaTask *task;
+                    DonnaTask *t;
 
-                    task = donna_task_get_duplicate (priv->location_task, &err);
-                    if (!task)
+                    t = donna_task_get_duplicate (priv->location_task, &err);
+                    if (!t)
                         goto no_task;
-                    set_get_children_task (data->tree, task);
+                    set_get_children_task (data->tree, t);
 
                     d = g_slice_new0 (struct node_get_children_list_data);
                     d->tree = data->tree;
                     d->node = g_object_ref (priv->location);
 
-                    donna_task_set_callback (task,
+                    donna_task_set_callback (t,
                             (task_callback_fn) node_get_children_list_cb,
                             d,
                             (GDestroyNotify) free_node_get_children_list_data);
-                    donna_app_run_task (priv->app, task);
+                    donna_app_run_task (priv->app, t);
                 }
                 else if (!change_location (data->tree, CHANGING_LOCATION_ASKED,
                             priv->location, NULL, &err))
@@ -8134,7 +8144,7 @@ switch_provider (DonnaTreeView *tree,
 
             if (ps->provider == provider_future)
             {
-                found = i;
+                found = (gint) i;
                 ps->nb_nodes++;
                 ++done;
             }
@@ -8661,7 +8671,6 @@ donna_tree_view_get_selected_nodes (DonnaTreeView   *tree,
 {
     DonnaTreeViewPrivate *priv;
     GtkTreeModel *model;
-    GtkTreePath *path;
     GtkTreeIter iter_focus;
     GtkTreeIter iter;
     GtkTreeSelection *sel;
@@ -9089,7 +9098,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 ++s;
             }
 
-            i = g_ascii_strtoll (s, &end, 10);
+            i = (gint) g_ascii_strtoll (s, &end, 10);
             if (i < 0)
                 return ROW_ID_INVALID;
 
@@ -9113,7 +9122,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                     path = gtk_tree_path_new_from_indices (0, -1);
                 else
                 {
-                    rid.ptr = ":top";
+                    rid.ptr = (gpointer) ":top";
                     if (convert_row_id_to_iter (tree, &rid, &iter_top) == ROW_ID_INVALID)
                         return ROW_ID_INVALID;
                     path = gtk_tree_model_get_path (model, &iter_top);
@@ -9132,7 +9141,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 }
                 else
                 {
-                    rid.ptr = ":bottom";
+                    rid.ptr = (gpointer) ":bottom";
                     if (convert_row_id_to_iter (tree, &rid, iter) == ROW_ID_INVALID)
                             return ROW_ID_INVALID;
                 }
@@ -9147,7 +9156,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
                 rows = height / rect.height;
 
                 /* get the one at specified percent */
-                i = (rows * ((gdouble) i / 100.0)) + 1;
+                i = (gint) ((gdouble) rows * ((gdouble) i / 100.0)) + 1;
                 i = CLAMP (i, 1, rows);
 
                 if (flg == PCTG_VISIBLE && !is_tree (tree))
@@ -10144,7 +10153,8 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
                     "Treeview '%s': Cannot return visual 'icon', "
-                    "it doesn't have a straight-forward string value");
+                    "it doesn't have a straight-forward string value",
+                    priv->name);
             return NULL;
         }
     }
@@ -10218,7 +10228,7 @@ editable_remove_widget_cb (GtkCellEditable *editable, struct inline_edit *ie)
          * (as a DonnaTreeRow) for move_inline_edit() to use */
 
         rid.type = DONNA_ARG_TYPE_PATH;
-        rid.ptr  = (ie->move == INLINE_EDIT_PREV) ? ":prev" : ":next";
+        rid.ptr  = (gpointer) ((ie->move == INLINE_EDIT_PREV) ? ":prev" : ":next");
         type = convert_row_id_to_iter (ie->tree, &rid, &iter);
         if (type == ROW_ID_ROW)
         {
@@ -10584,7 +10594,7 @@ _convert_value (DonnaTreeView           *tree,
         {
             if (streq (e->items[i].in_file, value))
             {
-                * (guint *) val |= e->items[i].value;
+                * (gint *) val |= e->items[i].value;
                 break;
             }
         }
@@ -10636,12 +10646,12 @@ _convert_value (DonnaTreeView           *tree,
                                                                             \
         if (DONNA_CONFIG_EXTRA_TYPE_LIST_##extra_type                       \
                 == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)                      \
-            val = priv->lower ^ val;                                        \
+            val = (gint) (priv->lower ^ (guint) val);                       \
                                                                             \
         if (need_cur)                                                       \
         {                                                                   \
             cur = cfg_get_##lower (tree, config, &from);                    \
-            if (cur != priv->lower)                                         \
+            if (cur != (gint) priv->lower)                                  \
             {                                                               \
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
                         DONNA_TREE_VIEW_ERROR_OTHER,                        \
@@ -10651,7 +10661,7 @@ _convert_value (DonnaTreeView           *tree,
                 return FALSE;                                               \
             }                                                               \
         }                                                                   \
-        else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)       \
+        else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)     \
         {                                                                   \
             od.val = &val;                                                  \
             real_option_cb (&od);                                           \
@@ -10691,7 +10701,7 @@ _convert_value (DonnaTreeView           *tree,
                 return FALSE;                                               \
             }                                                               \
         }                                                                   \
-        else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)       \
+        else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)     \
         {                                                                   \
             od.val = &val;                                                  \
             real_option_cb (&od);                                           \
@@ -10708,8 +10718,6 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 {
     DonnaTreeViewPrivate *priv;
     DonnaConfig *config;
-    const DonnaConfigExtra *extras;
-    DonnaConfigExtraListInt **ex_li;
     struct option_data od;
     GType type;
     guint from;
@@ -10778,9 +10786,9 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT)
     {
         if (from == _DONNA_CONFIG_COLUMN_FROM_TREE)
-            save_location = DONNA_COLUMN_OPTION_SAVE_IN_TREE;
+            save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_TREE;
         else /* _DONNA_CONFIG_COLUMN_FROM_DEFAULT */
-            save_location = DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT;
+            save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_DEFAULT;
     }
     else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK)
     {
@@ -10793,7 +10801,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
             return TRUE;
     }
 
-    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_TREE)
+    if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_TREE)
         loc = g_strconcat ("treeviews/", priv->name, "/", option, NULL);
     else /* DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT */
         loc = g_strconcat ("defaults/treeviews/",
@@ -10804,7 +10812,6 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         if (!donna_config_set_int (config, error, val, loc))
         {
             g_prefix_error (error, "Treeview '%s': Failed to save option '%s': ",
-                    "Treeview '%s': Failed to save option '%s'",
                     priv->name, option);
             g_free (loc);
             return FALSE;
@@ -10946,7 +10953,7 @@ save_to_file (DonnaTreeView *tree,
     else
         file = donna_app_get_conf_filename (tree->priv->app, filename);
 
-    if (!g_file_set_contents (file, str->str, str->len, error))
+    if (!g_file_set_contents (file, str->str, (gssize) str->len, error))
     {
         g_prefix_error (error, "Treeview '%s': Failed to save to file '%s': ",
                 tree->priv->name, filename);
@@ -11009,7 +11016,7 @@ donna_tree_view_save_list_file (DonnaTreeView      *tree,
     /* 2. focused row */
     if (elements & DONNA_LIST_FILE_FOCUS)
     {
-        rid.ptr = ":focused";
+        rid.ptr = (gpointer) ":focused";
         if (convert_row_id_to_iter (tree, &rid, &iter) == ROW_ID_ROW)
         {
             gtk_tree_model_get (model, &iter,
@@ -11926,8 +11933,8 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
                 iter = priv->future_location_iter;
 
             /* set up the iter for this level (so we can add children) */
-            if (level >= array->len)
-                g_array_set_size (array, level + 2);
+            if ((guint) level >= array->len)
+                g_array_set_size (array, (guint) level + 2);
             tf_row = &g_array_index (array, struct tf_row, level);
             tf_row->iter = iter;
             tf_row->watched.stamp = 0;
@@ -12270,7 +12277,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         data = g_new (struct refresh_data, 1);
         data->tree = tree;
         g_mutex_init (&data->mutex);
-        data->count = nb_org = donna_tree_model_get_count (model);
+        data->count = nb_org = (guint) donna_tree_model_get_count (model);
         data->done = FALSE;
         priv->refresh_on_hold = TRUE;
 
@@ -12442,7 +12449,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
     GtkTreeIter   tb_iter;
     guint         is_tb = 0;
     guint         rows  = 0;
-    guint         max;
+    guint         max   = 0;
     GdkRectangle  rect_visible;
     GdkRectangle  rect;
 
@@ -12453,7 +12460,6 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
 
     if (nb_type == DONNA_TREE_GOTO_PERCENT)
     {
-        GdkRectangle rect;
         gint height;
 
         /* locate first row */
@@ -12485,10 +12491,10 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         height += ABS (rect.y) + rect.height;
 
         /* nb of rows accessible on tree */
-        rows = height / rect.height;
+        rows = (guint) (height / rect.height);
 
         /* get the one at specified percent */
-        nb = (rows * ((gdouble) nb / 100.0)) + 1;
+        nb = (guint) ((gdouble) rows * ((gdouble) nb / 100.0)) + 1;
 
         /* this can now be treated as LINE */
         nb_type = DONNA_TREE_GOTO_LINE;
@@ -12499,7 +12505,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         if (!is_tree (tree))
         {
             /* list, so line n is path n-1 */
-            path = gtk_tree_path_new_from_indices (nb - 1, -1);
+            path = gtk_tree_path_new_from_indices ((gint) nb - 1, -1);
             if (!gtk_tree_model_get_iter (model, &iter, path))
             {
                 gtk_tree_path_free (path);
@@ -12626,19 +12632,25 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             {
                 if (!rows)
                 {
+                    gint count;
+
                     gtk_tree_view_get_visible_rect (treev, &rect_visible);
                     gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-                    rows = rect_visible.height / rect.height;
-                    max  = donna_tree_model_get_count (model) - 1;
+                    rows  = (guint) (rect_visible.height / rect.height);
+                    count = donna_tree_model_get_count (model) - 1;
+                    if (count >= 0)
+                        max = (guint) count;
+                    else
+                        max = 0;
                 }
 
                 if (!is_tree (tree))
                 {
                     gint *indices;
-                    gint i;
+                    guint i;
 
                     indices = gtk_tree_path_get_indices (path);
-                    i = indices[0];
+                    i = (guint) indices[0];
                     if (((gchar *) rowid->ptr)[1] == 't')
                     {
                         i -= rows;
@@ -12647,11 +12659,11 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                     else
                     {
                         i += rows;
-                        i = MIN ((guint) i, max);
+                        i = MIN (i, max);
                     }
 
                     gtk_tree_path_free (path);
-                    path = gtk_tree_path_new_from_indices (i, -1);
+                    path = gtk_tree_path_new_from_indices ((gint) i, -1);
                     gtk_tree_model_get_iter (model, &iter, path);
                 }
                 else
@@ -13978,7 +13990,7 @@ tree_context_get_alias (const gchar             *alias,
         gchar *ret;
 
         if (!conv->col_name)
-            return "";
+            return (gchar *) "";
 
         _col = get_column_by_name (tree, conv->col_name);
         if (G_UNLIKELY (!_col))
@@ -14026,7 +14038,7 @@ tree_context_get_alias (const gchar             *alias,
             return g_string_free (str, FALSE);
         }
         else
-            return "";
+            return (gchar *) "";
     }
     else if (streq (alias, "new_nodes"))
     {
@@ -14034,7 +14046,7 @@ tree_context_get_alias (const gchar             *alias,
         gchar *ret;
 
         if (!priv->location)
-            return "";
+            return (gchar *) "";
 
         if (G_UNLIKELY (snprintf (buf, 255, ":domain.%s.",
                         donna_node_get_domain (priv->location)) >= 255))
@@ -14054,7 +14066,7 @@ tree_context_get_alias (const gchar             *alias,
         GSList *l;
 
         if (!priv->columns)
-            return "";
+            return (gchar *) "";
 
         str = g_string_new (":");
         g_string_append (str, alias);
@@ -14849,7 +14861,7 @@ tree_context_get_item_info (const gchar             *item,
                     priv->name, item, extra, b);
             if (b != buf)
                 g_free (b);
-            g_free (info->trigger);
+            g_free ((gchar *) info->trigger);
             return FALSE;
         }
 
@@ -15391,7 +15403,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
         conv.col_name = _col->name;
     }
     else
-        conv.col_name = "";
+        conv.col_name = (gchar *) "";
 
     if (rowid)
     {
@@ -15807,8 +15819,8 @@ query_tooltip_cb (GtkTreeView   *treev,
                 {
                     gchar r;
 
-                    r = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (renderer),
-                                "renderer-type"));
+                    r = (gchar) GPOINTER_TO_INT (g_object_get_data (
+                                G_OBJECT (renderer), "renderer-type"));
                     for (index = 1; *rend && *rend != r; ++index, ++rend)
                         ;
                 }
@@ -16447,11 +16459,11 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                 list = g_hash_table_lookup (priv->hashtable, node);
                 for ( ; list; list = list->next)
                 {
-                    GtkTreeIter *iter = list->data;
+                    GtkTreeIter *it = list->data;
                     GtkTreePath *path;
 
-                    path = gtk_tree_model_get_path (model, iter);
-                    gtk_tree_model_row_changed (model, path, iter);
+                    path = gtk_tree_model_get_path (model, it);
+                    gtk_tree_model_row_changed (model, path, it);
                     gtk_tree_path_free (path);
                 }
 
@@ -16490,7 +16502,7 @@ static gboolean
 single_click_cb (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    gint delay;
+    guint delay;
 
     /* single click it is */
 
@@ -16563,7 +16575,7 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
         /* make sure we're over a row, i.e. not on blank space after the last
          * row, because that would cause trouble/is unsupported by GTK */
         gtk_tree_view_convert_bin_window_to_widget_coords ((GtkTreeView *) tree,
-                event->x, event->y, &x, &y);
+                (gint) event->x, (gint) event->y, &x, &y);
         if (gtk_tree_view_get_tooltip_context ((GtkTreeView *) tree, &x, &y, 0,
                     NULL, NULL, NULL)
                 /* don't start if this is a focusing click to be skipped. We
@@ -16659,7 +16671,7 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
 
     if (set_up_as_last)
     {
-        gint delay;
+        guint delay;
 
         /* left click are processed right away, unless Ctrl and/or Shift was
          * held. This is because:
@@ -17065,7 +17077,7 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
                     || (event->keyval >= GDK_KEY_KP_0 && event->keyval <= GDK_KEY_KP_9))
                 goto next;
         if ((priv->key_spec_type & SPEC_EXTRA)
-                && strchr (SPEC_EXTRA_CHARS, gdk_keyval_to_unicode (event->keyval)))
+                && strchr (SPEC_EXTRA_CHARS, (gint) gdk_keyval_to_unicode (event->keyval)))
             goto next;
         if (priv->key_spec_type & SPEC_MOTION)
         {
@@ -17609,7 +17621,7 @@ st_render_size (DonnaStatusProvider *sp,
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
     guint64 size = 0;
     gchar buf[20], *b = buf;
-    gssize len;
+    gsize len;
 
     switch (c)
     {
@@ -17720,7 +17732,8 @@ status_provider_render (DonnaStatusProvider    *sp,
                 if (priv->key_m)
                     g_string_append_printf (str, "%d", priv->key_m);
                 if (priv->key_val)
-                    g_string_append_c (str, gdk_keyval_to_unicode (priv->key_val));
+                    g_string_append_c (str,
+                            (gchar) gdk_keyval_to_unicode (priv->key_val));
                 if (priv->key_motion_m)
                     g_string_append_printf (str, "%d", priv->key_motion_m);
                 s += 2;
@@ -17781,7 +17794,7 @@ status_provider_render (DonnaStatusProvider    *sp,
             case 'V':
             case 'S':
                 g_string_append_len (str, fmt, s - fmt);
-                st_render_size (sp, status, str, s[1], "%R", &sel);
+                st_render_size (sp, status, str, s[1], (gchar *) "%R", &sel);
                 s += 2;
                 fmt = s;
                 break;

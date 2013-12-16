@@ -1,5 +1,6 @@
 
 #include	<glib-object.h>
+#include "closures.h"
 
 
 #ifdef G_ENABLE_DEBUG

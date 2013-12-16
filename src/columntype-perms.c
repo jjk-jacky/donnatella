@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -226,6 +228,11 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_perms_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypePerms, donna_column_type_perms,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_perms_columntype_init)
+        )
+
 static void
 donna_column_type_perms_class_init (DonnaColumnTypePermsClass *klass)
 {
@@ -251,14 +258,9 @@ donna_column_type_perms_init (DonnaColumnTypePerms *ct)
             DonnaColumnTypePermsPrivate);
     priv->user_id = getuid ();
     priv->nb_groups = getgroups (0, NULL);
-    priv->group_ids = g_new (gid_t, priv->nb_groups);
+    priv->group_ids = g_new (gid_t, (gsize) priv->nb_groups);
     getgroups (priv->nb_groups, priv->group_ids);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypePerms, donna_column_type_perms,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_perms_columntype_init)
-        )
 
 static void
 free_user (struct _user *u)
@@ -559,8 +561,8 @@ perms_cb (struct editing_data *ed)
 static void
 toggle_cb (GtkToggleButton *toggle, GtkSpinButton *spin)
 {
-    gchar c;
-    gint  perm;
+    gint c;
+    gint perm;
 
     c = (gchar) gtk_spin_button_get_value (spin);
     perm = GPOINTER_TO_INT (g_object_get_data ((GObject *) toggle, "perm"));
@@ -700,9 +702,9 @@ apply_cb (struct editing_data *data)
                     0,  &uid,
                     -1);
         else
-            uid = -1;
+            uid = (uid_t) -1;
 
-        if (uid != -1)
+        if (uid != (uid_t) -1)
             set |= SET_UID;
     }
 
@@ -713,9 +715,9 @@ apply_cb (struct editing_data *data)
                     0,  &gid,
                     -1);
         else
-            gid = -1;
+            gid = (gid_t) -1;
 
-        if (gid != -1)
+        if (gid != (gid_t) -1)
             set |= SET_GID;
     }
 
@@ -778,7 +780,6 @@ ct_perms_edit (DonnaColumnType    *ct,
 {
     struct tv_col_data *data = _data;
     struct editing_data *ed;
-    DonnaNodeHasValue has;
     mode_t mode;
     uid_t uid;
     gid_t gid;
@@ -787,7 +788,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     GtkWindow *win;
     gint row;
     gchar *s;
-    gchar c;
+    gint c;
 
     GtkGrid *grid;
     GtkListStore *store_pwd, *store_grp;
@@ -802,9 +803,15 @@ ct_perms_edit (DonnaColumnType    *ct,
         return FALSE;
 
     /* get the perms */
-    has = donna_node_get_mode (node, TRUE, &mode);
-    has = donna_node_get_uid (node, TRUE, &uid);
-    has = donna_node_get_gid (node, TRUE, &gid);
+    if (donna_node_get_mode (node, TRUE, &mode) != DONNA_NODE_VALUE_SET
+            || donna_node_get_uid (node, TRUE, &uid) != DONNA_NODE_VALUE_SET
+            || donna_node_get_gid (node, TRUE, &gid) != DONNA_NODE_VALUE_SET)
+    {
+        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
+                DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
+                "ColumnType 'perms': Failed to get properties");
+        return FALSE;
+    }
     /* get selected nodes (if any) */
     arr = donna_tree_view_get_selected_nodes (treeview, NULL);
 
@@ -1178,7 +1185,7 @@ ct_perms_set_value (DonnaColumnType    *ct,
     DonnaColumnTypePermsPrivate *priv;
     GString *str = NULL;
     const gchar *s;
-    guint unit;
+    gchar unit;
     guint ref;
     guint ref_add; /* for perms that are added, not set */
     guint i;
@@ -1274,7 +1281,7 @@ ct_perms_set_value (DonnaColumnType    *ct,
     {
         case UNIT_UID:
         case UNIT_GID:
-            ref = g_ascii_strtoull (s, NULL, 10);
+            ref = (guint) g_ascii_strtoull (s, NULL, 10);
             goto ready;
 
         case UNIT_USER:
@@ -1319,14 +1326,14 @@ ct_perms_set_value (DonnaColumnType    *ct,
 
     if (*s >= '0' && *s <= '9')
     {
-        ref = g_ascii_strtoull (s, NULL, 8);
+        ref = (guint) g_ascii_strtoull (s, NULL, 8);
         goto ready;
     }
 
     ref_add = 0;
     for (;;)
     {
-        gint m = 0;
+        guint m = 0;
         gboolean add = FALSE;
 
         if (*s == 'u')
@@ -1605,15 +1612,15 @@ static void
 add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
                   struct tv_col_data            *data,
                   gchar                        **str,
-                  gssize                        *max,
-                  gssize                        *total,
+                  gsize                         *max,
+                  gsize                         *total,
                   mode_t                         mode,
                   uid_t                          uid,
                   gid_t                          gid,
                   gchar                          perm,
                   gboolean                       in_color)
 {
-    gchar u_perm = (in_color) ? perm + 'A' - 'a' : perm;
+    gchar u_perm = (in_color) ? (gchar) (perm + 'A' - 'a') : perm;
     mode_t S_OTH, S_GRP, S_USR;
     int group_has_perm = 0;
     gssize need;
@@ -1700,14 +1707,17 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
         need = snprintf (*str,*max, "-");
 
 done:
-    if (need < *max)
+    if (need >= 0)
     {
-        *max -= need;
-        *str += need;
+        if ((gsize) need < *max)
+        {
+            *max -= (gsize) need;
+            *str += (gsize) need;
+        }
+        else
+            *max = 0;
+        *total += (gsize) need;
     }
-    else
-        *max = 0;
-    *total += need;
 }
 
 #define add_perm(PERM, letter)  do {    \
@@ -1719,18 +1729,18 @@ done:
     }                                   \
     ++total;                            \
 } while (0)
-static gssize
+static gsize
 print_perms (DonnaColumnTypePerms   *ctperms,
              struct tv_col_data     *data,
              gchar                  *str,
-             gssize                  max,
+             gsize                   max,
              const gchar            *fmt,
              mode_t                  mode,
              uid_t                   uid,
              gid_t                   gid)
 {
     DonnaColumnTypePermsPrivate *priv = ctperms->priv;
-    gssize total = 0;
+    gsize total = 0;
 
     while (*fmt != '\0')
     {
@@ -1774,7 +1784,7 @@ print_perms (DonnaColumnTypePerms   *ctperms,
 
                         u = get_user (priv, uid);
                         if (!u)
-                            s = "???";
+                            s = (gchar *) "???";
                         else
                             s = u->name;
 
@@ -1799,7 +1809,7 @@ print_perms (DonnaColumnTypePerms   *ctperms,
 
                         g = get_group (priv, gid);
                         if (!g)
-                            s = "???";
+                            s = (gchar *) "???";
                         else
                             s = g->name;
 
@@ -1825,15 +1835,15 @@ print_perms (DonnaColumnTypePerms   *ctperms,
             /* it was a known modifier */
             if (need > 0)
             {
-                if (need < max)
+                if ((gsize) need < max)
                 {
-                    max -= need;
-                    str += need;
+                    max -= (gsize) need;
+                    str += (gsize) need;
                 }
                 else
                     max = 0;
                 fmt += 2;
-                total += need;
+                total += (gsize) need;
                 continue;
             }
         }
@@ -1864,7 +1874,7 @@ format_perms (DonnaColumnTypePerms  *ctperms,
               gsize                  max)
 {
     gchar *fmt;
-    gssize len;
+    gsize len;
 
     fmt = g_markup_escape_text (_fmt, -1);
     len = print_perms (ctperms, data, str, max, fmt, mode, uid, gid);
@@ -1892,7 +1902,6 @@ ct_perms_render (DonnaColumnType    *ct,
     uid_t uid;
     gid_t gid;
     gchar buf[20], *b = buf;
-    gssize len;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
 
@@ -1971,7 +1980,6 @@ ct_perms_set_tooltip (DonnaColumnType    *ct,
     uid_t uid;
     gid_t gid;
     gchar buf[20], *b = buf;
-    gssize len;
     DonnaNodeHasValue has;
 
     if (!data->format_tooltip)
@@ -2174,7 +2182,6 @@ ct_perms_is_match_filter (DonnaColumnType    *ct,
                           GError            **error)
 {
     DonnaColumnTypePermsPrivate *priv = ((DonnaColumnTypePerms *) ct)->priv;
-    struct tv_col_data *data = _data;
     struct filter_data *fd;
     DonnaNodeHasValue has;
     guint val = 0;
@@ -2210,7 +2217,7 @@ ct_perms_is_match_filter (DonnaColumnType    *ct,
         {
             case UNIT_UID:
             case UNIT_GID:
-                fd->ref = g_ascii_strtoull (filter, NULL, 10);
+                fd->ref = (guint) g_ascii_strtoull (filter, NULL, 10);
                 goto compile_done;
 
             case UNIT_USER:
@@ -2277,13 +2284,13 @@ ct_perms_is_match_filter (DonnaColumnType    *ct,
         {
             if (*filter >= '0' && *filter <= '9')
             {
-                fd->ref = g_ascii_strtoull (filter, NULL, 8);
+                fd->ref = (guint) g_ascii_strtoull (filter, NULL, 8);
                 goto compile_done;
             }
 
             for (;;)
             {
-                gint m = 0;
+                guint m = 0;
 
                 if (*filter == 'u')
                     m = 0100;
@@ -2349,7 +2356,7 @@ ct_perms_is_match_filter (DonnaColumnType    *ct,
         else /* UNIT_SELF */
         {
             if (*filter >= '0' && *filter <= '9')
-                fd->ref = *filter - '0';
+                fd->ref = (guint) (*filter - '0');
             else
             {
                 for (;;)
@@ -2545,7 +2552,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
     }
     else if (streq (option, "sort"))
     {
-        gint c, v;
+        gint8 c, v;
 
         c = data->sort;
         if (streq (value, "perms"))

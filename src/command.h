@@ -27,10 +27,10 @@ struct command
     GDestroyNotify       destroy;
 };
 
-gint                _donna_get_choice_from_list     (gint            nb,
+gint                _donna_get_choice_from_list     (guint           nb,
                                                      const gchar    *choices[],
                                                      const gchar    *sel);
-guint               _donna_get_flags_from_list      (gint            nb,
+guint               _donna_get_flags_from_list      (guint           nb,
                                                      const gchar    *choices[],
                                                      guint           flags[],
                                                      gchar          *sel);

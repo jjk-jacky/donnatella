@@ -1,5 +1,6 @@
 
-#define _GNU_SOURCE             /* strchrnul() in string.h */
+#include "config.h"
+
 #include <glib-object.h>
 #include <stdlib.h>             /* atoi() */
 #include <stdio.h>              /* sscanf() */
@@ -11,6 +12,7 @@
 #include "node.h"
 #include "task.h"
 #include "colorfilter.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -151,6 +153,26 @@ static gboolean         provider_config_get_context_item_info (
                                             DonnaContextInfo   *info,
                                             GError            **error);
 
+/* internal, for treeview.c */
+gboolean
+_donna_config_get_boolean_tree_column (DonnaConfig   *config,
+                                       const gchar   *tv_name,
+                                       const gchar   *col_name,
+                                       guint          tree_col,
+                                       const gchar   *arr_name,
+                                       const gchar   *def_cat,
+                                       const gchar   *opt_name,
+                                       gboolean      *ret);
+gchar *
+_donna_config_get_string_tree_column (DonnaConfig   *config,
+                                      const gchar   *tv_name,
+                                      const gchar   *col_name,
+                                      guint          tree_col,
+                                      const gchar   *arr_name,
+                                      const gchar   *def_cat,
+                                      const gchar   *opt_name,
+                                      gchar         *def_val);
+
 
 static gchar *get_option_full_name (GNode *root, GNode *gnode);
 static void free_extra  (DonnaConfigExtra  *extra);
@@ -172,6 +194,11 @@ provider_config_provider_init (DonnaProviderInterface *interface)
     interface->get_context_alias_new_nodes  = provider_config_get_context_alias_new_nodes;
     interface->get_context_item_info        = provider_config_get_context_item_info;
 }
+
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_config_provider_init)
+        )
 
 static void
 donna_provider_config_class_init (DonnaProviderConfigClass *klass)
@@ -235,11 +262,6 @@ donna_provider_config_init (DonnaProviderConfig *provider)
     g_rw_lock_init (&priv->lock);
     g_rec_mutex_init (&priv->nodes_mutex);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderConfig, donna_provider_config,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_config_provider_init)
-        )
 
 static inline void
 config_option_set (DonnaConfig *config, const gchar *name)
@@ -450,7 +472,7 @@ is_valid_name_len (const gchar *name, gsize len, enum valid valid)
     return TRUE;
 }
 
-#define is_valid_name(name, valid)  is_valid_name_len (name, -1, valid)
+#define is_valid_name(name, valid)  is_valid_name_len (name, (gsize) -1, valid)
 
 gboolean
 donna_config_add_extra (DonnaConfig          *config,
@@ -503,7 +525,7 @@ donna_config_add_extra (DonnaConfig          *config,
         DonnaConfigItemExtraList *it = items;
 
         size_extra = sizeof (DonnaConfigExtraList);
-        size_items = nb_items * sizeof (DonnaConfigItemExtraList);
+        size_items = (gsize) nb_items * sizeof (DonnaConfigItemExtraList);
 
         for (i = 0; i < nb_items; ++i)
         {
@@ -527,7 +549,7 @@ donna_config_add_extra (DonnaConfig          *config,
         DonnaConfigItemExtraListInt *it = items;
 
         size_extra = sizeof (DonnaConfigExtraListInt);
-        size_items = nb_items * sizeof (DonnaConfigItemExtraListInt);
+        size_items = (gsize) nb_items * sizeof (DonnaConfigItemExtraListInt);
 
         for (i = 0; i < nb_items; ++i)
         {
@@ -551,7 +573,7 @@ donna_config_add_extra (DonnaConfig          *config,
         DonnaConfigItemExtraListFlags *it = items;
 
         size_extra = sizeof (DonnaConfigExtraListFlags);
-        size_items = nb_items * sizeof (DonnaConfigItemExtraListFlags);
+        size_items = (gsize) nb_items * sizeof (DonnaConfigItemExtraListFlags);
 
         for (i = 0; i < nb_items; ++i)
         {
@@ -887,7 +909,7 @@ ensure_categories (DonnaProviderConfig  *config,
                 goto next;
             }
 
-            node = get_child_node (parent, name, s - name);
+            node = get_child_node (parent, name, (gsize) (s - name));
             if (node)
             {
                 if (!option_is_category (node->data, root))
@@ -899,7 +921,7 @@ ensure_categories (DonnaProviderConfig  *config,
                 struct option *option;
                 struct option *po = parent->data;
 
-                if (!is_valid_name_len (name, s - name, VALID_CATEGORY_NAME))
+                if (!is_valid_name_len (name, (gsize) (s - name), VALID_CATEGORY_NAME))
                     return NULL;
 
                 option = g_slice_new0 (struct option);
@@ -931,7 +953,7 @@ next:
             break;
         else
         {
-            len -= s - name + 1;
+            len -= (gsize) (s - name + 1);
             name = s + 1;
             parent = node;
         }
@@ -968,7 +990,7 @@ get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value)
         for (i = 0; i < e->nb_items; ++i)
             if (streq (str, e->items[i].value))
             {
-                * (gchar **) value = e->items[i].value;
+                * (gchar **) value = (gchar *) e->items[i].value;
                 return TRUE;
             }
     }
@@ -993,7 +1015,7 @@ get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value)
         {
             s = strchr (str, ',');
             if (s)
-                len = s - str;
+                len = (gsize) (s - str);
             else
                 len = strlen (str);
             if (!add_flag_value (extra, str, len, &val))
@@ -1438,7 +1460,7 @@ export_config (DonnaProviderConfigPrivate   *priv,
                 g_string_append_c (str, '\n');
             }
             export_config (priv, child, str_loc, str, TRUE);
-            g_string_erase (str_loc, len, -1);
+            g_string_erase (str_loc, (gssize) len, -1);
         }
     }
     if (do_options)
@@ -1519,7 +1541,7 @@ get_option_node (GNode *root, const gchar *name)
         s = strchrnul (name, '/');
 
         if (*name != '\0')
-            node = get_child_node (node, name, s - name);
+            node = get_child_node (node, name, (gsize) (s - name));
         else
             node = NULL;
 
@@ -2132,7 +2154,7 @@ donna_config_get_string_column (DonnaConfig *config,
                                 const gchar *arr_name,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
-                                gchar       *def_val,
+                                const gchar *def_val,
                                 guint       *from)
 {
     _get_cfg_column (gchar *, STRING, string, dup_string, g_strdup, from);
@@ -2729,7 +2751,7 @@ move_numbered_category (GNode *root, GNode *node)
      * order. There's also the fact hat the parent category has an index of the
      * next available number */
 
-    num = g_ascii_strtoll (option->name, NULL, 10);
+    num = (gint) g_ascii_strtoll (option->name, NULL, 10);
     index = g_value_get_int (&op->value);
 
     /* is this the first numbered category? */
@@ -2749,7 +2771,7 @@ move_numbered_category (GNode *root, GNode *node)
                 || *o->name < '1' || *o->name > '9')
             continue;
 
-        idx = g_ascii_strtoll (o->name, NULL, 10);
+        idx = (gint) g_ascii_strtoll (o->name, NULL, 10);
         if (idx > num)
             break;
     }
@@ -2799,7 +2821,7 @@ _set_option_va (DonnaConfig    *config,
     s = strrchr (name + 1, '/');
     if (s)
     {
-        parent = ensure_categories (config, name + 1, s - name - 1,
+        parent = ensure_categories (config, name + 1, (gsize) (s - name - 1),
                 &parent_node, &child_node);
         if (!parent)
         {
@@ -2855,7 +2877,8 @@ _set_option_va (DonnaConfig    *config,
                     DONNA_CONFIG_ERROR_INVALID_OPTION_TYPE,
                     "Config: Option '%s' is of type '%s' (expected '%s')",
                     name + 1,
-                    (option->extra) ? option->extra : G_VALUE_TYPE_NAME (&option->value),
+                    (option->extra)
+                    ? (gchar *) option->extra : G_VALUE_TYPE_NAME (&option->value),
                     (extra) ? extra : g_type_name (type));
         }
         else
@@ -3231,7 +3254,7 @@ btn_clicked (struct set_option *so)
             g_value_unset (so->value);
             g_value_init (so->value, G_TYPE_INT);
         }
-        g_value_set_int (so->value, g_ascii_strtoll (
+        g_value_set_int (so->value, (gint) g_ascii_strtoll (
                     gtk_entry_get_text ((GtkEntry *) w), NULL, 10));
     }
     else if (streq (type, ":boolean"))
@@ -3255,9 +3278,9 @@ btn_clicked (struct set_option *so)
     else
     {
         DonnaConfigExtra *_e;
-        guint i;
+        gint i;
 
-        for (i = 0; i < so->extras->len; ++i)
+        for (i = 0; (guint) i < so->extras->len; ++i)
         {
             struct extra *e = &g_array_index (so->extras, struct extra, i);
             if (streq (type, e->name))
@@ -3288,7 +3311,6 @@ btn_clicked (struct set_option *so)
         else if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
         {
             const gchar *id = gtk_combo_box_get_active_id ((GtkComboBox *) w);
-            guint i;
 
             if (!id)
             {
@@ -3412,9 +3434,9 @@ combo_changed (struct set_option *so)
     else
     {
         DonnaConfigExtra *_e;
-        guint i;
+        gint i;
 
-        for (i = 0; i < so->extras->len; ++i)
+        for (i = 0; (guint) i < so->extras->len; ++i)
         {
             struct extra *e = &g_array_index (so->extras, struct extra, i);
             if (streq (type, e->name))
@@ -3696,7 +3718,7 @@ donna_config_set_option (DonnaConfig            *config,
         else if (G_VALUE_HOLDS (&v, G_TYPE_STRING))
             g_value_set_string (&v, value);
         else if (G_VALUE_HOLDS (&v, G_TYPE_INT))
-            g_value_set_int (&v, g_ascii_strtoll (value, NULL, 10));
+            g_value_set_int (&v, (gint) g_ascii_strtoll (value, NULL, 10));
         else if (G_VALUE_HOLDS (&v, G_TYPE_BOOLEAN))
         {
             if (streq (value, "true") || streq (value, "1"))
@@ -3710,7 +3732,7 @@ donna_config_set_option (DonnaConfig            *config,
                         DONNA_CONFIG_ERROR_INVALID_NAME,
                         "Config: Cannot set option '%s', invalid value '%s'; "
                         "Expected 'true', '1', 'false' or '0'",
-                        name);
+                        name, value);
                 g_value_unset (&v);
                 g_free (parent_name);
                 return FALSE;
@@ -3728,7 +3750,7 @@ donna_config_set_option (DonnaConfig            *config,
         struct set_option so;
         struct extra so_extra;
         GHashTableIter iter;
-        guint i = 0;
+        gint i = 0;
         guint nb;
 
         so.state = (value || value_imported) ? SO_INIT_WITH_DEFAULT_VALUE : SO_INIT;
@@ -3976,7 +3998,7 @@ donna_config_rename_option (DonnaConfig            *config,
     s = strrchr ((*name == '/') ? name + 1 : name, '/');
     if (s)
     {
-        parent = ensure_categories (config, name, s - name,
+        parent = ensure_categories (config, name, (gsize) (s - name),
                 &parent_node, &child_node);
         if (!parent)
         {
@@ -4192,7 +4214,7 @@ donna_config_rename_category (DonnaConfig            *config,
     s = strrchr ((*name == '/') ? name + 1 : name, '/');
     if (s)
     {
-        parent = ensure_categories (config, name, s - name,
+        parent = ensure_categories (config, name, (gsize) (s - name),
                 &parent_node, &child_node);
         if (!parent)
         {
@@ -4376,7 +4398,7 @@ _remove_option (DonnaProviderConfig *config,
     s = strrchr (name, '/');
     if (s)
     {
-        parent = ensure_categories (config, name, s - name,
+        parent = ensure_categories (config, name, (gsize) (s - name),
                 &parent_node, &child_node);
         if (!parent)
         {

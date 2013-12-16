@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include <gio/gdesktopappinfo.h>
 #include "provider-exec.h"
@@ -39,6 +41,11 @@ provider_exec_provider_init (DonnaProviderInterface *interface)
     interface->trigger_node_task        = provider_exec_trigger_node_task;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderExec, donna_provider_exec,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_exec_provider_init)
+        )
+
 static void
 donna_provider_exec_class_init (DonnaProviderExecClass *klass)
 {
@@ -56,11 +63,6 @@ static void
 donna_provider_exec_init (DonnaProviderExec *provider)
 {
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderExec, donna_provider_exec,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_exec_provider_init)
-        )
 
 static DonnaProviderFlags
 provider_exec_get_flags (DonnaProvider *provider)
@@ -181,7 +183,7 @@ resolve_path (const gchar *curdir, const gchar *path)
                     s = str->str;
                 /* go past the '/' */
                 ++s;
-                g_string_truncate (str, s - str->str);
+                g_string_truncate (str, (gsize) (s - str->str));
                 if (path[2] == '/')
                     path += 3;
                 else

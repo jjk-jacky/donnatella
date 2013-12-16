@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <sys/eventfd.h>
 #include <sys/select.h>
@@ -214,6 +216,9 @@ enum
 
 static GParamSpec * donna_task_props[NB_PROPS] = { NULL, };
 
+/* internal; used by provider-task.c */
+inline const gchar * state_name (DonnaTaskState state);
+
 static void donna_task_get_property (GObject        *object,
                                      guint           prop_id,
                                      GValue         *value,
@@ -223,6 +228,8 @@ static void donna_task_set_property (GObject        *object,
                                      const GValue   *value,
                                      GParamSpec     *pspec);
 static void donna_task_finalize     (GObject        *object);
+
+G_DEFINE_TYPE (DonnaTask, donna_task, G_TYPE_INITIALLY_UNOWNED)
 
 static void
 donna_task_class_init (DonnaTaskClass *klass)
@@ -443,8 +450,6 @@ donna_task_init (DonnaTask *task)
     g_mutex_init (&priv->mutex);
     g_cond_init (&priv->cond);
 }
-
-G_DEFINE_TYPE (DonnaTask, donna_task, G_TYPE_INITIALLY_UNOWNED)
 
 static void
 donna_task_finalize (GObject *object)

@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include "columntype.h"
 #include "columntype-text.h"
@@ -137,6 +139,11 @@ ct_text_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_text_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeText, donna_column_type_text,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_text_columntype_init)
+        )
+
 static void
 donna_column_type_text_class_init (DonnaColumnTypeTextClass *klass)
 {
@@ -155,17 +162,10 @@ donna_column_type_text_class_init (DonnaColumnTypeTextClass *klass)
 static void
 donna_column_type_text_init (DonnaColumnTypeText *ct)
 {
-    DonnaColumnTypeTextPrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_TEXT,
             DonnaColumnTypeTextPrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeText, donna_column_type_text,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_text_columntype_init)
-        )
 
 static void
 ct_text_finalize (GObject *object)
@@ -230,7 +230,7 @@ ct_text_get_renderers (DonnaColumnType   *ct)
     else if (data->options & opt_name_upper)                                  \
     {                                                                         \
         need |= DONNA_COLUMNTYPE_NEED_RESORT;                                 \
-        data->options &= ~opt_name_upper;                                     \
+        data->options &= (DonnaSortOptions) ~opt_name_upper;                  \
     }
 
 static DonnaColumnTypeNeed
@@ -312,8 +312,8 @@ struct editing_data
     DonnaTreeView *tree;
     DonnaNode *node;
     struct tv_col_data *data;
-    guint editing_started_sid;
-    guint editing_done_sid;
+    gulong editing_started_sid;
+    gulong editing_done_sid;
 };
 
 static gboolean
@@ -666,7 +666,7 @@ ct_text_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_NATURAL_ORDER;
         else
-            data->options &= ~DONNA_SORT_NATURAL_ORDER;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_NATURAL_ORDER;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
     else if (streq (option, "dot_first"))
@@ -683,7 +683,7 @@ ct_text_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_DOT_FIRST;
         else
-            data->options &= ~DONNA_SORT_DOT_FIRST;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_FIRST;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
     else if (streq (option, "case_sensitive"))
@@ -698,7 +698,7 @@ ct_text_set_option (DonnaColumnType    *ct,
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         if (v)
-            data->options &= ~DONNA_SORT_CASE_INSENSITIVE;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_CASE_INSENSITIVE;
         else
             data->options |= DONNA_SORT_CASE_INSENSITIVE;
         return DONNA_COLUMNTYPE_NEED_RESORT;
@@ -717,7 +717,7 @@ ct_text_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_DOT_MIXED;
         else
-            data->options &= ~DONNA_SORT_DOT_MIXED;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_MIXED;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
     else if (streq (option, "ignore_spunct"))
@@ -734,7 +734,7 @@ ct_text_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_IGNORE_SPUNCT;
         else
-            data->options &= ~DONNA_SORT_IGNORE_SPUNCT;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_IGNORE_SPUNCT;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
 
@@ -757,7 +757,6 @@ ct_text_get_context_alias (DonnaColumnType   *ct,
                            const gchar       *prefix,
                            GError           **error)
 {
-    struct tv_col_data *data = _data;
     const gchar *save_location;
 
     if (!streq (alias, "options"))

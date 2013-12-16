@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <string.h>
 #include "columntype.h"
@@ -29,7 +31,7 @@ struct tv_col_data
     gchar           *property;
     gchar           *labels;
     struct label    *defs;
-    gint             nb;
+    guint            nb;
 };
 
 struct _DonnaColumnTypeLabelPrivate
@@ -114,6 +116,11 @@ ct_label_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info = ct_label_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeLabel, donna_column_type_label,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_label_columntype_init)
+        )
+
 static void
 donna_column_type_label_class_init (DonnaColumnTypeLabelClass *klass)
 {
@@ -132,17 +139,10 @@ donna_column_type_label_class_init (DonnaColumnTypeLabelClass *klass)
 static void
 donna_column_type_label_init (DonnaColumnTypeLabel *ct)
 {
-    DonnaColumnTypeLabelPrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_LABEL,
             DonnaColumnTypeLabelPrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeLabel, donna_column_type_label,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_label_columntype_init)
-        )
 
 static void
 ct_label_finalize (GObject *object)
@@ -197,9 +197,7 @@ ct_label_get_renderers (DonnaColumnType   *ct)
 static void
 set_data_labels (struct tv_col_data *data)
 {
-    gint alloc, i;
-    gint id;
-    gchar *label;
+    guint alloc, i;
     gchar *l;
     gchar *s;
 
@@ -213,7 +211,7 @@ set_data_labels (struct tv_col_data *data)
         if (i >= alloc)
         {
             alloc += 4;
-            data->defs = g_renew (struct label, data->defs, alloc);
+            data->defs = g_renew (struct label, data->defs, (gsize) alloc);
         }
         s = strchr (l, '=');
         if (!s)
@@ -226,7 +224,7 @@ set_data_labels (struct tv_col_data *data)
             data->defs = NULL;
             break;
         }
-        data->defs[i].id = g_ascii_strtoll (l, NULL, 10);
+        data->defs[i].id = (gint) g_ascii_strtoll (l, NULL, 10);
         *s = '=';
         l = s + 1;
         s = strchr (l, ',');
@@ -257,7 +255,6 @@ ct_label_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
-    gint i;
 
     config = donna_app_peek_config (ctlbl->priv->app);
 
@@ -335,7 +332,8 @@ ct_label_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
-    gint i, id;
+    guint i;
+    gint id;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_LABEL (ct), NULL);
@@ -401,7 +399,6 @@ ct_label_node_cmp (DonnaColumnType    *ct,
     GValue value = G_VALUE_INIT;
     gint id1;
     gint id2;
-    gint ret;
 
     donna_node_get (node1, TRUE, data->property, &has1, &value, NULL);
     if (has1 == DONNA_NODE_VALUE_SET)

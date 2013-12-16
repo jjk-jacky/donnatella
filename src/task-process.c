@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <stdio.h>
 #include <poll.h>
@@ -299,7 +301,6 @@ close_fd (DonnaTask *task, DonnaPipe pipe, gint *fd)
 {
     DonnaTaskProcessPrivate *priv = ((DonnaTaskProcess *) task)->priv;
     GString *str = (pipe == DONNA_PIPE_OUTPUT) ? priv->str_out : priv->str_err;
-    gint ret;
 
     if (*fd < 0)
         return;
@@ -309,7 +310,7 @@ close_fd (DonnaTask *task, DonnaPipe pipe, gint *fd)
      * reused in threaded env) so we shouldn't try to close it again.
      *
      * See http://lkml.indiana.edu/hypermail/linux/kernel/0509.1/0877.html */
-    ret = close (*fd);
+    close (*fd);
     *fd = -1;
 
     g_signal_emit (task, donna_task_process_signals[PIPE_DATA_RECEIVED], 0,
@@ -352,10 +353,10 @@ donna_task_process_pipe_data_received (DonnaTaskProcess   *taskp,
         gchar *s;
 
         if (G_LIKELY (str))
-            g_string_append_len (str, data, len);
+            g_string_append_len (str, data, (gssize) len);
         else
         {
-            str = g_string_new_len (data, len);
+            str = g_string_new_len (data, (gssize) len);
             if (pipe == DONNA_PIPE_OUTPUT)
                 priv->str_out = str;
             else
@@ -375,7 +376,6 @@ donna_task_process_pipe_data_received (DonnaTaskProcess   *taskp,
 static gboolean
 read_data (DonnaTask *task, DonnaPipe pipe, gint *fd)
 {
-    DonnaTaskProcessPrivate *priv = ((DonnaTaskProcess *) task)->priv;
     gssize len;
     gchar buf[4096];
 
@@ -470,7 +470,7 @@ task_worker (DonnaTask *task, gpointer data)
     gint fd_out;
     gint fd_err;
     gint ret;
-    gint n_in = -1;
+    nfds_t n_in = (nfds_t) -1;
     gint closed = 0;
     gint failed = FAILED_NOT;
     guint sid;
@@ -525,7 +525,7 @@ task_worker (DonnaTask *task, gpointer data)
     fd_task = donna_task_get_fd (task);
     while (failed == FAILED_NOT && (fd_out >= 0 || fd_err >= 0))
     {
-        gint n = 0;
+        nfds_t n = 0;
 
         pfd[n].fd = fd_task;
         pfd[n].events = POLLIN;
@@ -542,7 +542,7 @@ task_worker (DonnaTask *task, gpointer data)
             /* we want to know if we can non-blockingly write if this is the
              * first time (check before calling stdin_fn), or stdin_fn asks for
              * it (got an EAGAIN error from write()) */
-            if (n_in < 0)
+            if (n_in == (nfds_t) -1)
                 r = DONNA_TASK_PROCESS_STDIN_WAIT_NONBLOCKING;
             else
                 r = priv->stdin_fn (task, pid, fd_in, priv->stdin_data);
@@ -943,7 +943,7 @@ donna_task_process_set_ui_msg (DonnaTaskProcess   *taskp)
         set_taskui_title (tui, s, FALSE);
     }
     else
-        set_taskui_title (tui, "Execute process", TRUE);
+        set_taskui_title (tui, (gchar *) "Execute process", TRUE);
     g_signal_connect (taskp, "pipe-new-line", (GCallback) pipe_new_line_cb, NULL);
 
     return TRUE;

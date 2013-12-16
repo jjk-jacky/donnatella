@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "provider-register.h"
 #include "provider-command.h"
@@ -101,6 +103,11 @@ provider_register_provider_init (DonnaProviderInterface *interface)
     interface->get_flags    = provider_register_get_flags;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderRegister, donna_provider_register,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_register_provider_init)
+        )
+
 static void
 donna_provider_register_class_init (DonnaProviderRegisterClass *klass)
 {
@@ -146,11 +153,6 @@ donna_provider_register_init (DonnaProviderRegister *provider)
             DonnaProviderRegisterPrivate);
     g_rec_mutex_init (&priv->rec_mutex);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderRegister, donna_provider_register,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_register_provider_init)
-        )
 
 /* internals */
 
@@ -341,7 +343,7 @@ clipboard_get (GtkClipboard             *clipboard,
     gtk_selection_data_set (sd, (info == 1) ? atom_gnome
             : ((info == 2) ? atom_kde : atom_uris),
             8,
-            (const guchar *) str->str, str->len);
+            (const guchar *) str->str, (gint) str->len);
     g_string_free (str, TRUE);
 }
 
@@ -360,9 +362,9 @@ task_take_clipboard_ownership (DonnaTask *task, gpointer _data)
     } *data = _data;
     GtkClipboard *clipboard;
     GtkTargetEntry targets[] = {
-        { _ATOM_GNOME, 0, 1 },
-        { _ATOM_KDE, 0, 2 },
-        { _ATOM_URIS, 0, 3 },
+        { (gchar *) _ATOM_GNOME, 0, 1 },
+        { (gchar *) _ATOM_KDE,   0, 2 },
+        { (gchar *) _ATOM_URIS,  0, 3 },
     };
     gboolean ret;
 
@@ -510,8 +512,11 @@ task_get_from_clipboard (DonnaTask *task, gpointer _data)
 
         if (*data->list)
         {
-            /* append to last item directly; p to silence warning */
-            gpointer p = g_list_append (*data->last, filename);
+            /* append to last item directly */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+            g_list_append (*data->last, filename);
+#pragma GCC diagnostic pop
             *data->last = (*data->last)->next;
         }
         else
@@ -680,8 +685,11 @@ add_node_to_reg (struct reg *reg, DonnaNode *node, gboolean is_clipboard)
     {
         if (reg->list)
         {
-            /* append to last item directly; p to silence warning */
-            gpointer p = g_list_append (reg->last, s);
+            /* append to last item directly */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+            g_list_append (reg->last, s);
+#pragma GCC diagnostic pop
             reg->last = reg->last->next;
         }
         else
@@ -753,7 +761,7 @@ register_set (DonnaProviderRegister *pr,
     GPtrArray *arr;
     struct reg *reg;
     gboolean is_clipboard;
-    guint reg_type = -1;
+    guint reg_type = (guint) -1;
     guint i;
 
     is_clipboard = *name == *reg_clipboard;
@@ -1199,7 +1207,7 @@ register_import (DonnaProviderRegister  *pr,
     GPtrArray *arr;
     struct reg *new_reg;
     struct reg *reg;
-    guint reg_type = -1;
+    guint reg_type = (guint) -1;
     gboolean is_clipboard;
     gchar *e;
 
@@ -1269,8 +1277,11 @@ register_import (DonnaProviderRegister  *pr,
         {
             if (new_reg->list)
             {
-                /* append to last item directly; p to silence warning */
-                gpointer p = g_list_append (new_reg->last, new);
+                /* append to last item directly */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+                g_list_append (new_reg->last, new);
+#pragma GCC diagnostic pop
                 new_reg->last = new_reg->last->next;
             }
             else
@@ -1532,7 +1543,7 @@ register_save (DonnaProviderRegister    *pr,
     }
 
     filename = get_filename (file);
-    if (!g_file_set_contents (filename, str->str, str->len, error))
+    if (!g_file_set_contents (filename, str->str, (gssize) str->len, error))
     {
         g_prefix_error (error, "Failed to save register '%s' to '%s': ",
                 name, file);
@@ -1732,8 +1743,11 @@ new_action_node (DonnaProviderRegister  *pr,
         return NULL;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
     if (snprintf (buf, 32, lbl, name) >= 32)
         b = g_strdup_printf (lbl, name);
+#pragma GCC diagnostic pop
 
     if (sensitive == SENSITIVE_IF_REG || sensitive == SENSITIVE_IF_REG_NOT_EMPTY)
     {
@@ -1829,9 +1843,9 @@ provider_register_new_node (DonnaProviderBase  *_provider,
         gchar *name = buf;
 
         if (s - location < 32)
-            sprintf (buf, "%.*s", s - location, location);
+            sprintf (buf, "%.*s", (gint) (s - location), location);
         else
-            name = g_strdup_printf ("%.*s", s - location, location);
+            name = g_strdup_printf ("%.*s", (gint) (s - location), location);
         ++s;
 
         if (!is_valid_register_name ((const gchar **) &name, &err))
@@ -2108,7 +2122,6 @@ provider_register_trigger_node (DonnaProviderBase  *_provider,
                                 DonnaNode          *node)
 {
     GError *err = NULL;
-    DonnaTask *t;
     gchar *location;
     gchar *name;
     gchar *action;
@@ -2432,11 +2445,11 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
             else if (*location == *reg_clipboard)
             {
                 DonnaNode *nr, *n;
-                GString *str = NULL;
+                GString *string = NULL;
 
                 reg = new_register (reg_clipboard, DONNA_REGISTER_UNKNOWN);
                 if (!get_from_clipboard (_provider->app, &reg->hashtable,
-                            &reg->list, &reg->last, &reg->type, &str, &err))
+                            &reg->list, &reg->last, &reg->type, &string, &err))
                 {
                     g_rec_mutex_unlock (&priv->rec_mutex);
                     g_prefix_error (&err, "Provider 'register': "
@@ -2449,10 +2462,11 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
                     g_free (location);
                     return DONNA_TASK_FAILED;;
                 }
-                else if (str)
+                else if (string)
                 {
-                    g_warning ("Failed to get some files from CLIPBOARD: %s", str->str);
-                    g_string_free (str, TRUE);
+                    g_warning ("Failed to get some files from CLIPBOARD: %s",
+                            string->str);
+                    g_string_free (string, TRUE);
                 }
                 take_clipboard_ownership ((DonnaProviderRegister *) _provider, FALSE);
                 add_reg_to_registers ((DonnaProviderRegister *) _provider, reg,
@@ -2864,7 +2878,7 @@ finish:
 
         for (i = 0; i < nodes_drop->len; ++i)
         {
-            gchar *s = donna_node_get_location (nodes_drop->pdata[i]);
+            s = donna_node_get_location (nodes_drop->pdata[i]);
             emit_drop (pr, nodes_drop->pdata[i],
                     *s == *reg_default || *s == *reg_clipboard);
             update_special_nodes (pr, s, FALSE);
@@ -2883,7 +2897,7 @@ finish:
 
             if (el->node)
             {
-                gchar *s = donna_node_get_location (el->node);
+                s = donna_node_get_location (el->node);
                 update_special_nodes (pr, s, el->arr->len > 0);
                 g_free (s);
             }
@@ -2918,7 +2932,7 @@ cmd_register_nodes_io (DonnaTask               *task,
                        DonnaProviderRegister   *pr)
 {
     GError *err = NULL;
-    const gchar *name = args[0]; /* opt */
+    const gchar *reg_name = args[0]; /* opt */
     gchar *io_type = args[1]; /* opt */
     DonnaNode *dest = args[2]; /* opt */
     gboolean in_new_folder = GPOINTER_TO_INT (args[3]); /* opt */
@@ -2933,7 +2947,7 @@ cmd_register_nodes_io (DonnaTask               *task,
     DonnaTask *t;
     DonnaTaskState state;
 
-    if (!is_valid_register_name (&name, &err))
+    if (!is_valid_register_name (&reg_name, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2979,7 +2993,7 @@ cmd_register_nodes_io (DonnaTask               *task,
         return DONNA_TASK_FAILED;
     }
 
-    if (!register_get_nodes (pr, name, drop, &reg_type, &nodes, &err))
+    if (!register_get_nodes (pr, reg_name, drop, &reg_type, &nodes, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -2987,8 +3001,6 @@ cmd_register_nodes_io (DonnaTask               *task,
 
     if (in_new_folder && nodes->len > 0)
     {
-        DonnaTask *t;
-        DonnaTaskState state;
         DonnaNode *n;
         GString *str;
         GString *str_defs;
@@ -3287,7 +3299,7 @@ cmd_register_save_all (DonnaTask                *task,
     else
         filename = get_filename (file);
 
-    if (!g_file_set_contents (filename, str->str, str->len, &err))
+    if (!g_file_set_contents (filename, str->str, (gssize) str->len, &err))
     {
         g_prefix_error (&err, "Command 'register_save_all': Failed to save registers: ");
         donna_task_take_error (task, err);
@@ -3414,14 +3426,14 @@ cmd_register_set_type (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
-#define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_value) \
-if (G_UNLIKELY (!donna_provider_command_add_command (pc, #cmd_name, cmd_argc, \
-            arg_type, cmd_return_value, cmd_visibility, \
-            (command_fn) cmd_##cmd_name, object, NULL, &err))) \
-{ \
-    g_warning ("Provider 'register': Failed to add command '" #cmd_name "': %s", \
-        err->message); \
-    g_clear_error (&err); \
+#define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_value)       \
+if (G_UNLIKELY (!donna_provider_command_add_command (pc, #cmd_name,             \
+                (guint) cmd_argc, arg_type, cmd_return_value, cmd_visibility,   \
+                (command_fn) cmd_##cmd_name, object, NULL, &err)))              \
+{                                                                               \
+    g_warning ("Provider 'register': Failed to add command '" #cmd_name "': %s",\
+        err->message);                                                          \
+    g_clear_error (&err);                                                       \
 }
 static void
 provider_register_contructed (GObject *object)

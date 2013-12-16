@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include "contextmenu.h"
 #include "app.h"
 #include "provider-internal.h"
@@ -40,11 +42,14 @@ struct node_internal
     gboolean     free_fl;
 };
 
+/* internal, used from donna.c */
+gboolean _donna_context_register_extras (DonnaConfig *config, GError **error);
+
 gboolean
 _donna_context_register_extras (DonnaConfig *config, GError **error)
 {
     DonnaConfigItemExtraListInt it[4];
-    guint i;
+    gint i;
 
     i = 0;
     it[i].value     = TYPE_STANDARD;
@@ -504,27 +509,27 @@ free_context_info (DonnaContextInfo *info)
     if (info->node)
         g_object_unref (info->node);
     if (info->free_name)
-        g_free (info->name);
+        g_free ((gchar *) info->name);
     if (info->free_icon)
     {
         if (info->icon_is_gicon)
             g_object_unref (info->icon);
         else
-            g_free (info->icon_name);
+            g_free ((gchar *) info->icon_name);
     }
     if (info->free_icon_selected)
     {
         if (info->icon_is_gicon_selected)
             g_object_unref (info->icon_selected);
         else
-            g_free (info->icon_name_selected);
+            g_free ((gchar *) info->icon_name_selected);
     }
     if (info->free_desc)
-        g_free (info->desc);
+        g_free ((gchar *) info->desc);
     if (info->free_trigger)
-        g_free (info->trigger);
+        g_free ((gchar *) info->trigger);
     if (info->free_menu)
-        g_free (info->menu);
+        g_free ((gchar *) info->menu);
 
     if (info->new_node_destroy && info->new_node_data)
         info->new_node_destroy (info->new_node_data);
@@ -608,7 +613,8 @@ import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
     }
 
     if ((import & IMPORT_DEFAULT) && !info->desc
-            && donna_node_get_desc (node, FALSE, &info->desc) == DONNA_NODE_VALUE_SET)
+            && donna_node_get_desc (node, FALSE,
+                (gchar **) &info->desc) == DONNA_NODE_VALUE_SET)
         info->free_desc = TRUE;
 
     if (import & IMPORT_ICON_SPECIAL)
@@ -616,7 +622,8 @@ import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
         donna_node_get (node, FALSE, "menu-image-special", &has, &v, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
-            info->icon_special = g_value_get_uint (&v);
+            guint icon_special = g_value_get_uint (&v);
+            info->icon_special = MIN (icon_special, 2);
             g_value_unset (&v);
         }
     }
@@ -678,7 +685,8 @@ import_info_from_node (DonnaNode *node, guint import, DonnaContextInfo *info)
         donna_node_get (node, FALSE, "menu-submenus", &has, &v, NULL);
         if (has == DONNA_NODE_VALUE_SET)
         {
-            info->submenus = g_value_get_uint (&v);
+            guint submenus = g_value_get_uint (&v);
+            info->submenus = MIN (submenus, 3);
             g_value_unset (&v);
         }
     }
@@ -809,7 +817,6 @@ get_user_item_info (const gchar             *item,
 
         for (j = 0; j < triggers->len; ++j)
         {
-            GError *err = NULL;
             gchar *t = triggers->pdata[j];
             gsize len;
 
@@ -841,7 +848,8 @@ get_user_item_info (const gchar             *item,
                 else if (expr == EXPR_TRUE)
                 {
                     /* get the actual trigger */
-                    if (!donna_config_get_string (config, NULL, &info->trigger,
+                    if (!donna_config_get_string (config, NULL,
+                                (gchar **) &info->trigger,
                                 "context_menus/%s/%s/%.*s",
                                 source, item, (gint) (len - 5), t))
                     {
@@ -854,21 +862,24 @@ get_user_item_info (const gchar             *item,
                     g_free (s);
 
                     /* try to get the name under the same suffix */
-                    if (donna_config_get_string (config, NULL, &info->name,
-                            "context_menus/%s/%s/name%.*s",
-                            source, item, (gint) (len - 7 - 5), t + 7))
+                    if (donna_config_get_string (config, NULL,
+                                (gchar **) &info->name,
+                                "context_menus/%s/%s/name%.*s",
+                                source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_name = TRUE;
 
                     /* try to get the icon under the same suffix */
-                    if (donna_config_get_string (config, NULL, &info->icon_name,
-                            "context_menus/%s/%s/icon%.*s",
-                            source, item, (gint) (len - 7 - 5), t + 7))
+                    if (donna_config_get_string (config, NULL,
+                                (gchar **) &info->icon_name,
+                                "context_menus/%s/%s/icon%.*s",
+                                source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_icon = TRUE;
 
                     /* try to get the icon selected under the same suffix */
-                    if (donna_config_get_string (config, NULL, &info->icon_name_selected,
-                            "context_menus/%s/%s/icon_selected%.*s",
-                            source, item, (gint) (len - 7 - 5), t + 7))
+                    if (donna_config_get_string (config, NULL,
+                                (gchar **) &info->icon_name_selected,
+                                "context_menus/%s/%s/icon_selected%.*s",
+                                source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_icon_selected = TRUE;
 
                     break;
@@ -881,7 +892,8 @@ get_user_item_info (const gchar             *item,
     }
 
     /* last chance: the default "trigger" */
-    if (!info->trigger && !donna_config_get_string (config, NULL, &info->trigger,
+    if (!info->trigger && !donna_config_get_string (config, NULL,
+                (gchar **) &info->trigger,
                 "context_menus/%s/%s/trigger", source, item))
     {
         if ((!(info->is_visible && info->is_sensitive) && !import_from_trigger)
@@ -904,15 +916,15 @@ get_user_item_info (const gchar             *item,
     if (info->trigger)
     {
         /* parse %C/%c in the trigger */
-        info->trigger = parse_Cc (info->trigger, s_C, s_c);
+        info->trigger = parse_Cc ((gchar *) info->trigger, s_C, s_c);
         info->free_trigger = TRUE;
     }
 
     if (type == TYPE_TRIGGER)
     {
-        info->node = get_node_trigger (app, info->trigger,
+        info->node = get_node_trigger (app, (gchar *) info->trigger,
                 conv_flags, conv_fn, conv_data);
-        g_free (info->trigger);
+        g_free ((gchar *) info->trigger);
         info->trigger = NULL;
         info->free_trigger = FALSE;
 
@@ -937,7 +949,7 @@ get_user_item_info (const gchar             *item,
     /* name */
     if (!info->name)
     {
-        if (donna_config_get_string (config, NULL, &info->name,
+        if (donna_config_get_string (config, NULL, (gchar **) &info->name,
                     "context_menus/%s/%s/name", source, item))
             info->free_name = TRUE;
         else if (import_from_trigger)
@@ -947,7 +959,7 @@ get_user_item_info (const gchar             *item,
     /* icon */
     if (!info->icon_name)
     {
-        if (donna_config_get_string (config, NULL, &info->icon_name,
+        if (donna_config_get_string (config, NULL, (gchar **) &info->icon_name,
                     "context_menus/%s/%s/icon", source, item))
             info->free_icon = TRUE;
         else if (import_from_trigger)
@@ -957,7 +969,7 @@ get_user_item_info (const gchar             *item,
     /* icon selected */
     if (!info->icon_name_selected)
     {
-        if (donna_config_get_string (config, NULL, &info->icon_name_selected,
+        if (donna_config_get_string (config, NULL, (gchar **) &info->icon_name_selected,
                     "context_menus/%s/%s/icon_selected", source, item))
             info->free_icon_selected = TRUE;
         else if (import_from_trigger)
@@ -982,12 +994,12 @@ get_user_item_info (const gchar             *item,
         if (donna_config_get_int (config, NULL, &submenus,
                     "context_menus/%s/%s/submenus",
                     source, item))
-            info->submenus = CLAMP (submenus, 0, 3);
+            info->submenus = (guint) CLAMP (submenus, 0, 3);
         else if (import_from_trigger)
             import |= IMPORT_SUBEMNUS;
     }
 
-    if (donna_config_get_string (config, NULL, &info->menu,
+    if (donna_config_get_string (config, NULL, (gchar **) &info->menu,
                 "context_menus/%s/%s/menu", source, item))
         info->free_menu = TRUE;
     else if (import_from_trigger)
@@ -997,7 +1009,7 @@ get_user_item_info (const gchar             *item,
     if (import > 0)
     {
         if (!node_trigger)
-            node_trigger = get_node_trigger (app, info->trigger,
+            node_trigger = get_node_trigger (app, (gchar *) info->trigger,
                     conv_flags, conv_fn, conv_data);
         if (!node_trigger)
             g_warning ("Context-menu: Cannot import options from node trigger "
@@ -1015,7 +1027,7 @@ get_user_item_info (const gchar             *item,
     }
     else
         /* parse %C/%c in the name */
-        info->name = parse_Cc (info->name, s_C, s_c);
+        info->name = parse_Cc ((gchar *) info->name, s_C, s_c);
 
     if (node_trigger)
         g_object_unref (node_trigger);
@@ -1144,7 +1156,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
     if (info->submenus > 0)
     {
         g_value_init (&v, G_TYPE_UINT);
-        g_value_set_uint (&v, CLAMP (info->submenus, 0, 3));
+        g_value_set_uint (&v, MIN ((guint) info->submenus, 3));
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-submenus",
                         G_TYPE_UINT, &v, (refresher_fn) gtk_true,
@@ -1164,7 +1176,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         g_value_init (&v, G_TYPE_STRING);
         if (info->free_menu)
         {
-            g_value_take_string (&v, info->menu);
+            g_value_take_string (&v, (gchar *) info->menu);
             info->free_menu = FALSE;
         }
         else
@@ -1377,7 +1389,7 @@ parse_items (DonnaApp               *app,
                 {
                     guint len = nodes->len;
 
-                    g_ptr_array_set_size (nodes, len + arr->len);
+                    g_ptr_array_set_size (nodes, (gint) (len + arr->len));
                     memcpy (&nodes->pdata[len], &arr->pdata[0],
                             sizeof (gpointer) * arr->len);
                     g_ptr_array_set_free_func (arr, NULL);
@@ -1420,16 +1432,16 @@ parse_items (DonnaApp               *app,
 
             if (info.node)
             {
-                DonnaNode *node;
+                DonnaNode *n;
 
                 /* we only have the node to use, only we can't use it since we
                  * need to create a container. So we import everything from it
                  * */
 
-                node = info.node;
+                n = info.node;
                 memset (&info, 0, sizeof (info));
-                import_info_from_node (node, IMPORT_ALL, &info);
-                g_object_unref (node);
+                import_info_from_node (n, IMPORT_ALL, &info);
+                g_object_unref (n);
             }
 
             node = donna_provider_internal_new_node (pi, info.name,
@@ -1487,11 +1499,12 @@ parse_items (DonnaApp               *app,
                     /* we do the parsing, but ignore intrefs since the trigger is
                      * just a string property, so they'll be cleaned via GC */
                     info.trigger = donna_app_parse_fl (app,
-                            (!info.free_trigger) ? g_strdup (info.trigger) : info.trigger,
+                            (info.free_trigger)
+                            ? (gchar *) info.trigger : g_strdup (info.trigger),
                             conv_flags, conv_fn, conv_data, NULL);
 
                     g_value_init (&v, G_TYPE_STRING);
-                    g_value_take_string (&v, info.trigger);
+                    g_value_take_string (&v, (gchar *) info.trigger);
                     info.free_trigger = FALSE;
 
                     if (G_UNLIKELY (!donna_node_add_property (node,
@@ -1589,7 +1602,8 @@ parse_items (DonnaApp               *app,
                 else
                 {
                     ni->fl = donna_app_parse_fl (app,
-                            (info.free_trigger) ? info.trigger : g_strdup (info.trigger),
+                            (info.free_trigger)
+                            ? (gchar *) info.trigger : g_strdup (info.trigger),
                             conv_flags, conv_fn, conv_data, &ni->intrefs);
                     ni->free_fl = TRUE;
                 }

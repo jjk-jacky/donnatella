@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "provider-command.h"
 #include "command.h"
@@ -65,6 +67,11 @@ provider_command_provider_init (DonnaProviderInterface *interface)
     interface->trigger_node_task = provider_command_trigger_node_task;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderCommand, donna_provider_command,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_command_provider_init)
+        )
+
 static void
 donna_provider_command_class_init (DonnaProviderCommandClass *klass)
 {
@@ -115,11 +122,6 @@ donna_provider_command_init (DonnaProviderCommand *provider)
     /* load commands, since we're in init there's no need to lock */
     _donna_add_commands (priv->commands);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderCommand, donna_provider_command,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_command_provider_init)
-        )
 
 static void
 provider_command_get_property (GObject        *object,
@@ -194,10 +196,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     DonnaNode *node;
     DonnaNode *n;
     GValue *value;
-    GtkWidget *w;
-    GdkPixbuf *pixbuf;
     GValue v = G_VALUE_INIT;
-    guint i;
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
 
@@ -853,8 +852,6 @@ convert:
         }
         else
         {
-            GError *err = NULL;
-
             ptr = donna_app_get_node (app, s, &err);
             if (!ptr)
             {
@@ -871,7 +868,6 @@ convert:
     }
     else if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_NODE)
     {
-        GError *err = NULL;
         GPtrArray *arr = NULL;
         gpointer ptr;
 
@@ -926,9 +922,9 @@ convert:
             arr = g_ptr_array_new_with_free_func (g_object_unref);
             for (;;)
             {
-                gchar *end;
+                gchar *_end;
 
-                if (!unquote_string (&start, &end, &err))
+                if (!unquote_string (&start, &_end, &err))
                 {
                     gchar *e;
 
@@ -944,11 +940,11 @@ convert:
                     /* not quoted */
 
                     skip_blank (start);
-                    end = strchr (start, ',');
-                    if (end)
+                    _end = strchr (start, ',');
+                    if (_end)
                     {
-                        *end = '\0';
-                        e = end - 1;
+                        *_end = '\0';
+                        e = _end - 1;
                     }
                     else
                         e = start + strlen (start) - 1;
@@ -970,10 +966,10 @@ convert:
                 g_ptr_array_add (arr, ptr);
 
                 /* no ',' found in unquoted string */
-                if (!end)
+                if (!_end)
                     break;
 
-                start = end + 1;
+                start = _end + 1;
                 skip_blank (start);
                 if (*start == '\0')
                     break;
@@ -1037,16 +1033,15 @@ convert:
             }
             else
             {
-                GError *err = NULL;
                 GPtrArray *arr;
                 gchar *start;
-                gchar *end;
+                gchar *_end;
 
                 start = s;
                 arr = g_ptr_array_new_with_free_func (g_free);
                 for (;;)
                 {
-                    if (unquote_string (&start, &end, &err))
+                    if (unquote_string (&start, &_end, &err))
                         g_ptr_array_add (arr, g_strdup (start));
                     else if (err)
                     {
@@ -1063,11 +1058,11 @@ convert:
                         /* not quoted */
 
                         skip_blank (start);
-                        end = strchr (start, ',');
-                        if (end)
+                        _end = strchr (start, ',');
+                        if (_end)
                         {
-                            *end = '\0';
-                            e = end - 1;
+                            *_end = '\0';
+                            e = _end - 1;
                         }
                         else
                             e = start + strlen (start) - 1;
@@ -1077,11 +1072,11 @@ convert:
                         *++e = '\0';
 
                         g_ptr_array_add (arr, g_strdup (start));
-                        if (!end)
+                        if (!_end)
                             break;
                     }
 
-                    start = end + 1;
+                    start = _end + 1;
                     skip_blank (start);
                     if (*start == '\0')
                         break;

@@ -149,7 +149,7 @@ struct _DonnaDonnaPrivate
     struct col_type
     {
         const gchar     *name;
-        gchar           *desc; /* i.e. config extra label */
+        const gchar     *desc; /* i.e. config extra label */
         GType            type;
         DonnaColumnType *ct;
         gpointer         ct_data;
@@ -166,7 +166,7 @@ struct argmt
     GPatternSpec *pspec;
 };
 
-static GThread *mt;
+static GThread *main_thread;
 static GLogLevelFlags show_log = G_LOG_LEVEL_WARNING;
 guint donna_debug_flags = 0;
 
@@ -309,6 +309,9 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->ask_text             = donna_donna_ask_text;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_APP, donna_donna_app_init))
+
 static void
 donna_donna_class_init (DonnaDonnaClass *klass)
 {
@@ -411,7 +414,7 @@ donna_donna_init (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv;
 
-    mt = g_thread_self ();
+    main_thread = g_thread_self ();
     g_log_set_default_handler (donna_donna_log_handler, NULL);
 
     priv = donna->priv = G_TYPE_INSTANCE_GET_PRIVATE (donna,
@@ -460,9 +463,6 @@ donna_donna_init (DonnaDonna *donna)
     priv->intrefs = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_intref);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_APP, donna_donna_app_init))
 
 static void
 donna_donna_set_property (GObject       *object,
@@ -564,7 +564,7 @@ donna_donna_log_handler (const gchar    *domain,
     if (g_main_context_is_owner (g_main_context_default ()))
         g_string_append (str, "[UI] ");
 
-    if (thread != mt)
+    if (thread != main_thread)
         g_string_append_printf (str, "[thread %p] ", thread);
 
     if (log_level & G_LOG_LEVEL_ERROR)
@@ -611,7 +611,7 @@ donna_donna_log_handler (const gchar    *domain,
     {
         gboolean under_gdb = FALSE;
         FILE *f;
-        gchar buf[64];
+        gchar buffer[64];
 
         /* try to determine if we're running under GDB or not, and if so we
          * break. This is done by reading our /proc/PID/status and checking if
@@ -622,15 +622,15 @@ donna_donna_log_handler (const gchar    *domain,
          * worries, and when attached it will break automagically.
          */
 
-        snprintf (buf, 64, "/proc/%d/status", getpid ());
-        f = fopen (buf, "r");
+        snprintf (buffer, 64, "/proc/%d/status", getpid ());
+        f = fopen (buffer, "r");
         if (f)
         {
-            while ((fgets (buf, 64, f)))
+            while ((fgets (buffer, 64, f)))
             {
-                if (streqn ("TracerPid:\t", buf, 11))
+                if (streqn ("TracerPid:\t", buffer, 11))
                 {
-                    under_gdb = buf[11] != '0';
+                    under_gdb = buffer[11] != '0';
                     break;
                 }
             }
@@ -1022,7 +1022,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
     DonnaArrangement *arr = NULL;
     GSList *list, *l;
     gchar _source[255];
-    gchar *source[] = { _source, "arrangements" };
+    gchar *source[] = { _source, (gchar *) "arrangements" };
     guint i, max = sizeof (source) / sizeof (source[0]);
     DonnaEnabledTypes type;
     gboolean is_first = TRUE;
@@ -1449,16 +1449,16 @@ donna_donna_parse_fl (DonnaApp       *app,
                 }
                 else
                 {
-                    gchar *s = donna_app_new_int_ref (app, type, ptr);
-                    g_string_append (str, s);
+                    gchar *ir = donna_app_new_int_ref (app, type, ptr);
+                    g_string_append (str, ir);
                     if (intrefs)
                     {
                         if (!*intrefs)
                             *intrefs = g_ptr_array_new_with_free_func (g_free);
-                        g_ptr_array_add (*intrefs, s);
+                        g_ptr_array_add (*intrefs, ir);
                     }
                     else
-                        g_free (s);
+                        g_free (ir);
                 }
             }
             else if (type & DONNA_ARG_TYPE_STRING)
@@ -1779,31 +1779,31 @@ donna_donna_free_int_ref (DonnaApp       *app,
 
 struct menu_click
 {
-    DonnaDonna      *donna;
+    DonnaDonna          *donna;
     /* options are loaded, but this is used when processing clicks */
-    gchar           *name;
+    gchar               *name;
     /* this is only used to hold references to the nodes for the menu */
-    GPtrArray       *nodes;
+    GPtrArray           *nodes;
     /* should icons be features on menuitems? */
-    guint            show_icons             : 1;
+    gboolean            show_icons;
     /* default to file/folder icon based on item/container if no icon set */
-    guint            use_default_icons      : 1;
+    gboolean             use_default_icons;
     /* are containers just items, submenus, or both combined? */
-    guint            submenus               : 2;
+    DonnaEnabledTypes    submenus;
     /* can children override submenus */
-    guint            can_children_submenus  : 1;
+    gboolean             can_children_submenus;
     /* can children override menu definition */
-    guint            can_children_menu      : 1;
+    gboolean             can_children_menu;
     /* type of nodes to load in submenus */
-    DonnaNodeType    node_type              : 2;
+    DonnaNodeType        node_type;
     /* do we "show" dot files in submenus */
-    guint            show_hidden            : 1;
+    gboolean             show_hidden;
     /* sort options */
-    guint            is_sorted              : 1;
-    guint            container_first        : 1;
-    guint            is_locale_based        : 1;
-    DonnaSortOptions options                : 5;
-    guint            sort_special_first     : 1;
+    gboolean             is_sorted;
+    gboolean             container_first;
+    gboolean             is_locale_based;
+    DonnaSortOptions     options;
+    gboolean             sort_special_first;
 };
 
 static void
@@ -2487,10 +2487,10 @@ load_menu (struct menu_click *mc)
                     if (!icon && mc->use_default_icons)
                     {
                         if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
-                            image = gtk_image_new_from_stock (GTK_STOCK_FILE,
+                            image = gtk_image_new_from_icon_name ("text-x-generic",
                                     GTK_ICON_SIZE_MENU);
                         else /* DONNA_NODE_CONTAINER */
-                            image = gtk_image_new_from_stock (GTK_STOCK_DIRECTORY,
+                            image = gtk_image_new_from_icon_name ("folder",
                                     GTK_ICON_SIZE_MENU);
                     }
                     else if (!icon)
@@ -2644,12 +2644,10 @@ donna_donna_show_menu (DonnaApp       *app,
                        const gchar    *name,
                        GError       **error)
 {
-    DonnaDonnaPrivate *priv;
     struct menu_click *mc;
     GtkMenu *menu;
 
     g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
-    priv = ((DonnaDonna *) app)->priv;
 
     mc = load_mc ((DonnaDonna *) app, name, nodes);
     /* menu will not be packed anywhere, so we need to take ownership and handle
@@ -2687,7 +2685,7 @@ donna_donna_show_error (DonnaApp       *app,
             GTK_DIALOG_DESTROY_WITH_PARENT | ((priv->exiting) ? GTK_DIALOG_MODAL : 0),
             GTK_MESSAGE_ERROR,
             GTK_BUTTONS_CLOSE,
-            title);
+            "%s", title);
     gtk_message_dialog_format_secondary_text ((GtkMessageDialog *) w, "%s",
             (error) ? error->message : "");
     g_signal_connect_swapped (w, "response", (GCallback) gtk_widget_destroy, w);
@@ -2823,7 +2821,7 @@ donna_donna_ask (DonnaApp       *app,
             GTK_DIALOG_DESTROY_WITH_PARENT,
             GTK_MESSAGE_QUESTION,
             GTK_BUTTONS_NONE,
-            title);
+            "%s", title);
 
     if (details)
     {
@@ -3153,7 +3151,7 @@ static void
 refresh_window_title (DonnaDonna *donna)
 {
     DonnaDonnaPrivate *priv = donna->priv;
-    gchar *def = "%L - Donnatella";
+    gchar *def = (gchar *) "%L - Donnatella";
     gchar *fmt;
     gchar *str;
 
@@ -3587,7 +3585,6 @@ create_gui (DonnaDonna *donna)
         s = areas;
         for (;;)
         {
-            GError *err = NULL;
             struct status *status;
             struct provider provider;
             gboolean expand;
@@ -3705,11 +3702,11 @@ prepare_donna (DonnaDonna *donna, GError **error)
     DonnaConfig *config = donna->priv->config;
     DonnaConfigItemExtraList    it_lst[8];
     DonnaConfigItemExtraListInt it_int[8];
-    guint i;
+    gint i;
 
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
-        it_lst[i].value = (gchar *) donna->priv->column_types[i].name;
+        it_lst[i].value = donna->priv->column_types[i].name;
         it_lst[i].label = donna->priv->column_types[i].desc;
     }
     if (G_UNLIKELY (!donna_config_add_extra (config,

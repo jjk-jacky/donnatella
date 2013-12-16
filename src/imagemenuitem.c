@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "imagemenuitem.h"
 #include "macros.h"

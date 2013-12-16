@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include "columntype.h"
 #include "columntype-value.h"
@@ -132,6 +134,11 @@ ct_value_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_value_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeValue, donna_column_type_value,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_value_columntype_init)
+        )
+
 static void
 donna_column_type_value_class_init (DonnaColumnTypeValueClass *klass)
 {
@@ -154,11 +161,6 @@ donna_column_type_value_init (DonnaColumnTypeValue *ct)
             DONNA_TYPE_COLUMNTYPE_VALUE,
             DonnaColumnTypeValuePrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeValue, donna_column_type_value,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_value_columntype_init)
-        )
 
 static void
 ct_value_finalize (GObject *object)
@@ -396,8 +398,8 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
         if (ed->key_limit == KEY_LIMIT_INT)
         {
             g_value_init (&value, G_TYPE_INT);
-            g_value_set_int (&value,
-                    g_ascii_strtoll (gtk_entry_get_text ((GtkEntry *) editable),
+            g_value_set_int (&value, (gint) g_ascii_strtoll (
+                        gtk_entry_get_text ((GtkEntry *) editable),
                         NULL, 10));
         }
         else if (ed->key_limit == KEY_LIMIT_DOUBLE)
@@ -749,7 +751,7 @@ get_text_for_type (DonnaColumnType      *ct,
                    guint                 index,
                    DonnaNode            *node,
                    GValue               *value,
-                   gchar               **text,
+                   const gchar         **text,
                    gchar               **free)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
@@ -811,7 +813,7 @@ get_text_for_value (DonnaColumnType     *ct,
                     guint                index,
                     DonnaNode           *node,
                     GValue              *value,
-                    gchar              **text,
+                    const gchar        **text,
                     gchar              **free)
 {
     DonnaColumnTypeValuePrivate *priv = ((DonnaColumnTypeValue *) ct)->priv;
@@ -844,12 +846,12 @@ get_text_for_value (DonnaColumnType     *ct,
     if (type == G_TYPE_STRING)
     {
         if (has == DONNA_NODE_VALUE_NONE && index == RND_TEXT)
-            *text = (gchar *) g_value_get_string (value);
+            *text = g_value_get_string (value);
         else if (has == DONNA_NODE_VALUE_SET && index == RND_COMBO)
         {
             const DonnaConfigExtra *_e;
 
-            *text = (gchar *) g_value_get_string (value);
+            *text = g_value_get_string (value);
             _e = donna_config_get_extra (donna_app_peek_config (priv->app),
                         g_value_get_string (&extra), NULL);
             if (_e && _e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
@@ -945,7 +947,7 @@ ct_value_render (DonnaColumnType    *ct,
 {
     struct tv_col_data *data = _data;
     GValue value = G_VALUE_INIT;
-    gchar *text = NULL;
+    const gchar *text = NULL;
     gchar *free = NULL;
     GPtrArray *arr;
 
@@ -981,7 +983,7 @@ ct_value_set_tooltip (DonnaColumnType    *ct,
 {
     struct tv_col_data *data = _data;
     GValue value = G_VALUE_INIT;
-    gchar *text = NULL;
+    const gchar *text = NULL;
     gchar *free = NULL;
     GPtrArray *arr;
 
@@ -1240,7 +1242,7 @@ ct_value_node_cmp (DonnaColumnType    *ct,
         free_and_return (donna_strcmp (val1.s, val2.s, DONNA_SORT_NATURAL_ORDER
                     | DONNA_SORT_CASE_INSENSITIVE))
     else /* G_TYPE_DOUBLE */
-        free_and_return (val1.d - val2.d)
+        free_and_return ((gint) (val1.d - val2.d))
 
 done:
     if (type1 != G_TYPE_INVALID)

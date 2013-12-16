@@ -82,8 +82,8 @@ struct _DonnaConfigExtraAny
 
 struct _DonnaConfigItemExtraList
 {
-    gchar *value;
-    gchar *label;
+    const gchar *value;
+    const gchar *label;
 };
 
 struct _DonnaConfigExtraList
@@ -96,9 +96,9 @@ struct _DonnaConfigExtraList
 
 struct _DonnaConfigItemExtraListInt
 {
-    gint   value;
-    gchar *in_file;
-    gchar *label;
+    gint         value;
+    const gchar *in_file;
+    const gchar *label;
 };
 
 struct _DonnaConfigExtraListInt
@@ -233,7 +233,7 @@ gchar *     donna_config_get_string_column      (DonnaConfig            *config,
                                                  const gchar            *arr_name,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gchar                  *def_val,
+                                                 const gchar            *def_val,
                                                  guint                  *from);
 gboolean    donna_config_arr_load_columns       (DonnaConfig            *config,
                                                  DonnaArrangement       *arr,

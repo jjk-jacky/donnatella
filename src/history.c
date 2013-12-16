@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <string.h>     /* memmove() */
 #include "history.h"
 #include "macros.h"
@@ -47,7 +49,7 @@ donna_history_set_max (DonnaHistory           *history,
     }
 
     history->max = max;
-    g_ptr_array_set_size (history->items, max);
+    g_ptr_array_set_size (history->items, (gint) max);
 }
 
 guint

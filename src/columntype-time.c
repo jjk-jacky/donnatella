@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <ctype.h>              /* isblank() */
 #include <time.h>
@@ -197,6 +199,11 @@ ct_time_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_time_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeTime, donna_column_type_time,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_time_columntype_init)
+        )
+
 static void
 donna_column_type_time_class_init (DonnaColumnTypeTimeClass *klass)
 {
@@ -215,17 +222,10 @@ donna_column_type_time_class_init (DonnaColumnTypeTimeClass *klass)
 static void
 donna_column_type_time_init (DonnaColumnTypeTime *ct)
 {
-    DonnaColumnTypeTimePrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_TIME,
             DonnaColumnTypeTimePrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeTime, donna_column_type_time,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_time_columntype_init)
-        )
 
 static void
 ct_time_finalize (GObject *object)
@@ -442,7 +442,7 @@ struct editing_data
     DonnaApp        *app;
     DonnaTreeView   *tree;
     DonnaNode       *node;
-    guint            sid;
+    gulong           sid;
     GPtrArray       *arr;
     GtkWidget       *window;
     GtkToggleButton *rad_sel;
@@ -564,8 +564,8 @@ get_ts (struct tv_col_data  *data,
     gint year       = 1970;
     gint month      = 1;
     gint day        = 1;
-    guint hour      = 0;
-    guint minute    = 0;
+    gint hour       = 0;
+    gint minute     = 0;
     gdouble seconds = 0;
 
     if (is_ts_fixed)
@@ -615,16 +615,16 @@ get_ts (struct tv_col_data  *data,
                     "Invalid reference time");
             return (guint64) -1;
         }
-        dt_ref = g_date_time_new_from_unix_local (ref);
+        dt_ref = g_date_time_new_from_unix_local ((gint64) ref);
     }
 
     /* any math to do on ref */
     while (*fmt == '+' || *fmt == '-')
     {
         GDateTime *dt;
-        gint64 nb;
+        gint nb;
 
-        nb = g_ascii_strtoll (fmt, (gchar **) &fmt, 10);
+        nb = (gint) g_ascii_strtoll (fmt, (gchar **) &fmt, 10);
         skip_blank (fmt);
         switch (*fmt)
         {
@@ -712,7 +712,7 @@ get_ts (struct tv_col_data  *data,
                             g_date_time_unref (dt_ref);
                             return (guint64) -1;
                         }
-                        dt_cur = g_date_time_new_from_unix_local (ref);
+                        dt_cur = g_date_time_new_from_unix_local ((gint64) ref);
                     }
                     get_element_from_dt (elements[i].unit, dt_cur);
                 }
@@ -739,28 +739,28 @@ get_ts (struct tv_col_data  *data,
         }
         else if (*fmt >= '0' && *fmt <= '9')
         {
-            guint64 nb;
+            guint64 num;
 
-            nb = g_ascii_strtoull (fmt, (gchar **) &fmt, 10);
+            num = g_ascii_strtoull (fmt, (gchar **) &fmt, 10);
             switch (elements[i].unit)
             {
                 case UNIT_YEAR:
-                    year = (gint) nb;
+                    year = (gint) num;
                     break;
                 case UNIT_MONTH:
-                    month = (gint) nb;
+                    month = (gint) num;
                     break;
                 case UNIT_DAY:
-                    day = (gint) nb;
+                    day = (gint) num;
                     break;
                 case UNIT_HOUR:
-                    hour = (guint) nb;
+                    hour = (gint) num;
                     break;
                 case UNIT_MINUTE:
-                    minute = (guint) nb;
+                    minute = (gint) num;
                     break;
                 case UNIT_SECOND:
-                    seconds = (gdouble) nb;
+                    seconds = (gdouble) num;
                     break;
             }
         }
@@ -790,7 +790,7 @@ get_ts (struct tv_col_data  *data,
                         g_date_time_unref (dt_ref);
                         return (guint64) -1;
                     }
-                    dt_cur = g_date_time_new_from_unix_local (ref);
+                    dt_cur = g_date_time_new_from_unix_local ((gint64) ref);
                 }
                 get_element_from_dt (elements[i].unit, dt_cur);
             }
@@ -814,7 +814,7 @@ get_ts (struct tv_col_data  *data,
         g_date_time_unref (dt_cur);
 
     dt_ref = g_date_time_new_local (year, month, day, hour, minute, seconds);
-    ts = g_date_time_to_unix (dt_ref);
+    ts = (guint64) g_date_time_to_unix (dt_ref);
     g_date_time_unref (dt_ref);
     return ts;
 }
@@ -1003,8 +1003,7 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
 static void
 set_entry_icon (GtkEntry *entry)
 {
-    gtk_entry_set_icon_from_stock (entry, GTK_ENTRY_ICON_SECONDARY,
-            GTK_STOCK_HELP);
+    gtk_entry_set_icon_from_icon_name (entry, GTK_ENTRY_ICON_SECONDARY, "help");
     gtk_entry_set_icon_activatable (entry, GTK_ENTRY_ICON_SECONDARY,
             FALSE);
     gtk_entry_set_icon_tooltip_markup (entry, GTK_ENTRY_ICON_SECONDARY,
@@ -1075,7 +1074,6 @@ ct_time_edit (DonnaColumnType    *ct,
               DonnaTreeView      *treeview,
               GError            **error)
 {
-    DonnaNodeHasValue has;
     GPtrArray *arr;
     struct editing_data *ed;
     GtkWindow *win;
@@ -1196,7 +1194,9 @@ ct_time_edit (DonnaColumnType    *ct,
     g_object_set (w, "margin-top", 15, NULL);
     gtk_grid_attach (grid, w, 0, row, 4, 1);
 
-    w = gtk_button_new_from_stock (GTK_STOCK_CANCEL);
+    w = gtk_button_new_with_label ("Cancel");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
     g_object_set (gtk_button_get_image ((GtkButton *) w),
             "icon-size", GTK_ICON_SIZE_MENU, NULL);
     g_signal_connect_swapped (w, "clicked",
@@ -1204,7 +1204,7 @@ ct_time_edit (DonnaColumnType    *ct,
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
     w = gtk_button_new_with_label ("Set time");
     gtk_button_set_image ((GtkButton *) w,
-            gtk_image_new_from_stock (GTK_STOCK_OK, GTK_ICON_SIZE_MENU));
+            gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
     g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
@@ -1225,7 +1225,6 @@ ct_time_set_value (DonnaColumnType    *ct,
                    GError            **error)
 {
     struct tv_col_data *data = _data;
-    guint i;
 
     if (*value == '=')
     {
@@ -1471,10 +1470,6 @@ ct_time_is_match_filter (DonnaColumnType    *ct,
 
     if (G_UNLIKELY (!*filter_data))
     {
-        gchar units[] = { UNIT_YEAR, UNIT_MONTH, UNIT_WEEK, UNIT_DAY, UNIT_HOUR,
-            UNIT_MINUTE, UNIT_SECOND };
-        gchar units_extra[] = { UNIT_DATE, UNIT_DAY_OF_YEAR, UNIT_DAY_OF_WEEK,
-            UNIT_DAY_OF_WEEK_2, UNIT_AGE };
         guint i;
         gchar *s;
 
@@ -1577,7 +1572,10 @@ get_date:
                 }
             }
             else
-                hour = minute = seconds = 0;
+            {
+                hour = minute = 0;
+                seconds = 0.0;
+            }
 
             dt = g_date_time_new_local (year, month, day, hour, minute, seconds);
             if (again)
@@ -1686,58 +1684,58 @@ compile_done:
     switch (fd->unit)
     {
         case UNIT_YEAR:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_year (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_year (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_MONTH:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_month (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_month (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_WEEK:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_week_of_year (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_week_of_year (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_DAY:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_day_of_month (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_day_of_month (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_HOUR:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_hour (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_hour (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_MINUTE:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_minute (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_minute (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_SECOND:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_second (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_second (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_DATE:
             r = time;
             break;
         case UNIT_DAY_OF_YEAR:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_day_of_year (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_day_of_year (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_DAY_OF_WEEK:
-            dt = g_date_time_new_from_unix_local (time);
-            r = g_date_time_get_day_of_week (dt);
+            dt = g_date_time_new_from_unix_local ((gint64) time);
+            r = (guint64) g_date_time_get_day_of_week (dt);
             g_date_time_unref (dt);
             break;
         case UNIT_DAY_OF_WEEK_2:
             {
                 gchar *s;
 
-                dt = g_date_time_new_from_unix_local (time);
+                dt = g_date_time_new_from_unix_local ((gint64) time);
                 s = g_date_time_format (dt, "%w");
                 g_date_time_unref (dt);
                 r = g_ascii_strtoull (s, NULL, 10);
@@ -1755,25 +1753,25 @@ compile_done:
                     switch (fd->unit_age)
                     {
                         case UNIT_YEAR:
-                            dt2 = g_date_time_add_years (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_years (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_MONTH:
-                            dt2 = g_date_time_add_months (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_months (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_WEEK:
-                            dt2 = g_date_time_add_weeks (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_weeks (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_DAY:
-                            dt2 = g_date_time_add_days (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_days (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_HOUR:
-                            dt2 = g_date_time_add_hours (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_hours (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_MINUTE:
-                            dt2 = g_date_time_add_minutes (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_minutes (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_SECOND:
-                            dt2 = g_date_time_add_seconds (dt, -1 * fd->ref);
+                            dt2 = g_date_time_add_seconds (dt, -1 * (gint) fd->ref);
                             break;
                         case UNIT_DATE:
                         case UNIT_DAY_OF_YEAR:
@@ -1783,7 +1781,7 @@ compile_done:
                             /* silence warnings */
                             g_return_val_if_reached (FALSE);
                     }
-                r = g_date_time_to_unix (dt2);
+                r = (guint64) g_date_time_to_unix (dt2);
                 g_date_time_unref (dt);
                 if (fd->comp != COMP_EQUAL)
                     g_date_time_unref (dt2);
@@ -1805,7 +1803,7 @@ compile_done:
                              * age = 0d == today
                              * age = 2V == 2 weeks ago, i.e. during that week
                              * etc */
-                            dt = g_date_time_new_from_unix_local (time);
+                            dt = g_date_time_new_from_unix_local ((gint64) time);
 
                             if (fd->unit_age == UNIT_WEEK)
                             {
@@ -1935,8 +1933,8 @@ ct_time_set_option (DonnaColumnType    *ct,
     {
         gint c, v;
 
-        c = data->options.age_span_seconds;
-        v = g_ascii_strtoull (value, NULL, 10);
+        c = (gint) data->options.age_span_seconds;
+        v = (gint) g_ascii_strtoull (value, NULL, 10);
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, "size", save_location,
                     option, G_TYPE_INT, &c, &v, error))
@@ -2007,8 +2005,8 @@ ct_time_set_option (DonnaColumnType    *ct,
     {
         gint c, v;
 
-        c = data->options_tooltip.age_span_seconds;
-        v = g_ascii_strtoull (value, NULL, 10);
+        c = (gint) data->options_tooltip.age_span_seconds;
+        v = (gint) g_ascii_strtoull (value, NULL, 10);
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     tv_name, col_name, arr_name, NULL, save_location,
                     option, G_TYPE_INT, &c, &v, error))
@@ -2308,7 +2306,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     else if (streq (item, "format"))
     {
         gchar *s;
-        guint64 now = time (NULL);
+        guint64 now = (guint64) time (NULL);
 
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
@@ -2357,7 +2355,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     else if (streq (item, "format_tooltip"))
     {
         gchar *s;
-        guint64 now = time (NULL);
+        guint64 now = (guint64) time (NULL);
 
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
@@ -2405,7 +2403,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     else if (streq (item, "age_fallback_format"))
     {
         gchar *s;
-        guint64 now = time (NULL);
+        guint64 now = (guint64) time (NULL);
 
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
@@ -2456,7 +2454,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     else if (streq (item, "age_fallback_format_tooltip"))
     {
         gchar *s;
-        guint64 now = time (NULL);
+        guint64 now = (guint64) time (NULL);
 
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;

@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <string.h>
 #include "statusbar.h"
 #include "macros.h"
@@ -173,7 +175,7 @@ donna_status_bar_get_preferred_width (GtkWidget      *widget,
     DonnaStatusBarPrivate *priv = ((DonnaStatusBar *) widget)->priv;
     guint i;
 
-    *minimum = *natural = (priv->areas->len - 1) * SPACING_BETWEEN_AREAS;
+    *minimum = *natural = ((gint) priv->areas->len - 1) * SPACING_BETWEEN_AREAS;
     for (i = 0; i < priv->areas->len; ++i)
     {
         struct area *area = &g_array_index (priv->areas, struct area, i);
@@ -226,7 +228,7 @@ donna_status_bar_size_allocate (GtkWidget     *widget,
     GTK_WIDGET_CLASS (donna_status_bar_parent_class)->size_allocate (widget,
             allocation);
 
-    min = nat = tot = (priv->areas->len - 1) * SPACING_BETWEEN_AREAS;
+    min = nat = tot = ((gint) priv->areas->len - 1) * SPACING_BETWEEN_AREAS;
     for (i = 0; i < priv->areas->len; ++i)
     {
         struct area *area = &g_array_index (priv->areas, struct area, i);
@@ -398,7 +400,7 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
                     widget, &cell, x, y, NULL);
             if (!renderer)
                 return FALSE;
-            c = GPOINTER_TO_INT (g_object_get_data ((GObject *) renderer,
+            c = (gchar) GPOINTER_TO_INT (g_object_get_data ((GObject *) renderer,
                         "donna-renderer"));
 
             rend = donna_status_provider_get_renderers (area->sp, area->id);
@@ -478,8 +480,8 @@ donna_status_bar_add_area (DonnaStatusBar       *sb,
 
     for (i = 0; i < priv->areas->len; ++i)
     {
-        struct area *area = &g_array_index (priv->areas, struct area, i);
-        if (streq (name, area->name))
+        struct area *a = &g_array_index (priv->areas, struct area, i);
+        if (streq (name, a->name))
         {
             g_set_error (error, DONNA_STATUS_BAR_ERROR,
                     DONNA_STATUS_BAR_ERROR_AREA_ALREADY_EXISTS,

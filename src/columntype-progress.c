@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <string.h>
 #include "columntype.h"
@@ -108,6 +110,11 @@ ct_progress_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_progress_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeProgress, donna_column_type_progress,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_progress_columntype_init)
+        )
+
 static void
 donna_column_type_progress_class_init (DonnaColumnTypeProgressClass *klass)
 {
@@ -126,17 +133,10 @@ donna_column_type_progress_class_init (DonnaColumnTypeProgressClass *klass)
 static void
 donna_column_type_progress_init (DonnaColumnTypeProgress *ct)
 {
-    DonnaColumnTypeProgressPrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_PROGRESS,
             DonnaColumnTypeProgressPrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeProgress, donna_column_type_progress,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_progress_columntype_init)
-        )
 
 static void
 ct_progress_finalize (GObject *object)
@@ -200,7 +200,6 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
     gchar *s;
-    gint i;
 
     config = donna_app_peek_config (ctpg->priv->app);
 
@@ -506,7 +505,6 @@ ct_progress_node_cmp (DonnaColumnType    *ct,
     GValue value = G_VALUE_INIT;
     gint p1;
     gint p2;
-    gint ret;
 
     donna_node_get (node1, TRUE, data->property, &has1, &value, NULL);
     if (has1 == DONNA_NODE_VALUE_SET)
@@ -559,8 +557,6 @@ ct_progress_set_option (DonnaColumnType    *ct,
                         GError            **error)
 {
     struct tv_col_data *data = _data;
-    gint c;
-    gint v;
 
     if (streq (option, "property"))
     {

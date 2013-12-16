@@ -9,6 +9,15 @@ G_BEGIN_DECLS
 
 typedef enum
 {
+    DONNA_ENABLED_TYPE_UNKNOWN = 0,
+    DONNA_ENABLED_TYPE_ENABLED,
+    DONNA_ENABLED_TYPE_DISABLED,
+    DONNA_ENABLED_TYPE_COMBINE,
+    DONNA_ENABLED_TYPE_IGNORE
+} DonnaEnabledTypes;
+
+typedef enum
+{
     /* so for clipboard operations so can default to cut/copy state */
     DONNA_IO_UNKNOWN = 0,
     DONNA_IO_COPY,

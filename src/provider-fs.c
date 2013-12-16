@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include <string.h>                 /* strrchr() */
 #include <sys/stat.h>
@@ -101,6 +103,11 @@ provider_fs_provider_init (DonnaProviderInterface *interface)
     interface->get_context_item_info        = provider_fs_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderFs, donna_provider_fs,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_fs_provider_init)
+        )
+
 static void
 donna_provider_fs_class_init (DonnaProviderFsClass *klass)
 {
@@ -123,20 +130,13 @@ donna_provider_fs_class_init (DonnaProviderFsClass *klass)
 static void
 donna_provider_fs_init (DonnaProviderFs *provider)
 {
-    DonnaProviderFsPrivate *priv;
-
-    priv = provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
+    provider->priv = G_TYPE_INSTANCE_GET_PRIVATE (provider,
             DONNA_TYPE_PROVIDER_FS,
             DonnaProviderFsPrivate);
 
     donna_provider_fs_add_io_engine (provider, "basic",
             donna_fs_engine_basic_io_task, NULL);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderFs, donna_provider_fs,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_fs_provider_init)
-        )
 
 static void
 free_io_engine (struct io_engine *ioe)
@@ -278,7 +278,6 @@ static void
 file_created (DonnaProviderFs    *pfs,
               const gchar        *location)
 {
-    DonnaProviderFsPrivate *priv = pfs->priv;
     DonnaProviderBase *_provider = (DonnaProviderBase *) pfs;
     DonnaProviderBaseClass  *klass;
     DonnaNode *parent;
@@ -323,10 +322,10 @@ file_created (DonnaProviderFs    *pfs,
         ++s;
 
     if (G_UNLIKELY (s - location >= 255))
-        b = g_strndup (location, s - location);
+        b = g_strndup (location, (gsize) (s - location));
     else
     {
-        memcpy (buf, location, s - location);
+        memcpy (buf, location, (size_t) (s - location));
         buf[s - location] = '\0';
     }
 
@@ -350,7 +349,6 @@ static void
 file_deleted (DonnaProviderFs    *pfs,
               const gchar        *location)
 {
-    DonnaProviderFsPrivate *priv = pfs->priv;
     DonnaProviderBase *_provider = (DonnaProviderBase *) pfs;
     DonnaProviderBaseClass  *klass;
     DonnaNode *node;
@@ -529,7 +527,7 @@ content_type_guess (const gchar *filename)
             if (len > 0)
             {
                 g_free (mt);
-                mt = g_content_type_guess (filename, data, len, NULL);
+                mt = g_content_type_guess (filename, data, (gsize) len, NULL);
             }
             close (fd);
         }
@@ -824,7 +822,6 @@ setter (DonnaTask       *task,
     if (do_time != TIME_NONE)
     {
         gchar *filename;
-        guint64 ts;
         struct stat st;
         struct utimbuf times;
 
@@ -916,8 +913,6 @@ new_node (DonnaProviderBase *_provider,
 
     if (!filename)
     {
-        gsize len;
-
         /* if filename encoding if UTF8, just use location */
         if (g_get_filename_charsets (NULL))
             filename = location;
@@ -950,7 +945,7 @@ new_node (DonnaProviderBase *_provider,
         | DONNA_NODE_GID_WRITABLE | DONNA_NODE_MTIME_WRITABLE
         | DONNA_NODE_ATIME_WRITABLE;
     if (type == DONNA_NODE_CONTAINER)
-        flags &= ~(DONNA_NODE_ICON_EXISTS | DONNA_NODE_DESC_EXISTS);
+        flags &= (DonnaNodeFlags) ~(DONNA_NODE_ICON_EXISTS | DONNA_NODE_DESC_EXISTS);
 
     node = donna_node_new (DONNA_PROVIDER (_provider),
             location,
@@ -1132,7 +1127,7 @@ has_get_children (DonnaProviderBase  *_provider,
         {
             if (get_children)
             {
-                DonnaNode *node;
+                DonnaNode *n;
                 gchar *location;
 
                 if (is_utf8)
@@ -1141,12 +1136,12 @@ has_get_children (DonnaProviderBase  *_provider,
                     location = g_filename_to_utf8 (b, -1, NULL, NULL, NULL);
 
                 klass->lock_nodes (_provider);
-                node = klass->get_cached_node (_provider, location);
+                n = klass->get_cached_node (_provider, location);
                 klass->unlock_nodes (_provider);
-                if (!node)
-                    node = new_node (_provider, location, b);
-                if (node)
-                    g_ptr_array_add (arr, node);
+                if (!n)
+                    n = new_node (_provider, location, b);
+                if (n)
+                    g_ptr_array_add (arr, n);
                 else
                     g_warning ("Provider 'fs': Unable to create a node for '%s'",
                             location);
@@ -1339,7 +1334,7 @@ provider_fs_new_child (DonnaProviderBase  *_provider,
         }
         else
             mode = 0755;
-        st = mkdir (filename, mode);
+        st = mkdir (filename, (mode_t) mode);
     }
     else /* DONNA_NODE_ITEM */
     {

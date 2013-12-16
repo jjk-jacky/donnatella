@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include "provider.h"
 #include "node.h"
@@ -19,6 +21,8 @@ enum
 };
 
 static guint donna_provider_signals[NB_SIGNALS] = { 0 };
+
+G_DEFINE_INTERFACE (DonnaProvider, donna_provider, G_TYPE_OBJECT)
 
 static void
 donna_provider_default_init (DonnaProviderInterface *interface)
@@ -100,8 +104,6 @@ donna_provider_default_init (DonnaProviderInterface *interface)
                 DONNA_TYPE_APP,
                 G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
-
-G_DEFINE_INTERFACE (DonnaProvider, donna_provider, G_TYPE_OBJECT)
 
 /* signals */
 
@@ -656,7 +658,7 @@ donna_provider_get_context_alias_new_nodes (DonnaProvider  *provider,
     if (interface->get_context_alias_new_nodes == NULL)
         /* if not implemented we just don't have anything, but the alias must
          * always exist/be valid */
-        return "";
+        return (gchar *) "";
 
     return (*interface->get_context_alias_new_nodes) (provider, extra, location,
             prefix, error);

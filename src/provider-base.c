@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include "provider-base.h"
@@ -113,6 +115,11 @@ provider_base_provider_init (DonnaProviderInterface *interface)
     interface->remove_from_task       = provider_base_remove_from_task;
 }
 
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (DonnaProviderBase, donna_provider_base,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_base_provider_init)
+        )
+
 static void
 donna_provider_base_class_init (DonnaProviderBaseClass *klass)
 {
@@ -153,11 +160,6 @@ donna_provider_base_init (DonnaProviderBase *provider)
             g_free, g_object_unref);
     g_rec_mutex_init (&priv->nodes_mutex);
 }
-
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (DonnaProviderBase, donna_provider_base,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_base_provider_init)
-        )
 
 static void
 provider_base_finalize (GObject *object)

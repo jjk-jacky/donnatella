@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <string.h>
 #include <ctype.h>      /* isblank() */
 #include "filter.h"
@@ -100,9 +102,7 @@ donna_filter_class_init (DonnaFilterClass *klass)
 static void
 donna_filter_init (DonnaFilter *filter)
 {
-    DonnaFilterPrivate *priv;
-
-    priv = filter->priv = G_TYPE_INSTANCE_GET_PRIVATE (filter,
+    filter->priv = G_TYPE_INSTANCE_GET_PRIVATE (filter,
             DONNA_TYPE_FILTER, DonnaFilterPrivate);
 }
 

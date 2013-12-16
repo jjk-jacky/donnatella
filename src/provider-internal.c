@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "provider-internal.h"
 #include "provider.h"
@@ -48,6 +50,11 @@ provider_internal_provider_init (DonnaProviderInterface *interface)
     interface->trigger_node_task        = provider_internal_trigger_node_task;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderInternal, donna_provider_internal,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_internal_provider_init)
+        )
+
 static void
 donna_provider_internal_class_init (DonnaProviderInternalClass *klass)
 {
@@ -70,11 +77,6 @@ donna_provider_internal_init (DonnaProviderInternal *provider)
             DONNA_TYPE_PROVIDER_INTERNAL,
             DonnaProviderInternalPrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderInternal, donna_provider_internal,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_internal_provider_init)
-        )
 
 
 /* DonnaProvider */

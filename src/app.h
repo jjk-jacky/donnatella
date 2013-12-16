@@ -20,15 +20,6 @@ typedef enum
     DONNA_APP_ERROR_OTHER,
 } DonnaAppError;
 
-typedef enum
-{
-    DONNA_ENABLED_TYPE_UNKNOWN = 0,
-    DONNA_ENABLED_TYPE_ENABLED,
-    DONNA_ENABLED_TYPE_DISABLED,
-    DONNA_ENABLED_TYPE_COMBINE,
-    DONNA_ENABLED_TYPE_IGNORE
-} DonnaEnabledTypes;
-
 struct _DonnaAppInterface
 {
     GTypeInterface parent;

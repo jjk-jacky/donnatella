@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "treestore.h"
 #include "closures.h"
@@ -769,8 +771,11 @@ tree_store_row_inserted (GtkTreeModel   *_model,
             tree_store_iter_children (model, &child, &parent);
             do
             {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress"
                 if (child.user_data != iter->user_data
                         && iter_is_visible (&child))
+#pragma GCC diagnostic pop
                 {
                     /* another visible child */
                     emit = FALSE;
@@ -818,19 +823,22 @@ tree_store_rows_reordered (GtkTreeModel     *_model,
     g_return_if_fail (_n > 0);
 
     /* create convertion table */
-    convert = g_new (gint, _n);
+    convert = g_new (gint, (gsize) _n);
     i = n = 0;
     gtk_tree_model_iter_children (_model, &it, iter);
     do
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress"
         convert[i++] = (iter_is_visible (&it)) ? n++ : -1;
+#pragma GCC diagnostic pop
     } while (gtk_tree_model_iter_next (_model, &it));
 
     /* any difference? */
     if (n != _n)
     {
         /* create new new_order */
-        new_order = g_new (gint, n);
+        new_order = g_new (gint, (gsize) n);
         n = 0;
         for (i = 0; i < _n; ++i)
             if (convert[_new_order[i]] != -1)
@@ -870,7 +878,7 @@ donna_tree_store_new (gint n_columns,
     priv = store->priv;
 
     if (n_columns > 10)
-        types = g_new (GType, n_columns);
+        types = g_new (GType, (gsize) n_columns);
     else
         types = _types;
 
@@ -1183,7 +1191,10 @@ ensure_visible (DonnaTreeStore *store, GtkTreeIter *iter)
 
     if (gtk_tree_model_iter_parent (GTK_TREE_MODEL (priv->store), &it, iter))
         /* if parent isn't visible, recurse to make sure it becomes visible */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress"
         if (!iter_is_visible (&it))
+#pragma GCC diagnostic pop
             ensure_visible (store, &it);
 
     if (!iter_is_visible (iter))

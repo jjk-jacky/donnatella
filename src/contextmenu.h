@@ -41,46 +41,46 @@ typedef void (*context_new_node_fn) (DonnaNode *node, gpointer data);
 
 typedef struct
 {
-    DonnaNode   *node;
+    DonnaNode              *node;
 
-    gchar       *name;
+    const gchar            *name;
     union {
-        gchar       *icon_name;
-        GIcon       *icon;
+        const gchar        *icon_name;
+        GIcon              *icon;
     };
     union {
-        gchar       *icon_name_selected;
-        GIcon       *icon_selected;
+        const gchar        *icon_name_selected;
+        GIcon              *icon_selected;
     };
-    gchar       *desc;
-    gchar       *trigger;
+    const gchar            *desc;
+    const gchar            *trigger;
     /* container only */
-    gchar       *menu;
+    const gchar            *menu;
 
     /* to allow adding extra/custom properties on the newly-created node */
-    context_new_node_fn new_node_fn;
-    gpointer            new_node_data;
-    GDestroyNotify      new_node_destroy;
+    context_new_node_fn     new_node_fn;
+    gpointer                new_node_data;
+    GDestroyNotify          new_node_destroy;
 
-    guint        icon_special       : 2; /* DonnaContextIconSpecial */
-    guint        icon_is_gicon      : 1;
-    guint        icon_is_gicon_selected : 1;
-    guint        is_active          : 1;
-    guint        is_inconsistent    : 1;
+    DonnaContextIconSpecial icon_special;
+    gboolean                icon_is_gicon;
+    gboolean                icon_is_gicon_selected;
+    gboolean                is_active;
+    gboolean                is_inconsistent;
 
-    guint        is_visible         : 1;
-    guint        is_sensitive       : 1;
-    guint        is_container       : 1;
-    guint        is_menu_bold       : 1;
+    gboolean                is_visible;
+    gboolean                is_sensitive;
+    gboolean                is_container;
+    gboolean                is_menu_bold;
     /* container only */
-    guint        submenus           : 2;
+    DonnaEnabledTypes       submenus;
 
-    guint        free_name          : 1;
-    guint        free_icon          : 1;
-    guint        free_icon_selected : 1;
-    guint        free_desc          : 1;
-    guint        free_trigger       : 1;
-    guint        free_menu          : 1;
+    gboolean                free_name;
+    gboolean                free_icon;
+    gboolean                free_icon_selected;
+    gboolean                free_desc;
+    gboolean                free_trigger;
+    gboolean                free_menu;
 } DonnaContextInfo;
 
 typedef GPtrArray * (*get_sel_fn)   (gpointer data, GError **error);

@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "taskui-messages.h"
 
@@ -23,6 +25,11 @@ tui_messages_taskui_init (DonnaTaskUiInterface *interface)
     interface->take_title   = tui_messages_take_title;
     interface->show         = tui_messages_show;
 }
+
+G_DEFINE_TYPE_WITH_CODE (DonnaTaskUiMessages, donna_task_ui_messages,
+        G_TYPE_INITIALLY_UNOWNED,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_TASKUI, tui_messages_taskui_init)
+        )
 
 static void
 donna_task_ui_messages_class_init (DonnaTaskUiMessagesClass *klass)
@@ -52,11 +59,6 @@ donna_task_ui_messages_init (DonnaTaskUiMessages *tuimsg)
             "foreground",   "red",
             NULL);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaTaskUiMessages, donna_task_ui_messages,
-        G_TYPE_INITIALLY_UNOWNED,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_TASKUI, tui_messages_taskui_init)
-        )
 
 static void
 tui_messages_finalize (GObject *object)

@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include "provider-invalid.h"
 #include "provider.h"
@@ -63,6 +65,11 @@ provider_invalid_provider_init (DonnaProviderInterface *interface)
     interface->trigger_node_task      = provider_invalid_trigger_node_task;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderInvalid, donna_provider_invalid,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_invalid_provider_init)
+        )
+
 static void
 donna_provider_invalid_class_init (DonnaProviderInvalidClass *klass)
 {
@@ -85,11 +92,6 @@ donna_provider_invalid_init (DonnaProviderInvalid *provider)
             DONNA_TYPE_PROVIDER_INVALID,
             DonnaProviderInvalidPrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderInvalid, donna_provider_invalid,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_invalid_provider_init)
-        )
 
 static void
 provider_invalid_finalize (GObject *object)

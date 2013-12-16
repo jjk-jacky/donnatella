@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "provider-mark.h"
 #include "provider-command.h"
@@ -81,6 +83,11 @@ provider_mark_provider_init (DonnaProviderInterface *interface)
     interface->get_context_item_info        = provider_mark_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderMark, donna_provider_mark,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_mark_provider_init)
+        )
+
 static void
 donna_provider_mark_class_init (DonnaProviderMarkClass *klass)
 {
@@ -140,11 +147,6 @@ provider_mark_finalize (GObject *object)
     g_mutex_clear (&priv->mutex);
     g_hash_table_unref (priv->marks);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderMark, donna_provider_mark,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_mark_provider_init)
-        )
 
 
 /* internals */
@@ -794,7 +796,7 @@ provider_mark_trigger_node (DonnaProviderBase  *_provider,
     g_object_get (_provider->app, "active-list", &tree, NULL);
     if (G_UNLIKELY (!tree))
     {
-        gchar *location = donna_node_get_location (node);
+        location = donna_node_get_location (node);
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_OTHER,
                 "Provider 'mark': Failed to trigger mark '%s', couldn't get active-list",
@@ -871,7 +873,7 @@ provider_mark_new_child (DonnaProviderBase  *_provider,
     }
 
     node_root = get_node_for ((DonnaProviderMark *) _provider, GET_IF_IN_CACHE,
-            "/", NULL);
+            (gpointer) "/", NULL);
     if (node_root)
     {
         donna_provider_node_new_child ((DonnaProvider *) _provider,
@@ -894,7 +896,6 @@ provider_mark_remove_from (DonnaProviderBase  *_provider,
                            DonnaNode          *source)
 {
     GError *err = NULL;
-    DonnaProviderMarkPrivate *priv = ((DonnaProviderMark *) _provider)->priv;
     GString *str = NULL;
     guint i;
 
@@ -1133,7 +1134,7 @@ cmd_mark_load (DonnaTask         *task,
         g_hash_table_remove_all (priv->marks);
     }
 
-    node_root = get_node_for (pm, GET_IF_IN_CACHE, "/", NULL);
+    node_root = get_node_for (pm, GET_IF_IN_CACHE, (gpointer) "/", NULL);
     if (node_root)
         nodes_new = g_ptr_array_new_with_free_func (g_object_unref);
     if (!reset)
@@ -1205,7 +1206,7 @@ cmd_mark_load (DonnaTask         *task,
             if (upd->type != (guint) -1)
             {
                 g_value_init (&v, G_TYPE_INT);
-                g_value_set_int (&v, upd->type);
+                g_value_set_int (&v, (gint) upd->type);
                 donna_node_set_property_value (upd->node, "mark-type", &v);
                 g_value_unset (&v);
             }
@@ -1269,7 +1270,7 @@ cmd_mark_save (DonnaTask        *task,
     }
     g_mutex_unlock (&priv->mutex);
 
-    if (!g_file_set_contents (file, str->str, str->len, &err))
+    if (!g_file_set_contents (file, str->str, (gssize) str->len, &err))
     {
         g_prefix_error (&err, "Command 'mark_save': Failed to save marks to '%s': ",
                 (filename) ? filename : "marks.conf");
@@ -1397,7 +1398,7 @@ cmd_mark_set (DonnaTask         *task,
             return DONNA_TASK_FAILED;
         }
 
-        node_root = get_node_for (pm, GET_IF_IN_CACHE, "/", NULL);
+        node_root = get_node_for (pm, GET_IF_IN_CACHE, (gpointer) "/", NULL);
         if (node_root)
         {
             node = get_node_for (pm, GET_CREATE_FROM_MARK, mark, NULL);
@@ -1439,14 +1440,14 @@ cmd_mark_set (DonnaTask         *task,
 }
 
 
-#define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_value) \
-if (G_UNLIKELY (!donna_provider_command_add_command (pc, #cmd_name, cmd_argc, \
-            arg_type, cmd_return_value, cmd_visibility, \
-            (command_fn) cmd_##cmd_name, object, NULL, &err))) \
-{ \
-    g_warning ("Provider 'mark': Failed to add command '" #cmd_name "': %s", \
-        err->message); \
-    g_clear_error (&err); \
+#define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_value)     \
+if (G_UNLIKELY (!donna_provider_command_add_command (pc, #cmd_name,           \
+                (guint) cmd_argc, arg_type, cmd_return_value, cmd_visibility, \
+                (command_fn) cmd_##cmd_name, object, NULL, &err)))            \
+{                                                                             \
+    g_warning ("Provider 'mark': Failed to add command '" #cmd_name "': %s",  \
+        err->message);                                                        \
+    g_clear_error (&err);                                                     \
 }
 static void
 provider_mark_contructed (GObject *object)

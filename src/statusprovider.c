@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include "statusprovider.h"
 
 enum
@@ -18,6 +20,8 @@ default_set_tooltip (DonnaStatusProvider    *sp,
     return FALSE;
 }
 
+G_DEFINE_INTERFACE (DonnaStatusProvider, donna_status_provider, G_TYPE_OBJECT)
+
 static void
 donna_status_provider_default_init (DonnaStatusProviderInterface *interface)
 {
@@ -35,8 +39,6 @@ donna_status_provider_default_init (DonnaStatusProviderInterface *interface)
                 1,
                 G_TYPE_UINT);
 }
-
-G_DEFINE_INTERFACE (DonnaStatusProvider, donna_status_provider, G_TYPE_OBJECT)
 
 /* signals */
 

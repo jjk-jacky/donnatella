@@ -1,10 +1,22 @@
 
+#include "config.h"
+
 #include <string.h>
 #include "columntype.h"
 #include "app.h"
 #include "conf.h"
 #include "util.h"
 #include "macros.h"
+
+/* internal; used by treeview.c */
+DonnaColumnOptionSaveLocation
+_donna_columntype_ask_save_location (DonnaApp     *app,
+                                     const gchar  *tv_name,
+                                     const gchar  *col_name,
+                                     const gchar  *arr_name,
+                                     const gchar  *def_cat,
+                                     const gchar  *option,
+                                     guint         from);
 
 static GtkSortType
 default_get_default_sort_order (DonnaColumnType    *ct,
@@ -13,7 +25,6 @@ default_get_default_sort_order (DonnaColumnType    *ct,
                                 const gchar        *arr_name,
                                 gpointer            data)
 {
-    DonnaColumnTypeInterface *interface;
     DonnaApp *app;
     const gchar *type;
     gchar buf[55], *b = buf;
@@ -139,7 +150,7 @@ helper_get_save_location (DonnaColumnType    *ct,
             ++*extra;
         s = strchr (*extra, ':');
         if (s)
-            len = s - *extra;
+            len = (gsize) (s - *extra);
         else
             len = strlen (*extra);
 
@@ -429,7 +440,8 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
 #define _cfg_set(type, value, location, ...)                                \
     if (!donna_config_set_##type (config, error, value, __VA_ARGS__))       \
     {                                                                       \
-        g_prefix_error ("ColumnType '%s': Failed to save option '%s': ",    \
+        g_prefix_error (error,                                              \
+                "ColumnType '%s': Failed to save option '%s': ",            \
                 donna_columntype_get_name (ct), option);                    \
         g_object_unref (app);                                               \
         return FALSE;                                                       \
@@ -677,6 +689,8 @@ helper_get_set_option_trigger (const gchar  *option,
     return g_string_free (str, FALSE);
 }
 
+G_DEFINE_INTERFACE (DonnaColumnType, donna_columntype, G_TYPE_OBJECT)
+
 static void
 donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 {
@@ -696,8 +710,6 @@ donna_columntype_default_init (DonnaColumnTypeInterface *interface)
                 DONNA_TYPE_APP,
                 G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
-
-G_DEFINE_INTERFACE (DonnaColumnType, donna_columntype, G_TYPE_OBJECT)
 
 const gchar *
 donna_columntype_get_name (DonnaColumnType *ct)
@@ -1049,7 +1061,7 @@ donna_columntype_get_context_alias (DonnaColumnType    *ct,
         /* all columntypes should support an alias "options" so let's resolve
          * that to an empty string, i.e. nothing (but not an error) */
         if (streq (alias, "options"))
-            return "";
+            return (gchar *) "";
 
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,

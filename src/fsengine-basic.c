@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <unistd.h>
 #include <signal.h>
@@ -15,6 +17,18 @@
 
 #define LEN_PREFIX      4
 
+DonnaTask *
+donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
+                               DonnaApp           *app,
+                               DonnaIoType         type,
+                               GPtrArray          *sources,
+                               DonnaNode          *dest,
+                               const gchar        *new_name,
+                               fs_parse_cmdline    parser,
+                               fs_file_created     file_created,
+                               fs_file_deleted     file_deleted,
+                               GError            **error);
+
 struct data
 {
     DonnaApp        *app;
@@ -30,9 +44,9 @@ struct data
     GPtrArray       *ret_nodes;
 
     /* openning quote around filename */
-    gchar           *openq;
+    const gchar     *openq;
     /* closing quote around filename */
-    gchar           *closeq;
+    const gchar     *closeq;
     /* prefix for announce of removal by rm */
     gchar           *removed_prefix;
     gsize            removed_prefix_len;
@@ -69,11 +83,11 @@ free_data (struct data *data)
 }
 
 static gboolean
-get_filename (gchar  *str,
-              gchar  *openq,
-              gchar  *closeq,
-              gchar **filename,
-              gchar **end)
+get_filename (gchar         *str,
+              const gchar   *openq,
+              const gchar   *closeq,
+              gchar        **filename,
+              gchar        **end)
 {
     gchar *s;
 
@@ -113,7 +127,7 @@ unesc_fn (gchar *filename, gchar *end, gchar *buf, gint bufsize)
         if (end - filename < bufsize)
             b = buf;
         else
-            b = g_new (gchar, end - filename + 1);
+            b = g_new (gchar, (gsize) (end - filename + 1));
 
         for (l = 0; *filename != '\0'; ++filename)
         {
@@ -126,7 +140,7 @@ unesc_fn (gchar *filename, gchar *end, gchar *buf, gint bufsize)
                         && filename[1] >= '0' && filename[1] <= '7'
                         && filename[2] >= '0' && filename[2] <= '7')
                 {
-                    b[l++] = g_ascii_strtoull (filename, NULL, 8);
+                    b[l++] = (gchar) g_ascii_strtoull (filename, NULL, 8);
                     filename += 2;
                     continue;
                 }
@@ -265,7 +279,7 @@ pipe_data_received (DonnaTask     *task,
     if (!data->str)
         data->str = g_string_new (NULL);
 
-    g_string_append_len (data->str, str, len);
+    g_string_append_len (data->str, str, (gssize) len);
 
     if (data->in_line)
     {
@@ -368,7 +382,7 @@ handle_stdin (DonnaTask          *task,
             }
 
 write:
-            written = write (fd, data->wbuf, data->wlen);
+            written = write (fd, data->wbuf, (size_t) data->wlen);
             if (written < 0)
             {
                 if (errno == EAGAIN)
@@ -388,8 +402,8 @@ write:
 
             if (written < data->wlen)
             {
-                data->wlen -= written;
-                memmove (data->wbuf, data->wbuf + written, data->wlen);
+                data->wlen -= (gint) written;
+                memmove (data->wbuf, data->wbuf + written, (size_t) data->wlen);
                 return DONNA_TASK_PROCESS_STDIN_WAIT_NONBLOCKING;
             }
 

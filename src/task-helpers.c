@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include <sys/eventfd.h>
 #include <sys/select.h>
@@ -192,7 +194,7 @@ ask_show_ui (DonnaTaskHelper    *th,
     ask->th = th;
 
     w = gtk_message_dialog_new (NULL, 0, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
-            ask->question);
+            "%s", ask->question);
     if (ask->details_markup)
         gtk_message_dialog_format_secondary_markup ((GtkMessageDialog *) w,
                 "%s", ask->details);
@@ -263,12 +265,12 @@ donna_task_helper_ask (DonnaTask          *task,
     {
         /* default buttons */
         ask.btn_default = 2;
-        g_ptr_array_add (ask.buttons, "Cancel");
-        g_ptr_array_add (ask.buttons, "gtk-cancel");
-        g_ptr_array_add (ask.buttons, "No");
-        g_ptr_array_add (ask.buttons, "gtk-no");
-        g_ptr_array_add (ask.buttons, "Yes");
-        g_ptr_array_add (ask.buttons, "gtk-yes");
+        g_ptr_array_add (ask.buttons, (gpointer) "Cancel");
+        g_ptr_array_add (ask.buttons, (gpointer) "gtk-cancel");
+        g_ptr_array_add (ask.buttons, (gpointer) "No");
+        g_ptr_array_add (ask.buttons, (gpointer) "gtk-no");
+        g_ptr_array_add (ask.buttons, (gpointer) "Yes");
+        g_ptr_array_add (ask.buttons, (gpointer) "gtk-yes");
     }
     else
     {

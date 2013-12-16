@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include <gobject/gvaluecollector.h>    /* G_VALUE_LCOPY */
 #include <string.h>                     /* memset() */
@@ -218,6 +220,8 @@ static void donna_node_finalize (GObject *object);
 
 static void free_node_prop (DonnaNodeProp *prop);
 
+G_DEFINE_TYPE (DonnaNode, donna_node, G_TYPE_OBJECT)
+
 static void
 donna_node_class_init (DonnaNodeClass *klass)
 {
@@ -252,8 +256,6 @@ donna_node_init (DonnaNode *node)
     g_value_init (&priv->basic_props[BASIC_PROP_GID].value,       G_TYPE_UINT);
     g_value_init (&priv->basic_props[BASIC_PROP_DESC].value,      G_TYPE_STRING);
 }
-
-G_DEFINE_TYPE (DonnaNode, donna_node, G_TYPE_OBJECT)
 
 static void
 donna_node_finalize (GObject *object)

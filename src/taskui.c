@@ -1,13 +1,15 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include "taskui.h"
+
+G_DEFINE_INTERFACE (DonnaTaskUi, donna_taskui, G_TYPE_OBJECT)
 
 static void
 donna_taskui_default_init (DonnaTaskUiInterface *klass)
 {
 }
-
-G_DEFINE_INTERFACE (DonnaTaskUi, donna_taskui, G_TYPE_OBJECT)
 
 void
 donna_taskui_set_title (DonnaTaskUi     *taskui,

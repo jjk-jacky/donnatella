@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "provider-task.h"
 #include "provider.h"
@@ -183,6 +185,12 @@ provider_task_status_provider_init (DonnaStatusProviderInterface *interface)
     interface->render           = provider_task_render;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaProviderTask, donna_provider_task,
+        DONNA_TYPE_PROVIDER_BASE,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_task_provider_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_STATUS_PROVIDER,
+            provider_task_status_provider_init)
+        )
 
 static void
 donna_provider_task_class_init (DonnaProviderTaskClass *klass)
@@ -244,13 +252,6 @@ donna_provider_task_init (DonnaProviderTask *provider)
     priv->statuses = g_array_new (FALSE, FALSE, sizeof (struct status));
     g_array_set_clear_func (priv->statuses, (GDestroyNotify) free_status);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaProviderTask, donna_provider_task,
-        DONNA_TYPE_PROVIDER_BASE,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_PROVIDER, provider_task_provider_init)
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_STATUS_PROVIDER,
-            provider_task_status_provider_init)
-        )
 
 static void
 provider_task_get_property (GObject        *object,
@@ -383,8 +384,6 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
              * Else there's nothing we can do. */
             for (i = 0; i < selection->len; ++i)
             {
-                gint st;
-
                 if (donna_node_peek_provider (selection->pdata[i]) != provider
                         /* not an item == a container == root/task manager */
                         || donna_node_get_node_type (selection->pdata[i]) != DONNA_NODE_ITEM)
@@ -545,8 +544,6 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
              * Else there's nothing we can do. */
             for (i = 0; i < selection->len; ++i)
             {
-                gint st;
-
                 if (donna_node_peek_provider (selection->pdata[i]) != provider
                         /* not an item == a container == root/task manager */
                         || donna_node_get_node_type (selection->pdata[i]) != DONNA_NODE_ITEM)
@@ -684,7 +681,7 @@ lock_manager (DonnaProviderTask *tm, TmState state)
                 || priv->queued > 0)
             g_cond_wait (&priv->cond, &priv->mutex);
 
-        priv->state &= ~TM_REFRESH_PENDING;
+        priv->state &= (TmState) ~TM_REFRESH_PENDING;
     }
     priv->state |= state;
     g_mutex_unlock (&priv->mutex);
@@ -1122,18 +1119,18 @@ provider_task_get_children (DonnaProviderBase  *_provider,
         {
             GError *err = NULL;
             struct task *t;
-            DonnaNode *node;
+            DonnaNode *n;
             gchar location[32];
 
             t = &g_array_index (priv->tasks, struct task, i);
             snprintf (location, 32, "/%p", t->task);
             klass->lock_nodes (_provider);
-            node = klass->get_cached_node (_provider, location);
+            n = klass->get_cached_node (_provider, location);
             klass->unlock_nodes (_provider);
-            if (!node)
-                node = new_node (_provider, location, t->task, TRUE, &err);
-            if (node)
-                g_ptr_array_add (arr, node);
+            if (!n)
+                n = new_node (_provider, location, t->task, TRUE, &err);
+            if (n)
+                g_ptr_array_add (arr, n);
             else
             {
                 g_warning ("Provider 'task': Failed to create children node: %s",
@@ -1154,7 +1151,7 @@ provider_task_get_children (DonnaProviderBase  *_provider,
     return DONNA_TASK_DONE;
 }
 
-inline const gchar *
+static inline const gchar *
 st_name (guint st)
 {
     switch (st)
@@ -1185,7 +1182,6 @@ provider_task_trigger_node (DonnaProviderBase  *_provider,
                             DonnaTask          *task,
                             DonnaNode          *node)
 {
-    DonnaProviderTaskPrivate *priv = ((DonnaProviderTask *) _provider)->priv;
     guint state;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
@@ -1434,7 +1430,6 @@ provider_task_render (DonnaStatusProvider    *sp,
     GString *str;
     gchar *fmt;
     gchar *s;
-    guint nb;
 
     for (i = 0; i < priv->statuses->len; ++i)
     {
@@ -2312,13 +2307,11 @@ donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
                                  GError            **error)
 {
     DonnaProvider *provider = (DonnaProvider *) tm;
-    DonnaProviderTaskPrivate *priv;
     GString *str = NULL;
     guint i;
 
     g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
     g_return_val_if_fail (nodes != NULL, FALSE);
-    priv = tm->priv;
 
     if (G_UNLIKELY (nodes->len == 0))
         return TRUE;
@@ -2428,13 +2421,11 @@ donna_task_manager_cancel (DonnaTaskManager     *tm,
                            DonnaNode            *node,
                            GError              **error)
 {
-    DonnaProviderTaskPrivate *priv;
     DonnaTask *task;
     gchar *location;
 
     g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    priv = tm->priv;
 
     if (donna_node_peek_provider (node) != (DonnaProvider *) tm
             /* not an item == a container == root/task manager */
@@ -2469,14 +2460,12 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
                             DonnaNode           *node,
                             GError             **error)
 {
-    DonnaProviderTaskPrivate *priv;
     DonnaTask *task;
     DonnaTaskUi *taskui;
     gchar *location;
 
     g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-    priv = tm->priv;
 
     if (donna_node_peek_provider (node) != (DonnaProvider *) tm
             /* not an item == a container == root/task manager */
@@ -2695,7 +2684,6 @@ exit_cb (DonnaApp               *app,
          gpointer                conv_data,
          DonnaProviderTask      *tm)
 {
-    DonnaProviderTaskPrivate *priv = tm->priv;
     struct refresh_exit_waiting rew;
     GSource *source;
 

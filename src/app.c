@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <string.h>
 #include "app.h"
 #include "provider.h"
@@ -19,6 +21,17 @@ static gboolean event_accumulator (GSignalInvocationHint    *ihint,
                                    GValue                   *value_accu,
                                    const GValue             *value_handler,
                                    gpointer                  data);
+
+/* internal; used from treeview.c with its own get_ct_data */
+gboolean
+_donna_app_filter_nodes (DonnaApp        *app,
+                         GPtrArray       *nodes,
+                         const gchar     *filter_str,
+                         get_ct_data_fn   get_ct_data,
+                         gpointer         data,
+                         GError         **error);
+
+G_DEFINE_INTERFACE (DonnaApp, donna_app, G_TYPE_OBJECT)
 
 static void
 donna_app_default_init (DonnaAppInterface *interface)
@@ -61,8 +74,6 @@ donna_app_default_init (DonnaAppInterface *interface)
                 FALSE,  /* default */
                 G_PARAM_READWRITE));
 }
-
-G_DEFINE_INTERFACE (DonnaApp, donna_app, G_TYPE_OBJECT)
 
 /* signals */
 
@@ -237,7 +248,7 @@ donna_app_get_node (DonnaApp    *app,
     else
     {
         *buf = '\0';
-        strncat (buf, full_location, location - full_location);
+        strncat (buf, full_location, (size_t) (location - full_location));
     }
     provider = (*interface->get_provider) (app, buf);
     if (!provider)
@@ -708,7 +719,6 @@ donna_app_show_error (DonnaApp       *app,
     g_free (title);
 }
 
-/* not static so it can be used from treeview.c with its own get_ct_data */
 gboolean
 _donna_app_filter_nodes (DonnaApp        *app,
                          GPtrArray       *nodes,

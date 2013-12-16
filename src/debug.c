@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib.h>
 #include <gdk/gdk.h>
 #include <string.h>

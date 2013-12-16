@@ -1,12 +1,14 @@
 
+#include "config.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include "util.h"
 
-gssize
+gsize
 donna_print_size (gchar       *str,
-                  gssize       max,
+                  gsize        max,
                   const gchar *fmt,
                   guint64      size,
                   gint         digits,
@@ -18,7 +20,7 @@ donna_print_size (gchar       *str,
     gint nb_unit = sizeof (s_unit) / sizeof (s_unit[0]);
     gint u = 0;
     gssize need;
-    gssize total = 0;
+    gsize total = 0;
 
     while (*fmt != '\0')
     {
@@ -77,15 +79,15 @@ donna_print_size (gchar       *str,
             /* it was a known modifier */
             if (need > 0)
             {
-                if (need < max)
+                if ((gsize) need < max)
                 {
-                    max -= need;
-                    str += need;
+                    max -= (gsize) need;
+                    str += (gsize) need;
                 }
                 else
                     max = 0;
                 fmt += 2;
-                total += need;
+                total += (gsize) need;
                 continue;
             }
         }
@@ -313,10 +315,10 @@ printing:
                     gchar buf[max];
                     gint need;
 
-                    need = g_snprintf (buf, max, "%d%s", nb[0], unit[0]);
+                    need = g_snprintf (buf, (gsize) max, "%d%s", nb[0], unit[0]);
                     if (need < 255 && count > 1)
-                        need += g_snprintf (buf + need, max - need, " %d%s",
-                                nb[1], unit[1]);
+                        need += g_snprintf (buf + need, (gsize) (max - need),
+                                " %d%s", nb[1], unit[1]);
                     if (need < 255)
                     {
                         if (cmp == -1)

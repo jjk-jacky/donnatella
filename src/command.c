@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <stdio.h>
 #include <ctype.h>
 #include "command.h"
@@ -9,13 +11,16 @@
 #include "macros.h"
 #include "debug.h"
 
+/* internal, used by donna.c */
+void _donna_add_commands (GHashTable *commands);
+
 
 /* helpers */
 
 gint
-_donna_get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
+_donna_get_choice_from_list (guint nb, const gchar *choices[], const gchar *sel)
 {
-    gchar to_lower = 'A' - 'a';
+    gint to_lower = 'A' - 'a';
     gint *matches;
     gint i;
 
@@ -23,13 +28,13 @@ _donna_get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
         return -1;
 
     matches = g_new (gint, nb + 1);
-    for (i = 0; i < nb; ++i)
+    for (i = 0; i < (gint) nb; ++i)
         matches[i] = i;
     matches[nb] = -1;
 
     for (i = 0; sel[i] != '\0'; ++i)
     {
-        gchar a;
+        gint a;
         gint *m;
 
         a = sel[i];
@@ -38,7 +43,7 @@ _donna_get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
 
         for (m = matches; *m > -1; )
         {
-            gchar c;
+            gint c;
 
             c = choices[*m][i];
             if (c >= 'A' && c <= 'Z')
@@ -72,7 +77,7 @@ _donna_get_choice_from_list (gint nb, const gchar *choices[], const gchar *sel)
 }
 
 guint
-_donna_get_flags_from_list (gint             nb,
+_donna_get_flags_from_list (guint            nb,
                             const gchar     *choices[],
                             guint            flags[],
                             gchar           *sel)
@@ -851,7 +856,7 @@ cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
             gchar *fmt;
             gint digits;
             gboolean long_unit;
-            gssize len;
+            gsize len;
 
             if (options[4] == '@')
                 sce = options + 5;
@@ -1248,7 +1253,7 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
 
         if (trg_container & TRG_POPUP)
         {
-            gpointer _args[5] = { node, "all", NULL, NULL, NULL };
+            gpointer _args[5] = { node, (gchar *) "all", NULL, NULL, NULL };
             return cmd_node_popup_children (task, app, _args);
         }
         else if (!(trg_container & TRG_GOTO))
@@ -2140,7 +2145,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
     gchar *s_set = args[1];
     DonnaTreeRowId *rid = args[2];
-    gint nb = GPOINTER_TO_INT (args[3]); /* opt */
+    guint nb = GPOINTER_TO_UINT (args[3]); /* opt */
     gchar *nb_type = args[4]; /* opt */
     gchar *action = args[5]; /* opt */
     gboolean to_focused = GPOINTER_TO_INT (args[6]); /* opt */
@@ -2977,7 +2982,7 @@ cmd_void (DonnaTask *task, DonnaApp *app, gpointer *args)
 
 #define add_command(cmd_name, cmd_argc, cmd_visibility, cmd_return_type) \
 command.name           = g_strdup (#cmd_name); \
-command.argc           = cmd_argc; \
+command.argc           = (guint) cmd_argc; \
 command.return_type    = cmd_return_type; \
 command.visibility     = cmd_visibility; \
 command.func           = (command_fn) cmd_##cmd_name; \

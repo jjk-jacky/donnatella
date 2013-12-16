@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <gtk/gtk.h>
 #include "misc.h"
 
@@ -23,8 +25,8 @@ _key_press_ctrl_a_cb (GtkEntry *entry, GdkEventKey *event)
         else
         {
             const gchar *name;
-            gsize  len;
-            gsize  dot;
+            gint len;
+            gint dot;
             gchar *s;
 
             /* locate the dot before the extension */

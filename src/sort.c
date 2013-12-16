@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib.h>
 #include <string.h>     /* strlen() */
 #include "sort.h"
@@ -186,7 +188,7 @@ donna_strcmp (const gchar *s1, const gchar *s2, DonnaSortOptions options)
 
                 d = g_unichar_digit_value (c1);
                 n1 *= 10;
-                n1 += d;
+                n1 += (unsigned long) d;
                 s1 = g_utf8_next_char (s1);
                 if (*s1)
                     c1 = g_utf8_get_char (s1);
@@ -201,7 +203,7 @@ donna_strcmp (const gchar *s1, const gchar *s2, DonnaSortOptions options)
 
                 d = g_unichar_digit_value (c2);
                 n2 *= 10;
-                n2 += d;
+                n2 += (unsigned long) d;
                 s2 = g_utf8_next_char (s2);
                 if (*s2)
                     c2 = g_utf8_get_char (s2);
@@ -258,7 +260,7 @@ donna_sort_get_options_char (gboolean dot_first,
 
 gchar *
 donna_sort_get_utf8_collate_key (const gchar   *str,
-                                 gssize         len,
+                                 gssize         _len,
                                  gboolean       dot_first,
                                  gboolean       special_first,
                                  gboolean       natural_order)
@@ -268,13 +270,16 @@ donna_sort_get_utf8_collate_key (const gchar   *str,
     const gchar *p;
     const gchar *prev;
     const gchar *end;
+    gsize len;
     gchar *collate_key;
     gchar c;
     gint digits;
     gint leading_zeros;
 
-    if (len < 0)
+    if (_len < 0)
         len = strlen (str);
+    else
+        len = (gsize) _len;
 
     result = g_string_sized_new (len * 2);
     append = g_string_sized_new (0);
@@ -293,10 +298,10 @@ donna_sort_get_utf8_collate_key (const gchar   *str,
 
         for ( ; s < end; s = g_utf8_next_char (s))
         {
-            gunichar c;
+            gunichar uc;
 
-            c = g_utf8_get_char (s);
-            if (!g_unichar_isalnum (c))
+            uc = g_utf8_get_char (s);
+            if (!g_unichar_isalnum (uc))
             {
                 if (!prefix && *s != '.')
                     prefix = TRUE;

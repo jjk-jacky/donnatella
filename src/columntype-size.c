@@ -1,4 +1,6 @@
 
+#include "config.h"
+
 #include <glib-object.h>
 #include "columntype.h"
 #include "columntype-size.h"
@@ -23,9 +25,9 @@ struct tv_col_data
     gchar   *property;
     gchar   *format;
     gchar   *format_tooltip;
-    guint8   digits     : 2;
-    guint8   long_unit  : 1;
-    guint8   is_size    : 1;
+    guint8   digits;
+    gboolean long_unit;
+    gboolean is_size;
 };
 
 enum comp
@@ -143,6 +145,11 @@ ct_size_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_size_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeSize, donna_column_type_size,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_size_columntype_init)
+        )
+
 static void
 donna_column_type_size_class_init (DonnaColumnTypeSizeClass *klass)
 {
@@ -161,17 +168,10 @@ donna_column_type_size_class_init (DonnaColumnTypeSizeClass *klass)
 static void
 donna_column_type_size_init (DonnaColumnTypeSize *ct)
 {
-    DonnaColumnTypeSizePrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_SIZE,
             DonnaColumnTypeSizePrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeSize, donna_column_type_size,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_size_columntype_init)
-        )
 
 static void
 ct_size_finalize (GObject *object)
@@ -280,12 +280,11 @@ ct_size_refresh_data (DonnaColumnType    *ct,
 
     i = donna_config_get_int_column (config, tv_name, col_name, arr_name,
             "size", "digits", 1, NULL);
-    /* we enforce this, because that's all we support (we can't stote more in
-     * data) and that's what makes sense */
-    i = MIN (MAX (0, i), 2);
+    /* we enforce [0,2] because it's what makes sense */
+    i = CLAMP (i, 0, 2);
     if (data->digits != i)
     {
-        data->digits = i;
+        data->digits = (guint8) i;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
@@ -333,7 +332,7 @@ format_size (guint64             size,
              gchar              *str,
              gsize               max)
 {
-    gssize len;
+    gsize len;
 
     len = donna_print_size (str, max, fmt, size, data->digits, data->long_unit);
     if (len >= max)
@@ -366,7 +365,6 @@ ct_size_render (DonnaColumnType    *ct,
     GValue value = G_VALUE_INIT;
     guint64 size;
     gchar buf[20], *b = buf;
-    gssize len;
 
     g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
 
@@ -427,7 +425,6 @@ ct_size_set_tooltip (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     guint64 size;
     gchar buf[20], *b = buf;
-    gssize len;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
 
@@ -669,6 +666,8 @@ compile_done:
         case COMP_IN_RANGE:
             return size >= fd->ref && size <= fd->ref2;
     }
+
+    g_return_val_if_reached (0);
 }
 
 static void
@@ -767,7 +766,7 @@ ct_size_set_option (DonnaColumnType    *ct,
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
-        data->digits = v;
+        data->digits = (guint8) v;
         return DONNA_COLUMNTYPE_NEED_REDRAW;
     }
     else if (streq (option, "property"))

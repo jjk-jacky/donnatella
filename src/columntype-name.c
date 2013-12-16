@@ -1,5 +1,6 @@
 
-#define _GNU_SOURCE             /* strchrnul() in string.h */
+#include "config.h"
+
 #include <glib-object.h>
 #include <string.h>
 #include "columntype.h"
@@ -24,10 +25,10 @@ enum
 struct tv_col_data
 {
     gchar               *collate_key;
-    guint                is_locale_based    : 1;
-    DonnaSortOptions     options            : 5;
+    gboolean             is_locale_based;
+    DonnaSortOptions     options;
     /* not used in strcmp_ext so included in DonnaSortOptions */
-    guint                sort_special_first : 1;
+    gboolean             sort_special_first;
 };
 
 struct _DonnaColumnTypeNamePrivate
@@ -152,6 +153,11 @@ ct_name_columntype_init (DonnaColumnTypeInterface *interface)
     interface->get_context_item_info    = ct_name_get_context_item_info;
 }
 
+G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeName, donna_column_type_name,
+        G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_name_columntype_init)
+        )
+
 static void
 donna_column_type_name_class_init (DonnaColumnTypeNameClass *klass)
 {
@@ -170,17 +176,10 @@ donna_column_type_name_class_init (DonnaColumnTypeNameClass *klass)
 static void
 donna_column_type_name_init (DonnaColumnTypeName *ct)
 {
-    DonnaColumnTypeNamePrivate *priv;
-
-    priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
+    ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
             DONNA_TYPE_COLUMNTYPE_NAME,
             DonnaColumnTypeNamePrivate);
 }
-
-G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeName, donna_column_type_name,
-        G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_name_columntype_init)
-        )
 
 static void
 ct_name_finalize (GObject *object)
@@ -247,7 +246,7 @@ ct_name_get_renderers (DonnaColumnType   *ct)
     else if (data->options & opt_name_upper)                                  \
     {                                                                         \
         need |= DONNA_COLUMNTYPE_NEED_RESORT;                                 \
-        data->options &= ~opt_name_upper;                                     \
+        data->options &= (DonnaSortOptions) ~opt_name_upper;                  \
     }
 
 static DonnaColumnTypeNeed
@@ -337,9 +336,9 @@ struct editing_data
     DonnaColumnTypeName *ctname;
     DonnaTreeView       *tree;
     DonnaNode           *node;
-    guint                editing_started_sid;
-    guint                editing_done_sid;
-    guint                key_press_event_sid;
+    gulong               editing_started_sid;
+    gulong               editing_done_sid;
+    gulong               key_press_event_sid;
 };
 
 static gboolean
@@ -388,7 +387,6 @@ editing_done_cb (GtkCellEditable *editable, struct editing_data *data)
     if (!canceled)
     {
         GError *err = NULL;
-        GValue value = G_VALUE_INIT;
 
         if (G_UNLIKELY (!GTK_IS_ENTRY (editable)))
         {
@@ -421,8 +419,8 @@ editing_started_cb (GtkCellRenderer     *renderer,
                     struct editing_data *data)
 {
     gchar *name;
-    gsize  len;
-    gsize  dot;
+    gint   len;
+    gint   dot;
     gchar *s;
 
     g_signal_handler_disconnect (renderer, data->editing_started_sid);
@@ -531,7 +529,6 @@ ct_name_render (DonnaColumnType    *ct,
     if (index == 1)
     {
         DonnaNodeHasValue has_value;
-        DonnaNodeType node_type;
         GIcon *icon;
 
         has_value = donna_node_get_icon (node, FALSE, &icon);
@@ -557,19 +554,19 @@ ct_name_render (DonnaColumnType    *ct,
             GPtrArray *arr;
 
             arr = g_ptr_array_sized_new (1);
-            g_ptr_array_add (arr, "icon");
+            g_ptr_array_add (arr, (gpointer) "icon");
             return arr;
         }
 
         if (donna_node_get_node_type (node) == DONNA_NODE_ITEM)
             g_object_set (renderer,
-                    "visible",  TRUE,
-                    "stock-id", GTK_STOCK_FILE,
+                    "visible",      TRUE,
+                    "icon-name",    "text-x-generic",
                     NULL);
         else /* DONNA_NODE_CONTAINER */
             g_object_set (renderer,
-                    "visible",  TRUE,
-                    "stock-id", GTK_STOCK_DIRECTORY,
+                    "visible",      TRUE,
+                    "icon-name",    "folder",
                     NULL);
     }
     else /* index == 2 */
@@ -745,14 +742,14 @@ ct_name_is_match_filter (DonnaColumnType    *ct,
                 if (s - filter < 255)
                 {
                     gchar buf[255];
-                    strncpy (buf, filter, s - filter);
+                    strncpy (buf, filter, (size_t) (s - filter));
                     buf[s - filter] = '\0';
                     g_ptr_array_add (arr, g_pattern_spec_new (buf));
                 }
                 else
                 {
                     gchar *b;
-                    b = g_strndup (filter, s - filter);
+                    b = g_strndup (filter, (gsize) (s - filter));
                     g_ptr_array_add (arr, g_pattern_spec_new (b));
                     g_free (b);
                 }
@@ -828,7 +825,7 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_NATURAL_ORDER;
         else
-            data->options &= ~DONNA_SORT_NATURAL_ORDER;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_NATURAL_ORDER;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
     else if (streq (option, "dot_first"))
@@ -845,7 +842,7 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_DOT_FIRST;
         else
-            data->options &= ~DONNA_SORT_DOT_FIRST;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_FIRST;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
     else if (streq (option, "locale_based"))
@@ -899,7 +896,7 @@ ct_name_set_option (DonnaColumnType    *ct,
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
         if (v)
-            data->options &= ~DONNA_SORT_CASE_INSENSITIVE;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_CASE_INSENSITIVE;
         else
             data->options |= DONNA_SORT_CASE_INSENSITIVE;
         return DONNA_COLUMNTYPE_NEED_RESORT;
@@ -918,7 +915,7 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_DOT_MIXED;
         else
-            data->options &= ~DONNA_SORT_DOT_MIXED;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_MIXED;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
     else if (streq (option, "ignore_spunct"))
@@ -935,7 +932,7 @@ ct_name_set_option (DonnaColumnType    *ct,
         if (v)
             data->options |= DONNA_SORT_IGNORE_SPUNCT;
         else
-            data->options &= ~DONNA_SORT_IGNORE_SPUNCT;
+            data->options &= (DonnaSortOptions) ~DONNA_SORT_IGNORE_SPUNCT;
         return DONNA_COLUMNTYPE_NEED_RESORT;
     }
 
