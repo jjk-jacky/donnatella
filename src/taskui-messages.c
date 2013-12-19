@@ -80,6 +80,7 @@ refresh_window_title (DonnaTaskUiMessages *tmsg)
 {
     DonnaTaskUiMessagesPrivate *priv = tmsg->priv;
     gtk_window_set_title ((GtkWindow *) priv->window, priv->title);
+    g_object_unref (tmsg);
     return G_SOURCE_REMOVE;
 }
 
@@ -94,7 +95,7 @@ tui_messages_take_title (DonnaTaskUi        *tui,
     priv->title = title;
     g_free (old);
     if (priv->window)
-        g_idle_add ((GSourceFunc) refresh_window_title, tui);
+        g_idle_add ((GSourceFunc) refresh_window_title, g_object_ref (tui));
 }
 
 static void
@@ -186,6 +187,7 @@ real_messages_add (struct message *m)
 
     if (m->is_heap)
     {
+        g_object_unref (m->tmsg);
         g_free (m->message);
         g_free (m);
     }
@@ -212,7 +214,7 @@ donna_task_ui_messages_add (DonnaTaskUiMessages    *tui,
     {
         struct message *m;
         m = g_new (struct message, 1);
-        m->tmsg = tui;
+        m->tmsg = g_object_ref (tui);
         m->level = level;
         m->message = g_strdup (message);
         m->is_heap = TRUE;
