@@ -748,16 +748,18 @@ provider_base_io_task (DonnaProvider       *provider,
     set_task_visibility (task, provider, io);
 
     DONNA_DEBUG (TASK, NULL,
-            gchar *fl = donna_node_get_full_location (dest);
+            gchar *fl = (dest) ? donna_node_get_full_location (dest) : NULL;
             donna_task_take_desc (task, g_strdup_printf (
-                    "io() %s (from %s as %s) with %d sources to '%s'",
+                    "io() %s (from %s as %s) with %d sources%s%s%s",
                     (type == DONNA_IO_COPY) ? "copy" :
                     (type == DONNA_IO_MOVE) ? "move" :
                     (type == DONNA_IO_DELETE) ? "delete" : "unknown",
                     donna_provider_get_domain (provider),
                     (is_source) ? "source" : "dest",
                     sources->len,
-                    fl));
+                    (fl) ? "to '" : "",
+                    (fl) ? fl : "",
+                    (fl) ? "'" : ""));
             g_free (fl));
 
     return task;
