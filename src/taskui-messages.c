@@ -69,6 +69,7 @@ tui_messages_finalize (GObject *object)
     g_free (priv->title);
     if (priv->window)
         gtk_widget_destroy (priv->window);
+    g_object_unref (priv->buffer);
 
     /* chain up */
     G_OBJECT_CLASS (donna_task_ui_messages_parent_class)->finalize (object);
