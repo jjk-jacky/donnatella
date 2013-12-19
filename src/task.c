@@ -451,6 +451,13 @@ donna_task_init (DonnaTask *task)
     g_cond_init (&priv->cond);
 }
 
+static gboolean
+unref_taskui (DonnaTaskUi *tui)
+{
+    g_object_unref (tui);
+    return G_SOURCE_REMOVE;
+}
+
 static void
 donna_task_finalize (GObject *object)
 {
@@ -490,7 +497,17 @@ donna_task_finalize (GObject *object)
         priv->duplicate_destroy (priv->duplicate_data);
 
     if (priv->taskui)
-        g_object_unref (priv->taskui);
+        /* because the taskui, as its name implies, is probably dealing with UI
+         * element, it might need to free/destroy them. If we just unref the
+         * taskui here (i.e. possibly from a thread) all taskui would have to
+         * make sure to do their calls to e.g. gtk_widget_destroy() back in the
+         * main thread UI, all that from their finalize... i.e. it's a
+         * complicated mess.
+         * Much simpler: we'll do our unref of the taskui from the main thread,
+         * thus they can do things directly. (This obviously also implies anyone
+         * else having ref-ed the taskui shall only ever unref it from thread UI
+         * as well, but that is indeed the idea.) */
+        g_idle_add ((GSourceFunc) unref_taskui, priv->taskui);
 
     G_OBJECT_CLASS (donna_task_parent_class)->finalize (object);
 }

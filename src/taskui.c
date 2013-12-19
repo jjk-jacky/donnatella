@@ -4,6 +4,8 @@
 #include <glib-object.h>
 #include "taskui.h"
 
+/* Note: always unref taskui from main thread UI only */
+
 G_DEFINE_INTERFACE (DonnaTaskUi, donna_taskui, G_TYPE_OBJECT)
 
 static void
