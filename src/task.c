@@ -25,10 +25,11 @@
  * also allow to pause/abort said operation.
  *
  * Either way, this is done using #DonnaTask objects. A task represents an
- * operation to be ran, preferably not in the main thread. The #DonnApp object
+ * operation to be ran, preferably not in the main thread. The #DonnaApp object
  * provides donna_app_run_task() to automatically run the task in another
- * thread for "internal" ones, while #DonnaTaskManager will handle "public" ones
- * (and take care of calling donna_app_run_task() when needed).
+ * thread for "internal" ones, or hand them over to the #DonnaTaskManager for
+ * "public" ones (which will handle starting/pausing them automatically, as well
+ * as providing user interface for pausing/cancelling them).
  *
  * Object will provide functions ending in _task to indicate they will simply
  * return a #DonnaTask to actually perform the operation. Parf of the API is
@@ -62,12 +63,12 @@
  * - donna_task_set_devices() to set the list of devices involved in the task.
  *   This is to be used by #DonnaTaskManager to determine if multiple tasks can
  *   be run at the same time.
- * - donna_task_set_visibility() to set the ::visibility property of the task.
- *   An internal task (%DONNA_TASK_VISIBILITY_INTERNAL) will be directly run
- *   in a dedicated thread by donna_app_run_task(), whereas a public task
- *   (%DONNA_TASK_VISIBILITY_PULIC) will be added to #DonnaTaskManager (in
- *   charge of starting the task as soon as possible; they also run in a
- *   dedicated thread).
+ * - donna_task_set_visibility() to set the #DonnaTask:visibility property of
+ *   the task.  An internal task (%DONNA_TASK_VISIBILITY_INTERNAL) will be
+ *   directly run in a dedicated thread by donna_app_run_task(), whereas a
+ *   public task (%DONNA_TASK_VISIBILITY_PULIC) will be added to
+ *   #DonnaTaskManager (in charge of starting the task as soon as possible; they
+ *   also run in a dedicated thread).
  *   Internal GUI tasks (%DONNA_TASK_VISIBILITY_INTERNAL_GUI) require to be run
  *   in the main thread, as they need to use GTK+ functions; Fast internal ones
  *   (%DONNA_TASK_VISIBILITY_INTERNAL_FAST) are guaranteed to be fast/not block
@@ -321,8 +322,8 @@ donna_task_class_init (DonnaTaskClass *klass)
     /**
      * DonnaTask:pulse:
      *
-     * The current value for the pulsating progress, when ::progress cannot be
-     * used/known. This is meant to be used as property pulse of a
+     * The current value for the pulsating progress, when #DonnaTask:progress
+     * cannot be used/known. This is meant to be used as property pulse of a
      * #GtkCellRendererProgress (e.g. #DonnaColumnTypeProgress)
      */
     donna_task_props[PROP_PULSE] =
@@ -338,8 +339,8 @@ donna_task_class_init (DonnaTaskClass *klass)
      * State of the task, one of #DonnaTaskState
      * Note that %DONNA_TASK_PAUSING and %DONNA_TASK_CANCELLING are "internal"
      * states that should only be briefly used, between the moment
-     * donna_task_paused()/donna_task_cancel() was called, and the worker
-     * acknowledged it. As such, no signal #DonnaTask::notify will be triggered
+     * donna_task_pause()/donna_task_cancel() was called, and the worker
+     * acknowledged it. As such, no signal #GObject::notify will be triggered
      * for those states.
      *
      * You can easily determine if the task has been started, or had already
@@ -412,7 +413,7 @@ donna_task_class_init (DonnaTaskClass *klass)
      * the caller of the task. For example, a task from a #DonnaProvider to get
      * a #DonnaNode for a location will set the node as retun value.
      *
-     * Like #DonnaTask::error the #GValue is owned by the task and should not be
+     * Like #DonnaTask:error the #GValue is owned by the task and should not be
      * unset.
      *
      * Returns: (transfer none): Task-owned #GValue
@@ -629,7 +630,7 @@ notify_prop (DonnaTask *task, gint prop_id)
  * This must be used when you need to create/return a task, so the requested
  * operation can be run in a separate thread.
  *
- * Returns: (transfer float): New floating #DonnaTask
+ * Returns: (transfer floating): New floating #DonnaTask
  */
 DonnaTask *
 donna_task_new (task_fn             func,
@@ -666,7 +667,7 @@ donna_task_new (task_fn             func,
  * Create a task while setting a few more properties than donna_task_new() See
  * description of those properties for more.
  *
- * Returns: (transfer float): New floating #DonnaTask
+ * Returns: (transfer floating): New floating #DonnaTask
  */
 DonnaTask *
 donna_task_new_full (task_fn             func,
@@ -714,9 +715,9 @@ donna_task_new_full (task_fn             func,
  * This is only needed if you created a #DonnaTask using g_object_new(), which
  * you really have no reason to do when donna_task_new() exists.
  *
- * This function is only intended to be used for object extending #DonnaClass,
- * so they can still set the worker of the task. It cannot be used to change a
- * task's worker.
+ * This function is only intended to be used for object extending
+ * #DonnaTaskClass, so they can still set the worker of the task. It should not
+ * be used to try to change a task's worker.
  *
  * Returns: Whether or not the worker was set to @task
  */
@@ -729,8 +730,8 @@ donna_task_set_worker (DonnaTask          *task,
     DonnaTaskPrivate *priv;
 
     g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
-    g_return_val_if_fail (func != NULL, NULL);
-    g_return_val_if_fail (task->priv->task_fn == NULL, NULL);
+    g_return_val_if_fail (func != NULL, FALSE);
+    g_return_val_if_fail (task->priv->task_fn == NULL, FALSE);
 
     priv = task->priv;
 
@@ -743,7 +744,7 @@ donna_task_set_worker (DonnaTask          *task,
 
 /**
  * donna_task_set_taskui:
- * @task: Task to set the ::taskui for
+ * @task: Task to set the #DonnaTask:taskui for
  * @taskui: #DonnaTaskUi to assign to the task
  *
  * This should only be used by the task creator, after a donna_task_new()
@@ -764,7 +765,7 @@ donna_task_set_taskui (DonnaTask *task, DonnaTaskUi *taskui)
 
 /**
  * donna_task_set_devices:
- * @task; Task to set ::devices for
+ * @task: Task to set #DonnaTask:devices for
  * @devices: (element-type gchar *): List of devices involved
  *
  * This should only be used by the task creator, after a donna_task_new()
@@ -845,7 +846,7 @@ donna_task_set_duplicator (DonnaTask        *task,
 /**
  * donna_task_set_desc:
  * @task: Task to set description for
- * @desc: String to be duplicated into ::desc
+ * @desc: String to be duplicated into #DonnaTask:desc
  *
  * Set the task's description. This should be used by the task's creator; If you
  * want to add something to the description (as caller of a *_task() function),
@@ -878,7 +879,7 @@ donna_task_set_desc (DonnaTask *task, const gchar *desc)
 /**
  * donna_task_take_desc:
  * @task: Task to set description for
- * @desc: String to be put into ::desc
+ * @desc: String to be put into #DonnaTask:desc
  *
  * Set the task's description to @desc, which will be freed (using g_free())
  * when not needed anymore by the task. This should be used by the task's
@@ -912,12 +913,12 @@ donna_task_take_desc (DonnaTask *task, gchar *desc)
 /**
  * donna_task_prefix_desc:
  * @task: Task to prefix the description of
- * @prefix: String to prefix into @task's ::desc
+ * @prefix: String to prefix into @task's #DonnaTask:desc
  *
  * Will add @prefix into the task's current description. This can be useful for
  * the caller of *_task() function, to add more precision to what the task is.
  *
- * Returns: Whether @prefix was added to @task's ::desc
+ * Returns: Whether @prefix was added to @task's #DonnaTask:desc
  */
 gboolean
 donna_task_prefix_desc (DonnaTask *task, const gchar *prefix)
@@ -1000,14 +1001,14 @@ donna_task_set_callback (DonnaTask       *task,
  * @data: User-data for @timeout
  * @destroy: Function called to free @data if the timeout isn't called
  *
- * Sets the timeout to be called in the mian thread @delay ms after the task
- * started, unless it's done. This can be useful (esp. for internal tasks) to
+ * Sets the timeout to be called in the main thread @delay ms after the task
+ * has been prepared (i.e. donna_task_prepare() was called - which will usually
+ * be called by donna_app_run_task() right away), unless it's already in
+ * %DONNA_TASK_POST_RUN state. This can be useful (esp. for internal tasks) to
  * provide some feedback to the user.
  * If the task is finalized without having ran or it ended before @delay ms,
  * @destroy will be called to free the memory associated with @data, else it's
  * the responsibility of @timeout to do it.
- *
- * FIXME: option for default for @delay
  *
  * This function should only be called once, as a task can only have one
  * timeout.
@@ -1038,6 +1039,7 @@ donna_task_set_timeout (DonnaTask       *task,
  * @task: Task to wait for execution to be over
  * @current_task: (allow-none): Current task (i.e. caller must be
  * @current_task's worker)
+ * @error: (allow-none): Return location for a #GError
  *
  * This will return only if @task has already finished its execution, or wait
  * until it has before returning; See donna_task_get_wait_fd() for more.
@@ -1066,24 +1068,24 @@ donna_task_set_timeout (DonnaTask       *task,
  *
  * %FALSE will be returned in case of error, e.g. donna_task_get_wait_fd()
  * returned -1.
- * Note that it will return %TRUE regardless of the ::state of @task; and that
- * it could return %FALSE while @task is in %DONNA_TASK_POST_RUN state, if again
- * getting the waiting fd failed. (I.e. you should always check @task's state
- * afterwards, regardless of the return value).
+ * Note that it will return %TRUE regardless of the #DonnaTask:state of @task;
+ * and that it could return %FALSE while @task is in %DONNA_TASK_POST_RUN state,
+ * if again getting the waiting fd failed. (I.e. you should always check @task's
+ * state afterwards, regardless of the return value).
  *
  * Don't forget to reference @task before starting the task & calling this
  * function. E.g. typically one would do:
- * <program>
+ * <programlisting>
  * donna_app_run_task (app, g_object_ref (task));
  * donna_task_wait_for_it (task, current_task);
  * // check donna_task_get_state (task) ...
  * g_object_unref (task);
- * </program>
+ * </programlisting>
  * An easier alternative is to call donna_app_run_task_and_wait() which does
  * exactly that, but will also switch @task visibility from
  * %DONNA_TASK_VISIBILITY_INTERNAL to %DONNA_TASK_VISIBILITY_INTERNAL_FAST in
  * order to make it run in the same thread as @current_task (You still need to
- * add a reference on @task before calling it), though.
+ * add a reference on @task before calling it, though).
  *
  * If you need to wait for the task to complete as well as some other event, you
  * can use donna_task_get_wait_fd() to get the file descriptor to use.
@@ -1270,7 +1272,7 @@ donna_task_can_be_duplicated (DonnaTask *task)
 /**
  * donna_task_get_duplicate:
  * @task: Task to duplicate
- * @error: (allow none): Return location for a GError, or %NULL
+ * @error: (allow-none): Return location for a GError, or %NULL
  *
  * A task can only be run once, and there is no possibility or re-starting it
  * after it ran (regardless or why it stopped, e.g. failure, cancellation, etc)
@@ -1300,7 +1302,7 @@ donna_task_get_duplicate (DonnaTask *task, GError **error)
  * donna_task_get_state:
  * @task: Task to get the state of
  *
- * Helper function to get the ::state property of @task
+ * Helper function to get the #DonnaTask:state property of @task
  *
  * Returns: Current #DonnaTaskState of @task
  */
@@ -1315,7 +1317,7 @@ donna_task_get_state (DonnaTask *task)
  * donna_task_get_desc:
  * @task: Task to get the description of
  *
- * Helper function to get the ::desc property of @task
+ * Helper function to get the #DonnaTask:desc property of @task
  *
  * Returns: Current description of @task (if any)
  */
@@ -1330,7 +1332,7 @@ donna_task_get_desc (DonnaTask *task)
  * donna_task_get_error:
  * @task: Task to get the error from
  *
- * Helper function to get the ::error property of @task
+ * Helper function to get the #DonnaTask:error property of @task
  * The #GError returned remains owned by @task and should not be freed.
  *
  * Returns: (transfer none): Task-owned #GError
@@ -1346,7 +1348,7 @@ donna_task_get_error (DonnaTask *task)
  * donna_task_get_return_value:
  * @task: Task to get the return value from
  *
- * Helper function to get the ::return-value property of @task
+ * Helper function to get the #DonnaTask:return-value property of @task
  * The #GValue returned remains owned by @task and should not be unset.
  *
  * Returns: (transfer none): Task-owned #GValue
@@ -1447,7 +1449,7 @@ callback_cb (gpointer data)
  * useful for cases where a task is created, but might not ran instantly, e.g.
  * because the thread pool might be full.
  *
- * This ensures the timeout works as expected by installing it ASAP. This should
+ * This ensures the timeout works as expected by installing it ASAP. This will
  * be called by app/task manager when they get a new task.
  * Note that donna_task_run() will still install the timeout if there was no
  * call to donna_task_prepare()
@@ -1604,19 +1606,19 @@ donna_task_run (DonnaTask *task)
  * @task: Task to set autostart on
  * @autostart: whether to enable or disable autostart
  *
- * When set, tasks have their ::state set to %DONNA_TASK_WAITING so the task
+ * When set, tasks have their #DonnaTask:state set to %DONNA_TASK_WAITING so the task
  * manager can start them as soon as possible; otherwise it's set to
  * %DONNA_TASK_STOPPED and a manual intervention is required.
  *
- * This will return %TRUE is @task's property ::state either was already set as
+ * This will return %TRUE is @task's property #DonnaTask:state either was already set as
  * needed, or was just changed, which can only happen if the previous value
- * of ::state was either %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED.
+ * of #DonnaTask:state was either %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED.
  * Else, %FALSE will be returned.
  *
  * Note that autostart is a feature that only applies to task handled by the
- * task manager, i.e. with a ::visibility of %DONNA_TASK_VISIBILITY_PULIC
+ * task manager, i.e. with a #DonnaTask:visibility of %DONNA_TASK_VISIBILITY_PULIC
  *
- * Returns: %TRUE if @task's ::state was (just/already) set to
+ * Returns: %TRUE if @task's #DonnaTask:state was (just/already) set to
  * %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED (based on @autostart)
  */
 gboolean
@@ -1668,8 +1670,8 @@ donna_task_set_autostart (DonnaTask          *task,
  * before the request is taken into account (a worker might even ignore it
  * completely).
  * If you need to know if/when the task gets actually paused, watch the task's
- * property ::state, which will be set to %DONNA_TASK_PAUSED once the worker is
- * paused.
+ * property #DonnaTask:state, which will be set to %DONNA_TASK_PAUSED once the
+ * worker is paused.
  *
  * This has no effect if the task isn't running (%DONNA_TASK_RUNNING)
  */
@@ -1753,8 +1755,8 @@ donna_task_resume (DonnaTask *task)
  * before the request is taken into account (a worker might even ignore it
  * completely).
  * If you need to know if/when the task gets actually cancelled, watch the task's
- * property ::state Note that it might not be set to %DONNA_TASK_CANCELLED (e.g.
- * if the task was already completed)
+ * property #DonnaTask:state Note that it might not be set to
+ * %DONNA_TASK_CANCELLED (e.g.  if the task was already completed)
  *
  * It is also possible to cancel a task that hasn't yet started, i.e. still
  * %DONNA_TASK_WAITING or %DONNA_TASK_STOPPED.
@@ -1943,22 +1945,25 @@ donna_task_is_cancelling (DonnaTask *task)
  * donna_task_update:
  * @task: Task to update
  * @update: What will be updated
- * @progress: new value for ::progress
- * @status_fmt: format for a printf-like new value of ::status
+ * @progress: new value for #DonnaTask:progress
+ * @status_fmt: format for a printf-like new value of #DonnaTask:status
+ * @...: printf()-like arguments (if any)
  *
  * This function should only be called by the task's worker, to set a new
- * ::progress/::pulse and/or ::status on @task. The corresponding ::notify
- * signals will be triggered accordingly.
+ * #DonnaTask:progress/#DonnaTask:pulse and/or #DonnaTask:status on @task. The
+ * corresponding #GObject::notify signals will be triggered accordingly.
  *
  * If @update has #DONNA_TASK_UPDATE_PROGRESS set then @progress will be the new
- * value of ::progress; if #DONNA_TASK_UPDATE_PROGRESS_PULSE is set then the
- * current value of ::pulse will be incremented; if #DONNA_TASK_UPDATE_STATUS is
- * set then @status_fmt will be used to set the new ::status
+ * value of #DonnaTask:progress; if #DONNA_TASK_UPDATE_PROGRESS_PULSE is set
+ * then the current value of #DonnaTask:pulse will be incremented; if
+ * #DONNA_TASK_UPDATE_STATUS is set then @status_fmt will be used to set the new
+ * #DonnaTask:status
  *
- * If #DONNA_TASK_UPDATE_PROGRESS is set, ::pulse will not be updated. Else, if
- * #DONNA_TASK_UPDATE_PROGRESS_PULSE is set and @progress is less than zero,
- * ::pulse is set to -1, else it is incremented (or reset to 1 if #G_MAXINT
- * would have been reached) and ::progress is set to -1 (if it isn't already).
+ * If #DONNA_TASK_UPDATE_PROGRESS is set, #DonnaTask:pulse will not be updated.
+ * Else, if #DONNA_TASK_UPDATE_PROGRESS_PULSE is set and @progress is less than
+ * zero, #DonnaTask:pulse is set to -1, else it is incremented (or reset to 1 if
+ * #G_MAXINT would have been reached) and #DonnaTask:progress is set to -1 (if
+ * it isn't already).
  */
 void
 donna_task_update (DonnaTask        *task,
@@ -2020,11 +2025,12 @@ donna_task_update (DonnaTask        *task,
  * @task: Task to set the error of
  * @domain: Domain of the error
  * @code: Code of the error
- * @format: printf-like error message
+ * @format: printf()-like error message format
+ * @...: printf()-like arguments
  *
  * This function should only be called by the task's worker.
  *
- * Sets the ::error property for @task
+ * Sets the #DonnaTask:error property for @task
  */
 void
 donna_task_set_error (DonnaTask     *task,
@@ -2055,11 +2061,11 @@ donna_task_set_error (DonnaTask     *task,
 /**
  * donna_task_take_error:
  * @task: Task to set the error of
- * @error: (transfer full): #GError to be used as ::error on @task
+ * @error: (transfer full): #GError to be used as #DonnaTask:error on @task
  *
  * This function should only be called by the task's worker.
- * @error will be used as new value for the ::error property. It will be freed
- * when @task is finalized.
+ * @error will be used as new value for the #DonnaTask:error property. It will
+ * be freed when @task is finalized.
  */
 void
 donna_task_take_error (DonnaTask *task,
@@ -2087,10 +2093,10 @@ donna_task_take_error (DonnaTask *task,
  * @value: #GValue containing the value to be copied
  *
  * This function should only be called by the task's worker.
- * The ::retrun-value property of @task will be set to a copy of the value held
- * inside @value
+ * The #DonnaTask:return-value property of @task will be set to a copy of the
+ * value held inside @value
  * If you want to directly set the value into @task's #GValue for
- * ::return-value, see donna_task_grab_return_value() and
+ * #DonnaTask:return-value, see donna_task_grab_return_value() and
  * donna_task_release_return_value()
  */
 void
@@ -2122,8 +2128,8 @@ donna_task_set_return_value (DonnaTask      *task,
  * @task: Task to get the return value of
  *
  * This function should only be called by the task's worker.
- * It will return the #GValue used as to hold the ::return-value property, so
- * you can directly call g_value_init/g_value_set functions on it.
+ * It will return the #GValue used as to hold the #DonnaTask:return-value
+ * property, so you can directly call g_value_init/g_value_set functions on it.
  *
  * It is important to only do this and call donna_task_release_return_value()
  * right after, a the task remains locked during that time, and attempting to do
