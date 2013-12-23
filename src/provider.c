@@ -9,6 +9,28 @@
 #include "closures.h"
 #include "macros.h"
 
+/**
+ * SECTION:provider
+ * @Short_description: Provider of a domain, handling its nodes
+ * @See_also: #DonnaNode, #DonnaTask, #DonnaProviderBase
+ *
+ * In donnatella exists a notion of domain, each domain being handled by its
+ * #DonnaProvider. A domain is an abstraction level, allowing interactions -
+ * such as #DonnaTreeView browsing - without the need to know about the
+ * inner-workings of said domain.
+ *
+ * The most common/obvious domain is "fs" which represents the filesystem.
+ * Others can include virtual ones such as "config" for the current
+ * configuration, or interfaces to features, e.g. "register" for registers.
+ *
+ * A provider will create the #DonnaNode<!-- -->s representing containers/items
+ * of the domain, handling refreshing/setting its properties, as well as tasks
+ * for IO operations.
+ *
+ * It is also where signals will be emitted, so it is only needed to connect one
+ * single handler (on the provider) for all nodes of the domain.
+ */
+
 enum
 {
     NEW_NODE,
@@ -27,6 +49,17 @@ G_DEFINE_INTERFACE (DonnaProvider, donna_provider, G_TYPE_OBJECT)
 static void
 donna_provider_default_init (DonnaProviderInterface *interface)
 {
+    /**
+     * DonnaProvider::new-node:
+     * @provider: the #DonnaProvider of @node
+     * @node: The #DonnaNode just created
+     *
+     * This signal is emitted when a new node is created by the provider, to
+     * allow adding new properties to the node.
+     *
+     * It doesn't mean the item/container represented by the node was just
+     * created, this is handled via #DonnaProvider::node-new-child
+     */
     donna_provider_signals[NEW_NODE] =
         g_signal_new ("new-node",
             DONNA_TYPE_PROVIDER,
@@ -38,6 +71,17 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             G_TYPE_NONE,
             1,
             DONNA_TYPE_NODE);
+    /**
+     * DonnaProvider::node-updated:
+     * @provider: the #DonnaProvider of @node
+     * @node: The #DonnaNode on which property was updated
+     * @property: The name of the property that was updated
+     *
+     * This is the equivalent of the #GObject::notify signal on #GObject and
+     * similarily, it has a details set to the property's name; So one can
+     * connect to "node-updated::name" to only have the handler called when
+     * property "name" was updated.
+     */
     donna_provider_signals[NODE_UPDATED] =
         g_signal_new ("node-updated",
             DONNA_TYPE_PROVIDER,
@@ -50,6 +94,19 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             2,
             DONNA_TYPE_NODE,
             G_TYPE_STRING);
+    /**
+     * DonnaProvider::node-deleted:
+     * @provider: the #DonnaProvider of @node
+     * @node: The #DonnaNode that was just deleted
+     *
+     * The object behind @node was deleted, which also means that any & all
+     * references taken on @node must be released. Much like #GtkWidget::destroy
+     * for #GtkWidget, after the signal emission @node should be finalized.
+     *
+     * If it wasn't the case, the node will be "moved" to provider "invalid"
+     * and trying to use it would only fail, since it represents a non-existing
+     * item/container.
+     */
     donna_provider_signals[NODE_DELETED] =
         g_signal_new ("node-deleted",
             DONNA_TYPE_PROVIDER,
@@ -61,6 +118,17 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             G_TYPE_NONE,
             1,
             DONNA_TYPE_NODE);
+    /**
+     * DonnaProvider::node-children:
+     * @provider: the #DonnaProvider of @node
+     * @node: The #DonnaNode for which children were just listed
+     * @node_types: The #DonnaNodeType<!-- -->s of the children listed
+     * @nodes: (element-type DonnaNode): A #GPtrArray of #DonnaNode
+     *
+     * When children of a node are listed, this signal is emitted. It is
+     * important to note that this doesn't mean all children are listed in
+     * @nodes, but only those of @node_types
+     */
     donna_provider_signals[NODE_CHILDREN] =
         g_signal_new ("node-children",
             DONNA_TYPE_PROVIDER,
@@ -74,6 +142,17 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             DONNA_TYPE_NODE,
             G_TYPE_UINT,
             G_TYPE_PTR_ARRAY);
+    /**
+     * DonnaProvider::node-new-child:
+     * @provider: the #DonnaProvider of @node
+     * @node: The #DonnaNode for which a new child was just created
+     * @child: The newly-created child of @node
+     *
+     * This signal is emitted when a new child was created in @node. This could
+     * be the result of an internal creation, or the provider was made aware of
+     * it either as result of a task to get children, or via some auto-refresh
+     * mechanism.
+     */
     donna_provider_signals[NODE_NEW_CHILD] =
         g_signal_new ("node-new-child",
             DONNA_TYPE_PROVIDER,
@@ -86,6 +165,16 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             2,
             DONNA_TYPE_NODE,
             DONNA_TYPE_NODE);
+    /**
+     * DonnaProvider::node-removed-from:
+     * @provider: the #DonnaProvider of @parent
+     * @node: The #DonnaNode that was removed/deleted
+     * @parent: The #DonnaNode from where @node was removed
+     *
+     * This signal is emitted when @node is removed from @parent, but @node was
+     * not deleted. This applies to non-flat domains, e.g. when a node is
+     * removed from a register.
+     */
     donna_provider_signals[NODE_REMOVED_FROM] =
         g_signal_new ("node-removed-from",
             DONNA_TYPE_PROVIDER,
@@ -99,6 +188,11 @@ donna_provider_default_init (DonnaProviderInterface *interface)
             DONNA_TYPE_NODE,
             DONNA_TYPE_NODE);
 
+    /**
+     * DonnaProvider:app:
+     *
+     * The #DonnaApp object
+     */
     g_object_interface_install_property (interface,
             g_param_spec_object ("app", "app", "Application",
                 DONNA_TYPE_APP,
@@ -107,6 +201,13 @@ donna_provider_default_init (DonnaProviderInterface *interface)
 
 /* signals */
 
+/**
+ * donna_provider_new_node:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode just created
+ *
+ * Emits signal #DonnaProvider::new-node on @provider
+ */
 void
 donna_provider_new_node (DonnaProvider  *provider,
                          DonnaNode      *node)
@@ -117,6 +218,14 @@ donna_provider_new_node (DonnaProvider  *provider,
     g_signal_emit (provider, donna_provider_signals[NEW_NODE], 0, node);
 }
 
+/**
+ * donna_provider_node_updated:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode on which property @name was updated
+ * @name: The name of the updated property
+ *
+ * Emits signal #DonnaProvider::node-updated on @provider
+ */
 void
 donna_provider_node_updated (DonnaProvider  *provider,
                              DonnaNode      *node,
@@ -170,6 +279,22 @@ done:
     return FALSE;
 }
 
+/**
+ * donna_provider_node_deleted:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode that was deleted
+ *
+ * Emits the signal #DonnaProvider::node-deleted on @provider
+ *
+ * This will also ensures that there are no more references on @node after the
+ * emission, so that @node can be finalized as expected. If that isn't the case,
+ * and to make sure @provider doesn't keep @node around, it will automatically
+ * be "transfered" to provider "invalid" by calling donna_node_mark_invalid() on
+ * @node after the provider's implementation of unref_node<!-- -->() was called.
+ *
+ * This allows providers not have to worry about it, even when they have a
+ * toggle_ref on @node as well as keeping it in their internal hashmap.
+ */
 void
 donna_provider_node_deleted (DonnaProvider  *provider,
                              DonnaNode      *node)
@@ -181,6 +306,16 @@ donna_provider_node_deleted (DonnaProvider  *provider,
     g_idle_add ((GSourceFunc) post_node_deleted, g_object_ref (node));
 }
 
+/**
+ * donna_provider_node_children:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode to which @children belong
+ * @node_types: The #DonnaNodeType<!-- -->s of children in @children
+ * @children: (element-type DonnaNode): A #GPtrArray of all children of @node
+ * of type @node_types only
+ *
+ * Emits the signal #DonnaProvider::node-children on @provider
+ */
 void
 donna_provider_node_children (DonnaProvider  *provider,
                               DonnaNode      *node,
@@ -195,6 +330,14 @@ donna_provider_node_children (DonnaProvider  *provider,
             node, node_types, children);
 }
 
+/**
+ * donna_provider_node_new_child:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode parent of @child
+ * @child: The newly-created child of @node
+ *
+ * Emits signal #DonnaProvider::node-new-child on @provider
+ */
 void
 donna_provider_node_new_child (DonnaProvider  *provider,
                                DonnaNode      *node,
@@ -208,6 +351,14 @@ donna_provider_node_new_child (DonnaProvider  *provider,
             node, child);
 }
 
+/**
+ * donna_provider_node_removed_from:
+ * @provider: The #DonnaProvider of @source
+ * @node: The #DonnaNode that was removed from @source
+ * @source: The #DonnaNode from where @node was removed
+ *
+ * Emits signal #DonnaProvider::node-removed-from on @provider
+ */
 void
 donna_provider_node_removed_from (DonnaProvider  *provider,
                                   DonnaNode      *node,
@@ -224,6 +375,12 @@ donna_provider_node_removed_from (DonnaProvider  *provider,
 
 /* API */
 
+/**
+ * donna_provider_get_domain:
+ * @provider: A #DonnaProvider
+ *
+ * Return the domain of @provider
+ */
 const gchar *
 donna_provider_get_domain (DonnaProvider  *provider)
 {
@@ -239,6 +396,12 @@ donna_provider_get_domain (DonnaProvider  *provider)
     return (*interface->get_domain) (provider);
 }
 
+/**
+ * donna_provider_get_flags:
+ * @provider: A #DonnaProvider
+ *
+ * Return the #DonnaProviderFlags for @provider
+ */
 DonnaProviderFlags
 donna_provider_get_flags (DonnaProvider *provider)
 {
@@ -254,6 +417,30 @@ donna_provider_get_flags (DonnaProvider *provider)
     return (*interface->get_flags) (provider);
 }
 
+/**
+ * donna_provider_get_node:
+ * @provider: A #DonnaProvider
+ * @location: The location of the #DonnaNode wanted
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * This will return the #DonnaNode for @location. If the node already existed or
+ * the provider could create it right away, the node is returned right away.
+ *
+ * However, if the node didn't yet exist and the provider might block (e.g. for
+ * "fs" where filesystem calls (i.e. IO operations) are required), then:
+ * - if in the main/UI thread, a #DonnaTask will be run while a new #GMainLoop
+ *   is created while waiting for it
+ * - else, the #DonnaTask is simply run blockingly
+ *
+ * This is important to remember when calling from the main/UI thread, since a
+ * new main loop might have run for a little bit, and events/signals might have
+ * been processed as a result.
+ *
+ * Note that you can also use helper donna_app_get_node() if you don't have the
+ * #DonnaProvider but a full-location instead.
+ *
+ * Returns: The #DonnaNode for @location, or %NULL
+ */
 DonnaNode *
 donna_provider_get_node (DonnaProvider    *provider,
                          const gchar      *location,
@@ -360,6 +547,21 @@ donna_provider_get_node (DonnaProvider    *provider,
     return (DonnaNode *) ret;
 }
 
+/**
+ * donna_provider_has_node_children_task:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode to get children from
+ * @node_types: The #DonnaNodeType<!-- -->s of children to get
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Creates a task that will check if @node has at least one child (of type
+ * @node_types), and put a #gboolean as #DonnaTask:return-value
+ *
+ * Note that you can also use helper donna_node_has_children_task() if you have
+ * @node but not its provider.
+ *
+ * Returns: (transfer floating): A #DonnaTask to get the children
+ */
 DonnaTask *
 donna_provider_has_node_children_task (DonnaProvider  *provider,
                                        DonnaNode      *node,
@@ -383,6 +585,21 @@ donna_provider_has_node_children_task (DonnaProvider  *provider,
     return (*interface->has_node_children_task) (provider, node, node_types, error);
 }
 
+/**
+ * donna_provider_get_node_children_task:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode to get children from
+ * @node_types: The #DonnaNodeType<!-- -->s of children to get
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Creates a task that will get the children (of type @node_types only) and
+ * put them in a #GPtrArray as #DonnaTask:return-value
+ *
+ * Note that you can also use helper donna_node_get_children_task() if you have
+ * @node but not its provider.
+ *
+ * Returns: (transfer floating): A #DonnaTask to get the children
+ */
 DonnaTask *
 donna_provider_get_node_children_task (DonnaProvider  *provider,
                                        DonnaNode      *node,
@@ -406,6 +623,21 @@ donna_provider_get_node_children_task (DonnaProvider  *provider,
     return (*interface->get_node_children_task) (provider, node, node_types, error);
 }
 
+/**
+ * donna_provider_trigger_node_task:
+ * @provider: The #DonnaProvider of @node
+ * @node: The #DonnaNode to trigger (must be a %DONNA_NODE_ITEM)
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Create a task that will trigger @node -- what this actually means depends not
+ * only on the node, but also the domain; E.g. in "fs" this will mean
+ * execute/open the file.
+ *
+ * Note that you can also use helper donna_node_trigger_task() if you have
+ * @node but not its provider.
+ *
+ * Returns: (transfer floating): A #DonnaTask to trigger @node
+ */
 DonnaTask *
 donna_provider_trigger_node_task (DonnaProvider  *provider,
                                   DonnaNode      *node,
@@ -437,6 +669,36 @@ donna_provider_trigger_node_task (DonnaProvider  *provider,
     return (*interface->trigger_node_task) (provider, node, error);
 }
 
+/**
+ * donna_provider_io_task:
+ * @provider: A #DonnaProvider
+ * @type: The type of IO operation to perform
+ * @is_source: Whether @provider is provider of @sources, or @dest
+ * @sources: (element-type DonnaNode): Array of #DonnaNode<!-- -->s to perform
+ * the operation on
+ * @dest: (allow-none): Destination of the operation
+ * @new_name: (allow-none): New name to use in the operation
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Create a task to perform the specified operation. For %DONNA_IO_COPY and
+ * %DONNA_IO_MOVE operations, @dest must be specified. For %DONNA_IO_DELETE
+ * simply pass %NULL.
+ *
+ * @provider must be the provider of all nodes in @sources if @is_source is
+ * %TRUE, else it must be provider of @dest.
+ *
+ * If specified, @new_name will be used if there's only one node in @sources,
+ * as new name for the node copied/moved.
+ *
+ * For %DONNA_IO_COPY the newly created/copied nodes will be put in a #GPtrArray
+ * as #DonnaTask:return-value.
+ * For %DONNA_IO_MOVE the moved nodes will be put in a #GPtrArray as
+ * #DonnaTask:return-value.
+ * For %DONNA_IO_DELETE there are no return value set.
+ *
+ * Returns: (transfer floating): A #DonnaTask to perform the IO operation, or
+ * %NULL
+ */
 DonnaTask *
 donna_provider_io_task (DonnaProvider  *provider,
                         DonnaIoType     type,
@@ -489,6 +751,24 @@ donna_provider_io_task (DonnaProvider  *provider,
             dest, new_name, error);
 }
 
+/**
+ * donna_provider_new_child_task:
+ * @provider: The #DonnaProvider of @parent
+ * @parent: The #DonnaNode to create a new child in
+ * @type: The type of node to create
+ * @name: The name of the child to create
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Create a task to create a new child of type @type inside @parent (which must,
+ * obviously, be a %DONNA_NODE_CONTAINER) by the name of @name.
+ *
+ * The newly-created node will be set as #DonnaTask:return-value of the task.
+ *
+ * Note that you can also use helper donna_node_new_child_task() if you have
+ * @node but not its provider.
+ *
+ * Returns: (transfer floating): A #DonnaTask to create the child
+ */
 DonnaTask *
 donna_provider_new_child_task (DonnaProvider  *provider,
                                DonnaNode      *parent,
@@ -521,6 +801,21 @@ donna_provider_new_child_task (DonnaProvider  *provider,
     return (*interface->new_child_task) (provider, parent, type, name, error);
 }
 
+/**
+ * donna_provider_remove_from_task:
+ * @provider: The #DonnaProvider of @source
+ * @nodes: (element-type DonnaNode): An array of #DonnaNode<!-- -->s
+ * @source: The #DonnaNode to remove @nodes from
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Create a task to remove @nodes from @source. This is useful to remove nodes
+ * from a node which isn't their parent, e.g. removing nodes from a register.
+ *
+ * This will automatically be converted into a %DONNA_IO_DELETE task if all
+ * @nodes are children of @source.
+ *
+ * Returns: (transfer floating): A #DonnaTask to remove @nodes from @source
+ */
 DonnaTask *
 donna_provider_remove_from_task (DonnaProvider  *provider,
                                  GPtrArray      *nodes,
@@ -607,6 +902,21 @@ donna_provider_remove_from_task (DonnaProvider  *provider,
     return (*interface->remove_from_task) (provider, nodes, source, error);
 }
 
+/**
+ * donna_provider_get_context_alias:
+ * @provider: A #DonnaProvider
+ * @alias: The alias to resolve
+ * @extra: The extra for the alias
+ * @reference: The contextual reference
+ * @prefix: The prefix to use when resolving @alias
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Providers can provider alias and/or items to be used in context menus. This
+ * will resolve @alias, prefixing all items with @prefix so they can be used
+ * properly.
+ *
+ * Returns: Resolved @alias, or %NULL
+ */
 gchar *
 donna_provider_get_context_alias (DonnaProvider         *provider,
                                   const gchar           *alias,
@@ -638,33 +948,23 @@ donna_provider_get_context_alias (DonnaProvider         *provider,
             prefix, error);
 }
 
-gchar *
-donna_provider_get_context_alias_new_nodes (DonnaProvider  *provider,
-                                            const gchar    *extra,
-                                            DonnaNode      *location,
-                                            const gchar    *prefix,
-                                            GError        **error)
-{
-    DonnaProviderInterface *interface;
-
-    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
-    g_return_val_if_fail (DONNA_IS_NODE (location), NULL);
-    g_return_val_if_fail (donna_node_peek_provider (location) == provider, NULL);
-    g_return_val_if_fail (prefix != NULL, NULL);
-
-    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
-
-    g_return_val_if_fail (interface != NULL, NULL);
-
-    if (interface->get_context_alias_new_nodes == NULL)
-        /* if not implemented we just don't have anything, but the alias must
-         * always exist/be valid */
-        return (gchar *) "";
-
-    return (*interface->get_context_alias_new_nodes) (provider, extra, location,
-            prefix, error);
-}
-
+/**
+ * donna_provider_get_context_item_info:
+ * @provider: A #DonnaProvider
+ * @item: The item to get info about
+ * @extra: The extra for the item
+ * @reference: The contextual reference
+ * @node_ref: (allow-none): The #DonnaNode as reference, or %NULL
+ * @get_sel: Function to get the selection
+ * @get_sel_data: Data to provider @get_sel
+ * @info: Location where to store info about @item
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Providers can provider alias and/or items to be used in context menus. This
+ * will set info about @item into @info.
+ *
+ * Returns: %TRUE is info about @item were set in @info, else %FALSE
+ */
 gboolean
 donna_provider_get_context_item_info (DonnaProvider             *provider,
                                       const gchar               *item,
@@ -699,4 +999,47 @@ donna_provider_get_context_item_info (DonnaProvider             *provider,
 
     return (*interface->get_context_item_info) (provider, item, extra,
             reference, node_ref, get_sel, get_sel_data, info, error);
+}
+
+/**
+ * donna_provider_get_context_alias_new_nodes:
+ * @provider: A #DonnaProvider
+ * @extra: The extra for the alias
+ * @location: The #DonnaNode being the current location
+ * @prefix: The prefix to use when resolving alias
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Providers can provider alias and/or items to be used in context menus. This
+ * should resolve a generic alias from #DonnaTreeView which is meant to provide
+ * items to create new nodes within @location
+ *
+ * If not implemented, an empty string will be returned.
+ *
+ * Returns: Resolved alias (empty string for nothing)
+ */
+gchar *
+donna_provider_get_context_alias_new_nodes (DonnaProvider  *provider,
+                                            const gchar    *extra,
+                                            DonnaNode      *location,
+                                            const gchar    *prefix,
+                                            GError        **error)
+{
+    DonnaProviderInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER (provider), NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (location), NULL);
+    g_return_val_if_fail (donna_node_peek_provider (location) == provider, NULL);
+    g_return_val_if_fail (prefix != NULL, NULL);
+
+    interface = DONNA_PROVIDER_GET_INTERFACE (provider);
+
+    g_return_val_if_fail (interface != NULL, NULL);
+
+    if (interface->get_context_alias_new_nodes == NULL)
+        /* if not implemented we just don't have anything, but the alias must
+         * always exist/be valid */
+        return (gchar *) "";
+
+    return (*interface->get_context_alias_new_nodes) (provider, extra, location,
+            prefix, error);
 }

@@ -496,8 +496,8 @@ donna_provider_io_task
 donna_provider_new_child_task
 donna_provider_remove_from_task
 donna_provider_get_context_alias
-donna_provider_get_context_alias_new_nodes
 donna_provider_get_context_item_info
+donna_provider_get_context_alias_new_nodes
 <SUBSECTION Standard>
 DONNA_IS_PROVIDER
 DONNA_PROVIDER
