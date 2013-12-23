@@ -11,7 +11,7 @@ AC_CONFIG_AUX_DIR([build-aux])
 AC_USE_SYSTEM_EXTENSIONS
 AC_SYS_LARGEFILE
 
-AM_INIT_AUTOMAKE([-Wall -Werror foreign silent-rules subdir-objects])
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign subdir-objects])
 AM_SILENT_RULES([yes])
 
 # for automake >= 1.12
@@ -19,6 +19,15 @@ m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
 # Checks for programs.
 AC_PROG_CC
+
+LT_INIT
+
+# Option to make doc
+m4_ifdef([GTK_DOC_CHECK], [
+GTK_DOC_CHECK([1.19],[--flavour no-tmpl])
+],[
+AM_CONDITIONAL([ENABLE_GTK_DOC], false)
+])
 
 # Option to use git version
 AC_ARG_ENABLE([git-version],
@@ -147,7 +156,7 @@ else
     AC_MSG_RESULT([no])
 fi
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile docs/reference/Makefile])
 AC_OUTPUT
 
 echo "
@@ -160,6 +169,8 @@ echo "
 
    debug messages           : ${with_debug}
    autobreak on critical    : ${with_autobreak}
+
+   build documentation      : ${enable_gtk_doc}
 
  Install paths:
    binaries                 : $(eval echo $(eval echo ${bindir}))

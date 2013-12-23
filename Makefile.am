@@ -1,4 +1,6 @@
 
+SUBDIRS = . docs/reference
+
 ACLOCAL_AMFLAGS = -I m4
 
 if USE_GIT_VERSION

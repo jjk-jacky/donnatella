@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+               "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
+]>
+<refentry id="config">
+  <refmeta>
+    <refentrytitle>Configuration</refentrytitle>
+  </refmeta>
+
+  <refnamediv>
+    <refname>Configuration</refname>
+    <refpurpose>How configuration works</refpurpose>
+  </refnamediv>
+
+  <refsect1>
+    <title>Overview</title>
+    <para>
+        On start, donna will load its entire configuration from one file -
+        <filename>donnatella.conf</filename> - into memory. Like other
+        configuration files, you can set its location via command-line option
+        <systemitem>--config-dir</systemitem>
+    </para>
+    <para>
+        The configuration is made of categories &amp; options, the laters being
+        in one of the following types: boolean (true/false), integer, or string.
+        In addition, some options can have an "extra" type associated to them,
+        which restricts their possible values to either an element from a list
+        (of strings or integers), or an integer being a combination of flags.
+    </para>
+    <para>
+        You can define the configuration by manually editting the file using a
+        simple text editor, or - when donna is running - by accessing it by
+        going to <systemitem>config:/</systemitem>
+    </para>
+  </refsect1>
+
+  <refsect1>
+      <title>One option, multiple locations</title>
+      <para>
+          On many occasions, a single option can be found at multiple locations.
+          For example, treeview options can be found either under
+          <systemitem>treeviews/&lt;TREEVIEW-NAME&gt;</systemitem> so they're
+          specific to this very treeview, or under
+          <systemitem>defaults/treeviews/&lt;MODE&gt;</systemitem> for default
+          options (based on the treeview's mode, as tree &amp; list are usually
+          very different in their behaviors, and offer mode-specific options.
+      </para>
+  </refsect1>
+</refentry>

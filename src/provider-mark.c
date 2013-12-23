@@ -946,6 +946,12 @@ provider_mark_remove_from (DonnaProviderBase  *_provider,
 
 /* commands */
 
+/**
+ * mark_delete:
+ * @name: Name of the mark to delete
+ *
+ * Delete the mark @mark
+ */
 static DonnaTaskState
 cmd_mark_delete (DonnaTask         *task,
                  DonnaApp          *app,

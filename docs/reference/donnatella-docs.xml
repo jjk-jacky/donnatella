@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+               "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd"
+[
+  <!ENTITY % local.common.attrib "xmlns:xi  CDATA  #FIXED 'http://www.w3.org/2003/XInclude'">
+]>
+<book id="index">
+  <bookinfo>
+    <title>Donnatella Reference Manual</title>
+    <releaseinfo>
+      for donnatella 0.00
+      The latest version of this documentation can be found on-line at
+      <ulink role="online-location" url="http://jjacky.com/donnatella/index.html">http://jjacky.com/donnatella/</ulink>.
+    </releaseinfo>
+  </bookinfo>
+
+  <part id="user">
+      <title>Manual</title>
+      <chapter id="overview">
+          <title>Overview</title>
+          <xi:include href="intro.sgml"/>
+      </chapter>
+      <chapter id="configuration">
+          <title>Configuration</title>
+          <xi:include href="config.sgml"/>
+          <xi:include href="xml/commands.xml"/>
+      </chapter>
+  </part>
+
+  <part id="dev">
+      <title>Donnatella</title>
+      <chapter id="donnatella">
+          <title>Donnatella</title>
+          <xi:include href="xml/app.xml"/>
+          <xi:include href="xml/cellrenderertext.xml"/>
+          <xi:include href="xml/closures.xml"/>
+          <xi:include href="xml/colorfilter.xml"/>
+          <xi:include href="xml/common.xml"/>
+          <xi:include href="xml/contextmenu.xml"/>
+          <xi:include href="xml/debug.xml"/>
+          <xi:include href="xml/donna.xml"/>
+          <xi:include href="xml/filter.xml"/>
+          <xi:include href="xml/history.xml"/>
+          <xi:include href="xml/imagemenuitem.xml"/>
+          <xi:include href="xml/macros.xml"/>
+          <xi:include href="xml/node.xml"/>
+          <xi:include href="xml/renderer.xml"/>
+          <xi:include href="xml/sort.xml"/>
+          <xi:include href="xml/statusbar.xml"/>
+          <xi:include href="xml/statusprovider.xml"/>
+          <xi:include href="xml/task.xml"/>
+          <xi:include href="xml/task-helpers.xml"/>
+          <xi:include href="xml/task-process.xml"/>
+          <xi:include href="xml/taskui.xml"/>
+          <xi:include href="xml/taskui-messages.xml"/>
+          <xi:include href="xml/treestore.xml"/>
+          <xi:include href="xml/treeview.xml"/>
+          <xi:include href="xml/util.xml"/>
+      </chapter>
+      <chapter id="providers">
+          <title>Providers</title>
+          <xi:include href="xml/provider.xml"/>
+          <xi:include href="xml/provider-base.xml"/>
+          <xi:include href="xml/provider-command.xml"/>
+          <xi:include href="xml/provider-config.xml"/>
+          <xi:include href="xml/provider-exec.xml"/>
+          <xi:include href="xml/provider-fs.xml"/>
+          <xi:include href="xml/provider-internal.xml"/>
+          <xi:include href="xml/provider-invalid.xml"/>
+          <xi:include href="xml/provider-mark.xml"/>
+          <xi:include href="xml/provider-register.xml"/>
+          <xi:include href="xml/provider-task.xml"/>
+      </chapter>
+      <chapter id="columntypes">
+          <title>Column Types</title>
+          <xi:include href="xml/columntype.xml"/>
+          <xi:include href="xml/columntype-label.xml"/>
+          <xi:include href="xml/columntype-name.xml"/>
+          <xi:include href="xml/columntype-perms.xml"/>
+          <xi:include href="xml/columntype-progress.xml"/>
+          <xi:include href="xml/columntype-size.xml"/>
+          <xi:include href="xml/columntype-text.xml"/>
+          <xi:include href="xml/columntype-time.xml"/>
+          <xi:include href="xml/columntype-value.xml"/>
+      </chapter>
+      <chapter id="object-tree">
+          <title>Object Hierarchy</title>
+          <xi:include href="xml/tree_index.sgml"/>
+      </chapter>
+      <index id="api-index-full">
+          <title>API Index</title>
+          <xi:include href="xml/api-index-full.xml"><xi:fallback /></xi:include>
+      </index>
+      <index id="deprecated-api-index" role="deprecated">
+          <title>Index of deprecated API</title>
+          <xi:include href="xml/api-index-deprecated.xml"><xi:fallback /></xi:include>
+      </index>
+  </part>
+
+  <xi:include href="xml/annotation-glossary.xml"><xi:fallback /></xi:include>
+</book>

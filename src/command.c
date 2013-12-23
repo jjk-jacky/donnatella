@@ -11,6 +11,14 @@
 #include "macros.h"
 #include "debug.h"
 
+/**
+ * SECTION:commands
+ * @Short_description: Commands that can be used in donna
+ *
+ * Donna uses "commands" to allow...
+ */
+
+
 /* internal, used by donna.c */
 void _donna_add_commands (GHashTable *commands);
 
@@ -142,6 +150,27 @@ show_err_on_task_failed (DonnaTask  *task,
             "Command 'node_activate': Failed to trigger node");
 }
 
+/**
+ * ask:
+ * @title: Title of the dialog, the question to ask
+ * @details: (optional): Details below the title
+ * @btn1_icon: (optional): Name of the icon for button 1
+ * @btn1_label: (optional): Label of button 1
+ * @btn2_icon: (optional): Name of the icon for button 2
+ * @btn2_label: (optional): Label of button 2
+ * @btn3_icon: (optional): Name of the icon for button 3
+ * @btn3_label: (optional): Label of button 3
+ * @btn4_icon: (optional): Name of the icon for button 4
+ * @btn4_label: (optional): Label of button 4
+ * @btn5_icon: (optional): Name of the icon for button 5
+ * @btn5_label: (optional): Label of button 5
+ *
+ * Ask someting.
+ *
+ * See donna_app_ask() for more.
+ *
+ * Returns: Number of the button pressed
+ */
 static DonnaTaskState
 cmd_ask (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
