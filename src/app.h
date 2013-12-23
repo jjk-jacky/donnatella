@@ -35,6 +35,9 @@ struct _DonnaAppInterface
                                                      gpointer        conv_data);
 
     /* virtual table */
+    gint                (*run)                      (DonnaApp       *app,
+                                                     gint            argc,
+                                                     gchar          *argv[]);
     void                (*ensure_focused)           (DonnaApp       *app);
     void                (*add_window)               (DonnaApp       *app,
                                                      GtkWindow      *window,
@@ -121,6 +124,9 @@ void                donna_app_treeview_loaded       (DonnaApp       *app,
                                                      DonnaTreeView  *tree);
 
 /* API */
+gint                donna_app_run                   (DonnaApp       *app,
+                                                     gint            argc,
+                                                     gchar          *argv[]);
 void                donna_app_ensure_focused        (DonnaApp       *app);
 void                donna_app_add_window            (DonnaApp       *app,
                                                      GtkWindow      *window,

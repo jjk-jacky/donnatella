@@ -118,6 +118,23 @@ donna_app_treeview_loaded (DonnaApp       *app,
 
 /* API */
 
+gint
+donna_app_run (DonnaApp       *app,
+               gint            argc,
+               gchar          *argv[])
+{
+    DonnaAppInterface *interface;
+
+    g_return_if_fail (DONNA_IS_APP (app));
+
+    interface = DONNA_APP_GET_INTERFACE (app);
+
+    g_return_if_fail (interface != NULL);
+    g_return_if_fail (interface->run != NULL);
+
+    (*interface->run) (app, argc, argv);
+}
+
 void
 donna_app_ensure_focused (DonnaApp       *app)
 {

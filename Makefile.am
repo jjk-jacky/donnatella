@@ -14,9 +14,10 @@ AM_CFLAGS = -D_GNU_SOURCE \
 			-DDOCDIR='"$(docdir)"' \
 			${WARNING_CFLAGS}
 
-donnatella_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
-donnatella_LDADD = @GTK_LIBS@
-donnatella_SOURCES = \
+noinst_LTLIBRARIES = libdonnatella.la
+libdonnatella_la_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
+libdonnatella_la_LIBADD = @GTK_LIBS@
+libdonnatella_la_SOURCES = \
 					 src/app.c \
 					 src/app.h \
 					 src/cellrenderertext.c \
@@ -113,8 +114,12 @@ donnatella_SOURCES = \
 					 src/util.c \
 					 src/util.h
 
+donnatella_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
+donnatella_LDADD = libdonnatella.la @GTK_LIBS@
+donnatella_SOURCES = src/donnatella.c
+
 if DONNA_DEBUG_ENABLED
 AM_CFLAGS += -g -O0
-donnatella_SOURCES += src/debug.c
+libdonnatella_la_SOURCES += src/debug.c
 endif
 

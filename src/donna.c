@@ -197,6 +197,9 @@ static void             donna_donna_get_property    (GObject        *object,
 static void             donna_donna_finalize        (GObject        *object);
 
 /* DonnaApp */
+static gint             donna_donna_run             (DonnaApp       *app,
+                                                     gint            argc,
+                                                     gchar          *argv[]);
 static void             donna_donna_ensure_focused  (DonnaApp       *app);
 static void             donna_donna_add_window      (DonnaApp       *app,
                                                      GtkWindow      *window,
@@ -282,6 +285,7 @@ static gchar *          donna_donna_ask_text        (DonnaApp       *app,
 static void
 donna_donna_app_init (DonnaAppInterface *interface)
 {
+    interface->run                  = donna_donna_run;
     interface->ensure_focused       = donna_donna_ensure_focused;
     interface->add_window           = donna_donna_add_window;
     interface->set_floating_window  = donna_donna_set_floating_window;
@@ -4110,18 +4114,14 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
     return TRUE;
 }
 
-int
-main (int argc, char *argv[])
+static gint
+donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
 {
     GError *err = NULL;
-    DonnaDonna *donna;
+    DonnaDonna *donna = (DonnaDonna *) app;
     enum rc rc;
 
-    setlocale (LC_ALL, "");
-    gtk_init (&argc, &argv);
-
     g_main_context_acquire (g_main_context_default ());
-    donna = g_object_new (DONNA_TYPE_DONNA, NULL);
 
     if (!parse_cmdline (donna, &argc, &argv, &err))
     {
@@ -4178,9 +4178,9 @@ main (int argc, char *argv[])
     gtk_widget_destroy ((GtkWidget *) donna->priv->window);
     g_main_context_release (g_main_context_default ());
 
-    g_object_unref (donna);
 #ifdef DONNA_DEBUG_ENABLED
     donna_debug_reset_valid ();
 #endif
+    g_object_unref (donna);
     return rc;
 }
