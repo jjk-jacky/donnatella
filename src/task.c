@@ -1543,6 +1543,19 @@ donna_task_run (DonnaTask *task)
 
     /* do the work & get new state */
     priv->state = priv->task_fn (task, priv->task_data);
+    if (G_UNLIKELY (!(priv->state & DONNA_TASK_POST_RUN)))
+    {
+        g_critical ("Task '%s': worker didn't set a valid (POST_RUN) state: %s (%d)",
+                (priv->desc) ? priv->desc : "(no desc)",
+                state_name (priv->state),
+                priv->state);
+        if (priv->error)
+            g_error_free (priv->error);
+        priv->error = g_error_new (DONNA_TASK_ERROR, DONNA_TASK_ERROR_OTHER,
+                "Task worker didn't set a valid (POST_RUN) state: %s",
+                state_name (priv->state));
+        priv->state = DONNA_TASK_FAILED;
+    }
 
     /* get the lock back */
     LOCK_TASK (task);
