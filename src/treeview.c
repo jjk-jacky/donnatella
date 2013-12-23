@@ -4303,17 +4303,27 @@ static inline void
 resort_tree (DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
-    GtkTreeSortable *sortable;
-    gint cur_sort_id;
-    GtkSortType cur_sort_order;
 
     /* trigger a resort */
+    DONNA_DEBUG (TREEVIEW, priv->name,
+            g_debug ("Treeview '%s': Resort tree", priv->name));
 
-    sortable = (GtkTreeSortable *) priv->store;
-    gtk_tree_sortable_get_sort_column_id (sortable, &cur_sort_id, &cur_sort_order);
-    gtk_tree_sortable_set_sort_column_id (sortable,
-            GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
-    gtk_tree_sortable_set_sort_column_id (sortable, cur_sort_id, cur_sort_order);
+    /* if there is no sorting needed (less than 2 rows) simply redraw */
+    if (donna_tree_model_get_count ((GtkTreeModel *) priv->store) > 1)
+    {
+        GtkTreeSortable *sortable = (GtkTreeSortable *) priv->store;
+        gint cur_sort_id;
+        GtkSortType cur_sort_order;
+
+        gtk_tree_sortable_get_sort_column_id (sortable,
+                &cur_sort_id, &cur_sort_order);
+        gtk_tree_sortable_set_sort_column_id (sortable,
+                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, cur_sort_order);
+        gtk_tree_sortable_set_sort_column_id (sortable,
+                cur_sort_id, cur_sort_order);
+    }
+    else
+        gtk_widget_queue_draw ((GtkWidget *) tree);
 }
 
 static void
