@@ -9,9 +9,18 @@
 G_BEGIN_DECLS
 
 #define DONNA_NODE_ERROR            g_quark_from_static_string ("DonnaNode-Error")
+/**
+ * DonnaNodeError:
+ * @DONNA_NODE_ERROR_ALREADY_EXISTS: Tried to add a property that already exists
+ * on the node
+ * @DONNA_NODE_ERROR_NOT_FOUND: Property doesn't exist on the node
+ * @DONNA_NODE_ERROR_READ_ONLY: Property is read-only / value cannot be set
+ * @DONNA_NODE_ERROR_INVALID_TYPE: Property is of a different/non-compatible
+ * type than the one given
+ * @DONNA_NODE_ERROR_OTHER: Other error
+ */
 typedef enum
 {
-    DONNA_NODE_ERROR_NOMEM,
     DONNA_NODE_ERROR_ALREADY_EXISTS,
     DONNA_NODE_ERROR_NOT_FOUND,
     DONNA_NODE_ERROR_READ_ONLY,
@@ -19,12 +28,31 @@ typedef enum
     DONNA_NODE_ERROR_OTHER
 } DonnaNodeError;
 
+/**
+ * DonnaNodeType:
+ * @DONNA_NODE_ITEM: Node is an item (e.g. file)
+ * @DONNA_NODE_CONTAINER: Node is a container (e.g. a directory)
+ *
+ * The type of object the node represents. Containers can have other nodes as
+ * children, while items can be triggered (e.g. execute/open a file)
+ */
 typedef enum
 {
     DONNA_NODE_ITEM         = (1 << 0),
     DONNA_NODE_CONTAINER    = (1 << 1),
 } DonnaNodeType;
 
+/**
+ * DonnaNodeHasValue:
+ * @DONNA_NODE_VALUE_NONE: No value has been set (property doesn't exists)
+ * @DONNA_NODE_VALUE_NEED_REFRESH: No value set, property needs a refresh
+ * @DONNA_NODE_VALUE_SET: Value has been set
+ * @DONNA_NODE_VALUE_ERROR: No value set, an error occured while trying to
+ * refresh it
+ *
+ * Whether or not a property's value was retrieved from a node; e.g. using
+ * donna_node_get()
+ */
 typedef enum
 {
     DONNA_NODE_VALUE_NONE = 0,
@@ -33,15 +61,65 @@ typedef enum
     DONNA_NODE_VALUE_ERROR
 } DonnaNodeHasValue;
 
+/**
+ * DONNA_NODE_REFRESH_SET_VALUES:
+ *
+ * To refresh all properties that currently have a value set, using
+ * donna_node_refresh_task()
+ */
 #define DONNA_NODE_REFRESH_SET_VALUES       NULL
+/**
+ * DONNA_NODE_REFRESH_ALL_VALUES:
+ *
+ * To refesh all properties, even those where no value has been set yet, using
+ * donna_node_refresh_task()
+ */
 #define DONNA_NODE_REFRESH_ALL_VALUES       "-all"
 
 extern const gchar *node_basic_properties[];
 
+/**
+ * DonnaNodeFlags:
+ * @DONNA_NODE_ICON_EXISTS: Property "icon" exists
+ * @DONNA_NODE_FULL_NAME_EXISTS: Property "full-name" exists
+ * @DONNA_NODE_SIZE_EXISTS: Property "size" exists
+ * @DONNA_NODE_CTIME_EXISTS: Property "ctime" exists
+ * @DONNA_NODE_MTIME_EXISTS: Property "mtime" exists
+ * @DONNA_NODE_ATIME_EXISTS: Property "atime" exists
+ * @DONNA_NODE_MODE_EXISTS: Property "mode" exists
+ * @DONNA_NODE_UID_EXISTS: Property "uid" exists
+ * @DONNA_NODE_GID_EXISTS: Property "gid" exists
+ * @DONNA_NODE_DESC_EXISTS: Property "desc" exists
+ * @DONNA_NODE_NAME_WRITABLE: Property "name" is writable (value can be set/changed)
+ * @DONNA_NODE_ICON_WRITABLE: Property "icon" is writable (value can be set/changed)
+ * @DONNA_NODE_FULL_NAME_WRITABLE: Property "full-name" is writable (value can be
+ * set/changed)
+ * @DONNA_NODE_SIZE_WRITABLE: Property "size" is writable (value can be set/changed)
+ * @DONNA_NODE_CTIME_WRITABLE: Property "ctime" is writable (value can be
+ * set/changed)
+ * @DONNA_NODE_MTIME_WRITABLE: Property "mtime" is writable (value can be
+ * set/changed)
+ * @DONNA_NODE_ATIME_WRITABLE: Property "atime" is writable (value can be
+ * set/changed)
+ * @DONNA_NODE_MODE_WRITABLE: Property "mode" is writable (value can be set/changed)
+ * @DONNA_NODE_UID_WRITABLE: Property "uid" is writable (value can be set/changed)
+ * @DONNA_NODE_GID_WRITABLE: Property "gid" is writable (value can be set/changed)
+ * @DONNA_NODE_DESC_WRITABLE: Property "desc" is writable (value can be set/changed)
+ * @DONNA_NODE_ALL_EXISTS: All basic properties exists
+ * @DONNA_NODE_ALL_WRITABLE: All basic properties are writable (values can be
+ * set/changed)
+ *
+ * Flags to define which basic properties exist (and which are writable) when
+ * creating a new node.
+ *
+ * Properties "provider", "domain", "location", "node-type" and "filename" are
+ * internals, and as such always exist (but cannot be set). Property "name" is
+ * required and always exists as well.
+ *
+ * This is used by #DonnaProvider<!-- -->s when calling donna_node_new()
+ */
 typedef enum
 {
-    /* PROVIDER, DOMAIN, LOCATION, NODE_TYPE, FILENAME are internal/always exist */
-    /* NAME is required/always exists */
     DONNA_NODE_ICON_EXISTS          = (1 << 0),
     DONNA_NODE_FULL_NAME_EXISTS     = (1 << 1),
     DONNA_NODE_SIZE_EXISTS          = (1 << 2),
@@ -79,25 +157,76 @@ typedef enum
         | DONNA_NODE_DESC_WRITABLE)
 } DonnaNodeFlags;
 
+/**
+ * DonnaNodeHasProp:
+ * @DONNA_NODE_PROP_NONE: Property doesn't exist on node
+ * @DONNA_NODE_PROP_EXISTS: Property exists on node
+ * @DONNA_NODE_PROP_HAS_VALUE: Property has a value set
+ * @DONNA_NODE_PROP_WRITABLE: Property is writable (value can be set/changed)
+ *
+ * Information about a property. See donna_node_has_property()
+ */
 typedef enum
 {
+    /*< private >*/
     DONNA_NODE_PROP_UNKNOWN     = (1 << 0),
+    /*< public >*/
     DONNA_NODE_PROP_NONE        = (1 << 1),
     DONNA_NODE_PROP_EXISTS      = (1 << 2),
     DONNA_NODE_PROP_HAS_VALUE   = (1 << 3),
     DONNA_NODE_PROP_WRITABLE    = (1 << 4),
 } DonnaNodeHasProp;
 
-/* functions called by a node to refresh/set a property value */
+/**
+ * refresher_fn:
+ * @task: (allow-none): The #DonnaTask in which the refresher is ran, or %NULL
+ * @node: The #DonnaNode for which the property must be refreshed
+ * @name: The name of the property to refresh
+ *
+ * The function called when a node was asked to refresh a property. This
+ * refresher must call donna_node_set_property_value() to set the new value, and
+ * then return %TRUE.
+ *
+ * @task will be %NULL if the call results from using e.g. donna_node_get() with
+ * parameter blocking set to %TRUE.
+ * It will be the #DonnaTask when called from donna_node_refresh_task(), in
+ * which case it should only use it to see whether it has been cancelled or not
+ * (in which case, stop and return %FALSE)
+ *
+ * The final state of @task (as well as any error/return value) will be handled
+ * by @node itself. This is to allow refreshing multiple properties within one
+ * single task.
+ *
+ * Returns: %TRUE if the refresh was succesful, else %FALSE
+ */
 typedef gboolean    (*refresher_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
                                      const gchar    *name);
+/**
+ * setter_fn:
+ * @task: The #DonnaTask under which the setter is run
+ * @node: The #DonnaNode for which to set the property
+ * @name: The name of the property to set
+ * @value: A #GValue holding the value to set
+ *
+ * This setter must (try to) set the specified property to the given value.
+ * @value is guaranteed to be of the same type as the property on @node.
+ *
+ * This is basically the worker of @task, in that - in addition to checking if
+ * the task is paused/cancelled - it should set its #DonnaTask:error property in
+ * case on failure.
+ *
+ * It should not, however, set a return value.
+ *
+ * Returns: The #DonnaTaskState for @task (must be a %DONNA_TASK_POST_RUN state)
+ */
 typedef DonnaTaskState (*setter_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
                                      const gchar    *name,
                                      const GValue   *value);
 struct _DonnaNode
 {
+    /*< private >*/
     GObject parent;
 
     DonnaNodePrivate *priv;
@@ -105,6 +234,7 @@ struct _DonnaNode
 
 struct _DonnaNodeClass
 {
+    /*< private >*/
     GObjectClass parent;
 };
 

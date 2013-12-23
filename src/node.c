@@ -14,7 +14,7 @@
 /**
  * SECTION:node
  * @Short_description: An object holding dynamic properties
- * @See_also: #DonnaProvider #DonnaTask
+ * @See_also: #DonnaProvider, #DonnaTask
  *
  * A #DonnaNode represents an "item" from a domain/#DonnaProvider (e.g. a file
  * in the filesystem).
@@ -297,7 +297,7 @@ free_node_prop (DonnaNodeProp *prop)
  * @provider: provider of the node
  * @location: location of the node
  * @node_type: type of node
- * @filename: (allow none): filename of the node (in GLib filename encoding),
+ * @filename: (allow-none): filename of the node (in GLib filename encoding),
  * or %NULL if we can use @name)
  * @refresher: function called to refresh a basic property
  * @setter: function to change value of a basic property
@@ -307,8 +307,8 @@ free_node_prop (DonnaNodeProp *prop)
  * Creates a new node, according to the specified parameters. This should only
  * be called by the #DonnaProvider of the node.
  *
- * If you need a node to use it, see donna_provider_get_node_task() or
- * donna_app_get_node_task()
+ * If you need a node to use it, see donna_provider_get_node() or
+ * donna_app_get_node()
  *
  * Returns: (transfer full): The new node
  */
@@ -380,7 +380,7 @@ donna_node_new (DonnaProvider       *provider,
  * donna_node_new_from_node:
  * @provider: provider of the node
  * @location: location of the node
- * @sce: source node upon which the node is based
+ * @source_node: source node upon which the node is based
  * @error: (allow-none): return location for error, or %NULL
  *
  * Creates a new node based upon an existing one (from a different provider).
@@ -394,7 +394,7 @@ donna_node_new (DonnaProvider       *provider,
  * lines matching.
  *
  * Like donna_node_new() this should only be called by the node's provider. If
- * you need a node to use it, see donna_provider_get_node_task()
+ * you need a node to use it, see donna_provider_get_node()
  *
  * Returns: (transfer full): The new node
  */
@@ -805,6 +805,7 @@ next:
  * @node: Node to get property values from
  * @is_blocking: Whether to refresh properties needing it or not
  * @first_name: First name of the properties to get
+ * @...: %NULL-terminated list of (names and) return locations for the values
  *
  * Get the value of specified properties, if possible. Each property name should
  * be followed by two parameters: the location of a #DonnaNodeHasValue variable,
@@ -816,7 +817,7 @@ next:
  * donna_node_get (node, FALSE, "some_property", &has, &value, NULL);
  * </programlisting>
  *
- * If @is_blocking is %FALSE the #DonnaHasValue might be
+ * If @is_blocking is %FALSE the #DonnaNodeHasValue might be
  * %DONNA_NODE_VALUE_NEED_REFRESH while with %TRUE a refresh will be
  * automatically called (within/blocking the thread). It can then also be set
  * to %DONNA_NODE_VALUE_ERROR if the refresher failed.
@@ -956,7 +957,7 @@ donna_node_get_full_location (DonnaNode *node)
  *
  * Helper to quickly get the type of @node
  *
- * Returns: #DonnanodeType of @node
+ * Returns: #DonnaNodeType of @node
  */
 DonnaNodeType
 donna_node_get_node_type (DonnaNode *node)
@@ -1281,7 +1282,7 @@ donna_node_get_gid (DonnaNode *node,
  * donna_node_get_desc:
  * @node: Node to get the desc from
  * @is_blocking: Whether to block and refresh if needed
- * @icon: Return location for @node's desc
+ * @desc: Return location for @node's desc
  *
  * Helper to quickly get the property desc of @node
  * Free it with g_free() when done.
@@ -1304,7 +1305,7 @@ donna_node_get_desc (DonnaNode  *node,
 /**
  * donna_node_get_parent:
  * @node: Node to get parent node of
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Returns the parent #DonnaNode of @node
  *
@@ -1596,8 +1597,9 @@ free_refresh_data (struct refresh_data *data)
 /**
  * donna_node_refresh_task:
  * @node: Node to refresh properties of
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  * @first_name: Name of the first property to refresh
+ * @...: %NULL-terminated list of names of property to refresh
  *
  * A task to refresh the specified properties. @first_name can be
  * %DONNA_NODE_REFRESH_SET_VALUES to refresh all set values, i.e. that already
@@ -1692,7 +1694,7 @@ donna_node_refresh_task (DonnaNode   *node,
  * donna_node_refresh_arr_task:
  * @node: The node to refresh properties of
  * @props: (element-type const gchar *): A #GPtrArray of properties names
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Same as donna_node_refresh_task() but using a #GPtrArray
  *
@@ -1972,7 +1974,7 @@ donna_node_set_property_task (DonnaNode     *node,
  * donna_node_has_children_task:
  * @node: Node to check whether it has children
  * @node_types: %DonnaNodeType of children to check for
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Returns a task to determine whether @node has children of the specified
  * type(s) or not
@@ -1996,7 +1998,7 @@ donna_node_has_children_task (DonnaNode          *node,
  * donna_node_get_children_task:
  * @node: Node to check whether it has children
  * @node_types: %DonnaNodeType of children to get
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Returns a task to get children of the specified type(s) from @node
  *
@@ -2018,7 +2020,7 @@ donna_node_get_children_task (DonnaNode          *node,
 /**
  * donna_node_trigger_task:
  * @node: Node to trigger
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Returns a task to trigger @node
  *
@@ -2040,7 +2042,7 @@ donna_node_trigger_task (DonnaNode          *node,
  * @node: Parent of the child to create
  * @type: Type of child to create
  * @name: Name of the new child
- * @error: (allow none): Return location of a #GError, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Returns a task to create a new child in @node
  *
@@ -2083,7 +2085,7 @@ donna_node_mark_ready (DonnaNode          *node)
  * This should only be used by the interface #DonnaProvider, if needed, from an
  * idle sourfce after emission of a node-deleted signal. That is, is there are
  * still references on the node, then the provider's virtual function
- * unref_node() will be called, then this to make the node "invalid."
+ * unref_node<!-- -->() will be called, then this to make the node "invalid."
  *
  * This is in case e.g. a task still has a ref on a node (e.g. as return value)
  * to make sure it won't create conflicts in case a new file is created uner the
