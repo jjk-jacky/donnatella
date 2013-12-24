@@ -98,7 +98,7 @@ static DonnaTask *      provider_base_remove_from_task (
 
 #define set_task_visibility(task, provider, task_type) \
     donna_task_set_visibility (task, \
-            DONNA_PROVIDER_BASE_GET_CLASS (provider)->task_visiblity.task_type);
+            DONNA_PROVIDER_BASE_GET_CLASS (provider)->task_visibility.task_type);
 
 static void
 provider_base_provider_init (DonnaProviderInterface *interface)
@@ -125,13 +125,13 @@ donna_provider_base_class_init (DonnaProviderBaseClass *klass)
 {
     GObjectClass *o_class;
 
-    klass->task_visiblity.new_node      = DONNA_TASK_VISIBILITY_INTERNAL;
-    klass->task_visiblity.has_children  = DONNA_TASK_VISIBILITY_INTERNAL;
-    klass->task_visiblity.get_children  = DONNA_TASK_VISIBILITY_INTERNAL;
-    klass->task_visiblity.trigger_node  = DONNA_TASK_VISIBILITY_INTERNAL;
-    klass->task_visiblity.io            = DONNA_TASK_VISIBILITY_INTERNAL;
-    klass->task_visiblity.new_child     = DONNA_TASK_VISIBILITY_INTERNAL;
-    klass->task_visiblity.remove_from   = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.new_node      = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.has_children  = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.get_children  = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.trigger_node  = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.io            = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.new_child     = DONNA_TASK_VISIBILITY_INTERNAL;
+    klass->task_visibility.remove_from   = DONNA_TASK_VISIBILITY_INTERNAL;
 
     klass->lock_nodes           = provider_base_lock_nodes;
     klass->unlock_nodes         = provider_base_unlock_nodes;
@@ -453,7 +453,7 @@ provider_base_get_node (DonnaProvider    *provider,
         return TRUE;
     }
 
-    if (DONNA_PROVIDER_BASE_GET_CLASS (p)->task_visiblity.new_node
+    if (DONNA_PROVIDER_BASE_GET_CLASS (p)->task_visibility.new_node
             == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
     {
         DonnaTaskState state;

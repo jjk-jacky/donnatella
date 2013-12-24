@@ -80,9 +80,9 @@ donna_provider_command_class_init (DonnaProviderCommandClass *klass)
 
     pb_class = (DonnaProviderBaseClass *) klass;
 
-    pb_class->task_visiblity.new_node       = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
-    pb_class->task_visiblity.has_children   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
-    pb_class->task_visiblity.get_children   = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visibility.new_node      = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visibility.has_children  = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visibility.get_children  = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
 
     pb_class->new_node      = provider_command_new_node;
     pb_class->has_children  = provider_command_has_children;

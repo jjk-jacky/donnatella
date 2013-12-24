@@ -62,7 +62,7 @@ donna_provider_internal_class_init (DonnaProviderInternalClass *klass)
 
     pb_class = (DonnaProviderBaseClass *) klass;
 
-    pb_class->task_visiblity.new_node       = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
+    pb_class->task_visibility.new_node      = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
 
     pb_class->new_node      = provider_internal_new_node;
     pb_class->unref_node    = provider_internal_unref_node;

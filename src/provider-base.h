@@ -31,7 +31,7 @@ struct _DonnaProviderBaseClass
 {
     GObjectClass parent;
 
-    /* visiblities for the different tasks */
+    /* visibilities for the different tasks */
     struct
     {
         DonnaTaskVisibility new_node;
@@ -41,7 +41,7 @@ struct _DonnaProviderBaseClass
         DonnaTaskVisibility io;
         DonnaTaskVisibility new_child;
         DonnaTaskVisibility remove_from;
-    } task_visiblity;
+    } task_visibility;
 
     /* virtual table */
     void            (*lock_nodes)           (DonnaProviderBase  *provider);
