@@ -11,6 +11,16 @@
 #include "debug.h"
 #include "macros.h"
 
+/**
+ * SECTION:provider-base
+ * @Short_description: Base implementation of a provider
+ *
+ * This base class provides helpers to simplify creating providers. Most
+ * notably, it handles the hashmap of nodes and the toggle_ref on the nodes, as
+ * well as creating the tasks for the different functions, leaving only the
+ * workers to be implemented.
+ */
+
 enum
 {
     PROP_0,
