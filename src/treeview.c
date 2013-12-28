@@ -1747,6 +1747,10 @@ real_option_cb (struct option_data *data)
     config = donna_app_peek_config (priv->app);
     opt = data->option + data->len;
 
+    DONNA_DEBUG (TREEVIEW, priv->name,
+            g_debug ("Treeview '%s': Config change for option '%s'",
+                priv->name, opt));
+
     if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT
             || data->opt == OPT_IN_MEMORY)
     {
@@ -2106,20 +2110,20 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
     gssize len;
     guint opt = OPT_NONE;
 
-    /* options we care about are ones for the tree (in "/treeviews/<NAME>" or
-     * "/defaults/treeviews/<MODE>") or for one of our columns:
-     * /treeviews/<NAME>/columns/<NAME>
-     * /columns/<NAME>
+    /* options we care about are ones for the tree (in "treeviews/<NAME>" or
+     * "defaults/treeviews/<MODE>") or for one of our columns:
+     * treeviews/<NAME>/columns/<NAME>
+     * columns/<NAME>
      * This excludes options in the current arrangement, but that's
      * okay/expected: arrangement are loaded/"created" on location change.
      *
-     * Here we can only check if the option starts with "/treeviews/<NAME>",
-     * "/defaults/treeviews/<MODE>" or "/columns/" and that's it, to loop
+     * Here we can only check if the option starts with "treeviews/<NAME>",
+     * "defaults/treeviews/<MODE>" or "columns/" and that's it, to loop
      * through our columns we need the GTK lock, i.e. go in main thread */
 
-    len = snprintf (buf, 255, "/treeviews/%s/", tree->priv->name);
+    len = snprintf (buf, 255, "treeviews/%s/", tree->priv->name);
     if (len >= 255)
-        b = g_strdup_printf ("/treeviews/%s/", tree->priv->name);
+        b = g_strdup_printf ("treeviews/%s/", tree->priv->name);
 
     if (streqn (option, b, (size_t) len))
     {
@@ -2130,10 +2134,10 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
             len += 8;
         }
     }
-    else if (streqn (option, "/columns/", 9))
+    else if (streqn (option, "columns/", 8))
     {
         opt = OPT_COLUMN;
-        len = 9;
+        len = 8;
     }
 
     if (b != buf)
