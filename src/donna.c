@@ -4012,7 +4012,7 @@ cmdline_cb (const gchar         *option,
 #ifdef DONNA_DEBUG_ENABLED
     else if (streq (option, "-d") || streq (option, "--debug"))
     {
-        if (!donna_debug_set_valid (g_strdup (value), error))
+        if (value && !donna_debug_set_valid (g_strdup (value), error))
             return FALSE;
         /* make sure the loglevel is at least debug */
         if (data->loglevel < G_LOG_LEVEL_DEBUG)
@@ -4043,7 +4043,7 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
         { "verbose",    'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Increase verbosity of log; Repeat multiple times as needed.", NULL },
 #ifdef DONNA_DEBUG_ENABLED
-        { "debug",      'd', 0, G_OPTION_ARG_CALLBACK, cmdline_cb,
+        { "debug",      'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Define \"filters\" for the debug log messages", "FILTERS" },
 #endif
         { NULL }
