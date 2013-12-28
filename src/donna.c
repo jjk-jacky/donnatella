@@ -4011,7 +4011,14 @@ cmdline_cb (const gchar         *option,
     }
 #ifdef DONNA_DEBUG_ENABLED
     else if (streq (option, "-d") || streq (option, "--debug"))
-        return donna_debug_set_valid (g_strdup (value), error);
+    {
+        if (!donna_debug_set_valid (g_strdup (value), error))
+            return FALSE;
+        /* make sure the loglevel is at least debug */
+        if (data->loglevel < G_LOG_LEVEL_DEBUG)
+            data->loglevel = G_LOG_LEVEL_DEBUG;
+        return TRUE;
+    }
 #endif
 
     g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
