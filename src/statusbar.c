@@ -4,6 +4,7 @@
 #include <string.h>
 #include "statusbar.h"
 #include "macros.h"
+#include "debug.h"
 
 #define DONNA_RENDERER_TEXT         't'
 #define DONNA_RENDERER_PIXBUF       'p'
@@ -468,6 +469,7 @@ donna_status_bar_add_area (DonnaStatusBar       *sb,
 {
     DonnaStatusBarPrivate *priv;
     struct area area;
+    gchar buf[25];
     const gchar *rend;
     guint i;
 
@@ -548,7 +550,8 @@ donna_status_bar_add_area (DonnaStatusBar       *sb,
         gtk_cell_area_box_pack_start ((GtkCellAreaBox *) area.area, *r,
                 area.expand && rend[1] == '\0', FALSE, FALSE);
     }
-    area.sid_status_changed = g_signal_connect (sp, "status-changed",
+    snprintf (buf, 25, "status-changed::%d", id);
+    area.sid_status_changed = g_signal_connect (sp, buf,
             (GCallback) status_changed, sb);
 
     g_array_append_val (priv->areas, area);
@@ -592,8 +595,12 @@ donna_status_bar_update_area (DonnaStatusBar       *sb,
                 if (area->sid_status_changed > 0)
                     g_signal_handler_disconnect (area->sp, area->sid_status_changed);
                 if (sp)
-                    area->sid_status_changed = g_signal_connect (sp, "status-changed",
+                {
+                    gchar buf[25];
+                    snprintf (buf, 25, "status-changed::%d", id);
+                    area->sid_status_changed = g_signal_connect (sp, buf,
                             (GCallback) status_changed, sb);
+                }
                 else
                     area->sid_status_changed = 0;
                 if (area->sp)

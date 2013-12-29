@@ -30,7 +30,7 @@ donna_status_provider_default_init (DonnaStatusProviderInterface *interface)
     donna_status_provider_signals[STATUS_CHANGED] =
         g_signal_new ("status-changed",
                 DONNA_TYPE_STATUS_PROVIDER,
-                G_SIGNAL_RUN_LAST,
+                G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
                 G_STRUCT_OFFSET (DonnaStatusProviderInterface, status_changed),
                 NULL,
                 NULL,
@@ -46,10 +46,15 @@ void
 donna_status_provider_status_changed (DonnaStatusProvider *sp,
                                       guint                id)
 {
+    GQuark detail;
+    gchar buf[8];
+
     g_return_if_fail (DONNA_IS_STATUS_PROVIDER (sp));
     g_return_if_fail (id > 0);
 
-    g_signal_emit (sp, donna_status_provider_signals[STATUS_CHANGED], 0, id);
+    snprintf (buf, 8, "%d", id);
+    detail = g_quark_from_string (buf);
+    g_signal_emit (sp, donna_status_provider_signals[STATUS_CHANGED], detail, id);
 }
 
 
