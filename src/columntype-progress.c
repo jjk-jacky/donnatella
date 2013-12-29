@@ -45,9 +45,10 @@ static void             ct_progress_finalize        (GObject            *object)
 static const gchar *    ct_progress_get_name        (DonnaColumnType    *ct);
 static const gchar *    ct_progress_get_renderers   (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_progress_refresh_data (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void             ct_progress_free_data       (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -63,9 +64,10 @@ static gint             ct_progress_node_cmp        (DonnaColumnType    *ct,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
 static DonnaColumnTypeNeed ct_progress_set_option   (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -190,9 +192,10 @@ ct_progress_get_renderers (DonnaColumnType   *ct)
 
 static DonnaColumnTypeNeed
 ct_progress_refresh_data (DonnaColumnType    *ct,
-                          const gchar        *tv_name,
                           const gchar        *col_name,
                           const gchar        *arr_name,
+                          const gchar        *tv_name,
+                          gboolean            is_tree,
                           gpointer           *_data)
 {
     DonnaColumnTypeProgress *ctpg = (DonnaColumnTypeProgress *) ct;
@@ -207,8 +210,9 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "property", "progress", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "property", "progress", NULL);
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -218,8 +222,9 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "label", "%P", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "label", "%P", NULL);
     if (!streq (data->label, s))
     {
         g_free (data->label);
@@ -227,8 +232,9 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "property_lbl", "", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "property_lbl", "", NULL);
     if (*s == '\0')
     {
         g_free (s);
@@ -243,8 +249,9 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "property_pulse", "pulse", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "property_pulse", "pulse", NULL);
     if (!streq (data->property_pulse, s))
     {
         g_free (data->property_pulse);
@@ -547,9 +554,10 @@ ct_progress_node_cmp (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 ct_progress_set_option (DonnaColumnType    *ct,
-                        const gchar        *tv_name,
                         const gchar        *col_name,
                         const gchar        *arr_name,
+                        const gchar        *tv_name,
+                        gboolean            is_tree,
                         gpointer            _data,
                         const gchar        *option,
                         const gchar        *value,
@@ -561,7 +569,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -575,7 +583,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_lbl"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property_lbl, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -589,7 +597,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_pulse"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property_pulse, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -603,7 +611,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     else if (streq (option, "label"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->label, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 

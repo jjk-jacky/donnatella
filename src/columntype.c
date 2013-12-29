@@ -11,18 +11,20 @@
 /* internal; used by treeview.c */
 DonnaColumnOptionSaveLocation
 _donna_columntype_ask_save_location (DonnaApp     *app,
-                                     const gchar  *tv_name,
                                      const gchar  *col_name,
                                      const gchar  *arr_name,
+                                     const gchar  *tv_name,
+                                     gboolean      is_tree,
                                      const gchar  *def_cat,
                                      const gchar  *option,
                                      guint         from);
 
 static GtkSortType
 default_get_default_sort_order (DonnaColumnType    *ct,
-                                const gchar        *tv_name,
                                 const gchar        *col_name,
                                 const gchar        *arr_name,
+                                const gchar        *tv_name,
+                                gboolean            is_tree,
                                 gpointer            data)
 {
     DonnaApp *app;
@@ -39,7 +41,7 @@ default_get_default_sort_order (DonnaColumnType    *ct,
         strcpy (stpcpy (buf, "columntypes/"), type);
 
     order = (donna_config_get_boolean_column (donna_app_peek_config (app),
-                tv_name, col_name, arr_name, b, "desc_first", FALSE, NULL))
+                col_name, arr_name, tv_name, is_tree, b, "desc_first", FALSE, NULL))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
     if (G_UNLIKELY (b != buf))
@@ -166,8 +168,8 @@ helper_get_save_location (DonnaColumnType    *ct,
             save = "arr";
         else if (streqn (*extra, "tree", len))
             save = "tree";
-        else if (streqn (*extra, "col", len))
-            save = "col";
+        else if (streqn (*extra, "mode", len))
+            save = "mode";
         else if (streqn (*extra, "default", len))
             save = "default";
         else
@@ -227,9 +229,10 @@ tree_changed_location (struct asl *asl)
  * special handling when col_name is NULL */
 DonnaColumnOptionSaveLocation
 _donna_columntype_ask_save_location (DonnaApp     *app,
-                                     const gchar  *tv_name,
                                      const gchar  *col_name,
                                      const gchar  *arr_name,
+                                     const gchar  *tv_name,
+                                     gboolean      is_tree,
                                      const gchar  *def_cat,
                                      const gchar  *option,
                                      guint         from)
@@ -246,9 +249,10 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
     GtkWidget *btn_box;
     gchar *s;
     gint row;
+    gboolean is_tree_option = col_name == NULL;
 
     win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    if (col_name)
+    if (!is_tree_option)
         gtk_widget_set_name (win, "columnoption-save-location");
     else
         gtk_widget_set_name (win, "treeoption-save-location");
@@ -266,13 +270,13 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
     gtk_style_context_add_class (context, "title");
     gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
 
-    if (col_name)
+    if (!is_tree_option)
         s = g_strdup_printf ("Column options can be saved in different locations, "
                 "each with a different reach. Select where the new value for "
                 "option '%s' of column '%s' will be saved.",
                 option, col_name);
     else
-        s = g_strdup_printf ("Tree options can be saved in two locations, "
+        s = g_strdup_printf ("Tree options can be saved in different locations, "
                 "each with a different reach. Select where the new value for "
                 "option '%s' will be saved.",
                 option);
@@ -291,7 +295,7 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
     gtk_box_pack_start ((GtkBox *) hbox, w, FALSE, FALSE, 0);
     row = 0;
 
-    if (col_name)
+    if (!is_tree_option)
     {
         btn = gtk_radio_button_new (NULL);
         btn_grp = (GtkRadioButton *) btn;
@@ -328,11 +332,13 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
         btn_grp = (GtkRadioButton *) btn;
     }
     w = gtk_label_new (NULL);
-    gtk_label_set_markup ((GtkLabel *) w, "As a <b>treeview</b> option");
+    s = g_strdup_printf ("In <b>treeview '%s'</b> only", tv_name);
+    gtk_label_set_markup ((GtkLabel *) w, s);
+    g_free (s);
     gtk_container_add ((GtkContainer *) btn, w);
     gtk_grid_attach (grid, btn, 0, row, 1, 1);
     w = gtk_label_new (NULL);
-    if (col_name)
+    if (!is_tree_option)
         s = g_strdup_printf ("(<i>treeviews/%s/columns/%s</i>)", tv_name, col_name);
     else
         s = g_strdup_printf ("(<i>treeviews/%s</i>)", tv_name);
@@ -346,50 +352,57 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
             GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_TREE));
     ++row;
 
-    if (col_name)
+    btn = gtk_radio_button_new_from_widget (btn_grp);
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, (is_tree)
+            ? "As <b>mode</b> default (i.e. for <b>trees</b>)"
+            : "As <b>mode</b> default (i.e. for <b>lists</b>)");
+    gtk_container_add ((GtkContainer *) btn, w);
+    gtk_grid_attach (grid, btn, 0, row, 1, 1);
+    w = gtk_label_new (NULL);
+    if (is_tree_option)
+        s = g_strdup_printf ("(<i>defaults/treeviews/%s</i>)",
+                (is_tree) ? "tree": "list");
+    else
+        s = g_strdup_printf ("(<i>defaults/treeviews/%s/columns/%s</i>)",
+                (is_tree) ? "tree": "list", col_name);
+    gtk_label_set_markup ((GtkLabel *) w, s);
+    g_free (s);
+    gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+    if (from == _DONNA_CONFIG_COLUMN_FROM_MODE)
+        g_object_set (btn, "active", TRUE, NULL);
+    gtk_grid_attach (grid, w, 1, row, 1, 1);
+    g_object_set_data ((GObject *) btn, "_from",
+            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_MODE));
+    ++row;
+
+    if (!is_tree_option)
     {
         btn = gtk_radio_button_new_from_widget (btn_grp);
         w = gtk_label_new (NULL);
-        gtk_label_set_markup ((GtkLabel *) w, "As a <b>column</b> option");
+        gtk_label_set_markup ((GtkLabel *) w, "As a new <b>default</b>");
         gtk_container_add ((GtkContainer *) btn, w);
-        gtk_grid_attach (grid, btn, 0, row, 1, 1);
-        w = gtk_label_new (NULL);
-        s = g_strdup_printf ("(<i>columns/%s</i>)", col_name);
-        gtk_label_set_markup ((GtkLabel *) w, s);
-        g_free (s);
-        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
-        if (from == _DONNA_CONFIG_COLUMN_FROM_COLUMN)
-            g_object_set (btn, "active", TRUE, NULL);
-        gtk_grid_attach (grid, w, 1, row, 1, 1);
+        if (!def_cat)
+        {
+            gtk_widget_set_sensitive (btn, FALSE);
+            gtk_grid_attach (grid, btn, 0, row, 2, 1);
+        }
+        else
+        {
+            gtk_grid_attach (grid, btn, 0, row, 1, 1);
+
+            w = gtk_label_new (NULL);
+            s = g_strdup_printf ("(<i>defaults/%s</i>)", def_cat);
+            gtk_label_set_markup ((GtkLabel *) w, s);
+            g_free (s);
+            gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+            if (from == _DONNA_CONFIG_COLUMN_FROM_DEFAULT)
+                g_object_set (btn, "active", TRUE, NULL);
+            gtk_grid_attach (grid, w, 1, row, 1, 1);
+        }
         g_object_set_data ((GObject *) btn, "_from",
-                GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_COLUMN));
-        ++row;
+                GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT));
     }
-
-    btn = gtk_radio_button_new_from_widget (btn_grp);
-    w = gtk_label_new (NULL);
-    gtk_label_set_markup ((GtkLabel *) w, "As a new <b>default</b>");
-    gtk_container_add ((GtkContainer *) btn, w);
-    if (!def_cat)
-    {
-        gtk_widget_set_sensitive (btn, FALSE);
-        gtk_grid_attach (grid, btn, 0, row, 2, 1);
-    }
-    else
-    {
-        gtk_grid_attach (grid, btn, 0, row, 1, 1);
-
-        w = gtk_label_new (NULL);
-        s = g_strdup_printf ("(<i>defaults/%s</i>)", def_cat);
-        gtk_label_set_markup ((GtkLabel *) w, s);
-        g_free (s);
-        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
-        if (from == _DONNA_CONFIG_COLUMN_FROM_DEFAULT)
-            g_object_set (btn, "active", TRUE, NULL);
-        gtk_grid_attach (grid, w, 1, row, 1, 1);
-    }
-    g_object_set_data ((GObject *) btn, "_from",
-            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT));
 
     asl.win = win;
     asl.list = gtk_radio_button_get_group ((GtkRadioButton *) btn);
@@ -465,9 +478,10 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
     }
 static gboolean
 helper_set_option (DonnaColumnType    *ct,
-                   const gchar        *tv_name,
                    const gchar        *col_name,
                    const gchar        *arr_name,
+                   const gchar        *tv_name,
+                   gboolean            is_tree,
                    const gchar        *def_cat,
                    DonnaColumnOptionSaveLocation save_location,
                    const gchar        *option,
@@ -494,8 +508,8 @@ helper_set_option (DonnaColumnType    *ct,
         {
             gchar *s;
 
-            s = donna_config_get_string_column (config,
-                    tv_name, col_name, arr_name, def_cat, option, NULL, &from);
+            s = donna_config_get_string_column (config, col_name,
+                    arr_name, tv_name, is_tree, def_cat, option, NULL, &from);
             if (!streq (* (gchar ** ) current, s))
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
@@ -514,8 +528,8 @@ helper_set_option (DonnaColumnType    *ct,
         {
             gboolean b;
 
-            b = donna_config_get_boolean_column (config,
-                    tv_name, col_name, arr_name, def_cat, option, FALSE, &from);
+            b = donna_config_get_boolean_column (config, col_name,
+                    arr_name, tv_name, is_tree, def_cat, option, FALSE, &from);
             if (b != * (gboolean *) current)
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
@@ -533,8 +547,8 @@ helper_set_option (DonnaColumnType    *ct,
         {
             gint i;
 
-            i = donna_config_get_int_column (config,
-                    tv_name, col_name, arr_name, def_cat, option, 0, &from);
+            i = donna_config_get_int_column (config, col_name,
+                    arr_name, tv_name, is_tree, def_cat, option, 0, &from);
             if (i != * (gint *) current)
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
@@ -551,8 +565,8 @@ helper_set_option (DonnaColumnType    *ct,
         {
             gdouble d;
 
-            d = donna_config_get_double_column (config,
-                    tv_name, col_name, arr_name, def_cat, option, 0.0, &from);
+            d = donna_config_get_double_column (config, col_name,
+                    arr_name, tv_name, is_tree, def_cat, option, 0.0, &from);
             if (d != * (gdouble *) current)
             {
                 g_set_error (error, DONNA_COLUMNTYPE_ERROR,
@@ -569,7 +583,7 @@ helper_set_option (DonnaColumnType    *ct,
         if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
         {
             save_location = _donna_columntype_ask_save_location (app,
-                    tv_name, col_name, arr_name, def_cat, option, from);
+                    col_name, arr_name, tv_name, is_tree, def_cat, option, from);
             if (save_location == (guint) -1)
             {
                 g_object_unref (app);
@@ -586,8 +600,8 @@ helper_set_option (DonnaColumnType    *ct,
                 case _DONNA_CONFIG_COLUMN_FROM_TREE:
                     save_location = DONNA_COLUMN_OPTION_SAVE_IN_TREE;
                     break;
-                case _DONNA_CONFIG_COLUMN_FROM_COLUMN:
-                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_COLUMN;
+                case _DONNA_CONFIG_COLUMN_FROM_MODE:
+                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_MODE;
                     break;
                 case _DONNA_CONFIG_COLUMN_FROM_DEFAULT:
                     save_location = DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT;
@@ -627,9 +641,10 @@ helper_set_option (DonnaColumnType    *ct,
         cfg_set ("treeview", "treeviews/%s/columns/%s/%s",
                 tv_name, col_name, option);
     }
-    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_COLUMN)
+    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MODE)
     {
-        cfg_set ("column", "columns/%s/%s", col_name, option);
+        cfg_set ("column", "defaults/treeviews/%s/columns/%s/%s",
+                (is_tree) ? "tree" : "list", col_name, option);
     }
     else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT)
     {
@@ -743,9 +758,10 @@ donna_columntype_get_renderers (DonnaColumnType  *ct)
 
 DonnaColumnTypeNeed
 donna_columntype_refresh_data (DonnaColumnType  *ct,
-                               const gchar        *tv_name,
                                const gchar        *col_name,
                                const gchar        *arr_name,
+                               const gchar        *tv_name,
+                               gboolean            is_tree,
                                gpointer           *data)
 {
     DonnaColumnTypeInterface *interface;
@@ -759,7 +775,7 @@ donna_columntype_refresh_data (DonnaColumnType  *ct,
     g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
     g_return_val_if_fail (interface->refresh_data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
 
-    return (*interface->refresh_data) (ct, tv_name, col_name, arr_name, data);
+    return (*interface->refresh_data) (ct, col_name, arr_name, tv_name, is_tree, data);
 }
 
 void
@@ -799,9 +815,10 @@ donna_columntype_get_props (DonnaColumnType    *ct,
 
 GtkSortType
 donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
-                                         const gchar        *tv_name,
                                          const gchar        *col_name,
                                          const gchar        *arr_name,
+                                         const gchar        *tv_name,
+                                         gboolean            is_tree,
                                          gpointer            data)
 {
     DonnaColumnTypeInterface *interface;
@@ -815,7 +832,8 @@ donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
     g_return_val_if_fail (interface != NULL, GTK_SORT_ASCENDING);
     g_return_val_if_fail (interface->get_default_sort_order != NULL, GTK_SORT_ASCENDING);
 
-    return (*interface->get_default_sort_order) (ct, tv_name, col_name, arr_name, data);
+    return (*interface->get_default_sort_order) (ct, col_name, arr_name,
+            tv_name, is_tree, data);
 }
 
 gboolean
@@ -866,9 +884,10 @@ donna_columntype_edit (DonnaColumnType    *ct,
 
 DonnaColumnTypeNeed
 donna_columntype_set_option (DonnaColumnType    *ct,
-                             const gchar        *tv_name,
                              const gchar        *col_name,
                              const gchar        *arr_name,
+                             const gchar        *tv_name,
+                             gboolean            is_tree,
                              gpointer            data,
                              const gchar        *option,
                              const gchar        *value,
@@ -896,8 +915,8 @@ donna_columntype_set_option (DonnaColumnType    *ct,
         return DONNA_COLUMNTYPE_NEED_NOTHING;
     }
 
-    return (*interface->set_option) (ct, tv_name, col_name, arr_name, data,
-            option, value, save_location, error);
+    return (*interface->set_option) (ct, col_name, arr_name, tv_name, is_tree,
+            data, option, value, save_location, error);
 }
 
 gboolean

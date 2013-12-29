@@ -269,7 +269,8 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
         priv->option_deleted_sid = g_signal_connect (config, "option-deleted",
                 (GCallback) option_cb, filter);
 
-    if (donna_config_get_string (config, NULL, &type, "columns/%s/type", col_name))
+    if (donna_config_get_string (config, NULL, &type,
+                "defaults/treeviews/list/columns/%s/type", col_name))
         ct = donna_app_get_columntype (priv->app, type);
     else
         /* fallback to its name */

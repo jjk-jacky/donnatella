@@ -156,21 +156,23 @@ static gboolean         provider_config_get_context_item_info (
 /* internal, for treeview.c */
 gboolean
 _donna_config_get_boolean_tree_column (DonnaConfig   *config,
-                                       const gchar   *tv_name,
                                        const gchar   *col_name,
-                                       guint          tree_col,
                                        const gchar   *arr_name,
+                                       const gchar   *tv_name,
+                                       gboolean       is_tree,
                                        const gchar   *def_cat,
                                        const gchar   *opt_name,
+                                       guint          tree_col,
                                        gboolean      *ret);
 gchar *
 _donna_config_get_string_tree_column (DonnaConfig   *config,
-                                      const gchar   *tv_name,
                                       const gchar   *col_name,
-                                      guint          tree_col,
                                       const gchar   *arr_name,
+                                      const gchar   *tv_name,
+                                      gboolean       is_tree,
                                       const gchar   *def_cat,
                                       const gchar   *opt_name,
+                                      guint          tree_col,
                                       gchar         *def_val);
 
 
@@ -1942,9 +1944,10 @@ static gboolean
 _get_option_column (DonnaConfig  *config,
                     GType         type,
                     GValue       *value,
-                    const gchar  *tv_name,
                     const gchar  *col_name,
                     const gchar  *arr_name,
+                    const gchar  *tv_name,
+                    gboolean      is_tree,
                     const gchar  *def_cat,
                     const gchar  *opt_name,
                     guint         tree_col,
@@ -1955,8 +1958,11 @@ _get_option_column (DonnaConfig  *config,
     GNode *child;
     GValue *v;
     gsize len_col = (col_name) ? strlen (col_name) : 0;
+    gsize len_tv  = (tv_name) ? strlen (tv_name) : 0;
     gsize len_opt = strlen (opt_name);
     struct option *option;
+
+    g_return_val_if_fail (opt_name != NULL, FALSE);
 
     g_rw_lock_reader_lock (&priv->lock);
 
@@ -1985,87 +1991,54 @@ _get_option_column (DonnaConfig  *config,
 
 treeview:
     if (!tv_name)
-        goto column;
+        goto def;
     node = priv->root;
-    get_child_cat ("treeviews", 9, column);
-    get_child_cat (tv_name, strlen (tv_name), column);
-    get_child_cat ("columns", 7, column);
-    get_child_cat (col_name, len_col, column);
+    get_child_cat ("treeviews", 9, mode);
+    get_child_cat (tv_name, len_tv, mode);
+    get_child_cat ("columns", 7, mode);
+    get_child_cat (col_name, len_col, mode);
     if (tree_col == TREE_COL_LIST_SELECTED)
-        get_child_cat ("selected", 8, treeview);
-    get_child_opt (opt_name, len_opt, type, column);
+        get_child_cat ("selected", 8, mode);
+    get_child_opt (opt_name, len_opt, type, mode);
     if (from)
         *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
     goto get_value;
 
-column:
+mode:
     if (!col_name)
         /* implies is_tree_col, since then we can ask for the blank column */
-        goto tree_col;
+        goto def;
     node = priv->root;
-    if (def_cat)
-    {
-        if (tree_col)
-        {
-            get_child_cat ("columns", 7, tree_col);
-            get_child_cat (col_name, len_col, tree_col);
-            if (tree_col == TREE_COL_LIST_SELECTED)
-                get_child_cat ("selected", 8, tree_col);
-            get_child_opt (opt_name, len_opt, type, tree_col);
-        }
-        else
-        {
-            get_child_cat ("columns", 7, def);
-            get_child_cat (col_name, len_col, def);
-            get_child_opt (opt_name, len_opt, type, def);
-        }
-        if (from)
-            *from = _DONNA_CONFIG_COLUMN_FROM_COLUMN;
-        goto get_value;
-    }
-    /* we need to check columns, and set the default if nothing found */
-    g_rw_lock_reader_unlock (&priv->lock);
-    option = __get_option (config, type, TRUE, "columns/%s/%s",
-            col_name, opt_name);
-    if (option)
-    {
-        g_value_copy (&option->value, value);
-        if (from)
-            *from = _DONNA_CONFIG_COLUMN_FROM_COLUMN;
-    }
-    g_rw_lock_reader_unlock (&priv->lock);
-    return option != NULL;
-
-tree_col:
-    node = priv->root;
+    get_child_cat ("defaults", 8, def);
     get_child_cat ("treeviews", 9, def);
-    get_child_cat (tv_name, strlen (tv_name), def);
+    get_child_cat ((is_tree) ? "tree" : "list", 4, def);
+    get_child_cat ("columns", 7, def);
+    get_child_cat (col_name, len_col, def);
     if (tree_col == TREE_COL_LIST_SELECTED)
         get_child_cat ("selected", 8, def);
     get_child_opt (opt_name, len_opt, type, def);
+    if (from)
+        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
     goto get_value;
 
 def:
-    g_rw_lock_reader_unlock (&priv->lock);
-    if (tree_col)
+    if (!col_name && tv_name)
     {
-        option = __get_option (config, type, TRUE, "defaults/%s/columns/%s/%s%s",
-                def_cat,
-                col_name,
-                (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
-                opt_name);
-        if (option)
-        {
-            g_value_copy (&option->value, value);
-            g_rw_lock_reader_unlock (&priv->lock);
-            return TRUE;
-        }
-        g_rw_lock_reader_unlock (&priv->lock);
+        node = priv->root;
+        get_child_cat ("treeviews", 9, def_tree);
+        get_child_cat (tv_name, len_tv, def_tree);
+        if (tree_col == TREE_COL_LIST_SELECTED)
+            get_child_cat ("selected", 8, def_tree);
+        get_child_opt (opt_name, len_opt, type, def_tree);
+        goto get_value;
     }
-    option = __get_option (config, type, TRUE, "defaults/%s/%s%s",
-            def_cat,
-            (tree_col == TREE_COL_LIST_SELECTED) ? "selected/" : "",
-            opt_name);
+    if (!def_cat)
+        goto not_found;
+
+def_tree:
+    /* because def_cat might be a string/with/multiple/categories */
+    g_rw_lock_reader_unlock (&priv->lock);
+    option = __get_option (config, type, TRUE, "defaults/%s/%s", def_cat, opt_name);
     if (option)
     {
         g_value_copy (&option->value, value);
@@ -2079,6 +2052,10 @@ get_value:
     g_value_copy (v, value);
     g_rw_lock_reader_unlock (&priv->lock);
     return TRUE;
+
+not_found:
+    g_rw_lock_reader_unlock (&priv->lock);
+    return FALSE;
 }
 
 #undef get_child_opt
@@ -2090,17 +2067,18 @@ get_value:
                                                                     \
     g_value_init (&value, G_TYPE_##gtype);                          \
     if (!_get_option_column (config, G_TYPE_##gtype, &value,        \
-                tv_name, col_name, arr_name,                        \
+                col_name, arr_name, tv_name, is_tree,               \
                 def_cat, opt_name, 0, from))                        \
     {                                                               \
         g_value_unset (&value);                                     \
         donna_config_set_##cfg_set (config, NULL, def_val,          \
-                (def_cat) ? "defaults/%s/%s" : "columns/%s/%s",     \
-                (def_cat) ? def_cat : col_name,                     \
+                (def_cat) ? "defaults/%s/%s" : "defaults/treeviews/%s/columns/%s/%s", \
+                (def_cat) ? def_cat : (is_tree) ? "tree" : "list",  \
+                (def_cat) ? opt_name : col_name,                    \
                 opt_name);                                          \
         if (from)                                                   \
             *from = (def_cat) ? _DONNA_CONFIG_COLUMN_FROM_DEFAULT   \
-                : _DONNA_CONFIG_COLUMN_FROM_COLUMN;                 \
+                : _DONNA_CONFIG_COLUMN_FROM_MODE;                   \
         return dup_def (def_val);                                   \
     }                                                               \
     ret = g_value_##gvalue_get (&value);                            \
@@ -2110,9 +2088,10 @@ get_value:
 
 gboolean
 donna_config_get_boolean_column (DonnaConfig *config,
-                                 const gchar *tv_name,
                                  const gchar *col_name,
                                  const gchar *arr_name,
+                                 const gchar *tv_name,
+                                 gboolean     is_tree,
                                  const gchar *def_cat,
                                  const gchar *opt_name,
                                  gboolean     def_val,
@@ -2123,9 +2102,10 @@ donna_config_get_boolean_column (DonnaConfig *config,
 
 gint
 donna_config_get_int_column (DonnaConfig *config,
-                             const gchar *tv_name,
                              const gchar *col_name,
                              const gchar *arr_name,
+                             const gchar *tv_name,
+                             gboolean     is_tree,
                              const gchar *def_cat,
                              const gchar *opt_name,
                              gint         def_val,
@@ -2136,9 +2116,10 @@ donna_config_get_int_column (DonnaConfig *config,
 
 gdouble
 donna_config_get_double_column (DonnaConfig *config,
-                                const gchar *tv_name,
                                 const gchar *col_name,
                                 const gchar *arr_name,
+                                const gchar *tv_name,
+                                gboolean     is_tree,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
                                 gdouble      def_val,
@@ -2149,9 +2130,10 @@ donna_config_get_double_column (DonnaConfig *config,
 
 gchar *
 donna_config_get_string_column (DonnaConfig *config,
-                                const gchar *tv_name,
                                 const gchar *col_name,
                                 const gchar *arr_name,
+                                const gchar *tv_name,
+                                gboolean     is_tree,
                                 const gchar *def_cat,
                                 const gchar *opt_name,
                                 const gchar *def_val,
@@ -2162,12 +2144,13 @@ donna_config_get_string_column (DonnaConfig *config,
 
 gchar *
 _donna_config_get_string_tree_column (DonnaConfig   *config,
-                                      const gchar   *tv_name,
                                       const gchar   *col_name,
-                                      guint          tree_col,
                                       const gchar   *arr_name,
+                                      const gchar   *tv_name,
+                                      gboolean       is_tree,
                                       const gchar   *def_cat,
                                       const gchar   *opt_name,
+                                      guint          tree_col,
                                       gchar         *def_val)
 {
     GValue value = G_VALUE_INIT;
@@ -2177,7 +2160,7 @@ _donna_config_get_string_tree_column (DonnaConfig   *config,
 
     g_value_init (&value, G_TYPE_STRING);
     if (!_get_option_column (config, G_TYPE_STRING, &value,
-                tv_name, col_name, arr_name, def_cat, opt_name, tree_col, NULL))
+                col_name, arr_name, tv_name, is_tree, def_cat, opt_name, tree_col, NULL))
     {
         g_value_unset (&value);
         if (!def_val)
@@ -2195,12 +2178,13 @@ _donna_config_get_string_tree_column (DonnaConfig   *config,
 
 gboolean
 _donna_config_get_boolean_tree_column (DonnaConfig   *config,
-                                       const gchar   *tv_name,
                                        const gchar   *col_name,
-                                       guint          tree_col,
                                        const gchar   *arr_name,
+                                       const gchar   *tv_name,
+                                       gboolean       is_tree,
                                        const gchar   *def_cat,
                                        const gchar   *opt_name,
+                                       guint          tree_col,
                                        gboolean      *ret)
 {
     GValue value = G_VALUE_INIT;
@@ -2209,7 +2193,7 @@ _donna_config_get_boolean_tree_column (DonnaConfig   *config,
 
     g_value_init (&value, G_TYPE_BOOLEAN);
     if (!_get_option_column (config, G_TYPE_BOOLEAN, &value,
-                tv_name, col_name, arr_name, def_cat, opt_name, tree_col, NULL))
+                col_name, arr_name, tv_name, is_tree, def_cat, opt_name, tree_col, NULL))
     {
         g_value_unset (&value);
         return FALSE;

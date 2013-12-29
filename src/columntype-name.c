@@ -52,9 +52,10 @@ static void             ct_name_finalize            (GObject            *object)
 static const gchar *    ct_name_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_name_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_name_refresh_data     (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void             ct_name_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -102,9 +103,10 @@ static gboolean         ct_name_is_match_filter     (DonnaColumnType    *ct,
 static void             ct_name_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_name_set_option       (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -234,8 +236,8 @@ ct_name_get_renderers (DonnaColumnType   *ct)
 }
 
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
-    if (donna_config_get_boolean_column (config, tv_name, col_name, arr_name, \
-                "sort", opt_name_lower, def_val, NULL) == value)              \
+    if (donna_config_get_boolean_column (config, col_name, arr_name, tv_name, \
+                is_tree, "sort", opt_name_lower, def_val, NULL) == value)     \
     {                                                                         \
         if (!(data->options & opt_name_upper))                                \
         {                                                                     \
@@ -251,9 +253,10 @@ ct_name_get_renderers (DonnaColumnType   *ct)
 
 static DonnaColumnTypeNeed
 ct_name_refresh_data (DonnaColumnType    *ct,
-                      const gchar        *tv_name,
                       const gchar        *col_name,
                       const gchar        *arr_name,
+                      const gchar        *tv_name,
+                      gboolean            is_tree,
                       gpointer           *_data)
 {
     DonnaColumnTypeName *ctname = DONNA_COLUMNTYPE_NAME (ct);
@@ -268,7 +271,8 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     if (data->is_locale_based != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "sort", "locale_based", FALSE, NULL))
+                col_name, arr_name, tv_name, is_tree, "sort",
+                "locale_based", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_RESORT;
         data->is_locale_based = !data->is_locale_based;
@@ -292,7 +296,8 @@ ct_name_refresh_data (DonnaColumnType    *ct,
     if (data->is_locale_based)
     {
         if (data->sort_special_first != donna_config_get_boolean_column (config,
-                    tv_name, col_name, arr_name, "sort", "special_first", TRUE, NULL))
+                    col_name, arr_name, tv_name, is_tree, "sort",
+                    "special_first", TRUE, NULL))
         {
             need |= DONNA_COLUMNTYPE_NEED_RESORT;
             data->sort_special_first = !data->sort_special_first;
@@ -786,9 +791,10 @@ ct_name_free_filter_data (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 ct_name_set_option (DonnaColumnType    *ct,
-                    const gchar        *tv_name,
                     const gchar        *col_name,
                     const gchar        *arr_name,
+                    const gchar        *tv_name,
+                    gboolean            is_tree,
                     gpointer            _data,
                     const gchar        *option,
                     const gchar        *value,
@@ -815,7 +821,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -832,7 +838,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -849,7 +855,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = data->is_locale_based;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -874,7 +880,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = data->sort_special_first;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -888,7 +894,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE : TRUE;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -905,7 +911,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -922,7 +928,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 

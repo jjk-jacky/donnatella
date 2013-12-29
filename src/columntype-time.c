@@ -98,9 +98,10 @@ static void             ct_time_finalize            (GObject            *object)
 static const gchar *    ct_time_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_time_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_time_refresh_data     (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void             ct_time_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -148,9 +149,10 @@ static gboolean         ct_time_is_match_filter     (DonnaColumnType    *ct,
 static void             ct_time_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_time_set_option       (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -280,9 +282,10 @@ ct_time_get_renderers (DonnaColumnType   *ct)
 
 static DonnaColumnTypeNeed
 ct_time_refresh_data (DonnaColumnType    *ct,
-                      const gchar        *tv_name,
                       const gchar        *col_name,
                       const gchar        *arr_name,
+                      const gchar        *tv_name,
+                      gboolean            is_tree,
                       gpointer           *_data)
 {
     DonnaColumnTypeTime *cttime = DONNA_COLUMNTYPE_TIME (ct);
@@ -298,8 +301,9 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/time", "property", "mtime", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/time",
+            "property", "mtime", NULL);
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -318,8 +322,9 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "time", "format", "%O", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "time",
+            "format", "%O", NULL);
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -329,16 +334,18 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    sec = (guint) donna_config_get_int_column (config, tv_name, col_name, arr_name,
-            "time", "age_span_seconds", 7*24*3600, NULL);
+    sec = (guint) donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, "time",
+            "age_span_seconds", 7*24*3600, NULL);
     if (data->options.age_span_seconds != sec)
     {
         data->options.age_span_seconds = sec;
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "time", "age_fallback_format", "%F %T", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "time",
+            "age_fallback_format", "%F %T", NULL);
     if (!streq (data->options.age_fallback_format, s))
     {
         g_free ((gchar *) data->options.age_fallback_format);
@@ -348,8 +355,9 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/time", "property_tooltip", "mtime", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/time",
+            "property_tooltip", "mtime", NULL);
     if (!streq (data->property_tooltip, s))
     {
         g_free (data->property_tooltip);
@@ -367,8 +375,9 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/time", "format_tooltip", "%c", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/time",
+            "format_tooltip", "%c", NULL);
     if (!streq (data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -377,15 +386,17 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    sec = (guint) donna_config_get_int_column (config, tv_name, col_name, arr_name,
-            NULL, "age_span_seconds_tooltip", 7*24*3600, NULL);
+    sec = (guint) donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "age_span_seconds_tooltip", 7*24*3600, NULL);
     if (data->options_tooltip.age_span_seconds != sec)
     {
         data->options_tooltip.age_span_seconds = sec;
     }
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "age_fallback_format_tooltip", "%F %T", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "age_fallback_format_tooltip", "%F %T", NULL);
     if (!streq (data->options_tooltip.age_fallback_format, s))
     {
         g_free ((gchar *) data->options_tooltip.age_fallback_format);
@@ -1880,9 +1891,10 @@ ct_time_free_filter_data (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 ct_time_set_option (DonnaColumnType    *ct,
-                    const gchar        *tv_name,
                     const gchar        *col_name,
                     const gchar        *arr_name,
+                    const gchar        *tv_name,
+                    gboolean            is_tree,
                     gpointer            _data,
                     const gchar        *option,
                     const gchar        *value,
@@ -1894,7 +1906,8 @@ ct_time_set_option (DonnaColumnType    *ct,
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/time", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/time",
+                    save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1918,7 +1931,7 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "time", save_location,
+                    col_name, arr_name, tv_name, is_tree, "time", save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1936,7 +1949,7 @@ ct_time_set_option (DonnaColumnType    *ct,
         c = (gint) data->options.age_span_seconds;
         v = (gint) g_ascii_strtoull (value, NULL, 10);
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "time", save_location,
+                    col_name, arr_name, tv_name, is_tree, "time", save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1952,7 +1965,7 @@ ct_time_set_option (DonnaColumnType    *ct,
 
         c = (gchar *) data->options.age_fallback_format;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "time", save_location,
+                    col_name, arr_name, tv_name, is_tree, "time", save_location,
                     option, G_TYPE_STRING, &c, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1966,7 +1979,8 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_tooltip"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/time", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/time",
+                    save_location,
                     option, G_TYPE_STRING, &data->property_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1990,7 +2004,8 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format_tooltip"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "time", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/time",
+                    save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2008,7 +2023,7 @@ ct_time_set_option (DonnaColumnType    *ct,
         c = (gint) data->options_tooltip.age_span_seconds;
         v = (gint) g_ascii_strtoull (value, NULL, 10);
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2024,7 +2039,7 @@ ct_time_set_option (DonnaColumnType    *ct,
 
         c = (gchar *) data->options_tooltip.age_fallback_format;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &c, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 

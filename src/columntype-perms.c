@@ -120,9 +120,10 @@ static void             ct_perms_finalize           (GObject            *object)
 static const gchar *    ct_perms_get_name           (DonnaColumnType    *ct);
 static const gchar *    ct_perms_get_renderers      (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_perms_refresh_data    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void             ct_perms_free_data          (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -130,9 +131,10 @@ static GPtrArray *      ct_perms_get_props          (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GtkSortType      ct_perms_get_default_sort_order
                                                     (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data);
 static gboolean         ct_perms_can_edit           (DonnaColumnType    *ct,
                                                      gpointer            data,
@@ -176,9 +178,10 @@ static gboolean         ct_perms_is_match_filter    (DonnaColumnType    *ct,
 static void             ct_perms_free_filter_data   (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_perms_set_option      (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -331,9 +334,10 @@ ct_perms_get_renderers (DonnaColumnType   *ct)
 
 static DonnaColumnTypeNeed
 ct_perms_refresh_data (DonnaColumnType    *ct,
-                       const gchar        *tv_name,
                        const gchar        *col_name,
                        const gchar        *arr_name,
+                       const gchar        *tv_name,
+                       gboolean            is_tree,
                        gpointer           *_data)
 {
     DonnaColumnTypePerms *ctperms = DONNA_COLUMNTYPE_PERMS (ct);
@@ -349,8 +353,9 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "format", "%S", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/perms",
+            "format", "%S", NULL);
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -360,8 +365,9 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "format_tooltip", "%p %V:%H", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/perms",
+            "format_tooltip", "%p %V:%H", NULL);
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -372,8 +378,9 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "color_user", "green", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/perms",
+            "color_user", "green", NULL);
     if (!streq (data->color_user, s))
     {
         g_free (data->color_user);
@@ -383,8 +390,9 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "color_group", "blue", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/perms",
+            "color_group", "blue", NULL);
     if (!streq (data->color_group, s))
     {
         g_free (data->color_group);
@@ -394,8 +402,9 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "color_mixed", "#00aaaa", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/perms",
+            "color_mixed", "#00aaaa", NULL);
     if (!streq (data->color_mixed, s))
     {
         g_free (data->color_mixed);
@@ -405,8 +414,9 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    i = donna_config_get_int_column (config, tv_name, col_name, arr_name,
-            "columntypes/perms", "sort", SORT_MY_PERMS, NULL);
+    i = donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/perms",
+            "sort", SORT_MY_PERMS, NULL);
     if (i != data->sort)
     {
         data->sort = (gint8) i;
@@ -485,9 +495,10 @@ ct_perms_get_props (DonnaColumnType  *ct,
 
 static GtkSortType
 ct_perms_get_default_sort_order (DonnaColumnType *ct,
-                                 const gchar     *tv_name,
                                  const gchar     *col_name,
                                  const gchar     *arr_name,
+                                 const gchar     *tv_name,
+                                 gboolean         is_tree,
                                  gpointer         _data)
 {
     struct tv_col_data *data = _data;
@@ -495,7 +506,7 @@ ct_perms_get_default_sort_order (DonnaColumnType *ct,
     return (donna_config_get_boolean_column (donna_app_peek_config (
                     DONNA_COLUMNTYPE_PERMS (ct)->priv->app),
                 /* no default since it's based on option sort */
-                tv_name, col_name, arr_name, NULL, "desc_first",
+                col_name, arr_name, tv_name, is_tree, NULL, "desc_first",
                 data->sort == SORT_PERMS || data->sort == SORT_MY_PERMS, NULL))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 }
@@ -2467,9 +2478,10 @@ ct_perms_free_filter_data (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 ct_perms_set_option (DonnaColumnType    *ct,
-                     const gchar        *tv_name,
                      const gchar        *col_name,
                      const gchar        *arr_name,
+                     const gchar        *tv_name,
+                     gboolean            is_tree,
                      gpointer            _data,
                      const gchar        *option,
                      const gchar        *value,
@@ -2481,7 +2493,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
     if (streq (option, "format"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/perms", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2497,7 +2510,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
         if (*value == '\0')
             value = NULL;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/perms", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2511,7 +2525,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
     else if (streq (option, "color_user"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/perms", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    save_location,
                     option, G_TYPE_STRING, &data->color_user, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2525,7 +2540,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
     else if (streq (option, "color_group"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/perms", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    save_location,
                     option, G_TYPE_STRING, &data->color_group, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2539,7 +2555,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
     else if (streq (option, "color_mixed"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/perms", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    save_location,
                     option, G_TYPE_STRING, &data->color_mixed, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -2577,7 +2594,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
         }
 
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/perms", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 

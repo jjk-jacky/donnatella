@@ -54,7 +54,7 @@ typedef enum
     DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
     DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT,
     DONNA_COLUMN_OPTION_SAVE_IN_TREE,
-    DONNA_COLUMN_OPTION_SAVE_IN_COLUMN,
+    DONNA_COLUMN_OPTION_SAVE_IN_MODE,
     DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT,
     DONNA_COLUMN_OPTION_SAVE_IN_ASK
 } DonnaColumnOptionSaveLocation;
@@ -78,9 +78,10 @@ struct _DonnaColumnTypeInterface
                                              GError            **error);
     gboolean            (*helper_set_option) (
                                              DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
                                              const gchar        *col_name,
                                              const gchar        *arr_name,
+                                             const gchar        *tv_name,
+                                             gboolean            is_tree,
                                              const gchar        *def_cat,
                                              DonnaColumnOptionSaveLocation save_location,
                                              const gchar        *option,
@@ -100,9 +101,10 @@ struct _DonnaColumnTypeInterface
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
     DonnaColumnTypeNeed (*refresh_data)     (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
                                              const gchar        *col_name,
                                              const gchar        *arr_name,
+                                             const gchar        *tv_name,
+                                             gboolean            is_tree,
                                              gpointer           *data);
     void                (*free_data)        (DonnaColumnType    *ct,
                                              gpointer            data);
@@ -110,9 +112,10 @@ struct _DonnaColumnTypeInterface
                                              gpointer            data);
     GtkSortType         (*get_default_sort_order)
                                             (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
                                              const gchar        *col_name,
                                              const gchar        *arr_name,
+                                             const gchar        *tv_name,
+                                             gboolean            is_tree,
                                              gpointer            data);
     gboolean            (*can_edit)         (DonnaColumnType    *ct,
                                              gpointer            data,
@@ -127,9 +130,10 @@ struct _DonnaColumnTypeInterface
                                              DonnaTreeView      *treeview,
                                              GError            **error);
     DonnaColumnTypeNeed (*set_option)       (DonnaColumnType    *ct,
-                                             const gchar        *tv_name,
                                              const gchar        *col_name,
                                              const gchar        *arr_name,
+                                             const gchar        *tv_name,
+                                             gboolean            is_tree,
                                              gpointer            data,
                                              const gchar        *option,
                                              const gchar        *value,
@@ -191,9 +195,10 @@ struct _DonnaColumnTypeInterface
 const gchar *   donna_columntype_get_name       (DonnaColumnType    *ct);
 const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
 DonnaColumnTypeNeed donna_columntype_refresh_data (DonnaColumnType  *ct,
-                                                 const gchar        *tv_name,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
+                                                 const gchar        *tv_name,
+                                                 gboolean            is_tree,
                                                  gpointer           *data);
 void            donna_columntype_free_data      (DonnaColumnType    *ct,
                                                  gpointer            data);
@@ -201,9 +206,10 @@ GPtrArray *     donna_columntype_get_props      (DonnaColumnType    *ct,
                                                  gpointer            data);
 GtkSortType     donna_columntype_get_default_sort_order
                                                 (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
+                                                 const gchar        *tv_name,
+                                                 gboolean            is_tree,
                                                  gpointer            data);
 gboolean        donna_columntype_can_edit       (DonnaColumnType    *ct,
                                                  gpointer            data,
@@ -218,9 +224,10 @@ gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
                                                  DonnaTreeView      *treeview,
                                                  GError            **error);
 DonnaColumnTypeNeed donna_columntype_set_option (DonnaColumnType    *ct,
-                                                 const gchar        *tv_name,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
+                                                 const gchar        *tv_name,
+                                                 gboolean            is_tree,
                                                  gpointer            data,
                                                  const gchar        *option,
                                                  const gchar        *value,

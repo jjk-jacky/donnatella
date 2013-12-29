@@ -1736,14 +1736,14 @@ cmd_tree_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *s_l    = args[4]; /* opt */
 
     const gchar *c_s_l[] = { "memory", "current", "ask", "arrangement", "tree",
-        "column", "default" };
+        "mode", "default" };
     DonnaColumnOptionSaveLocation save_location[] = {
         DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
         DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
         DONNA_COLUMN_OPTION_SAVE_IN_ASK,
         DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT,
         DONNA_COLUMN_OPTION_SAVE_IN_TREE,
-        DONNA_COLUMN_OPTION_SAVE_IN_COLUMN,
+        DONNA_COLUMN_OPTION_SAVE_IN_MODE,
         DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT };
     gint c;
 
@@ -1756,7 +1756,7 @@ cmd_tree_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
                     DONNA_COMMAND_ERROR_OTHER,
                     "Cannot set column option, invalid save location: '%s'; "
                     "Must be 'memory', 'current', 'ask', 'arrangement', 'tree', "
-                    "'column' or 'default'",
+                    "'mode' or 'default'",
                     s_l);
             return DONNA_TASK_FAILED;
         }
@@ -2818,13 +2818,13 @@ cmd_tree_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *value  = args[2];
     const gchar *s_l    = args[3]; /* opt */
 
-    const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "default" };
+    const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "mode" };
     DonnaTreeviewOptionSaveLocation save_location[] = {
         DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
         DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
         DONNA_COLUMN_OPTION_SAVE_IN_ASK,
         DONNA_COLUMN_OPTION_SAVE_IN_TREE,
-        DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT };
+        DONNA_COLUMN_OPTION_SAVE_IN_MODE };
     gint c;
 
     if (s_l)
@@ -2835,7 +2835,7 @@ cmd_tree_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
                     "Cannot set tree option, invalid save location: '%s'; "
-                    "Must be 'memory', 'current', 'ask', 'tree' or 'default'",
+                    "Must be 'memory', 'current', 'ask', 'tree' or 'mode'",
                     s_l);
             return DONNA_TASK_FAILED;
         }

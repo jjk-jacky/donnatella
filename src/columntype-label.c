@@ -53,9 +53,10 @@ static void             ct_label_finalize           (GObject            *object)
 static const gchar *    ct_label_get_name           (DonnaColumnType    *ct);
 static const gchar *    ct_label_get_renderers      (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_label_refresh_data    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void             ct_label_free_data          (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -71,9 +72,10 @@ static gint             ct_label_node_cmp           (DonnaColumnType    *ct,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
 static DonnaColumnTypeNeed ct_label_set_option      (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -245,9 +247,10 @@ set_data_labels (struct tv_col_data *data)
 
 static DonnaColumnTypeNeed
 ct_label_refresh_data (DonnaColumnType    *ct,
-                       const gchar        *tv_name,
                        const gchar        *col_name,
                        const gchar        *arr_name,
+                       const gchar        *tv_name,
+                       gboolean            is_tree,
                        gpointer           *_data)
 {
     DonnaColumnTypeLabel *ctlbl = (DonnaColumnTypeLabel *) ct;
@@ -262,8 +265,8 @@ ct_label_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "property", "id", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL, "property", "id", NULL);
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -273,8 +276,8 @@ ct_label_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "labels", "0=false,1=true", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL, "labels", "0=false,1=true", NULL);
     if (!streq (data->labels, s))
     {
         g_free (data->labels);
@@ -437,9 +440,10 @@ ct_label_node_cmp (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 ct_label_set_option (DonnaColumnType    *ct,
-                     const gchar        *tv_name,
                      const gchar        *col_name,
                      const gchar        *arr_name,
+                     const gchar        *tv_name,
+                     gboolean            is_tree,
                      gpointer            _data,
                      const gchar        *option,
                      const gchar        *value,
@@ -451,7 +455,7 @@ ct_label_set_option (DonnaColumnType    *ct,
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -465,7 +469,7 @@ ct_label_set_option (DonnaColumnType    *ct,
     else if (streq (option, "labels"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->labels, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 

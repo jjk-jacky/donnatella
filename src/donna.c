@@ -2724,7 +2724,7 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
                         priv->column_types[i].type, "app", app, NULL);
             if (!priv->column_types[i].ct_data)
                 donna_columntype_refresh_data (priv->column_types[i].ct,
-                        NULL, col_name, NULL, &priv->column_types[i].ct_data);
+                        col_name, NULL, NULL, FALSE, &priv->column_types[i].ct_data);
             g_rec_mutex_unlock (&priv->rec_mutex);
             g_free (type);
             return priv->column_types[i].ct_data;

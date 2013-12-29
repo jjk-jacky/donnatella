@@ -492,26 +492,29 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
 /* internal from provider-config.c */
 enum
 {
-    TREE_COL_TREE,          /* mode tree, clicks */
+    TREE_COL_TREE = 1,      /* mode tree, clicks */
     TREE_COL_LIST,          /* mode list */
     TREE_COL_LIST_SELECTED, /* mode list, selected */
 };
-gchar *_donna_config_get_string_tree_column (DonnaConfig   *config,
-                                             const gchar   *tv_name,
-                                             const gchar   *col_name,
-                                             guint          tree_col,
-                                             const gchar   *arr_name,
-                                             const gchar   *def_cat,
-                                             const gchar   *opt_name,
-                                             gchar         *def_val);
+gchar *
+_donna_config_get_string_tree_column (DonnaConfig   *config,
+                                      const gchar   *col_name,
+                                      const gchar   *arr_name,
+                                      const gchar   *tv_name,
+                                      gboolean       is_tree,
+                                      const gchar   *def_cat,
+                                      const gchar   *opt_name,
+                                      guint          tree_col,
+                                      gchar         *def_val);
 gboolean
 _donna_config_get_boolean_tree_column (DonnaConfig   *config,
-                                       const gchar   *tv_name,
                                        const gchar   *col_name,
-                                       guint          tree_col,
                                        const gchar   *arr_name,
+                                       const gchar   *tv_name,
+                                       gboolean       is_tree,
                                        const gchar   *def_cat,
                                        const gchar   *opt_name,
+                                       guint          tree_col,
                                        gboolean      *ret);
 
 /* internal from app.c */
@@ -525,9 +528,10 @@ gboolean _donna_app_filter_nodes (DonnaApp        *app,
 /* internal from columntype.c */
 DonnaColumnOptionSaveLocation
 _donna_columntype_ask_save_location (DonnaApp     *app,
-                                     const gchar  *tv_name,
                                      const gchar  *col_name,
                                      const gchar  *arr_name,
+                                     const gchar  *tv_name,
+                                     gboolean      is_tree,
                                      const gchar  *def_cat,
                                      const gchar  *option,
                                      guint         from);
@@ -667,18 +671,20 @@ static gboolean status_provider_set_tooltip         (DonnaStatusProvider    *sp,
 static const gchar * columntype_get_name            (DonnaColumnType    *ct);
 static const gchar * columntype_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed columntype_refresh_data  (DonnaColumnType  *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void         columntype_free_data            (DonnaColumnType    *ct,
                                                      gpointer            data);
 static GPtrArray *  columntype_get_props            (DonnaColumnType    *ct,
                                                      gpointer            data);
 static DonnaColumnTypeNeed columntype_set_option    (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -1610,7 +1616,7 @@ config_get_int (DonnaTreeView   *tree,
     }
 
     if (from)
-        *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
 
     if (donna_config_get_int (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (tree->priv->is_tree) ? "tree" : "list", option))
@@ -1644,7 +1650,7 @@ config_get_boolean (DonnaTreeView   *tree,
     }
 
     if (from)
-        *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
 
     if (donna_config_get_boolean (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (tree->priv->is_tree) ? "tree" : "list", option))
@@ -1678,7 +1684,7 @@ config_get_string (DonnaTreeView   *tree,
     }
 
     if (from)
-        *from = _DONNA_CONFIG_COLUMN_FROM_DEFAULT;
+        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
 
     if (donna_config_get_string (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (tree->priv->is_tree) ? "tree" : "list", option))
@@ -2059,10 +2065,12 @@ real_option_cb (struct option_data *data)
                     /* we know we will get a value, but it might not be from the
                      * config changed that occured, since the value might be
                      * overridden by current arrangement, etc */
-                    ss = donna_config_get_string_column (config,
-                            priv->name, _col->name,
+                    ss = donna_config_get_string_column (config, _col->name,
                             (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            NULL, "title", ss, NULL);
+                            priv->name,
+                            priv->is_tree,
+                            NULL,
+                            "title", ss, NULL);
                     gtk_tree_view_column_set_title (_col->column, ss);
                     gtk_label_set_text ((GtkLabel *) _col->label, ss);
                     g_free (ss);
@@ -2074,10 +2082,12 @@ real_option_cb (struct option_data *data)
                     /* we know we will get a value, but it might not be from the
                      * config changed that occured, since the value might be
                      * overridden by current arrangement, etc */
-                    w = donna_config_get_int_column (config,
-                            priv->name, _col->name,
+                    w = donna_config_get_int_column (config, _col->name,
                             (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            NULL, "width", w, NULL);
+                            priv->name,
+                            priv->is_tree,
+                            NULL,
+                            "width", w, NULL);
                     gtk_tree_view_column_set_fixed_width (_col->column, w);
                 }
                 else
@@ -2085,9 +2095,10 @@ real_option_cb (struct option_data *data)
                     DonnaColumnTypeNeed need;
 
                     /* ask the ct if something needs to happen */
-                    need = donna_columntype_refresh_data (_col->ct,
-                            priv->name, _col->name,
+                    need = donna_columntype_refresh_data (_col->ct, _col->name,
                             (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                            priv->name,
+                            priv->is_tree,
                             &_col->ct_data);
                     if (need & DONNA_COLUMNTYPE_NEED_RESORT)
                         resort_tree (data->tree);
@@ -2113,13 +2124,14 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
     /* options we care about are ones for the tree (in "treeviews/<NAME>" or
      * "defaults/treeviews/<MODE>") or for one of our columns:
      * treeviews/<NAME>/columns/<NAME>
-     * columns/<NAME>
+     * defaults/treeviews/<NAME>/columns/<NAME>
      * This excludes options in the current arrangement, but that's
      * okay/expected: arrangement are loaded/"created" on location change.
+     * Also excludes "generic" default, also to be expected.
      *
      * Here we can only check if the option starts with "treeviews/<NAME>",
-     * "defaults/treeviews/<MODE>" or "columns/" and that's it, to loop
-     * through our columns we need the GTK lock, i.e. go in main thread */
+     * "defaults/treeviews/<MODE>" and that's it, to loop through our columns we
+     * need the GTK lock, i.e. go in main thread */
 
     len = snprintf (buf, 255, "treeviews/%s/", tree->priv->name);
     if (len >= 255)
@@ -2133,11 +2145,6 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
             opt = OPT_TREEVIEW_COLUMN;
             len += 8;
         }
-    }
-    else if (streqn (option, "columns/", 8))
-    {
-        opt = OPT_COLUMN;
-        len = 8;
     }
 
     if (b != buf)
@@ -2153,7 +2160,15 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
         else
             b = buf;
         if (streqn (option, b, (size_t) len))
-            opt = OPT_DEFAULT;
+        {
+            if (streqn (option + len, "columns/", 8))
+            {
+                opt = OPT_TREEVIEW_COLUMN;
+                len += 8;
+            }
+            else
+                opt = OPT_DEFAULT;
+        }
         if (b != buf)
             g_free (b);
     }
@@ -3794,12 +3809,14 @@ get_ct_data (const gchar *col_name, DonnaTreeView *tree)
         cf = g_new0 (struct column_filter, 1);
         cf->name = g_strdup (col_name);
         donna_config_get_string (donna_app_peek_config (priv->app), NULL,
-                &col_type, "columns/%s/type", col_name);
+                &col_type, "defaults/treeviews/%s/columns/%s/type",
+                (priv->is_tree) ? "tree" : "list", col_name);
         cf->ct   = donna_app_get_columntype (priv->app,
                 (col_type) ? col_type : col_name);
         g_free (col_type);
-        donna_columntype_refresh_data (cf->ct, priv->name, col_name,
-                priv->arrangement->columns_options, &cf->ct_data);
+        donna_columntype_refresh_data (cf->ct, col_name,
+                priv->arrangement->columns_options, priv->name, priv->is_tree,
+                &cf->ct_data);
         priv->columns_filter = g_slist_prepend (priv->columns_filter, cf);
         return cf->ct_data;
     }
@@ -5750,9 +5767,11 @@ set_sort_column (DonnaTreeView      *tree,
             sort_order = (order == DONNA_SORT_ASC)
                 ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
         else
-            sort_order = donna_columntype_get_default_sort_order (
-                    _col->ct, priv->name, _col->name,
+            sort_order = donna_columntype_get_default_sort_order (_col->ct,
+                    _col->name,
                     (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
                     _col->ct_data);
         if (refresh_second_arrow)
             set_second_arrow (tree);
@@ -5820,8 +5839,11 @@ set_second_sort_column (DonnaTreeView       *tree,
                 ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING;
         else
             priv->second_sort_order = donna_columntype_get_default_sort_order (
-                    _col->ct, priv->name, _col->name,
+                    _col->ct,
+                    _col->name,
                     (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
                     _col->ct_data);
     }
     else if (order != DONNA_SORT_UNKNOWN)
@@ -6035,7 +6057,8 @@ load_arrangement (DonnaTreeView     *tree,
             *e = '\0';
 
         if (!donna_config_get_string (config, NULL, &col_type,
-                    "columns/%s/type", col))
+                    "defaults/treeviews/%s/columns/%s/type",
+                    (priv->is_tree) ? "tree" : "list", col))
         {
             g_warning ("Treeview '%s': No type defined for column '%s', "
                     "fallback to its name",
@@ -6080,14 +6103,20 @@ load_arrangement (DonnaTreeView     *tree,
                         _col->name = g_strdup (col);
                         donna_columntype_free_data (ct, _col->ct_data);
                         _col->ct_data = NULL;
-                        donna_columntype_refresh_data (ct, priv->name, col,
-                                arrangement->columns_options, &_col->ct_data);
+                        donna_columntype_refresh_data (ct, col,
+                                arrangement->columns_options,
+                                priv->name,
+                                priv->is_tree,
+                                &_col->ct_data);
                     }
                     else if (must_load_columns_options (arrangement,
                                 priv->arrangement, force))
                         /* refresh data to load new options */
-                        donna_columntype_refresh_data (ct, priv->name, col,
-                                arrangement->columns_options, &_col->ct_data);
+                        donna_columntype_refresh_data (ct, col,
+                                arrangement->columns_options,
+                                priv->name,
+                                priv->is_tree,
+                                &_col->ct_data);
                     /* move column */
                     gtk_tree_view_move_column_after (treev, column, last_column);
 
@@ -6111,8 +6140,11 @@ load_arrangement (DonnaTreeView     *tree,
             _col->column = column = gtk_tree_view_column_new ();
             _col->name = g_strdup (col);
             /* data for use in render, node_cmp, etc */
-            donna_columntype_refresh_data (ct, priv->name, col,
-                    arrangement->columns_options, &_col->ct_data);
+            donna_columntype_refresh_data (ct, col,
+                    arrangement->columns_options,
+                    priv->name,
+                    priv->is_tree,
+                    &_col->ct_data);
             /* give our ref on the ct to the column */
             _col->ct = ct;
             /* add to our list of columns (order doesn't matter) */
@@ -6241,8 +6273,9 @@ load_arrangement (DonnaTreeView     *tree,
         /* size */
         if (snprintf (buf, 64, "columntypes/%s", col_type) >= 64)
             b = g_strdup_printf ("columntypes/%s", col_type);
-        width = donna_config_get_int_column (config, priv->name, col,
-                arrangement->columns_options, b, "width", 230, NULL);
+        width = donna_config_get_int_column (config, col,
+                arrangement->columns_options, priv->name, priv->is_tree, b,
+                "width", 230, NULL);
         gtk_tree_view_column_set_min_width (column, 23);
         gtk_tree_view_column_set_fixed_width (column, width);
         if (b != buf)
@@ -6252,8 +6285,9 @@ load_arrangement (DonnaTreeView     *tree,
         }
 
         /* title */
-        title = donna_config_get_string_column (config, priv->name, col,
-                arrangement->columns_options, NULL, "title", col, NULL);
+        title = donna_config_get_string_column (config, col,
+                arrangement->columns_options, priv->name, priv->is_tree, NULL,
+                "title", col, NULL);
         gtk_tree_view_column_set_title (column, title);
         gtk_label_set_text (GTK_LABEL (_col->label), title);
         g_free (title);
@@ -6628,16 +6662,17 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 gchar *title;
 
                 /* ctdata */
-                donna_columntype_refresh_data (_col->ct, priv->name, _col->name,
-                        arr->columns_options, &_col->ct_data);
+                donna_columntype_refresh_data (_col->ct, _col->name,
+                        arr->columns_options, priv->name, priv->is_tree,
+                        &_col->ct_data);
 
                 /* size */
                 if (snprintf (buf, 64, "columntypes/%s",
                             donna_columntype_get_name (_col->ct)) >= 64)
                     b = g_strdup_printf ("columntypes/%s",
                             donna_columntype_get_renderers (_col->ct));
-                width = donna_config_get_int_column (config,
-                        priv->name, _col->name, arr->columns_options, b,
+                width = donna_config_get_int_column (config, _col->name,
+                        arr->columns_options, priv->name, priv->is_tree, b,
                         "width", 230, NULL);
                 gtk_tree_view_column_set_fixed_width (_col->column, width);
                 if (b != buf)
@@ -6647,8 +6682,8 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 }
 
                 /* title */
-                title = donna_config_get_string_column (config,
-                        priv->name, _col->name, arr->columns_options, NULL,
+                title = donna_config_get_string_column (config, _col->name,
+                        arr->columns_options, priv->name, priv->is_tree, NULL,
                         "title", _col->name, NULL);
                 gtk_tree_view_column_set_title (_col->column, title);
                 gtk_label_set_text (GTK_LABEL (_col->label), title);
@@ -10402,10 +10437,10 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    need = donna_columntype_set_option (_col->ct,
-            priv->name,
-            _col->name,
+    need = donna_columntype_set_option (_col->ct, _col->name,
             priv->arrangement->columns_options,
+            priv->name,
+            priv->is_tree,
             _col->ct_data,
             option,
             value,
@@ -10694,7 +10729,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     g_return_val_if_fail (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY
             || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT
             || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_TREE
-            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_DEFAULT
+            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MODE
             || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK, FALSE);
     priv = tree->priv;
     config = donna_app_peek_config (priv->app);
@@ -10749,14 +10784,14 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         if (from == _DONNA_CONFIG_COLUMN_FROM_TREE)
             save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_TREE;
-        else /* _DONNA_CONFIG_COLUMN_FROM_DEFAULT */
-            save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_DEFAULT;
+        else /* _DONNA_CONFIG_COLUMN_FROM_MODE */
+            save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_MODE;
     }
     else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK)
     {
-        save_location = _donna_columntype_ask_save_location (priv->app,
-                priv->name, NULL, NULL,
-                (priv->is_tree) ? "defaults/treeviews/tree" : "defaults/treeviews/list",
+        save_location = _donna_columntype_ask_save_location (priv->app, NULL,
+                NULL, priv->name, priv->is_tree,
+                (priv->is_tree) ? "treeviews/tree" : "treeviews/list",
                 option, from);
         if (save_location == (guint) -1)
             /* user cancelled, not an error */
@@ -10765,7 +10800,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
     if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_TREE)
         loc = g_strconcat ("treeviews/", priv->name, "/", option, NULL);
-    else /* DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT */
+    else /* DONNA_COLUMN_OPTION_SAVE_IN_MODE */
         loc = g_strconcat ("defaults/treeviews/",
                 (priv->is_tree) ? "tree" : "list", "/", option, NULL);
 
@@ -16119,20 +16154,24 @@ handle_click (DonnaTreeView     *tree,
         memcpy (e, "_on_rls", 8 * sizeof (gchar)); /* 8 to include NUL */
 
         /* should we delay the trigger to button-release ? */
-        if (!_donna_config_get_boolean_tree_column (config, priv->name,
-                    conv.col_name,
-                    (priv->is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
+        if (!_donna_config_get_boolean_tree_column (config, conv.col_name,
                     (priv->is_tree) ? clicks
                     : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
                     (priv->is_tree) ? "treeviews/tree" : "treeviews/list",
-                    b, &on_rls) && is_selected)
+                    b,
+                    (priv->is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
+                    &on_rls) && is_selected)
             /* nothing found under "selected", fallback to regular clicks */
-            _donna_config_get_boolean_tree_column (config, priv->name,
-                    conv.col_name,
-                    TREE_COL_LIST,
+            _donna_config_get_boolean_tree_column (config, conv.col_name,
                     (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
                     "treeviews/list",
-                    b, &on_rls);
+                    b,
+                    TREE_COL_LIST,
+                    &on_rls);
 
         if (on_rls)
         {
@@ -16169,21 +16208,25 @@ handle_click (DonnaTreeView     *tree,
             def = "command:tree_set_second_sort (%o, %R)";
     }
 
-    fl = _donna_config_get_string_tree_column (config, priv->name,
-            conv.col_name,
-            (priv->is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
+    fl = _donna_config_get_string_tree_column (config, conv.col_name,
             (priv->is_tree) ? clicks
             : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+            priv->name,
+            priv->is_tree,
             (priv->is_tree) ? "treeviews/tree" : "treeviews/list",
-            b, (gchar *) def);
+            b,
+            (priv->is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
+            (gchar *) def);
     if (!fl && is_selected)
         /* nothing found under "selected", fallback to regular clicks */
-        fl = _donna_config_get_string_tree_column (config, priv->name,
-                conv.col_name,
-                TREE_COL_LIST,
+        fl = _donna_config_get_string_tree_column (config, conv.col_name,
                 (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
+                priv->name,
+                priv->is_tree,
                 "treeviews/list",
-                b, (gchar *) def);
+                b,
+                TREE_COL_LIST,
+                (gchar *) def);
 
     g_free (clicks);
 
@@ -17932,9 +17975,10 @@ columntype_get_renderers (DonnaColumnType    *ct)
 
 static DonnaColumnTypeNeed
 columntype_refresh_data (DonnaColumnType  *ct,
-                         const gchar        *tv_name,
                          const gchar        *col_name,
                          const gchar        *arr_name,
+                         const gchar        *tv_name,
+                         gboolean            is_tree,
                          gpointer           *data)
 {
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) ct)->priv;
@@ -17943,16 +17987,16 @@ columntype_refresh_data (DonnaColumnType  *ct,
 
     config = donna_app_peek_config (priv->app);
 
-    if (priv->ln_relative != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "columntypes/line-numbers",
+    if (priv->ln_relative != donna_config_get_boolean_column (config, col_name,
+                arr_name, tv_name, is_tree, "columntypes/line-numbers",
                 "relative", FALSE, NULL))
     {
         need |= DONNA_COLUMNTYPE_NEED_REDRAW;
         priv->ln_relative = !priv->ln_relative;
     }
 
-    if (priv->ln_relative_focused != donna_config_get_boolean_column (config,
-                tv_name, col_name, arr_name, "columntypes/line-numbers",
+    if (priv->ln_relative_focused != donna_config_get_boolean_column (config, col_name,
+                arr_name, tv_name, is_tree, "columntypes/line-numbers",
                 "relative_focused", TRUE, NULL))
     {
         if (priv->ln_relative)
@@ -17979,9 +18023,10 @@ columntype_get_props (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 columntype_set_option (DonnaColumnType    *ct,
-                       const gchar        *tv_name,
                        const gchar        *col_name,
                        const gchar        *arr_name,
+                       const gchar        *tv_name,
+                       gboolean            is_tree,
                        gpointer            data,
                        const gchar        *option,
                        const gchar        *value,
@@ -18006,8 +18051,9 @@ columntype_set_option (DonnaColumnType    *ct,
 
         c = priv->ln_relative;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/line-numbers", save_location,
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
+                    arr_name, tv_name, is_tree, "columntypes/line-numbers",
+                    save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -18032,8 +18078,9 @@ columntype_set_option (DonnaColumnType    *ct,
 
         c = priv->ln_relative_focused;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/line-numbers", save_location,
+        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
+                    arr_name, tv_name, is_tree, "columntypes/line-numbers",
+                    save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 

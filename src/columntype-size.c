@@ -66,9 +66,10 @@ static void             ct_size_finalize            (GObject            *object)
 static const gchar *    ct_size_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_size_get_renderers       (DonnaColumnType    *ct);
 static DonnaColumnTypeNeed ct_size_refresh_data     (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer           *data);
 static void             ct_size_free_data           (DonnaColumnType    *ct,
                                                      gpointer            data);
@@ -97,9 +98,10 @@ static gboolean         ct_size_is_match_filter     (DonnaColumnType    *ct,
 static void             ct_size_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_size_set_option       (DonnaColumnType    *ct,
-                                                     const gchar        *tv_name,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
+                                                     const gchar        *tv_name,
+                                                     gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
                                                      const gchar        *value,
@@ -225,9 +227,10 @@ ct_size_get_renderers (DonnaColumnType   *ct)
 
 static DonnaColumnTypeNeed
 ct_size_refresh_data (DonnaColumnType    *ct,
-                      const gchar        *tv_name,
                       const gchar        *col_name,
                       const gchar        *arr_name,
+                      const gchar        *tv_name,
+                      gboolean            is_tree,
                       gpointer           *_data)
 {
     DonnaColumnTypeSize *ctsize = DONNA_COLUMNTYPE_SIZE (ct);
@@ -243,8 +246,9 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         *_data = g_new0 (struct tv_col_data, 1);
     data = *_data;
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "columntypes/size", "property", "size", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "columntypes/size",
+            "property", "size", NULL);
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -256,8 +260,9 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            "size", "format", "%R", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "size",
+            "format", "%R", NULL);
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -267,8 +272,9 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    s = donna_config_get_string_column (config, tv_name, col_name, arr_name,
-            NULL, "format_tooltip", "%B", NULL);
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL,
+            "format_tooltip", "%B", NULL);
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -278,8 +284,9 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
-    i = donna_config_get_int_column (config, tv_name, col_name, arr_name,
-            "size", "digits", 1, NULL);
+    i = donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, "size",
+            "digits", 1, NULL);
     /* we enforce [0,2] because it's what makes sense */
     i = CLAMP (i, 0, 2);
     if (data->digits != i)
@@ -288,8 +295,9 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         need = DONNA_COLUMNTYPE_NEED_REDRAW;
     }
 
-    i = donna_config_get_boolean_column (config, tv_name, col_name, arr_name,
-            "size", "long_unit", FALSE, NULL);
+    i = donna_config_get_boolean_column (config, col_name,
+            arr_name, tv_name, is_tree, "size",
+            "long_unit", FALSE, NULL);
     if (data->long_unit != i)
     {
         data->long_unit = i;
@@ -679,9 +687,10 @@ ct_size_free_filter_data (DonnaColumnType    *ct,
 
 static DonnaColumnTypeNeed
 ct_size_set_option (DonnaColumnType    *ct,
-                    const gchar        *tv_name,
                     const gchar        *col_name,
                     const gchar        *arr_name,
+                    const gchar        *tv_name,
+                    gboolean            is_tree,
                     gpointer            _data,
                     const gchar        *option,
                     const gchar        *value,
@@ -695,7 +704,7 @@ ct_size_set_option (DonnaColumnType    *ct,
     if (streq (option, "format"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "size", save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -709,7 +718,7 @@ ct_size_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format_tooltip"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -735,7 +744,7 @@ ct_size_set_option (DonnaColumnType    *ct,
         c = data->long_unit;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "size", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -759,7 +768,7 @@ ct_size_set_option (DonnaColumnType    *ct,
         c = data->digits;
         v = *value - '0';
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "size", save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -772,7 +781,8 @@ ct_size_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "columntypes/size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "columntypes/size",
+                    save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
