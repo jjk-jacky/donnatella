@@ -1670,7 +1670,7 @@ static gchar *
 config_get_string (DonnaTreeView   *tree,
                    DonnaConfig     *config,
                    const gchar     *option,
-                   gchar           *def,
+                   const gchar     *def,
                    guint           *from)
 {
     gchar *val;
@@ -1699,7 +1699,7 @@ config_get_string (DonnaTreeView   *tree,
             def);
     donna_config_set_string (config, NULL, def, "defaults/treeviews/%s/%s",
             (tree->priv->is_tree) ? "tree" : "list", option);
-    return def;
+    return g_strdup (def);
 }
 
 #define cfg_get_is_tree(t,c,f) \
@@ -1740,6 +1740,8 @@ config_get_string (DonnaTreeView   *tree,
             DONNA_TREE_SET_SCROLL | DONNA_TREE_SET_FOCUS, f), 0, 7)
 #define cfg_get_history_max(t,c,f) \
     config_get_int (t, c, "history_max", 100, f)
+#define cfg_get_key_mode(t,c,f) \
+    config_get_string (t, c, "key_mode", "donna", f)
 
 static gboolean
 real_option_cb (struct option_data *data)
@@ -1863,6 +1865,19 @@ real_option_cb (struct option_data *data)
 
                 gtk_widget_queue_draw ((GtkWidget *) treev);
             }
+        }
+        else if (streq (opt, "key_mode"))
+        {
+            if (data->opt == OPT_IN_MEMORY)
+                s = * (gchar **) data->val;
+            else
+                s = cfg_get_key_mode (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || !streq (priv->key_mode, s))
+                donna_tree_view_set_key_mode (tree, s);
+
+            if (data->opt != OPT_IN_MEMORY)
+                g_free (s);
         }
         else if (priv->is_tree)
         {
@@ -2233,6 +2248,7 @@ load_config (DonnaTreeView *tree)
     priv->node_types = cfg_get_node_types (tree, config, NULL);
     priv->sort_groups = cfg_get_sort_groups (tree, config, NULL);
     priv->select_highlight = cfg_get_select_highlight (tree, config, NULL);
+    priv->key_mode = cfg_get_key_mode (tree, config, NULL);
 
     if (priv->is_tree)
     {
@@ -10715,6 +10731,34 @@ _convert_value (DonnaTreeView           *tree,
         }                                                                   \
     }
 
+#define handle_option_string(option_name, lower)                            \
+    else if (streq (option, option_name))                                   \
+    {                                                                       \
+        type = G_TYPE_STRING;                                               \
+                                                                            \
+        s_val = value;                                                      \
+                                                                            \
+        if (need_cur)                                                       \
+        {                                                                   \
+            s_cur = cfg_get_##lower (tree, config, &from);                  \
+            if (!streq (s_cur, priv->lower))                                \
+            {                                                               \
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
+                        DONNA_TREE_VIEW_ERROR_OTHER,                        \
+                        "Treeview '%s': Cannot set option '%s'; "           \
+                        "Values not matching: '%s' (config) vs '%s' (memory)", \
+                        priv->name, option, s_cur, priv->lower);            \
+                return FALSE;                                               \
+            }                                                               \
+        }                                                                   \
+        else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)     \
+        {                                                                   \
+            od.val = &s_val;                                                \
+            real_option_cb (&od);                                           \
+            return TRUE;                                                    \
+        }                                                                   \
+    }
+
 gboolean
 donna_tree_view_set_option (DonnaTreeView      *tree,
                             const gchar        *option,
@@ -10760,6 +10804,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     handle_option_boolean ("show_hidden", show_hidden)
     handle_option_int_extra ("sort_groups", "sg", INT, sort_groups)
     handle_option_int_extra ("select_highlight", "highlight", INT, select_highlight)
+    handle_option_string ("key_mode", key_mode)
     else if (priv->is_tree)
     {
         if (0)
@@ -12863,7 +12908,19 @@ donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
 
     g_free (priv->key_mode);
     priv->key_mode = g_strdup (key_mode);
-    check_statuses (tree, STATUS_CHANGED_ON_KEYMODE);
+
+    /* wrong_key */
+    g_free (priv->key_combine_name);
+    priv->key_combine_name = NULL;
+    priv->key_combine = 0;
+    priv->key_combine_spec = 0;
+    priv->key_spec_type = SPEC_NONE;
+    priv->key_m = 0;
+    priv->key_val = 0;
+    priv->key_motion_m = 0;
+    priv->key_motion = 0;
+
+    check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEYMODE);
 }
 
 gboolean
@@ -12929,7 +12986,7 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
     priv = tree->priv;
 
     g_free (priv->key_mode);
-    priv->key_mode = NULL;
+    priv->key_mode = cfg_get_key_mode (tree, donna_app_peek_config (priv->app), NULL);
 
     /* wrong_key */
     g_free (priv->key_combine_name);
@@ -14149,6 +14206,7 @@ tree_context_get_alias (const gchar             *alias,
     else if (streq (alias, "tree_options"))
     {
         GString *str;
+        GPtrArray *arr = NULL; /* to get list of key modes */
 
         if (!extra)
             extra = "";
@@ -14230,6 +14288,20 @@ tree_context_get_alias (const gchar             *alias,
         {
             g_string_free (str, TRUE);
             return FALSE;
+        }
+
+        donna_g_string_append_concat (str, ",-,:tree_options.key_mode:@", extra, NULL);
+        if (donna_config_list_options (donna_app_peek_config (priv->app),
+                    &arr, DONNA_CONFIG_OPTION_TYPE_CATEGORY, "key_modes"))
+        {
+            guint i;
+
+            g_string_append_c (str, '<');
+            for (i = 0; i < arr->len; ++i)
+                donna_g_string_append_concat (str, (i > 0) ? "," : "",
+                        ":tree_options.key_mode:", arr->pdata[i], "@", extra, NULL);
+            g_string_append_c (str, '>');
+            g_ptr_array_unref (arr);
         }
 
         return g_string_free (str, FALSE);
@@ -15022,12 +15094,29 @@ tree_context_get_item_info (const gchar             *item,
     }
     else if (streqn (item, "tree_options.", 13))
     {
+        gchar *custom = NULL;
+
+        /* key_mode does have some extra */
+        if (extra && *extra != '@' && streq (item + 13, "key_mode"))
+        {
+            gchar *e;
+
+            e = strchr (extra, '@');
+            if (e)
+                custom = g_strndup (extra, (gsize) (e - extra));
+            else
+                custom = g_strdup (extra);
+
+            extra = e;
+        }
+
         if (extra && *extra != '@')
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
                     "Treeview '%s': Invalid extra '%s' for item '%s'",
                     priv->name, extra, item);
+            g_free (custom);
             return FALSE;
         }
         else if (extra)
@@ -15043,6 +15132,7 @@ tree_context_get_item_info (const gchar             *item,
                         DONNA_CONTEXT_MENU_ERROR_OTHER,
                         "Treeview '%s': Invalid save_location '%s' in extra for item '%s'",
                         priv->name, extra, item);
+                g_free (custom);
                 return FALSE;
             }
         }
@@ -15134,6 +15224,30 @@ tree_context_get_item_info (const gchar             *item,
             }
         }
 #endif
+        else if (streq (item, "key_mode"))
+        {
+            info->is_visible = info->is_sensitive = TRUE;
+            if (custom)
+            {
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->is_active = streq (custom, priv->key_mode);
+                info->name = custom;
+                info->free_name = TRUE;
+                info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,",
+                        custom, ",", (extra) ? extra : "", ")", NULL);
+                info->free_trigger = TRUE;
+            }
+            else
+            {
+                info->name = g_strconcat ("Key Mode: ", priv->key_mode, NULL);
+                info->free_name = TRUE;
+                info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,"
+                        "@ask_text(Enter the new default key mode,,",
+                        priv->key_mode, "),", (extra) ? extra : "", ")", NULL);
+                info->free_trigger = TRUE;
+            }
+            return TRUE;
+        }
         else if (priv->is_tree)
         {
             if (streq (item, "is_minitree"))
@@ -16894,24 +17008,24 @@ donna_tree_view_rubber_banding_active (GtkTreeView *treev)
 static inline gchar *
 find_key_config (DonnaTreeView *tree, DonnaConfig *config, gchar *key)
 {
+    gchar *fallback;
+
     if (donna_config_has_category (config, NULL,
-                "treeviews/%s/keys%s%s/key_%s",
-                tree->priv->name,
-                (tree->priv->key_mode) ? "/" : "",
-                (tree->priv->key_mode) ? tree->priv->key_mode : "",
-                key))
-        return g_strdup_printf ("treeviews/%s/keys/key_%s", tree->priv->name, key);
-    if (donna_config_has_category (config, NULL,
-                "defaults/treeviews/%s/keys%s%s/key_%s",
-                (tree->priv->is_tree) ? "tree" : "list",
-                (tree->priv->key_mode) ? "/" : "",
-                (tree->priv->key_mode) ? tree->priv->key_mode : "",
-                key))
-        return g_strdup_printf ("defaults/treeviews/%s/keys%s%s/key_%s",
-                (tree->priv->is_tree) ? "tree" : "list",
-                (tree->priv->key_mode) ? "/" : "",
-                (tree->priv->key_mode) ? tree->priv->key_mode : "",
-                key);
+                "key_modes/%s/key_%s",
+                tree->priv->key_mode, key))
+        return g_strdup_printf ("key_modes/%s/key_%s", tree->priv->key_mode, key);
+
+    if (donna_config_get_string (config, NULL, &fallback,
+                "key_modes/%s/fallback", tree->priv->key_mode))
+    {
+        gchar *s = NULL;
+        if (donna_config_has_category (config, NULL,
+                    "key_modes/%s/key_%s", fallback, key))
+            s = g_strdup_printf ("key_modes/%s/key_%s", fallback, key);
+        g_free (fallback);
+        return s;
+    }
+
     return NULL;
 }
 
@@ -17246,7 +17360,7 @@ next:
         {
             /* special case: GDK_KEY_Escape will always default to
              * tree_reset_keys if not defined. This is to ensure that if you set
-             * a keymode, you can always get back to normal mode (even if you
+             * a key mode, you can always get back to normal mode (even if you
              * forgot to define the key Escape to do so. Of course if you define
              * it to nothing/something else, it's on you. */
             donna_tree_view_reset_keys (tree);
@@ -17788,8 +17902,7 @@ status_provider_render (DonnaStatusProvider    *sp,
 
             case 'K':
                 g_string_append_len (str, fmt, s - fmt);
-                if (priv->key_mode)
-                    g_string_append (str, priv->key_mode);
+                g_string_append (str, priv->key_mode);
                 s += 2;
                 fmt = s;
                 break;
