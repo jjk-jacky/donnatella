@@ -12669,6 +12669,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                 {
                     guint i;
                     gboolean (*move_fn) (GtkTreeModel *, GtkTreeIter *);
+                    GtkTreeIter prev_it = iter;
 
                     if (((gchar *) rowid->ptr)[1] == 't')
                         move_fn = donna_tree_model_iter_previous;
@@ -12679,14 +12680,14 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                     {
                         if (!move_fn (model, &iter))
                         {
-                            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                                    DONNA_TREE_VIEW_ERROR_OTHER,
-                                    "Treeview '%s': Failed moving around",
-                                    priv->name);
-                            return FALSE;
+                            iter = prev_it;
+                            break;
                         }
                         if (is_row_accessible (tree, &iter))
+                        {
+                            prev_it = iter;
                             ++i;
+                        }
                     }
                     path = gtk_tree_model_get_path (model, &iter);
                 }
