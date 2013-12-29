@@ -1748,8 +1748,8 @@ real_option_cb (struct option_data *data)
     opt = data->option + data->len;
 
     DONNA_DEBUG (TREEVIEW, priv->name,
-            g_debug ("Treeview '%s': Config change for option '%s'",
-                priv->name, opt));
+            g_debug ("Treeview '%s': Config change for option '%s' (%s)",
+                priv->name, opt, data->option));
 
     if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT
             || data->opt == OPT_IN_MEMORY)
