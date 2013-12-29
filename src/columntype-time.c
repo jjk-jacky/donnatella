@@ -1918,7 +1918,7 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    tv_name, col_name, arr_name, "time", save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1936,7 +1936,7 @@ ct_time_set_option (DonnaColumnType    *ct,
         c = (gint) data->options.age_span_seconds;
         v = (gint) g_ascii_strtoull (value, NULL, 10);
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    tv_name, col_name, arr_name, "time", save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1952,7 +1952,7 @@ ct_time_set_option (DonnaColumnType    *ct,
 
         c = (gchar *) data->options.age_fallback_format;
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    tv_name, col_name, arr_name, "time", save_location,
                     option, G_TYPE_STRING, &c, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
@@ -1990,7 +1990,7 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format_tooltip"))
     {
         if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    tv_name, col_name, arr_name, "size", save_location,
+                    tv_name, col_name, arr_name, "time", save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMNTYPE_NEED_NOTHING;
 
