@@ -12650,8 +12650,10 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                     i = (guint) indices[0];
                     if (((gchar *) rowid->ptr)[1] == 't')
                     {
-                        i -= rows;
-                        i = MAX (i, 0);
+                        if (rows > i)
+                            i = 0;
+                        else
+                            i -= rows;
                     }
                     else
                     {
