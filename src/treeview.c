@@ -50,9 +50,10 @@ enum
     DONNA_TREE_COL_ICON,
     DONNA_TREE_COL_BOX,
     DONNA_TREE_COL_HIGHLIGHT,
-    DONNA_TREE_COL_CLICKS,
+    DONNA_TREE_COL_CLICK_MODE,
     /* which of name, icon, box and/or highlight are locals (else from node).
-     * Also includes clicks even though it's not a visual/can't come from node */
+     * Also includes click_mode even though it's not a visual/can't come from
+     * node */
     DONNA_TREE_COL_VISUALS,
     DONNA_TREE_NB_COLS
 };
@@ -190,7 +191,7 @@ struct visuals
     gchar       *box;
     gchar       *highlight;
     /* not a visual, but treated the same */
-    gchar       *clicks;
+    gchar       *click_mode;
 };
 
 struct col_prop
@@ -379,6 +380,8 @@ struct _DonnaTreeViewPrivate
     gulong               sid_active_list_changed;
     gulong               sid_treeview_loaded;
 
+    /* to handle clicks */
+    gchar               *click_mode;
     /* info about last event, used to handle single, double & slow-dbl clicks */
     GdkEventButton      *last_event;
     guint                last_event_timeout; /* it was a single-click */
@@ -488,34 +491,6 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
                  || (es) == DONNA_TREE_EXPAND_MAXI)     \
              ? NULL : ROW_CLASS_MINITREE),              \
             -1)
-
-/* internal from provider-config.c */
-enum
-{
-    TREE_COL_TREE = 1,      /* mode tree, clicks */
-    TREE_COL_LIST,          /* mode list */
-    TREE_COL_LIST_SELECTED, /* mode list, selected */
-};
-gchar *
-_donna_config_get_string_tree_column (DonnaConfig   *config,
-                                      const gchar   *col_name,
-                                      const gchar   *arr_name,
-                                      const gchar   *tv_name,
-                                      gboolean       is_tree,
-                                      const gchar   *def_cat,
-                                      const gchar   *opt_name,
-                                      guint          tree_col,
-                                      gchar         *def_val);
-gboolean
-_donna_config_get_boolean_tree_column (DonnaConfig   *config,
-                                       const gchar   *col_name,
-                                       const gchar   *arr_name,
-                                       const gchar   *tv_name,
-                                       gboolean       is_tree,
-                                       const gchar   *def_cat,
-                                       const gchar   *opt_name,
-                                       guint          tree_col,
-                                       gboolean      *ret);
 
 /* internal from app.c */
 gboolean _donna_app_filter_nodes (DonnaApp        *app,
@@ -966,7 +941,7 @@ free_visuals (struct visuals *visuals)
         g_object_unref (visuals->icon);
     g_free (visuals->box);
     g_free (visuals->highlight);
-    g_free (visuals->clicks);
+    g_free (visuals->click_mode);
     g_slice_free (struct visuals, visuals);
 }
 
@@ -1047,6 +1022,8 @@ donna_tree_view_finalize (GObject *object)
         g_hash_table_foreach_remove (priv->tree_visuals,
                 (GHRFunc) free_tree_visuals, NULL);
     g_array_free (priv->statuses, TRUE);
+    g_free (priv->click_mode);
+    g_free (priv->key_mode);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -1114,9 +1091,9 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
     it_int[i].in_file   = "highlight";
     it_int[i].label     = "Highlighted Folders";
     ++i;
-    it_int[i].value     = DONNA_TREE_VISUAL_CLICKS;
-    it_int[i].in_file   = "click";
-    it_int[i].label     = "Custom Click Definitions";
+    it_int[i].value     = DONNA_TREE_VISUAL_CLICK_MODE;
+    it_int[i].in_file   = "click_mode";
+    it_int[i].label     = "Custom Click Modes";
     ++i;
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS, "visuals", "Tree Visuals",
@@ -1742,6 +1719,8 @@ config_get_string (DonnaTreeView   *tree,
     config_get_int (t, c, "history_max", 100, f)
 #define cfg_get_key_mode(t,c,f) \
     config_get_string (t, c, "key_mode", "donna", f)
+#define cfg_get_click_mode(t,c,f) \
+    config_get_string (t, c, "click_mode", "donna", f)
 
 static gboolean
 real_option_cb (struct option_data *data)
@@ -1877,6 +1856,22 @@ real_option_cb (struct option_data *data)
                 donna_tree_view_set_key_mode (tree, s);
 
             if (data->opt != OPT_IN_MEMORY)
+                g_free (s);
+        }
+        else if (streq (opt, "click_mode"))
+        {
+            if (data->opt == OPT_IN_MEMORY)
+                s = * (gchar **) data->val;
+            else
+                s = cfg_get_click_mode (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || !streq (priv->click_mode, s))
+            {
+                g_free (priv->click_mode);
+                priv->click_mode = (data->opt == OPT_IN_MEMORY)
+                    ? g_strdup (s) : s;
+            }
+            else if (data->opt != OPT_IN_MEMORY)
                 g_free (s);
         }
         else if (priv->is_tree)
@@ -2249,6 +2244,7 @@ load_config (DonnaTreeView *tree)
     priv->sort_groups = cfg_get_sort_groups (tree, config, NULL);
     priv->select_highlight = cfg_get_select_highlight (tree, config, NULL);
     priv->key_mode = cfg_get_key_mode (tree, config, NULL);
+    priv->click_mode = cfg_get_click_mode (tree, config, NULL);
 
     if (priv->is_tree)
     {
@@ -2596,9 +2592,9 @@ remove_row_from_tree (DonnaTreeView *tree,
                                 DONNA_TREE_COL_HIGHLIGHT,   &visuals->highlight,
                                 -1);
                     /* not a visual, but treated the same */
-                    if (v & DONNA_TREE_VISUAL_CLICKS)
+                    if (v & DONNA_TREE_VISUAL_CLICK_MODE)
                         gtk_tree_model_get (model, iter,
-                                DONNA_TREE_COL_CLICKS,      &visuals->clicks,
+                                DONNA_TREE_COL_CLICK_MODE,  &visuals->click_mode,
                                 -1);
 
                     fl = donna_node_get_full_location (node);
@@ -5258,11 +5254,11 @@ load_tree_visuals (DonnaTreeView    *tree,
                         -1);
             }
             /* not a visual, but treated the same */
-            if (visuals->clicks)
+            if (visuals->click_mode)
             {
-                v |= DONNA_TREE_VISUAL_CLICKS;
+                v |= DONNA_TREE_VISUAL_CLICK_MODE;
                 donna_tree_store_set (priv->store, iter,
-                        DONNA_TREE_COL_CLICKS,  visuals->clicks,
+                        DONNA_TREE_COL_CLICK_MODE,  visuals->click_mode,
                         -1);
             }
             donna_tree_store_set (priv->store, iter,
@@ -10002,8 +9998,8 @@ set_tree_visual (DonnaTreeView  *tree,
         col = DONNA_TREE_COL_BOX;
     else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
         col = DONNA_TREE_COL_HIGHLIGHT;
-    else if (visual == DONNA_TREE_VISUAL_CLICKS)
-        col = DONNA_TREE_COL_CLICKS;
+    else if (visual == DONNA_TREE_VISUAL_CLICK_MODE)
+        col = DONNA_TREE_COL_CLICK_MODE;
     else
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
@@ -10130,8 +10126,8 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
         col = DONNA_TREE_COL_BOX;
     else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
         col = DONNA_TREE_COL_HIGHLIGHT;
-    else if (visual == DONNA_TREE_VISUAL_CLICKS)
-        col = DONNA_TREE_COL_CLICKS;
+    else if (visual == DONNA_TREE_VISUAL_CLICK_MODE)
+        col = DONNA_TREE_COL_CLICK_MODE;
     else
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
@@ -10805,6 +10801,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     handle_option_int_extra ("sort_groups", "sg", INT, sort_groups)
     handle_option_int_extra ("select_highlight", "highlight", INT, select_highlight)
     handle_option_string ("key_mode", key_mode)
+    handle_option_string ("click_mode", click_mode)
     else if (priv->is_tree)
     {
         if (0)
@@ -11628,9 +11625,9 @@ save_row (DonnaTreeView     *tree,
             g_free (s);
             need_space = TRUE;
         }
-        if ((visuals & DONNA_TREE_VISUAL_CLICKS) && (v & DONNA_TREE_VISUAL_CLICKS))
+        if ((visuals & DONNA_TREE_VISUAL_CLICK_MODE) && (v & DONNA_TREE_VISUAL_CLICK_MODE))
         {
-            gtk_tree_model_get (model, iter, DONNA_TREE_COL_CLICKS, &s, -1);
+            gtk_tree_model_get (model, iter, DONNA_TREE_COL_CLICK_MODE, &s, -1);
             if (need_space)
                 g_string_append_c (str, ' ');
             g_string_append_c (str, '(');
@@ -11797,7 +11794,7 @@ donna_tree_view_save_tree_file (DonnaTreeView      *tree,
                         g_string_append_c (str, ']');
                     }
 
-                    if ((visuals & DONNA_TREE_VISUAL_CLICKS) && visual->clicks)
+                    if ((visuals & DONNA_TREE_VISUAL_CLICK_MODE) && visual->click_mode)
                     {
                         if (!added)
                         {
@@ -11806,7 +11803,7 @@ donna_tree_view_save_tree_file (DonnaTreeView      *tree,
                         }
                         g_string_append_c (str, ' ');
                         g_string_append_c (str, '(');
-                        g_string_append (str, visual->clicks);
+                        g_string_append (str, visual->click_mode);
                         g_string_append_c (str, ')');
                     }
 
@@ -11935,12 +11932,12 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
         GError *err = NULL;
         GtkTreeIter parent;
         DonnaNode *node;
-        gint level       = 0;
-        gchar *name      = NULL;
-        gchar *icon      = NULL;
-        gchar *box       = NULL;
-        gchar *highlight = NULL;
-        gchar *clicks    = NULL;
+        gint level          = 0;
+        gchar *name         = NULL;
+        gchar *icon         = NULL;
+        gchar *box          = NULL;
+        gchar *highlight    = NULL;
+        gchar *click_mode   = NULL;
         gboolean is_in_tree;
         gboolean is_future_location = FALSE;
         gboolean expand = FALSE;
@@ -11971,7 +11968,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
         load_visual ('@', '@', ICON, icon)
         load_visual ('{', '}', BOX, box)
         load_visual ('[', ']', HIGHLIGHT, highlight)
-        load_visual ('(', ')', CLICKS, clicks)
+        load_visual ('(', ')', CLICK_MODE, click_mode)
 
         /* flags */
         if (*s == '!')
@@ -12059,9 +12056,9 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             if (highlight)
                 set_tree_visual (tree, &iter,
                         DONNA_TREE_VISUAL_HIGHLIGHT, highlight, NULL);
-            if (clicks)
+            if (click_mode)
                 set_tree_visual (tree, &iter,
-                        DONNA_TREE_VISUAL_CLICKS, clicks, NULL);
+                        DONNA_TREE_VISUAL_CLICK_MODE, click_mode, NULL);
 
             if (es == DONNA_TREE_EXPAND_PARTIAL && priv->is_minitree)
             {
@@ -12114,7 +12111,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             }
         }
         /* add visuals for non-loaded row */
-        else if (name || icon || box || highlight || clicks)
+        else if (name || icon || box || highlight || click_mode)
         {
             GSList *l;
             struct visuals *visual;
@@ -12143,7 +12140,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
             }
             visual->box = g_strdup (box);
             visual->highlight = g_strdup (highlight);
-            visual->clicks = g_strdup (clicks);
+            visual->click_mode = g_strdup (click_mode);
 
             if (priv->tree_visuals)
                 l = g_hash_table_lookup (priv->tree_visuals, s);
@@ -14206,7 +14203,7 @@ tree_context_get_alias (const gchar             *alias,
     else if (streq (alias, "tree_options"))
     {
         GString *str;
-        GPtrArray *arr = NULL; /* to get list of key modes */
+        GPtrArray *arr; /* to get list of key/click modes */
 
         if (!extra)
             extra = "";
@@ -14290,6 +14287,7 @@ tree_context_get_alias (const gchar             *alias,
             return FALSE;
         }
 
+        arr = NULL;
         donna_g_string_append_concat (str, ",-,:tree_options.key_mode:@", extra, NULL);
         if (donna_config_list_options (donna_app_peek_config (priv->app),
                     &arr, DONNA_CONFIG_OPTION_TYPE_CATEGORY, "key_modes"))
@@ -14300,6 +14298,21 @@ tree_context_get_alias (const gchar             *alias,
             for (i = 0; i < arr->len; ++i)
                 donna_g_string_append_concat (str, (i > 0) ? "," : "",
                         ":tree_options.key_mode:", arr->pdata[i], "@", extra, NULL);
+            g_string_append_c (str, '>');
+            g_ptr_array_unref (arr);
+        }
+
+        arr = NULL;
+        donna_g_string_append_concat (str, ",:tree_options.click_mode:@", extra, NULL);
+        if (donna_config_list_options (donna_app_peek_config (priv->app),
+                    &arr, DONNA_CONFIG_OPTION_TYPE_CATEGORY, "click_modes"))
+        {
+            guint i;
+
+            g_string_append_c (str, '<');
+            for (i = 0; i < arr->len; ++i)
+                donna_g_string_append_concat (str, (i > 0) ? "," : "",
+                        ":tree_options.click_mode:", arr->pdata[i], "@", extra, NULL);
             g_string_append_c (str, '>');
             g_ptr_array_unref (arr);
         }
@@ -15096,8 +15109,9 @@ tree_context_get_item_info (const gchar             *item,
     {
         gchar *custom = NULL;
 
-        /* key_mode does have some extra */
-        if (extra && *extra != '@' && streq (item + 13, "key_mode"))
+        /* key_mode & click_mode can also have some extra */
+        if (extra && *extra != '@' && (streq (item + 13, "key_mode")
+                    || streq (item + 13, "click_mode")))
         {
             gchar *e;
 
@@ -15244,6 +15258,30 @@ tree_context_get_item_info (const gchar             *item,
                 info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,"
                         "@ask_text(Enter the new default key mode,,",
                         priv->key_mode, "),", (extra) ? extra : "", ")", NULL);
+                info->free_trigger = TRUE;
+            }
+            return TRUE;
+        }
+        else if (streq (item, "click_mode"))
+        {
+            info->is_visible = info->is_sensitive = TRUE;
+            if (custom)
+            {
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->is_active = streq (custom, priv->click_mode);
+                info->name = custom;
+                info->free_name = TRUE;
+                info->trigger = g_strconcat ("command:tree_set_option (%o,click_mode,",
+                        custom, ",", (extra) ? extra : "", ")", NULL);
+                info->free_trigger = TRUE;
+            }
+            else
+            {
+                info->name = g_strconcat ("Click Mode: ", priv->click_mode, NULL);
+                info->free_name = TRUE;
+                info->trigger = g_strconcat ("command:tree_set_option (%o,click_mode,"
+                        "@ask_text(Enter the click key mode,,",
+                        priv->click_mode, "),", (extra) ? extra : "", ")", NULL);
                 info->free_trigger = TRUE;
             }
             return TRUE;
@@ -15469,11 +15507,11 @@ tree_context_get_item_info (const gchar             *item,
             v = DONNA_TREE_VISUAL_HIGHLIGHT;
             col = DONNA_TREE_COL_HIGHLIGHT;
         }
-        else if (streq (item, "clicks"))
+        else if (streq (item, "click_mode"))
         {
-            name = "Clicks";
-            v = DONNA_TREE_VISUAL_CLICKS;
-            col = DONNA_TREE_COL_CLICKS;
+            name = "Click Mode";
+            v = DONNA_TREE_VISUAL_CLICK_MODE;
+            col = DONNA_TREE_COL_CLICK_MODE;
         }
         else
         {
@@ -16210,6 +16248,87 @@ focused:
     return FALSE;
 }
 
+static gboolean
+get_click (DonnaConfig  *config,
+           const gchar  *click_mode,
+           gboolean      is_selected,
+           const gchar  *col_name,
+           const gchar  *click,
+           gboolean      is_on_rls,
+           gpointer      ret)
+{
+    gchar *fallback = NULL;
+    typedef gboolean (*config_get_fn) (DonnaConfig   *config,
+                                       GError       **error,
+                                       gpointer       retval,
+                                       const gchar   *fmt,
+                                       ...);
+    config_get_fn config_get;
+
+    if (is_on_rls)
+        config_get = (config_get_fn) donna_config_get_boolean;
+    else
+        config_get = (config_get_fn) donna_config_get_string;
+
+again:
+
+    /* first we look for column-specific value */
+    if (col_name)
+    {
+        if (config_get (config, NULL, ret,
+                    "click_modes/%s/columns/%s/%s%s",
+                    click_mode,
+                    col_name,
+                    (is_selected) ? "selected/" : "",
+                    click))
+            return TRUE;
+
+        /* nothing, maybe we have a fallback click_mode */
+        donna_config_get_string (config, NULL, &fallback,
+                "click_modes/%s/fallback",
+                click_mode);
+
+        /* try column-specific fallback */
+        if (fallback && config_get (config, NULL, ret,
+                    "click_modes/%s/columns/%s/%s%s",
+                    fallback,
+                    col_name,
+                    (is_selected) ? "selected/" : "",
+                    click))
+            return TRUE;
+    }
+
+    /* then general/treeview value */
+    if (config_get (config, NULL, ret, "click_modes/%s/%s%s",
+                click_mode,
+                (is_selected) ? "selected/" : "",
+                click))
+        return TRUE;
+
+    /* if we haven't yet, get fallback name */
+    if (!col_name)
+        donna_config_get_string (config, NULL, &fallback,
+                "click_modes/%s/fallback",
+                click_mode);
+
+    /* try general/treeview fallback */
+    if (fallback && config_get (config, NULL, ret,
+                "click_modes/%s/%s%s",
+                fallback,
+                (is_selected) ? "selected/" : "",
+                click))
+        return TRUE;
+
+    /* if we find nothing under selected, try without */
+    if (is_selected)
+    {
+        is_selected = FALSE;
+        goto again;
+    }
+
+    return FALSE;
+}
+
 static void
 handle_click (DonnaTreeView     *tree,
               DonnaClick         click,
@@ -16224,16 +16343,15 @@ handle_click (DonnaTreeView     *tree,
     struct conv conv = { NULL, };
     struct column *_col;
     GPtrArray *intrefs = NULL;
-    gchar *fl;
+    gchar *fl = NULL;
     gboolean is_selected;
-    gchar *clicks = NULL;
+    gchar *click_mode = NULL;
     /* longest possible is "blankcol_ctrl_shift_middle_double_click_on_rls"
      * (len=46); But longest prefix is "colheader_" (len=10) and even though it
      * can't be slow/double and therefore would fit inside 46, we move to 47 (48
      * with NUL) because we need a prefix space of 10 */
     gchar buf[48];
     gchar *b = buf + 10; /* leave space for "blankcol_" prefix */
-    const gchar *def = NULL;
 
     if (event->state & GDK_CONTROL_MASK)
     {
@@ -16317,7 +16435,7 @@ handle_click (DonnaTreeView     *tree,
 
     if (priv->is_tree && iter)
         gtk_tree_model_get ((GtkTreeModel *) priv->store, iter,
-                DONNA_TREE_COL_CLICKS,  &clicks,
+                DONNA_TREE_COL_CLICK_MODE, &click_mode,
                 -1);
 
     /* list only: different source when the clicked item is selected */
@@ -16335,26 +16453,9 @@ handle_click (DonnaTreeView     *tree,
         memcpy (e, "_on_rls", 8 * sizeof (gchar)); /* 8 to include NUL */
 
         /* should we delay the trigger to button-release ? */
-        if (!_donna_config_get_boolean_tree_column (config, conv.col_name,
-                    (priv->is_tree) ? clicks
-                    : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                    priv->name,
-                    priv->is_tree,
-                    (priv->is_tree) ? "treeviews/tree" : "treeviews/list",
-                    b,
-                    (priv->is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
-                    &on_rls) && is_selected)
-            /* nothing found under "selected", fallback to regular clicks */
-            _donna_config_get_boolean_tree_column (config, conv.col_name,
-                    (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
-                    priv->name,
-                    priv->is_tree,
-                    "treeviews/list",
-                    b,
-                    TREE_COL_LIST,
-                    &on_rls);
-
-        if (on_rls)
+        if (get_click (config, (click_mode) ? click_mode : priv->click_mode,
+                    is_selected, conv.col_name, b, TRUE, &on_rls)
+                && on_rls)
         {
             priv->on_release_click  = click;
             priv->on_release_x      = event->x;
@@ -16364,52 +16465,10 @@ handle_click (DonnaTreeView     *tree,
         *e = '\0';
     }
 
-    /* a few of those should have valid defaults, just in case */
-    if (priv->is_tree)
-    {
-        if (streq (b, "left_click"))
-            def = "command:tree_set_cursor (%o, %r)";
-        else if (streq (b, "left_double_click")
-                || streq (b, "expander_left_click"))
-            def = "command:tree_toggle_row (%o, %r, standard)";
-    }
-    else
-    {
-        if (streq (b, "left_click"))
-            def = "command:tree_set_focus (%o, %r)";
-        else if (streq (b, "blank_left_click")
-                || streq (b, "blankcol_left_click")
-                || streq (b, "blankrow_left_click"))
-            def = "command:tree_selection (%o, unselect, :all, )";
-        else if (streq (b, "left_double_click"))
-            def = "command:tree_activate_row (%o, %r)";
-        else if (streq (b, "colheader_left_click"))
-            def = "command:tree_set_sort (%o, %R)";
-        else if (streq (b, "colheader_ctrl_left_click"))
-            def = "command:tree_set_second_sort (%o, %R)";
-    }
-
-    fl = _donna_config_get_string_tree_column (config, conv.col_name,
-            (priv->is_tree) ? clicks
-            : (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-            priv->name,
-            priv->is_tree,
-            (priv->is_tree) ? "treeviews/tree" : "treeviews/list",
-            b,
-            (priv->is_tree) ? TREE_COL_TREE : (is_selected) ? TREE_COL_LIST_SELECTED : TREE_COL_LIST,
-            (gchar *) def);
-    if (!fl && is_selected)
-        /* nothing found under "selected", fallback to regular clicks */
-        fl = _donna_config_get_string_tree_column (config, conv.col_name,
-                (priv->arrangement) ?  priv->arrangement->columns_options : NULL,
-                priv->name,
-                priv->is_tree,
-                "treeviews/list",
-                b,
-                TREE_COL_LIST,
-                (gchar *) def);
-
-    g_free (clicks);
+    /* get the trigger */
+    get_click (config, (click_mode) ? click_mode : priv->click_mode,
+            is_selected, conv.col_name, b, FALSE, &fl);
+    g_free (click_mode);
 
     if (!fl)
         return;
@@ -18425,7 +18484,7 @@ donna_tree_view_new (DonnaApp    *app,
                 G_TYPE_ICON,    /* DONNA_TREE_COL_ICON */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_BOX */
                 G_TYPE_STRING,  /* DONNA_TREE_COL_HIGHLIGHT */
-                G_TYPE_STRING,  /* DONNA_TREE_COL_CLICKS */
+                G_TYPE_STRING,  /* DONNA_TREE_COL_CLICK_MODE */
                 G_TYPE_UINT);   /* DONNA_TREE_COL_VISUALS */
         model = GTK_TREE_MODEL (priv->store);
         /* some stylling */

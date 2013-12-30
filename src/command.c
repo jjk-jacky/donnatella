@@ -1954,9 +1954,10 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *visual = args[2];
     gchar *source = args[3];
 
-    const gchar *c_visual[] = { "name", "icon", "box", "highlight", "clicks" };
+    const gchar *c_visual[] = { "name", "icon", "box", "highlight", "click_mode" };
     DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
-        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
+        DONNA_TREE_VISUAL_CLICK_MODE };
     const gchar *c_source[] = { "any", "tree", "node" };
     DonnaTreeVisualSource sources[] = { DONNA_TREE_VISUAL_SOURCE_ANY,
         DONNA_TREE_VISUAL_SOURCE_TREE, DONNA_TREE_VISUAL_SOURCE_NODE };
@@ -1971,7 +1972,7 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown type '%s'. "
-                "Must be 'name', 'box', 'highlight' or 'clicks'",
+                "Must be 'name', 'box', 'highlight' or 'click_mode'",
                 visual);
         return DONNA_TASK_FAILED;
     }
@@ -2468,9 +2469,10 @@ cmd_tree_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *file = args[1];
     gchar *s_visuals = args[2]; /* opt */
 
-    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "clicks" };
+    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "click_mode" };
     DonnaTreeVisual _visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
-        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
+        DONNA_TREE_VISUAL_CLICK_MODE };
     guint visuals;
 
     if (s_visuals)
@@ -2482,7 +2484,7 @@ cmd_tree_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
                     DONNA_COMMAND_ERROR_OTHER,
                     "Command 'tree_save_tree_file': Invalid visuals : '%s'; "
                     "Must be (a '+'-separated combination of) 'name', 'icon', "
-                    "'box',' highlight', and/or 'clicks'",
+                    "'box',' highlight', and/or 'click_mode'",
                     s_visuals);
             return DONNA_TASK_FAILED;
         }
@@ -2652,9 +2654,10 @@ cmd_tree_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *file = args[1];
     gchar *s_visuals = args[2]; /* opt */
 
-    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "clicks" };
+    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "click_mode" };
     DonnaTreeVisual _visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
-        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT, DONNA_TREE_VISUAL_CLICKS };
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
+        DONNA_TREE_VISUAL_CLICK_MODE };
     guint visuals;
 
     if (s_visuals)
@@ -2666,7 +2669,7 @@ cmd_tree_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
                     DONNA_COMMAND_ERROR_OTHER,
                     "Command 'tree_save_tree_file': Invalid visuals : '%s'; "
                     "Must be (a '+'-separated combination of) 'name', 'icon', "
-                    "'box',' highlight', and/or 'clicks'",
+                    "'box',' highlight', and/or 'click_mode'",
                     s_visuals);
             return DONNA_TASK_FAILED;
         }
@@ -2938,10 +2941,10 @@ cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *visual = args[2];
     gchar *value = args[3];
 
-    const gchar *choices[] = { "name", "icon", "box", "highlight", "clicks" };
+    const gchar *choices[] = { "name", "icon", "box", "highlight", "click_mode" };
     DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
         DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
-        DONNA_TREE_VISUAL_CLICKS };
+        DONNA_TREE_VISUAL_CLICK_MODE };
     gint c;
 
     c = _get_choice (choices, visual);
@@ -2950,7 +2953,7 @@ cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
                 "Cannot set tree visual, unknown type '%s'. "
-                "Must be 'name', 'icon', 'box', 'highlight' or 'clicks'",
+                "Must be 'name', 'icon', 'box', 'highlight' or 'click_mode'",
                 visual);
         return DONNA_TASK_FAILED;
     }

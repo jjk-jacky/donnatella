@@ -124,12 +124,12 @@ typedef enum
 
 typedef enum
 {
-    DONNA_TREE_VISUAL_NOTHING   = 0,
-    DONNA_TREE_VISUAL_NAME      = (1 << 0),
-    DONNA_TREE_VISUAL_ICON      = (1 << 1),
-    DONNA_TREE_VISUAL_BOX       = (1 << 2),
-    DONNA_TREE_VISUAL_HIGHLIGHT = (1 << 3),
-    DONNA_TREE_VISUAL_CLICKS    = (1 << 4),
+    DONNA_TREE_VISUAL_NOTHING    = 0,
+    DONNA_TREE_VISUAL_NAME       = (1 << 0),
+    DONNA_TREE_VISUAL_ICON       = (1 << 1),
+    DONNA_TREE_VISUAL_BOX        = (1 << 2),
+    DONNA_TREE_VISUAL_HIGHLIGHT  = (1 << 3),
+    DONNA_TREE_VISUAL_CLICK_MODE = (1 << 4),
 } DonnaTreeVisual;
 
 typedef enum
