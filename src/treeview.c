@@ -15193,7 +15193,7 @@ tree_context_get_item_info (const gchar             *item,
                         "@ask_text(Enter the name of the list to sync with,,",
                         (!priv->sid_active_list_changed && priv->sync_with)
                         ? donna_tree_view_get_name (priv->sync_with) : "",
-                        "),", extra, ")", NULL);
+                        "),", (extra) ? extra : "", ")", NULL);
                 info->free_trigger = TRUE;
 
                 return TRUE;
