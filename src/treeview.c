@@ -162,7 +162,7 @@ enum key_type
 
 enum changed_on
 {
-    STATUS_CHANGED_ON_KEYMODE   = (1 << 0),
+    STATUS_CHANGED_ON_KEY_MODE  = (1 << 0),
     STATUS_CHANGED_ON_KEYS      = (1 << 1),
     STATUS_CHANGED_ON_CONTENT   = (1 << 2),
 };
@@ -254,12 +254,12 @@ struct status
     guint            id;
     enum changed_on  changed_on;
     gchar           *fmt;
-    /* keep the name, so we can load keymode_colors options. We don't "preload"
-     * them because we don't know which keymodes exists, so it's simpler that
-     * way */
+    /* keep the name, so we can load key_modes_colors options. We don't
+     * "preload" them because we don't know which key modes exists, so it's
+     * simpler that way */
     gchar           *name;
-    /* keymode color options */
-    gboolean         keymode_colors;
+    /* key modes color options */
+    gboolean         key_modes_colors;
     /* size options */
     gint             digits;
     gboolean         long_unit;
@@ -12920,7 +12920,7 @@ donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
     priv->key_motion_m = 0;
     priv->key_motion = 0;
 
-    check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEYMODE);
+    check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEY_MODE);
 }
 
 gboolean
@@ -12999,7 +12999,7 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
     priv->key_motion_m = 0;
     priv->key_motion = 0;
 
-    check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEYMODE);
+    check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEY_MODE);
 }
 
 /* mode list only */
@@ -17696,16 +17696,16 @@ status_provider_create_status (DonnaStatusProvider    *sp,
                     "defaults/size/long_unit"))
             status.long_unit = FALSE;
 
-    if (!donna_config_get_boolean (config, NULL, &status.keymode_colors,
-                "statusbar/%s/keymode_colors", name))
-        status.keymode_colors = FALSE;
-    if (status.keymode_colors)
+    if (!donna_config_get_boolean (config, NULL, &status.key_modes_colors,
+                "statusbar/%s/key_modes_colors", name))
+        status.key_modes_colors = FALSE;
+    if (status.key_modes_colors)
     {
         status.name = g_strdup (name);
-        status.changed_on |= STATUS_CHANGED_ON_KEYMODE;
+        status.changed_on |= STATUS_CHANGED_ON_KEY_MODE;
     }
     else
-        /* name only needed to load keymode_colors options */
+        /* name only needed to load key_modes_colors options */
         status.name = NULL;
 
     while ((s = strchr (s, '%')))
@@ -17713,7 +17713,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
         switch (s[1])
         {
             case 'K':
-                status.changed_on |= STATUS_CHANGED_ON_KEYMODE;
+                status.changed_on |= STATUS_CHANGED_ON_KEY_MODE;
                 break;
 
             case 'k':
@@ -18062,7 +18062,7 @@ status_provider_render (DonnaStatusProvider    *sp,
     }
 
     g_string_append (str, fmt);
-    if (status->keymode_colors)
+    if (status->key_modes_colors)
     {
         DonnaConfig *config;
 
@@ -18070,7 +18070,7 @@ status_provider_render (DonnaStatusProvider    *sp,
         if (priv->key_mode)
         {
             if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/keymode_%s_background",
+                        "statusbar/%s/key_mode_%s_background",
                         status->name, priv->key_mode))
             {
                 g_object_set (renderer,
@@ -18081,7 +18081,7 @@ status_provider_render (DonnaStatusProvider    *sp,
                 g_free (s);
             }
             else if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/keymode_%s_background-rgba",
+                        "statusbar/%s/key_mode_%s_background-rgba",
                         status->name, priv->key_mode))
             {
                 GdkRGBA rgba;
@@ -18098,7 +18098,7 @@ status_provider_render (DonnaStatusProvider    *sp,
             }
 
             if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/keymode_%s_foreground",
+                        "statusbar/%s/key_mode_%s_foreground",
                         status->name, priv->key_mode))
             {
                 g_object_set (renderer,
@@ -18109,7 +18109,7 @@ status_provider_render (DonnaStatusProvider    *sp,
                 g_free (s);
             }
             else if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/keymode_%s_foreground-rgba",
+                        "statusbar/%s/key_mode_%s_foreground-rgba",
                         status->name, priv->key_mode))
             {
                 GdkRGBA rgba;
