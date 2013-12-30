@@ -1931,6 +1931,15 @@ real_option_cb (struct option_data *data)
                 else
                     sw = NULL;
 
+                /* if the treeview isn't a list, ignore */
+                if (sw && sw->priv->is_tree)
+                {
+                    g_warning ("Treeview '%s': Option 'sync_with' set to '%s' "
+                            "which is a tree -- Can only sync with lists",
+                            priv->name, s);
+                    sw = NULL;
+                }
+
                 if (priv->sync_with != sw)
                 {
                     if (priv->sid_active_list_changed)
@@ -10720,6 +10729,8 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     guint from;
     gint cur;
     gint val;
+    gchar *s_cur;
+    const gchar *s_val;
     gboolean need_cur;
     gchar *loc;
 
@@ -10760,6 +10771,49 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         handle_option_boolean ("sync_scroll", sync_scroll)
         handle_option_int_extra ("node_visuals", "visuals", FLAGS, node_visuals)
         handle_option_boolean ("auto_focus_sync", auto_focus_sync)
+        else if (streq (option, "sync_with"))
+        {
+            type = G_TYPE_STRING;
+
+            s_val = value;
+
+            if (need_cur)
+            {
+                DonnaTreeView *sw = NULL;
+
+                s_cur = cfg_get_sync_with (tree, config, &from);
+                if (s_cur)
+                {
+                    if (streq (s_cur, ":active"))
+                        g_object_get (priv->app, "active-list", &sw, NULL);
+                    else
+                        sw = donna_app_get_treeview (priv->app, s_cur);
+                }
+
+                if (priv->sync_with != sw)
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "Treeview '%s': Cannot set option 'sync_with'; "
+                            "Values not matching: '%s' (config) vs '%s' (memory)",
+                            priv->name, s_cur, (priv->sync_with)
+                            ? donna_tree_view_get_name (priv->sync_with)
+                            : "-");
+                    g_object_unref (sw);
+                    g_free (s_cur);
+                    return FALSE;
+                }
+                g_object_unref (sw);
+                g_free (s_cur);
+
+            }
+            else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)
+            {
+                od.val = &s_val;
+                real_option_cb (&od);
+                return TRUE;
+            }
+        }
         else
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
@@ -10817,6 +10871,16 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     else if (type == G_TYPE_BOOLEAN)
     {
         if (!donna_config_set_boolean (config, error, val, loc))
+        {
+            g_prefix_error (error, "Treeview '%s': Failed to save option '%s'",
+                    priv->name, option);
+            g_free (loc);
+            return FALSE;
+        }
+    }
+    else if (type == G_TYPE_STRING)
+    {
+        if (!donna_config_set_string (config, error, s_val, loc))
         {
             g_prefix_error (error, "Treeview '%s': Failed to save option '%s'",
                     priv->name, option);
