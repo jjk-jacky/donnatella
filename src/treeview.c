@@ -14297,7 +14297,7 @@ tree_context_get_alias (const gchar             *alias,
             g_string_append_c (str, '<');
             for (i = 0; i < arr->len; ++i)
                 donna_g_string_append_concat (str, (i > 0) ? "," : "",
-                        ":tree_options.key_mode:", arr->pdata[i], "@", extra, NULL);
+                        ":tree_options.key_mode:@", extra, ":", arr->pdata[i], NULL);
             g_string_append_c (str, '>');
             g_ptr_array_unref (arr);
         }
@@ -14312,7 +14312,7 @@ tree_context_get_alias (const gchar             *alias,
             g_string_append_c (str, '<');
             for (i = 0; i < arr->len; ++i)
                 donna_g_string_append_concat (str, (i > 0) ? "," : "",
-                        ":tree_options.click_mode:", arr->pdata[i], "@", extra, NULL);
+                        ":tree_options.click_mode:@", extra, ":", arr->pdata[i], NULL);
             g_string_append_c (str, '>');
             g_ptr_array_unref (arr);
         }
@@ -15107,57 +15107,69 @@ tree_context_get_item_info (const gchar             *item,
     }
     else if (streqn (item, "tree_options.", 13))
     {
-        gchar *custom = NULL;
+        const gchar *save = "";
 
-        /* key_mode & click_mode can also have some extra */
-        if (extra && *extra != '@' && (streq (item + 13, "key_mode")
-                    || streq (item + 13, "click_mode")))
+        if (extra && *extra == '@')
         {
-            gchar *e;
+            gchar *s;
+            gsize len;
 
-            e = strchr (extra, '@');
-            if (e)
-                custom = g_strndup (extra, (gsize) (e - extra));
-            else
-                custom = g_strdup (extra);
-
-            extra = e;
-        }
-
-        if (extra && *extra != '@')
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Treeview '%s': Invalid extra '%s' for item '%s'",
-                    priv->name, extra, item);
-            g_free (custom);
-            return FALSE;
-        }
-        else if (extra)
-        {
             ++extra;
-            if (*extra == '\0')
-                extra = NULL;
-            else if (!(streq (extra, "memory") || streq (extra, "current")
-                || streq (extra, "ask") || streq (extra, "tree")
-                || streq (extra, "default")))
+            s = strchr (extra, ':');
+            if (s)
+                len = (gsize) (s - extra);
+            else
+                len = strlen (extra);
+
+            if (len == 0)
+                save = "";
+            else if (streqn (extra, "memory", len))
+                save = "memory";
+            else if (streqn (extra, "current", len))
+                save = "current";
+            else if (streqn (extra, "ask", len))
+                save = "ask";
+            else if (streqn (extra, "arr", len))
+                save = "arr";
+            else if (streqn (extra, "tree", len))
+                save = "tree";
+            else if (streqn (extra, "mode", len))
+                save = "mode";
+            else if (streqn (extra, "default", len))
+                save = "default";
+            else
             {
                 g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                         DONNA_CONTEXT_MENU_ERROR_OTHER,
                         "Treeview '%s': Invalid save_location '%s' in extra for item '%s'",
                         priv->name, extra, item);
-                g_free (custom);
                 return FALSE;
             }
+
+            if (!s || s[1] == '\0')
+                extra = NULL;
+            else
+                extra = s + 1;
+        }
+
+        /* only key_mode & click_mode can also have some extra */
+        if (extra && !(streq (item + 13, "key_mode")
+                    || streq (item + 13, "click_mode")))
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "Treeview '%s': Invalid extra '%s' for item '%s'",
+                    priv->name, extra, item);
+            return FALSE;
         }
 
         item += 13;
 #define set_trigger(option,value) do {                                      \
-        if (extra)                                                          \
+        if (save)                                                           \
         {                                                                   \
             info->trigger = g_strconcat (                                   \
                     "command:tree_set_option (%o," option "," value ",",    \
-                    extra, ")", NULL);                                      \
+                    save, ")", NULL);                                       \
             info->free_trigger = TRUE;                                      \
         }                                                                   \
         else                                                                \
@@ -15177,7 +15189,7 @@ tree_context_get_item_info (const gchar             *item,
             {
                 if (!_set_item_from_extra (tree, info, priv->node_types,
                             "node-type", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "node_types", item + 11, extra, error))
+                            "node_types", item + 11, save, error))
                     return FALSE;
 
                 info->is_visible = info->is_sensitive = TRUE;
@@ -15209,7 +15221,7 @@ tree_context_get_item_info (const gchar             *item,
             {
                 if (!_set_item_from_extra (tree, info, priv->sort_groups,
                             "sg", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "sort_groups", item + 12, extra, error))
+                            "sort_groups", item + 12, save, error))
                     return FALSE;
 
                 info->is_visible = info->is_sensitive = TRUE;
@@ -15230,7 +15242,7 @@ tree_context_get_item_info (const gchar             *item,
             {
                 if (!_set_item_from_extra (tree, info, priv->select_highlight,
                             "highlight", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "select_highlight", item + 17, extra, error))
+                            "select_highlight", item + 17, save, error))
                     return FALSE;
 
                 info->is_visible = info->is_sensitive = TRUE;
@@ -15241,14 +15253,14 @@ tree_context_get_item_info (const gchar             *item,
         else if (streq (item, "key_mode"))
         {
             info->is_visible = info->is_sensitive = TRUE;
-            if (custom)
+            if (extra)
             {
                 info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-                info->is_active = streq (custom, priv->key_mode);
-                info->name = custom;
+                info->is_active = streq (extra, priv->key_mode);
+                info->name = g_strdup (extra);
                 info->free_name = TRUE;
                 info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,",
-                        custom, ",", (extra) ? extra : "", ")", NULL);
+                        extra, ",", save, ")", NULL);
                 info->free_trigger = TRUE;
             }
             else
@@ -15257,7 +15269,7 @@ tree_context_get_item_info (const gchar             *item,
                 info->free_name = TRUE;
                 info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,"
                         "@ask_text(Enter the new default key mode,,",
-                        priv->key_mode, "),", (extra) ? extra : "", ")", NULL);
+                        priv->key_mode, "),", save, ")", NULL);
                 info->free_trigger = TRUE;
             }
             return TRUE;
@@ -15265,14 +15277,14 @@ tree_context_get_item_info (const gchar             *item,
         else if (streq (item, "click_mode"))
         {
             info->is_visible = info->is_sensitive = TRUE;
-            if (custom)
+            if (extra)
             {
                 info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-                info->is_active = streq (custom, priv->click_mode);
-                info->name = custom;
+                info->is_active = streq (extra, priv->click_mode);
+                info->name = g_strdup (extra);
                 info->free_name = TRUE;
                 info->trigger = g_strconcat ("command:tree_set_option (%o,click_mode,",
-                        custom, ",", (extra) ? extra : "", ")", NULL);
+                        extra, ",", save, ")", NULL);
                 info->free_trigger = TRUE;
             }
             else
@@ -15281,7 +15293,7 @@ tree_context_get_item_info (const gchar             *item,
                 info->free_name = TRUE;
                 info->trigger = g_strconcat ("command:tree_set_option (%o,click_mode,"
                         "@ask_text(Enter the click key mode,,",
-                        priv->click_mode, "),", (extra) ? extra : "", ")", NULL);
+                        priv->click_mode, "),", save, ")", NULL);
                 info->free_trigger = TRUE;
             }
             return TRUE;
@@ -15345,7 +15357,7 @@ tree_context_get_item_info (const gchar             *item,
                         "@ask_text(Enter the name of the list to sync with,,",
                         (!priv->sid_active_list_changed && priv->sync_with)
                         ? donna_tree_view_get_name (priv->sync_with) : "",
-                        "),", (extra) ? extra : "", ")", NULL);
+                        "),", save, ")", NULL);
                 info->free_trigger = TRUE;
 
                 return TRUE;
@@ -15363,7 +15375,7 @@ tree_context_get_item_info (const gchar             *item,
                 {
                     if (!_set_item_from_extra (tree, info, priv->sync_mode,
                                 "sync", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                                "sync_mode", item + 10, extra, error))
+                                "sync_mode", item + 10, save, error))
                         return FALSE;
 
                     item += 10;
@@ -15407,7 +15419,7 @@ tree_context_get_item_info (const gchar             *item,
                 {
                     if (!_set_item_from_extra (tree, info, priv->node_visuals,
                                 "visuals", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
-                                "node_visuals", item + 13, extra, error))
+                                "node_visuals", item + 13, save, error))
                         return FALSE;
 
                     info->is_visible = info->is_sensitive = TRUE;
@@ -15460,7 +15472,7 @@ tree_context_get_item_info (const gchar             *item,
                 {
                     if (!_set_item_from_extra (tree, info, priv->goto_item_set,
                                 "tree-set", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
-                                "goto_item_set", item + 14, extra, error))
+                                "goto_item_set", item + 14, save, error))
                         return FALSE;
 
                     info->is_visible = info->is_sensitive = TRUE;
