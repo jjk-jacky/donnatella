@@ -4009,6 +4009,11 @@ cmdline_cb (const gchar         *option,
         }
         return TRUE;
     }
+    else if (streq (option, "-q") || streq (option, "--quiet"))
+    {
+        data->loglevel = G_LOG_LEVEL_ERROR;
+        return TRUE;
+    }
 #ifdef DONNA_DEBUG_ENABLED
     else if (streq (option, "-d") || streq (option, "--debug"))
     {
@@ -4042,6 +4047,8 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
             "Set LEVEL as the minimum log level to show", "LEVEL" },
         { "verbose",    'v', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Increase verbosity of log; Repeat multiple times as needed.", NULL },
+        { "quiet",      'q', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
+            "Quiet mode (Same as --log-level=error)", NULL },
 #ifdef DONNA_DEBUG_ENABLED
         { "debug",      'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Define \"filters\" for the debug log messages", "FILTERS" },
