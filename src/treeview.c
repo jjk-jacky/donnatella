@@ -6554,7 +6554,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
                     "treeviews/%s/arrangement", priv->name))
             /* fallback on default for our mode */
             if (!donna_config_arr_load_columns (config, arr,
-                        "defaults/arrangements/%s",
+                        "defaults/treeviews/%s/arrangement",
                         (priv->is_tree) ? "tree" : "list"))
             {
                 /* if all else fails, use a column "name" */
@@ -6566,7 +6566,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
         if (!donna_config_arr_load_sort (config, arr,
                     "treeviews/%s/arrangement", priv->name)
                 && !donna_config_arr_load_sort (config, arr,
-                    "defaults/arrangements/%s",
+                    "defaults/treeviews/%s/arrangement",
                     (priv->is_tree) ? "tree" : "list"))
         {
             /* we can't find anything, default to first column */
@@ -6585,7 +6585,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
                     "treeviews/%s/arrangement",
                     priv->name))
             donna_config_arr_load_second_sort (config, arr,
-                    "defaults/arrangements/%s",
+                    "defaults/treeviews/%s/arrangement",
                     (priv->is_tree) ? "tree" : "list");
 
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS))
@@ -6594,7 +6594,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
                     "treeviews/%s/arrangement",
                     priv->name)
                 && !donna_config_arr_load_columns_options (config, arr,
-                    "defaults/arrangements/%s",
+                    "defaults/treeviews/%s/arrangement",
                     (priv->is_tree) ? "tree" : "list"))
             /* else: we say we have something, it is NULL. This will force
              * updating the columntype-data without using an arr_name */
@@ -6606,7 +6606,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
         if (!donna_config_arr_load_color_filters (config, priv->app, arr,
                     "treeviews/%s/arrangement", priv->name))
             donna_config_arr_load_color_filters (config, priv->app, arr,
-                    "defaults/arrangements/%s",
+                    "defaults/treeviews/%s/arrangement",
                     (priv->is_tree) ? "tree" : "list");
 
         /* special: color filters might have been loaded with a type COMBINE,
