@@ -3483,7 +3483,7 @@ load_widget (DonnaDonna  *donna,
 }
 
 static inline enum rc
-create_gui (DonnaDonna *donna)
+create_gui (DonnaDonna *donna, gchar *layout)
 {
     GError              *err = NULL;
     DonnaApp            *app = (DonnaApp *) donna;
@@ -3508,7 +3508,8 @@ create_gui (DonnaDonna *donna)
     g_signal_connect (window, "delete-event",
             (GCallback) window_delete_event_cb, donna);
 
-    if (!donna_config_get_string (priv->config, &err, &s, "donna/layout"))
+    if (!layout
+            && !donna_config_get_string (priv->config, &err, &layout, "donna/layout"))
     {
         w = gtk_message_dialog_new (NULL,
                 GTK_DIALOG_MODAL,
@@ -3522,21 +3523,21 @@ create_gui (DonnaDonna *donna)
         return RC_LAYOUT_MISSING;
     }
 
-    if (!donna_config_get_string (priv->config, &err, &ss, "layouts/%s", s))
+    if (!donna_config_get_string (priv->config, &err, &ss, "layouts/%s", layout))
     {
         w = gtk_message_dialog_new (NULL,
                 GTK_DIALOG_MODAL,
                 GTK_MESSAGE_ERROR,
                 GTK_BUTTONS_CLOSE,
                 "Unable to load interface: layout '%s' not defined (%s)",
-                s, (err) ? err->message : "no error message");
+                layout, (err) ? err->message : "no error message");
         g_clear_error (&err);
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
-        g_free (s);
+        g_free (layout);
         return RC_LAYOUT_MISSING;
     }
-    g_free (s);
+    g_free (layout);
     s = ss;
 
     if (!donna_config_get_string (priv->config, NULL, &active_list_name,
@@ -4032,7 +4033,11 @@ cmdline_cb (const gchar         *option,
 }
 
 static gboolean
-parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
+parse_cmdline (DonnaDonna    *donna,
+               gchar        **layout,
+               int           *argc,
+               char         **argv[],
+               GError       **error)
 {
     DonnaDonnaPrivate *priv = donna->priv;
     struct cmdline_opt data = { G_LOG_LEVEL_WARNING, };
@@ -4049,6 +4054,8 @@ parse_cmdline (DonnaDonna *donna, int *argc, char **argv[], GError **error)
             "Increase verbosity of log; Repeat multiple times as needed.", NULL },
         { "quiet",      'q', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Quiet mode (Same as --log-level=error)", NULL },
+        { "layout",     'y', 0, G_OPTION_ARG_STRING, layout,
+            "Use LAYOUT as layout (instead of option donna/layout)", "LAYOUT" },
 #ifdef DONNA_DEBUG_ENABLED
         { "debug",      'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Define \"filters\" for the debug log messages", "FILTERS" },
@@ -4134,14 +4141,16 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
     GError *err = NULL;
     DonnaDonna *donna = (DonnaDonna *) app;
     enum rc rc;
+    gchar *layout = NULL;
 
     g_main_context_acquire (g_main_context_default ());
 
-    if (!parse_cmdline (donna, &argc, &argv, &err))
+    if (!parse_cmdline (donna, &layout, &argc, &argv, &err))
     {
         fputs (err->message, stderr);
         fputc ('\n', stderr);
         g_clear_error (&err);
+        g_free (layout);
         return RC_PARSE_CMDLINE_FAILED;
     }
 
@@ -4157,6 +4166,7 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
         g_clear_error (&err);
         gtk_dialog_run ((GtkDialog *) w);
         gtk_widget_destroy (w);
+        g_free (layout);
         return RC_PREPARE_FAILED;
     }
 
@@ -4164,7 +4174,7 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
     init_donna (donna);
 
     /* create & show the main window */
-    rc = create_gui (donna);
+    rc = create_gui (donna, layout);
     if (G_UNLIKELY (rc != 0))
         return rc;
 
