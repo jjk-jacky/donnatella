@@ -3483,7 +3483,7 @@ load_widget (DonnaDonna  *donna,
 }
 
 static inline enum rc
-create_gui (DonnaDonna *donna, gchar *layout)
+create_gui (DonnaDonna *donna, gchar *layout, gboolean maximized)
 {
     GError              *err = NULL;
     DonnaApp            *app = (DonnaApp *) donna;
@@ -3498,7 +3498,6 @@ create_gui (DonnaDonna *donna, gchar *layout)
     gchar               *areas;
     gint                 width;
     gint                 height;
-    gboolean             maximized;
 
     window = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
     priv->window = g_object_ref (window);
@@ -3688,8 +3687,9 @@ next:
         height = -1;
     gtk_window_set_default_size (window, width, height);
 
-    if (donna_config_get_boolean (priv->config, NULL, &maximized, "donna/maximized")
-            && maximized)
+    if (maximized
+            || (donna_config_get_boolean (priv->config, NULL, &maximized, "donna/maximized")
+                && maximized))
         gtk_window_maximize (window);
 
     refresh_window_title ((DonnaDonna *) app);
@@ -4035,6 +4035,7 @@ cmdline_cb (const gchar         *option,
 static gboolean
 parse_cmdline (DonnaDonna    *donna,
                gchar        **layout,
+               gboolean      *maximized,
                int           *argc,
                char         **argv[],
                GError       **error)
@@ -4056,6 +4057,8 @@ parse_cmdline (DonnaDonna    *donna,
             "Quiet mode (Same as --log-level=error)", NULL },
         { "layout",     'y', 0, G_OPTION_ARG_STRING, layout,
             "Use LAYOUT as layout (instead of option donna/layout)", "LAYOUT" },
+        { "maximized",  'M', 0, G_OPTION_ARG_NONE, maximized,
+            "Start with main window maximized", NULL },
 #ifdef DONNA_DEBUG_ENABLED
         { "debug",      'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Define \"filters\" for the debug log messages", "FILTERS" },
@@ -4142,10 +4145,11 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
     DonnaDonna *donna = (DonnaDonna *) app;
     enum rc rc;
     gchar *layout = NULL;
+    gboolean maximized = FALSE;
 
     g_main_context_acquire (g_main_context_default ());
 
-    if (!parse_cmdline (donna, &layout, &argc, &argv, &err))
+    if (!parse_cmdline (donna, &layout, &maximized, &argc, &argv, &err))
     {
         fputs (err->message, stderr);
         fputc ('\n', stderr);
@@ -4174,7 +4178,7 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
     init_donna (donna);
 
     /* create & show the main window */
-    rc = create_gui (donna, layout);
+    rc = create_gui (donna, layout, maximized);
     if (G_UNLIKELY (rc != 0))
         return rc;
 
