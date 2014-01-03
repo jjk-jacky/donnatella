@@ -9429,6 +9429,11 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
         action = DONNA_TREE_SEL_SELECT;
     }
 
+    if (!priv->is_tree)
+        /* we set this so all the selection-changed signals that will be emitted
+         * after each (un)select_iter() call will be noop (otherwise it slows
+         * things down a bit */
+        priv->filling_list = TRUE;
     for (i = 0; i < nodes->len; ++i)
     {
         DonnaNode *node = nodes->pdata[i];
@@ -9452,6 +9457,13 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
                     gtk_tree_selection_select_iter (sel, l->data);
             }
         }
+    }
+    if (!priv->is_tree)
+    {
+        /* restore things, and also make sure the status are updated (since we
+         * prevented that from happening) */
+        priv->filling_list = FALSE;
+        check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
     }
 
     return TRUE;
@@ -17536,7 +17548,9 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
     /* filling_list is also set when clearing the store, because that has GTK
      * trigger *a lot* of selection-changed (even when there's no selection)
      * which in turn would trigger lots of status refresh, which would be a
-     * little slow (when there was lots of items) */
+     * little slow (when there was lots of items).
+     * It is also set from selection_nodes() since on each (un)select_iter()
+     * call there's a signal emitted, which slows things down a bit. */
     if (!priv->filling_list)
         check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
     if (!priv->is_tree)
