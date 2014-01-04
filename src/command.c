@@ -2822,7 +2822,7 @@ cmd_tree_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *s_l    = args[3]; /* opt */
 
     const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "mode" };
-    DonnaTreeviewOptionSaveLocation save_location[] = {
+    DonnaTreeViewOptionSaveLocation save_location[] = {
         DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
         DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
         DONNA_COLUMN_OPTION_SAVE_IN_ASK,

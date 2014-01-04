@@ -158,14 +158,14 @@ typedef enum
 /* must be same as DonnaColumnOptionSaveLocation */
 typedef enum
 {
-    DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY = 0, /* i.e. don't save, only apply */
-    DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT,
-    _DONNA_TREEVIEW_OPTION_SAVE_IN_ARRANGEMENT,
-    DONNA_TREEVIEW_OPTION_SAVE_IN_TREE,
-    DONNA_TREEVIEW_OPTION_SAVE_IN_MODE,
-    _DONNA_TREEVIEW_OPTION_SAVE_IN_DEFAULT,
-    DONNA_TREEVIEW_OPTION_SAVE_IN_ASK
-} DonnaTreeviewOptionSaveLocation;
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY = 0, /* i.e. don't save, only apply */
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT,
+    _DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT,
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE,
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE,
+    _DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT,
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK
+} DonnaTreeViewOptionSaveLocation;
 
 typedef enum
 {
@@ -299,7 +299,7 @@ gboolean        donna_tree_view_set_second_sort_order (
 gboolean        donna_tree_view_set_option      (DonnaTreeView      *tree,
                                                  const gchar        *option,
                                                  const gchar        *value,
-                                                 DonnaTreeviewOptionSaveLocation save_location,
+                                                 DonnaTreeViewOptionSaveLocation save_location,
                                                  GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_save_tree_file  (DonnaTreeView      *tree,

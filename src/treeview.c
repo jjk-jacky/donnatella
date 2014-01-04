@@ -10691,7 +10691,7 @@ _convert_value (DonnaTreeView           *tree,
                 return FALSE;                                               \
             }                                                               \
         }                                                                   \
-        else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)     \
+        else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
         {                                                                   \
             od.val = &val;                                                  \
             real_option_cb (&od);                                           \
@@ -10731,7 +10731,7 @@ _convert_value (DonnaTreeView           *tree,
                 return FALSE;                                               \
             }                                                               \
         }                                                                   \
-        else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)     \
+        else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
         {                                                                   \
             od.val = &val;                                                  \
             real_option_cb (&od);                                           \
@@ -10759,7 +10759,7 @@ _convert_value (DonnaTreeView           *tree,
                 return FALSE;                                               \
             }                                                               \
         }                                                                   \
-        else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)     \
+        else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
         {                                                                   \
             od.val = &s_val;                                                \
             real_option_cb (&od);                                           \
@@ -10771,7 +10771,7 @@ gboolean
 donna_tree_view_set_option (DonnaTreeView      *tree,
                             const gchar        *option,
                             const gchar        *value,
-                            DonnaTreeviewOptionSaveLocation save_location,
+                            DonnaTreeViewOptionSaveLocation save_location,
                             GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -10789,11 +10789,11 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (option != NULL, FALSE);
     g_return_val_if_fail (value != NULL, FALSE);
-    g_return_val_if_fail (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY
-            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT
-            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_TREE
-            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MODE
-            || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK, FALSE);
+    g_return_val_if_fail (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK, FALSE);
     priv = tree->priv;
     config = donna_app_peek_config (priv->app);
     od.tree = tree;
@@ -10801,8 +10801,8 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     od.opt = OPT_IN_MEMORY;
     od.len = 0;
 
-    need_cur = save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT
-        || save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK;
+    need_cur = save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
+        || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK;
 
     if (0)
     {
@@ -10861,7 +10861,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
                 g_free (s_cur);
 
             }
-            else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_MEMORY)
+            else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
             {
                 od.val = &s_val;
                 real_option_cb (&od);
@@ -10888,14 +10888,14 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_CURRENT)
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT)
     {
         if (from == _DONNA_CONFIG_COLUMN_FROM_TREE)
-            save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_TREE;
+            save_location = DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE;
         else /* _DONNA_CONFIG_COLUMN_FROM_MODE */
-            save_location = DONNA_TREEVIEW_OPTION_SAVE_IN_MODE;
+            save_location = DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE;
     }
-    else if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_ASK)
+    else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK)
     {
         save_location = _donna_column_type_ask_save_location (priv->app, NULL,
                 NULL, priv->name, priv->is_tree,
@@ -10906,7 +10906,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
             return TRUE;
     }
 
-    if (save_location == DONNA_TREEVIEW_OPTION_SAVE_IN_TREE)
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE)
         loc = g_strconcat ("treeviews/", priv->name, "/", option, NULL);
     else /* DONNA_COLUMN_OPTION_SAVE_IN_MODE */
         loc = g_strconcat ("defaults/treeviews/",
