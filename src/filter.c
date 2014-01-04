@@ -157,7 +157,7 @@ static void
 free_block (struct block *block)
 {
     if (block->data)
-        donna_columntype_free_filter_data (block->ct, block->data);
+        donna_column_type_free_filter_data (block->ct, block->data);
     g_free (block->filter);
     g_free (block->col_name);
     if (block->ct)
@@ -271,10 +271,10 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
 
     if (donna_config_get_string (config, NULL, &type,
                 "defaults/treeviews/list/columns/%s/type", col_name))
-        ct = donna_app_get_columntype (priv->app, type);
+        ct = donna_app_get_column_type (priv->app, type);
     else
         /* fallback to its name */
-        ct = donna_app_get_columntype (priv->app, col_name);
+        ct = donna_app_get_column_type (priv->app, col_name);
 
     g_free (type);
     return ct;
@@ -333,8 +333,8 @@ parse_block (DonnaFilter *filter, gchar **str, GError **error)
         if (!block->ct)
         {
             g_set_error (error, DONNA_FILTER_ERROR,
-                    DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
-                    "Unable to load columntype for 'name'");
+                    DONNA_FILTER_ERROR_INVALID_COLUMN_TYPE,
+                    "Unable to load column type for 'name'");
             free_block (block);
             *str = f;
             return NULL;
@@ -348,8 +348,8 @@ parse_block (DonnaFilter *filter, gchar **str, GError **error)
         if (!block->ct)
         {
             g_set_error (error, DONNA_FILTER_ERROR,
-                    DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
-                    "Unable to load columntype for '%s'",
+                    DONNA_FILTER_ERROR_INVALID_COLUMN_TYPE,
+                    "Unable to load column type for '%s'",
                     block->col_name);
             *s = ':';
             free_block (block);
@@ -539,7 +539,7 @@ is_match_element (struct element    *element,
         {
             struct block *block = element->data;
 
-            match = donna_columntype_is_match_filter (block->ct,
+            match = donna_column_type_is_match_filter (block->ct,
                     block->filter, &block->data,
                     get_ct_data (block->col_name, data), node, &err);
         }

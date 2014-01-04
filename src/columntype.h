@@ -1,6 +1,6 @@
 
-#ifndef __DONNA_COLUMNTYPE_H__
-#define __DONNA_COLUMNTYPE_H__
+#ifndef __DONNA_COLUMN_TYPE_H__
+#define __DONNA_COLUMN_TYPE_H__
 
 #include <gtk/gtk.h>
 #include "common.h"
@@ -12,39 +12,39 @@ G_BEGIN_DECLS
 typedef struct _DonnaColumnType             DonnaColumnType; /* dummy typedef */
 typedef struct _DonnaColumnTypeInterface    DonnaColumnTypeInterface;
 
-#define DONNA_TYPE_COLUMNTYPE               (donna_columntype_get_type ())
-#define DONNA_COLUMNTYPE(obj)               (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_COLUMNTYPE, DonnaColumnType))
-#define DONNA_IS_COLUMNTYPE(obj)            (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_COLUMNTYPE))
-#define DONNA_COLUMNTYPE_GET_INTERFACE(obj) (G_TYPE_INSTANCE_GET_INTERFACE ((obj), DONNA_TYPE_COLUMNTYPE, DonnaColumnTypeInterface))
+#define DONNA_TYPE_COLUMN_TYPE              (donna_column_type_get_type ())
+#define DONNA_COLUMN_TYPE(obj)              (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_COLUMN_TYPE, DonnaColumnType))
+#define DONNA_IS_COLUMN_TYPE(obj)           (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_COLUMN_TYPE))
+#define DONNA_COLUMN_TYPE_GET_INTERFACE(obj)(G_TYPE_INSTANCE_GET_INTERFACE ((obj), DONNA_TYPE_COLUMN_TYPE, DonnaColumnTypeInterface))
 
-GType           donna_columntype_get_type   (void) G_GNUC_CONST;
+GType           donna_column_type_get_type  (void) G_GNUC_CONST;
 
-#define DONNA_COLUMNTYPE_ERROR              g_quark_from_static_string ("DonnaColumnType-Error")
+#define DONNA_COLUMN_TYPE_ERROR             g_quark_from_static_string ("DonnaColumnType-Error")
 typedef enum
 {
-    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
-    DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
-    DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
-    DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE,
-    DONNA_COLUMNTYPE_ERROR_PARTIAL_COMPLETION,
-    DONNA_COLUMNTYPE_ERROR_OTHER,
+    DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
+    DONNA_COLUMN_TYPE_ERROR_NOT_SUPPORTED,
+    DONNA_COLUMN_TYPE_ERROR_NODE_NO_PROP,
+    DONNA_COLUMN_TYPE_ERROR_NODE_NOT_WRITABLE,
+    DONNA_COLUMN_TYPE_ERROR_PARTIAL_COMPLETION,
+    DONNA_COLUMN_TYPE_ERROR_OTHER,
 } DonnaColumnTypeError;
 
 
 typedef DonnaColumnType *   (*new_ct)       (DonnaConfig        *config);
 
-#define DONNA_COLUMNTYPE_RENDERER_TEXT      't'
-#define DONNA_COLUMNTYPE_RENDERER_PIXBUF    'p'
-#define DONNA_COLUMNTYPE_RENDERER_PROGRESS  'P'
-#define DONNA_COLUMNTYPE_RENDERER_COMBO     'c'
-#define DONNA_COLUMNTYPE_RENDERER_TOGGLE    'T'
-#define DONNA_COLUMNTYPE_RENDERER_SPINNER   'S'
+#define DONNA_COLUMN_TYPE_RENDERER_TEXT     't'
+#define DONNA_COLUMN_TYPE_RENDERER_PIXBUF   'p'
+#define DONNA_COLUMN_TYPE_RENDERER_PROGRESS 'P'
+#define DONNA_COLUMN_TYPE_RENDERER_COMBO    'c'
+#define DONNA_COLUMN_TYPE_RENDERER_TOGGLE   'T'
+#define DONNA_COLUMN_TYPE_RENDERER_SPINNER  'S'
 
 typedef enum
 {
-    DONNA_COLUMNTYPE_NEED_NOTHING   = 0,
-    DONNA_COLUMNTYPE_NEED_REDRAW    = (1 << 0),
-    DONNA_COLUMNTYPE_NEED_RESORT    = (1 << 1)
+    DONNA_COLUMN_TYPE_NEED_NOTHING  = 0,
+    DONNA_COLUMN_TYPE_NEED_REDRAW   = (1 << 0),
+    DONNA_COLUMN_TYPE_NEED_RESORT   = (1 << 1)
 } DonnaColumnTypeNeed;
 
 /* keep DonnaTreeviewOptionSaveLocation in sync */
@@ -192,30 +192,30 @@ struct _DonnaColumnTypeInterface
                                              GError            **error);
 };
 
-const gchar *   donna_columntype_get_name       (DonnaColumnType    *ct);
-const gchar *   donna_columntype_get_renderers  (DonnaColumnType    *ct);
-DonnaColumnTypeNeed donna_columntype_refresh_data (DonnaColumnType  *ct,
+const gchar *   donna_column_type_get_name      (DonnaColumnType    *ct);
+const gchar *   donna_column_type_get_renderers (DonnaColumnType    *ct);
+DonnaColumnTypeNeed donna_column_type_refresh_data (DonnaColumnType *ct,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
                                                  const gchar        *tv_name,
                                                  gboolean            is_tree,
                                                  gpointer           *data);
-void            donna_columntype_free_data      (DonnaColumnType    *ct,
+void            donna_column_type_free_data     (DonnaColumnType    *ct,
                                                  gpointer            data);
-GPtrArray *     donna_columntype_get_props      (DonnaColumnType    *ct,
+GPtrArray *     donna_column_type_get_props     (DonnaColumnType    *ct,
                                                  gpointer            data);
-GtkSortType     donna_columntype_get_default_sort_order
+GtkSortType     donna_column_type_get_default_sort_order
                                                 (DonnaColumnType    *ct,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
                                                  const gchar        *tv_name,
                                                  gboolean            is_tree,
                                                  gpointer            data);
-gboolean        donna_columntype_can_edit       (DonnaColumnType    *ct,
+gboolean        donna_column_type_can_edit      (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  DonnaNode          *node,
                                                  GError            **error);
-gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
+gboolean        donna_column_type_edit          (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  DonnaNode          *node,
                                                  GtkCellRenderer   **renderers,
@@ -223,7 +223,7 @@ gboolean        donna_columntype_edit           (DonnaColumnType    *ct,
                                                  gpointer            re_data,
                                                  DonnaTreeView      *treeview,
                                                  GError            **error);
-DonnaColumnTypeNeed donna_columntype_set_option (DonnaColumnType    *ct,
+DonnaColumnTypeNeed donna_column_type_set_option(DonnaColumnType    *ct,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
                                                  const gchar        *tv_name,
@@ -233,37 +233,39 @@ DonnaColumnTypeNeed donna_columntype_set_option (DonnaColumnType    *ct,
                                                  const gchar        *value,
                                                  DonnaColumnOptionSaveLocation save_location,
                                                  GError            **error);
-gboolean        donna_columntype_set_value      (DonnaColumnType    *ct,
+gboolean        donna_column_type_set_value     (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  GPtrArray          *nodes,
                                                  const gchar        *value,
                                                  DonnaNode          *node,
                                                  DonnaTreeView      *treeview,
                                                  GError            **error);
-GPtrArray *     donna_columntype_render         (DonnaColumnType    *ct,
+GPtrArray *     donna_column_type_render        (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkCellRenderer    *renderer);
-gboolean        donna_columntype_set_tooltip    (DonnaColumnType    *ct,
+gboolean        donna_column_type_set_tooltip   (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  guint               index,
                                                  DonnaNode          *node,
                                                  GtkTooltip         *tooltip);
-gint            donna_columntype_node_cmp       (DonnaColumnType    *ct,
+gint            donna_column_type_node_cmp      (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  DonnaNode          *node1,
                                                  DonnaNode          *node2);
-gboolean        donna_columntype_is_match_filter(DonnaColumnType    *ct,
+gboolean        donna_column_type_is_match_filter
+                                                (DonnaColumnType    *ct,
                                                  const gchar        *filter,
                                                  gpointer           *filter_data,
                                                  gpointer            data,
                                                  DonnaNode          *node,
                                                  GError            **error);
-void            donna_columntype_free_filter_data(DonnaColumnType   *ct,
+void            donna_column_type_free_filter_data
+                                                (DonnaColumnType    *ct,
                                                  gpointer            filter_data);
 /* context related */
-gchar *         donna_columntype_get_context_alias (
+gchar *         donna_column_type_get_context_alias (
                                                  DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  const gchar        *alias,
@@ -274,7 +276,7 @@ gchar *         donna_columntype_get_context_alias (
                                                  gpointer            get_sel_data,
                                                  const gchar        *prefix,
                                                  GError            **error);
-gboolean        donna_columntype_get_context_item_info (
+gboolean        donna_column_type_get_context_item_info (
                                                  DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  const gchar        *item,
@@ -287,10 +289,10 @@ gboolean        donna_columntype_get_context_item_info (
                                                  GError            **error);
 
 
-inline GtkWindow * donna_columntype_new_floating_window (
+inline GtkWindow * donna_column_type_new_floating_window (
                                                  DonnaTreeView      *tree,
                                                  gboolean            destroy_on_sel_changed);
 
 G_END_DECLS
 
-#endif /* __DONNA_COLUMNTYPE_H__ */
+#endif /* __DONNA_COLUMN_TYPE_H__ */

@@ -98,7 +98,7 @@ static gboolean         ct_progress_get_context_item_info (
 
 
 static void
-ct_progress_columntype_init (DonnaColumnTypeInterface *interface)
+ct_progress_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_progress_get_name;
     interface->get_renderers            = ct_progress_get_renderers;
@@ -114,7 +114,7 @@ ct_progress_columntype_init (DonnaColumnTypeInterface *interface)
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeProgress, donna_column_type_progress,
         G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_progress_columntype_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMN_TYPE, ct_progress_column_type_init)
         )
 
 static void
@@ -136,7 +136,7 @@ static void
 donna_column_type_progress_init (DonnaColumnTypeProgress *ct)
 {
     ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
-            DONNA_TYPE_COLUMNTYPE_PROGRESS,
+            DONNA_TYPE_COLUMN_TYPE_PROGRESS,
             DonnaColumnTypeProgressPrivate);
 }
 
@@ -145,7 +145,7 @@ ct_progress_finalize (GObject *object)
 {
     DonnaColumnTypeProgressPrivate *priv;
 
-    priv = DONNA_COLUMNTYPE_PROGRESS (object)->priv;
+    priv = DONNA_COLUMN_TYPE_PROGRESS (object)->priv;
     g_object_unref (priv->app);
 
     /* chain up */
@@ -159,7 +159,7 @@ ct_progress_set_property (GObject            *object,
                           GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        DONNA_COLUMNTYPE_PROGRESS (object)->priv->app = g_value_dup_object (value);
+        DONNA_COLUMN_TYPE_PROGRESS (object)->priv->app = g_value_dup_object (value);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -171,7 +171,7 @@ ct_progress_get_property (GObject            *object,
                           GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        g_value_set_object (value, DONNA_COLUMNTYPE_PROGRESS (object)->priv->app);
+        g_value_set_object (value, DONNA_COLUMN_TYPE_PROGRESS (object)->priv->app);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -179,14 +179,14 @@ ct_progress_get_property (GObject            *object,
 static const gchar *
 ct_progress_get_name (DonnaColumnType *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PROGRESS (ct), NULL);
     return "progress";
 }
 
 static const gchar *
 ct_progress_get_renderers (DonnaColumnType   *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PROGRESS (ct), NULL);
     return "P";
 }
 
@@ -201,7 +201,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     DonnaColumnTypeProgress *ctpg = (DonnaColumnTypeProgress *) ct;
     DonnaConfig *config;
     struct tv_col_data *data;
-    DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
+    DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     gchar *s;
 
     config = donna_app_peek_config (ctpg->priv->app);
@@ -217,7 +217,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property);
         data->property = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else
         g_free (s);
@@ -229,7 +229,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->label);
         data->label = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
     s = donna_config_get_string_column (config, col_name,
@@ -244,7 +244,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property_lbl);
         data->property_lbl = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -256,7 +256,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property_pulse);
         data->property_pulse = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -284,7 +284,7 @@ ct_progress_get_props (DonnaColumnType  *ct,
     struct tv_col_data *data = _data;
     GPtrArray *props;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PROGRESS (ct), NULL);
 
     props = g_ptr_array_new_full (3, g_free);
     g_ptr_array_add (props, g_strdup (data->property));
@@ -322,7 +322,7 @@ ct_progress_render (DonnaColumnType    *ct,
     gchar *lbl = NULL;
     gchar *s;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PROGRESS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PROGRESS (ct), NULL);
 
     if (data->property_lbl)
     {
@@ -568,66 +568,66 @@ ct_progress_set_option (DonnaColumnType    *ct,
 
     if (streq (option, "property"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property);
         data->property = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_lbl"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property_lbl, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property_lbl);
         data->property_lbl = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_pulse"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property_pulse, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property_pulse);
         data->property_pulse = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "label"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->label, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->label);
         data->label = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-            DONNA_COLUMNTYPE_ERROR_OTHER,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+            DONNA_COLUMN_TYPE_ERROR_OTHER,
             "ColumnType 'progress': Unknown option '%s'",
             option);
-    return DONNA_COLUMNTYPE_NEED_NOTHING;
+    return DONNA_COLUMN_TYPE_NEED_NOTHING;
 }
 
 static gchar *
@@ -653,7 +653,7 @@ ct_progress_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, TRUE, error);
     if (!save_location)
         return NULL;
@@ -693,7 +693,7 @@ ct_progress_get_context_item_info (DonnaColumnType   *ct,
     const gchar *ask_current;
     const gchar *save_location;
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);
     if (!save_location)
         return FALSE;
@@ -753,7 +753,7 @@ ct_progress_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    info->trigger = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_set_option_trigger (item, NULL, FALSE,
                 ask_title, ask_details, ask_current, save_location);
     info->free_trigger = TRUE;

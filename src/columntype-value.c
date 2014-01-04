@@ -119,7 +119,7 @@ static gboolean         ct_value_get_context_item_info (
                                                      GError           **error);
 
 static void
-ct_value_columntype_init (DonnaColumnTypeInterface *interface)
+ct_value_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_value_get_name;
     interface->get_renderers            = ct_value_get_renderers;
@@ -138,7 +138,7 @@ ct_value_columntype_init (DonnaColumnTypeInterface *interface)
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeValue, donna_column_type_value,
         G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_value_columntype_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMN_TYPE, ct_value_column_type_init)
         )
 
 static void
@@ -160,7 +160,7 @@ static void
 donna_column_type_value_init (DonnaColumnTypeValue *ct)
 {
     ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
-            DONNA_TYPE_COLUMNTYPE_VALUE,
+            DONNA_TYPE_COLUMN_TYPE_VALUE,
             DonnaColumnTypeValuePrivate);
 }
 
@@ -169,7 +169,7 @@ ct_value_finalize (GObject *object)
 {
     DonnaColumnTypeValuePrivate *priv;
 
-    priv = DONNA_COLUMNTYPE_VALUE (object)->priv;
+    priv = DONNA_COLUMN_TYPE_VALUE (object)->priv;
     g_object_unref (priv->app);
 
     /* chain up */
@@ -183,7 +183,7 @@ ct_value_set_property (GObject            *object,
                        GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        DONNA_COLUMNTYPE_VALUE (object)->priv->app = g_value_dup_object (value);
+        DONNA_COLUMN_TYPE_VALUE (object)->priv->app = g_value_dup_object (value);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -195,7 +195,7 @@ ct_value_get_property (GObject            *object,
                        GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        g_value_set_object (value, DONNA_COLUMNTYPE_VALUE (object)->priv->app);
+        g_value_set_object (value, DONNA_COLUMN_TYPE_VALUE (object)->priv->app);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -203,14 +203,14 @@ ct_value_get_property (GObject            *object,
 static const gchar *
 ct_value_get_name (DonnaColumnType *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_VALUE (ct), NULL);
     return "value";
 }
 
 static const gchar *
 ct_value_get_renderers (DonnaColumnType   *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_VALUE (ct), NULL);
     return "tc";
 }
 
@@ -222,9 +222,9 @@ ct_value_refresh_data (DonnaColumnType    *ct,
                        gboolean            is_tree,
                        gpointer           *_data)
 {
-    DonnaColumnTypeValue *ctv = DONNA_COLUMNTYPE_VALUE (ct);
+    DonnaColumnTypeValue *ctv = DONNA_COLUMN_TYPE_VALUE (ct);
     DonnaConfig *config;
-    DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
+    DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     struct tv_col_data *data;
     gchar *s;
 
@@ -238,7 +238,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
                 arr_name, tv_name, is_tree, "columntypes/value",
                 "show_type", FALSE, NULL))
     {
-        need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        need |= DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
         data->show_type = !data->show_type;
     }
 
@@ -250,7 +250,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
         g_free (data->prop_value);
         data->prop_value = s;
 
-        need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        need |= DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else
         g_free (s);
@@ -263,7 +263,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
         g_free (data->prop_extra);
         data->prop_extra = s;
 
-        need |= DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        need |= DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else
         g_free (s);
@@ -289,7 +289,7 @@ ct_value_get_props (DonnaColumnType  *ct,
     struct tv_col_data *data = _data;
     GPtrArray *props;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_VALUE (ct), NULL);
 
     props = g_ptr_array_new_full (2, g_free);
     g_ptr_array_add (props, g_strdup (data->prop_value));
@@ -537,13 +537,13 @@ ct_value_can_edit (DonnaColumnType    *ct,
 
     if (data->show_type)
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_NOT_SUPPORTED,
                 "ColumnType 'value': Cannot change the type of an option");
         return FALSE;
     }
 
-    return DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+    return DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
             data->prop_value, node, error);
 }
 
@@ -574,7 +574,7 @@ ct_value_edit (DonnaColumnType    *ct,
     if (has == DONNA_NODE_VALUE_NONE || has == DONNA_NODE_VALUE_ERROR)
     {
         gchar *fl = donna_node_get_full_location (node);
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR, DONNA_COLUMN_TYPE_ERROR_OTHER,
                 "ColumnType 'value': Failed to get property for '%s'", fl);
         g_free (fl);
         return FALSE;
@@ -646,7 +646,7 @@ ct_value_edit (DonnaColumnType    *ct,
             ed->node = node;
             ed->data = data;
 
-            win = donna_columntype_new_floating_window (treeview, FALSE);
+            win = donna_column_type_new_floating_window (treeview, FALSE);
             ed->window = w = (GtkWidget *) win;
             g_signal_connect_swapped (win, "destroy", (GCallback) g_free, ed);
 
@@ -688,7 +688,7 @@ ct_value_edit (DonnaColumnType    *ct,
         else
         {
             gchar *fl = donna_node_get_full_location (node);
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR, DONNA_COLUMN_TYPE_ERROR_OTHER,
                     "ColumnType 'value': Failed to get matching extras for '%s'", fl);
             g_free (fl);
             return FALSE;
@@ -741,7 +741,7 @@ ct_value_edit (DonnaColumnType    *ct,
     {
         g_signal_handler_disconnect (renderers[rnd], ed->editing_started_sid);
         g_free (ed);
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_OTHER,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR, DONNA_COLUMN_TYPE_ERROR_OTHER,
                 "ColumnType 'value': Failed to put renderer in edit mode");
         return FALSE;
     }
@@ -954,7 +954,7 @@ ct_value_render (DonnaColumnType    *ct,
     gchar *free = NULL;
     GPtrArray *arr;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_VALUE (ct), NULL);
 
     if (data->show_type)
         arr = get_text_for_type (ct, data, index, node, &value, &text, &free);
@@ -990,7 +990,7 @@ ct_value_set_tooltip (DonnaColumnType    *ct,
     gchar *free = NULL;
     GPtrArray *arr;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_VALUE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_VALUE (ct), NULL);
 
     if (data->show_type)
         arr = get_text_for_type (ct, data, index, node, &value, &text, &free);
@@ -1271,33 +1271,33 @@ ct_value_set_option (DonnaColumnType    *ct,
 
     if (streq (option, "property_value"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/value",
                     save_location,
                     option, G_TYPE_STRING, &data->prop_value, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->prop_value);
         data->prop_value = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_extra"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/value",
                     save_location,
                     option, G_TYPE_STRING, &data->prop_extra, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->prop_extra);
         data->prop_extra = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "show_type"))
     {
@@ -1306,34 +1306,34 @@ ct_value_set_option (DonnaColumnType    *ct,
         if (!streq (value, "0") && !streq (value, "1")
                 && !streq (value, "false") && !streq (value, "true"))
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_OTHER,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_OTHER,
                     "ColumnType 'value': Invalid value for option '%s': "
                     "Must be '0', 'false', '1' or 'true'",
                     option);
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
         }
 
         c = data->show_type;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/value",
                     save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         data->show_type = v;
-        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-            DONNA_COLUMNTYPE_ERROR_OTHER,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+            DONNA_COLUMN_TYPE_ERROR_OTHER,
             "ColumnType 'value': Unknown option '%s'",
             option);
-    return DONNA_COLUMNTYPE_NEED_NOTHING;
+    return DONNA_COLUMN_TYPE_NEED_NOTHING;
 }
 
 static gchar *
@@ -1359,7 +1359,7 @@ ct_value_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, TRUE, error);
     if (!save_location)
         return NULL;
@@ -1398,7 +1398,7 @@ ct_value_get_context_item_info (DonnaColumnType   *ct,
     const gchar *ask_current;
     const gchar *save_location;
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);
     if (!save_location)
         return FALSE;
@@ -1441,7 +1441,7 @@ ct_value_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    info->trigger = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_set_option_trigger (item, value, FALSE,
                 ask_title, NULL, ask_current, save_location);
     info->free_trigger = TRUE;

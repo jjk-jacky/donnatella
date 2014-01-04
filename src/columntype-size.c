@@ -130,7 +130,7 @@ static gboolean         ct_size_get_context_item_info (
                                                      GError           **error);
 
 static void
-ct_size_columntype_init (DonnaColumnTypeInterface *interface)
+ct_size_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_size_get_name;
     interface->get_renderers            = ct_size_get_renderers;
@@ -149,7 +149,7 @@ ct_size_columntype_init (DonnaColumnTypeInterface *interface)
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeSize, donna_column_type_size,
         G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_size_columntype_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMN_TYPE, ct_size_column_type_init)
         )
 
 static void
@@ -171,7 +171,7 @@ static void
 donna_column_type_size_init (DonnaColumnTypeSize *ct)
 {
     ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
-            DONNA_TYPE_COLUMNTYPE_SIZE,
+            DONNA_TYPE_COLUMN_TYPE_SIZE,
             DonnaColumnTypeSizePrivate);
 }
 
@@ -180,7 +180,7 @@ ct_size_finalize (GObject *object)
 {
     DonnaColumnTypeSizePrivate *priv;
 
-    priv = DONNA_COLUMNTYPE_SIZE (object)->priv;
+    priv = DONNA_COLUMN_TYPE_SIZE (object)->priv;
     g_object_unref (priv->app);
 
     /* chain up */
@@ -194,7 +194,7 @@ ct_size_set_property (GObject            *object,
                       GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        DONNA_COLUMNTYPE_SIZE (object)->priv->app = g_value_dup_object (value);
+        DONNA_COLUMN_TYPE_SIZE (object)->priv->app = g_value_dup_object (value);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -206,7 +206,7 @@ ct_size_get_property (GObject            *object,
                       GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        g_value_set_object (value, DONNA_COLUMNTYPE_SIZE (object)->priv->app);
+        g_value_set_object (value, DONNA_COLUMN_TYPE_SIZE (object)->priv->app);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -214,14 +214,14 @@ ct_size_get_property (GObject            *object,
 static const gchar *
 ct_size_get_name (DonnaColumnType *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_SIZE (ct), NULL);
     return "size";
 }
 
 static const gchar *
 ct_size_get_renderers (DonnaColumnType   *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_SIZE (ct), NULL);
     return "t";
 }
 
@@ -233,10 +233,10 @@ ct_size_refresh_data (DonnaColumnType    *ct,
                       gboolean            is_tree,
                       gpointer           *_data)
 {
-    DonnaColumnTypeSize *ctsize = DONNA_COLUMNTYPE_SIZE (ct);
+    DonnaColumnTypeSize *ctsize = DONNA_COLUMN_TYPE_SIZE (ct);
     DonnaConfig *config;
     struct tv_col_data *data;
-    DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
+    DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     gchar *s;
     gint i;
 
@@ -253,7 +253,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property);
         data->property = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
 
         data->is_size = streq (s, "size");
     }
@@ -267,7 +267,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->format);
         data->format = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -279,7 +279,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->format_tooltip);
         data->format_tooltip = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -292,7 +292,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     if (data->digits != i)
     {
         data->digits = (guint8) i;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
     i = donna_config_get_boolean_column (config, col_name,
@@ -301,7 +301,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     if (data->long_unit != i)
     {
         data->long_unit = i;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
     return need;
@@ -325,7 +325,7 @@ ct_size_get_props (DonnaColumnType  *ct,
 {
     GPtrArray *props;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_SIZE (ct), NULL);
 
     props = g_ptr_array_new_full (1, g_free);
     g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
@@ -374,7 +374,7 @@ ct_size_render (DonnaColumnType    *ct,
     guint64 size;
     gchar buf[20], *b = buf;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_SIZE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_SIZE (ct), NULL);
 
     if (donna_node_get_node_type (node) == DONNA_NODE_CONTAINER)
     {
@@ -703,103 +703,103 @@ ct_size_set_option (DonnaColumnType    *ct,
 
     if (streq (option, "format"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "size", save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->format);
         data->format = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "format_tooltip"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->format_tooltip);
         data->format_tooltip = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_NOTHING;
+        return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
     else if (streq (option, "long_unit"))
     {
         if (!streq (value, "0") && !streq (value, "1")
                 && !streq (value, "false") && !streq (value, "true"))
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_OTHER,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_OTHER,
                     "ColumnType 'size': Invalid value for option 'long_unit': "
                     "Must be '0', 'false', '1' or 'true'");
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
         }
 
         c = data->long_unit;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "size", save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         data->long_unit = v;
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "digits"))
     {
         if (!streq (value, "0") && !streq (value, "1") && !streq (value, "2"))
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_OTHER,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_OTHER,
                     "ColumnType 'size': Invalid value for option 'long_unit': "
                     "Must be '0', '1' or '2'");
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
         }
 
         c = data->digits;
         v = *value - '0';
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "size", save_location,
                     option, G_TYPE_INT, &c, &v, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         data->digits = (guint8) v;
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/size",
                     save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property);
         data->property = g_strdup (value);
         data->is_size = streq (value, "size");
-        return DONNA_COLUMNTYPE_NEED_RESORT | DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-            DONNA_COLUMNTYPE_ERROR_OTHER,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+            DONNA_COLUMN_TYPE_ERROR_OTHER,
             "ColumnType 'size': Unknown option '%s'",
             option);
-    return DONNA_COLUMNTYPE_NEED_NOTHING;
+    return DONNA_COLUMN_TYPE_NEED_NOTHING;
 }
 
 static gchar *
@@ -825,7 +825,7 @@ ct_size_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, TRUE, error);
     if (!save_location)
         return NULL;
@@ -890,7 +890,7 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
     const gchar *save_location;
     gboolean quote_value = FALSE;
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);
     if (!save_location)
         return FALSE;
@@ -1084,7 +1084,7 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    info->trigger = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_set_option_trigger (item, value, quote_value,
                 ask_title, NULL, ask_current, save_location);
     info->free_trigger = TRUE;

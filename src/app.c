@@ -344,8 +344,8 @@ donna_app_trigger_node (DonnaApp       *app,
 }
 
 DonnaColumnType *
-donna_app_get_columntype (DonnaApp       *app,
-                          const gchar    *type)
+donna_app_get_column_type (DonnaApp      *app,
+                           const gchar   *type)
 {
     DonnaAppInterface *interface;
 
@@ -355,9 +355,9 @@ donna_app_get_columntype (DonnaApp       *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_columntype != NULL, NULL);
+    g_return_val_if_fail (interface->get_column_type != NULL, NULL);
 
-    return (*interface->get_columntype) (app, type);
+    return (*interface->get_column_type) (app, type);
 }
 
 DonnaFilter *

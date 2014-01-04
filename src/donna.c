@@ -211,7 +211,7 @@ static DonnaConfig *    donna_donna_get_config      (DonnaApp       *app);
 static DonnaConfig *    donna_donna_peek_config     (DonnaApp       *app);
 static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
                                                      const gchar    *domain);
-static DonnaColumnType *donna_donna_get_columntype  (DonnaApp       *app,
+static DonnaColumnType *donna_donna_get_column_type (DonnaApp       *app,
                                                      const gchar    *type);
 static DonnaFilter *    donna_donna_get_filter      (DonnaApp       *app,
                                                      const gchar    *filter);
@@ -292,7 +292,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_config           = donna_donna_get_config;
     interface->peek_config          = donna_donna_peek_config;
     interface->get_provider         = donna_donna_get_provider;
-    interface->get_columntype       = donna_donna_get_columntype;
+    interface->get_column_type      = donna_donna_get_column_type;
     interface->get_filter           = donna_donna_get_filter;
     interface->run_task             = donna_donna_run_task;
     interface->peek_task_manager    = donna_donna_peek_task_manager;
@@ -430,28 +430,28 @@ donna_donna_init (DonnaDonna *donna)
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", donna, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].desc = "Name (and Icon)";
-    priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMNTYPE_NAME;
+    priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMN_TYPE_NAME;
     priv->column_types[COL_TYPE_SIZE].name = "size";
     priv->column_types[COL_TYPE_SIZE].desc = "Size";
-    priv->column_types[COL_TYPE_SIZE].type = DONNA_TYPE_COLUMNTYPE_SIZE;
+    priv->column_types[COL_TYPE_SIZE].type = DONNA_TYPE_COLUMN_TYPE_SIZE;
     priv->column_types[COL_TYPE_TIME].name = "time";
     priv->column_types[COL_TYPE_TIME].desc = "Date/Time";
-    priv->column_types[COL_TYPE_TIME].type = DONNA_TYPE_COLUMNTYPE_TIME;
+    priv->column_types[COL_TYPE_TIME].type = DONNA_TYPE_COLUMN_TYPE_TIME;
     priv->column_types[COL_TYPE_PERMS].name = "perms";
     priv->column_types[COL_TYPE_PERMS].desc = "Permissions";
-    priv->column_types[COL_TYPE_PERMS].type = DONNA_TYPE_COLUMNTYPE_PERMS;
+    priv->column_types[COL_TYPE_PERMS].type = DONNA_TYPE_COLUMN_TYPE_PERMS;
     priv->column_types[COL_TYPE_TEXT].name = "text";
     priv->column_types[COL_TYPE_TEXT].desc = "Text";
-    priv->column_types[COL_TYPE_TEXT].type = DONNA_TYPE_COLUMNTYPE_TEXT;
+    priv->column_types[COL_TYPE_TEXT].type = DONNA_TYPE_COLUMN_TYPE_TEXT;
     priv->column_types[COL_TYPE_LABEL].name = "label";
     priv->column_types[COL_TYPE_LABEL].desc = "Label";
-    priv->column_types[COL_TYPE_LABEL].type = DONNA_TYPE_COLUMNTYPE_LABEL;
+    priv->column_types[COL_TYPE_LABEL].type = DONNA_TYPE_COLUMN_TYPE_LABEL;
     priv->column_types[COL_TYPE_PROGRESS].name = "progress";
     priv->column_types[COL_TYPE_PROGRESS].desc = "Progress bar";
-    priv->column_types[COL_TYPE_PROGRESS].type = DONNA_TYPE_COLUMNTYPE_PROGRESS;
+    priv->column_types[COL_TYPE_PROGRESS].type = DONNA_TYPE_COLUMN_TYPE_PROGRESS;
     priv->column_types[COL_TYPE_VALUE].name = "value";
     priv->column_types[COL_TYPE_VALUE].desc = "Value (of config option)";
-    priv->column_types[COL_TYPE_VALUE].type = DONNA_TYPE_COLUMNTYPE_VALUE;
+    priv->column_types[COL_TYPE_VALUE].type = DONNA_TYPE_COLUMN_TYPE_VALUE;
 
     priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", donna, NULL);
 
@@ -533,7 +533,7 @@ donna_donna_finalize (GObject *object)
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
         if (priv->column_types[i].ct_data)
-            donna_columntype_free_data (priv->column_types[i].ct,
+            donna_column_type_free_data (priv->column_types[i].ct,
                     priv->column_types[i].ct_data);
         if (priv->column_types[i].ct)
             g_object_unref (priv->column_types[i].ct);
@@ -852,8 +852,8 @@ donna_donna_get_provider (DonnaApp    *app,
 }
 
 DonnaColumnType *
-donna_donna_get_columntype (DonnaApp       *app,
-                            const gchar    *type)
+donna_donna_get_column_type (DonnaApp      *app,
+                             const gchar   *type)
 {
     DonnaDonnaPrivate *priv;
     gint i;
@@ -2723,7 +2723,7 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
                 priv->column_types[i].ct = g_object_new (
                         priv->column_types[i].type, "app", app, NULL);
             if (!priv->column_types[i].ct_data)
-                donna_columntype_refresh_data (priv->column_types[i].ct,
+                donna_column_type_refresh_data (priv->column_types[i].ct,
                         col_name, NULL, NULL, FALSE, &priv->column_types[i].ct_data);
             g_rec_mutex_unlock (&priv->rec_mutex);
             g_free (type);

@@ -10,14 +10,14 @@
 
 /* internal; used by treeview.c */
 DonnaColumnOptionSaveLocation
-_donna_columntype_ask_save_location (DonnaApp     *app,
-                                     const gchar  *col_name,
-                                     const gchar  *arr_name,
-                                     const gchar  *tv_name,
-                                     gboolean      is_tree,
-                                     const gchar  *def_cat,
-                                     const gchar  *option,
-                                     guint         from);
+_donna_column_type_ask_save_location (DonnaApp     *app,
+                                      const gchar  *col_name,
+                                      const gchar  *arr_name,
+                                      const gchar  *tv_name,
+                                      gboolean      is_tree,
+                                      const gchar  *def_cat,
+                                      const gchar  *option,
+                                      guint         from);
 
 static GtkSortType
 default_get_default_sort_order (DonnaColumnType    *ct,
@@ -33,7 +33,7 @@ default_get_default_sort_order (DonnaColumnType    *ct,
     GtkSortType order;
 
     g_object_get (ct, "app", &app, NULL);
-    type = donna_columntype_get_name (ct);
+    type = donna_column_type_get_name (ct);
     /* 42 == 55 - strlen ("columntypes/") - 1 */
     if (G_UNLIKELY (strnlen (type, 42) >= 42))
         b = g_strconcat ("columntypes/", type, NULL);
@@ -56,9 +56,9 @@ default_can_edit (DonnaColumnType    *ct,
                   DonnaNode          *node,
                   GError            **error)
 {
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR, DONNA_COLUMN_TYPE_ERROR_NOT_SUPPORTED,
             "ColumnType '%s': No editing supported",
-            donna_columntype_get_name (ct));
+            donna_column_type_get_name (ct));
     return FALSE;
 }
 
@@ -72,9 +72,9 @@ default_edit (DonnaColumnType    *ct,
               DonnaTreeView      *treeview,
               GError            **error)
 {
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR, DONNA_COLUMN_TYPE_ERROR_NOT_SUPPORTED,
             "ColumnType '%s': No editing supported",
-            donna_columntype_get_name (ct));
+            donna_column_type_get_name (ct));
     return FALSE;
 }
 
@@ -87,9 +87,9 @@ default_set_value (DonnaColumnType    *ct,
                    DonnaTreeView      *treeview,
                    GError            **error)
 {
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR, DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR, DONNA_COLUMN_TYPE_ERROR_NOT_SUPPORTED,
             "ColumnType '%s': No editing supported",
-            donna_columntype_get_name (ct));
+            donna_column_type_get_name (ct));
     return FALSE;
 }
 
@@ -115,19 +115,19 @@ helper_can_edit (DonnaColumnType    *ct,
 
     if (!(has_prop & DONNA_NODE_PROP_EXISTS))
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_NODE_NO_PROP,
                 "ColumnType '%s': property '%s' doesn't exist",
-                donna_columntype_get_name (ct), property);
+                donna_column_type_get_name (ct), property);
         return FALSE;
     }
 
     if (!(has_prop & DONNA_NODE_PROP_WRITABLE))
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_NODE_NOT_WRITABLE,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_NODE_NOT_WRITABLE,
                 "ColumnType '%s': property '%s' isn't writable",
-                donna_columntype_get_name (ct), property);
+                donna_column_type_get_name (ct), property);
         return FALSE;
     }
 
@@ -177,7 +177,7 @@ helper_get_save_location (DonnaColumnType    *ct,
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
                     "ColumnType '%s': Invalid save location from extra: '%s''",
-                    donna_columntype_get_name (ct), *extra);
+                    donna_column_type_get_name (ct), *extra);
             return NULL;
         }
 
@@ -228,14 +228,14 @@ tree_changed_location (struct asl *asl)
 /* this is also used by treeview.c for treeview options. This is why we have a
  * special handling when col_name is NULL */
 DonnaColumnOptionSaveLocation
-_donna_columntype_ask_save_location (DonnaApp     *app,
-                                     const gchar  *col_name,
-                                     const gchar  *arr_name,
-                                     const gchar  *tv_name,
-                                     gboolean      is_tree,
-                                     const gchar  *def_cat,
-                                     const gchar  *option,
-                                     guint         from)
+_donna_column_type_ask_save_location (DonnaApp    *app,
+                                      const gchar *col_name,
+                                      const gchar *arr_name,
+                                      const gchar *tv_name,
+                                      gboolean     is_tree,
+                                      const gchar *def_cat,
+                                      const gchar *option,
+                                      guint        from)
 {
     struct asl asl = { NULL, };
     GMainLoop *loop;
@@ -455,7 +455,7 @@ _donna_columntype_ask_save_location (DonnaApp     *app,
     {                                                                       \
         g_prefix_error (error,                                              \
                 "ColumnType '%s': Failed to save option '%s': ",            \
-                donna_columntype_get_name (ct), option);                    \
+                donna_column_type_get_name (ct), option);                   \
         g_object_unref (app);                                               \
         return FALSE;                                                       \
     }
@@ -512,11 +512,11 @@ helper_set_option (DonnaColumnType    *ct,
                     arr_name, tv_name, is_tree, def_cat, option, NULL, &from);
             if (!streq (* (gchar ** ) current, s))
             {
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%s' (config) vs '%s' (memory)",
-                        donna_columntype_get_name (ct), option,
+                        donna_column_type_get_name (ct), option,
                         s, * (gchar **) current);
                 g_object_unref (app);
                 g_free (s);
@@ -532,11 +532,11 @@ helper_set_option (DonnaColumnType    *ct,
                     arr_name, tv_name, is_tree, def_cat, option, FALSE, &from);
             if (b != * (gboolean *) current)
             {
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%s' (config) vs '%s' (memory)",
-                        donna_columntype_get_name (ct), option,
+                        donna_column_type_get_name (ct), option,
                         (b) ? "true" : "false",
                         (* (gboolean *) current) ? "true" : "false");
                 g_object_unref (app);
@@ -551,11 +551,11 @@ helper_set_option (DonnaColumnType    *ct,
                     arr_name, tv_name, is_tree, def_cat, option, 0, &from);
             if (i != * (gint *) current)
             {
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%d' (config) vs '%d' (memory)",
-                        donna_columntype_get_name (ct), option,
+                        donna_column_type_get_name (ct), option,
                         i, * (gint *) current);
                 g_object_unref (app);
                 return FALSE;
@@ -569,11 +569,11 @@ helper_set_option (DonnaColumnType    *ct,
                     arr_name, tv_name, is_tree, def_cat, option, 0.0, &from);
             if (d != * (gdouble *) current)
             {
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "ColumnType '%s': Cannot save option '%s'; "
                         "Values not matching: '%f' (config) vs '%f' (memory)",
-                        donna_columntype_get_name (ct), option,
+                        donna_column_type_get_name (ct), option,
                         d, * (gdouble *) current);
                 g_object_unref (app);
                 return FALSE;
@@ -582,7 +582,7 @@ helper_set_option (DonnaColumnType    *ct,
 
         if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
         {
-            save_location = _donna_columntype_ask_save_location (app,
+            save_location = _donna_column_type_ask_save_location (app,
                     col_name, arr_name, tv_name, is_tree, def_cat, option, from);
             if (save_location == (guint) -1)
             {
@@ -612,21 +612,21 @@ helper_set_option (DonnaColumnType    *ct,
 
     if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT && !arr_name)
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_OTHER,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_OTHER,
                 "ColumnType '%s': Cannot save option '%s' in arrangement: "
                 "No current arrangement available",
-                donna_columntype_get_name (ct), option);
+                donna_column_type_get_name (ct), option);
         g_object_unref (app);
         return FALSE;
     }
     else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT && !def_cat)
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_OTHER,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_OTHER,
                 "ColumnType '%s': Cannot save option '%s' in defaults: "
                 "No default location for option",
-                donna_columntype_get_name (ct), option);
+                donna_column_type_get_name (ct), option);
         g_object_unref (app);
         return FALSE;
     }
@@ -704,10 +704,10 @@ helper_get_set_option_trigger (const gchar  *option,
     return g_string_free (str, FALSE);
 }
 
-G_DEFINE_INTERFACE (DonnaColumnType, donna_columntype, G_TYPE_OBJECT)
+G_DEFINE_INTERFACE (DonnaColumnType, donna_column_type, G_TYPE_OBJECT)
 
 static void
-donna_columntype_default_init (DonnaColumnTypeInterface *interface)
+donna_column_type_default_init (DonnaColumnTypeInterface *interface)
 {
     interface->helper_can_edit                  = helper_can_edit;
     interface->helper_get_save_location         = helper_get_save_location;
@@ -727,13 +727,13 @@ donna_columntype_default_init (DonnaColumnTypeInterface *interface)
 }
 
 const gchar *
-donna_columntype_get_name (DonnaColumnType *ct)
+donna_column_type_get_name (DonnaColumnType *ct)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), NULL);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_name != NULL, NULL);
@@ -742,13 +742,13 @@ donna_columntype_get_name (DonnaColumnType *ct)
 }
 
 const gchar *
-donna_columntype_get_renderers (DonnaColumnType  *ct)
+donna_column_type_get_renderers (DonnaColumnType  *ct)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), NULL);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_renderers != NULL, NULL);
@@ -757,39 +757,39 @@ donna_columntype_get_renderers (DonnaColumnType  *ct)
 }
 
 DonnaColumnTypeNeed
-donna_columntype_refresh_data (DonnaColumnType  *ct,
-                               const gchar        *col_name,
-                               const gchar        *arr_name,
-                               const gchar        *tv_name,
-                               gboolean            is_tree,
-                               gpointer           *data)
+donna_column_type_refresh_data (DonnaColumnType   *ct,
+                                const gchar       *col_name,
+                                const gchar       *arr_name,
+                                const gchar       *tv_name,
+                                gboolean           is_tree,
+                                gpointer          *data)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (col_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (col_name != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (data != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
-    g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (interface->refresh_data != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (interface != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (interface->refresh_data != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
 
     return (*interface->refresh_data) (ct, col_name, arr_name, tv_name, is_tree, data);
 }
 
 void
-donna_columntype_free_data (DonnaColumnType    *ct,
-                            gpointer            data)
+donna_column_type_free_data (DonnaColumnType   *ct,
+                             gpointer           data)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_if_fail (DONNA_IS_COLUMNTYPE (ct));
+    g_return_if_fail (DONNA_IS_COLUMN_TYPE (ct));
 
     if (G_UNLIKELY (!data))
         return;
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_if_fail (interface != NULL);
     g_return_if_fail (interface->free_data != NULL);
@@ -798,14 +798,14 @@ donna_columntype_free_data (DonnaColumnType    *ct,
 }
 
 GPtrArray *
-donna_columntype_get_props (DonnaColumnType    *ct,
-                            gpointer            data)
+donna_column_type_get_props (DonnaColumnType   *ct,
+                             gpointer           data)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), NULL);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_props != NULL, NULL);
@@ -814,20 +814,20 @@ donna_columntype_get_props (DonnaColumnType    *ct,
 }
 
 GtkSortType
-donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
-                                         const gchar        *col_name,
-                                         const gchar        *arr_name,
-                                         const gchar        *tv_name,
-                                         gboolean            is_tree,
-                                         gpointer            data)
+donna_column_type_get_default_sort_order (DonnaColumnType   *ct,
+                                          const gchar       *col_name,
+                                          const gchar       *arr_name,
+                                          const gchar       *tv_name,
+                                          gboolean           is_tree,
+                                          gpointer           data)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), GTK_SORT_ASCENDING);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), GTK_SORT_ASCENDING);
     g_return_val_if_fail (tv_name != NULL, GTK_SORT_ASCENDING);
     g_return_val_if_fail (col_name != NULL, GTK_SORT_ASCENDING);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, GTK_SORT_ASCENDING);
     g_return_val_if_fail (interface->get_default_sort_order != NULL, GTK_SORT_ASCENDING);
@@ -837,17 +837,17 @@ donna_columntype_get_default_sort_order (DonnaColumnType    *ct,
 }
 
 gboolean
-donna_columntype_can_edit (DonnaColumnType    *ct,
-                           gpointer            data,
-                           DonnaNode          *node,
-                           GError            **error)
+donna_column_type_can_edit (DonnaColumnType   *ct,
+                            gpointer           data,
+                            DonnaNode         *node,
+                            GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->can_edit != NULL, FALSE);
@@ -856,24 +856,24 @@ donna_columntype_can_edit (DonnaColumnType    *ct,
 }
 
 gboolean
-donna_columntype_edit (DonnaColumnType    *ct,
-                       gpointer            data,
-                       DonnaNode          *node,
-                       GtkCellRenderer   **renderers,
-                       renderer_edit_fn    renderer_edit,
-                       gpointer            re_data,
-                       DonnaTreeView      *treeview,
-                       GError            **error)
+donna_column_type_edit (DonnaColumnType   *ct,
+                        gpointer           data,
+                        DonnaNode         *node,
+                        GtkCellRenderer  **renderers,
+                        renderer_edit_fn   renderer_edit,
+                        gpointer           re_data,
+                        DonnaTreeView     *treeview,
+                        GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (renderers != NULL && GTK_IS_CELL_RENDERER (renderers[0]), FALSE);
     g_return_val_if_fail (renderer_edit != NULL, FALSE);
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (treeview), FALSE);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->edit != NULL, FALSE);
@@ -883,36 +883,36 @@ donna_columntype_edit (DonnaColumnType    *ct,
 }
 
 DonnaColumnTypeNeed
-donna_columntype_set_option (DonnaColumnType    *ct,
-                             const gchar        *col_name,
-                             const gchar        *arr_name,
-                             const gchar        *tv_name,
-                             gboolean            is_tree,
-                             gpointer            data,
-                             const gchar        *option,
-                             const gchar        *value,
-                             DonnaColumnOptionSaveLocation save_location,
-                             GError            **error)
+donna_column_type_set_option (DonnaColumnType   *ct,
+                              const gchar       *col_name,
+                              const gchar       *arr_name,
+                              const gchar       *tv_name,
+                              gboolean           is_tree,
+                              gpointer           data,
+                              const gchar       *option,
+                              const gchar       *value,
+                              DonnaColumnOptionSaveLocation save_location,
+                              GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (tv_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (col_name != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (option != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
-    g_return_val_if_fail (value != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (tv_name != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (col_name != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (option != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
+    g_return_val_if_fail (value != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
-    g_return_val_if_fail (interface != NULL, DONNA_COLUMNTYPE_NEED_NOTHING);
+    g_return_val_if_fail (interface != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
 
     if (interface->set_option == NULL)
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_NOT_SUPPORTED,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_NOT_SUPPORTED,
                 "ColumnType '%s': Setting column option not supported",
-                donna_columntype_get_name (ct));
-        return DONNA_COLUMNTYPE_NEED_NOTHING;
+                donna_column_type_get_name (ct));
+        return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
 
     return (*interface->set_option) (ct, col_name, arr_name, tv_name, is_tree,
@@ -920,21 +920,21 @@ donna_columntype_set_option (DonnaColumnType    *ct,
 }
 
 gboolean
-donna_columntype_set_value (DonnaColumnType    *ct,
-                            gpointer            data,
-                            GPtrArray          *nodes,
-                            const gchar        *value,
-                            DonnaNode          *node_ref,
-                            DonnaTreeView      *treeview,
-                            GError            **error)
+donna_column_type_set_value (DonnaColumnType   *ct,
+                             gpointer           data,
+                             GPtrArray         *nodes,
+                             const gchar       *value,
+                             DonnaNode         *node_ref,
+                             DonnaTreeView     *treeview,
+                             GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
     g_return_val_if_fail (!node_ref || DONNA_IS_NODE (node_ref), FALSE);
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (treeview), FALSE);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->set_value != NULL, FALSE);
@@ -943,19 +943,19 @@ donna_columntype_set_value (DonnaColumnType    *ct,
 }
 
 GPtrArray *
-donna_columntype_render (DonnaColumnType    *ct,
-                         gpointer            data,
-                         guint               index,
-                         DonnaNode          *node,
-                         GtkCellRenderer    *renderer)
+donna_column_type_render (DonnaColumnType   *ct,
+                          gpointer           data,
+                          guint              index,
+                          DonnaNode         *node,
+                          GtkCellRenderer   *renderer)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), NULL);
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
     g_return_val_if_fail (GTK_IS_CELL_RENDERER (renderer), NULL);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->render != NULL, NULL);
@@ -964,19 +964,19 @@ donna_columntype_render (DonnaColumnType    *ct,
 }
 
 gboolean
-donna_columntype_set_tooltip (DonnaColumnType    *ct,
-                              gpointer            data,
-                              guint               index,
-                              DonnaNode          *node,
-                              GtkTooltip         *tooltip)
+donna_column_type_set_tooltip (DonnaColumnType   *ct,
+                               gpointer           data,
+                               guint              index,
+                               DonnaNode         *node,
+                               GtkTooltip        *tooltip)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
     g_return_val_if_fail (GTK_IS_TOOLTIP (tooltip), FALSE);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, FALSE);
     g_return_val_if_fail (interface->set_tooltip != NULL, FALSE);
@@ -985,18 +985,18 @@ donna_columntype_set_tooltip (DonnaColumnType    *ct,
 }
 
 gint
-donna_columntype_node_cmp (DonnaColumnType    *ct,
-                           gpointer            data,
-                           DonnaNode          *node1,
-                           DonnaNode          *node2)
+donna_column_type_node_cmp (DonnaColumnType   *ct,
+                            gpointer           data,
+                            DonnaNode         *node1,
+                            DonnaNode         *node2)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), 0);
     g_return_val_if_fail (DONNA_IS_NODE (node1), 0);
     g_return_val_if_fail (DONNA_IS_NODE (node2), 0);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, 0);
     g_return_val_if_fail (interface->node_cmp != NULL, 0);
@@ -1005,29 +1005,29 @@ donna_columntype_node_cmp (DonnaColumnType    *ct,
 }
 
 gboolean
-donna_columntype_is_match_filter (DonnaColumnType    *ct,
-                                  const gchar        *filter,
-                                  gpointer           *filter_data,
-                                  gpointer            data,
-                                  DonnaNode          *node,
-                                  GError            **error)
+donna_column_type_is_match_filter (DonnaColumnType   *ct,
+                                   const gchar       *filter,
+                                   gpointer          *filter_data,
+                                   gpointer           data,
+                                   DonnaNode         *node,
+                                   GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), 0);
     g_return_val_if_fail (filter != NULL, 0);
     g_return_val_if_fail (filter_data != NULL, 0);
     g_return_val_if_fail (DONNA_IS_NODE (node), 0);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, 0);
     if (!interface->is_match_filter)
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_OTHER,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_OTHER,
                 "ColumnType '%s': no filtering supported",
-                donna_columntype_get_name (ct));
+                donna_column_type_get_name (ct));
         return FALSE;
     }
 
@@ -1036,17 +1036,17 @@ donna_columntype_is_match_filter (DonnaColumnType    *ct,
 }
 
 void
-donna_columntype_free_filter_data (DonnaColumnType   *ct,
-                                   gpointer           filter_data)
+donna_column_type_free_filter_data (DonnaColumnType  *ct,
+                                    gpointer          filter_data)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), 0);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), 0);
 
     if (G_UNLIKELY (!filter_data))
         return;
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
     g_return_val_if_fail (interface != NULL, 0);
     g_return_val_if_fail (interface->free_filter_data != NULL, 0);
@@ -1055,29 +1055,29 @@ donna_columntype_free_filter_data (DonnaColumnType   *ct,
 }
 
 gchar *
-donna_columntype_get_context_alias (DonnaColumnType    *ct,
-                                    gpointer            data,
-                                    const gchar        *alias,
-                                    const gchar        *extra,
-                                    DonnaContextReference reference,
-                                    DonnaNode          *node_ref,
-                                    get_sel_fn          get_sel,
-                                    gpointer            get_sel_data,
-                                    const gchar        *prefix,
-                                    GError            **error)
+donna_column_type_get_context_alias (DonnaColumnType   *ct,
+                                     gpointer           data,
+                                     const gchar       *alias,
+                                     const gchar       *extra,
+                                     DonnaContextReference reference,
+                                     DonnaNode         *node_ref,
+                                     get_sel_fn         get_sel,
+                                     gpointer           get_sel_data,
+                                     const gchar       *prefix,
+                                     GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), NULL);
     g_return_val_if_fail (alias != NULL, NULL);
     g_return_val_if_fail (prefix != NULL, NULL);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
     g_return_val_if_fail (interface != NULL, NULL);
 
     if (interface->get_context_alias == NULL)
     {
-        /* all columntypes should support an alias "options" so let's resolve
+        /* all column types should support an alias "options" so let's resolve
          * that to an empty string, i.e. nothing (but not an error) */
         if (streq (alias, "options"))
             return (gchar *) "";
@@ -1085,7 +1085,7 @@ donna_columntype_get_context_alias (DonnaColumnType    *ct,
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
                 "ColumnType '%s': No context alias supported",
-                donna_columntype_get_name (ct));
+                donna_column_type_get_name (ct));
         return NULL;
     }
 
@@ -1095,26 +1095,26 @@ donna_columntype_get_context_alias (DonnaColumnType    *ct,
 }
 
 gboolean
-donna_columntype_get_context_item_info (DonnaColumnType    *ct,
-                                        gpointer            data,
-                                        const gchar        *item,
-                                        const gchar        *extra,
-                                        DonnaContextReference reference,
-                                        DonnaNode          *node_ref,
-                                        get_sel_fn          get_sel,
-                                        gpointer            get_sel_data,
-                                        DonnaContextInfo   *info,
-                                        GError            **error)
+donna_column_type_get_context_item_info (DonnaColumnType   *ct,
+                                         gpointer           data,
+                                         const gchar       *item,
+                                         const gchar       *extra,
+                                         DonnaContextReference reference,
+                                         DonnaNode         *node_ref,
+                                         get_sel_fn         get_sel,
+                                         gpointer           get_sel_data,
+                                         DonnaContextInfo  *info,
+                                         GError           **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
     g_return_val_if_fail (item != NULL, FALSE);
     g_return_val_if_fail (info != NULL, FALSE);
     g_return_val_if_fail (node_ref == NULL || DONNA_IS_NODE (node_ref), FALSE);
     g_return_val_if_fail (get_sel != NULL, FALSE);
 
-    interface = DONNA_COLUMNTYPE_GET_INTERFACE (ct);
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
     g_return_val_if_fail (interface != NULL, FALSE);
 
     if (interface->get_context_item_info == NULL)
@@ -1122,7 +1122,7 @@ donna_columntype_get_context_item_info (DonnaColumnType    *ct,
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
                 "ColumnType '%s': No context item supported",
-                donna_columntype_get_name (ct));
+                donna_column_type_get_name (ct));
         return FALSE;
     }
 
@@ -1151,8 +1151,8 @@ donna_columntype_get_context_item_info (DonnaColumnType    *ct,
  * Return: (transfer full): A new g_object_ref_sink()ed #GtkWindow
  */
 inline GtkWindow *
-donna_columntype_new_floating_window (DonnaTreeView *tree,
-                                      gboolean       destroy_on_sel_changed)
+donna_column_type_new_floating_window (DonnaTreeView *tree,
+                                       gboolean       destroy_on_sel_changed)
 {
     GtkWindow *win;
 

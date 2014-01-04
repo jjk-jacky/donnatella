@@ -104,7 +104,7 @@ static gboolean         ct_label_get_context_item_info (
                                                      GError           **error);
 
 static void
-ct_label_columntype_init (DonnaColumnTypeInterface *interface)
+ct_label_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name              = ct_label_get_name;
     interface->get_renderers         = ct_label_get_renderers;
@@ -120,7 +120,7 @@ ct_label_columntype_init (DonnaColumnTypeInterface *interface)
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypeLabel, donna_column_type_label,
         G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_label_columntype_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMN_TYPE, ct_label_column_type_init)
         )
 
 static void
@@ -142,7 +142,7 @@ static void
 donna_column_type_label_init (DonnaColumnTypeLabel *ct)
 {
     ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
-            DONNA_TYPE_COLUMNTYPE_LABEL,
+            DONNA_TYPE_COLUMN_TYPE_LABEL,
             DonnaColumnTypeLabelPrivate);
 }
 
@@ -151,7 +151,7 @@ ct_label_finalize (GObject *object)
 {
     DonnaColumnTypeLabelPrivate *priv;
 
-    priv = DONNA_COLUMNTYPE_LABEL (object)->priv;
+    priv = DONNA_COLUMN_TYPE_LABEL (object)->priv;
     g_object_unref (priv->app);
 
     /* chain up */
@@ -165,7 +165,7 @@ ct_label_set_property (GObject            *object,
                        GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        DONNA_COLUMNTYPE_LABEL (object)->priv->app = g_value_dup_object (value);
+        DONNA_COLUMN_TYPE_LABEL (object)->priv->app = g_value_dup_object (value);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -177,7 +177,7 @@ ct_label_get_property (GObject            *object,
                        GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        g_value_set_object (value, DONNA_COLUMNTYPE_LABEL (object)->priv->app);
+        g_value_set_object (value, DONNA_COLUMN_TYPE_LABEL (object)->priv->app);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -185,14 +185,14 @@ ct_label_get_property (GObject            *object,
 static const gchar *
 ct_label_get_name (DonnaColumnType *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_LABEL (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_LABEL (ct), NULL);
     return "label";
 }
 
 static const gchar *
 ct_label_get_renderers (DonnaColumnType   *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_LABEL (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_LABEL (ct), NULL);
     return "t";
 }
 
@@ -256,7 +256,7 @@ ct_label_refresh_data (DonnaColumnType    *ct,
     DonnaColumnTypeLabel *ctlbl = (DonnaColumnTypeLabel *) ct;
     DonnaConfig *config;
     struct tv_col_data *data;
-    DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
+    DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     gchar *s;
 
     config = donna_app_peek_config (ctlbl->priv->app);
@@ -271,7 +271,7 @@ ct_label_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->property);
         data->property = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else
         g_free (s);
@@ -283,7 +283,7 @@ ct_label_refresh_data (DonnaColumnType    *ct,
         g_free (data->labels);
         data->labels = s;
         set_data_labels (data);
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
     return need;
@@ -307,7 +307,7 @@ ct_label_get_props (DonnaColumnType  *ct,
 {
     GPtrArray *props;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_LABEL (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_LABEL (ct), NULL);
 
     props = g_ptr_array_new_full (1, g_free);
     g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
@@ -339,7 +339,7 @@ ct_label_render (DonnaColumnType    *ct,
     gint id;
     gchar *s;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_LABEL (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_LABEL (ct), NULL);
 
     if (!data->labels)
     {
@@ -454,39 +454,39 @@ ct_label_set_option (DonnaColumnType    *ct,
 
     if (streq (option, "property"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property);
         data->property = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW | DONNA_COLUMNTYPE_NEED_RESORT;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else if (streq (option, "labels"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, save_location,
                     option, G_TYPE_STRING, &data->labels, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->labels);
         data->labels = g_strdup (value);
         set_data_labels (data);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-            DONNA_COLUMNTYPE_ERROR_OTHER,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+            DONNA_COLUMN_TYPE_ERROR_OTHER,
             "ColumnType 'label': Unknown option '%s'",
             option);
-    return DONNA_COLUMNTYPE_NEED_NOTHING;
+    return DONNA_COLUMN_TYPE_NEED_NOTHING;
 }
 
 static gchar *
@@ -512,7 +512,7 @@ ct_label_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, TRUE, error);
     if (!save_location)
         return NULL;
@@ -549,7 +549,7 @@ ct_label_get_context_item_info (DonnaColumnType   *ct,
     const gchar *current;
     const gchar *save_location;
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);
     if (!save_location)
         return FALSE;
@@ -586,7 +586,7 @@ ct_label_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    info->trigger = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_set_option_trigger (item, NULL, FALSE,
                 title, NULL, current, save_location);
     info->free_trigger = TRUE;

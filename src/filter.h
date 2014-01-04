@@ -11,7 +11,7 @@ G_BEGIN_DECLS
 #define DONNA_FILTER_ERROR          g_quark_from_static_string ("DonnaFilter-Error")
 typedef enum
 {
-    DONNA_FILTER_ERROR_INVALID_COLUMNTYPE,
+    DONNA_FILTER_ERROR_INVALID_COLUMN_TYPE,
     DONNA_FILTER_ERROR_INVALID_SYNTAX,
 } DonnaFilterError;
 

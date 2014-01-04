@@ -210,7 +210,7 @@ static gboolean         ct_perms_get_context_item_info (
                                                      GError           **error);
 
 static void
-ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
+ct_perms_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_perms_get_name;
     interface->get_renderers            = ct_perms_get_renderers;
@@ -233,7 +233,7 @@ ct_perms_columntype_init (DonnaColumnTypeInterface *interface)
 
 G_DEFINE_TYPE_WITH_CODE (DonnaColumnTypePerms, donna_column_type_perms,
         G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMNTYPE, ct_perms_columntype_init)
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_COLUMN_TYPE, ct_perms_column_type_init)
         )
 
 static void
@@ -257,7 +257,7 @@ donna_column_type_perms_init (DonnaColumnTypePerms *ct)
     DonnaColumnTypePermsPrivate *priv;
 
     priv = ct->priv = G_TYPE_INSTANCE_GET_PRIVATE (ct,
-            DONNA_TYPE_COLUMNTYPE_PERMS,
+            DONNA_TYPE_COLUMN_TYPE_PERMS,
             DonnaColumnTypePermsPrivate);
     priv->user_id = getuid ();
     priv->nb_groups = getgroups (0, NULL);
@@ -284,7 +284,7 @@ ct_perms_finalize (GObject *object)
 {
     DonnaColumnTypePermsPrivate *priv;
 
-    priv = DONNA_COLUMNTYPE_PERMS (object)->priv;
+    priv = DONNA_COLUMN_TYPE_PERMS (object)->priv;
     g_object_unref (priv->app);
     g_slist_free_full (priv->users, (GDestroyNotify) free_user);
     g_slist_free_full (priv->groups, (GDestroyNotify) free_group);
@@ -301,7 +301,7 @@ ct_perms_set_property (GObject            *object,
                        GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        DONNA_COLUMNTYPE_PERMS (object)->priv->app = g_value_dup_object (value);
+        DONNA_COLUMN_TYPE_PERMS (object)->priv->app = g_value_dup_object (value);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -313,7 +313,7 @@ ct_perms_get_property (GObject            *object,
                        GParamSpec         *pspec)
 {
     if (G_LIKELY (prop_id == PROP_APP))
-        g_value_set_object (value, DONNA_COLUMNTYPE_PERMS (object)->priv->app);
+        g_value_set_object (value, DONNA_COLUMN_TYPE_PERMS (object)->priv->app);
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -321,14 +321,14 @@ ct_perms_get_property (GObject            *object,
 static const gchar *
 ct_perms_get_name (DonnaColumnType *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
     return "perms";
 }
 
 static const gchar *
 ct_perms_get_renderers (DonnaColumnType   *ct)
 {
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
     return "t";
 }
 
@@ -340,10 +340,10 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
                        gboolean            is_tree,
                        gpointer           *_data)
 {
-    DonnaColumnTypePerms *ctperms = DONNA_COLUMNTYPE_PERMS (ct);
+    DonnaColumnTypePerms *ctperms = DONNA_COLUMN_TYPE_PERMS (ct);
     DonnaConfig *config;
     struct tv_col_data *data;
-    DonnaColumnTypeNeed need = DONNA_COLUMNTYPE_NEED_NOTHING;
+    DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     gchar *s;
     gint i;
 
@@ -360,7 +360,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->format);
         data->format = g_markup_escape_text (s, -1);
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -373,7 +373,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (data->format_tooltip);
         /* empty string to disable tooltip */
         data->format_tooltip = (*s == '\0') ? NULL : g_markup_escape_text (s, -1);
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -385,7 +385,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->color_user);
         data->color_user = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -397,7 +397,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->color_group);
         data->color_group = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -409,7 +409,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->color_mixed);
         data->color_mixed = s;
-        need = DONNA_COLUMNTYPE_NEED_REDRAW;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
         g_free (s);
@@ -420,7 +420,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     if (i != data->sort)
     {
         data->sort = (gint8) i;
-        need = DONNA_COLUMNTYPE_NEED_RESORT;
+        need = DONNA_COLUMN_TYPE_NEED_RESORT;
     }
 
     return need;
@@ -445,7 +445,7 @@ ct_perms_get_props (DonnaColumnType  *ct,
     gchar *s;
     guint set = 0;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
 
     props = g_ptr_array_new_full (3, g_free);
 
@@ -504,7 +504,7 @@ ct_perms_get_default_sort_order (DonnaColumnType *ct,
     struct tv_col_data *data = _data;
 
     return (donna_config_get_boolean_column (donna_app_peek_config (
-                    DONNA_COLUMNTYPE_PERMS (ct)->priv->app),
+                    DONNA_COLUMN_TYPE_PERMS (ct)->priv->app),
                 /* no default since it's based on option sort */
                 col_name, arr_name, tv_name, is_tree, NULL, "desc_first",
                 data->sort == SORT_PERMS || data->sort == SORT_MY_PERMS, NULL))
@@ -764,15 +764,15 @@ ct_perms_can_edit (DonnaColumnType    *ct,
                    DonnaNode          *node,
                    GError            **error)
 {
-    if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+    if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
             "mode", node, error))
         return FALSE;
 
-    if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+    if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
             "uid", node, error))
         return FALSE;
 
-    if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
+    if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_can_edit (ct,
             "gid", node, error))
         return FALSE;
 
@@ -818,8 +818,8 @@ ct_perms_edit (DonnaColumnType    *ct,
             || donna_node_get_uid (node, TRUE, &uid) != DONNA_NODE_VALUE_SET
             || donna_node_get_gid (node, TRUE, &gid) != DONNA_NODE_VALUE_SET)
     {
-        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                DONNA_COLUMNTYPE_ERROR_NODE_NO_PROP,
+        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                DONNA_COLUMN_TYPE_ERROR_NODE_NO_PROP,
                 "ColumnType 'perms': Failed to get properties");
         return FALSE;
     }
@@ -834,7 +834,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     ed->uid  = uid;
     ed->gid  = gid;
 
-    win = donna_columntype_new_floating_window (treeview, !!arr);
+    win = donna_column_type_new_floating_window (treeview, !!arr);
     ed->window = w = (GtkWidget *) win;
     g_signal_connect_swapped (win, "destroy",
             (GCallback) window_destroy_cb, ed);
@@ -1201,7 +1201,7 @@ ct_perms_set_value (DonnaColumnType    *ct,
     guint ref_add; /* for perms that are added, not set */
     guint i;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), FALSE);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), FALSE);
     priv = ((DonnaColumnTypePerms *) ct)->priv;
 
     s = value;
@@ -1218,8 +1218,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
             break;
 
         case UNIT_SELF:
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                     "Cannot use unit SELF ('s') to set value");
             return FALSE;
 
@@ -1235,8 +1235,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
 
         if (!node_ref)
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                     "Invalid syntax: no value given");
             return FALSE;
         }
@@ -1247,8 +1247,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
             if (has != DONNA_NODE_VALUE_SET)
             {
                 gchar *fl = donna_node_get_full_location (node_ref);
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "Failed to import UID from '%s'",
                         fl);
                 g_free (fl);
@@ -1261,8 +1261,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
             if (has != DONNA_NODE_VALUE_SET)
             {
                 gchar *fl = donna_node_get_full_location (node_ref);
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "Failed to import GID from '%s'",
                         fl);
                 g_free (fl);
@@ -1275,8 +1275,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
             if (has != DONNA_NODE_VALUE_SET)
             {
                 gchar *fl = donna_node_get_full_location (node_ref);
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_OTHER,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_OTHER,
                         "Failed to import permissions from '%s'",
                         fl);
                 g_free (fl);
@@ -1302,8 +1302,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
                 u = get_user_from_name (priv, s);
                 if (!u)
                 {
-                    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                            DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                            DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                             "Unable to find user '%s'", s);
                     return FALSE;
                 }
@@ -1319,8 +1319,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
                 g = get_group_from_name (priv, s);
                 if (!g)
                 {
-                    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                            DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                            DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                             "Unable to find group '%s'", s);
                     return FALSE;
                 }
@@ -1359,8 +1359,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
             break;
         else
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                     "Invalid syntax, expected 'u', 'g', 'o', 'a' or EOL: %s",
                     s);
             return FALSE;
@@ -1370,8 +1370,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
             add = TRUE;
         else if (*s != '=')
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                     "Invalid syntax, expected '=' or '+': %s'",
                     s);
             return FALSE;
@@ -1396,8 +1396,8 @@ ct_perms_set_value (DonnaColumnType    *ct,
                 break;
             else
             {
-                g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                        DONNA_COLUMNTYPE_ERROR_INVALID_SYNTAX,
+                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                        DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
                         "Invalid syntax, expected 'r', 'w', 'x', ',' or EOL: %s",
                         s);
                 return FALSE;
@@ -1466,8 +1466,8 @@ ready:
                             != DONNA_NODE_VALUE_SET)
                     {
                         gchar *fl = donna_node_get_full_location (nodes->pdata[i]);
-                        g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                                DONNA_COLUMNTYPE_ERROR_OTHER,
+                        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                                DONNA_COLUMN_TYPE_ERROR_OTHER,
                                 "ColumnType 'perms': "
                                 "Couldn't update permissions of '%s', "
                                 "failed to get current value",
@@ -1511,8 +1511,8 @@ ready:
     if (!str)
         return TRUE;
 
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-            DONNA_COLUMNTYPE_ERROR_PARTIAL_COMPLETION,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+            DONNA_COLUMN_TYPE_ERROR_PARTIAL_COMPLETION,
             "Some operations failed :\n%s", str->str);
     g_string_free (str, TRUE);
 
@@ -1914,7 +1914,7 @@ ct_perms_render (DonnaColumnType    *ct,
     gid_t gid;
     gchar buf[20], *b = buf;
 
-    g_return_val_if_fail (DONNA_IS_COLUMNTYPE_PERMS (ct), NULL);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
 
     has = donna_node_get_mode (node, FALSE, &val);
     if (has == DONNA_NODE_VALUE_NONE)
@@ -2492,80 +2492,80 @@ ct_perms_set_option (DonnaColumnType    *ct,
 
     if (streq (option, "format"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->format);
         data->format = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "format_tooltip"))
     {
         if (*value == '\0')
             value = NULL;
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->format_tooltip);
         data->format_tooltip = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_NOTHING;
+        return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
     else if (streq (option, "color_user"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->color_user, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->color_user);
         data->color_user = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "color_group"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->color_group, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->color_group);
         data->color_group = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "color_mixed"))
     {
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->color_mixed, &value, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->color_mixed);
         data->color_mixed = g_strdup (value);
-        return DONNA_COLUMNTYPE_NEED_REDRAW;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "sort"))
     {
@@ -2586,31 +2586,31 @@ ct_perms_set_option (DonnaColumnType    *ct,
             v = SORT_GROUP_ID;
         else
         {
-            g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-                    DONNA_COLUMNTYPE_ERROR_OTHER,
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_OTHER,
                     "ColumnType 'perms': Invalid value '%s' for option '%s'",
                     value, option);
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
         }
 
-        if (!DONNA_COLUMNTYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "columntypes/perms",
                     save_location,
                     option, G_TYPE_INT, &c, &v, error))
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
-            return DONNA_COLUMNTYPE_NEED_NOTHING;
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         data->sort = v;
-        return DONNA_COLUMNTYPE_NEED_RESORT;
+        return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
 
-    g_set_error (error, DONNA_COLUMNTYPE_ERROR,
-            DONNA_COLUMNTYPE_ERROR_OTHER,
+    g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+            DONNA_COLUMN_TYPE_ERROR_OTHER,
             "ColumnType 'perms': Unknown option '%s'",
             option);
-    return DONNA_COLUMNTYPE_NEED_NOTHING;
+    return DONNA_COLUMN_TYPE_NEED_NOTHING;
 }
 
 static gchar *
@@ -2637,7 +2637,7 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, TRUE, error);
     if (!save_location)
         return NULL;
@@ -2744,7 +2744,7 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
     const gchar *save_location;
     gboolean quote_value = FALSE;
 
-    save_location = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);
     if (!save_location)
         return FALSE;
@@ -3070,7 +3070,7 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    info->trigger = DONNA_COLUMNTYPE_GET_INTERFACE (ct)->
+    info->trigger = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_set_option_trigger (item, value, quote_value,
                 ask_title, NULL, ask_current, save_location);
     info->free_trigger = TRUE;

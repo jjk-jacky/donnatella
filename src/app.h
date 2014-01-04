@@ -48,7 +48,7 @@ struct _DonnaAppInterface
     DonnaConfig *       (*peek_config)              (DonnaApp       *app);
     DonnaProvider *     (*get_provider)             (DonnaApp       *app,
                                                      const gchar    *domain);
-    DonnaColumnType *   (*get_columntype)           (DonnaApp       *app,
+    DonnaColumnType *   (*get_column_type)          (DonnaApp       *app,
                                                      const gchar    *type);
     DonnaFilter *       (*get_filter)               (DonnaApp       *app,
                                                      const gchar    *filter);
@@ -143,7 +143,7 @@ DonnaNode *         donna_app_get_node              (DonnaApp       *app,
 gboolean            donna_app_trigger_node          (DonnaApp       *app,
                                                      const gchar    *full_location,
                                                      GError        **error);
-DonnaColumnType *   donna_app_get_columntype        (DonnaApp       *app,
+DonnaColumnType *   donna_app_get_column_type       (DonnaApp       *app,
                                                      const gchar    *type);
 DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
                                                      const gchar    *filter);
