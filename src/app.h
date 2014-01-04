@@ -25,7 +25,7 @@ struct _DonnaAppInterface
     GTypeInterface parent;
 
     /* signals */
-    void                (*treeview_loaded)          (DonnaApp       *app,
+    void                (*tree_view_loaded)         (DonnaApp       *app,
                                                      DonnaTreeView  *tree);
     gboolean            (*event)                    (DonnaApp       *app,
                                                      const gchar    *event,
@@ -55,7 +55,7 @@ struct _DonnaAppInterface
     void                (*run_task)                 (DonnaApp       *app,
                                                      DonnaTask      *task);
     DonnaTaskManager *  (*peek_task_manager)        (DonnaApp       *app);
-    DonnaTreeView *     (*get_treeview)             (DonnaApp       *app,
+    DonnaTreeView *     (*get_tree_view)            (DonnaApp       *app,
                                                      const gchar    *name);
     gchar *             (*get_current_dirname)      (DonnaApp       *app);
     gchar *             (*get_conf_filename)        (DonnaApp       *app,
@@ -120,7 +120,7 @@ struct _DonnaAppInterface
 };
 
 /* signals */
-void                donna_app_treeview_loaded       (DonnaApp       *app,
+void                donna_app_tree_view_loaded      (DonnaApp       *app,
                                                      DonnaTreeView  *tree);
 
 /* API */
@@ -154,7 +154,7 @@ gboolean            donna_app_run_task_and_wait     (DonnaApp       *app,
                                                      DonnaTask      *current_task,
                                                      GError        **error);
 DonnaTaskManager *  donna_app_peek_task_manager     (DonnaApp       *app);
-DonnaTreeView *     donna_app_get_treeview          (DonnaApp       *app,
+DonnaTreeView *     donna_app_get_tree_view         (DonnaApp       *app,
                                                      const gchar    *name);
 DonnaNode *         donna_app_get_current_location  (DonnaApp       *app,
                                                      GError        **error);

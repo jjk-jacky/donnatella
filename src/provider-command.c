@@ -777,7 +777,7 @@ convert:
             if (s[len] != '>')
             {
                 g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Invalid treeview name/reference: '%s'",
+                        "Command '%s', argument %d: Invalid tree view name/reference: '%s'",
                         rc->command->name, rc->i + 1, s);
                 goto error;
             }
@@ -792,11 +792,11 @@ convert:
         }
         else
         {
-            ptr = donna_app_get_treeview (app, s);
+            ptr = donna_app_get_tree_view (app, s);
             if (!ptr)
             {
                 g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
-                        "Command '%s', argument %d: Treeview '%s' not found",
+                        "Command '%s', argument %d: TreeView '%s' not found",
                         rc->command->name, rc->i + 1, s);
                 goto error;
             }

@@ -332,7 +332,7 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
         btn_grp = (GtkRadioButton *) btn;
     }
     w = gtk_label_new (NULL);
-    s = g_strdup_printf ("In <b>treeview '%s'</b> only", tv_name);
+    s = g_strdup_printf ("In <b>tree view '%s'</b> only", tv_name);
     gtk_label_set_markup ((GtkLabel *) w, s);
     g_free (s);
     gtk_container_add ((GtkContainer *) btn, w);
@@ -429,7 +429,7 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
         /* if the tree changes location, we need to abort. Because we start a
          * main loop, the tree could change location, which could mean our
          * arr_name and col_name will point to random memory location */
-        asl.tree = donna_app_get_treeview (app, tv_name);
+        asl.tree = donna_app_get_tree_view (app, tv_name);
         asl.sid = g_signal_connect_swapped (asl.tree, "notify::location",
                 /* we don't connect gtk_widget_destroy in the off chance the
                  * tree would notify of multiple change of locations */

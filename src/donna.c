@@ -128,7 +128,7 @@ struct _DonnaDonnaPrivate
     DonnaConfig     *config;
     DonnaTaskManager*task_manager;
     DonnaStatusBar  *sb;
-    GSList          *treeviews;
+    GSList          *tree_views;
     GSList          *arrangements;
     GThreadPool     *pool;
     DonnaTreeView   *active_list;
@@ -218,7 +218,7 @@ static DonnaFilter *    donna_donna_get_filter      (DonnaApp       *app,
 static void             donna_donna_run_task        (DonnaApp       *app,
                                                      DonnaTask      *task);
 static DonnaTaskManager*donna_donna_peek_task_manager(DonnaApp       *app);
-static DonnaTreeView *  donna_donna_get_treeview    (DonnaApp       *app,
+static DonnaTreeView *  donna_donna_get_tree_view   (DonnaApp       *app,
                                                      const gchar    *name);
 static gchar *          donna_donna_get_current_dirname (
                                                      DonnaApp       *app);
@@ -296,7 +296,7 @@ donna_donna_app_init (DonnaAppInterface *interface)
     interface->get_filter           = donna_donna_get_filter;
     interface->run_task             = donna_donna_run_task;
     interface->peek_task_manager    = donna_donna_peek_task_manager;
-    interface->get_treeview         = donna_donna_get_treeview;
+    interface->get_tree_view        = donna_donna_get_tree_view;
     interface->get_current_dirname  = donna_donna_get_current_dirname;
     interface->get_conf_filename    = donna_donna_get_conf_filename;
     interface->new_int_ref          = donna_donna_new_int_ref;
@@ -1175,11 +1175,11 @@ donna_donna_peek_task_manager (DonnaApp *app)
 }
 
 static DonnaTreeView *
-donna_load_treeview (DonnaDonna *donna, const gchar *name)
+donna_load_tree_view (DonnaDonna *donna, const gchar *name)
 {
     DonnaTreeView *tree;
 
-    tree = donna_donna_get_treeview ((DonnaApp *) donna, name);
+    tree = donna_donna_get_tree_view ((DonnaApp *) donna, name);
     if (!tree)
     {
         /* shall we load it indeed */
@@ -1188,17 +1188,17 @@ donna_load_treeview (DonnaDonna *donna, const gchar *name)
         {
             g_signal_connect (tree, "select-arrangement",
                     G_CALLBACK (tree_select_arrangement), donna);
-            donna->priv->treeviews = g_slist_prepend (donna->priv->treeviews,
+            donna->priv->tree_views = g_slist_prepend (donna->priv->tree_views,
                     g_object_ref (tree));
-            donna_app_treeview_loaded ((DonnaApp *) donna, tree);
+            donna_app_tree_view_loaded ((DonnaApp *) donna, tree);
         }
     }
     return tree;
 }
 
 static DonnaTreeView *
-donna_donna_get_treeview (DonnaApp       *app,
-                          const gchar    *name)
+donna_donna_get_tree_view (DonnaApp      *app,
+                           const gchar   *name)
 {
     DonnaDonnaPrivate *priv;
     DonnaTreeView *tree = NULL;
@@ -1207,7 +1207,7 @@ donna_donna_get_treeview (DonnaApp       *app,
     g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
 
     priv = ((DonnaDonna *) app)->priv;
-    for (l = priv->treeviews; l; l = l->next)
+    for (l = priv->tree_views; l; l = l->next)
     {
         if (streq (name, donna_tree_view_get_name (l->data)))
         {
@@ -3443,7 +3443,7 @@ load_widget (DonnaDonna  *donna,
                 *end = '\0';
 
                 w = gtk_scrolled_window_new (NULL, NULL);
-                tree = donna_load_treeview (donna, *def);
+                tree = donna_load_tree_view (donna, *def);
                 if (!donna_tree_view_is_tree (tree) && !priv->active_list)
                 {
                     gboolean skip;

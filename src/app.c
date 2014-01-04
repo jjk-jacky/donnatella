@@ -9,7 +9,7 @@
 
 enum
 {
-    TREEVIEW_LOADED,
+    TREE_VIEW_LOADED,
     EVENT,
     NB_SIGNALS
 };
@@ -36,11 +36,11 @@ G_DEFINE_INTERFACE (DonnaApp, donna_app, G_TYPE_OBJECT)
 static void
 donna_app_default_init (DonnaAppInterface *interface)
 {
-    donna_app_signals[TREEVIEW_LOADED] =
-        g_signal_new ("treeview-loaded",
+    donna_app_signals[TREE_VIEW_LOADED] =
+        g_signal_new ("tree-view-loaded",
             DONNA_TYPE_APP,
             G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET (DonnaAppInterface, treeview_loaded),
+            G_STRUCT_OFFSET (DonnaAppInterface, tree_view_loaded),
             NULL,
             NULL,
             g_cclosure_marshal_VOID__OBJECT,
@@ -106,13 +106,13 @@ event_accumulator (GSignalInvocationHint    *ihint,
 }
 
 void
-donna_app_treeview_loaded (DonnaApp       *app,
-                           DonnaTreeView  *tree)
+donna_app_tree_view_loaded (DonnaApp      *app,
+                            DonnaTreeView *tree)
 {
     g_return_if_fail (DONNA_IS_APP (app));
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
 
-    g_signal_emit (app, donna_app_signals[TREEVIEW_LOADED], 0, tree);
+    g_signal_emit (app, donna_app_signals[TREE_VIEW_LOADED], 0, tree);
 }
 
 
@@ -433,8 +433,8 @@ donna_app_peek_task_manager (DonnaApp       *app)
 }
 
 DonnaTreeView *
-donna_app_get_treeview (DonnaApp    *app,
-                        const gchar *name)
+donna_app_get_tree_view (DonnaApp    *app,
+                         const gchar *name)
 {
     DonnaAppInterface *interface;
 
@@ -444,9 +444,9 @@ donna_app_get_treeview (DonnaApp    *app,
     interface = DONNA_APP_GET_INTERFACE (app);
 
     g_return_val_if_fail (interface != NULL, NULL);
-    g_return_val_if_fail (interface->get_treeview != NULL, NULL);
+    g_return_val_if_fail (interface->get_tree_view != NULL, NULL);
 
-    return (*interface->get_treeview) (app, name);
+    return (*interface->get_tree_view) (app, name);
 }
 
 DonnaNode *

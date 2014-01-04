@@ -378,7 +378,7 @@ struct _DonnaTreeViewPrivate
     DonnaTreeView       *sync_with;
     gulong               sid_sw_location_changed;
     gulong               sid_active_list_changed;
-    gulong               sid_treeview_loaded;
+    gulong               sid_tree_view_loaded;
 
     /* to handle clicks */
     gchar               *click_mode;
@@ -829,7 +829,7 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
 
     donna_tree_view_props[PROP_LOCATION] =
         g_param_spec_object ("location", "location",
-                "Current location of the treeview",
+                "Current location of the tree view",
                 DONNA_TYPE_NODE,
                 G_PARAM_READABLE);
 
@@ -1937,7 +1937,7 @@ real_option_cb (struct option_data *data)
                 if (streq (s, ":active"))
                     g_object_get (priv->app, "active-list", &sw, NULL);
                 else if (s)
-                    sw = donna_app_get_treeview (priv->app, s);
+                    sw = donna_app_get_tree_view (priv->app, s);
                 else
                     sw = NULL;
 
@@ -1977,11 +1977,11 @@ real_option_cb (struct option_data *data)
                                 data->tree)
                         : 0;
 
-                    if (priv->sid_treeview_loaded)
+                    if (priv->sid_tree_view_loaded)
                     {
                         g_signal_handler_disconnect (priv->app,
-                                priv->sid_treeview_loaded);
-                        priv->sid_treeview_loaded = 0;
+                                priv->sid_tree_view_loaded);
+                        priv->sid_tree_view_loaded = 0;
                     }
                 }
                 /* the same treeview could be set, but with a switch between
@@ -2206,7 +2206,7 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
 }
 
 static void
-treeview_loaded_cb (DonnaApp *app, DonnaTreeView *loaded_tree, DonnaTreeView *tree)
+tree_view_loaded_cb (DonnaApp *app, DonnaTreeView *loaded_tree, DonnaTreeView *tree)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     gchar *s;
@@ -2214,8 +2214,8 @@ treeview_loaded_cb (DonnaApp *app, DonnaTreeView *loaded_tree, DonnaTreeView *tr
     s = cfg_get_sync_with (tree, donna_app_peek_config (priv->app), NULL);
     if (!priv->sync_with && streq (s, loaded_tree->priv->name))
     {
-        g_signal_handler_disconnect (priv->app, priv->sid_treeview_loaded);
-        priv->sid_treeview_loaded = 0;
+        g_signal_handler_disconnect (priv->app, priv->sid_tree_view_loaded);
+        priv->sid_tree_view_loaded = 0;
         priv->sync_with = g_object_ref (loaded_tree);
         priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
                 "notify::location",
@@ -2263,16 +2263,16 @@ load_config (DonnaTreeView *tree)
                     (GCallback) active_list_changed_cb, tree);
         }
         else if (s)
-            priv->sync_with = donna_app_get_treeview (priv->app, s);
+            priv->sync_with = donna_app_get_tree_view (priv->app, s);
         g_free (s);
         if (priv->sync_with)
             priv->sid_sw_location_changed = g_signal_connect (priv->sync_with,
                     "notify::location",
                     (GCallback) sync_with_location_changed_cb, tree);
         else if (s)
-            priv->sid_treeview_loaded = g_signal_connect (priv->app,
-                    "treeview_loaded",
-                    (GCallback) treeview_loaded_cb, tree);
+            priv->sid_tree_view_loaded = g_signal_connect (priv->app,
+                    "tree_view_loaded",
+                    (GCallback) tree_view_loaded_cb, tree);
 
         priv->sync_scroll = cfg_get_sync_scroll (tree, config, NULL);
         priv->auto_focus_sync = cfg_get_auto_focus_sync (tree, config, NULL);
@@ -7050,7 +7050,7 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
         gchar *location = donna_node_get_location (node);
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_NOT_FOUND,
                 "Treeview '%s': Cannot set property '%s' on node '%s:%s', "
-                "the node is not represented in the treeview",
+                "the node is not represented in the tree view",
                 priv->name,
                 prop,
                 donna_node_get_domain (node),
@@ -10841,7 +10841,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
                     if (streq (s_cur, ":active"))
                         g_object_get (priv->app, "active-list", &sw, NULL);
                     else
-                        sw = donna_app_get_treeview (priv->app, s_cur);
+                        sw = donna_app_get_tree_view (priv->app, s_cur);
                 }
 
                 if (priv->sync_with != sw)
@@ -14622,7 +14622,7 @@ tree_context_get_item_info (const gchar             *item,
             /* if we're not a tree, get the given one */
             if (!priv->is_tree)
             {
-                t = donna_app_get_treeview (priv->app, extra);
+                t = donna_app_get_tree_view (priv->app, extra);
                 if (!t)
                     return TRUE;
 
