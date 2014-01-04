@@ -405,7 +405,7 @@ free_intref (struct intref *ir)
 {
     if (ir->type & DONNA_ARG_IS_ARRAY)
         g_ptr_array_unref (ir->ptr);
-    else if (ir->type == DONNA_ARG_TYPE_TREEVIEW || ir->type == DONNA_ARG_TYPE_NODE)
+    else if (ir->type == DONNA_ARG_TYPE_TREE_VIEW || ir->type == DONNA_ARG_TYPE_NODE)
         g_object_unref (ir->ptr);
     else
         g_warning ("free_intref(): Invalid type: %d", ir->type);
@@ -1337,7 +1337,7 @@ donna_donna_parse_fl (DonnaApp       *app,
              * since those only make sense the other way around (or as type of
              * ROW_ID) */
 
-            if (type & DONNA_ARG_TYPE_TREEVIEW)
+            if (type & DONNA_ARG_TYPE_TREE_VIEW)
                 g_string_append (str, donna_tree_view_get_name ((DonnaTreeView *) ptr));
             else if (type & DONNA_ARG_TYPE_ROW)
             {
@@ -1718,7 +1718,7 @@ donna_donna_new_int_ref (DonnaApp       *app,
     ir->type = type;
     if (type & DONNA_ARG_IS_ARRAY)
         ir->ptr = g_ptr_array_ref (ptr);
-    else if (type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+    else if (type & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE))
         ir->ptr = g_object_ref (ptr);
     else
         ir->ptr = ptr;
@@ -1755,7 +1755,7 @@ donna_donna_get_int_ref (DonnaApp       *app,
         ptr = ir->ptr;
         if (ir->type & DONNA_ARG_IS_ARRAY)
             ptr = g_ptr_array_ref (ptr);
-        else if (ir->type & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+        else if (ir->type & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE))
             ptr = g_object_ref (ptr);
     }
     g_rec_mutex_unlock (&priv->rec_mutex);

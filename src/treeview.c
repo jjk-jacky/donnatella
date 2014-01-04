@@ -16182,7 +16182,7 @@ tree_conv_flag (const gchar      c,
     switch (c)
     {
         case 'o':
-            *type = DONNA_ARG_TYPE_TREEVIEW;
+            *type = DONNA_ARG_TYPE_TREE_VIEW;
             *ptr = conv->tree;
             return TRUE;
 

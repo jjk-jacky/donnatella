@@ -526,7 +526,7 @@ donna_app_new_int_ref (DonnaApp       *app,
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (ptr != NULL, NULL);
-    g_return_val_if_fail (type == DONNA_ARG_TYPE_TREEVIEW
+    g_return_val_if_fail (type == DONNA_ARG_TYPE_TREE_VIEW
             || type == DONNA_ARG_TYPE_NODE
             || (type & DONNA_ARG_IS_ARRAY), NULL);
 

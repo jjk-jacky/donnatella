@@ -311,7 +311,7 @@ free_command_args (struct command *command, GPtrArray *args)
             continue;
         else if (command->arg_type[i] & DONNA_ARG_IS_ARRAY)
             g_ptr_array_unref (args->pdata[i]);
-        else if (command->arg_type[i] & (DONNA_ARG_TYPE_TREEVIEW | DONNA_ARG_TYPE_NODE))
+        else if (command->arg_type[i] & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE))
             g_object_unref (args->pdata[i]);
         else if (command->arg_type[i] & (DONNA_ARG_TYPE_STRING
                     | DONNA_ARG_TYPE_ROW | DONNA_ARG_TYPE_PATH))
@@ -658,9 +658,9 @@ parse_arg (struct run_command    *rc,
             else
                 s = g_value_dup_string (v);
         }
-        else if (_rc.command->return_type & DONNA_ARG_TYPE_TREEVIEW)
+        else if (_rc.command->return_type & DONNA_ARG_TYPE_TREE_VIEW)
         {
-            if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TREEVIEW)
+            if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TREE_VIEW)
                 g_ptr_array_add (rc->args, g_value_dup_object (v));
             else
                 s = g_strdup (donna_tree_view_get_name (g_value_get_object (v)));
@@ -765,7 +765,7 @@ convert:
      * but never used "directly")
      */
 
-    if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TREEVIEW)
+    if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TREE_VIEW)
     {
         gpointer ptr;
 
@@ -781,7 +781,7 @@ convert:
                         rc->command->name, rc->i + 1, s);
                 goto error;
             }
-            ptr = donna_app_get_int_ref (app, s, DONNA_ARG_TYPE_TREEVIEW);
+            ptr = donna_app_get_int_ref (app, s, DONNA_ARG_TYPE_TREE_VIEW);
             if (!ptr)
             {
                 g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
