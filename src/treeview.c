@@ -1489,8 +1489,8 @@ enum
 {
     OPT_NONE = 0,
     OPT_DEFAULT,
-    OPT_TREEVIEW,
-    OPT_TREEVIEW_COLUMN,
+    OPT_TREE_VIEW,
+    OPT_TREE_VIEW_COLUMN,
     OPT_COLUMN,
     OPT_IN_MEMORY   /* from set_option() when value in changed in memory */
 };
@@ -1738,12 +1738,12 @@ real_option_cb (struct option_data *data)
             g_debug ("TreeView '%s': Config change for option '%s' (%s)",
                 priv->name, opt, data->option));
 
-    if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT
+    if (data->opt == OPT_TREE_VIEW || data->opt == OPT_DEFAULT
             || data->opt == OPT_IN_MEMORY)
     {
         gint val;
 
-        /* treeview option */
+        /* tree view option */
 
         if (streq (opt, "is_tree"))
         {
@@ -1941,7 +1941,7 @@ real_option_cb (struct option_data *data)
                 else
                     sw = NULL;
 
-                /* if the treeview isn't a list, ignore */
+                /* if the tree view isn't a list, ignore */
                 if (sw && sw->priv->is_tree)
                 {
                     g_warning ("TreeView '%s': Option 'sync_with' set to '%s' "
@@ -1984,8 +1984,8 @@ real_option_cb (struct option_data *data)
                         priv->sid_tree_view_loaded = 0;
                     }
                 }
-                /* the same treeview could be set, but with a switch between
-                 * the treeview itself and the active list */
+                /* the same tree view could be set, but with a switch between
+                 * the tree view itself and the active list */
                 else if ((priv->sid_active_list_changed) ? TRUE : FALSE
                         != (streq (s, ":active")) ? TRUE : FALSE)
                 {
@@ -2158,10 +2158,10 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
 
     if (streqn (option, b, (size_t) len))
     {
-        opt = OPT_TREEVIEW;
+        opt = OPT_TREE_VIEW;
         if (streqn (option + len, "columns/", 8))
         {
-            opt = OPT_TREEVIEW_COLUMN;
+            opt = OPT_TREE_VIEW_COLUMN;
             len += 8;
         }
     }
@@ -2182,7 +2182,7 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
         {
             if (streqn (option + len, "columns/", 8))
             {
-                opt = OPT_TREEVIEW_COLUMN;
+                opt = OPT_TREE_VIEW_COLUMN;
                 len += 8;
             }
             else
@@ -3111,8 +3111,8 @@ set_children (DonnaTreeView *tree,
                     GtkWidget *w;
 
                     priv->draw_state = DRAW_NOTHING;
-                    /* we give the treeview the focus, to ensure the focused row
-                     * is set, hence the class focused-row applied */
+                    /* we give the tree view the focus, to ensure the focused
+                     * row is set, hence the class focused-row applied */
                     w = gtk_widget_get_toplevel ((GtkWidget *) tree);
                     w = gtk_window_get_focus ((GtkWindow *) w);
                     gtk_widget_grab_focus ((GtkWidget *) tree);
@@ -4970,7 +4970,7 @@ real_new_child_cb (struct new_child_data *data)
             /* remove the "location empty" message */
             priv->draw_state = DRAW_NOTHING;
 
-            /* we give the treeview the focus, to ensure the focused row is set,
+            /* we give the tree view the focus, to ensure the focused row is set,
              * hence the class focused-row applied */
             w = gtk_widget_get_toplevel ((GtkWidget *) data->tree);
             w = gtk_window_get_focus ((GtkWindow *) w);
@@ -5332,7 +5332,7 @@ add_node_to_tree (DonnaTreeView *tree,
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = donna_node_get_full_location (node);
-            g_debug2 ("treeview '%s': adding new node %p for '%s'",
+            g_debug2 ("TreeView '%s': adding new node %p for '%s'",
                 priv->name, node, fl);
             g_free (fl));
 
@@ -8104,7 +8104,7 @@ no_task:
             /* scroll to top-left */
             gtk_tree_view_scroll_to_point ((GtkTreeView *) data->tree, 0, 0);
 
-        /* we give the treeview the focus, to ensure the focused row is set,
+        /* we give the tree view the focus, to ensure the focused row is set,
          * hence the class focused-row applied */
         w = gtk_widget_get_toplevel ((GtkWidget *) data->tree);
         w = gtk_window_get_focus ((GtkWindow *) w);
@@ -11312,7 +11312,7 @@ load_list (DonnaTreeView *tree, struct load_list *ll)
         }
 
         /* we don't need the node, only its address to find the iter (besides,
-         * if we find it, then the treeview has a ref on it anyways) */
+         * if we find it, then the tree view has a ref on it anyways) */
         g_object_unref (node);
         l = g_hash_table_lookup (priv->hashtable, node);
         if (G_UNLIKELY (!l))
@@ -11320,7 +11320,7 @@ load_list (DonnaTreeView *tree, struct load_list *ll)
             if (!errmsg)
                 errmsg = g_string_new (NULL);
             g_string_append_printf (errmsg, "- Failed to get node to focus: "
-                    "'%s' not found in treeview", data);
+                    "'%s' not found in tree view", data);
             g_string_append_c (errmsg, '\n');
             g_clear_error (&err);
             goto sort;
@@ -11444,7 +11444,7 @@ selection:
                 if (!errmsg)
                     errmsg = g_string_new (NULL);
                 g_string_append_printf (errmsg, "- Failed to get node to select: "
-                        "'%s' not found in treeview", data);
+                        "'%s' not found in tree view", data);
                 g_string_append_c (errmsg, '\n');
                 g_clear_error (&err);
                 goto next;
