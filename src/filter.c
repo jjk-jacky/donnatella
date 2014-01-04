@@ -270,7 +270,7 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
                 (GCallback) option_cb, filter);
 
     if (donna_config_get_string (config, NULL, &type,
-                "defaults/treeviews/list/columns/%s/type", col_name))
+                "defaults/lists/columns/%s/type", col_name))
         ct = donna_app_get_column_type (priv->app, type);
     else
         /* fallback to its name */

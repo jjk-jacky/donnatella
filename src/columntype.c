@@ -361,11 +361,11 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
     gtk_grid_attach (grid, btn, 0, row, 1, 1);
     w = gtk_label_new (NULL);
     if (is_tree_option)
-        s = g_strdup_printf ("(<i>defaults/treeviews/%s</i>)",
-                (is_tree) ? "tree": "list");
+        s = g_strdup_printf ("(<i>defaults/%s</i>)",
+                (is_tree) ? "trees": "lists");
     else
-        s = g_strdup_printf ("(<i>defaults/treeviews/%s/columns/%s</i>)",
-                (is_tree) ? "tree": "list", col_name);
+        s = g_strdup_printf ("(<i>defaults/%s/columns/%s</i>)",
+                (is_tree) ? "trees": "lists", col_name);
     gtk_label_set_markup ((GtkLabel *) w, s);
     g_free (s);
     gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
@@ -643,8 +643,8 @@ helper_set_option (DonnaColumnType    *ct,
     }
     else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MODE)
     {
-        cfg_set ("column", "defaults/treeviews/%s/columns/%s/%s",
-                (is_tree) ? "tree" : "list", col_name, option);
+        cfg_set ("column", "defaults/%s/columns/%s/%s",
+                (is_tree) ? "trees" : "lists", col_name, option);
     }
     else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT)
     {

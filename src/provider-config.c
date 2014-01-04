@@ -1970,8 +1970,7 @@ treeview:
 mode:
     node = priv->root;
     get_child_cat ("defaults", 8, def);
-    get_child_cat ("treeviews", 9, def);
-    get_child_cat ((is_tree) ? "tree" : "list", 4, def);
+    get_child_cat ((is_tree) ? "trees" : "lists", 5, def);
     get_child_cat ("columns", 7, def);
     get_child_cat (col_name, len_col, def);
     get_child_opt (opt_name, len_opt, type, def);
@@ -2019,8 +2018,8 @@ not_found:
     {                                                               \
         g_value_unset (&value);                                     \
         donna_config_set_##cfg_set (config, NULL, def_val,          \
-                (def_cat) ? "defaults/%s/%s" : "defaults/treeviews/%s/columns/%s/%s", \
-                (def_cat) ? def_cat : (is_tree) ? "tree" : "list",  \
+                (def_cat) ? "defaults/%s/%s" : "defaults/%s/columns/%s/%s", \
+                (def_cat) ? def_cat : (is_tree) ? "trees" : "lists",\
                 (def_cat) ? opt_name : col_name,                    \
                 opt_name);                                          \
         if (from)                                                   \
