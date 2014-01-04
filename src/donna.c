@@ -1036,8 +1036,8 @@ tree_select_arrangement (DonnaTreeView  *tree,
     if (!node)
         return NULL;
 
-    if (snprintf (source[0], 255, "treeviews/%s/arrangements", tv_name) >= 255)
-        source[0] = g_strdup_printf ("treeviews/%s/arrangements", tv_name);
+    if (snprintf (source[0], 255, "tree_views/%s/arrangements", tv_name) >= 255)
+        source[0] = g_strdup_printf ("tree_views/%s/arrangements", tv_name);
 
     for (i = 0; i < max; ++i)
     {
@@ -3296,7 +3296,7 @@ window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
         {
             gboolean skip;
             if (donna_config_get_boolean (priv->config, NULL, &skip,
-                        "treeviews/%s/not_active_list",
+                        "tree_views/%s/not_active_list",
                         donna_tree_view_get_name ((DonnaTreeView *) widget))
                     && skip)
                 return;
@@ -3448,7 +3448,7 @@ load_widget (DonnaDonna  *donna,
                 {
                     gboolean skip;
                     if (!donna_config_get_boolean (priv->config, NULL, &skip,
-                                "treeviews/%s/not_active_list",
+                                "tree_views/%s/not_active_list",
                                 donna_tree_view_get_name (tree))
                             || !skip)
                     {

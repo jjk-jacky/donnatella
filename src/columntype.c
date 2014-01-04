@@ -339,9 +339,9 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
     gtk_grid_attach (grid, btn, 0, row, 1, 1);
     w = gtk_label_new (NULL);
     if (!is_tree_option)
-        s = g_strdup_printf ("(<i>treeviews/%s/columns/%s</i>)", tv_name, col_name);
+        s = g_strdup_printf ("(<i>tree_views/%s/columns/%s</i>)", tv_name, col_name);
     else
-        s = g_strdup_printf ("(<i>treeviews/%s</i>)", tv_name);
+        s = g_strdup_printf ("(<i>tree_views/%s</i>)", tv_name);
     gtk_label_set_markup ((GtkLabel *) w, s);
     g_free (s);
     gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
@@ -638,7 +638,7 @@ helper_set_option (DonnaColumnType    *ct,
     }
     else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_TREE)
     {
-        cfg_set ("treeview", "treeviews/%s/columns/%s/%s",
+        cfg_set ("treeview", "tree_views/%s/columns/%s/%s",
                 tv_name, col_name, option);
     }
     else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MODE)

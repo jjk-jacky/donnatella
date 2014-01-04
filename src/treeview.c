@@ -1584,7 +1584,7 @@ config_get_int (DonnaTreeView   *tree,
 {
     gint val;
 
-    if (donna_config_get_int (config, NULL, &val, "treeviews/%s/%s",
+    if (donna_config_get_int (config, NULL, &val, "tree_views/%s/%s",
             tree->priv->name, option))
     {
         if (from)
@@ -1618,7 +1618,7 @@ config_get_boolean (DonnaTreeView   *tree,
 {
     gboolean val;
 
-    if (donna_config_get_boolean (config, NULL, &val, "treeviews/%s/%s",
+    if (donna_config_get_boolean (config, NULL, &val, "tree_views/%s/%s",
             tree->priv->name, option))
     {
         if (from)
@@ -1652,7 +1652,7 @@ config_get_string (DonnaTreeView   *tree,
 {
     gchar *val;
 
-    if (donna_config_get_string (config, NULL, &val, "treeviews/%s/%s",
+    if (donna_config_get_string (config, NULL, &val, "tree_views/%s/%s",
             tree->priv->name, option))
     {
         if (from)
@@ -2140,21 +2140,21 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
     gssize len;
     guint opt = OPT_NONE;
 
-    /* options we care about are ones for the tree (in "treeviews/<NAME>" or
+    /* options we care about are ones for the tree (in "tree_views/<NAME>" or
      * "defaults/<MODE>s") or for one of our columns:
-     * treeviews/<NAME>/columns/<NAME>
+     * tree_views/<NAME>/columns/<NAME>
      * defaults/<MODE>s/columns/<NAME>
      * This excludes options in the current arrangement, but that's
      * okay/expected: arrangement are loaded/"created" on location change.
      * Also excludes "generic" default, also to be expected.
      *
-     * Here we can only check if the option starts with "treeviews/<NAME>",
+     * Here we can only check if the option starts with "tree_views/<NAME>",
      * "defaults/<MODE>s" and that's it, to loop through our columns we
      * need the GTK lock, i.e. go in main thread */
 
-    len = snprintf (buf, 255, "treeviews/%s/", tree->priv->name);
+    len = snprintf (buf, 255, "tree_views/%s/", tree->priv->name);
     if (len >= 255)
-        b = g_strdup_printf ("treeviews/%s/", tree->priv->name);
+        b = g_strdup_printf ("tree_views/%s/", tree->priv->name);
 
     if (streqn (option, b, (size_t) len))
     {
@@ -6551,7 +6551,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS))
         /* try loading our from our own arrangement */
         if (!donna_config_arr_load_columns (config, arr,
-                    "treeviews/%s/arrangement", priv->name))
+                    "tree_views/%s/arrangement", priv->name))
             /* fallback on default for our mode */
             if (!donna_config_arr_load_columns (config, arr,
                         "defaults/%s/arrangement",
@@ -6564,7 +6564,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
 
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SORT))
         if (!donna_config_arr_load_sort (config, arr,
-                    "treeviews/%s/arrangement", priv->name)
+                    "tree_views/%s/arrangement", priv->name)
                 && !donna_config_arr_load_sort (config, arr,
                     "defaults/%s/arrangement",
                     (priv->is_tree) ? "trees" : "lists"))
@@ -6582,7 +6582,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     /* Note: even here, this one is optional */
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_SECOND_SORT))
         if (!donna_config_arr_load_second_sort (config, arr,
-                    "treeviews/%s/arrangement",
+                    "tree_views/%s/arrangement",
                     priv->name))
             donna_config_arr_load_second_sort (config, arr,
                     "defaults/%s/arrangement",
@@ -6591,7 +6591,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLUMNS_OPTIONS))
     {
         if (!donna_config_arr_load_columns_options (config, arr,
-                    "treeviews/%s/arrangement",
+                    "tree_views/%s/arrangement",
                     priv->name)
                 && !donna_config_arr_load_columns_options (config, arr,
                     "defaults/%s/arrangement",
@@ -6604,7 +6604,7 @@ select_arrangement (DonnaTreeView *tree, DonnaNode *location)
     if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS))
     {
         if (!donna_config_arr_load_color_filters (config, priv->app, arr,
-                    "treeviews/%s/arrangement", priv->name))
+                    "tree_views/%s/arrangement", priv->name))
             donna_config_arr_load_color_filters (config, priv->app, arr,
                     "defaults/%s/arrangement",
                     (priv->is_tree) ? "trees" : "lists");
@@ -10899,7 +10899,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         save_location = _donna_column_type_ask_save_location (priv->app, NULL,
                 NULL, priv->name, priv->is_tree,
-                (priv->is_tree) ? "treeviews/tree" : "treeviews/list",
+                (priv->is_tree) ? "trees" : "lists",
                 option, from);
         if (save_location == (guint) -1)
             /* user cancelled, not an error */
@@ -10907,7 +10907,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     }
 
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE)
-        loc = g_strconcat ("treeviews/", priv->name, "/", option, NULL);
+        loc = g_strconcat ("tree_views/", priv->name, "/", option, NULL);
     else /* DONNA_COLUMN_OPTION_SAVE_IN_MODE */
         loc = g_strconcat ("defaults/",
                 (priv->is_tree) ? "trees/" : "lists/", option, NULL);
@@ -15676,10 +15676,10 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 
         /* if no domain or no domain-specific, try basic definition */
         if (!domain || !donna_config_get_string (config, NULL, &items,
-                    "treeviews/%s/context_menu_%s",
+                    "tree_views/%s/context_menu_%s",
                     priv->name, domain))
             donna_config_get_string (config, NULL, &items,
-                    "treeviews/%s/context_menu", priv->name);
+                    "tree_views/%s/context_menu", priv->name);
 
         /* still nothing, use defaults */
         if (!items)
@@ -15703,7 +15703,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
         }
     }
 
-    nodes = donna_context_menu_get_nodes (priv->app, items, reference, "treeviews",
+    nodes = donna_context_menu_get_nodes (priv->app, items, reference, "tree_views",
                 (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
                 "olrRnfsS", (conv_flag_fn) tree_conv_flag, &conv, error);
@@ -15749,7 +15749,7 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
     else
     {
         if (!donna_config_get_string (config, NULL, &menus,
-                    "treeviews/%s/context_menu_menus",
+                    "tree_views/%s/context_menu_menus",
                     priv->name))
             donna_config_get_string (config, NULL, &menus,
                     "defaults/%s/context_menu_menus",

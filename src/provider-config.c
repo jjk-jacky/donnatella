@@ -1958,7 +1958,7 @@ treeview:
     if (!tv_name)
         goto def;
     node = priv->root;
-    get_child_cat ("treeviews", 9, mode);
+    get_child_cat ("tree_views", 10, mode);
     get_child_cat (tv_name, len_tv, mode);
     get_child_cat ("columns", 7, mode);
     get_child_cat (col_name, len_col, mode);
