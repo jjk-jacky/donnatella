@@ -1598,7 +1598,7 @@ config_get_int (DonnaTreeView   *tree,
     if (donna_config_get_int (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (tree->priv->is_tree) ? "tree" : "list", option))
         return val;
-    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, "
+    g_warning ("TreeView '%s': option 'defaults/treeviews/%s/%s' not found, "
             "setting default (%d)",
             tree->priv->name,
             (tree->priv->is_tree) ? "tree" : "list",
@@ -1632,7 +1632,7 @@ config_get_boolean (DonnaTreeView   *tree,
     if (donna_config_get_boolean (config, NULL, &val, "defaults/treeviews/%s/%s",
                 (tree->priv->is_tree) ? "tree" : "list", option))
         return val;
-    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, "
+    g_warning ("TreeView '%s': option 'defaults/treeviews/%s/%s' not found, "
             "setting default (%d)",
             tree->priv->name,
             (tree->priv->is_tree) ? "tree" : "list",
@@ -1668,7 +1668,7 @@ config_get_string (DonnaTreeView   *tree,
         return val;
     if (!def)
         return NULL;
-    g_warning ("Treeview '%s': option 'defaults/treeviews/%s/%s' not found, "
+    g_warning ("TreeView '%s': option 'defaults/treeviews/%s/%s' not found, "
             "setting default (%s)",
             tree->priv->name,
             (tree->priv->is_tree) ? "tree" : "list",
@@ -1735,7 +1735,7 @@ real_option_cb (struct option_data *data)
     opt = data->option + data->len;
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': Config change for option '%s' (%s)",
+            g_debug ("TreeView '%s': Config change for option '%s' (%s)",
                 priv->name, opt, data->option));
 
     if (data->opt == OPT_TREEVIEW || data->opt == OPT_DEFAULT
@@ -1752,7 +1752,7 @@ real_option_cb (struct option_data *data)
             if (priv->is_tree != val)
             {
                 donna_app_show_error (priv->app, NULL,
-                        "Treeview '%s': option 'is_tree' was changed; "
+                        "TreeView '%s': option 'is_tree' was changed; "
                         "Please restart the application to have it applied.",
                         priv->name);
             }
@@ -1944,7 +1944,7 @@ real_option_cb (struct option_data *data)
                 /* if the treeview isn't a list, ignore */
                 if (sw && sw->priv->is_tree)
                 {
-                    g_warning ("Treeview '%s': Option 'sync_with' set to '%s' "
+                    g_warning ("TreeView '%s': Option 'sync_with' set to '%s' "
                             "which is a tree -- Can only sync with lists",
                             priv->name, s);
                     sw = NULL;
@@ -2357,7 +2357,7 @@ show_err_on_task_failed (DonnaTask      *task,
         return;
 
     donna_app_show_error (tree->priv->app, donna_task_get_error (task),
-            "Treeview '%s': Failed to trigger node", tree->priv->name);
+            "TreeView '%s': Failed to trigger node", tree->priv->name);
 }
 
 typedef void (*node_children_extra_cb) (DonnaTreeView *tree, GtkTreeIter *iter);
@@ -2711,7 +2711,7 @@ remove_row_from_tree (DonnaTreeView *tree,
     /* now we can remove the row */
     DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = (node) ? donna_node_get_full_location (node) : (gchar *) "-";
-            g_debug2 ("Treeview '%s': remove node '%s'",
+            g_debug2 ("TreeView '%s': remove node '%s'",
                 priv->name, fl);
             if (node)
             g_free (fl));
@@ -3002,7 +3002,7 @@ set_children (DonnaTreeView *tree,
             if (row.stamp == 0 && !add_node_to_tree (tree, iter, node, FALSE, &row))
             {
                 gchar *location = donna_node_get_location (node);
-                g_critical ("Treeview '%s': failed to add node for '%s:%s'",
+                g_critical ("TreeView '%s': failed to add node for '%s:%s'",
                         tree->priv->name,
                         donna_node_get_domain (node),
                         location);
@@ -3176,7 +3176,7 @@ node_get_children_tree_cb (DonnaTask                   *task,
         error = donna_task_get_error (task);
         location = donna_node_get_location (node);
         donna_app_show_error (data->tree->priv->app, error,
-                "Treeview '%s': Failed to get children for node '%s:%s'",
+                "TreeView '%s': Failed to get children for node '%s:%s'",
                 data->tree->priv->name,
                 donna_node_get_domain (node),
                 location);
@@ -3228,7 +3228,7 @@ expand_row (DonnaTreeView           *tree,
             -1);
     if (!node)
     {
-        g_warning ("Treeview '%s': expand_row() failed to get node from model",
+        g_warning ("TreeView '%s': expand_row() failed to get node from model",
                 priv->name);
         return FALSE;
     }
@@ -3258,7 +3258,7 @@ expand_row (DonnaTreeView           *tree,
                 if (!donna_tree_store_iter_children (priv->store,
                             &child, i))
                 {
-                    g_critical ("Treeview '%s': Inconsistency detected",
+                    g_critical ("TreeView '%s': Inconsistency detected",
                             priv->name);
                     continue;
                 }
@@ -3541,12 +3541,12 @@ donna_tree_view_test_expand_row (GtkTreeView    *treev,
 
         /* refuse expansion. This case should never happen */
         case DONNA_TREE_EXPAND_NONE:
-            g_critical ("Treeview '%s' wanted to expand a node without children",
+            g_critical ("TreeView '%s' wanted to expand a node without children",
                     priv->name);
             return TRUE;
     }
     /* should never be reached */
-    g_critical ("Treeview '%s': invalid expand state: %d",
+    g_critical ("TreeView '%s': invalid expand state: %d",
             priv->name,
             expand_state);
     return FALSE;
@@ -3712,7 +3712,7 @@ refresh_node_prop_cb (DonnaTask                      *task,
             list = g_hash_table_lookup (priv->hashtable, data->node);
             if (!list)
             {
-                g_critical ("Treeview '%s': refresh_node_prop_cb for missing node",
+                g_critical ("TreeView '%s': refresh_node_prop_cb for missing node",
                         priv->name);
                 goto bail;
             }
@@ -4228,7 +4228,7 @@ sort_func (GtkTreeModel      *model,
                 return -1;
             else if (itereq (iter2, (GtkTreeIter *) l->data))
                 return 1;
-        g_warning ("Treeview '%s': Failed to find order of roots", priv->name);
+        g_warning ("TreeView '%s': Failed to find order of roots", priv->name);
     }
 
     sort_order = gtk_tree_view_column_get_sort_order (column);
@@ -4297,7 +4297,7 @@ resort_tree (DonnaTreeView *tree)
 
     /* trigger a resort */
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': Resort tree", priv->name));
+            g_debug ("TreeView '%s': Resort tree", priv->name));
 
     /* if there is no sorting needed (less than 2 rows) simply redraw */
     if (donna_tree_model_get_count ((GtkTreeModel *) priv->store) > 1)
@@ -4698,7 +4698,7 @@ real_node_deleted_cb (struct node_deleted_data *data)
         {
             gchar *fl = donna_node_get_full_location (data->node);
             donna_app_show_error (priv->app, NULL,
-                    "Treeview '%s': Current location (%s) has been deleted",
+                    "TreeView '%s': Current location (%s) has been deleted",
                     priv->name, fl);
             g_free (fl);
             /*FIXME DRAW_ERROR*/
@@ -4736,7 +4736,7 @@ real_node_deleted_cb (struct node_deleted_data *data)
             {
                 gchar *fl = donna_node_get_full_location (data->node);
                 donna_app_show_error (data->tree->priv->app, err,
-                        "Treeview '%s': Failed to go to '%s' (as parent of '%s')",
+                        "TreeView '%s': Failed to go to '%s' (as parent of '%s')",
                         data->tree->priv->name, location, fl);
                 g_free (fl);
             }
@@ -4891,7 +4891,7 @@ real_node_children_cb (struct node_children_cb_data *data)
         if (es == DONNA_TREE_EXPAND_MAXI)
         {
             DONNA_DEBUG (TREE_VIEW, priv->name,
-                    g_debug ("Treeview '%s': updating children for current location",
+                    g_debug ("TreeView '%s': updating children for current location",
                     priv->name));
             set_children (data->tree, &priv->location_iter, data->children, FALSE, FALSE);
         }
@@ -5099,7 +5099,7 @@ node_refresh_visuals_cb (DonnaTask                  *task,
                 if (G_VALUE_TYPE (&value) != GTYPE)                                 \
                 {                                                                   \
                     gchar *location = donna_node_get_location (node);               \
-                    g_warning ("Treeview '%s': "                                    \
+                    g_warning ("TreeView '%s': "                                    \
                             "Unable to load visual-" lower " from node '%s:%s', "   \
                             "property isn't of expected type (%s instead of %s)",   \
                             priv->name,                                             \
@@ -5567,7 +5567,7 @@ add_node_to_tree (DonnaTreeView *tree,
             -1);
 
         location = donna_node_get_location (node);
-        g_warning ("Treeview '%s': Unable to create a task to determine if the node '%s:%s' has children: %s",
+        g_warning ("TreeView '%s': Unable to create a task to determine if the node '%s:%s' has children: %s",
                 priv->name, domain, location, err->message);
         g_free (location);
         g_clear_error (&err);
@@ -5592,7 +5592,7 @@ donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node, GError **error)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot add root in mode List", tree->priv->name);
+                "TreeView '%s': Cannot add root in mode List", tree->priv->name);
         return FALSE;
     }
 
@@ -5718,7 +5718,7 @@ set_second_arrow (DonnaTreeView *tree)
             priv->second_sort_column != priv->sort_column);
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug4 ("Treeview '%s': set second arrow %s on %s (%d)",
+            g_debug4 ("TreeView '%s': set second arrow %s on %s (%d)",
                 priv->name,
                 (arrow_type == GTK_ARROW_UP) ? "up" : "down",
                 _col->name,
@@ -5740,7 +5740,7 @@ set_sort_column (DonnaTreeView      *tree,
 
     _col = get_column_by_column (tree, column);
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': set sort on %s (%s)",
+            g_debug ("TreeView '%s': set sort on %s (%s)",
                 priv->name,
                 (_col) ? _col->name : "-",
                 (order == DONNA_SORT_ASC) ? "asc" :
@@ -5831,7 +5831,7 @@ set_second_sort_column (DonnaTreeView       *tree,
 
     _col = get_column_by_column (tree, column);
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': set second sort on %s (%s)",
+            g_debug ("TreeView '%s': set second sort on %s (%s)",
                 priv->name,
                 (_col) ? _col->name : "-",
                 (order == DONNA_SORT_ASC) ? "asc" :
@@ -5910,7 +5910,7 @@ free_arrangement (DonnaArrangement *arr)
 static gint
 no_sort (GtkTreeModel *model, GtkTreeIter *i1, GtkTreeIter *i2, gpointer data)
 {
-    g_critical ("Treeview '%s': Invalid sorting function called",
+    g_critical ("TreeView '%s': Invalid sorting function called",
             ((DonnaTreeView *) data)->priv->name);
     return 0;
 }
@@ -5993,7 +5993,7 @@ load_arrangement (DonnaTreeView     *tree,
      * having (at least) columns */
     if (G_UNLIKELY (!col))
     {
-        g_critical ("Treeview '%s': load_arrangement() called on an arrangement without columns",
+        g_critical ("TreeView '%s': load_arrangement() called on an arrangement without columns",
                 priv->name);
         col = (gchar *) "name";
     }
@@ -6081,7 +6081,7 @@ load_arrangement (DonnaTreeView     *tree,
                     "defaults/treeviews/%s/columns/%s/type",
                     (priv->is_tree) ? "tree" : "list", col))
         {
-            g_warning ("Treeview '%s': No type defined for column '%s', "
+            g_warning ("TreeView '%s': No type defined for column '%s', "
                     "fallback to its name",
                     priv->name, col);
             col_type = NULL;
@@ -6099,7 +6099,7 @@ load_arrangement (DonnaTreeView     *tree,
             ct = donna_app_get_column_type (priv->app, (col_type) ? col_type : col);
             if (!ct)
             {
-                g_critical ("Treeview '%s': Unable to load column-type '%s' for column '%s'",
+                g_critical ("TreeView '%s': Unable to load column-type '%s' for column '%s'",
                         priv->name, (col_type) ? col_type : col, col);
                 goto next;
             }
@@ -6225,7 +6225,7 @@ load_arrangement (DonnaTreeView     *tree,
                         load_renderer = gtk_cell_renderer_spinner_new;
                         break;
                     default:
-                        g_critical ("Treeview '%s': Unknown renderer type '%c' for column '%s'",
+                        g_critical ("TreeView '%s': Unknown renderer type '%c' for column '%s'",
                                 priv->name, *rend, col);
                         continue;
                 }
@@ -6335,7 +6335,7 @@ load_arrangement (DonnaTreeView     *tree,
                 g_ptr_array_unref (props);
             }
             else
-                g_critical ("Treeview '%s': column '%s' reports no properties to watch for refresh",
+                g_critical ("TreeView '%s': column '%s' reports no properties to watch for refresh",
                         priv->name, col);
 
             /* sort -- (see column_button_release_event_cb() for more) */
@@ -6634,7 +6634,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
             gchar *fl = NULL;
             if (priv->location)
                 fl = donna_node_get_full_location (priv->location);
-            g_debug2 ("Treeview '%s': build arrangement for '%s' (force=%d)",
+            g_debug2 ("TreeView '%s': build arrangement for '%s' (force=%d)",
                 priv->name, (fl) ? fl : "-", force);
             g_free (fl));
 
@@ -7049,7 +7049,7 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     {
         gchar *location = donna_node_get_location (node);
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Cannot set property '%s' on node '%s:%s', "
+                "TreeView '%s': Cannot set property '%s' on node '%s:%s', "
                 "the node is not represented in the tree view",
                 priv->name,
                 prop,
@@ -7065,12 +7065,12 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
         gchar *fl = donna_node_get_full_location (node);
         if (err)
         g_propagate_prefixed_error (error, err,
-                "Treeview '%s': Cannot set property '%s' on node '%s': ",
+                "TreeView '%s': Cannot set property '%s' on node '%s': ",
                 priv->name, prop, fl);
         else
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed to create task to set property '%s' on node '%s'",
+                    "TreeView '%s': Failed to create task to set property '%s' on node '%s'",
                     priv->name, prop, fl);
         g_free (fl);
         return FALSE;
@@ -7745,7 +7745,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
     if (G_UNLIKELY (flags & DONNA_PROVIDER_FLAG_INVALID))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Unable to get flags for provider '%s'",
+                "TreeView '%s': Unable to get flags for provider '%s'",
                 priv->name,
                 donna_provider_get_domain (provider));
         return NULL;
@@ -7920,7 +7920,7 @@ node_get_children_list_cb (DonnaTask                            *task,
 
             error = donna_task_get_error (task);
             donna_app_show_error (priv->app, error,
-                    "Treeview '%s': Failed to get children for node '%s'",
+                    "TreeView '%s': Failed to get children for node '%s'",
                     priv->name, fl);
             g_free (fl);
 
@@ -8000,7 +8000,7 @@ node_get_children_list_cb (DonnaTask                            *task,
 no_task:
                 fl = donna_node_get_full_location (priv->location);
                 donna_app_show_error (priv->app, err,
-                        "Treeview '%s': Failed to go back to '%s'",
+                        "TreeView '%s': Failed to go back to '%s'",
                         priv->name, fl);
                 g_free (fl);
                 g_clear_error (&err);
@@ -8346,7 +8346,7 @@ change_location (DonnaTreeView *tree,
                 fl = donna_node_get_full_location (node);
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                        "Treeview '%s': Cannot set node '%s' as current location, "
+                        "TreeView '%s': Cannot set node '%s' as current location, "
                         "provider is flat (i.e. no parent to go to)",
                         priv->name, fl);
                 g_free (fl);
@@ -8573,7 +8573,7 @@ change_location (DonnaTreeView *tree,
                         /* this means the history changed during the change of
                          * location, and e.g. change of history_max option
                          * (could have resulted in he needed items to be lost) */
-                        g_warning ("Treeview '%s': History move couldn't be validated, "
+                        g_warning ("TreeView '%s': History move couldn't be validated, "
                                 "adding current location as new one instead",
                                 priv->name);
                         donna_history_take_item (priv->history, fl);
@@ -8586,7 +8586,7 @@ change_location (DonnaTreeView *tree,
                 {
                     /* this means the history changed during the change of
                      * location, and e.g. was cleared. */
-                    g_warning ("Treeview '%s': History move couldn't be validated, "
+                    g_warning ("TreeView '%s': History move couldn't be validated, "
                             "adding current location as new one instead",
                             priv->name);
                     donna_history_take_item (priv->history,
@@ -8630,7 +8630,7 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         {
             gchar *location = donna_node_get_location (node);
             g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Cannot go to '%s:%s', invalid type",
+                    "TreeView '%s': Cannot go to '%s:%s', invalid type",
                     priv->name, donna_node_get_domain (node), location);
             g_free (location);
             return FALSE;
@@ -8703,7 +8703,7 @@ donna_tree_view_get_selected_nodes (DonnaTreeView   *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': No selection support in mode Tree"
+                "TreeView '%s': No selection support in mode Tree"
                 " (use get_location() to get the current/selected node)",
                 priv->name);
         return NULL;
@@ -9250,7 +9250,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot update selection, invalid row-id",
+                "TreeView '%s': Cannot update selection, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9261,7 +9261,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
-                "Treeview '%s': Cannot update selection, incompatible with mode tree",
+                "TreeView '%s': Cannot update selection, incompatible with mode tree",
                 priv->name);
         return FALSE;
     }
@@ -9317,7 +9317,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot update selection, failed to get focused row",
+                        "TreeView '%s': Cannot update selection, failed to get focused row",
                         priv->name);
                 return FALSE;
             }
@@ -9326,7 +9326,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot update selection, failed to get path",
+                        "TreeView '%s': Cannot update selection, failed to get path",
                         priv->name);
                 gtk_tree_path_free (path_focus);
                 return FALSE;
@@ -9349,7 +9349,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot invert selection on a range (Vanilla GTK+ limitation)",
+                        "TreeView '%s': Cannot invert selection on a range (Vanilla GTK+ limitation)",
                         priv->name);
                 gtk_tree_path_free (path);
                 gtk_tree_path_free (path_focus);
@@ -9418,7 +9418,7 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
-                "Treeview '%s': Cannot update selection, incompatible with mode tree",
+                "TreeView '%s': Cannot update selection, incompatible with mode tree",
                 priv->name);
         return FALSE;
     }
@@ -9488,7 +9488,7 @@ donna_tree_view_set_focus (DonnaTreeView        *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot set focus, invalid row-id",
+                "TreeView '%s': Cannot set focus, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9521,7 +9521,7 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot set cursor, invalid row-id",
+                "TreeView '%s': Cannot set cursor, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9567,7 +9567,7 @@ donna_tree_view_activate_row (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot activate row, invalid row-id",
+                "TreeView '%s': Cannot activate row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9669,7 +9669,7 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': toggle_node() doesn't apply in mode list",
+                "TreeView '%s': toggle_node() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
@@ -9679,7 +9679,7 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot toggle row, invalid row-id",
+                "TreeView '%s': Cannot toggle row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9694,7 +9694,7 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
     if (G_UNLIKELY (!path))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Failed to obtain path for iter", priv->name);
+                "TreeView '%s': Failed to obtain path for iter", priv->name);
         return FALSE;
     }
 
@@ -9807,7 +9807,7 @@ donna_tree_view_full_expand (DonnaTreeView      *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': full_expand() doesn't apply in mode list",
+                "TreeView '%s': full_expand() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
@@ -9817,7 +9817,7 @@ donna_tree_view_full_expand (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot full-expand row, invalid row-id",
+                "TreeView '%s': Cannot full-expand row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9860,7 +9860,7 @@ donna_tree_view_full_collapse (DonnaTreeView      *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': full_collapse() doesn't apply in mode list",
+                "TreeView '%s': full_collapse() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
@@ -9870,7 +9870,7 @@ donna_tree_view_full_collapse (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot full-collapse row, invalid row-id",
+                "TreeView '%s': Cannot full-collapse row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9901,14 +9901,14 @@ donna_tree_view_maxi_expand (DonnaTreeView      *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': maxi_expand() doesn't apply in mode list",
+                "TreeView '%s': maxi_expand() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
     if (G_UNLIKELY (!priv->is_minitree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': maxi_expand() only works in mini-tree",
+                "TreeView '%s': maxi_expand() only works in mini-tree",
                 priv->name);
         return FALSE;
     }
@@ -9918,7 +9918,7 @@ donna_tree_view_maxi_expand (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot maxi-expand row, invalid row-id",
+                "TreeView '%s': Cannot maxi-expand row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9943,7 +9943,7 @@ donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': maxi_collapse() doesn't apply in mode list",
+                "TreeView '%s': maxi_collapse() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
@@ -9953,7 +9953,7 @@ donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot maxi-collapse row, invalid row-id",
+                "TreeView '%s': Cannot maxi-collapse row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -9999,7 +9999,7 @@ set_tree_visual (DonnaTreeView  *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot set visual 'icon', "
+                        "TreeView '%s': Cannot set visual 'icon', "
                         "unable to get icon from '%s'",
                         priv->name, _value);
                 return FALSE;
@@ -10016,7 +10016,7 @@ set_tree_visual (DonnaTreeView  *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Cannot set visual, invalid visual type",
+                "TreeView '%s': Cannot set visual, invalid visual type",
                 priv->name);
         return FALSE;
     }
@@ -10072,7 +10072,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': set_visual() doesn't apply in mode list",
+                "TreeView '%s': set_visual() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
@@ -10082,7 +10082,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot set visual, invalid row-id",
+                "TreeView '%s': Cannot set visual, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -10115,7 +10115,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     if (G_UNLIKELY (!priv->is_tree))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': get_visual() doesn't apply in mode list",
+                "TreeView '%s': get_visual() doesn't apply in mode list",
                 priv->name);
         return NULL;
     }
@@ -10125,7 +10125,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot set visual, invalid row-id",
+                "TreeView '%s': Cannot set visual, invalid row-id",
                 priv->name);
         return NULL;
     }
@@ -10144,7 +10144,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Cannot get visual, invalid visual type",
+                "TreeView '%s': Cannot get visual, invalid visual type",
                 priv->name);
         return NULL;
     }
@@ -10182,7 +10182,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
             g_free (value);
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Cannot return visual 'icon', "
+                    "TreeView '%s': Cannot return visual 'icon', "
                     "it doesn't have a straight-forward string value",
                     priv->name);
             return NULL;
@@ -10399,7 +10399,7 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
-                "Treeview '%s': Cannot edit column, unknown column '%s'",
+                "TreeView '%s': Cannot edit column, unknown column '%s'",
                 priv->name, column);
         return FALSE;
     }
@@ -10409,7 +10409,7 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot edit column, invalid row-id",
+                "TreeView '%s': Cannot edit column, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -10465,7 +10465,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
-                "Treeview '%s': Cannot set column option, unknown column '%s'",
+                "TreeView '%s': Cannot set column option, unknown column '%s'",
                 priv->name, column);
         return FALSE;
     }
@@ -10482,7 +10482,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
 
     if (err)
     {
-        g_propagate_prefixed_error (error, err, "Treeview '%s': "
+        g_propagate_prefixed_error (error, err, "TreeView '%s': "
                 "Failed to set option '%s' on column '%s': ",
                 priv->name, option, column);
         return FALSE;
@@ -10521,7 +10521,7 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
-                "Treeview '%s': Cannot set column value, unknown column '%s'",
+                "TreeView '%s': Cannot set column value, unknown column '%s'",
                 priv->name, column);
         return FALSE;
     }
@@ -10538,7 +10538,7 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                    "Treeview '%s': Cannot set column value, invalid reference row-id",
+                    "TreeView '%s': Cannot set column value, invalid reference row-id",
                     priv->name);
             g_ptr_array_unref (nodes);
             return FALSE;
@@ -10554,7 +10554,7 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
     ret = donna_column_type_set_value (_col->ct, _col->ct_data, nodes, value,
             node_ref, tree, error);
     if (!ret)
-        g_prefix_error (error, "Treeview '%s': Failed to set column value: ",
+        g_prefix_error (error, "TreeView '%s': Failed to set column value: ",
                 priv->name);
 
     g_ptr_array_unref (nodes);
@@ -10579,7 +10579,7 @@ _convert_value (DonnaTreeView           *tree,
             name, error);
     if (!extra)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to set option '%s': "
+        g_prefix_error (error, "TreeView '%s': Failed to set option '%s': "
                 "Unable to get definition of extra '%s': ",
                 priv->name, option, name);
         return FALSE;
@@ -10588,7 +10588,7 @@ _convert_value (DonnaTreeView           *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Failed to set option '%s': "
+                "TreeView '%s': Failed to set option '%s': "
                 "Extra '%s' not of expected type",
                 priv->name, option, name);
         return FALSE;
@@ -10610,7 +10610,7 @@ _convert_value (DonnaTreeView           *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed to set option '%s': "
+                    "TreeView '%s': Failed to set option '%s': "
                     "Invalid value '%s' (not in extra '%s')",
                     priv->name, option, value, name);
             return FALSE;
@@ -10632,7 +10632,7 @@ _convert_value (DonnaTreeView           *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed to set option '%s': "
+                    "TreeView '%s': Failed to set option '%s': "
                     "Invalid value '%s' (not in extra '%s')",
                     priv->name, option, value, name);
             return FALSE;
@@ -10654,7 +10654,7 @@ _convert_value (DonnaTreeView           *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed to set option '%s': "
+                    "TreeView '%s': Failed to set option '%s': "
                     "Invalid value '%s' (not in extra '%s')",
                     priv->name, option, value, name);
             return FALSE;
@@ -10685,7 +10685,7 @@ _convert_value (DonnaTreeView           *tree,
             {                                                               \
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
                         DONNA_TREE_VIEW_ERROR_OTHER,                        \
-                        "Treeview '%s': Cannot set option '%s'; "           \
+                        "TreeView '%s': Cannot set option '%s'; "           \
                         "Values not matching: '%d' (config) vs '%d' (memory)", \
                         priv->name, option, cur, priv->lower);              \
                 return FALSE;                                               \
@@ -10712,7 +10712,7 @@ _convert_value (DonnaTreeView           *tree,
         {                                                                   \
             g_set_error (error, DONNA_TREE_VIEW_ERROR,                      \
                     DONNA_TREE_VIEW_ERROR_OTHER,                            \
-                    "Treeview '%s': Cannot set option '%s'; "               \
+                    "TreeView '%s': Cannot set option '%s'; "               \
                     "Invalid value '%s' (must be '1', 'true', '0' or 'false')", \
                     priv->name, option, value);                             \
             return FALSE;                                                   \
@@ -10725,7 +10725,7 @@ _convert_value (DonnaTreeView           *tree,
             {                                                               \
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
                         DONNA_TREE_VIEW_ERROR_OTHER,                        \
-                        "Treeview '%s': Cannot set option '%s'; "           \
+                        "TreeView '%s': Cannot set option '%s'; "           \
                         "Values not matching: '%d' (config) vs '%d' (memory)", \
                         priv->name, option, cur, priv->lower);              \
                 return FALSE;                                               \
@@ -10753,7 +10753,7 @@ _convert_value (DonnaTreeView           *tree,
             {                                                               \
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
                         DONNA_TREE_VIEW_ERROR_OTHER,                        \
-                        "Treeview '%s': Cannot set option '%s'; "           \
+                        "TreeView '%s': Cannot set option '%s'; "           \
                         "Values not matching: '%s' (config) vs '%s' (memory)", \
                         priv->name, option, s_cur, priv->lower);            \
                 return FALSE;                                               \
@@ -10848,7 +10848,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
                 {
                     g_set_error (error, DONNA_TREE_VIEW_ERROR,
                             DONNA_TREE_VIEW_ERROR_OTHER,
-                            "Treeview '%s': Cannot set option 'sync_with'; "
+                            "TreeView '%s': Cannot set option 'sync_with'; "
                             "Values not matching: '%s' (config) vs '%s' (memory)",
                             priv->name, s_cur, (priv->sync_with)
                             ? donna_tree_view_get_name (priv->sync_with)
@@ -10872,7 +10872,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                    "Treeview '%s': Cannot set option '%s': No such option",
+                    "TreeView '%s': Cannot set option '%s': No such option",
                     priv->name, option);
             return FALSE;
         }
@@ -10883,7 +10883,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Cannot set option '%s': No such option",
+                "TreeView '%s': Cannot set option '%s': No such option",
                 priv->name, option);
         return FALSE;
     }
@@ -10916,7 +10916,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         if (!donna_config_set_int (config, error, val, loc))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to save option '%s': ",
+            g_prefix_error (error, "TreeView '%s': Failed to save option '%s': ",
                     priv->name, option);
             g_free (loc);
             return FALSE;
@@ -10926,7 +10926,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         if (!donna_config_set_boolean (config, error, val, loc))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to save option '%s'",
+            g_prefix_error (error, "TreeView '%s': Failed to save option '%s'",
                     priv->name, option);
             g_free (loc);
             return FALSE;
@@ -10936,7 +10936,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         if (!donna_config_set_string (config, error, s_val, loc))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to save option '%s'",
+            g_prefix_error (error, "TreeView '%s': Failed to save option '%s'",
                     priv->name, option);
             g_free (loc);
             return FALSE;
@@ -10970,7 +10970,7 @@ donna_tree_view_move_root (DonnaTreeView     *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot move rows in List mode",
+                "TreeView '%s': Cannot move rows in List mode",
                 priv->name);
         return FALSE;
     }
@@ -10980,7 +10980,7 @@ donna_tree_view_move_root (DonnaTreeView     *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot move row, invalid row-id",
+                "TreeView '%s': Cannot move row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -10989,7 +10989,7 @@ donna_tree_view_move_root (DonnaTreeView     *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot move row, not a root",
+                "TreeView '%s': Cannot move row, not a root",
                 priv->name);
         return FALSE;
     }
@@ -11000,11 +11000,11 @@ donna_tree_view_move_root (DonnaTreeView     *tree,
             break;
     if (G_UNLIKELY (!l))
     {
-        g_warning ("Treeview '%s': Failed to find a root iter in list of roots",
+        g_warning ("TreeView '%s': Failed to find a root iter in list of roots",
                 priv->name);
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Row not found in internal list of roots. This is a bug!",
+                "TreeView '%s': Row not found in internal list of roots. This is a bug!",
                 priv->name);
         return FALSE;
     }
@@ -11070,7 +11070,7 @@ save_to_file (DonnaTreeView *tree,
 
     if (!g_file_set_contents (file, str->str, (gssize) str->len, error))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to save to file '%s': ",
+        g_prefix_error (error, "TreeView '%s': Failed to save to file '%s': ",
                 tree->priv->name, filename);
         g_string_free (str, TRUE);
         if (file != filename)
@@ -11106,7 +11106,7 @@ donna_tree_view_save_list_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot save list file in mode Tree",
+                "TreeView '%s': Cannot save list file in mode Tree",
                 priv->name);
         return FALSE;
     }
@@ -11115,7 +11115,7 @@ donna_tree_view_save_list_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Cannot save to file, no current location",
+                "TreeView '%s': Cannot save to file, no current location",
                 priv->name);
         return FALSE;
     }
@@ -11241,7 +11241,7 @@ load_from_file (DonnaTreeView   *tree,
 
     if (!g_file_get_contents (file, data, NULL, error))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to load from file; "
+        g_prefix_error (error, "TreeView '%s': Failed to load from file; "
                 "Error reading '%s': ",
                 priv->name, filename);
         if (file != filename)
@@ -11289,7 +11289,7 @@ load_list (DonnaTreeView *tree, struct load_list *ll)
     if (!s)
     {
         donna_app_show_error (priv->app, NULL,
-                "Treeview '%s': Failed to finish loading list from file: "
+                "TreeView '%s': Failed to finish loading list from file: "
                 "Invalid data",
                 priv->name);
         goto free;
@@ -11460,7 +11460,7 @@ free:
     if (errmsg)
     {
         donna_app_show_error (priv->app, NULL,
-                "Treeview '%s': Failed to finish loading list from file:\n\n%s",
+                "TreeView '%s': Failed to finish loading list from file:\n\n%s",
                 priv->name, errmsg->str);
         g_string_free (errmsg, TRUE);
     }
@@ -11488,7 +11488,7 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot load list file in mode Tree",
+                "TreeView '%s': Cannot load list file in mode Tree",
                 priv->name);
         return FALSE;
     }
@@ -11501,7 +11501,7 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Failed to load from file; "
+                "TreeView '%s': Failed to load from file; "
                 "Invalid data in '%s' (no current location)",
                 priv->name, filename);
         g_free (data);
@@ -11512,7 +11512,7 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
     node = donna_app_get_node (priv->app, data, error);
     if (!node)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to load from file; "
+        g_prefix_error (error, "TreeView '%s': Failed to load from file; "
                 "Unable to get node of current location: ",
                 priv->name);
         g_free (data);
@@ -11702,7 +11702,7 @@ donna_tree_view_save_tree_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot save tree file in mode List",
+                "TreeView '%s': Cannot save tree file in mode List",
                 priv->name);
         return FALSE;
     }
@@ -11715,7 +11715,7 @@ donna_tree_view_save_tree_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Cannot save to file, nothing in tree",
+                "TreeView '%s': Cannot save to file, nothing in tree",
                 priv->name);
         return FALSE;
     }
@@ -11863,7 +11863,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot load tree file in mode List",
+                "TreeView '%s': Cannot load tree file in mode List",
                 priv->name);
         return FALSE;
     }
@@ -11876,7 +11876,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Failed to load from file; "
+                "TreeView '%s': Failed to load from file; "
                 "Invalid data in '%s'",
                 priv->name, filename);
         g_free (data);
@@ -12213,7 +12213,7 @@ node_get_children_refresh_list_cb (DonnaTask            *task,
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
         donna_app_show_error (priv->app, donna_task_get_error (task),
-                "Treeview '%s': Failed to refresh", priv->name);
+                "TreeView '%s': Failed to refresh", priv->name);
         return;
     }
 
@@ -12244,7 +12244,7 @@ node_get_children_refresh_tree_cb (DonnaTask                         *task,
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
         donna_app_show_error (priv->app, donna_task_get_error (task),
-                "Treeview '%s': Failed to refresh", priv->name);
+                "TreeView '%s': Failed to refresh", priv->name);
         goto free;
     }
 
@@ -12280,7 +12280,7 @@ may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter)
     if (!task)
     {
         gchar *fl = donna_node_get_full_location (node);
-        g_warning ("Treeview '%s': Failed to refresh '%s': %s",
+        g_warning ("TreeView '%s': Failed to refresh '%s': %s",
                 priv->name, fl, err->message);
         g_clear_error (&err);
         g_free (fl);
@@ -12301,7 +12301,7 @@ may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter)
         if (!task)
         {
             gchar *fl = donna_node_get_full_location (node);
-            g_warning ("Treeview '%s': Failed to trigger children update for '%s': %s",
+            g_warning ("TreeView '%s': Failed to trigger children update for '%s': %s",
                     priv->name, fl, err->message);
             g_clear_error (&err);
             g_free (fl);
@@ -12369,7 +12369,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
                     gtk_tree_path_free (end);
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Failed to get visible range of rows",
+                        "TreeView '%s': Failed to get visible range of rows",
                         priv->name);
                 return FALSE;
             }
@@ -12382,7 +12382,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Failed to get first row",
+                        "TreeView '%s': Failed to get first row",
                         priv->name);
                 return FALSE;
             }
@@ -12413,7 +12413,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             if (G_UNLIKELY (!task))
             {
                 gchar *fl = donna_node_get_full_location (node);
-                g_warning ("Treeview '%s': Failed to refresh '%s': %s",
+                g_warning ("TreeView '%s': Failed to refresh '%s': %s",
                         priv->name, fl, err->message);
                 g_clear_error (&err);
                 g_free (fl);
@@ -12456,7 +12456,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Failed to get first root",
+                        "TreeView '%s': Failed to get first root",
                         priv->name);
                 return FALSE;
             }
@@ -12588,7 +12588,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed getting the last line",
+                    "TreeView '%s': Failed getting the last line",
                     priv->name);
             return FALSE;
         }
@@ -12597,7 +12597,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "Treeview '%s': Failed getting path to the last line",
+                    "TreeView '%s': Failed getting path to the last line",
                     priv->name);
             return FALSE;
         }
@@ -12630,7 +12630,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                 {
                     g_set_error (error, DONNA_TREE_VIEW_ERROR,
                             DONNA_TREE_VIEW_ERROR_OTHER,
-                            "Treeview '%s': Failed getting the last line (<%d)",
+                            "TreeView '%s': Failed getting the last line (<%d)",
                             priv->name, nb);
                     return FALSE;
                 }
@@ -12647,7 +12647,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Failed getting the first line (going to %d)",
+                        "TreeView '%s': Failed getting the first line (going to %d)",
                         priv->name, nb);
                 return FALSE;
             }
@@ -12685,7 +12685,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                    "Treeview '%s': Cannot go to line, failed to get cursor",
+                    "TreeView '%s': Cannot go to line, failed to get cursor",
                     priv->name);
             return FALSE;
         }
@@ -12694,7 +12694,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             gtk_tree_path_free (path);
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                    "Treeview '%s': Cannot go to line, failed to get cursor",
+                    "TreeView '%s': Cannot go to line, failed to get cursor",
                     priv->name);
             return FALSE;
         }
@@ -12729,7 +12729,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                        "Treeview '%s': Cannot go to line, invalid row-id",
+                        "TreeView '%s': Cannot go to line, invalid row-id",
                         priv->name);
                 return FALSE;
             }
@@ -12895,7 +12895,7 @@ donna_tree_view_get_node_at_row (DonnaTreeView  *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot get node, invalid row-id",
+                "TreeView '%s': Cannot get node, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -12949,7 +12949,7 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Cannot remove row in mode List",
+                "TreeView '%s': Cannot remove row in mode List",
                 priv->name);
         return FALSE;
     }
@@ -12959,7 +12959,7 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot remove row, invalid row-id",
+                "TreeView '%s': Cannot remove row, invalid row-id",
                 priv->name);
         return FALSE;
     }
@@ -12974,7 +12974,7 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                    "Treeview '%s': Cannot remove row, option is_minitree not enabled",
+                    "TreeView '%s': Cannot remove row, option is_minitree not enabled",
                     priv->name);
             gtk_tree_path_free (path);
             return FALSE;
@@ -13055,7 +13055,7 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "Treeview '%s': Cannot get nodes, invalid row-id",
+                "TreeView '%s': Cannot get nodes, invalid row-id",
                 priv->name);
         return NULL;
     }
@@ -13064,7 +13064,7 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
-                "Treeview '%s': Cannot get nodes using 'to_focused' flag in mode tree",
+                "TreeView '%s': Cannot get nodes using 'to_focused' flag in mode tree",
                 priv->name);
         return NULL;
     }
@@ -13081,7 +13081,7 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot get nodes, failed to get focused row",
+                        "TreeView '%s': Cannot get nodes, failed to get focused row",
                         priv->name);
                 return NULL;
             }
@@ -13090,7 +13090,7 @@ donna_tree_view_get_nodes (DonnaTreeView      *tree,
             {
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': Cannot get nodes, failed to get path",
+                        "TreeView '%s': Cannot get nodes, failed to get path",
                         priv->name);
                 gtk_tree_path_free (path_focus);
                 return NULL;
@@ -13208,7 +13208,7 @@ get_node_for_history (DonnaTreeView         *tree,
             (internal_fn) history_goto, NULL, NULL, error);
     if (G_UNLIKELY (!node))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+        g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't create node: ",
                 priv->name);
         return NULL;
@@ -13220,7 +13220,7 @@ get_node_for_history (DonnaTreeView         *tree,
                     DONNA_TYPE_TREE_VIEW, &v,
                     (refresher_fn) gtk_true, NULL, error)))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+        g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't add property 'history-tree': ",
                 priv->name);
         g_value_unset (&v);
@@ -13252,7 +13252,7 @@ get_node_for_history (DonnaTreeView         *tree,
     if (G_UNLIKELY (!donna_node_add_property (node, "history-direction",
                     G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+        g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't add property 'history-direction': ",
                 priv->name);
         g_value_unset (&v);
@@ -13264,7 +13264,7 @@ get_node_for_history (DonnaTreeView         *tree,
     if (G_UNLIKELY (!donna_node_add_property (node, "history-pos",
                     G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to get history; "
+        g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't add property 'history-pos': ",
                 priv->name);
         g_value_unset (&v);
@@ -13305,7 +13305,7 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': No history in mode Tree",
+                "TreeView '%s': No history in mode Tree",
                 priv->name);
         return FALSE;
     }
@@ -13314,7 +13314,7 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Cannot get history, no valid direction(s) given",
+                "TreeView '%s': Cannot get history, no valid direction(s) given",
                 priv->name);
         return NULL;
     }
@@ -13324,7 +13324,7 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Cannot get history, failed to get provider 'internal'",
+                "TreeView '%s': Cannot get history, failed to get provider 'internal'",
                 priv->name);
         return NULL;
     }
@@ -13337,7 +13337,7 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
                 nb, error);
         if (G_UNLIKELY (!items))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to get history: ",
+            g_prefix_error (error, "TreeView '%s': Failed to get history: ",
                     priv->name);
             g_ptr_array_unref (arr);
             g_object_unref (pi);
@@ -13393,7 +13393,7 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
                     DONNA_HISTORY_BACKWARD, 0, error);
             if (G_UNLIKELY (!name))
             {
-                g_prefix_error (error, "Treeview '%s': Failed to get history; "
+                g_prefix_error (error, "TreeView '%s': Failed to get history; "
                         "couldn't get item: ",
                         priv->name);
                 g_ptr_array_unref (arr);
@@ -13421,7 +13421,7 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
                 nb, error);
         if (G_UNLIKELY (!items))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to get history: ",
+            g_prefix_error (error, "TreeView '%s': Failed to get history: ",
                     priv->name);
             g_ptr_array_unref (arr);
             g_object_unref (pi);
@@ -13473,7 +13473,7 @@ donna_tree_view_history_get_node (DonnaTreeView          *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': No history in mode Tree",
+                "TreeView '%s': No history in mode Tree",
                 priv->name);
         return FALSE;
     }
@@ -13483,7 +13483,7 @@ donna_tree_view_history_get_node (DonnaTreeView          *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_OTHER,
-                "Treeview '%s': Cannot get history node, "
+                "TreeView '%s': Cannot get history node, "
                 "failed to get provider 'internal'",
                 priv->name);
         return NULL;
@@ -13492,7 +13492,7 @@ donna_tree_view_history_get_node (DonnaTreeView          *tree,
     item = donna_history_get_item (priv->history, direction, nb, error);
     if (!item)
     {
-        g_prefix_error (error, "Treeview '%s': Failed getting history node: ",
+        g_prefix_error (error, "TreeView '%s': Failed getting history node: ",
                 priv->name);
         g_object_unref (pi);
         return NULL;
@@ -13524,7 +13524,7 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': No history in mode Tree",
+                "TreeView '%s': No history in mode Tree",
                 priv->name);
         return FALSE;
     }
@@ -13532,7 +13532,7 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
     fl = donna_history_get_item (priv->history, direction, nb, error);
     if (!fl)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to move in history: ",
+        g_prefix_error (error, "TreeView '%s': Failed to move in history: ",
                 priv->name);
         return FALSE;
     }
@@ -13540,14 +13540,14 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
     node = donna_app_get_node (priv->app, fl, error);
     if (!node)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to move in history: ",
+        g_prefix_error (error, "TreeView '%s': Failed to move in history: ",
                 priv->name);
         return FALSE;
     }
 
     if (!change_location (tree, CHANGING_LOCATION_ASKED, node, &hm, error))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to move in history: ",
+        g_prefix_error (error, "TreeView '%s': Failed to move in history: ",
                 priv->name);
         return FALSE;
     }
@@ -13569,7 +13569,7 @@ donna_tree_view_history_clear (DonnaTreeView        *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': No history in mode Tree",
+                "TreeView '%s': No history in mode Tree",
                 priv->name);
         return FALSE;
     }
@@ -13596,7 +13596,7 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Can't get node 'up', no current location set",
+                "TreeView '%s': Can't get node 'up', no current location set",
                 priv->name);
         return NULL;
     }
@@ -13606,7 +13606,7 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                "Treeview '%s': Can't get node 'up', current location is in flat provider",
+                "TreeView '%s': Can't get node 'up', current location is in flat provider",
                 priv->name);
         return NULL;
     }
@@ -13619,7 +13619,7 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
         g_free (fl);
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Can't get node 'up', we're in root already",
+                "TreeView '%s': Can't get node 'up', we're in root already",
                 priv->name);
         return NULL;
     }
@@ -13655,7 +13655,7 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
     g_free (fl);
     if (!node)
     {
-        g_prefix_error (error, "Treeview '%s': Can't get node to go up: ",
+        g_prefix_error (error, "TreeView '%s': Can't get node to go up: ",
                 priv->name);
         return NULL;
     }
@@ -13779,7 +13779,7 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Can't get node 'down' in mode Tree (requires history)",
+                "TreeView '%s': Can't get node 'down' in mode Tree (requires history)",
                 priv->name);
         return NULL;
     }
@@ -13788,7 +13788,7 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Can't get node 'down', no current location set",
+                "TreeView '%s': Can't get node 'down', no current location set",
                 priv->name);
         return NULL;
     }
@@ -13798,7 +13798,7 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                "Treeview '%s': Can't get node 'down', current location is in flat provider",
+                "TreeView '%s': Can't get node 'down', current location is in flat provider",
                 priv->name);
         return NULL;
     }
@@ -13816,7 +13816,7 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
         items = donna_history_get_items (priv->history, direction, 0, error);
         if (!items)
         {
-            g_prefix_error (error, "Treeview '%s': Can't get node 'down': ", priv->name);
+            g_prefix_error (error, "TreeView '%s': Can't get node 'down': ", priv->name);
             g_free (fl);
             g_strfreev (items_f);
             return NULL;
@@ -13898,7 +13898,7 @@ found:
         g_free (fl);
         if (!node)
         {
-            g_prefix_error (error, "Treeview '%s': Can't get node to go down: ",
+            g_prefix_error (error, "TreeView '%s': Can't get node to go down: ",
                     priv->name);
             return NULL;
         }
@@ -13912,7 +13912,7 @@ found:
 
     g_set_error (error, DONNA_TREE_VIEW_ERROR,
             DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-            "Treeview '%s': No node 'down' could be found",
+            "TreeView '%s': No node 'down' could be found",
             priv->name);
     return NULL;
 }
@@ -13968,7 +13968,7 @@ context_get_selection (struct conv *conv, GError **error)
                  * Neither means no selection, which here is an error */
                 g_set_error (error, DONNA_TREE_VIEW_ERROR,
                         DONNA_TREE_VIEW_ERROR_OTHER,
-                        "Treeview '%s': No selection", tree->priv->name);
+                        "TreeView '%s': No selection", tree->priv->name);
         }
     }
 
@@ -13992,7 +13992,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
     extra = donna_config_get_extra (config, name, error);
     if (!extra)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to resolve alias 'tree_options': "
+        g_prefix_error (error, "TreeView '%s': Failed to resolve alias 'tree_options': "
                 "Failed to get extras '%s' from config: ",
                 priv->name, name);
         return FALSE;
@@ -14002,7 +14002,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "TreeView '%s': Failed to resolve alias 'tree_options': "
                 "Invalid extra type for '%s' in config",
                 priv->name, name);
         return FALSE;
@@ -14045,7 +14045,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "TreeView '%s': Failed to resolve alias 'tree_options': "
                 "Unexpected extra type", priv->name);
         return FALSE;
     }
@@ -14078,7 +14078,7 @@ tree_context_get_alias (const gchar             *alias,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
-                    "Treeview '%s': No such alias: '%s'",
+                    "TreeView '%s': No such alias: '%s'",
                     priv->name, alias - 4);
             return NULL;
         }
@@ -14090,7 +14090,7 @@ tree_context_get_alias (const gchar             *alias,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
-                    "Treeview '%s': No such alias: '%s' (no such column)",
+                    "TreeView '%s': No such alias: '%s' (no such column)",
                     priv->name, alias - 7);
             return NULL;
         }
@@ -14127,7 +14127,7 @@ tree_context_get_alias (const gchar             *alias,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
-                    "Treeview '%s': Can't resolve alias 'column_options': "
+                    "TreeView '%s': Can't resolve alias 'column_options': "
                     "Failed to get column '%s' -- This is not supposed to happen!",
                     priv->name, conv->col_name);
             return NULL;
@@ -14225,7 +14225,7 @@ tree_context_get_alias (const gchar             *alias,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Treeview '%s': Invalid extra (save_location) '%s' for alias '%s'",
+                    "TreeView '%s': Invalid extra (save_location) '%s' for alias '%s'",
                     priv->name, extra, alias);
             return FALSE;
         }
@@ -14357,7 +14357,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
     extra = donna_config_get_extra (config, name, error);
     if (!extra)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to get item 'tree_options.%s.%s': "
+        g_prefix_error (error, "TreeView '%s': Failed to get item 'tree_options.%s.%s': "
                 "Failed to get extras '%s' from config: ",
                 priv->name, parent, item, name);
         return FALSE;
@@ -14367,7 +14367,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "Treeview '%s': Failed to get item 'tree_options.%s.%s': "
+                "TreeView '%s': Failed to get item 'tree_options.%s.%s': "
                 "Invalid extra type for '%s' in config",
                 priv->name, parent, item, name);
         return FALSE;
@@ -14400,7 +14400,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item 'tree_options.%s.%s': "
+                    "TreeView '%s': No item 'tree_options.%s.%s': "
                     "No such value in extra '%s'",
                     priv->name, parent, item, name);
             return FALSE;
@@ -14433,7 +14433,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item 'tree_options.%s.%s': "
+                    "TreeView '%s': No item 'tree_options.%s.%s': "
                     "No such value in extra '%s'",
                     priv->name, parent, item, name);
             return FALSE;
@@ -14466,7 +14466,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No item 'tree_options.%s.%s': "
+                    "TreeView '%s': No item 'tree_options.%s.%s': "
                     "No such value in extra '%s'",
                     priv->name, parent, item, name);
             return FALSE;
@@ -14476,7 +14476,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "Treeview '%s': Failed to resolve alias 'tree_options': "
+                "TreeView '%s': Failed to resolve alias 'tree_options': "
                 "Unexpected extra type", priv->name);
         return FALSE;
     }
@@ -14508,7 +14508,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No such item: '%s'",
+                    "TreeView '%s': No such item: '%s'",
                     priv->name, item - 4);
             return FALSE;
         }
@@ -14520,7 +14520,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No such item: '%s' (no such column)",
+                    "TreeView '%s': No such item: '%s' (no such column)",
                     priv->name, item - 7);
             return FALSE;
         }
@@ -14536,7 +14536,7 @@ tree_context_get_item_info (const gchar             *item,
                     info,
                     error))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to get item '%s': ",
+            g_prefix_error (error, "TreeView '%s': Failed to get item '%s': ",
                     priv->name, item - 7);
             return FALSE;
         }
@@ -14734,7 +14734,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No such item: '%s'",
+                    "TreeView '%s': No such item: '%s'",
                     priv->name, item - 4);
             return FALSE;
         }
@@ -14746,7 +14746,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No such item: '%s' (provider not found)",
+                    "TreeView '%s': No such item: '%s' (provider not found)",
                     priv->name, item - 7);
             return FALSE;
         }
@@ -14757,7 +14757,7 @@ tree_context_get_item_info (const gchar             *item,
                 (reference & DONNA_CONTEXT_HAS_SELECTION) ? conv : NULL,
                 info, error))
         {
-            g_prefix_error (error, "Treeview '%s': Failed to get item '%s': ",
+            g_prefix_error (error, "TreeView '%s': Failed to get item '%s': ",
                     priv->name, item - 7);
             return FALSE;
         }
@@ -14857,7 +14857,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Treeview '%s': Invalid extra '%s' for item '%s'",
+                    "TreeView '%s': Invalid extra '%s' for item '%s'",
                     priv->name, extra, item);
             return FALSE;
         }
@@ -15017,7 +15017,7 @@ tree_context_get_item_info (const gchar             *item,
         node = donna_app_get_node (priv->app, b, error);
         if (!node)
         {
-            g_prefix_error (error, "Treeview '%s': "
+            g_prefix_error (error, "TreeView '%s': "
                     "Cannot create item '%s' for register '%s', failed to get node '%s': ",
                     priv->name, item, extra, b);
             if (b != buf)
@@ -15097,7 +15097,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "Treeview '%s': No such item: '%s' (no such column)",
+                    "TreeView '%s': No such item: '%s' (no such column)",
                     priv->name, item);
             return FALSE;
         }
@@ -15153,7 +15153,7 @@ tree_context_get_item_info (const gchar             *item,
             {
                 g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                         DONNA_CONTEXT_MENU_ERROR_OTHER,
-                        "Treeview '%s': Invalid save_location '%s' in extra for item '%s'",
+                        "TreeView '%s': Invalid save_location '%s' in extra for item '%s'",
                         priv->name, extra, item);
                 return FALSE;
             }
@@ -15170,7 +15170,7 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Treeview '%s': Invalid extra '%s' for item '%s'",
+                    "TreeView '%s': Invalid extra '%s' for item '%s'",
                     priv->name, extra, item);
             return FALSE;
         }
@@ -15601,7 +15601,7 @@ tree_context_get_item_info (const gchar             *item,
 err:
     g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-            "Treeview '%s': No such item: '%s'",
+            "TreeView '%s': No such item: '%s'",
                 priv->name, item);
     return FALSE;
 }
@@ -15636,7 +15636,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                    "Treeview '%s': Cannot get context nodes, no column '%s'",
+                    "TreeView '%s': Cannot get context nodes, no column '%s'",
                     priv->name, column);
             return NULL;
         }
@@ -15652,7 +15652,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                    "Treeview '%s': Cannot get context nodes, invalid reference row-id",
+                    "TreeView '%s': Cannot get context nodes, invalid reference row-id",
                     priv->name);
             return NULL;
         }
@@ -15697,7 +15697,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                    "Treeview '%s': No items for context menu found",
+                    "TreeView '%s': No items for context menu found",
                     priv->name);
             return NULL;
         }
@@ -15715,7 +15715,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 
     if (!nodes)
     {
-        g_prefix_error (error, "Treeview '%s': Failed to get context nodes: ",
+        g_prefix_error (error, "TreeView '%s': Failed to get context nodes: ",
                 priv->name);
         return NULL;
     }
@@ -15761,7 +15761,7 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
 
     if (!donna_app_show_menu (priv->app, nodes, menus, error))
     {
-        g_prefix_error (error, "Treeview '%s': Failed to show context menu: ",
+        g_prefix_error (error, "TreeView '%s': Failed to show context menu: ",
                 priv->name);
         if (menus != _menus)
             g_free (menus);
@@ -15792,7 +15792,7 @@ donna_tree_view_get_node_root   (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Can't get root node, no current location",
+                "TreeView '%s': Can't get root node, no current location",
                 priv->name);
         return NULL;
     }
@@ -15801,7 +15801,7 @@ donna_tree_view_get_node_root   (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_MODE,
-                "Treeview '%s': Can't get root node in mode List",
+                "TreeView '%s': Can't get root node in mode List",
                 priv->name);
         return NULL;
     }
@@ -15811,7 +15811,7 @@ donna_tree_view_get_node_root   (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_FLAT_PROVIDER,
-                "Treeview '%s': Can't get root node, current location is in flat provider",
+                "TreeView '%s': Can't get root node, current location is in flat provider",
                 priv->name);
         return NULL;
     }
@@ -15876,7 +15876,7 @@ donna_tree_view_set_sort_order (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Cannot sort by column '%s': Column doesn't exist",
+                "TreeView '%s': Cannot sort by column '%s': Column doesn't exist",
                 priv->name, column);
         return FALSE;
     }
@@ -15903,7 +15903,7 @@ donna_tree_view_set_second_sort_order (DonnaTreeView      *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "Treeview '%s': Cannot second sort by column '%s': Column doesn't exist",
+                "TreeView '%s': Cannot second sort by column '%s': Column doesn't exist",
                 priv->name, column);
         return FALSE;
     }
@@ -16090,7 +16090,7 @@ donna_tree_view_row_activated (GtkTreeView    *treev,
     /* warning because this shouldn't happen, as we're doing things our own way.
      * If this happens, it's probably an oversight somewhere that should be
      * fixed. So warning, and then we just do our ativating */
-    g_warning ("Treeview '%s': row-activated signal was emitted", tree->priv->name);
+    g_warning ("TreeView '%s': row-activated signal was emitted", tree->priv->name);
 
     rowid.type = DONNA_ARG_TYPE_PATH;
     rowid.ptr  = gtk_tree_path_to_string (path);
@@ -16454,7 +16454,7 @@ handle_click (DonnaTreeView     *tree,
         b = buf + 10;
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': handle_click '%s'",
+            g_debug ("TreeView '%s': handle_click '%s'",
                 priv->name, b));
 
     if (priv->is_tree && iter)
@@ -16507,7 +16507,7 @@ handle_click (DonnaTreeView     *tree,
         g_free (conv.row);
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': handle_click '%s': trigger=%s",
+            g_debug ("TreeView '%s': handle_click '%s': trigger=%s",
                 priv->name, b, fl));
     donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
     g_free (fl);
@@ -16589,7 +16589,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
         click |= DONNA_CLICK_RIGHT;
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': trigger click %d", priv->name, click));
+            g_debug ("TreeView '%s': trigger click %d", priv->name, click));
 
     /* the focus thing only matters on the actual click (i.e. on press), so we
      * ignore it when triggering a click on release */
@@ -16715,7 +16715,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
                     g_set_error (&err, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
                             "%s", str->str);
                     donna_app_show_error (priv->app, err,
-                            "Treeview '%s': Error occured on '%s'",
+                            "TreeView '%s': Error occured on '%s'",
                             priv->name, fl);
                     g_free (fl);
                     g_error_free (err);
@@ -17138,7 +17138,7 @@ repeat:
     {
         if (!donna_config_get_string (config, NULL, alias, "%s/key", *from))
         {
-            g_warning ("Treeview '%s': Key '%s' of type ALIAS without alias set",
+            g_warning ("TreeView '%s': Key '%s' of type ALIAS without alias set",
                     priv->name, *key);
             return -1;
         }
@@ -17149,7 +17149,7 @@ repeat:
         *key = *alias;
         if (++level > 10)
         {
-            g_warning ("Treeview '%s': There might be an infinite loop in key aliasing, "
+            g_warning ("TreeView '%s': There might be an infinite loop in key aliasing, "
                     "bailing out on key '%s' reaching level %d",
                     priv->name, *key, level);
             return -1;
@@ -17459,7 +17459,7 @@ next:
                 if (!donna_config_get_string (config, NULL, &priv->key_combine_name,
                             "%s/combine", from))
                 {
-                    g_warning ("Treeview '%s': Key '%s' missing its name as COMBINE",
+                    g_warning ("TreeView '%s': Key '%s' missing its name as COMBINE",
                             priv->name, key);
                     wrong_key (TRUE);
                 }
@@ -17468,7 +17468,7 @@ next:
                     i = SPEC_LOWER | SPEC_UPPER;
                 if (i & SPEC_MOTION)
                 {
-                    g_warning ("Treeview '%s': Key '%s' cannot be COMBINE with spec MOTION",
+                    g_warning ("TreeView '%s': Key '%s' cannot be COMBINE with spec MOTION",
                             priv->name, key);
                     wrong_key (TRUE);
                 }
@@ -17652,7 +17652,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         if (priv->changing_sel_mode)
             return;
 
-        g_warning ("Treeview '%s': the selection was lost in BROWSE mode",
+        g_warning ("TreeView '%s': the selection was lost in BROWSE mode",
                 priv->name);
 
         gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
@@ -17761,7 +17761,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
     config = donna_app_peek_config (priv->app);
     if (!donna_config_get_string (config, error, &s, "statusbar/%s/format", name))
     {
-        g_prefix_error (error, "Treeview '%s': Status '%s': No format: ",
+        g_prefix_error (error, "TreeView '%s': Status '%s': No format: ",
                 priv->name, name);
         return 0;
     }
@@ -17948,7 +17948,7 @@ status_provider_render (DonnaStatusProvider    *sp,
     }
     if (G_UNLIKELY (i >= priv->statuses->len))
     {
-        g_warning ("Treeview '%s': Asked to render unknown status #%d",
+        g_warning ("TreeView '%s': Asked to render unknown status #%d",
                 priv->name, id);
         return;
     }
@@ -18495,7 +18495,7 @@ donna_tree_view_new (DonnaApp    *app,
     load_config (tree);
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("Treeview '%s': setting up as %s",
+            g_debug ("TreeView '%s': setting up as %s",
                 priv->name, (priv->is_tree) ? "tree" : "list"));
 
     if (priv->is_tree)
