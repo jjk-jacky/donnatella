@@ -34,11 +34,11 @@ default_get_default_sort_order (DonnaColumnType    *ct,
 
     g_object_get (ct, "app", &app, NULL);
     type = donna_column_type_get_name (ct);
-    /* 42 == 55 - strlen ("columntypes/") - 1 */
-    if (G_UNLIKELY (strnlen (type, 42) >= 42))
-        b = g_strconcat ("columntypes/", type, NULL);
+    /* 41 == 55 - strlen ("column_types/") - 1 */
+    if (G_UNLIKELY (strlen (type) + 41 >= 41))
+        b = g_strconcat ("column_types/", type, NULL);
     else
-        strcpy (stpcpy (buf, "columntypes/"), type);
+        strcpy (stpcpy (buf, "column_types/"), type);
 
     order = (donna_config_get_boolean_column (donna_app_peek_config (app),
                 col_name, arr_name, tv_name, is_tree, b, "desc_first", FALSE, NULL))

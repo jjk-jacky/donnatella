@@ -235,7 +235,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     if (data->show_type != donna_config_get_boolean_column (config, col_name,
-                arr_name, tv_name, is_tree, "columntypes/value",
+                arr_name, tv_name, is_tree, "column_types/value",
                 "show_type", FALSE, NULL))
     {
         need |= DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
@@ -243,7 +243,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
     }
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/value",
+            arr_name, tv_name, is_tree, "column_types/value",
             "property_value", "option-value", NULL);
     if (!streq (s, data->prop_value))
     {
@@ -256,7 +256,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/value",
+            arr_name, tv_name, is_tree, "column_types/value",
             "property_extra", "option-extra", NULL);
     if (!streq (s, data->prop_extra))
     {
@@ -1272,7 +1272,7 @@ ct_value_set_option (DonnaColumnType    *ct,
     if (streq (option, "property_value"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/value",
+                    col_name, arr_name, tv_name, is_tree, "column_types/value",
                     save_location,
                     option, G_TYPE_STRING, &data->prop_value, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -1287,7 +1287,7 @@ ct_value_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_extra"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/value",
+                    col_name, arr_name, tv_name, is_tree, "column_types/value",
                     save_location,
                     option, G_TYPE_STRING, &data->prop_extra, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -1317,7 +1317,7 @@ ct_value_set_option (DonnaColumnType    *ct,
         c = data->show_type;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/value",
+                    col_name, arr_name, tv_name, is_tree, "column_types/value",
                     save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;

@@ -302,7 +302,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/time",
+            arr_name, tv_name, is_tree, "column_types/time",
             "property", "mtime", NULL);
     if (!streq (data->property, s))
     {
@@ -356,7 +356,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/time",
+            arr_name, tv_name, is_tree, "column_types/time",
             "property_tooltip", "mtime", NULL);
     if (!streq (data->property_tooltip, s))
     {
@@ -376,7 +376,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/time",
+            arr_name, tv_name, is_tree, "column_types/time",
             "format_tooltip", "%c", NULL);
     if (!streq (data->format_tooltip, s))
     {
@@ -1906,7 +1906,7 @@ ct_time_set_option (DonnaColumnType    *ct,
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/time",
+                    col_name, arr_name, tv_name, is_tree, "column_types/time",
                     save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -1979,7 +1979,7 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_tooltip"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/time",
+                    col_name, arr_name, tv_name, is_tree, "column_types/time",
                     save_location,
                     option, G_TYPE_STRING, &data->property_tooltip, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -2004,7 +2004,7 @@ ct_time_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format_tooltip"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/time",
+                    col_name, arr_name, tv_name, is_tree, "column_types/time",
                     save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;

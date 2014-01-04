@@ -354,7 +354,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/perms",
+            arr_name, tv_name, is_tree, "column_types/perms",
             "format", "%S", NULL);
     if (!streq (data->format, s))
     {
@@ -366,7 +366,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/perms",
+            arr_name, tv_name, is_tree, "column_types/perms",
             "format_tooltip", "%p %V:%H", NULL);
     if (!streq(data->format_tooltip, s))
     {
@@ -379,7 +379,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/perms",
+            arr_name, tv_name, is_tree, "column_types/perms",
             "color_user", "green", NULL);
     if (!streq (data->color_user, s))
     {
@@ -391,7 +391,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/perms",
+            arr_name, tv_name, is_tree, "column_types/perms",
             "color_group", "blue", NULL);
     if (!streq (data->color_group, s))
     {
@@ -403,7 +403,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/perms",
+            arr_name, tv_name, is_tree, "column_types/perms",
             "color_mixed", "#00aaaa", NULL);
     if (!streq (data->color_mixed, s))
     {
@@ -415,7 +415,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     i = donna_config_get_int_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/perms",
+            arr_name, tv_name, is_tree, "column_types/perms",
             "sort", SORT_MY_PERMS, NULL);
     if (i != data->sort)
     {
@@ -2493,7 +2493,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
     if (streq (option, "format"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -2510,7 +2510,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
         if (*value == '\0')
             value = NULL;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -2525,7 +2525,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
     else if (streq (option, "color_user"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->color_user, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -2540,7 +2540,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
     else if (streq (option, "color_group"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->color_group, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -2555,7 +2555,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
     else if (streq (option, "color_mixed"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     save_location,
                     option, G_TYPE_STRING, &data->color_mixed, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -2594,7 +2594,7 @@ ct_perms_set_option (DonnaColumnType    *ct,
         }
 
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/perms",
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;

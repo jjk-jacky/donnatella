@@ -247,7 +247,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "columntypes/size",
+            arr_name, tv_name, is_tree, "column_types/size",
             "property", "size", NULL);
     if (!streq (data->property, s))
     {
@@ -781,7 +781,7 @@ ct_size_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "columntypes/size",
+                    col_name, arr_name, tv_name, is_tree, "column_types/size",
                     save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;

@@ -3902,7 +3902,7 @@ apply_color_filters (DonnaTreeView      *tree,
 /* Because the same renderers are used on all columns, we need to reset their
  * properties so they don't "leak" to other columns. If we used a model, every
  * row would have a foobar-set to TRUE or FALSE accordingly.
- * But we don't, and not all columntypes will set the same properties, also we
+ * But we don't, and not all column types will set the same properties, also we
  * have things like color filters that also may set some.
  * So we need to reset whatever what set last time a renderer was used. An easy
  * way would be to connect to notify beforehand, have the ct & color filters do
@@ -6292,8 +6292,8 @@ load_arrangement (DonnaTreeView     *tree,
             priv->main_column = column;
 
         /* size */
-        if (snprintf (buf, 64, "columntypes/%s", col_type) >= 64)
-            b = g_strdup_printf ("columntypes/%s", col_type);
+        if (snprintf (buf, 64, "column_types/%s", col_type) >= 64)
+            b = g_strdup_printf ("column_types/%s", col_type);
         width = donna_config_get_int_column (config, col,
                 arrangement->columns_options, priv->name, priv->is_tree, b,
                 "width", 230, NULL);
@@ -6688,9 +6688,9 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                         &_col->ct_data);
 
                 /* size */
-                if (snprintf (buf, 64, "columntypes/%s",
+                if (snprintf (buf, 64, "column_types/%s",
                             donna_column_type_get_name (_col->ct)) >= 64)
-                    b = g_strdup_printf ("columntypes/%s",
+                    b = g_strdup_printf ("column_types/%s",
                             donna_column_type_get_renderers (_col->ct));
                 width = donna_config_get_int_column (config, _col->name,
                         arr->columns_options, priv->name, priv->is_tree, b,
@@ -18253,7 +18253,7 @@ columntype_refresh_data (DonnaColumnType  *ct,
     config = donna_app_peek_config (priv->app);
 
     if (priv->ln_relative != donna_config_get_boolean_column (config, col_name,
-                arr_name, tv_name, is_tree, "columntypes/line-numbers",
+                arr_name, tv_name, is_tree, "column_types/line-numbers",
                 "relative", FALSE, NULL))
     {
         need |= DONNA_COLUMN_TYPE_NEED_REDRAW;
@@ -18261,7 +18261,7 @@ columntype_refresh_data (DonnaColumnType  *ct,
     }
 
     if (priv->ln_relative_focused != donna_config_get_boolean_column (config, col_name,
-                arr_name, tv_name, is_tree, "columntypes/line-numbers",
+                arr_name, tv_name, is_tree, "column_types/line-numbers",
                 "relative_focused", TRUE, NULL))
     {
         if (priv->ln_relative)
@@ -18317,7 +18317,7 @@ columntype_set_option (DonnaColumnType    *ct,
         c = priv->ln_relative;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
-                    arr_name, tv_name, is_tree, "columntypes/line-numbers",
+                    arr_name, tv_name, is_tree, "column_types/line-numbers",
                     save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
@@ -18344,7 +18344,7 @@ columntype_set_option (DonnaColumnType    *ct,
         c = priv->ln_relative_focused;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
-                    arr_name, tv_name, is_tree, "columntypes/line-numbers",
+                    arr_name, tv_name, is_tree, "column_types/line-numbers",
                     save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
