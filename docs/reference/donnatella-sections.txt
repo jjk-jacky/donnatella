@@ -114,6 +114,7 @@ DonnaColumnTypeNeed
 DonnaColumnOptionSaveLocation
 renderer_edit_fn
 DonnaColumnTypeInterface
+DonnaColumnType
 donna_columntype_get_name
 donna_columntype_get_renderers
 donna_columntype_refresh_data
@@ -791,6 +792,7 @@ donna_status_bar_get_type
 <FILE>statusprovider</FILE>
 <TITLE>DonnaStatusProvider</TITLE>
 DonnaStatusProviderInterface
+DonnaStatusProvider
 donna_status_provider_status_changed
 donna_status_provider_create_status
 donna_status_provider_free_status
@@ -915,6 +917,7 @@ donna_task_process_get_type
 <FILE>taskui</FILE>
 <TITLE>DonnaTaskUi</TITLE>
 DonnaTaskUiInterface
+DonnaTaskUi
 donna_taskui_set_title
 donna_taskui_take_title
 donna_taskui_show
