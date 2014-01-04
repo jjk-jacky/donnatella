@@ -1734,7 +1734,7 @@ real_option_cb (struct option_data *data)
     config = donna_app_peek_config (priv->app);
     opt = data->option + data->len;
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': Config change for option '%s' (%s)",
                 priv->name, opt, data->option));
 
@@ -2709,7 +2709,7 @@ remove_row_from_tree (DonnaTreeView *tree,
     it = *iter;
 
     /* now we can remove the row */
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = (node) ? donna_node_get_full_location (node) : (gchar *) "-";
             g_debug2 ("Treeview '%s': remove node '%s'",
                 priv->name, fl);
@@ -4296,7 +4296,7 @@ resort_tree (DonnaTreeView *tree)
     DonnaTreeViewPrivate *priv = tree->priv;
 
     /* trigger a resort */
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': Resort tree", priv->name));
 
     /* if there is no sorting needed (less than 2 rows) simply redraw */
@@ -4890,7 +4890,7 @@ real_node_children_cb (struct node_children_cb_data *data)
                 -1);
         if (es == DONNA_TREE_EXPAND_MAXI)
         {
-            DONNA_DEBUG (TREEVIEW, priv->name,
+            DONNA_DEBUG (TREE_VIEW, priv->name,
                     g_debug ("Treeview '%s': updating children for current location",
                     priv->name));
             set_children (data->tree, &priv->location_iter, data->children, FALSE, FALSE);
@@ -5330,7 +5330,7 @@ add_node_to_tree (DonnaTreeView *tree,
         }
     }
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = donna_node_get_full_location (node);
             g_debug2 ("treeview '%s': adding new node %p for '%s'",
                 priv->name, node, fl);
@@ -5717,7 +5717,7 @@ set_second_arrow (DonnaTreeView *tree)
     gtk_widget_set_visible (_col->second_arrow,
             priv->second_sort_column != priv->sort_column);
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug4 ("Treeview '%s': set second arrow %s on %s (%d)",
                 priv->name,
                 (arrow_type == GTK_ARROW_UP) ? "up" : "down",
@@ -5739,7 +5739,7 @@ set_sort_column (DonnaTreeView      *tree,
     GtkSortType sort_order;
 
     _col = get_column_by_column (tree, column);
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': set sort on %s (%s)",
                 priv->name,
                 (_col) ? _col->name : "-",
@@ -5830,7 +5830,7 @@ set_second_sort_column (DonnaTreeView       *tree,
     struct column *_col;
 
     _col = get_column_by_column (tree, column);
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': set second sort on %s (%s)",
                 priv->name,
                 (_col) ? _col->name : "-",
@@ -6630,7 +6630,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
 
     priv = tree->priv;
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = NULL;
             if (priv->location)
                 fl = donna_node_get_full_location (priv->location);
@@ -16453,7 +16453,7 @@ handle_click (DonnaTreeView     *tree,
     else
         b = buf + 10;
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': handle_click '%s'",
                 priv->name, b));
 
@@ -16506,7 +16506,7 @@ handle_click (DonnaTreeView     *tree,
     if (iter)
         g_free (conv.row);
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': handle_click '%s': trigger=%s",
                 priv->name, b, fl));
     donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
@@ -16588,7 +16588,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     else if (event->button == 3)
         click |= DONNA_CLICK_RIGHT;
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': trigger click %d", priv->name, click));
 
     /* the focus thing only matters on the actual click (i.e. on press), so we
@@ -18494,7 +18494,7 @@ donna_tree_view_new (DonnaApp    *app,
 
     load_config (tree);
 
-    DONNA_DEBUG (TREEVIEW, priv->name,
+    DONNA_DEBUG (TREE_VIEW, priv->name,
             g_debug ("Treeview '%s': setting up as %s",
                 priv->name, (priv->is_tree) ? "tree" : "list"));
 
