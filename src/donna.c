@@ -2439,24 +2439,23 @@ load_mc (DonnaDonna *donna, const gchar *name, GPtrArray *nodes)
 
     get_int (i, "submenus", DONNA_ENABLED_TYPE_DISABLED);
     if (i == DONNA_ENABLED_TYPE_ENABLED || i == DONNA_ENABLED_TYPE_COMBINE)
-    {
         mc->submenus = i;
 
-        /* we could have made this option a list-flags, i.e. be exactly the
-         * value we want, but we wanted it to be similar to what's used in
-         * commands, where you say "all" not "item,container" (as would have
-         * been the case using flags) */
-        get_int (i, "children", 0);
-        if (i == 1)
-            mc->node_type = DONNA_NODE_ITEM;
-        else if (i == 2)
-            mc->node_type = DONNA_NODE_CONTAINER;
-        else /* if (i == 0) */
-            mc->node_type = DONNA_NODE_ITEM | DONNA_NODE_CONTAINER;
+    /* we could have made this option a list-flags, i.e. be exactly the
+     * value we want, but we wanted it to be similar to what's used in
+     * commands, where you say "all" not "item,container" (as would have
+     * been the case using flags) */
+    get_int (i, "children", 0);
+    if (i == 1)
+        mc->node_type = DONNA_NODE_ITEM;
+    else if (i == 2)
+        mc->node_type = DONNA_NODE_CONTAINER;
+    else /* if (i == 0) */
+        mc->node_type = DONNA_NODE_ITEM | DONNA_NODE_CONTAINER;
 
-        get_boolean (b, "children_show_hidden", TRUE);
-        mc->show_hidden = b;
-    }
+    get_boolean (b, "children_show_hidden", TRUE);
+    mc->show_hidden = b;
+
     get_boolean (b, "can_children_submenus", TRUE);
     mc->can_children_submenus = b;
     get_boolean (b, "can_children_menu", TRUE);
