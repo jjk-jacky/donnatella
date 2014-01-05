@@ -2134,9 +2134,9 @@ cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *s_set = args[2]; /* opt */
 
     const gchar *c_set[] = { "scroll", "focus", "cursor" };
-    DonnaTreeSet sets[] = { DONNA_TREE_SET_SCROLL, DONNA_TREE_SET_FOCUS,
-        DONNA_TREE_SET_CURSOR };
-    DonnaTreeSet set;
+    DonnaTreeViewSet sets[] = { DONNA_TREE_VIEW_SET_SCROLL,
+        DONNA_TREE_VIEW_SET_FOCUS, DONNA_TREE_VIEW_SET_CURSOR };
+    DonnaTreeViewSet set;
 
     /* we cannot differentiate between the level arg being set to 0, and not
      * specified. So, we assume not set and default to 1.
@@ -2181,12 +2181,12 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     gboolean to_focused = GPOINTER_TO_INT (args[6]); /* opt */
 
     const gchar *c_set[] = { "scroll", "focus", "cursor" };
-    DonnaTreeSet sets[] = { DONNA_TREE_SET_SCROLL, DONNA_TREE_SET_FOCUS,
-        DONNA_TREE_SET_CURSOR };
+    DonnaTreeViewSet sets[] = { DONNA_TREE_VIEW_SET_SCROLL,
+        DONNA_TREE_VIEW_SET_FOCUS, DONNA_TREE_VIEW_SET_CURSOR };
     const gchar *c_nb_type[] = { "repeat", "line", "percent" };
     DonnaTreeGoto nb_types[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
         DONNA_TREE_GOTO_PERCENT };
-    DonnaTreeSet set;
+    DonnaTreeViewSet set;
     const gchar *c_action[] = { "select", "unselect", "invert", "define" };
     DonnaSelAction actions[] = { DONNA_SEL_SELECT, DONNA_SEL_UNSELECT,
         DONNA_SEL_INVERT, DONNA_SEL_DEFINE };

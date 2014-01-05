@@ -143,10 +143,10 @@ typedef enum
 
 typedef enum
 {
-    DONNA_TREE_SET_SCROLL   = (1 << 0),
-    DONNA_TREE_SET_FOCUS    = (1 << 1),
-    DONNA_TREE_SET_CURSOR   = (1 << 2),
-} DonnaTreeSet;
+    DONNA_TREE_VIEW_SET_SCROLL   = (1 << 0),
+    DONNA_TREE_VIEW_SET_FOCUS    = (1 << 1),
+    DONNA_TREE_VIEW_SET_CURSOR   = (1 << 2),
+} DonnaTreeViewSet;
 
 typedef enum
 {
@@ -250,7 +250,7 @@ gboolean        donna_tree_view_filter_nodes    (DonnaTreeView      *tree,
                                                  const gchar        *filter_str,
                                                  GError            **error);
 gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
-                                                 DonnaTreeSet        set,
+                                                 DonnaTreeViewSet    set,
                                                  DonnaRowId         *rowid,
                                                  guint               nb,
                                                  DonnaTreeGoto       nb_type,
@@ -272,7 +272,7 @@ DonnaNode *     donna_tree_view_get_node_up     (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
                                                  gint                level,
-                                                 DonnaTreeSet        set,
+                                                 DonnaTreeViewSet    set,
                                                  GError            **error);
 GPtrArray *     donna_tree_view_context_get_nodes (
                                                  DonnaTreeView      *tree,

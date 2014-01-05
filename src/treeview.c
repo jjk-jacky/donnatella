@@ -440,7 +440,7 @@ struct _DonnaTreeViewPrivate
     gboolean                 auto_focus_sync;
     /* mode List */
     gboolean                 focusing_click;
-    DonnaTreeSet             goto_item_set;
+    DonnaTreeViewSet         goto_item_set;
     /* DonnaColumnType (line number) */
     gboolean                 ln_relative; /* relative number */
     gboolean                 ln_relative_focused; /* relative only when focused */
@@ -1127,15 +1127,15 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
         return FALSE;
 
     i = 0;
-    it_int[i].value     = DONNA_TREE_SET_SCROLL;
+    it_int[i].value     = DONNA_TREE_VIEW_SET_SCROLL;
     it_int[i].in_file   = "scroll";
     it_int[i].label     = "Scroll";
     ++i;
-    it_int[i].value     = DONNA_TREE_SET_FOCUS;
+    it_int[i].value     = DONNA_TREE_VIEW_SET_FOCUS;
     it_int[i].in_file   = "focus";
     it_int[i].label     = "Focus";
     ++i;
-    it_int[i].value     = DONNA_TREE_SET_CURSOR;
+    it_int[i].value     = DONNA_TREE_VIEW_SET_CURSOR;
     it_int[i].in_file   = "cursor";
     it_int[i].label     = "Cursor";
     ++i;
@@ -1714,7 +1714,7 @@ config_get_string (DonnaTreeView   *tree,
     config_get_boolean (t, c, "focusing_click", TRUE, f)
 #define cfg_get_goto_item_set(t,c,f) \
     CLAMP (config_get_int (t, c, "goto_item_set", \
-            DONNA_TREE_SET_SCROLL | DONNA_TREE_SET_FOCUS, f), 0, 7)
+            DONNA_TREE_VIEW_SET_SCROLL | DONNA_TREE_VIEW_SET_FOCUS, f), 0, 7)
 #define cfg_get_history_max(t,c,f) \
     config_get_int (t, c, "history_max", 100, f)
 #define cfg_get_key_mode(t,c,f) \
@@ -8075,7 +8075,7 @@ no_task:
 
             path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
 
-            if (priv->goto_item_set & DONNA_TREE_SET_SCROLL)
+            if (priv->goto_item_set & DONNA_TREE_VIEW_SET_SCROLL)
             {
                 if (changed_location)
                     scroll_to_iter (data->tree, &iter);
@@ -8084,12 +8084,12 @@ no_task:
                             path, NULL, FALSE, 0.0, 0.0);
             }
 
-            if (priv->goto_item_set & DONNA_TREE_SET_FOCUS)
+            if (priv->goto_item_set & DONNA_TREE_VIEW_SET_FOCUS)
                 gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
 
-            if (priv->goto_item_set & DONNA_TREE_SET_CURSOR)
+            if (priv->goto_item_set & DONNA_TREE_VIEW_SET_CURSOR)
             {
-                if (!(priv->goto_item_set & DONNA_TREE_SET_FOCUS))
+                if (!(priv->goto_item_set & DONNA_TREE_VIEW_SET_FOCUS))
                     gtk_tree_view_set_focused_row ((GtkTreeView *) data->tree, path);
                 gtk_tree_selection_select_path (
                         gtk_tree_view_get_selection ((GtkTreeView *) data->tree),
@@ -8098,7 +8098,7 @@ no_task:
 
             gtk_tree_path_free (path);
         }
-        if (!(priv->goto_item_set & DONNA_TREE_SET_SCROLL)
+        if (!(priv->goto_item_set & DONNA_TREE_VIEW_SET_SCROLL)
                 || it || iter.stamp == 0)
             /* scroll to top-left */
             gtk_tree_view_scroll_to_point ((GtkTreeView *) data->tree, 0, 0);
@@ -8247,7 +8247,7 @@ struct cl_go_up
     GDestroyNotify destroy;
 
     DonnaNode *node;
-    DonnaTreeSet set;
+    DonnaTreeViewSet set;
 };
 
 static inline gboolean
@@ -12547,7 +12547,7 @@ donna_tree_view_filter_nodes (DonnaTreeView *tree,
 
 gboolean
 donna_tree_view_goto_line (DonnaTreeView      *tree,
-                           DonnaTreeSet        set,
+                           DonnaTreeViewSet    set,
                            DonnaRowId         *rowid,
                            guint               nb,
                            DonnaTreeGoto       nb_type,
@@ -12743,7 +12743,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                 is_tb = 2;
 
             /* scroll only; or we're already there: let's go beyond */
-            if (set == DONNA_TREE_SET_SCROLL || is_tb == 2)
+            if (set == DONNA_TREE_VIEW_SET_SCROLL || is_tb == 2)
             {
                 if (!rows)
                 {
@@ -12834,18 +12834,18 @@ move:
             g_object_unref (r.node);
         }
 
-        if (set & DONNA_TREE_SET_FOCUS)
+        if (set & DONNA_TREE_VIEW_SET_FOCUS)
             gtk_tree_view_set_focused_row (treev, path);
-        if (set & DONNA_TREE_SET_CURSOR)
+        if (set & DONNA_TREE_VIEW_SET_CURSOR)
         {
-            if (!(set & DONNA_TREE_SET_FOCUS))
+            if (!(set & DONNA_TREE_VIEW_SET_FOCUS))
                     gtk_tree_view_set_focused_row (treev, path);
             gtk_tree_selection_select_path (
                     gtk_tree_view_get_selection (treev), path);
         }
     }
 
-    if (set & DONNA_TREE_SET_SCROLL)
+    if (set & DONNA_TREE_VIEW_SET_SCROLL)
     {
         /* get visible area, so we can determine if it is already visible */
         gtk_tree_view_get_visible_rect (treev, &rect_visible);
@@ -13685,13 +13685,13 @@ go_up_cb (DonnaTreeView *tree, struct cl_go_up *data)
 
         path = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, iter);
 
-        if (data->set & DONNA_TREE_SET_FOCUS)
+        if (data->set & DONNA_TREE_VIEW_SET_FOCUS)
             gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
-        if (data->set & DONNA_TREE_SET_SCROLL)
+        if (data->set & DONNA_TREE_VIEW_SET_SCROLL)
             scroll_to_iter (tree, iter);
-        if (data->set & DONNA_TREE_SET_CURSOR)
+        if (data->set & DONNA_TREE_VIEW_SET_CURSOR)
         {
-            if (!(data->set & DONNA_TREE_SET_FOCUS))
+            if (!(data->set & DONNA_TREE_VIEW_SET_FOCUS))
                     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
             gtk_tree_selection_select_path (
                     gtk_tree_view_get_selection ((GtkTreeView *) tree), path);
@@ -13705,7 +13705,7 @@ go_up_cb (DonnaTreeView *tree, struct cl_go_up *data)
 gboolean
 donna_tree_view_go_up (DonnaTreeView      *tree,
                        gint                level,
-                       DonnaTreeSet        set,
+                       DonnaTreeViewSet    set,
                        GError            **error)
 {
     GError *err = NULL;

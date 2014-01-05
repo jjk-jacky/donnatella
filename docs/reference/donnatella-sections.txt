@@ -1004,7 +1004,7 @@ DonnaTreeToggle
 DonnaTreeViewRefreshMode
 DonnaTreeVisual
 DonnaTreeVisualSource
-DonnaTreeSet
+DonnaTreeViewSet
 DonnaTreeGoto
 DonnaTreeviewOptionSaveLocation
 DonnaListFileElements
