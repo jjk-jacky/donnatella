@@ -1782,7 +1782,7 @@ real_option_cb (struct option_data *data)
             {
                 priv->node_types = val;
                 donna_tree_view_refresh (data->tree,
-                        DONNA_TREE_REFRESH_RELOAD, NULL);
+                        DONNA_TREE_VIEW_REFRESH_RELOAD, NULL);
             }
         }
         else if (streq (opt, "sort_groups"))
@@ -2837,8 +2837,8 @@ struct refresh_data
 };
 
 /* when doing a refresh, we ask every node on tree (or every visible node for
- * DONNA_TREE_REFRESH_VISIBLE) to refresh its set properties, and we then get
- * flooded by node-updated signals.
+ * DONNA_TREE_VIEW_REFRESH_VISIBLE) to refresh its set properties, and we then
+ * get flooded by node-updated signals.
  * In a tree w/ 800 rows/nodes, that's 800 * nb_props, so even with only 6
  * properties (name, size, time, uid, gid, mode) that's 4 800 callbacks, which
  * is a lot.
@@ -12326,7 +12326,7 @@ may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter)
 
 gboolean
 donna_tree_view_refresh (DonnaTreeView          *tree,
-                         DonnaTreeRefreshMode    mode,
+                         DonnaTreeViewRefreshMode mode,
                          GError                **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -12334,17 +12334,18 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     GtkTreeModel *model;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    g_return_val_if_fail (mode == DONNA_TREE_REFRESH_VISIBLE
-            || mode == DONNA_TREE_REFRESH_SIMPLE
-            || mode == DONNA_TREE_REFRESH_NORMAL
-            || mode == DONNA_TREE_REFRESH_RELOAD, FALSE);
+    g_return_val_if_fail (mode == DONNA_TREE_VIEW_REFRESH_VISIBLE
+            || mode == DONNA_TREE_VIEW_REFRESH_SIMPLE
+            || mode == DONNA_TREE_VIEW_REFRESH_NORMAL
+            || mode == DONNA_TREE_VIEW_REFRESH_RELOAD, FALSE);
     priv = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
     if (G_UNLIKELY (!priv->is_tree && !priv->location))
             return TRUE;
 
-    if (mode == DONNA_TREE_REFRESH_VISIBLE || mode == DONNA_TREE_REFRESH_SIMPLE)
+    if (mode == DONNA_TREE_VIEW_REFRESH_VISIBLE
+            || mode == DONNA_TREE_VIEW_REFRESH_SIMPLE)
     {
         struct refresh_data *data;
         GtkTreePath *start = NULL;
@@ -12356,7 +12357,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         if (donna_tree_model_get_count (model) == 0)
             return TRUE;
 
-        if (mode == DONNA_TREE_REFRESH_VISIBLE)
+        if (mode == DONNA_TREE_VIEW_REFRESH_VISIBLE)
         {
             if (!gtk_tree_view_get_visible_range (treev, &start, &end)
                     || !gtk_tree_model_get_iter (model, &it, start)
@@ -12375,7 +12376,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             gtk_tree_path_free (start);
             gtk_tree_path_free (end);
         }
-        else /* DONNA_TREE_REFRESH_SIMPLE */
+        else /* DONNA_TREE_VIEW_REFRESH_SIMPLE */
         {
             if (!gtk_tree_model_iter_children (model, &it, NULL))
             {
@@ -12424,7 +12425,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             donna_app_run_task (priv->app, task);
             g_object_unref (node);
             ++nb_real;
-        } while ((mode == DONNA_TREE_REFRESH_SIMPLE || !itereq (&it, &it_end))
+        } while ((mode == DONNA_TREE_VIEW_REFRESH_SIMPLE || !itereq (&it, &it_end))
                 && donna_tree_model_iter_next (model, &it));
 
         /* we might have to adjust the number we set, either because some task
@@ -12441,7 +12442,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
 
         return TRUE;
     }
-    else if (mode == DONNA_TREE_REFRESH_NORMAL)
+    else if (mode == DONNA_TREE_VIEW_REFRESH_NORMAL)
     {
         if (priv->is_tree)
         {
@@ -12498,7 +12499,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             return TRUE;
         }
     }
-    /* DONNA_TREE_REFRESH_RELOAD */
+    /* DONNA_TREE_VIEW_REFRESH_RELOAD */
 
     if (priv->is_tree)
     {
@@ -13171,7 +13172,7 @@ history_goto (DonnaTask *task, DonnaNode *node)
     if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
     {
         /* current location: refresh */
-        donna_tree_view_refresh (tree, DONNA_TREE_REFRESH_NORMAL, NULL);
+        donna_tree_view_refresh (tree, DONNA_TREE_VIEW_REFRESH_NORMAL, NULL);
         return DONNA_TASK_DONE;
     }
     direction = g_value_get_uint (&v);

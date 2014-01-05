@@ -116,11 +116,11 @@ typedef enum
 
 typedef enum
 {
-    DONNA_TREE_REFRESH_VISIBLE,
-    DONNA_TREE_REFRESH_SIMPLE,
-    DONNA_TREE_REFRESH_NORMAL,
-    DONNA_TREE_REFRESH_RELOAD
-} DonnaTreeRefreshMode;
+    DONNA_TREE_VIEW_REFRESH_VISIBLE,
+    DONNA_TREE_VIEW_REFRESH_SIMPLE,
+    DONNA_TREE_VIEW_REFRESH_NORMAL,
+    DONNA_TREE_VIEW_REFRESH_RELOAD
+} DonnaTreeViewRefreshMode;
 
 typedef enum
 {
@@ -243,7 +243,7 @@ gboolean        donna_tree_view_column_set_value(DonnaTreeView      *tree,
                                                  DonnaRowId         *rowid_ref,
                                                  GError            **error);
 gboolean        donna_tree_view_refresh         (DonnaTreeView      *tree,
-                                                 DonnaTreeRefreshMode mode,
+                                                 DonnaTreeViewRefreshMode mode,
                                                  GError             **error);
 gboolean        donna_tree_view_filter_nodes    (DonnaTreeView      *tree,
                                                  GPtrArray          *nodes,

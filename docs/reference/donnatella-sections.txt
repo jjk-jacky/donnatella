@@ -1001,7 +1001,7 @@ DonnaRowId
 DonnaRow
 DonnaSelAction
 DonnaTreeToggle
-DonnaTreeRefreshMode
+DonnaTreeViewRefreshMode
 DonnaTreeVisual
 DonnaTreeVisualSource
 DonnaTreeSet

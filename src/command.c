@@ -2558,9 +2558,9 @@ cmd_tree_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *mode = args[1];
 
     const gchar *choices[] = { "visible", "simple", "normal", "reload" };
-    DonnaTreeRefreshMode modes[] = { DONNA_TREE_REFRESH_VISIBLE,
-        DONNA_TREE_REFRESH_SIMPLE, DONNA_TREE_REFRESH_NORMAL,
-        DONNA_TREE_REFRESH_RELOAD };
+    DonnaTreeViewRefreshMode modes[] = { DONNA_TREE_VIEW_REFRESH_VISIBLE,
+        DONNA_TREE_VIEW_REFRESH_SIMPLE, DONNA_TREE_VIEW_REFRESH_NORMAL,
+        DONNA_TREE_VIEW_REFRESH_RELOAD };
     gint c;
 
     c = _get_choice (choices, mode);
