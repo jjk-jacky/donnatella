@@ -150,10 +150,10 @@ typedef enum
 
 typedef enum
 {
-    DONNA_TREE_GOTO_LINE,
-    DONNA_TREE_GOTO_REPEAT,
-    DONNA_TREE_GOTO_PERCENT,
-} DonnaTreeGoto;
+    DONNA_TREE_VIEW_GOTO_LINE,
+    DONNA_TREE_VIEW_GOTO_REPEAT,
+    DONNA_TREE_VIEW_GOTO_PERCENT,
+} DonnaTreeViewGoto;
 
 /* must be same as DonnaColumnOptionSaveLocation */
 typedef enum
@@ -253,7 +253,7 @@ gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
                                                  DonnaTreeViewSet    set,
                                                  DonnaRowId         *rowid,
                                                  guint               nb,
-                                                 DonnaTreeGoto       nb_type,
+                                                 DonnaTreeViewGoto   nb_type,
                                                  DonnaSelAction      action,
                                                  gboolean            to_focused,
                                                  GError            **error);

@@ -12550,7 +12550,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                            DonnaTreeViewSet    set,
                            DonnaRowId         *rowid,
                            guint               nb,
-                           DonnaTreeGoto       nb_type,
+                           DonnaTreeViewGoto   nb_type,
                            DonnaSelAction      action,
                            gboolean            to_focused,
                            GError            **error)
@@ -12573,7 +12573,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
     priv  = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
-    if (nb_type == DONNA_TREE_GOTO_PERCENT)
+    if (nb_type == DONNA_TREE_VIEW_GOTO_PERCENT)
     {
         gint height;
 
@@ -12612,10 +12612,10 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         nb = (guint) ((gdouble) rows * ((gdouble) nb / 100.0)) + 1;
 
         /* this can now be treated as LINE */
-        nb_type = DONNA_TREE_GOTO_LINE;
+        nb_type = DONNA_TREE_VIEW_GOTO_LINE;
     }
 
-    if (nb_type == DONNA_TREE_GOTO_LINE && nb > 0)
+    if (nb_type == DONNA_TREE_VIEW_GOTO_LINE && nb > 0)
     {
         if (!priv->is_tree)
         {
@@ -12702,7 +12702,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
         path = NULL;
     }
 
-    if (nb > 1 && nb_type == DONNA_TREE_GOTO_REPEAT)
+    if (nb > 1 && nb_type == DONNA_TREE_VIEW_GOTO_REPEAT)
     {
         /* only those make sense to be repeated */
         if (rowid->type != DONNA_ARG_TYPE_PATH
@@ -12851,7 +12851,7 @@ move:
         gtk_tree_view_get_visible_rect (treev, &rect_visible);
 
         gtk_tree_view_get_background_area (treev, path, NULL, &rect);
-        if (nb_type == DONNA_TREE_GOTO_LINE)
+        if (nb_type == DONNA_TREE_VIEW_GOTO_LINE)
         {
             /* when going to a specific line, let's center it */
             if (rect.y < 0 || rect.y > rect_visible.height - rect.height)

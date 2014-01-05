@@ -2184,8 +2184,8 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeViewSet sets[] = { DONNA_TREE_VIEW_SET_SCROLL,
         DONNA_TREE_VIEW_SET_FOCUS, DONNA_TREE_VIEW_SET_CURSOR };
     const gchar *c_nb_type[] = { "repeat", "line", "percent" };
-    DonnaTreeGoto nb_types[] = { DONNA_TREE_GOTO_REPEAT, DONNA_TREE_GOTO_LINE,
-        DONNA_TREE_GOTO_PERCENT };
+    DonnaTreeViewGoto nb_types[] = { DONNA_TREE_VIEW_GOTO_REPEAT,
+        DONNA_TREE_VIEW_GOTO_LINE, DONNA_TREE_VIEW_GOTO_PERCENT };
     DonnaTreeViewSet set;
     const gchar *c_action[] = { "select", "unselect", "invert", "define" };
     DonnaSelAction actions[] = { DONNA_SEL_SELECT, DONNA_SEL_UNSELECT,
