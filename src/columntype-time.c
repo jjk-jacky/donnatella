@@ -1205,6 +1205,11 @@ ct_time_edit (DonnaColumnType    *ct,
     g_object_set (w, "margin-top", 15, NULL);
     gtk_grid_attach (grid, w, 0, row, 4, 1);
 
+    w = gtk_button_new_with_label ("Set time");
+    gtk_button_set_image ((GtkButton *) w,
+            gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
+    g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
+    gtk_box_pack_end (box, w, FALSE, FALSE, 3);
     w = gtk_button_new_with_label ("Cancel");
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
@@ -1212,11 +1217,6 @@ ct_time_edit (DonnaColumnType    *ct,
             "icon-size", GTK_ICON_SIZE_MENU, NULL);
     g_signal_connect_swapped (w, "clicked",
             (GCallback) gtk_widget_destroy, win);
-    gtk_box_pack_end (box, w, FALSE, FALSE, 3);
-    w = gtk_button_new_with_label ("Set time");
-    gtk_button_set_image ((GtkButton *) w,
-            gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
-    g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
 
