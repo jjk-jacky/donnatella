@@ -11,6 +11,65 @@
 #include "util.h"
 #include "macros.h"
 
+/**
+ * SECTION:columntype-size
+ * @Short_description: To show a size.
+ *
+ * Column type to show a size.
+ *
+ * <refsect2 id="ct-size-options">
+ * <title>Options</title>
+ * <para>
+ * The following options are available :
+
+ * - <systemitem>property</systemitem> (string) : Name of the property to use.
+ *   Defaults to "size"
+ * - <systemitem>format</systemitem> (string) : A format string on how to show
+ *   the size. Defaults to "&percnt;R"
+ * - <systemitem>format_tooltip</systemitem> (string) : A format string like
+ *   <systemitem>format</systemitem> for the tooltip; Defaults to "&percnt;B"
+ * - <systemitem>digits</systemitem> (integer) : Must be a value between 0 and 2
+ *   (both included), the number of digits to show after the decimal point on
+ *   rounded sizes. Defaults to 1
+ * - <systemitem>long_unit</systemitem> (boolean) : Wheter to use long units
+ *   (e.g. "MiB") or not (e.g. "M") Defaults to false
+ *
+ * The following format specifiers are supported <systemitem>format</systemitem>
+ * and <systemitem>format_tooltip</systemitem>:
+ *
+ * - &percnt;r: Raw size, without any formatting (not even thousand separator)
+ * - &percnt;b: Size in bytes, much like &percnt;r only with a thousand
+ *   separator. (The actual character used depends on the LC_NUMERIC part of the
+ *   locale.)
+ * - &percnt;B: Like &percnt;b followed with the unit
+ * - &percnt;k: Size in KiB (w/ thousand separator)
+ * - &percnt;K: Like &percnt;k followed with the unit
+ * - &percnt;m: Size in MiB (w/ thousand separator)
+ * - &percnt;M: Like &percnt;m followed with the unit
+ * - &percnt;R: Size rounded up in the best fitting unit (with the unit obviously)
+ * - &percnt;&percnt;: The '&percnt;' character
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="ct-size-filtering">
+ * <title>Filtering</title>
+ * <para>
+ * You can filter by using the following format:
+ * [COMP] VALUE
+ *
+ * Where COMP can be one of the usuals: <, <=, =, >=, or > If none specified, it
+ * defaults to '='
+ *
+ * VALUE must be a number. When COMP is '=' then you can also follow it with a
+ * dash ('-') and another number, to specify a range, to match when the value
+ * compared is within the specified range.
+ *
+ * The numbers in VALUE can be suffixed with a unit character: B, K, M, G, or T.
+ * The number is then assumed to be a size in the given unit, and timed by 1024
+ * as many times as needed.
+ * </para></refsect2>
+ */
+
 enum
 {
     PROP_0,

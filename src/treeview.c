@@ -21,6 +21,200 @@
 #include "closures.h"
 #include "debug.h"
 
+/**
+ * SECTION:treeview
+ * @Short_description: The TreeView componement for trees and lists
+ *
+ * The treeview is the main GUI component of donna; It can be used as a tree, or
+ * as a list. Either way, it comes with advanced features you might not yet be
+ * familiar with (but might soon get addicted to).
+ *
+ * It should however be noted that quite a few of those were not possible to do
+ * using the treeview widget from GTK+ As such, they will only be available if
+ * you're using a patched version of GTK+3 which adds support for all of those,
+ * while remaining 100% compatible with GTK+3.
+ *
+ * <refsect2 id="tree-or-list">
+ * <title>Tree or List</title>
+ * <para>
+ * The first thing to do for a treeview, is set whether it should be a list or a
+ * tree. This is done via boolean option
+ * <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/is_tree</systemitem>.
+ *
+ * For example, to have treeview "foobar" be a tree, you'd set:
+ * <programlisting>
+ * [tree_views/foobar]
+ * is_tree=true
+ * </programlisting>
+ *
+ * This option is obviously required, and if missing it will default to
+ * <systemitem>false</systemitem>.
+ *
+ * Some of the other treeview options apply to both modes, while each mode has
+ * its own specific set of options.
+ * </para></refsect2>
+ *
+ * <refsect2 id="tree-and-list-options">
+ * <title>Tree and List options</title>
+ * <para>
+ * The following treeview options apply to both trees and lists, using the
+ * treeview option paths, as described in #option-paths.
+ *
+ * - <systemitem>show_hidden</systemitem> &lpar;boolean&rpar; : Whether or not
+ *   to show "hidden" files/folders, i.e.  beginning with a dot
+ * - <systemitem>node_types</systemitem> &lpar;integer:node-type&rpar; : Which
+ *   types of nodes to show: "items" &lpar;e.g.  files&rpar;, "containers"
+ *   &lpar;e.g. folders&rpar;, or "all" for both
+ * - <systemitem>sort_groups</systemitem> &lpar;integer:sg&rpar; : How to sort
+ *   containers: "first" to have them listed first when sorting ascendingly, and
+ *   last when sorting descendingly; "first-always" to have them always listed
+ *   first; or "mixed" to have them mixed with items
+ * - <systemitem>select_highlight</systemitem> &lpar;integer:highlight&rpar; :
+ *   How to draw rows that are selected; Note that this requires a patched GTK
+ *   to work.  "fullrow" for a full row highlight &lpar;GTK default&rpar;;
+ *   "column" for an highlight on the column &lpar;cell&rpar; only; "underline"
+ *   for a simple underline of the full row; or "column-underline" to combine
+ *   both the cell highlight and the full row underline.
+ * - <systemitem>key_mode</systemitem> &lpar;string&rpar; : Default key mode for
+ *   the treeview. See <link linkend="KeyModes">Key Modes</link> for more.
+ * - <systemitem>click_mode</systemitem> &lpar;string&rpar; : Click mode for the
+ *   treeview.  See <link linkend="ClickModes">Click Modes</link> for more.
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="how-gui-works">
+ * <title>Know (how) your GUI (works)</title>
+ * <para>
+ * As with most graphical file manager, donna's main window is composed of a few
+ * GUI elements, at the center of it a list, showing you the content of a
+ * folder. It usually comes along with a tree, where the folder
+ * structure/hierarchy of the file system is represented.
+ *
+ * In donna, both list and tree are done by the same component, a treeview.
+ * Obviously, though they have similarities, lists and trees are quite
+ * different in their behaviors. Option <systemitem>is_tree</systemitem> will
+ * determine which it is, and then list and tree share common options, as well as
+ * having their own.
+ *
+ * Either way, a treeview is made up of columns, columns being defined similarly
+ * first by their type - commonly referred to as columntype - then a mix of
+ * common (to all columns/column-types) and and type-specific options.
+ *
+ * Although tree views have options, those are only for "general"
+ * features/behaviors of the treeview, but you don't configure columns directly.
+ *
+ * Instead, donna uses arrangements. An arrangement defines which columns are
+ * features on the treeview, the main and secondary sort orders, column options as
+ * well as color filters.
+ * </para></refsect2>
+ *
+ * <refsect2 id="arrangements">
+ * <title>Arranging your columns</title>
+ * <para>
+ * Tree views, both as list and tree, uses arrangements. Arrangements are
+ * defined like regular treeview options, with an extra twist.
+ *
+ * First of all, what is found in an arrangement definition? It can contain the
+ * following:
+ * - columns; Option <systemitem>columns</systemitem> is a coma-separated list
+ *   of columns to load in the treeview. Option
+ *   <systemitem>main_column</systemitem> allows to set the main column, i.e.
+ *   used for the selection highlight effect (and expanders on trees).
+ * - sort order; Options <systemitem>sort_column</systemitem> and
+ *   <systemitem>sort_order</systemitem> define the (main) sort order
+ * - secondary sort order; Options <systemitem>second_sort_column</systemitem>,
+ *   <systemitem>second_sort_order</systemitem> and
+ *   <systemitem>second_sort_sticky</systemitem> define the secondary sort
+ *   order. If sticky, it means when the main sort order is set to the current
+ *   second sort order, the later remains set and will be "restored" back when
+ *   the main sort order is set elsewhere.
+ * - column options; Category <systemitem>column_options</systemitem> can
+ *   contain column options, which will be first in the option paths for column
+ *   options.
+ * - color filter; Category <systemitem>color_filters</systemitem> can contain
+ *   color filters.
+ *
+ * Each of those elements will be looked for and loaded into the current
+ * arrangement. Unless all elements have been loaded, loading continues for
+ * other arrangements down the option path.
+ *
+ * Note that color filters are special, in that even when loaded into the
+ * current arrangement, they will not be considered loaded when their option
+ * type was set to combine, to keep loading color filters.
+ *
+ * Trees simply load an arrangement on start, using the typical option path for
+ * treeview options:
+ * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/arrangement</systemitem>
+ * - <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/arrangement</systemitem>
+ *
+ * For lists however, there's a little more to it. First off, donna allows
+ * "dynamic arrangements" which must contain an option "mask" a pattern that,
+ * when matched against the list's current location, will be loaded.
+ *
+ * Those dynamic arrangements will be looked for using typical option path:
+ * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/arrangements</systemitem> (Note
+ *   that final 's')
+ * - <systemitem>defaults/lists/arrangements</systemitem> (Again,
+ *   plural)
+ *
+ * Each of those can have an option type set to either :
+ * - <systemitem>disabled</systemitem> to stop loading dynamic arrangements.
+ *   Loading will continue for "fixed" arrangements however.
+ * - <systemitem>enabled</systemitem> to load dynamic arrangements. In this
+ *   case, no other dynamic arrangements will be loaded (though "fixed" one are
+ *   still processed).
+ * - <systemitem>combine</systemitem> to load arrangements, but continue loading
+ *   dynamic arrangements if possible
+ * - <systemitem>ignore</systemitem> to simply ignore them (as if they didn't
+ *   exist) and look for the next ones
+ *
+ * If the current arrangement isn't complete (i.e. not all elements have been
+ * loaded yet) then the regular option paths are traversed as well (the
+ * so-called "fixed" arrangements).
+ *
+ * Note that, should the current arrangement have no columns set in the end, it
+ * would try and default to one column "name" in an attempt not to remain empty.
+ *
+ * Dynamic arrangements will allow you to have e.g. different columns based on
+ * the current domain, or have different columns in certain locations; You can
+ * also simply change column options based on the current location, e.g. have
+ * one default format used to show the modified date, and another one used only
+ * in a (few) selected location(s); Or simply set some different sort orders for
+ * some locations.
+ * </para></refsect2>
+ *
+ * <refsect2 id="define-columns">
+ * <title>Defining your columns</title>
+ * <para>
+ * The arrangement will define the list of columns to be featured in the
+ * treeview.  Columns are defined first by their type, from option
+ * <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;/type</systemitem>
+ *
+ * Then, a mix of general and type-specific column options are available. The
+ * option paths for those options are:
+ * - <systemitem>&lt;ARRANGEMENT&gt;/columns_options/&lt;COLUMN-NAME&gt;</systemitem>
+ * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/columns/&lt;COLUMN-NAME&gt;</systemitem>
+ * - <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;</systemitem>
+ * - <systemitem>defaults/&lt;DEFAULT&gt;</systemitem>
+ *
+ * Obviously the first one is optional, since current arrangement might not
+ * feature columns options. The later is as well, as certain options might have
+ * a default path (e.g. for date format,
+ * <systemitem>defaults/date/format</systemitem>) while others may not.
+ *
+ * Generic options, common to all column types, are:
+ * - <systemitem>width</systemitem> (integer) : Width of the column
+ * - <systemitem>title</systemitem> (string) : Title of the column (shown in
+ *   column header)
+ * - <systemitem>desc_first</systemitem> (boolean) : When sorting on this
+ *   column, whether to default to descending (true) or ascending (false).
+ *   Default value depends on the columntype
+ *
+ * Other options depend on their column types, each having its own options (or
+ * none). See #DonnaColumnType.description
+ * </para></refsect2>
+ */
+
 enum
 {
     PROP_0,

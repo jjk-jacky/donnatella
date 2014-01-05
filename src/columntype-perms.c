@@ -16,6 +16,101 @@
 #include "macros.h"
 #include "debug.h"
 
+/**
+ * SECTION:columntype-perms
+ * @Short_description: To show user, group and/or permissions.
+ *
+ * Column type to show user, group and/or permissions.
+ *
+ * <refsect2 id="ct-perms-options">
+ * <title>Options</title>
+ * <para>
+ * The following options are available :
+ *
+ * - <systemitem>format</systemitem> (string) : A format string defining what to
+ *   show and how. Defaults to "&percnt;S"
+ * - <systemitem>format_tooltip</systemitem> (string) : Same as format only for
+ *   the tooltip.
+ * - <systemitem>color_user</systemitem> (string) : Color used on user name
+ *   (&percnt;V) and in &percnt;S
+ * - <systemitem>color_group</systemitem> (string) : Color used on group name
+ *   (&percnt;H) and in &percnt;S
+ * - <systemitem>color_mixed</systemitem> (string) : Color used in &percnt;S
+ * - <systemitem>sort</systemitem> (integer:perms) : Which criteria to sort by
+ *   when sorting on the column.
+ *   Can be one of "perms", "self", "uid", "user", "gid", and "group"
+ *
+ * The following format specifiers are supported in
+ * <systemitem>format</systemitem> and <systemitem>format_tooltip</systemitem>:
+ *
+ * - &percnt;p: Permissions, as classic "rwxrwxrwx" string
+ * - &percnt;s: Permissions owned ("self"), as "rwx" string. A letter indicates
+ *   you have the permission (e.g. to read, regardless of where from), a dash
+ *   that you don't.
+ * - &percnt;S: Similar as above, but with colors. There will always be the
+ *   three letters, lowercase when you don't have the permission, uppercase when
+ *   you do. In addition, the color indicates why you have the permission, or
+ *   what would be needed to have it (that is, the first/lower requirement) :
+ *
+ *   In <systemitem>color_user</systemitem> if you have the permission because
+ *   you're the owner (and), or if only owner has the permission.
+ *
+ *   In <systemitem>color_group</systemitem> if you have the permission because
+ *   you're member of the group, or if you'd need to be in the group to have it
+ *   (Note that owner might also have it).
+ *
+ *   In <systemitem>color_mixed</systemitem> if you have the permission as
+ *   owner, but the group also has it (i.e. you're not a member).
+ * - &percnt;u : User ID
+ * - &percnt;U : User name
+ * - &percnt;V : Same as &percnt;U but with colors. It will be in
+ *   <systemitem>color_user</systemitem> when it is you.
+ * - &percnt;g : Group ID
+ * - &percnt;G : Group name
+ * - &percnt;H : Same as &percnt;G but with colors. It will be in
+ *   <systemitem>color_group</systemitem> when you are in the group.
+ * - &percnt;o : Permissions as octal number
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="ct-perms-filtering">
+ * <title>Filtering</title>
+ * <para>
+ * You can filter by using the following format:
+ * [UNIT] [COMP] VALUE
+ *
+ * Where UNIT can be one of the following:
+ * - u: user id
+ * - U: user name
+ * - g: group id
+ * - G: group name
+ * - p: permissions
+ * - s: "self" (permissions owned)
+ *
+ * Defaults to 'p' if none specified.
+ *
+ * If UNIT is one of 'u', 'U', 'g' or 'G' then it must only be followed by VALUE
+ * (no COMP), the user/group id/name.
+ *
+ * If UNIT is one of 'p' or 's', then COMP can be either '=' (equals), '-'
+ * (requires) or '/' (any); And VALUE must represent permissions. This is
+ * inspired by the syntax of find(1).
+ *
+ * If UNIT is 'p' then VALUE can be either a octal number (e.g. 644), or a
+ * coma-separated list of 'u', 'g', 'o' or 'a', followed by '=' or '+', then one
+ * or more of 'r', 'w' and 'x'.
+ * For example, the following do the same: "p-644" and "p-u=rw,g=r,o=r"
+ *
+ * If UNIT is 's' then VALUE can be either a single octal number (e.g. 5), or
+ * one or more of 'r', 'w' and 'x'.
+ * For example, the following do the same: "s/rw" and "s/6"
+ *
+ * As you probably guessed, it will match if the node either has the exact
+ * specified permissions ('='), if any of the specified permissions are present
+ * ('/'), or if at least all the specifed permissions are present ('-').
+ * </para></refsect2>
+ */
+
 #define SET_PERMS   (1 << 0)
 #define SET_UID     (1 << 1)
 #define SET_GID     (1 << 2)

@@ -10,6 +10,43 @@
 #include "sort.h"
 #include "macros.h"
 
+/**
+ * SECTION: columntype-text
+ * @Short_description: To show the value of a text property.
+ *
+ * Column type to show the value of a text property.
+ *
+ * <refsect2 id="ct-text-options">
+ * <title>Options</title>
+ * <para>
+ * The following options are available :
+ *
+ * - <systemitem>property</systemitem> (string) : Name of the property to show;
+ *   Defaults to "name"
+ * - <systemitem>natural_order</systemitem> (boolean) : Whether to use natural
+ *   order (1, 2, 11) or not.
+ * - <systemitem>dot_first</systemitem> (boolean) : Whether to put "dot files"
+ *   (i.e. nodes with a dot as first character in their names) first or not.
+ *   Note that even with this option disabled, they might be sorted first - or
+ *   before non-dotted names at least - by the sort algorithm.
+ * - <systemitem>dot_mixed</systemitem> (boolean) : Alongside dot_first set to
+ *   false, this will have dot files mixed in, i.e. ignoring the dot when
+ *   sorting.
+ * - <systemitem>case_sensitive</systemitem> (boolean) : Whether to be case
+ *   sensitive or not.
+ * - <systemitem>ignore_spunct</systemitem> (boolean) : Whether to ignore space
+ *   and punctuation/symbol characters or not. (Much like
+ *   <systemitem>dot_mixed</systemitem> ignores dots.)
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="ct-text-filtering">
+ * <title>Filtering</title>
+ * <para>
+ * You can use patterns, which will be matched against the property's value.
+ * </para></refsect2>
+ */
+
 enum
 {
     PROP_0,

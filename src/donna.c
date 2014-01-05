@@ -43,6 +43,176 @@
 #include "util.h"
 #include "macros.h"
 
+/**
+ * SECTION:donna
+ * @Short_Description: Overview of your file manager: donnatella
+ *
+ * donnatella - donna for short - is a free, open-source GUI file manager for
+ * GNU/Linux systems.
+ *
+ * <refsect2 id="installation">
+ * <title>Installation: a patched GTK+3 for full GUI power</title>
+ * <para>
+ * donna is built upon GTK+3 and the underlying GLib/GIO libraries. However,
+ * because some of the features of donna were not doable using GTK+ as it is,
+ * especially when it comes to the treeview, a patchset is available.
+ *
+ * This set of patches for GTK+ will fix some bugs & add extra features, all the
+ * while remaining 100% compatible with GTK+3. You can safely compile your
+ * patched GTK+ and install it, replacing the vanilla GTK+.  It won't change
+ * anything for other applications (unless they were victims of the few fixed
+ * bugs), but will unleash the full power of donnatella.
+ *
+ * Obviously it would be better if this wasn't necessary, and I'd like to see
+ * all patches merged upstream. This is a work in process, but unfortunately
+ * upstream doesn't seem too eager to review those patches (Seems they don't
+ * have much love for the treeview, because client-side decorations are so much
+ * more useful... :p).
+ * </para></refsect2>
+ *
+ * <refsect2 id="start">
+ * <title>Start</title>
+ * <para>
+ * On start, donna will load its configuration (and possibly other data) from
+ * its configuration directory, which is
+ * <filename>$XDG_CONFIG_HOME/donnatella</filename> (and will default to
+ * <filename>~/.config/donnatella</filename>).
+ *
+ * If you need to you can specify another directory to be used, using
+ * command-line option <systemitem>--config-dir</systemitem>
+ * </para></refsect2>
+ *
+ * <refsect2 id="concept">
+ * <title>Concept</title>
+ * <para>
+ * Usually, a file manager shows you the files & directories of your file
+ * system. Things are a little different in donna, though, as it uses a layer of
+ * abstraction.
+ *
+ * Instead, donna is all about nodes (items & containers) of a domain. A domain
+ * might be "fs" (which stands for file system), where nodes will be the files
+ * (items) and directories (containers) as expected.
+ *
+ * But using this concept will allow donna to easily show other things exactly
+ * the same way. That is, it will be used to show the content of "virtual
+ * folders" or list search results; It also allows to show nodes that aren't
+ * files or directories, like the categories & options of the configuration, or
+ * provide interface to other features of donna, e.g. registers or marks.
+ * </para></refsect2>
+ *
+ * <refsect2 id="features">
+ * <title>Features</title>
+ * <para>
+ * <refsect3 id="layout">
+ * <title>Layout: Single pane, dual pane, hexapane...</title>
+ * <para>
+ * donna is made so you can fully customize it to your needs & improve your
+ * workflow as best possible. By default, you will have a tree on the left, and
+ * a list on the right. Simple, standard, efficient setup.
+ *
+ * However, you might want something different: no tree; a dual pane with one
+ * tree and two lists, or one tree for each lists; maybe you want 4 panes, or
+ * more?
+ *
+ * The actual layout of donna's window is entirely configurable. You can in fact
+ * create as many layouts as you need. A layout is define under section
+ * <systemitem>[layouts]</systemitem> in the configuration file
+ * (<filename>donnatella.conf</filename>).
+ *
+ * The basic rule in donna is that most GUI component will have a name: each
+ * treeview, each toolbar, etc will have a unique name to identify it. The main
+ * window can only hold one single element.
+ *
+ * Worry not, there is a trick: special elements are available:
+ *
+ * - boxH() & boxV() : those aren't actually visible, but will allow to pack
+ *   more than one component together. The former will put them next to each
+ *   other horizontally, the later vertically.  Inside boxes should be a
+ *   coma-separated list of children elements. You can add as many elements as
+ *   you wish inside a box.
+ * - paneH() & paneV() : those are quite similar to boxes, only they can and
+ *   must contain only 2 children. There will also be possibility to resize both
+ *   children by dragging a splitter put between the two.  Inside panes should
+ *   always be a coma-separated list of two elements, though they are no
+ *   restrictions as to which elements those are (i.e. you can put boxes or
+ *   panes inside panes).  You can prefix one element with a '!' to indicate
+ *   that it should be "fixed," meaning that when the window is resized it
+ *   shouldn't (as much as possible) be automatically resized.  The first
+ *   element can also be suffixed with the '@' symbol and a size, this will be
+ *   the initial size/position of the splitter between the two children.
+ *
+ * And of course, there are actual GUI compenents. Those should always be
+ * followed by a colon and the name of the component. This will be used to
+ * identify it within donna, starting with loading its configuration.
+ *
+ * The following GUI compenents are available:
+ *
+ * - <systemitem>treeview</systemitem> : this is the main component in
+ *   donnatella. A treeview will either be a list (by default) or a tree, using
+ *   its boolean option <systemitem>is_tree</systemitem>.
+ *
+ * You can now create the layout you want for donna. For example, to make a
+ * dual-pane with one tree on the left, and two lists on the right, you could
+ * use:
+ *
+ * <programlisting>
+ * [layouts]
+ * dualpane=paneH(!treeview:tree@230,paneV(treeview:listTop,treeview:listBtm))
+ * </programlisting>
+ *
+ * Once your layout set, you simply need to tell donna to load it up on start,
+ * which is done by setting its name under option donna/layout, e.g:
+ *
+ * <programlisting>
+ * [donna]
+ * layout=dualpane
+ * </programlisting>
+ *
+ * Voilà!
+ *
+ * The default configuration actually comes with a few layouts you can try, or
+ * use as examples in order to create your very own.
+ *
+ * It is also possible to define which layout should be used from the command
+ * line, thus "overriding" option donna/layout, using
+ * <systemitem>--layout</systemitem>
+ * Note that it is, however, not possible to change layout while donna is
+ * running.
+ *
+ * A couple other options are available regarding the main window, all going
+ * under the same section <systemitem>[donna]</systemitem> :
+ *
+ * - <systemitem>width</systemitem> & <systemitem>height</systemitem> : to
+ *   define the initial size of the main window
+ * - <systemitem>maximized</systemitem> : A boolean, set to true to have the
+ *   window maximized on start.
+ *   In that case, the width & height will be used when unmaximizing the window.
+ * - <systemitem>active_list</systemitem> : must be the name of a treeview in
+ *   mode list, to be the active-list. If not set, the first list created will
+ *   be the active-list.
+ *
+ * </para></refsect3>
+ *
+ * <refsect3 id="configuration">
+ * <title>Configuration</title>
+ * <para>
+ * donna's configuration is loaded from a single text file, and then handled via
+ * the configuration manager, which is also providing domain "config" as an
+ * interface. See #DonnaProviderConfig.description
+ * </para></refsect3>
+ *
+ * <refsect3 id="treeviews">
+ * <title>Advanced Treeviews</title>
+ * <para>
+ * As you could expect, the main GUI component of donna is the treeview,
+ * especially since it will handle both trees & lists.
+ *
+ * See #DonnaTreeView.description for more about all the many unique options/features both
+ * trees & lists offer.
+ * </para></refsect3>
+ * </para></refsect2>
+ */
+
 enum
 {
     PROP_0,

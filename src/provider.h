@@ -63,6 +63,7 @@ typedef enum
 
 /**
  * DonnaProviderInterface:
+ * @parent: Parent type
  * @new_node: Signal #DonnaProvider::new-node
  * @node_updated: Signal #DonnaProvider::node-updated
  * @node_deleted: Signal #DonnaProvider::node-deleted

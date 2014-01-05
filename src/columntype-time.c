@@ -12,6 +12,104 @@
 #include "util.h"
 #include "macros.h"
 
+/**
+ * SECTION: columntype-time
+ * @Short_description: To show a date/time from a property containing a
+ * timestamp.
+ *
+ * Column type to show a date/time from a property containing a timestamp.
+ *
+ * <refsect2 id="ct-time-options">
+ * <title>Options</title>
+ * <para>
+ * The following options are available :
+ *
+ * - <systemitem>property</systemitem> (string) : Name of the property to use.
+ *   Defaults to "mtime"
+ * - <systemitem>format</systemitem> (string) : A format string on how to show
+ *   the date/time. Defaults to "&percnt;O"
+ * - <systemitem>age_span_seconds</systemitem> (integer) : Number of seconds for
+ *   &percnt;O If the timestamp is within this span, the age will be used, else
+ *   <systemitem>age_fallback_format</systemitem> will be used; Defaults to
+ *   7*24*3600 (7 days)
+ * - <systemitem>age_fallback_format</systemitem> (string) : Format (using
+ *   similar syntax as "format" only without &percnt;o/&percnt;O obviously) that
+ *   will be used if not in the <systemitem>age_span_seconds</systemitem>;
+ *   Defaults to "&percnt;F &percnt;T"
+
+ * Then another batch of the same options - suffixed with "_tooltip" - for the
+ * tooltip:
+ *
+ * - <systemitem>property_tooltip</systemitem>; Defaults to "mtime"
+ * - <systemitem>format_tooltip</systemitem>; Defaults to "&percnt;c"
+ * - <systemitem>age_span_seconds_tooltip</systemitem>; Defaults to 7*24*3600 (7
+ *   days)
+ * - <systemitem>age_fallback_format_tooltip</systemitem>; Defaults to
+ *   "&percnt;F &percnt;T"
+ *
+ * See g_date_time_format() for the supported format specifiers in
+ * <systemitem>format</systemitem> and <systemitem>format_tooltip</systemitem>.
+ * Additionally, donna adds two extra format specifiers:
+ *
+ * - &percnt;o: the "age." It will show how much time has passed since the
+ *   timestamp (or is left, should it be in the future). E.g: "1h 23m ago"
+ * - &percnt;O: Same as &percnt;o only with a fallback format.
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="ct-time-filtering">
+ * <title>Filtering</title>
+ * <para>
+ * You can filter by using the following format:
+ * [UNIT] [COMP] VALUE
+ *
+ * Where COMP can be one of the usuals: <, <=, =, >=, or > If none specified, it
+ * defaults to '='
+ *
+ * And UNIT defines which part of the date/time will be compared; It must be one
+ * of the following:
+ *
+ * - Y : year
+ * - m : month
+ * - V : week
+ * - d : day
+ * - H : hour
+ * - M : minute
+ * - S : second
+ * - D : full date
+ * - j : day of the year
+ * - u : day of the week (1-7 for Mon-Sun)
+ * - w : day of the week (0-6 for Sun-Sat)
+ * - A : age
+ *
+ * If none specified, it defaults to 'D'
+ *
+ * If UNIT is 'D' then VALUE should be a date, formatted YYYY-MM-DD[ HH:MM[:SS]]
+ * If COMP is '=' then you can also follow it with a dash ('-') and another
+ * date, using similar format, to indicate a range. It will then match if the
+ * property is of a date/time within the given range.
+ *
+ * For all other units, VALUE must be a number. If UNIT is 'A' then the number
+ * can be followed by another unit of Y, m, V, d, H, M, or S. If none is
+ * specified, defaults to 'd'
+ *
+ * As with UNIT 'D' (except with UNIT 'A') when COMP is '=' then you can also
+ * specify a range as VALUE, to match when the value compared is within the
+ * specified range.
+ *
+ * Note that for days of the week ('u' and 'w') the order matters, so you can
+ * use ranges like 6-1 to mean (with 'w') from Saturday to Monday (Sat, Sun,
+ * Mon).
+ *
+ * This should be pretty obvious what can be done. There is one special case
+ * worth mentioning, when comparing by age ('A') using '=' : in that case, "0d"
+ * will mean today, "2V" two weeks ago, and so on.
+ * So for instance, "A0d" will match if the timestamp is from today, and "A=2V"
+ * will match if the timestamp is from the week from 2 weeks ago (as in, any
+ * time during that week).
+ * </para></refsect2>
+ */
+
 enum
 {
     PROP_0,

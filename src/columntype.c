@@ -8,6 +8,35 @@
 #include "util.h"
 #include "macros.h"
 
+/**
+ * SECTION:columntype
+ * @Short_description: A column type is the "engine" of a column
+ *
+ * Tree views use columns to show information about nodes. A column is first
+ * defined by its columntype, through option
+ * <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;</systemitem>
+ *
+ * A column type is what defines the behavior of the column: what it will show
+ * and how, it also handles sorting by that column or the filtering capabilities
+ * of the column.
+ *
+ * In addition, in their context menus tree views will offer an alias
+ * <systemitem>column.&lt;COLUMN-NAME&gt;.options</systemitem> which is resolved
+ * by the column type, which can also offer items that will be available under
+ * <systemitem>column.&lt;COLUMN-NAME&gt;.&lt;ITEM&gt;</systemitem>
+ * As a rule, column types will provide items for their options.
+ *
+ * Available column types are:
+ * - "name" : See #DonnaColumnTypeName.description
+ * - "time" : See #DonnaColumnTypeTime.description
+ * - "size" : See #DonnaColumnTypeSize.description
+ * - "perms" : See #DonnaColumnTypePerms.description
+ * - "text" : See #DonnaColumnTypeText.description
+ * - "value" : See #DonnaColumnTypeValue.description
+ * - "progress" : See #DonnaColumnTypeProgress.description
+ * - "label" : See #DonnaColumnTypeLabel.description
+ */
+
 /* internal; used by treeview.c */
 DonnaColumnOptionSaveLocation
 _donna_column_type_ask_save_location (DonnaApp     *app,
@@ -1131,7 +1160,8 @@ donna_column_type_get_context_item_info (DonnaColumnType   *ct,
             info, error);
 }
 
-/** donna_columntype_new_floating_window:
+/**
+ * donna_column_type_new_floating_window:
  * @tree: #DonnaTreeView where the column is
  * @destroy_on_sel_changed: Whether to destroy the window on selection change
  *

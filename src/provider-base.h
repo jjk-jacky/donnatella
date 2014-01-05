@@ -30,6 +30,7 @@ struct _DonnaProviderBase
 
 /**
  * DonnaProviderBaseClass:
+ * @parent: Parent class
  * @task_visibility: Define the different visibility for #DonnaTask<!-- -->s that
  * will be created
  * @lock_nodes: Call this to lock the hashmap of nodes. Must always be paired

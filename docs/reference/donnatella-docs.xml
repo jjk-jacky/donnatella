@@ -15,47 +15,24 @@
   </bookinfo>
 
   <part id="user">
-      <title>Manual</title>
+      <title>Donnatella</title>
       <chapter id="overview">
           <title>Overview</title>
-          <xi:include href="intro.sgml"/>
-      </chapter>
-      <chapter id="configuration">
-          <title>Configuration</title>
-          <xi:include href="config.sgml"/>
+          <xi:include href="xml/donna.xml"/>
+          <xi:include href="xml/treeview.xml"/>
           <xi:include href="xml/commands.xml"/>
       </chapter>
-  </part>
-
-  <part id="dev">
-      <title>Donnatella</title>
-      <chapter id="donnatella">
-          <title>Donnatella</title>
-          <xi:include href="xml/app.xml"/>
-          <xi:include href="xml/cellrenderertext.xml"/>
-          <xi:include href="xml/closures.xml"/>
-          <xi:include href="xml/colorfilter.xml"/>
-          <xi:include href="xml/common.xml"/>
-          <xi:include href="xml/contextmenu.xml"/>
-          <xi:include href="xml/debug.xml"/>
-          <xi:include href="xml/donna.xml"/>
-          <xi:include href="xml/filter.xml"/>
-          <xi:include href="xml/history.xml"/>
-          <xi:include href="xml/imagemenuitem.xml"/>
-          <xi:include href="xml/macros.xml"/>
-          <xi:include href="xml/node.xml"/>
-          <xi:include href="xml/renderer.xml"/>
-          <xi:include href="xml/sort.xml"/>
-          <xi:include href="xml/statusbar.xml"/>
-          <xi:include href="xml/statusprovider.xml"/>
-          <xi:include href="xml/task.xml"/>
-          <xi:include href="xml/task-helpers.xml"/>
-          <xi:include href="xml/task-process.xml"/>
-          <xi:include href="xml/taskui.xml"/>
-          <xi:include href="xml/taskui-messages.xml"/>
-          <xi:include href="xml/treestore.xml"/>
-          <xi:include href="xml/treeview.xml"/>
-          <xi:include href="xml/util.xml"/>
+      <chapter id="columntypes">
+          <title>Column Types</title>
+          <xi:include href="xml/columntype.xml"/>
+          <xi:include href="xml/columntype-label.xml"/>
+          <xi:include href="xml/columntype-name.xml"/>
+          <xi:include href="xml/columntype-perms.xml"/>
+          <xi:include href="xml/columntype-progress.xml"/>
+          <xi:include href="xml/columntype-size.xml"/>
+          <xi:include href="xml/columntype-text.xml"/>
+          <xi:include href="xml/columntype-time.xml"/>
+          <xi:include href="xml/columntype-value.xml"/>
       </chapter>
       <chapter id="providers">
           <title>Providers</title>
@@ -71,17 +48,35 @@
           <xi:include href="xml/provider-register.xml"/>
           <xi:include href="xml/provider-task.xml"/>
       </chapter>
-      <chapter id="columntypes">
-          <title>Column Types</title>
-          <xi:include href="xml/columntype.xml"/>
-          <xi:include href="xml/columntype-label.xml"/>
-          <xi:include href="xml/columntype-name.xml"/>
-          <xi:include href="xml/columntype-perms.xml"/>
-          <xi:include href="xml/columntype-progress.xml"/>
-          <xi:include href="xml/columntype-size.xml"/>
-          <xi:include href="xml/columntype-text.xml"/>
-          <xi:include href="xml/columntype-time.xml"/>
-          <xi:include href="xml/columntype-value.xml"/>
+  </part>
+
+  <part id="dev">
+      <title>Internals</title>
+      <chapter id="internals">
+          <title>Donnatella</title>
+          <xi:include href="xml/app.xml"/>
+          <xi:include href="xml/cellrenderertext.xml"/>
+          <xi:include href="xml/closures.xml"/>
+          <xi:include href="xml/colorfilter.xml"/>
+          <xi:include href="xml/common.xml"/>
+          <xi:include href="xml/contextmenu.xml"/>
+          <xi:include href="xml/debug.xml"/>
+          <xi:include href="xml/filter.xml"/>
+          <xi:include href="xml/history.xml"/>
+          <xi:include href="xml/imagemenuitem.xml"/>
+          <xi:include href="xml/macros.xml"/>
+          <xi:include href="xml/node.xml"/>
+          <xi:include href="xml/renderer.xml"/>
+          <xi:include href="xml/sort.xml"/>
+          <xi:include href="xml/statusbar.xml"/>
+          <xi:include href="xml/statusprovider.xml"/>
+          <xi:include href="xml/task.xml"/>
+          <xi:include href="xml/task-helpers.xml"/>
+          <xi:include href="xml/task-process.xml"/>
+          <xi:include href="xml/taskui.xml"/>
+          <xi:include href="xml/taskui-messages.xml"/>
+          <xi:include href="xml/treestore.xml"/>
+          <xi:include href="xml/util.xml"/>
       </chapter>
       <chapter id="object-tree">
           <title>Object Hierarchy</title>

@@ -9,6 +9,35 @@
 #include "sort.h"
 #include "macros.h"
 
+/**
+ * SECTION:columntype-value
+ * @Short_description: To show the type or value of an option.
+ *
+ * Column type to show the type or value of an option (from configuration). Note
+ * that while firstly intended for the configuration, it can actually show the
+ * value of any property on the node.
+ *
+ * <refsect2 id="ct-value-options">
+ * <title>Options</title>
+ * <para>
+ * The following options are available :
+ *
+ * - <systemitem>show_type</systemitem> (boolean) : Whether to show the type or
+ *   value of the option; Defaults to false
+ * - <systemitem>property_value</systemitem> (string) : Name of the property
+ *   holding the value; Defaults to "option-value"
+ * - <systemitem>property_extra</systemitem> (string) : Name of the property
+ *   holding the name of the extra; Defaults to "option-extra"
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="ct-value-filtering">
+ * <title>Filtering</title>
+ * <para>
+ * There are no filtering possible on column of this type.
+ * </para></refsect2>
+ */
+
 enum
 {
     PROP_0,
