@@ -2156,16 +2156,16 @@ provider_register_trigger_node (DonnaProviderBase  *_provider,
 
     if (streq (action, "cut") || streq (action, "copy"))
         s = g_strdup_printf (
-                "command:register_set (%s, %s, @tree_get_nodes (:active, :selected))",
+                "command:register_set (%s, %s, @tv_get_nodes (:active, :selected))",
                 name, action);
     else if (streq (action, "append"))
         s = g_strdup_printf (
-                "command:register_add_nodes (%s, @tree_get_nodes (:active, :selected))",
+                "command:register_add_nodes (%s, @tv_get_nodes (:active, :selected))",
                 name);
     else if (streq (action, "paste") || streq (action, "paste_copy")
             || streq (action, "paste_move") || streq (action, "paste_new_folder"))
         s = g_strdup_printf (
-                "command:register_nodes_io (%s, %s, @tree_get_location (:active), %d)",
+                "command:register_nodes_io (%s, %s, @tv_get_location (:active), %d)",
                 name,
                 (streq (action, "paste_copy")) ? "copy"
                  : (streq (action, "paste_move")) ? "move" : "auto",

@@ -1669,7 +1669,7 @@ cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     DonnaTreeView *tree = args[0];
 
@@ -1678,7 +1678,7 @@ cmd_tree_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1694,7 +1694,7 @@ cmd_tree_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err= NULL;
     DonnaTreeView *tree = args[0];
@@ -1709,7 +1709,7 @@ cmd_tree_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1726,7 +1726,7 @@ cmd_tree_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1776,7 +1776,7 @@ cmd_tree_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1797,7 +1797,7 @@ cmd_tree_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1824,7 +1824,7 @@ cmd_tree_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1845,7 +1845,7 @@ cmd_tree_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1861,7 +1861,7 @@ cmd_tree_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1877,7 +1877,7 @@ cmd_tree_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     DonnaTreeView *tree = args[0];
 
@@ -1896,7 +1896,7 @@ cmd_tree_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1920,7 +1920,7 @@ cmd_tree_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -1946,7 +1946,7 @@ cmd_tree_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2005,7 +2005,7 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2020,7 +2020,7 @@ cmd_tree_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
     node = donna_tree_view_get_node_down (tree, level, &err);
     if (!node)
     {
-        g_prefix_error (&err, "Command 'tree_get_node_down': ");
+        g_prefix_error (&err, "Command 'tv_get_node_down': ");
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
@@ -2034,7 +2034,7 @@ cmd_tree_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2053,7 +2053,7 @@ cmd_tree_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2064,7 +2064,7 @@ cmd_tree_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
     node = donna_tree_view_get_node_root (tree, &err);
     if (!node)
     {
-        g_prefix_error (&err, "Command 'tree_get_node_root': ");
+        g_prefix_error (&err, "Command 'tv_get_node_root': ");
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
@@ -2078,14 +2078,14 @@ cmd_tree_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
 
     if (!donna_tree_view_go_root (tree, &err))
     {
-        g_prefix_error (&err, "Command 'tree_go_root': ");
+        g_prefix_error (&err, "Command 'tv_go_root': ");
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
@@ -2094,7 +2094,7 @@ cmd_tree_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2112,7 +2112,7 @@ cmd_tree_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     node = donna_tree_view_get_node_up (tree, level, &err);
     if (!node)
     {
-        g_prefix_error (&err, "Command 'tree_get_node_up': ");
+        g_prefix_error (&err, "Command 'tv_get_node_up': ");
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
@@ -2126,7 +2126,7 @@ cmd_tree_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2153,7 +2153,7 @@ cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_SYNTAX,
-                "Command 'tree_go_up': Invalid set argument '%s': "
+                "Command 'tv_go_up': Invalid set argument '%s': "
                 "Must be (a '+'-separated list of) 'scroll', 'focus' and/or 'cursor'",
                 s_set);
         return DONNA_TASK_FAILED;
@@ -2169,7 +2169,7 @@ cmd_tree_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2246,7 +2246,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2283,7 +2283,7 @@ cmd_tree_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2330,7 +2330,7 @@ cmd_tree_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2380,7 +2380,7 @@ cmd_tree_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2423,7 +2423,7 @@ cmd_tree_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2442,7 +2442,7 @@ cmd_tree_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tree_load_list_file': Invalid elements : '%s'; "
+                    "Command 'tv_load_list_file': Invalid elements : '%s'; "
                     "Must be (a '+'-separated combination of) 'focus', 'sort', "
                     "'scroll', and/or 'selection'",
                     s_elements);
@@ -2462,7 +2462,7 @@ cmd_tree_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2482,7 +2482,7 @@ cmd_tree_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tree_save_tree_file': Invalid visuals : '%s'; "
+                    "Command 'tv_save_tree_file': Invalid visuals : '%s'; "
                     "Must be (a '+'-separated combination of) 'name', 'icon', "
                     "'box',' highlight', and/or 'click_mode'",
                     s_visuals);
@@ -2502,7 +2502,7 @@ cmd_tree_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2518,7 +2518,7 @@ cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2534,7 +2534,7 @@ cmd_tree_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_move_root (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_move_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2551,7 +2551,7 @@ cmd_tree_move_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2584,7 +2584,7 @@ cmd_tree_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2599,7 +2599,7 @@ cmd_tree_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     DonnaTreeView *tree = args[0];
 
@@ -2608,7 +2608,7 @@ cmd_tree_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2627,7 +2627,7 @@ cmd_tree_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tree_save_list_file': Invalid elements : '%s'; "
+                    "Command 'tv_save_list_file': Invalid elements : '%s'; "
                     "Must be (a '+'-separated combination of) 'focus', 'sort', "
                     "'scroll', and/or 'selection'",
                     s_elements);
@@ -2647,7 +2647,7 @@ cmd_tree_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2667,7 +2667,7 @@ cmd_tree_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tree_save_tree_file': Invalid visuals : '%s'; "
+                    "Command 'tv_save_tree_file': Invalid visuals : '%s'; "
                     "Must be (a '+'-separated combination of) 'name', 'icon', "
                     "'box',' highlight', and/or 'click_mode'",
                     s_visuals);
@@ -2687,7 +2687,7 @@ cmd_tree_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2721,7 +2721,7 @@ cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2754,7 +2754,7 @@ cmd_tree_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2771,7 +2771,7 @@ cmd_tree_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2787,7 +2787,7 @@ cmd_tree_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_key_mode (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_key_mode (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     DonnaTreeView *tree = args[0];
     gchar *key_mode = args[1];
@@ -2797,7 +2797,7 @@ cmd_tree_set_key_mode (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2813,7 +2813,7 @@ cmd_tree_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2857,7 +2857,7 @@ cmd_tree_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2875,7 +2875,7 @@ cmd_tree_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tree_set_second_sort': Invalid sort order '%s'; "
+                    "Command 'tv_set_second_sort': Invalid sort order '%s'; "
                     "Must be 'asc', 'desc' or 'unknown'",
                     s_order);
             return DONNA_TASK_FAILED;
@@ -2895,7 +2895,7 @@ cmd_tree_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2913,7 +2913,7 @@ cmd_tree_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tree_set_sort': Invalid sort order '%s'; "
+                    "Command 'tv_set_sort': Invalid sort order '%s'; "
                     "Must be 'asc', 'desc' or 'unknown'",
                     s_order);
             return DONNA_TASK_FAILED;
@@ -2933,7 +2933,7 @@ cmd_tree_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -2972,7 +2972,7 @@ cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 static DonnaTaskState
-cmd_tree_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
+cmd_tv_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
@@ -3275,26 +3275,26 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    add_command (tree_abort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_abort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_activate_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_activate_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
-    add_command (tree_add_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_add_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_column_edit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_column_edit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3303,7 +3303,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_column_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_column_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3313,7 +3313,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_column_set_value, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_column_set_value, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3321,7 +3321,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_context_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_context_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
@@ -3331,37 +3331,37 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_context_popup, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_context_popup, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_full_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_full_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_full_expand, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_full_expand, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    add_command (tree_get_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_get_node_at_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_node_at_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
@@ -3369,42 +3369,42 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_get_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_STRING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_get_node_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_node_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_go_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_go_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    add_command (tree_get_node_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_node_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    add_command (tree_go_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_go_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_get_node_up, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_get_node_up, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_go_up, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_go_up, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3415,98 +3415,98 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_goto_line, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_goto_line, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_history_clear, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_history_clear, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_history_get, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_history_get, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_history_get_node, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_history_get_node, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_history_move, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_history_move, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_load_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_load_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_load_tree_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_load_tree_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_maxi_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_maxi_collapse, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_maxi_expand, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_maxi_expand, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_INT;
-    add_command (tree_move_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_move_root, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_refresh, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_refresh, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_remove_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_remove_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    add_command (tree_reset_keys, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-            DONNA_ARG_TYPE_NOTHING);
-
-    i = -1;
-    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_save_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_reset_keys, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_save_tree_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_save_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tv_save_tree_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3514,39 +3514,39 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_selection, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_selection, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
-    add_command (tree_selection_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_selection_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_set_cursor, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_cursor, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
-    add_command (tree_set_focus, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_focus, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_set_key_mode, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_key_mode, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
-    add_command (tree_set_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_location, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3554,21 +3554,21 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_set_second_sort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_second_sort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    add_command (tree_set_sort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_sort, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
@@ -3576,14 +3576,14 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_set_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_set_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    add_command (tree_toggle_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+    add_command (tv_toggle_row, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

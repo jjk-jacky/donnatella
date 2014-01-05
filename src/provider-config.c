@@ -5089,9 +5089,9 @@ provider_config_get_context_item_info (DonnaProvider      *provider,
         info->is_visible = info->is_sensitive = TRUE;
         info->name = "New Category";
         info->icon_name = "folder-new";
-        info->trigger = "command:tree_goto_line (%o, f+s, "
+        info->trigger = "command:tv_goto_line (%o, f+s, "
             "@config_set_option ("
-            "@node_get_property (@tree_get_location (%o), location),"
+            "@node_get_property (@tv_get_location (%o), location),"
             ":category,,,1,1))";
         return TRUE;
     }
@@ -5100,9 +5100,9 @@ provider_config_get_context_item_info (DonnaProvider      *provider,
         info->is_visible = info->is_sensitive = TRUE;
         info->name = "New Boolean Option";
         info->icon_name = "document-new";
-        info->trigger = "command:tree_goto_line (%o, f+s, "
+        info->trigger = "command:tv_goto_line (%o, f+s, "
             "@config_set_option ("
-            "@node_get_property (@tree_get_location (%o), location),"
+            "@node_get_property (@tv_get_location (%o), location),"
             ":boolean,,,1,1))";
         return TRUE;
     }
@@ -5126,18 +5126,18 @@ provider_config_get_context_item_info (DonnaProvider      *provider,
             }
             info->name = g_strconcat ("New '", _e->any.title, "' Option", NULL);
             info->free_name = TRUE;
-            info->trigger = g_strconcat ("command:tree_goto_line (%o, f+s, "
+            info->trigger = g_strconcat ("command:tv_goto_line (%o, f+s, "
                     "@config_set_option ("
-                    "@node_get_property (@tree_get_location (%o), location),",
+                    "@node_get_property (@tv_get_location (%o), location),",
                     extra, ",,,1,1))", NULL);
             info->free_trigger = TRUE;
         }
         else
         {
             info->name = "New Integer Option";
-            info->trigger = "command:tree_goto_line (%o, f+s, "
+            info->trigger = "command:tv_goto_line (%o, f+s, "
                 "@config_set_option ("
-                "@node_get_property (@tree_get_location (%o), location),"
+                "@node_get_property (@tv_get_location (%o), location),"
                 ":int,,,1,1))";
         }
 
@@ -5162,18 +5162,18 @@ provider_config_get_context_item_info (DonnaProvider      *provider,
             }
             info->name = g_strconcat ("New '", _e->any.title, "' Option", NULL);
             info->free_name = TRUE;
-            info->trigger = g_strconcat ("command:tree_goto_line (%o, f+s, "
+            info->trigger = g_strconcat ("command:tv_goto_line (%o, f+s, "
                     "@config_set_option ("
-                    "@node_get_property (@tree_get_location (%o), location),",
+                    "@node_get_property (@tv_get_location (%o), location),",
                     extra, ",,,1,1))", NULL);
             info->free_trigger = TRUE;
         }
         else
         {
             info->name = "New String Option";
-            info->trigger = "command:tree_goto_line (%o, f+s, "
+            info->trigger = "command:tv_goto_line (%o, f+s, "
                 "@config_set_option ("
-                "@node_get_property (@tree_get_location (%o), location),"
+                "@node_get_property (@tv_get_location (%o), location),"
                 ":string,,,1,1))";
         }
 

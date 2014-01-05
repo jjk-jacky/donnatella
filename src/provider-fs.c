@@ -445,8 +445,8 @@ provider_fs_get_context_item_info (DonnaProvider            *provider,
         info->is_visible = info->is_sensitive = TRUE;
         info->name = "New Folder";
         info->icon_name = "folder-new";
-        info->trigger = "command:tree_goto_line (%o, f+s, "
-            "@node_new_child (@tree_get_location (%o), c, "
+        info->trigger = "command:tv_goto_line (%o, f+s, "
+            "@node_new_child (@tv_get_location (%o), c, "
             "@ask_text (Please enter the name of the new folder to create)))";
         return TRUE;
     }
@@ -455,8 +455,8 @@ provider_fs_get_context_item_info (DonnaProvider            *provider,
         info->is_visible = info->is_sensitive = TRUE;
         info->name = "New File";
         info->icon_name = "document-new";
-        info->trigger = "command:tree_goto_line (%o, f+s, "
-            "@node_new_child (@tree_get_location (%o), i, "
+        info->trigger = "command:tv_goto_line (%o, f+s, "
+            "@node_new_child (@tv_get_location (%o), i, "
             "@ask_text (Please enter the name of the new file to create)))";
         return TRUE;
     }

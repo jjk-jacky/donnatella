@@ -670,7 +670,7 @@ helper_get_set_option_trigger (const gchar  *option,
 
     g_return_val_if_fail (value != NULL || ask_title != NULL, NULL);
 
-    str = g_string_new ("command:tree_column_set_option (%o,%R,");
+    str = g_string_new ("command:tv_column_set_option (%o,%R,");
     g_string_append (str, option);
     g_string_append_c (str, ',');
     if (quote_value)

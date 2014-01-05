@@ -13992,7 +13992,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
     extra = donna_config_get_extra (config, name, error);
     if (!extra)
     {
-        g_prefix_error (error, "TreeView '%s': Failed to resolve alias 'tree_options': "
+        g_prefix_error (error, "TreeView '%s': Failed to resolve alias 'tv_options': "
                 "Failed to get extras '%s' from config: ",
                 priv->name, name);
         return FALSE;
@@ -14002,7 +14002,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to resolve alias 'tree_options': "
+                "TreeView '%s': Failed to resolve alias 'tv_options': "
                 "Invalid extra type for '%s' in config",
                 priv->name, name);
         return FALSE;
@@ -14012,9 +14012,9 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
 
-        donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
+        donna_g_string_append_concat (str, ":tv_options.", item, "<", NULL);
         for (i = 0; i < e->nb_items; ++i)
-            donna_g_string_append_concat (str, ":tree_options.", item, ".",
+            donna_g_string_append_concat (str, ":tv_options.", item, ".",
                     e->items[i].in_file, ":@", save_location, ",", NULL);
         g_string_truncate (str, str->len - 1);
         g_string_append_c (str, '>');
@@ -14023,9 +14023,9 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
 
-        donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
+        donna_g_string_append_concat (str, ":tv_options.", item, "<", NULL);
         for (i = 0; i < e->nb_items; ++i)
-            donna_g_string_append_concat (str, ":tree_options.", item, ".",
+            donna_g_string_append_concat (str, ":tv_options.", item, ".",
                     e->items[i].in_file, ":@", save_location, ",", NULL);
         g_string_truncate (str, str->len - 1);
         g_string_append_c (str, '>');
@@ -14034,9 +14034,9 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
 
-        donna_g_string_append_concat (str, ":tree_options.", item, "<", NULL);
+        donna_g_string_append_concat (str, ":tv_options.", item, "<", NULL);
         for (i = 0; i < e->nb_items; ++i)
-            donna_g_string_append_concat (str, ":tree_options.", item, ".",
+            donna_g_string_append_concat (str, ":tv_options.", item, ".",
                     e->items[i].value, ":@", save_location, ",", NULL);
         g_string_truncate (str, str->len - 1);
         g_string_append_c (str, '>');
@@ -14045,7 +14045,7 @@ _add_items_for_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to resolve alias 'tree_options': "
+                "TreeView '%s': Failed to resolve alias 'tv_options': "
                 "Unexpected extra type", priv->name);
         return FALSE;
     }
@@ -14212,7 +14212,7 @@ tree_context_get_alias (const gchar             *alias,
         str->str[str->len - 1] = '>';
         return g_string_free (str, FALSE);
     }
-    else if (streq (alias, "tree_options"))
+    else if (streq (alias, "tv_options"))
     {
         GString *str;
         GPtrArray *arr; /* to get list of key/click modes */
@@ -14232,7 +14232,7 @@ tree_context_get_alias (const gchar             *alias,
 
         str = g_string_new (NULL);
         donna_g_string_append_concat (str,
-                ":tree_options.show_hidden:@", extra, ",", NULL);
+                ":tv_options.show_hidden:@", extra, ",", NULL);
         if (!_add_items_for_extra (tree, str,
                     "sg", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
                     "sort_groups", extra, error))
@@ -14253,12 +14253,12 @@ tree_context_get_alias (const gchar             *alias,
         if (priv->is_tree)
         {
             donna_g_string_append_concat (str, ",-,"
-                    ":tree_options.is_minitree:@", extra, ","
-                    ":tree_options.sync<"
-                        ":tree_options.sync_with<"
-                            ":tree_options.sync_with.active:@", extra, ","
-                            ":tree_options.sync_with.custom:@", extra, ",-,"
-                            ":tree_options.auto_focus_sync:@", extra, ">,",
+                    ":tv_options.is_minitree:@", extra, ","
+                    ":tv_options.sync<"
+                        ":tv_options.sync_with<"
+                            ":tv_options.sync_with.active:@", extra, ","
+                            ":tv_options.sync_with.custom:@", extra, ",-,"
+                            ":tv_options.auto_focus_sync:@", extra, ">,",
                             NULL);
             if (!_add_items_for_extra (tree, str,
                         "sync", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
@@ -14270,7 +14270,7 @@ tree_context_get_alias (const gchar             *alias,
             /* add sync_scroll *inside* the submenu */
             g_string_truncate (str, str->len - 1);
             donna_g_string_append_concat (str, ",-,"
-                    ":tree_options.sync_scroll:@", extra, ">>", NULL);
+                    ":tv_options.sync_scroll:@", extra, ">>", NULL);
 
             g_string_append_c (str, ',');
             if (!_add_items_for_extra (tree, str,
@@ -14283,11 +14283,11 @@ tree_context_get_alias (const gchar             *alias,
         }
         else
             donna_g_string_append_concat (str, ",-,"
-                    ":tree_options.focusing_click:@", extra, ",",
-                    ":tree_options.goto_item_set<"
-                        ":tree_options.goto_item_set.scroll:@", extra, ",",
-                        ":tree_options.goto_item_set.focus:@", extra, ",",
-                        ":tree_options.goto_item_set.cursor:@", extra, ">",
+                    ":tv_options.focusing_click:@", extra, ",",
+                    ":tv_options.goto_item_set<"
+                        ":tv_options.goto_item_set.scroll:@", extra, ",",
+                        ":tv_options.goto_item_set.focus:@", extra, ",",
+                        ":tv_options.goto_item_set.cursor:@", extra, ">",
                         NULL);
 
         g_string_append (str, ",-,");
@@ -14300,7 +14300,7 @@ tree_context_get_alias (const gchar             *alias,
         }
 
         arr = NULL;
-        donna_g_string_append_concat (str, ",-,:tree_options.key_mode:@", extra, NULL);
+        donna_g_string_append_concat (str, ",-,:tv_options.key_mode:@", extra, NULL);
         if (donna_config_list_options (donna_app_peek_config (priv->app),
                     &arr, DONNA_CONFIG_OPTION_TYPE_CATEGORY, "key_modes"))
         {
@@ -14309,13 +14309,13 @@ tree_context_get_alias (const gchar             *alias,
             g_string_append_c (str, '<');
             for (i = 0; i < arr->len; ++i)
                 donna_g_string_append_concat (str, (i > 0) ? "," : "",
-                        ":tree_options.key_mode:@", extra, ":", arr->pdata[i], NULL);
+                        ":tv_options.key_mode:@", extra, ":", arr->pdata[i], NULL);
             g_string_append_c (str, '>');
             g_ptr_array_unref (arr);
         }
 
         arr = NULL;
-        donna_g_string_append_concat (str, ",:tree_options.click_mode:@", extra, NULL);
+        donna_g_string_append_concat (str, ",:tv_options.click_mode:@", extra, NULL);
         if (donna_config_list_options (donna_app_peek_config (priv->app),
                     &arr, DONNA_CONFIG_OPTION_TYPE_CATEGORY, "click_modes"))
         {
@@ -14324,7 +14324,7 @@ tree_context_get_alias (const gchar             *alias,
             g_string_append_c (str, '<');
             for (i = 0; i < arr->len; ++i)
                 donna_g_string_append_concat (str, (i > 0) ? "," : "",
-                        ":tree_options.click_mode:@", extra, ":", arr->pdata[i], NULL);
+                        ":tv_options.click_mode:@", extra, ":", arr->pdata[i], NULL);
             g_string_append_c (str, '>');
             g_ptr_array_unref (arr);
         }
@@ -14357,7 +14357,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
     extra = donna_config_get_extra (config, name, error);
     if (!extra)
     {
-        g_prefix_error (error, "TreeView '%s': Failed to get item 'tree_options.%s.%s': "
+        g_prefix_error (error, "TreeView '%s': Failed to get item 'tv_options.%s.%s': "
                 "Failed to get extras '%s' from config: ",
                 priv->name, parent, item, name);
         return FALSE;
@@ -14367,7 +14367,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to get item 'tree_options.%s.%s': "
+                "TreeView '%s': Failed to get item 'tv_options.%s.%s': "
                 "Invalid extra type for '%s' in config",
                 priv->name, parent, item, name);
         return FALSE;
@@ -14386,7 +14386,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
                 info->free_name = TRUE;
                 info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
                 info->trigger = g_strconcat (
-                        "command:tree_set_option (%o,", parent, ",",
+                        "command:tv_set_option (%o,", parent, ",",
                         e->items[i].in_file, ",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
@@ -14400,7 +14400,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "TreeView '%s': No item 'tree_options.%s.%s': "
+                    "TreeView '%s': No item 'tv_options.%s.%s': "
                     "No such value in extra '%s'",
                     priv->name, parent, item, name);
             return FALSE;
@@ -14419,7 +14419,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
                 info->free_name = TRUE;
                 info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
                 info->trigger = g_strconcat (
-                        "command:tree_set_option (%o,", parent, ",",
+                        "command:tv_set_option (%o,", parent, ",",
                         e->items[i].in_file, ",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
@@ -14433,7 +14433,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "TreeView '%s': No item 'tree_options.%s.%s': "
+                    "TreeView '%s': No item 'tv_options.%s.%s': "
                     "No such value in extra '%s'",
                     priv->name, parent, item, name);
             return FALSE;
@@ -14452,7 +14452,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
                 info->free_name = TRUE;
                 info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
                 info->trigger = g_strconcat (
-                        "command:tree_set_option (%o,", parent, ",",
+                        "command:tv_set_option (%o,", parent, ",",
                         e->items[i].value, ",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
@@ -14466,7 +14466,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "TreeView '%s': No item 'tree_options.%s.%s': "
+                    "TreeView '%s': No item 'tv_options.%s.%s': "
                     "No such value in extra '%s'",
                     priv->name, parent, item, name);
             return FALSE;
@@ -14476,7 +14476,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
     {
         g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                 DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to resolve alias 'tree_options': "
+                "TreeView '%s': Failed to resolve alias 'tv_options': "
                 "Unexpected extra type", priv->name);
         return FALSE;
     }
@@ -14599,7 +14599,7 @@ tree_context_get_item_info (const gchar             *item,
 
         if (info->is_visible && info->is_sensitive)
             info->trigger = g_strconcat (
-                    "command:tree_column_edit (%o,%r,", _col->name, ")", NULL);
+                    "command:tv_column_edit (%o,%r,", _col->name, ")", NULL);
 
         return TRUE;
     }
@@ -14653,7 +14653,7 @@ tree_context_get_item_info (const gchar             *item,
                     g_object_unref (t);
 
                 info->trigger = g_strconcat (
-                        "command:tree_go_root (", extra, ")", NULL);
+                        "command:tv_go_root (", extra, ")", NULL);
                 info->free_trigger = TRUE;
             }
         }
@@ -14677,9 +14677,9 @@ tree_context_get_item_info (const gchar             *item,
             info->icon_name = "go-up";
             if (extra)
                 info->trigger = g_strconcat (
-                        "command:tree_go_up (%o,,", extra, ")", NULL);
+                        "command:tv_go_up (%o,,", extra, ")", NULL);
             else
-                info->trigger = "command:tree_go_up (%o)";
+                info->trigger = "command:tv_go_up (%o)";
         }
         else if (streq (item, "down"))
         {
@@ -14692,7 +14692,7 @@ tree_context_get_item_info (const gchar             *item,
 
             info->name = "Go Down";
             info->icon_name = "go-down";
-            info->trigger = "command:tree_go_down (%o)";
+            info->trigger = "command:tv_go_down (%o)";
         }
         else if (streq (item, "back"))
         {
@@ -14704,7 +14704,7 @@ tree_context_get_item_info (const gchar             *item,
             info->icon_name = "go-previous";
             info->is_sensitive = donna_history_get_item (priv->history,
                     DONNA_HISTORY_BACKWARD, 1, NULL) != NULL;
-            info->trigger = "command:tree_history_move (%o)";
+            info->trigger = "command:tv_history_move (%o)";
         }
         else if (streq (item, "forward"))
         {
@@ -14716,7 +14716,7 @@ tree_context_get_item_info (const gchar             *item,
             info->icon_name = "go-next";
             info->is_sensitive = donna_history_get_item (priv->history,
                     DONNA_HISTORY_FORWARD, 1, NULL) != NULL;
-            info->trigger = "command:tree_history_move (%o, forward)";
+            info->trigger = "command:tv_history_move (%o, forward)";
         }
         else
             goto err;
@@ -14787,7 +14787,7 @@ tree_context_get_item_info (const gchar             *item,
         if (!extra || streq (extra, "up"))
         {
             info->name = "Move Root Up";
-            info->trigger = "command:tree_move_root (%o,%r,-1)";
+            info->trigger = "command:tv_move_root (%o,%r,-1)";
             /* not sensitive if first */
             if (info->is_sensitive
                     && (GtkTreeIter *) priv->roots->data == conv->row->iter)
@@ -14796,7 +14796,7 @@ tree_context_get_item_info (const gchar             *item,
         else if (streq (extra, "down"))
         {
             info->name = "Move Root Down";
-            info->trigger = "command:tree_move_root (%o,%r,1)";
+            info->trigger = "command:tv_move_root (%o,%r,1)";
             /* not sensitive if last */
             if (info->is_sensitive)
             {
@@ -14823,7 +14823,7 @@ tree_context_get_item_info (const gchar             *item,
                     if ((GtkTreeIter *) l->data == conv->row->iter)
                         break;
                 info->trigger = g_strdup_printf (
-                        "command:tree_move_root (%%o,%%r,%d)", n);
+                        "command:tv_move_root (%%o,%%r,%d)", n);
                 info->free_trigger = TRUE;
             }
         }
@@ -14848,7 +14848,7 @@ tree_context_get_item_info (const gchar             *item,
                 if (info->is_sensitive)
                 {
                     info->trigger = g_strdup_printf (
-                            "command:tree_move_root (%%o,%%r,%d)", n);
+                            "command:tv_move_root (%%o,%%r,%d)", n);
                     info->free_trigger = TRUE;
                 }
             }
@@ -14873,7 +14873,7 @@ tree_context_get_item_info (const gchar             *item,
         if (item[7] == '\0')
         {
             info->name = "Refresh";
-            info->trigger = "command:tree_refresh (%o, normal)";
+            info->trigger = "command:tv_refresh (%o, normal)";
             return TRUE;
         }
         else if (item[7] != '.')
@@ -14883,17 +14883,17 @@ tree_context_get_item_info (const gchar             *item,
         if (streq (item, "visible"))
         {
             info->name = "Refresh (Visible)";
-            info->trigger = "command:tree_refresh (%o, visible)";
+            info->trigger = "command:tv_refresh (%o, visible)";
         }
         else if (streq (item, "simple"))
         {
             info->name = "Refresh (Simple)";
-            info->trigger = "command:tree_refresh (%o, simple)";
+            info->trigger = "command:tv_refresh (%o, simple)";
         }
         else if (streq (item, "reload"))
         {
             info->name = "Refresh (Reload)";
-            info->trigger = "command:tree_refresh (%o, reload)";
+            info->trigger = "command:tv_refresh (%o, reload)";
         }
         else
             goto err;
@@ -14952,11 +14952,11 @@ tree_context_get_item_info (const gchar             *item,
             if (on == ON_SEL)
                 info->trigger = g_strconcat (
                         "command:register_set (", extra, ",cut,"
-                        "@tree_get_nodes (%o, :selected))", NULL);
+                        "@tv_get_nodes (%o, :selected))", NULL);
             else if (on == ON_REF)
                 info->trigger = g_strconcat (
                         "command:register_set (", extra, ",cut,"
-                        "@tree_get_nodes (%o, %r))", NULL);
+                        "@tv_get_nodes (%o, %r))", NULL);
         }
         else if (streq (item, "copy"))
         {
@@ -14964,11 +14964,11 @@ tree_context_get_item_info (const gchar             *item,
             if (on == ON_SEL)
                 info->trigger = g_strconcat (
                         "command:register_set (", extra, ",copy,"
-                        "@tree_get_nodes (%o, :selected))", NULL);
+                        "@tv_get_nodes (%o, :selected))", NULL);
             else if (on == ON_REF)
                 info->trigger = g_strconcat (
                         "command:register_set (", extra, ",copy,"
-                        "@tree_get_nodes (%o, %r))", NULL);
+                        "@tv_get_nodes (%o, %r))", NULL);
         }
         else if (streq (item, "append"))
         {
@@ -14976,11 +14976,11 @@ tree_context_get_item_info (const gchar             *item,
             if (on == ON_SEL)
                 info->trigger = g_strconcat (
                         "command:register_add_nodes (", extra, ","
-                        "@tree_get_nodes (%o, :selected))", NULL);
+                        "@tv_get_nodes (%o, :selected))", NULL);
             else if (on == ON_REF)
                 info->trigger = g_strconcat (
                         "command:register_add_nodes (", extra, ","
-                        "@tree_get_nodes (%o, %r))", NULL);
+                        "@tv_get_nodes (%o, %r))", NULL);
         }
         else if (streq (item, "paste") || streq (item, "paste_copy")
                 || streq (item, "paste_move") || streq (item, "paste_new_folder"))
@@ -15073,7 +15073,7 @@ tree_context_get_item_info (const gchar             *item,
         }
         info->name = "Remove Row From Tree";
         info->icon_name = "list-remove";
-        info->trigger = "command:tree_remove_row (%o,%r)";
+        info->trigger = "command:tv_remove_row (%o,%r)";
         return TRUE;
     }
     else if (streqn (item, "sort_order", 10)
@@ -15110,14 +15110,14 @@ tree_context_get_item_info (const gchar             *item,
                 && _col->column != priv->sort_column;
         else
             info->is_active = _col->column == priv->sort_column;
-        info->trigger = g_strconcat ("command:tree_set_",
+        info->trigger = g_strconcat ("command:tv_set_",
                 (is_second) ? "second_" : "", "sort (%o,",
                 _col->name, ")", NULL);
         info->free_trigger = TRUE;
 
         return TRUE;
     }
-    else if (streqn (item, "tree_options.", 13))
+    else if (streqn (item, "tv_options.", 11))
     {
         const gchar *save = "";
 
@@ -15165,8 +15165,8 @@ tree_context_get_item_info (const gchar             *item,
         }
 
         /* only key_mode & click_mode can also have some extra */
-        if (extra && !(streq (item + 13, "key_mode")
-                    || streq (item + 13, "click_mode")))
+        if (extra && !(streq (item + 11, "key_mode")
+                    || streq (item + 11, "click_mode")))
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
@@ -15175,17 +15175,17 @@ tree_context_get_item_info (const gchar             *item,
             return FALSE;
         }
 
-        item += 13;
+        item += 11;
 #define set_trigger(option,value) do {                                      \
         if (save)                                                           \
         {                                                                   \
             info->trigger = g_strconcat (                                   \
-                    "command:tree_set_option (%o," option "," value ",",    \
+                    "command:tv_set_option (%o," option "," value ",",    \
                     save, ")", NULL);                                       \
             info->free_trigger = TRUE;                                      \
         }                                                                   \
         else                                                                \
-            info->trigger = "command:tree_set_option (%o," option "," value ")"; \
+            info->trigger = "command:tv_set_option (%o," option "," value ")"; \
 } while (0)
 
         if (streqn (item, "node_types", 10))
@@ -15271,7 +15271,7 @@ tree_context_get_item_info (const gchar             *item,
                 info->is_active = streq (extra, priv->key_mode);
                 info->name = g_strdup (extra);
                 info->free_name = TRUE;
-                info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,",
+                info->trigger = g_strconcat ("command:tv_set_option (%o,key_mode,",
                         extra, ",", save, ")", NULL);
                 info->free_trigger = TRUE;
             }
@@ -15279,7 +15279,7 @@ tree_context_get_item_info (const gchar             *item,
             {
                 info->name = g_strconcat ("Key Mode: ", priv->key_mode, NULL);
                 info->free_name = TRUE;
-                info->trigger = g_strconcat ("command:tree_set_option (%o,key_mode,"
+                info->trigger = g_strconcat ("command:tv_set_option (%o,key_mode,"
                         "@ask_text(Enter the new default key mode,,",
                         priv->key_mode, "),", save, ")", NULL);
                 info->free_trigger = TRUE;
@@ -15295,7 +15295,7 @@ tree_context_get_item_info (const gchar             *item,
                 info->is_active = streq (extra, priv->click_mode);
                 info->name = g_strdup (extra);
                 info->free_name = TRUE;
-                info->trigger = g_strconcat ("command:tree_set_option (%o,click_mode,",
+                info->trigger = g_strconcat ("command:tv_set_option (%o,click_mode,",
                         extra, ",", save, ")", NULL);
                 info->free_trigger = TRUE;
             }
@@ -15303,7 +15303,7 @@ tree_context_get_item_info (const gchar             *item,
             {
                 info->name = g_strconcat ("Click Mode: ", priv->click_mode, NULL);
                 info->free_name = TRUE;
-                info->trigger = g_strconcat ("command:tree_set_option (%o,click_mode,"
+                info->trigger = g_strconcat ("command:tv_set_option (%o,click_mode,"
                         "@ask_text(Enter the click key mode,,",
                         priv->click_mode, "),", save, ")", NULL);
                 info->free_trigger = TRUE;
@@ -15365,7 +15365,7 @@ tree_context_get_item_info (const gchar             *item,
                 if (priv->sid_active_list_changed == 0)
                     info->is_active = TRUE;
 
-                info->trigger = g_strconcat ("command:tree_set_option (%o,sync_with,"
+                info->trigger = g_strconcat ("command:tv_set_option (%o,sync_with,"
                         "@ask_text(Enter the name of the list to sync with,,",
                         (!priv->sid_active_list_changed && priv->sync_with)
                         ? donna_tree_view_get_name (priv->sync_with) : "",
@@ -15495,7 +15495,7 @@ tree_context_get_item_info (const gchar             *item,
 
 #undef set_trigger
         /* for error message */
-        item -= 13;
+        item -= 11;
     }
     else if (streqn (item, "tree_visuals.", 13))
     {
@@ -15578,7 +15578,7 @@ tree_context_get_item_info (const gchar             *item,
             info->name = g_strconcat (name, "...", NULL);
         info->free_name = TRUE;
 
-        str = g_string_new ("command:tree_set_visual (%o,%r,");
+        str = g_string_new ("command:tv_set_visual (%o,%r,");
         g_string_append (str, name);
         g_string_append (str, ",@ask_text (");
         g_string_append_printf (str, "Enter the new '%s' value", name);

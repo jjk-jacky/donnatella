@@ -816,7 +816,7 @@ convert:
                 g_free (row);
                 g_free (rid);
                 g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                        "Command '%s', argument %d: Invalid argument syntax TREE_ROW for TREE_ROW_ID",
+                        "Command '%s', argument %d: Invalid argument syntax ROW for ROW_ID",
                         rc->command->name, rc->i + 1);
                 goto error;
             }

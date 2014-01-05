@@ -628,7 +628,7 @@ provider_mark_get_context_item_info (DonnaProvider          *provider,
         info->is_visible = info->is_sensitive = TRUE;
         info->name = "New (Standard) Mark";
         info->icon_name = "document-new";
-        info->trigger = "command:tree_goto_line (%o, f+s, @mark_set ("
+        info->trigger = "command:tv_goto_line (%o, f+s, @mark_set ("
             "@ask_text (Please enter the location for the new mark), "
             "@ask_text (Please enter the name of the new mark), s,"
             "@ask_text (\"Please enter the destination (full location) of the new mark\")))";
@@ -639,7 +639,7 @@ provider_mark_get_context_item_info (DonnaProvider          *provider,
         info->is_visible = info->is_sensitive = TRUE;
         info->name = "New Dynamic Mark";
         info->icon_name = "document-new";
-        info->trigger = "command:tree_goto_line (%o, f+s, @mark_set ("
+        info->trigger = "command:tv_goto_line (%o, f+s, @mark_set ("
             "@ask_text (Please enter the location for the new mark), "
             "@ask_text (Please enter the name of the new mark), d,"
             "@ask_text (\"Please enter the trigger (full location) for the new mark\")))";
