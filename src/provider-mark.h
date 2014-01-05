@@ -17,14 +17,9 @@ typedef struct _DonnaProviderMark           DonnaProviderMark;
 typedef struct _DonnaProviderMarkClass      DonnaProviderMarkClass;
 typedef struct _DonnaProviderMarkPrivate    DonnaProviderMarkPrivate;
 
-typedef enum
-{
-    DONNA_MARK_STANDARD,
-    DONNA_MARK_DYNAMIC
-} DonnaMarkType;
-
 struct _DonnaProviderMark
 {
+    /*< private >*/
     DonnaProviderBase parent;
 
     DonnaProviderMarkPrivate *priv;

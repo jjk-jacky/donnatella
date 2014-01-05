@@ -11,12 +11,18 @@
 #include "macros.h"
 #include "debug.h"
 
+enum mark_type
+{
+    MARK_STANDARD,
+    MARK_DYNAMIC
+};
+
 
 struct mark
 {
     gchar *location;
     gchar *name;
-    DonnaMarkType type;
+    enum mark_type type;
     gchar *value;
 };
 
@@ -156,7 +162,7 @@ static struct mark *
 new_mark (DonnaProviderMark *pm,
           const gchar       *location,
           const gchar       *name,
-          DonnaMarkType      type,
+          enum mark_type     type,
           const gchar       *value,
           GError           **error)
 {
@@ -286,10 +292,10 @@ setter (DonnaTask *task, DonnaNode *node, const gchar *name, const GValue *value
     }
     else if (streq (name, "mark-type"))
     {
-        DonnaMarkType type;
+        enum mark_type type;
 
-        type = (DonnaMarkType) g_value_get_int (value);
-        if (type == DONNA_MARK_STANDARD || type == DONNA_MARK_DYNAMIC)
+        type = (enum mark_type) g_value_get_int (value);
+        if (type == MARK_STANDARD || type == MARK_DYNAMIC)
         {
             mark->type = type;
             ret = DONNA_TASK_DONE;
@@ -450,7 +456,7 @@ get_mark_node (DonnaTask            *task,
     DonnaProviderMarkPrivate *priv = pm->priv;
     struct mark *mark;
     DonnaNode *n = NULL;
-    DonnaMarkType type;
+    enum mark_type type;
     DonnaTaskState state = DONNA_TASK_DONE;
 
     g_assert (node);
@@ -473,7 +479,7 @@ get_mark_node (DonnaTask            *task,
         g_mutex_unlock (&priv->mutex);
         g_prefix_error (&err, "Provider 'mark': "
                 "Cannot get %s's node for mark '%s' [%s]: ",
-                (mark->type == DONNA_MARK_STANDARD) ? "dest" : "trigger",
+                (mark->type == MARK_STANDARD) ? "dest" : "trigger",
                 location, mark->value);
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -483,7 +489,7 @@ get_mark_node (DonnaTask            *task,
 
     /* in STANDARD we have the node we want. In DYNAMIC we have the node to
      * trigger, which should give us the node we want */
-    if (type == DONNA_MARK_DYNAMIC)
+    if (type == MARK_DYNAMIC)
     {
         DonnaTask *t;
 
@@ -853,7 +859,7 @@ provider_mark_new_child (DonnaProviderBase  *_provider,
 
     g_mutex_lock (&priv->mutex);
     mark = new_mark ((DonnaProviderMark *) _provider, name, NULL,
-            DONNA_MARK_STANDARD, NULL, &err);
+            MARK_STANDARD, NULL, &err);
     if (!mark)
     {
         g_mutex_unlock (&priv->mutex);
@@ -1171,7 +1177,7 @@ cmd_mark_load (DonnaTask         *task,
             else if (streqn (s, "type=", 5))
             {
                 if (s[5] == '0' || s[5] == '1')
-                    m.type = (s[5] == '0') ? DONNA_MARK_STANDARD : DONNA_MARK_DYNAMIC;
+                    m.type = (s[5] == '0') ? MARK_STANDARD : MARK_DYNAMIC;
             }
             else if (streqn (s, "value=", 6))
                 m.value = s + 6;
@@ -1268,7 +1274,7 @@ cmd_mark_save (DonnaTask        *task,
     while ((g_hash_table_iter_next (&iter, NULL, (gpointer) &mark)))
     {
         g_string_append_printf (str, "mark=%s\n", mark->location);
-        if (mark->type != DONNA_MARK_STANDARD)
+        if (mark->type != MARK_STANDARD)
             g_string_append_printf (str, "type=%d\n", mark->type);
         if (!streq (mark->location, mark->name))
             g_string_append_printf (str, "name=%s\n", mark->name);
@@ -1309,8 +1315,8 @@ cmd_mark_set (DonnaTask         *task,
 
     struct mark *mark;
     const gchar *s_types[] = { "standard", "dynamic" };
-    DonnaMarkType m_types[] = { DONNA_MARK_STANDARD, DONNA_MARK_DYNAMIC };
-    DonnaMarkType m_type;
+    enum mark_type m_types[] = { MARK_STANDARD, MARK_DYNAMIC };
+    enum mark_type m_type;
     gint t = -1;
     DonnaNode *node = NULL;
     enum {
@@ -1335,7 +1341,7 @@ cmd_mark_set (DonnaTask         *task,
         m_type = m_types[t];
     }
     else
-        m_type = DONNA_MARK_STANDARD;
+        m_type = MARK_STANDARD;
 
     g_mutex_lock (&priv->mutex);
     mark = g_hash_table_lookup (priv->marks, location);
@@ -1469,10 +1475,10 @@ provider_mark_contructed (GObject *object)
 
     G_OBJECT_CLASS (donna_provider_mark_parent_class)->constructed (object);
 
-    it[0].value     = DONNA_MARK_STANDARD;
+    it[0].value     = MARK_STANDARD;
     it[0].in_file   = "standard";
     it[0].label     = "Standard mark";
-    it[1].value     = DONNA_MARK_DYNAMIC;
+    it[1].value     = MARK_DYNAMIC;
     it[1].in_file   = "dynamic";
     it[1].label     = "Dynamic Mark";
     if (G_UNLIKELY (!donna_config_add_extra (donna_app_peek_config (app),
