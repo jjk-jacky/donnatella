@@ -425,12 +425,12 @@ container_children_cb (DonnaTask    *task,
         if (donna_node_get_node_type (children->pdata[i]) & node_types)
         {
             if (get_children)
+                g_ptr_array_add (arr, g_object_ref (children->pdata[i]));
+            else
             {
                 has_children = TRUE;
                 break;
             }
-            else
-                g_ptr_array_add (arr, g_object_ref (children->pdata[i]));
         }
     }
 
