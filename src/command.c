@@ -1682,7 +1682,7 @@ cmd_tree_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_activate_row (tree, rid, &err))
     {
@@ -1713,7 +1713,7 @@ cmd_tree_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gchar *col_name = args[2];
 
     if (!donna_tree_view_column_edit (tree, rid, col_name, &err))
@@ -1780,11 +1780,11 @@ cmd_tree_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gboolean to_focused = GPOINTER_TO_INT (args[2]); /* opt */
     const gchar *column = args[3];
     const gchar *value = args[4];
-    DonnaTreeRowId *rid_ref = args[5]; /* opt */
+    DonnaRowId *rid_ref = args[5]; /* opt */
 
     if (!donna_tree_view_column_set_value (tree, rid, to_focused, column,
                 value, rid_ref, &err))
@@ -1801,7 +1801,7 @@ cmd_tree_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rowid = args[1]; /* opt */
+    DonnaRowId *rowid = args[1]; /* opt */
     const gchar *column = args[2]; /* opt */
     gchar *sections = args[3]; /* opt */
 
@@ -1828,7 +1828,7 @@ cmd_tree_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rowid = args[1]; /* opt */
+    DonnaRowId *rowid = args[1]; /* opt */
     const gchar *column = args[2]; /* opt */
     gchar *sections = args[3]; /* opt */
     const gchar *menus = args[4]; /* opt */
@@ -1849,7 +1849,7 @@ cmd_tree_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_full_collapse (tree, rid, &err))
     {
@@ -1865,7 +1865,7 @@ cmd_tree_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_full_expand (tree, rid, &err))
     {
@@ -1900,7 +1900,7 @@ cmd_tree_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     DonnaNode *node;
     GValue *v;
@@ -1924,7 +1924,7 @@ cmd_tree_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gboolean to_focused = GPOINTER_TO_INT (args[2]); /* opt */
 
     GPtrArray *arr;
@@ -1950,7 +1950,7 @@ cmd_tree_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gchar *visual = args[2];
     gchar *source = args[3];
 
@@ -2174,7 +2174,7 @@ cmd_tree_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     gchar *s_set = args[1];
-    DonnaTreeRowId *rid = args[2];
+    DonnaRowId *rid = args[2];
     guint nb = GPOINTER_TO_UINT (args[3]); /* opt */
     gchar *nb_type = args[4]; /* opt */
     gchar *action = args[5]; /* opt */
@@ -2506,7 +2506,7 @@ cmd_tree_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_maxi_collapse (tree, rid, &err))
     {
@@ -2522,7 +2522,7 @@ cmd_tree_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_maxi_expand (tree, rid, &err))
     {
@@ -2538,7 +2538,7 @@ cmd_tree_move_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gint move = GPOINTER_TO_INT (args[2]);
 
     if (!donna_tree_view_move_root (tree, rid, move, &err))
@@ -2588,7 +2588,7 @@ cmd_tree_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_remove_row (tree, rid, &err))
     {
@@ -2692,7 +2692,7 @@ cmd_tree_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     gchar *action = args[1];
-    DonnaTreeRowId *rid = args[2];
+    DonnaRowId *rid = args[2];
     gboolean to_focused = GPOINTER_TO_INT (args[3]); /* opt */
 
     const gchar *choices[] = { "select", "unselect", "invert", "define" };
@@ -2758,7 +2758,7 @@ cmd_tree_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gboolean no_scroll = GPOINTER_TO_INT (args[2]);
 
     if (!donna_tree_view_set_cursor (tree, rid, no_scroll, &err))
@@ -2775,7 +2775,7 @@ cmd_tree_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
 
     if (!donna_tree_view_set_focus (tree, rid, &err))
     {
@@ -2937,7 +2937,7 @@ cmd_tree_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gchar *visual = args[2];
     gchar *value = args[3];
 
@@ -2976,7 +2976,7 @@ cmd_tree_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    DonnaTreeRowId *rid = args[1];
+    DonnaRowId *rid = args[1];
     gchar *toggle = args[2];
 
     const gchar *choices[] = { "standard", "full", "maxi" };

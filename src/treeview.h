@@ -87,13 +87,13 @@ struct _DonnaArrangement
 /* special handling for DONNA_ARG_TYPE_ROW_ID that can be a ROW, NODE, or PATH.
  * This allows any of those to be used/parsed, and the command can check it got
  * the right one. */
-struct _DonnaTreeRowId
+struct _DonnaRowId
 {
     DonnaArgType    type;
     gpointer        ptr;
 };
 
-struct _DonnaTreeRow
+struct _DonnaRow
 {
     DonnaNode   *node;
     GtkTreeIter *iter;
@@ -211,21 +211,21 @@ gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
 DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
 gboolean        donna_tree_view_selection       (DonnaTreeView      *tree,
                                                  DonnaTreeSelAction  action,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  gboolean            to_focused,
                                                  GError            **error);
 gboolean        donna_tree_view_set_focus       (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_set_cursor      (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  gboolean            no_scroll,
                                                  GError            **error);
 gboolean        donna_tree_view_activate_row    (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_column_edit     (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  const gchar        *column,
                                                  GError            **error);
 gboolean        donna_tree_view_column_set_option (
@@ -236,11 +236,11 @@ gboolean        donna_tree_view_column_set_option (
                                                  DonnaColumnOptionSaveLocation save_location,
                                                  GError            **error);
 gboolean        donna_tree_view_column_set_value(DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  gboolean            to_focused,
                                                  const gchar        *column,
                                                  const gchar        *value,
-                                                 DonnaTreeRowId     *rowid_ref,
+                                                 DonnaRowId         *rowid_ref,
                                                  GError            **error);
 gboolean        donna_tree_view_refresh         (DonnaTreeView      *tree,
                                                  DonnaTreeRefreshMode mode,
@@ -251,20 +251,20 @@ gboolean        donna_tree_view_filter_nodes    (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
                                                  DonnaTreeSet        set,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  guint               nb,
                                                  DonnaTreeGoto       nb_type,
                                                  DonnaTreeSelAction  action,
                                                  gboolean            to_focused,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_node_at_row (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 void            donna_tree_view_set_key_mode    (DonnaTreeView      *tree,
                                                  const gchar        *key_mode);
 void            donna_tree_view_reset_keys      (DonnaTreeView      *tree);
 GPtrArray *     donna_tree_view_get_nodes       (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  gboolean            to_focused,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_node_up     (DonnaTreeView      *tree,
@@ -276,12 +276,12 @@ gboolean        donna_tree_view_go_up           (DonnaTreeView      *tree,
                                                  GError            **error);
 GPtrArray *     donna_tree_view_context_get_nodes (
                                                  DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  const gchar        *column,
                                                  gchar              *sections,
                                                  GError            **error);
 gboolean        donna_tree_view_context_popup   (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  const gchar        *column,
                                                  gchar              *sections,
                                                  const gchar        *menus,
@@ -314,42 +314,42 @@ gboolean        donna_tree_view_add_root        (DonnaTreeView      *tree,
                                                  DonnaNode          *node,
                                                  GError            **error);
 gboolean        donna_tree_view_set_visual      (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  DonnaTreeVisual     visual,
                                                  const gchar        *value,
                                                  GError            **error);
 gchar *         donna_tree_view_get_visual      (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  DonnaTreeVisual     visual,
                                                  DonnaTreeVisualSource source,
                                                  GError            **error);
 gboolean        donna_tree_view_toggle_row      (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  DonnaTreeToggle     toggle,
                                                  GError            **error);
 gboolean        donna_tree_view_full_expand     (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_full_collapse   (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_remove_row      (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_go_root         (DonnaTreeView      *tree,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_node_root   (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_move_root       (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  gint                move,
                                                  GError            **error);
 /* Mini-Tree */
 gboolean        donna_tree_view_maxi_expand     (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 gboolean        donna_tree_view_maxi_collapse   (DonnaTreeView      *tree,
-                                                 DonnaTreeRowId     *rowid,
+                                                 DonnaRowId         *rowid,
                                                  GError            **error);
 /* Mode List */
 gboolean        donna_tree_view_save_list_file  (DonnaTreeView      *tree,

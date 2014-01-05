@@ -112,8 +112,8 @@ typedef struct _DonnaTreeView           DonnaTreeView;
 typedef struct _DonnaTreeViewPrivate    DonnaTreeViewPrivate;
 typedef struct _DonnaTreeViewClass      DonnaTreeViewClass;
 
-typedef struct _DonnaTreeRow            DonnaTreeRow;
-typedef struct _DonnaTreeRowId          DonnaTreeRowId;
+typedef struct _DonnaRow                DonnaRow;
+typedef struct _DonnaRowId              DonnaRowId;
 
 #define DONNA_TYPE_TREE_VIEW            (donna_tree_view_get_type ())
 #define DONNA_TREE_VIEW(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_TREE_VIEW, DonnaTreeView))

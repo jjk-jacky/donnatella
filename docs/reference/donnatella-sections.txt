@@ -997,8 +997,8 @@ DonnaSortOrder
 DonnaSecondSortSticky
 DonnaArrangementFlags
 DonnaArrangement
-DonnaTreeRowId
-DonnaTreeRow
+DonnaRowId
+DonnaRow
 DonnaTreeSelAction
 DonnaTreeToggle
 DonnaTreeRefreshMode

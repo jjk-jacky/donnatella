@@ -318,7 +318,7 @@ free_command_args (struct command *command, GPtrArray *args)
             g_free (args->pdata[i]);
         else if (command->arg_type[i] & DONNA_ARG_TYPE_ROW_ID)
         {
-            DonnaTreeRowId *rowid;
+            DonnaRowId *rowid;
 
             rowid = args->pdata[i];
             if (rowid->type == DONNA_ARG_TYPE_NODE)
@@ -575,7 +575,7 @@ parse_arg (struct run_command    *rc,
                     else if ((_rc.command->return_type & DONNA_ARG_TYPE_NODE)
                             && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_ROW_ID))
                     {
-                        DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                        DonnaRowId *rid = g_new (DonnaRowId, 1);
                         rid->ptr = g_object_ref (arr->pdata[0]);
                         rid->type = DONNA_ARG_TYPE_NODE;
                         g_ptr_array_add (rc->args, rid);
@@ -682,7 +682,7 @@ parse_arg (struct run_command    *rc,
             }
             else if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_ROW_ID)
             {
-                DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+                DonnaRowId *rid = g_new (DonnaRowId, 1);
                 rid->ptr = g_value_dup_object (v);
                 rid->type = DONNA_ARG_TYPE_NODE;
                 g_ptr_array_add (rc->args, rid);
@@ -805,12 +805,12 @@ convert:
     }
     else if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_ROW_ID)
     {
-        DonnaTreeRowId *rid = g_new (DonnaTreeRowId, 1);
+        DonnaRowId *rid = g_new (DonnaRowId, 1);
         gpointer ptr;
 
         if (*s == '[')
         {
-            DonnaTreeRow *row = g_new (DonnaTreeRow, 1);
+            DonnaRow *row = g_new (DonnaRow, 1);
             if (sscanf (s, "[%p;%p]", &row->node, &row->iter) != 2)
             {
                 g_free (row);

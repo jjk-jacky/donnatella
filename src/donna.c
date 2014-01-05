@@ -1341,7 +1341,7 @@ donna_donna_parse_fl (DonnaApp       *app,
                 g_string_append (str, donna_tree_view_get_name ((DonnaTreeView *) ptr));
             else if (type & DONNA_ARG_TYPE_ROW)
             {
-                DonnaTreeRow *row = (DonnaTreeRow *) ptr;
+                DonnaRow *row = (DonnaRow *) ptr;
                 if (dereference != DEREFERENCE_NONE)
                 {
                     gchar *l = NULL;

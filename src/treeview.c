@@ -270,7 +270,7 @@ struct status
 struct conv
 {
     DonnaTreeView   *tree;
-    DonnaTreeRow    *row;
+    DonnaRow        *row;
     gchar           *col_name;
     guint            key_m;
     /* context menus: selected nodes, if asked by a provider */
@@ -7094,7 +7094,7 @@ donna_tree_view_set_node_property (DonnaTreeView      *tree,
     return TRUE;
 }
 
-static DonnaTreeRow *
+static DonnaRow *
 get_row_for_iter (DonnaTreeView *tree, GtkTreeIter *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -7108,9 +7108,9 @@ get_row_for_iter (DonnaTreeView *tree, GtkTreeIter *iter)
     for (l = g_hash_table_lookup (priv->hashtable, node); l; l = l->next)
         if (itereq (iter, (GtkTreeIter *) l->data))
         {
-            DonnaTreeRow *row;
+            DonnaRow *row;
 
-            row = g_new (DonnaTreeRow, 1);
+            row = g_new (DonnaRow, 1);
             row->node = node;
             row->iter = l->data;
             return row;
@@ -8754,7 +8754,7 @@ typedef enum
 
 static row_id_type
 convert_row_id_to_iter (DonnaTreeView   *tree,
-                        DonnaTreeRowId  *rowid,
+                        DonnaRowId      *rowid,
                         GtkTreeIter     *iter)
 {
     DonnaTreeViewPrivate *priv = tree->priv;
@@ -8762,7 +8762,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
 
     if (rowid->type == DONNA_ARG_TYPE_ROW)
     {
-        DonnaTreeRow *row = rowid->ptr;
+        DonnaRow *row = rowid->ptr;
 
         list = g_hash_table_lookup (priv->hashtable, row->node);
         if (!list)
@@ -9128,7 +9128,7 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
 
             if (flg != LINE)
             {
-                DonnaTreeRowId rid = { DONNA_ARG_TYPE_PATH, NULL };
+                DonnaRowId rid = { DONNA_ARG_TYPE_PATH, NULL };
                 GdkRectangle rect;
                 gint height;
                 gint rows;
@@ -9225,7 +9225,7 @@ unselect_path (gpointer p, gpointer s)
 gboolean
 donna_tree_view_selection (DonnaTreeView        *tree,
                            DonnaTreeSelAction    action,
-                           DonnaTreeRowId       *rowid,
+                           DonnaRowId           *rowid,
                            gboolean              to_focused,
                            GError              **error)
 {
@@ -9470,7 +9470,7 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_set_focus (DonnaTreeView        *tree,
-                           DonnaTreeRowId       *rowid,
+                           DonnaRowId           *rowid,
                            GError              **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -9501,7 +9501,7 @@ donna_tree_view_set_focus (DonnaTreeView        *tree,
 
 gboolean
 donna_tree_view_set_cursor (DonnaTreeView        *tree,
-                            DonnaTreeRowId       *rowid,
+                            DonnaRowId           *rowid,
                             gboolean              no_scroll,
                             GError              **error)
 {
@@ -9544,7 +9544,7 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
 
 gboolean
 donna_tree_view_activate_row (DonnaTreeView      *tree,
-                              DonnaTreeRowId     *rowid,
+                              DonnaRowId         *rowid,
                               GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -9649,7 +9649,7 @@ next:
 
 gboolean
 donna_tree_view_toggle_row (DonnaTreeView      *tree,
-                            DonnaTreeRowId     *rowid,
+                            DonnaRowId         *rowid,
                             DonnaTreeToggle     toggle,
                             GError            **error)
 {
@@ -9792,7 +9792,7 @@ full_expand_children (DonnaTreeView *tree, GtkTreeIter *iter)
 
 gboolean
 donna_tree_view_full_expand (DonnaTreeView      *tree,
-                             DonnaTreeRowId     *rowid,
+                             DonnaRowId         *rowid,
                              GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -9844,7 +9844,7 @@ reset_expand_flag (GtkTreeModel *model, GtkTreeIter *iter)
 
 gboolean
 donna_tree_view_full_collapse (DonnaTreeView      *tree,
-                               DonnaTreeRowId     *rowid,
+                               DonnaRowId         *rowid,
                                GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -9886,7 +9886,7 @@ donna_tree_view_full_collapse (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_maxi_expand (DonnaTreeView      *tree,
-                             DonnaTreeRowId     *rowid,
+                             DonnaRowId         *rowid,
                              GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -9928,7 +9928,7 @@ donna_tree_view_maxi_expand (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
-                               DonnaTreeRowId     *rowid,
+                               DonnaRowId         *rowid,
                                GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -10054,7 +10054,7 @@ set_tree_visual (DonnaTreeView  *tree,
 
 gboolean
 donna_tree_view_set_visual (DonnaTreeView      *tree,
-                            DonnaTreeRowId     *rowid,
+                            DonnaRowId         *rowid,
                             DonnaTreeVisual     visual,
                             const gchar        *value,
                             GError            **error)
@@ -10091,7 +10091,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
 
 gchar *
 donna_tree_view_get_visual (DonnaTreeView           *tree,
-                            DonnaTreeRowId          *rowid,
+                            DonnaRowId              *rowid,
                             DonnaTreeVisual          visual,
                             DonnaTreeVisualSource    source,
                             GError                 **error)
@@ -10210,14 +10210,14 @@ struct inline_edit
 {
     DonnaTreeView       *tree;
     GtkTreeViewColumn   *column;
-    DonnaTreeRow        *row;
+    DonnaRow            *row;
     guint                move;
 };
 
 static gboolean
 move_inline_edit (struct inline_edit *ie)
 {
-    DonnaTreeRowId rid;
+    DonnaRowId rid;
     struct column *_col;
 
     rid.type = DONNA_ARG_TYPE_ROW;
@@ -10226,7 +10226,7 @@ move_inline_edit (struct inline_edit *ie)
     _col = get_column_by_column (ie->tree, ie->column);
     donna_tree_view_column_edit (ie->tree, &rid, _col->name, NULL);
     g_object_unref (ie->row->node);
-    g_slice_free (DonnaTreeRow, ie->row);
+    g_slice_free (DonnaRow, ie->row);
     g_slice_free (struct inline_edit, ie);
     return FALSE;
 }
@@ -10242,7 +10242,7 @@ editable_remove_widget_cb (GtkCellEditable *editable, struct inline_edit *ie)
     priv->renderer_editable = NULL;
     if (ie->move != INLINE_EDIT_DONE)
     {
-        DonnaTreeRowId rid;
+        DonnaRowId rid;
         row_id_type type;
         GtkTreeIter iter;
 
@@ -10254,7 +10254,7 @@ editable_remove_widget_cb (GtkCellEditable *editable, struct inline_edit *ie)
          * e.g. pressing Up goes to the row above *after* the resort has been
          * triggered.
          * This is why we get the iter of the prev/next row now, and store it
-         * (as a DonnaTreeRow) for move_inline_edit() to use */
+         * (as a DonnaRow) for move_inline_edit() to use */
 
         rid.type = DONNA_ARG_TYPE_PATH;
         rid.ptr  = (gpointer) ((ie->move == INLINE_EDIT_PREV) ? ":prev" : ":next");
@@ -10263,7 +10263,7 @@ editable_remove_widget_cb (GtkCellEditable *editable, struct inline_edit *ie)
         {
             GSList *list;
 
-            ie->row = g_slice_new (DonnaTreeRow);
+            ie->row = g_slice_new (DonnaRow);
 
             gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
                     TREE_VIEW_COL_NODE, &ie->row->node,
@@ -10378,7 +10378,7 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
 
 gboolean
 donna_tree_view_column_edit (DonnaTreeView      *tree,
-                             DonnaTreeRowId     *rowid,
+                             DonnaRowId         *rowid,
                              const gchar        *column,
                              GError            **error)
 {
@@ -10497,11 +10497,11 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_column_set_value (DonnaTreeView      *tree,
-                                  DonnaTreeRowId     *rowid,
+                                  DonnaRowId         *rowid,
                                   gboolean            to_focused,
                                   const gchar        *column,
                                   const gchar        *value,
-                                  DonnaTreeRowId     *rowid_ref,
+                                  DonnaRowId         *rowid_ref,
                                   GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -10951,7 +10951,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_move_root (DonnaTreeView     *tree,
-                           DonnaTreeRowId    *rowid,
+                           DonnaRowId        *rowid,
                            gint               move,
                            GError           **error)
 {
@@ -11090,7 +11090,7 @@ donna_tree_view_save_list_file (DonnaTreeView      *tree,
                                 GError            **error)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaTreeRowId rid = { DONNA_ARG_TYPE_PATH, NULL };
+    DonnaRowId rid = { DONNA_ARG_TYPE_PATH, NULL };
     GtkTreeModel *model;
     GtkTreeIter iter;
     DonnaNode *node;
@@ -12547,7 +12547,7 @@ donna_tree_view_filter_nodes (DonnaTreeView *tree,
 gboolean
 donna_tree_view_goto_line (DonnaTreeView      *tree,
                            DonnaTreeSet        set,
-                           DonnaTreeRowId     *rowid,
+                           DonnaRowId         *rowid,
                            guint               nb,
                            DonnaTreeGoto       nb_type,
                            DonnaTreeSelAction  action,
@@ -12816,8 +12816,8 @@ move:
         if (action == DONNA_TREE_SEL_SELECT || action == DONNA_TREE_SEL_UNSELECT
                 || action == DONNA_TREE_SEL_INVERT || action == DONNA_TREE_SEL_DEFINE)
         {
-            DonnaTreeRowId rid;
-            DonnaTreeRow r;
+            DonnaRowId rid;
+            DonnaRow r;
             GSList *l;
 
             rid.type = DONNA_ARG_TYPE_ROW;
@@ -12877,7 +12877,7 @@ move:
 
 DonnaNode *
 donna_tree_view_get_node_at_row (DonnaTreeView  *tree,
-                                 DonnaTreeRowId *rowid,
+                                 DonnaRowId     *rowid,
                                  GError        **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -12933,7 +12933,7 @@ donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
 
 gboolean
 donna_tree_view_remove_row (DonnaTreeView   *tree,
-                            DonnaTreeRowId  *rowid,
+                            DonnaRowId      *rowid,
                             GError         **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -13030,7 +13030,7 @@ donna_tree_view_abort (DonnaTreeView *tree)
 
 GPtrArray *
 donna_tree_view_get_nodes (DonnaTreeView      *tree,
-                           DonnaTreeRowId     *rowid,
+                           DonnaRowId         *rowid,
                            gboolean            to_focused,
                            GError            **error)
 {
@@ -15607,7 +15607,7 @@ err:
 
 GPtrArray *
 donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
-                                   DonnaTreeRowId     *rowid,
+                                   DonnaRowId         *rowid,
                                    const gchar        *column,
                                    gchar              *items,
                                    GError            **error)
@@ -15724,7 +15724,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
 
 gboolean
 donna_tree_view_context_popup (DonnaTreeView      *tree,
-                               DonnaTreeRowId     *rowid,
+                               DonnaRowId         *rowid,
                                const gchar        *column,
                                gchar              *items,
                                const gchar        *_menus,
@@ -16084,7 +16084,7 @@ donna_tree_view_row_activated (GtkTreeView    *treev,
                                GtkTreeViewColumn *column)
 {
     DonnaTreeView *tree = (DonnaTreeView *) treev;
-    DonnaTreeRowId rowid;
+    DonnaRowId rowid;
 
     /* warning because this shouldn't happen, as we're doing things our own way.
      * If this happens, it's probably an oversight somewhere that should be
