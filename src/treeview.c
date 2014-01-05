@@ -9224,7 +9224,7 @@ unselect_path (gpointer p, gpointer s)
 
 gboolean
 donna_tree_view_selection (DonnaTreeView        *tree,
-                           DonnaTreeSelAction    action,
+                           DonnaSelAction        action,
                            DonnaRowId           *rowid,
                            gboolean              to_focused,
                            GError              **error)
@@ -9235,10 +9235,10 @@ donna_tree_view_selection (DonnaTreeView        *tree,
     row_id_type type;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    g_return_val_if_fail (action == DONNA_TREE_SEL_SELECT
-            || action == DONNA_TREE_SEL_UNSELECT
-            || action == DONNA_TREE_SEL_INVERT
-            || action == DONNA_TREE_SEL_DEFINE, FALSE);
+    g_return_val_if_fail (action == DONNA_SEL_SELECT
+            || action == DONNA_SEL_UNSELECT
+            || action == DONNA_SEL_INVERT
+            || action == DONNA_SEL_DEFINE, FALSE);
     g_return_val_if_fail (rowid != NULL, FALSE);
 
     priv = tree->priv;
@@ -9256,7 +9256,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
 
     /* tree is limited in its selection capabilities */
     if (priv->is_tree && !(type == ROW_ID_ROW && !to_focused
-                && action == DONNA_TREE_SEL_SELECT))
+                && action == DONNA_SEL_SELECT))
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
@@ -9267,11 +9267,11 @@ donna_tree_view_selection (DonnaTreeView        *tree,
 
     if (type == ROW_ID_ALL)
     {
-        if (action == DONNA_TREE_SEL_SELECT || action == DONNA_TREE_SEL_DEFINE)
+        if (action == DONNA_SEL_SELECT || action == DONNA_SEL_DEFINE)
             gtk_tree_selection_select_all (sel);
-        else if (action == DONNA_TREE_SEL_UNSELECT)
+        else if (action == DONNA_SEL_UNSELECT)
             gtk_tree_selection_unselect_all (sel);
-        else /* DONNA_TREE_SEL_INVERT */
+        else /* DONNA_SEL_INVERT */
         {
             gint nb, count;
             GList *list;
@@ -9301,7 +9301,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
     {
         /* SELECT/DEFINE the selection means do nothing; UNSELECT & INVERT both
          * means unselect (all) */
-        if (action == DONNA_TREE_SEL_UNSELECT || action == DONNA_TREE_SEL_INVERT)
+        if (action == DONNA_SEL_UNSELECT || action == DONNA_SEL_INVERT)
             gtk_tree_selection_unselect_all (sel);
         return TRUE;
     }
@@ -9331,17 +9331,17 @@ donna_tree_view_selection (DonnaTreeView        *tree,
                 return FALSE;
             }
 
-            if (action == DONNA_TREE_SEL_DEFINE)
+            if (action == DONNA_SEL_DEFINE)
             {
                 gtk_tree_selection_unselect_all (sel);
-                action = DONNA_TREE_SEL_SELECT;
+                action = DONNA_SEL_SELECT;
             }
 
-            if (action == DONNA_TREE_SEL_SELECT)
+            if (action == DONNA_SEL_SELECT)
                 gtk_tree_selection_select_range (sel, path, path_focus);
-            else if (action == DONNA_TREE_SEL_UNSELECT)
+            else if (action == DONNA_SEL_UNSELECT)
                 gtk_tree_selection_unselect_range (sel, path, path_focus);
-            else /* DONNA_TREE_SEL_INVERT */
+            else /* DONNA_SEL_INVERT */
 #ifdef GTK_IS_JJK
                 gtk_tree_selection_invert_range (sel, path, path_focus);
 #else
@@ -9362,17 +9362,17 @@ donna_tree_view_selection (DonnaTreeView        *tree,
         }
         else
         {
-            if (action == DONNA_TREE_SEL_DEFINE)
+            if (action == DONNA_SEL_DEFINE)
             {
                 gtk_tree_selection_unselect_all (sel);
-                action = DONNA_TREE_SEL_SELECT;
+                action = DONNA_SEL_SELECT;
             }
 
-            if (action == DONNA_TREE_SEL_SELECT)
+            if (action == DONNA_SEL_SELECT)
                 gtk_tree_selection_select_iter (sel, &iter);
-            else if (action == DONNA_TREE_SEL_UNSELECT)
+            else if (action == DONNA_SEL_UNSELECT)
                 gtk_tree_selection_unselect_iter (sel, &iter);
-            else /* DONNA_TREE_SEL_INVERT */
+            else /* DONNA_SEL_INVERT */
             {
                 if (gtk_tree_selection_iter_is_selected (sel, &iter))
                     gtk_tree_selection_unselect_iter (sel, &iter);
@@ -9387,7 +9387,7 @@ donna_tree_view_selection (DonnaTreeView        *tree,
 /* mode list only */
 gboolean
 donna_tree_view_selection_nodes (DonnaTreeView      *tree,
-                                 DonnaTreeSelAction  action,
+                                 DonnaSelAction      action,
                                  GPtrArray          *nodes,
                                  GError            **error)
 {
@@ -9396,10 +9396,10 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
     guint i;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    g_return_val_if_fail (action == DONNA_TREE_SEL_SELECT
-            || action == DONNA_TREE_SEL_UNSELECT
-            || action == DONNA_TREE_SEL_INVERT
-            || action == DONNA_TREE_SEL_DEFINE, FALSE);
+    g_return_val_if_fail (action == DONNA_SEL_SELECT
+            || action == DONNA_SEL_UNSELECT
+            || action == DONNA_SEL_INVERT
+            || action == DONNA_SEL_DEFINE, FALSE);
     g_return_val_if_fail (nodes != NULL, FALSE);
 
     priv = tree->priv;
@@ -9407,7 +9407,7 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
 
     if (nodes->len == 0)
     {
-        if (action == DONNA_TREE_SEL_DEFINE)
+        if (action == DONNA_SEL_DEFINE)
             gtk_tree_selection_unselect_all (sel);
         return TRUE;
     }
@@ -9422,10 +9422,10 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    if (action == DONNA_TREE_SEL_DEFINE)
+    if (action == DONNA_SEL_DEFINE)
     {
         gtk_tree_selection_unselect_all (sel);
-        action = DONNA_TREE_SEL_SELECT;
+        action = DONNA_SEL_SELECT;
     }
 
     if (!priv->is_tree)
@@ -9444,11 +9444,11 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
 
         for (l = list; l; l = l->next)
         {
-            if (action == DONNA_TREE_SEL_SELECT)
+            if (action == DONNA_SEL_SELECT)
                 gtk_tree_selection_select_iter (sel, l->data);
-            else if (action == DONNA_TREE_SEL_UNSELECT)
+            else if (action == DONNA_SEL_UNSELECT)
                 gtk_tree_selection_unselect_iter (sel, l->data);
-            else /* DONNA_TREE_SEL_INVERT */
+            else /* DONNA_SEL_INVERT */
             {
                 if (gtk_tree_selection_iter_is_selected (sel, l->data))
                     gtk_tree_selection_unselect_iter (sel, l->data);
@@ -12550,7 +12550,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                            DonnaRowId         *rowid,
                            guint               nb,
                            DonnaTreeGoto       nb_type,
-                           DonnaTreeSelAction  action,
+                           DonnaSelAction      action,
                            gboolean            to_focused,
                            GError            **error)
 {
@@ -12813,8 +12813,8 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             is_tb = 2;
         }
 move:
-        if (action == DONNA_TREE_SEL_SELECT || action == DONNA_TREE_SEL_UNSELECT
-                || action == DONNA_TREE_SEL_INVERT || action == DONNA_TREE_SEL_DEFINE)
+        if (action == DONNA_SEL_SELECT || action == DONNA_SEL_UNSELECT
+                || action == DONNA_SEL_INVERT || action == DONNA_SEL_DEFINE)
         {
             DonnaRowId rid;
             DonnaRow r;

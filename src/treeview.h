@@ -101,11 +101,11 @@ struct _DonnaRow
 
 typedef enum
 {
-    DONNA_TREE_SEL_SELECT = 1,
-    DONNA_TREE_SEL_UNSELECT,
-    DONNA_TREE_SEL_INVERT,
-    DONNA_TREE_SEL_DEFINE,      /* basically unselect all + select */
-} DonnaTreeSelAction;
+    DONNA_SEL_SELECT = 1,
+    DONNA_SEL_UNSELECT,
+    DONNA_SEL_INVERT,
+    DONNA_SEL_DEFINE,       /* basically unselect all + select */
+} DonnaSelAction;
 
 typedef enum
 {
@@ -210,7 +210,7 @@ gboolean        donna_tree_view_set_location    (DonnaTreeView      *tree,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_location    (DonnaTreeView      *tree);
 gboolean        donna_tree_view_selection       (DonnaTreeView      *tree,
-                                                 DonnaTreeSelAction  action,
+                                                 DonnaSelAction      action,
                                                  DonnaRowId         *rowid,
                                                  gboolean            to_focused,
                                                  GError            **error);
@@ -254,7 +254,7 @@ gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
                                                  DonnaRowId         *rowid,
                                                  guint               nb,
                                                  DonnaTreeGoto       nb_type,
-                                                 DonnaTreeSelAction  action,
+                                                 DonnaSelAction      action,
                                                  gboolean            to_focused,
                                                  GError            **error);
 DonnaNode *     donna_tree_view_get_node_at_row (DonnaTreeView      *tree,
@@ -361,7 +361,7 @@ gboolean        donna_tree_view_load_list_file  (DonnaTreeView      *tree,
                                                  DonnaListFileElements elements,
                                                  GError            **error);
 gboolean        donna_tree_view_selection_nodes (DonnaTreeView      *tree,
-                                                 DonnaTreeSelAction  action,
+                                                 DonnaSelAction      action,
                                                  GPtrArray          *nodes,
                                                  GError            **error);
 GPtrArray *     donna_tree_view_get_selected_nodes (

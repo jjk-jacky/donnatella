@@ -999,7 +999,7 @@ DonnaArrangementFlags
 DonnaArrangement
 DonnaRowId
 DonnaRow
-DonnaTreeSelAction
+DonnaSelAction
 DonnaTreeToggle
 DonnaTreeRefreshMode
 DonnaTreeVisual
