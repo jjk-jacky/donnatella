@@ -2364,7 +2364,10 @@ load_submenu (struct load_submenu *ls)
     if (!node)
         return;
 
-    task = donna_node_get_children_task (node, ls->mc->node_type, NULL);
+    task = donna_node_get_children_task (node,
+            (ls->sub_mc && ls->sub_mc->node_type) ? ls->sub_mc->node_type
+            : ls->mc->node_type,
+            NULL);
 
     if (ls->blocking)
         g_object_ref (task);
