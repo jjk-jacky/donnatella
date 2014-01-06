@@ -109,8 +109,6 @@ libdonnatella_la_SOURCES = \
 					 src/taskui.h \
 					 src/taskui-messages.c \
 					 src/taskui-messages.h \
-					 src/treestore.c \
-					 src/treestore.h \
 					 src/treeview.c \
 					 src/treeview.h \
 					 src/util.c \
