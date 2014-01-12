@@ -6286,7 +6286,18 @@ column_button_press_event_cb (GtkWidget         *btn,
                               GdkEventButton    *event,
                               struct column     *column)
 {
+    DonnaTreeViewPrivate *priv = column->tree->priv;
     DonnaClick click = DONNA_CLICK_SINGLE;
+    gboolean just_focused;
+
+    /* if app's main window just got focused, we ignore this click */
+    g_object_get (priv->app, "just-focused", &just_focused, NULL);
+    if (just_focused)
+    {
+        g_object_set (priv->app, "just-focused", FALSE, NULL);
+        gtk_widget_grab_focus ((GtkWidget *) column->tree);
+        return TRUE;
+    }
 
     if (event->button == 1)
         click |= DONNA_CLICK_LEFT;
@@ -6295,7 +6306,7 @@ column_button_press_event_cb (GtkWidget         *btn,
     else if (event->button == 3)
         click |= DONNA_CLICK_RIGHT;
 
-    column->tree->priv->on_release_triggered = FALSE;
+    priv->on_release_triggered = FALSE;
     handle_click (column->tree, click, event, NULL, column->column, NULL,
             CLICK_ON_COLHEADER);
 
