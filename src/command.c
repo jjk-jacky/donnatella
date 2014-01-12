@@ -2469,10 +2469,13 @@ cmd_tv_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *file = args[1];
     gchar *s_visuals = args[2]; /* opt */
 
-    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "click_mode" };
+    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "click_mode",
+        "all" };
     DonnaTreeVisual _visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
         DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
-        DONNA_TREE_VISUAL_CLICK_MODE };
+        DONNA_TREE_VISUAL_CLICK_MODE,
+        DONNA_TREE_VISUAL_NAME | DONNA_TREE_VISUAL_ICON | DONNA_TREE_VISUAL_BOX
+            | DONNA_TREE_VISUAL_HIGHLIGHT | DONNA_TREE_VISUAL_CLICK_MODE };
     guint visuals;
 
     if (s_visuals)
@@ -2482,9 +2485,9 @@ cmd_tv_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
         {
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'tv_save_tree_file': Invalid visuals : '%s'; "
+                    "Command 'tv_load_tree_file': Invalid visuals : '%s'; "
                     "Must be (a '+'-separated combination of) 'name', 'icon', "
-                    "'box',' highlight', and/or 'click_mode'",
+                    "'box',' highlight', 'click_mode' and/or 'all'",
                     s_visuals);
             return DONNA_TASK_FAILED;
         }
@@ -2654,10 +2657,13 @@ cmd_tv_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *file = args[1];
     gchar *s_visuals = args[2]; /* opt */
 
-    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "click_mode" };
+    const gchar *_s_visuals[] = { "name", "icon", "box", "highlight", "click_mode",
+        "all" };
     DonnaTreeVisual _visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
         DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
-        DONNA_TREE_VISUAL_CLICK_MODE };
+        DONNA_TREE_VISUAL_CLICK_MODE,
+        DONNA_TREE_VISUAL_NAME | DONNA_TREE_VISUAL_ICON | DONNA_TREE_VISUAL_BOX
+            | DONNA_TREE_VISUAL_HIGHLIGHT | DONNA_TREE_VISUAL_CLICK_MODE };
     guint visuals;
 
     if (s_visuals)
@@ -2669,7 +2675,7 @@ cmd_tv_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
                     DONNA_COMMAND_ERROR_OTHER,
                     "Command 'tv_save_tree_file': Invalid visuals : '%s'; "
                     "Must be (a '+'-separated combination of) 'name', 'icon', "
-                    "'box',' highlight', and/or 'click_mode'",
+                    "'box',' highlight', 'click_mode' and/or 'all'",
                     s_visuals);
             return DONNA_TASK_FAILED;
         }
