@@ -350,7 +350,7 @@ new_node_for_mark (DonnaProviderMark *pm,
 
     node = donna_node_new ((DonnaProvider *) pm, mark->location,
             DONNA_NODE_ITEM, NULL, refresher, setter, mark->name,
-            DONNA_NODE_NAME_WRITABLE);
+            DONNA_NODE_NAME_WRITABLE | DONNA_NODE_DESC_EXISTS);
     if (G_UNLIKELY (!node))
     {
         if (!data_is_mark)
@@ -361,6 +361,12 @@ new_node_for_mark (DonnaProviderMark *pm,
                 mark->location);
         return NULL;
     }
+
+    g_value_init (&v, G_TYPE_STRING);
+    g_value_take_string (&v, g_strconcat ("[", mark->location, "] ",
+                mark->value, NULL));
+    donna_node_set_property_value (node, "desc", &v);
+    g_value_unset (&v);
 
     g_value_init (&v, G_TYPE_INT);
     g_value_set_int (&v, mark->type);
