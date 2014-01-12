@@ -17096,6 +17096,13 @@ again:
     return FALSE;
 }
 
+static gboolean
+grab_focus (GtkWidget *wtree)
+{
+    gtk_widget_grab_focus (wtree);
+    return G_SOURCE_REMOVE;
+}
+
 static void
 handle_click (DonnaTreeView     *tree,
               DonnaClick         click,
@@ -17238,7 +17245,7 @@ handle_click (DonnaTreeView     *tree,
     g_free (click_mode);
 
     if (!fl)
-        return;
+        goto done;
 
     if (iter)
         conv.row = get_row_for_iter (tree, iter);
@@ -17254,6 +17261,12 @@ handle_click (DonnaTreeView     *tree,
                 priv->name, b, fl));
     donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
     g_free (fl);
+
+done:
+    if (click_on == CLICK_ON_COLHEADER)
+        /* not sure why, but it doesn't work for middle click if called
+         * directly, so we use an idle source */
+        g_idle_add ((GSourceFunc) grab_focus, tree);
 }
 
 /* for obvious reason (grabbing the focus happens here) this can only be called
