@@ -1277,6 +1277,20 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
     gint i;
 
     i = 0;
+    it_int[i].value     = DONNA_SORT_ASC;
+    it_int[i].in_file   = "asc";
+    it_int[i].label     = "Ascendingly";
+    ++i;
+    it_int[i].value     = DONNA_SORT_DESC;
+    it_int[i].in_file   = "desc";
+    it_int[i].label     = "Descendingly";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "order", "Sort Order",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
     it_int[i].value     = SORT_CONTAINER_FIRST;
     it_int[i].in_file   = "first";
     it_int[i].label     = "First (Last when sorting descendingly)";
