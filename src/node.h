@@ -143,6 +143,10 @@ typedef enum
     DONNA_NODE_GID_WRITABLE         = (1 << 19),
     DONNA_NODE_DESC_WRITABLE        = (1 << 20),
 
+    /*< private >*/
+    DONNA_NODE_INVALID              = (1 << 31),
+
+    /*< public >*/
     DONNA_NODE_ALL_EXISTS           = (DONNA_NODE_ICON_EXISTS
         | DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_SIZE_EXISTS
         | DONNA_NODE_CTIME_EXISTS | DONNA_NODE_MTIME_EXISTS

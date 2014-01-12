@@ -1774,6 +1774,19 @@ set_property (DonnaTask *task, struct set_property *data)
     GValue value = G_VALUE_INIT;
     DonnaTaskState ret;
 
+    /* This is for the rare case where the task would start after the node has
+     * been marked invalid. Since it could happen, let's avoid calling a setter
+     * that might assume the node to be in a valid state which could cause all
+     * kinds of issues... */
+    if (G_UNLIKELY (data->node->priv->flags & DONNA_NODE_INVALID))
+    {
+        /* name is now the old full location prefixed w/ "[invalid]" */
+        donna_task_set_error (task, DONNA_NODE_ERROR, DONNA_NODE_ERROR_OTHER,
+                "Cannot set property '%s' on '%s': Node is invalid",
+                data->prop->name, data->node->priv->name);
+        return DONNA_TASK_FAILED;
+    }
+
     DONNA_DEBUG (TASK, NULL,
             g_debug3 ("set_property(%s) for '%s:%s'",
                 data->prop->name,
@@ -2116,7 +2129,7 @@ donna_node_mark_invalid (DonnaNode          *node,
     g_free (priv->location);
     priv->location = g_strdup_printf ("%p", node);
 
-    priv->flags = 0;//DONNA_NODE_ICON_EXISTS;
+    priv->flags = DONNA_NODE_INVALID; //|DONNA_NODE_ICON_EXISTS;
     priv->refresher = (refresher_fn) gtk_true;
     for (i = 0; i < NB_BASIC_PROPS; ++i)
     {
