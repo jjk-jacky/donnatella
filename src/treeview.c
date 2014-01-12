@@ -5620,11 +5620,21 @@ real_new_child_cb (struct new_child_data *data)
     }
     else
     {
+        GtkTreeModel *model = (GtkTreeModel *) priv->store;
         GSList *list;
 
         list = g_hash_table_lookup (priv->hashtable, data->node);
         for ( ; list; list = list->next)
-            add_node_to_tree_filtered (data->tree, list->data, data->child, NULL);
+        {
+            enum tree_expand es;
+
+            /* we only add if expand is MAXI or NONE */
+            gtk_tree_model_get (model, list->data,
+                    TREE_COL_EXPAND_STATE,  &es,
+                    -1);
+            if (es == TREE_EXPAND_MAXI || es == TREE_EXPAND_NONE)
+                add_node_to_tree_filtered (data->tree, list->data, data->child, NULL);
+        }
     }
 
 free:
@@ -5646,13 +5656,11 @@ node_new_child_cb (DonnaProvider *provider,
     DonnaNodeType type;
 
     type = donna_node_get_node_type (child);
-    /* if we don't care for this type of nodes, nothing to do. We also ignore
-     * containers in minitree.
+    /* if we don't care for this type of nodes, nothing to do.
      * XXX technically this is bad, since we shouldn't access priv from possibly
      * another thread. But really, everything we look at exists, and is very
      * unlikely to change/cause issues, so this saves one alloc + 2 ref */
-    if (!(type & priv->node_types) || (priv->is_tree && priv->is_minitree
-                && type == DONNA_NODE_CONTAINER))
+    if (!(type & priv->node_types))
         return;
 
     /* we can't check if node is in the tree though, because there's no lock,
