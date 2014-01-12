@@ -2097,7 +2097,6 @@ donna_node_mark_invalid (DonnaNode          *node,
 {
     DonnaNodePrivate *priv;
     guint i;
-    gchar *s;
 
     g_return_if_fail (DONNA_IS_NODE (node));
     priv = node->priv;
@@ -2110,10 +2109,9 @@ donna_node_mark_invalid (DonnaNode          *node,
 
     g_hash_table_remove_all (priv->props);
 
-    s = g_strconcat ("[invalid] ", donna_provider_get_domain (priv->provider),
-            ":", priv->location, NULL);
     g_free (priv->name);
-    priv->name = s;
+    priv->name = g_strconcat ("[invalid] ", donna_provider_get_domain (priv->provider),
+            ":", priv->location, NULL);
 
     g_free (priv->location);
     priv->location = g_strdup_printf ("%p", node);
