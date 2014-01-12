@@ -6286,14 +6286,14 @@ column_button_press_event_cb (GtkWidget         *btn,
                               GdkEventButton    *event,
                               struct column     *column)
 {
-    DonnaClick click;
+    DonnaClick click = DONNA_CLICK_SINGLE;
 
     if (event->button == 1)
-        click = DONNA_CLICK_LEFT;
+        click |= DONNA_CLICK_LEFT;
     else if (event->button == 2)
-        click = DONNA_CLICK_MIDDLE;
+        click |= DONNA_CLICK_MIDDLE;
     else if (event->button == 3)
-        click = DONNA_CLICK_RIGHT;
+        click |= DONNA_CLICK_RIGHT;
 
     column->tree->priv->on_release_triggered = FALSE;
     handle_click (column->tree, click, event, NULL, column->column, NULL,
