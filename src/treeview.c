@@ -6974,7 +6974,7 @@ load_arrangement (DonnaTreeView     *tree,
             gtk_tree_view_column_set_clickable (column, TRUE);
         }
 
-        if (!first_column)
+        if (!first_column && col_ct != (DonnaColumnType *) tree)
             first_column = column;
 
         if (!ctname_column && col_ct == ctname)
