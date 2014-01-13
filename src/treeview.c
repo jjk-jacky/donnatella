@@ -14960,23 +14960,34 @@ tree_context_get_alias (const gchar             *alias,
     else if (streq (alias, "sort_order") || streq (alias, "second_sort_order"))
     {
         GString *str;
-        GSList *l;
+        GList *list, *l;
 
         if (!priv->columns)
             return (gchar *) "";
 
-        str = g_string_new (":");
-        g_string_append (str, alias);
-        g_string_append_c (str, '<');
-        for (l = priv->columns; l; l = l->next)
+        str = g_string_new (NULL);
+        /* get them from treeview to preserve the current order */
+        list = gtk_tree_view_get_columns ((GtkTreeView *) tree);
+        for (l = list; l; l = l->next)
         {
+            struct column *_col;
+
+            _col = get_column_by_column (tree, l->data);
+            /* blankcol */
+            if (!_col)
+                continue;
+            /* skip line-number -- can't really sort by that one */
+            if (_col->ct == (DonnaColumnType *) tree)
+                continue;
+
             g_string_append_c (str, ':');
             g_string_append (str, alias);
             g_string_append_c (str, ':');
-            g_string_append (str, ((struct column *) l->data)->name);
+            g_string_append (str, _col->name);
             g_string_append_c (str, ',');
         }
-        str->str[str->len - 1] = '>';
+        g_list_free (list);
+        g_string_truncate (str, str->len - 1);
         return g_string_free (str, FALSE);
     }
     else if (streq (alias, "tv_options"))
@@ -15869,7 +15880,14 @@ tree_context_get_item_info (const gchar             *item,
             return FALSE;
         }
 
-        info->name = g_strdup (_col->name);
+        info->name = donna_config_get_string_column (
+                donna_app_peek_config (priv->app),
+                _col->name,
+                (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                priv->name,
+                priv->is_tree,
+                NULL,
+                "title", _col->name, NULL);
         info->free_name = TRUE;
         info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
         if (is_second)
