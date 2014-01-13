@@ -15544,16 +15544,22 @@ tree_context_get_item_info (const gchar             *item,
             _col = get_column_by_name (tree, extra);
             info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
             if (_col)
+            {
                 info->is_active = TRUE;
-            info->name = donna_config_get_string_column (
-                    donna_app_peek_config (priv->app),
-                    extra,
-                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                    priv->name,
-                    priv->is_tree,
-                    NULL,
-                    "title", extra, NULL);
-            info->free_name = TRUE;
+                info->name = gtk_tree_view_column_get_title (_col->column);
+            }
+            else
+            {
+                info->name = donna_config_get_string_column (
+                        donna_app_peek_config (priv->app),
+                        extra,
+                        (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                        priv->name,
+                        priv->is_tree,
+                        NULL,
+                        "title", extra, NULL);
+                info->free_name = TRUE;
+            }
             info->trigger = g_strconcat ("command:tv_toggle_column(%o,",
                     extra, ")", NULL);
             info->free_trigger = TRUE;
@@ -16065,15 +16071,7 @@ tree_context_get_item_info (const gchar             *item,
             return FALSE;
         }
 
-        info->name = donna_config_get_string_column (
-                donna_app_peek_config (priv->app),
-                _col->name,
-                (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                priv->name,
-                priv->is_tree,
-                NULL,
-                "title", _col->name, NULL);
-        info->free_name = TRUE;
+        info->name = gtk_tree_view_column_get_title (_col->column);
         info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
         if (is_second)
             info->is_active = _col->column == priv->second_sort_column
