@@ -11294,6 +11294,59 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
+    if (streq (option, "title"))
+    {
+        const gchar *current = gtk_tree_view_column_get_title (_col->column);
+
+        /* we "abuse" the fact that we are a columntype as well */
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (tree)->helper_set_option (_col->ct,
+                    _col->name,
+                    priv->arrangement->columns_options,
+                    priv->name,
+                    priv->is_tree,
+                    NULL, /* no default */
+                    save_location,
+                    option,
+                    G_TYPE_STRING,
+                    &current,
+                    (gpointer) value,
+                    error))
+            return FALSE;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return TRUE;
+
+        gtk_tree_view_column_set_title (_col->column, value);
+        gtk_label_set_text ((GtkLabel *) _col->label, value);
+        return TRUE;
+    }
+    else if (streq (option, "width"))
+    {
+        gint current = gtk_tree_view_column_get_fixed_width (_col->column);
+
+        /* we "abuse" the fact that we are a columntype as well */
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (tree)->helper_set_option (_col->ct,
+                    _col->name,
+                    priv->arrangement->columns_options,
+                    priv->name,
+                    priv->is_tree,
+                    NULL, /* no default */
+                    save_location,
+                    option,
+                    G_TYPE_INT,
+                    &current,
+                    (gpointer) value,
+                    error))
+            return FALSE;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return TRUE;
+
+        current = (gint) g_ascii_strtoll (value, NULL, 10);
+        gtk_tree_view_column_set_fixed_width (_col->column, current);
+        return TRUE;
+    }
+
     need = donna_column_type_set_option (_col->ct, _col->name,
             priv->arrangement->columns_options,
             priv->name,
@@ -15009,6 +15062,7 @@ tree_context_get_alias (const gchar             *alias,
         struct column *_col;
         gchar buf[255], *b = buf;
         gchar *ret;
+        gchar *s;
 
         if (!conv->col_name)
             return (gchar *) "";
@@ -15040,7 +15094,11 @@ tree_context_get_alias (const gchar             *alias,
 
         if (G_UNLIKELY (b != buf))
             g_free (b);
-        return ret;
+
+        s = g_strconcat (":column.", _col->name, ".title,"
+                ":column.", _col->name, ".width,-,", ret, NULL);
+        g_free (ret);
+        return s;
     }
     else if (streq (alias, "column_edit"))
     {
@@ -15453,6 +15511,33 @@ tree_context_get_item_info (const gchar             *item,
                     "TreeView '%s': No such item: '%s' (no such column)",
                     priv->name, item - 7);
             return FALSE;
+        }
+
+        if (streq (s + 1, "title"))
+        {
+            const gchar *title = gtk_tree_view_column_get_title (_col->column);
+
+            info->is_visible = info->is_sensitive = TRUE;
+            info->name = g_strconcat ("Title: ", title, NULL);
+            info->free_name = TRUE;
+            info->trigger = g_strconcat ("command:tv_column_set_option (%o,",
+                    _col->name, ",title,@ask_text(Enter the new column title,,",
+                    title,"))", NULL);
+            info->free_trigger = TRUE;
+            return TRUE;
+        }
+        else if (streq (s + 1, "width"))
+        {
+            gint width = gtk_tree_view_column_get_fixed_width (_col->column);
+
+            info->is_visible = info->is_sensitive = TRUE;
+            info->name = g_strdup_printf ("Width: %d", width);
+            info->free_name = TRUE;
+            info->trigger = g_strdup_printf ("command:tv_column_set_option (%%o,"
+                    "%s,width,@ask_text(Enter the new column width,,%d))",
+                    _col->name, width);
+            info->free_trigger = TRUE;
+            return TRUE;
         }
 
         if (!donna_column_type_get_context_item_info (_col->ct,
