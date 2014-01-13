@@ -15061,6 +15061,34 @@ tree_context_get_alias (const gchar             *alias,
         else
             return (gchar *) "";
     }
+    else if (streq (alias, "columns"))
+    {
+        GString *str = g_string_new (NULL);
+        GPtrArray *arr = NULL;
+        GSList *l;
+        guint i;
+
+        if (donna_config_list_options (donna_app_peek_config (priv->app), &arr,
+                    DONNA_CONFIG_OPTION_TYPE_CATEGORY, "defaults/%s/columns",
+                    (priv->is_tree) ? "trees" : "lists"))
+            for (i = 0; i < arr->len; ++i)
+                donna_g_string_append_concat (str, ":columns:", arr->pdata[i], ",", NULL);
+
+        /* make sure all columns used are listed. In case some columns aren't
+         * defined at all in defaults */
+        for (l = priv->columns; l; l = l->next)
+        {
+            struct column *_col = l->data;
+            if (!arr || !donna_g_ptr_array_contains (arr,
+                        _col->name, (GCompareFunc) strcmp))
+                donna_g_string_append_concat (str, ":columns:", _col->name, ",", NULL);
+        }
+        g_string_truncate (str, str->len - 1);
+
+        if (arr)
+            g_ptr_array_unref (arr);
+        return g_string_free (str, FALSE);
+    }
     else if (streq (alias, "new_nodes"))
     {
         gchar buf[255], *b = buf;
@@ -15502,6 +15530,39 @@ tree_context_get_item_info (const gchar             *item,
         if (info->is_visible && info->is_sensitive)
             info->trigger = g_strconcat (
                     "command:tv_column_edit (%o,%r,", _col->name, ")", NULL);
+
+        return TRUE;
+    }
+    else if (streq (item, "columns"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+
+        if (extra)
+        {
+            struct column *_col;
+
+            _col = get_column_by_name (tree, extra);
+            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+            if (_col)
+                info->is_active = TRUE;
+            info->name = donna_config_get_string_column (
+                    donna_app_peek_config (priv->app),
+                    extra,
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
+                    NULL,
+                    "title", extra, NULL);
+            info->free_name = TRUE;
+            info->trigger = g_strconcat ("command:tv_toggle_column(%o,",
+                    extra, ")", NULL);
+            info->free_trigger = TRUE;
+        }
+        else
+        {
+            info->name = "Columns";
+            info->submenus = 1;
+        }
 
         return TRUE;
     }

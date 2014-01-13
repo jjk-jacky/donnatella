@@ -378,6 +378,29 @@ duplicate_gvalue (const GValue *src)
     return dst;
 }
 
+gboolean
+donna_g_ptr_array_contains (GPtrArray          *arr,
+                            gpointer            value,
+                            GCompareFunc        cmp)
+{
+    guint i;
+
+    g_return_val_if_fail (arr != NULL, FALSE);
+
+    for (i = 0; i < arr->len; ++i)
+    {
+        if (cmp)
+        {
+            if (cmp (arr->pdata[i], value) == 0)
+                return TRUE;
+        }
+        else if (arr->pdata[i] == value)
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
 void
 donna_g_string_append_quoted (GString            *str,
                               const gchar        *s,

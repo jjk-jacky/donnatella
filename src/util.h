@@ -23,6 +23,9 @@ gchar *         donna_print_time                (guint64             ts,
                                                  const gchar        *fmt,
                                                  DonnaTimeOptions   *options);
 GValue *        duplicate_gvalue                (const GValue       *src);
+gboolean        donna_g_ptr_array_contains      (GPtrArray          *arr,
+                                                 gpointer            value,
+                                                 GCompareFunc        cmp);
 void            donna_g_string_append_quoted    (GString            *str,
                                                  const gchar        *s,
                                                  gboolean            double_percent);
