@@ -6749,6 +6749,7 @@ load_arrangement (DonnaTreeView     *tree,
         gboolean           is_last_col;
         DonnaColumnType   *ct;
         DonnaColumnType   *col_ct;
+        gboolean           force_load_options = FALSE;
         gint               width;
         gchar             *title;
         GSList            *l;
@@ -6817,6 +6818,8 @@ load_arrangement (DonnaTreeView     *tree,
                                 priv->name,
                                 priv->is_tree,
                                 &_col->ct_data);
+                        /* so width & title are reloaded */
+                        force_load_options = TRUE;
                     }
                     else if (must_load_columns_options (arrangement,
                                 priv->arrangement, force))
@@ -6860,6 +6863,8 @@ load_arrangement (DonnaTreeView     *tree,
             priv->columns = g_slist_prepend (priv->columns, _col);
             /* to test for expander column */
             col_ct = ct;
+            /* so width & title are reloaded */
+            force_load_options = TRUE;
             /* sizing stuff */
             gtk_tree_view_column_set_sizing (column, GTK_TREE_VIEW_COLUMN_FIXED);
             if (!priv->is_tree)
@@ -6979,27 +6984,31 @@ load_arrangement (DonnaTreeView     *tree,
                 && streq (col, arrangement->main_column))
             priv->main_column = column;
 
-        /* size */
-        if (snprintf (buf, 64, "column_types/%s", col_type) >= 64)
-            b = g_strdup_printf ("column_types/%s", col_type);
-        width = donna_config_get_int_column (config, col,
-                arrangement->columns_options, priv->name, priv->is_tree, b,
-                "width", 230, NULL);
-        gtk_tree_view_column_set_min_width (column, 23);
-        gtk_tree_view_column_set_fixed_width (column, width);
-        if (b != buf)
+        if (force_load_options
+                || must_load_columns_options (arrangement, priv->arrangement, force))
         {
-            g_free (b);
-            b = buf;
-        }
+            /* size */
+            if (snprintf (buf, 64, "column_types/%s", col_type) >= 64)
+                b = g_strdup_printf ("column_types/%s", col_type);
+            width = donna_config_get_int_column (config, col,
+                    arrangement->columns_options, priv->name, priv->is_tree, b,
+                    "width", 230, NULL);
+            gtk_tree_view_column_set_min_width (column, 23);
+            gtk_tree_view_column_set_fixed_width (column, width);
+            if (b != buf)
+            {
+                g_free (b);
+                b = buf;
+            }
 
-        /* title */
-        title = donna_config_get_string_column (config, col,
-                arrangement->columns_options, priv->name, priv->is_tree, NULL,
-                "title", col, NULL);
-        gtk_tree_view_column_set_title (column, title);
-        gtk_label_set_text (GTK_LABEL (_col->label), title);
-        g_free (title);
+            /* title */
+            title = donna_config_get_string_column (config, col,
+                    arrangement->columns_options, priv->name, priv->is_tree, NULL,
+                    "title", col, NULL);
+            gtk_tree_view_column_set_title (column, title);
+            gtk_label_set_text (GTK_LABEL (_col->label), title);
+            g_free (title);
+        }
 
         /* for line-number columns, there's no properties to watch, and this
          * shouldn't trigger a warning, obviously. Sorting also doesn't apply
