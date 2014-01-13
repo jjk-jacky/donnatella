@@ -7051,8 +7051,11 @@ load_arrangement (DonnaTreeView     *tree,
             }
             ++sort_id;
 
-            /* second sort order */
-            if (second_sort_column && streq (second_sort_column, col))
+            /* second sort order -- only if main sort has been set (else we'd
+             * end up trying to sort by invalid main sort, and segfault or
+             * something) */
+            if (priv->sort_column
+                    && second_sort_column && streq (second_sort_column, col))
             {
                 if (free_second_sort_column)
                 {
@@ -7144,9 +7147,18 @@ next:
     /* failed to set second sort order */
     if (second_sort_column)
     {
+        struct column *_col;
+
+        /* try to get the column, as this might not have been set only because
+         * we hadn't set the main sort first (which is required) */
+        _col = get_column_by_name (tree, second_sort_column);
+        if (_col)
+            set_second_sort_column (tree, _col->column, second_sort_order, TRUE);
+        else
+            set_second_sort_column (tree, first_column, DONNA_SORT_UNKNOWN, TRUE);
+
         if (free_second_sort_column)
             g_free (second_sort_column);
-        set_second_sort_column (tree, first_column, DONNA_SORT_UNKNOWN, TRUE);
     }
 
     /* remove all columns left unused */
