@@ -13000,6 +13000,75 @@ next:
     return TRUE;
 }
 
+gboolean
+donna_tree_view_toggle_column (DonnaTreeView      *tree,
+                               const gchar        *column,
+                               GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaArrangement arr;
+    struct column *_col;
+    GString *str;
+    GList *list, *l;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
+    priv = tree->priv;
+
+    _col = get_column_by_name (tree, column);
+    if (_col)
+    {
+        /* toggle off -- for sanity reason, let's not allow to remove the
+         * last/only column */
+        if ((struct column *) priv->columns->data == _col && !priv->columns->next)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Cannot remove the only column in tree view",
+                    priv->name);
+            return FALSE;
+        }
+    }
+
+    if (G_UNLIKELY (!priv->arrangement) || !priv->arrangement->columns)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "TreeView '%s': Internal error: no arrangement/columns set",
+                priv->name);
+        return FALSE;
+    }
+
+    str = g_string_new (NULL);
+    /* get them from treeview to preserve the current order */
+    list = gtk_tree_view_get_columns ((GtkTreeView *) tree);
+    for (l = list; l; l = l->next)
+    {
+        struct column *_c = get_column_by_column (tree, l->data);
+        if (!_c)
+            /* blankcol */
+            continue;
+        if (!_col || !streq (_c->name, column))
+        {
+            g_string_append (str, _c->name);
+            g_string_append_c (str, ',');
+        }
+    }
+    g_list_free (list);
+
+    if (_col)
+        g_string_truncate (str, str->len - 1);
+    else
+        g_string_append (str, column);
+
+    memcpy (&arr, priv->arrangement, sizeof (DonnaArrangement));
+    arr.columns = g_string_free (str, FALSE);
+    load_arrangement (tree, &arr, FALSE);
+    g_free (arr.columns);
+
+    return TRUE;
+}
+
 
 struct refresh_list
 {
