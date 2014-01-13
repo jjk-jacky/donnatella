@@ -6741,8 +6741,6 @@ load_arrangement (DonnaTreeView     *tree,
     priv->columns = NULL;
     priv->main_column = NULL;
 
-    priv->ln_relative = priv->ln_relative_focused = FALSE;
-
     for (;;)
     {
         struct column     *_col;
