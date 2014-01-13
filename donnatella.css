@@ -1,6 +1,6 @@
 .second-arrow { color: alpha(@fg_color,0.5); -GtkArrow-arrow-scaling: 0.6; }
 DonnaTreeView row.minitree-unknown.expander { color: red; }
-DonnaTreeView row.minitree-partial.expander { color: blue; }
+DonnaTreeView row.minitree-partial.expander { color: orange; }
 
 DonnaTreeView.domain-config row:nth-child(odd) { background: #ffcd96; }
 DonnaTreeView.domain-config row:nth-child(even) { background: #ffc882; }
