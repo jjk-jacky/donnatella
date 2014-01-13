@@ -4929,6 +4929,8 @@ sort_func (GtkTreeModel      *model,
     priv = tree->priv;
     _col = get_column_by_column (tree, column);
 
+    g_return_val_if_fail (_col != NULL, 0);
+
     /* special case: in mode list we can be our own ct, for the column showing
      * the line number. There's no sorting on that column obviously. */
     if (_col->ct == (DonnaColumnType *) tree)
