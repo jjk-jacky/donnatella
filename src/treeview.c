@@ -6753,6 +6753,7 @@ load_arrangement (DonnaTreeView     *tree,
         gint               width;
         gchar             *title;
         GSList            *l;
+        GSList            *ll;
         GtkTreeViewColumn *column;
         GtkCellRenderer   *renderer;
         const gchar       *rend;
@@ -6779,10 +6780,7 @@ load_arrangement (DonnaTreeView     *tree,
         /* ct "line-number" is a special one, which is handled by the treeview
          * itself (only supported in mode list) to show line numbers */
         if (!priv->is_tree && streq (col_type, "line-number"))
-        {
             ct = (DonnaColumnType *) g_object_ref (tree);
-            column = NULL;
-        }
         else
         {
             ct = donna_app_get_column_type (priv->app, (col_type) ? col_type : col);
@@ -6792,54 +6790,92 @@ load_arrangement (DonnaTreeView     *tree,
                         priv->name, (col_type) ? col_type : col, col);
                 goto next;
             }
+        }
+        /* look to re-user the same column if possible; if not, look for an
+         * existing column of the same type (that won't be re-used) */
+        column = NULL;
+        for (ll = NULL, l = list; l; l = l->next)
+        {
+            _col = l->data;
 
-            /* look for an existing column of that type */
-            column = NULL;
-            for (l = list; l; l = l->next)
+            /* must be the same columntype */
+            if (_col->ct != ct)
+                continue;
+
+            /* if the same column, re-use */
+            if (streq (_col->name, col))
             {
-                _col = l->data;
+                ll = l;
 
-                if (_col->ct == ct)
+                col_ct = _col->ct;
+                column = _col->column;
+                /* column has a ref already, we can release ours */
+                g_object_unref (ct);
+
+                if (must_load_columns_options (arrangement, priv->arrangement, force))
+                    /* refresh data to load new options */
+                    donna_column_type_refresh_data (ct, col,
+                            arrangement->columns_options,
+                            priv->name,
+                            priv->is_tree,
+                            &_col->ct_data);
+                break;
+            }
+
+            /* if we already have a ct to use, we're just looking the for same
+             * column to re-use if possible */
+            if (ll)
+                continue;
+
+            /* will it be used for another column? */
+            if (!is_last_col)
+            {
+                gchar *s;
+
+                s = strstr (e + 1, _col->name);
+                if (s)
                 {
-                    col_ct = _col->ct;
-                    column = _col->column;
-
-                    /* column has a ref already, we can release ours */
-                    g_object_unref (ct);
-                    /* update the name if needed */
-                    if (!streq (_col->name, col))
-                    {
-                        g_free (_col->name);
-                        _col->name = g_strdup (col);
-                        donna_column_type_free_data (ct, _col->ct_data);
-                        _col->ct_data = NULL;
-                        donna_column_type_refresh_data (ct, col,
-                                arrangement->columns_options,
-                                priv->name,
-                                priv->is_tree,
-                                &_col->ct_data);
-                        /* so width & title are reloaded */
-                        force_load_options = TRUE;
-                    }
-                    else if (must_load_columns_options (arrangement,
-                                priv->arrangement, force))
-                        /* refresh data to load new options */
-                        donna_column_type_refresh_data (ct, col,
-                                arrangement->columns_options,
-                                priv->name,
-                                priv->is_tree,
-                                &_col->ct_data);
-                    /* move column */
-                    gtk_tree_view_move_column_after (treev, column, last_column);
-
-                    list = g_slist_delete_link (list, l);
-                    priv->columns = g_slist_prepend (priv->columns, _col);
-                    break;
+                    s += strlen (_col->name);
+                    if (*s == '\0' || *s == ',')
+                        continue;
                 }
             }
+
+            /* mark it -- we'll use it if we don't find a match */
+            ll = l;
         }
 
-        if (!column)
+        if (!column && ll)
+        {
+            _col = ll->data;
+
+            col_ct = _col->ct;
+            column = _col->column;
+            /* column has a ref already, we can release ours */
+            g_object_unref (ct);
+
+            g_free (_col->name);
+            _col->name = g_strdup (col);
+            donna_column_type_free_data (ct, _col->ct_data);
+            _col->ct_data = NULL;
+            donna_column_type_refresh_data (ct, col,
+                    arrangement->columns_options,
+                    priv->name,
+                    priv->is_tree,
+                    &_col->ct_data);
+            /* so width & title are reloaded */
+            force_load_options = TRUE;
+        }
+
+        if (column)
+        {
+            /* move column */
+            gtk_tree_view_move_column_after (treev, column, last_column);
+
+            list = g_slist_delete_link (list, ll);
+            priv->columns = g_slist_prepend (priv->columns, _col);
+        }
+        else
         {
             GtkWidget *btn;
             GtkWidget *hbox;
