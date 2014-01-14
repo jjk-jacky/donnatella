@@ -135,10 +135,17 @@ donna_status_bar_finalize (GObject *object)
 }
 
 static void
-set_renderers (struct area *area)
+set_renderers (GtkWidget *widget, struct area *area)
 {
+    GtkStyleContext *context;
+    PangoFontDescription *font_desc;
     GtkCellRenderer **r;
     guint i;
+
+    /* we want to font stuff from CSS applied via classes (i.e. per-area) */
+    context = gtk_widget_get_style_context (widget);
+    gtk_style_context_get (context, gtk_widget_get_state_flags (widget),
+            "font", &font_desc, NULL);
 
     for (i = 1, r = area->renderers; *r; ++r, ++i)
     {
@@ -161,11 +168,15 @@ set_renderers (struct area *area)
                 /* brings the last item to index j, hence no need to increment i */
                 g_ptr_array_remove_index_fast (arr, j);
             }
+            if (area->rend[i - 1] == DONNA_RENDERER_TEXT)
+                g_object_set (*r, "font-desc", font_desc, NULL);
             donna_status_provider_render (area->sp, area->id, i, *r);
         }
         else
             g_object_set (*r, "visible", FALSE, NULL);
     }
+
+    pango_font_description_free (font_desc);
 }
 
 static void
@@ -187,7 +198,7 @@ donna_status_bar_get_preferred_width (GtkWidget      *widget,
 
         gtk_style_context_save (context);
         gtk_style_context_add_class (context, area->name);
-        set_renderers (area);
+        set_renderers (widget, area);
         gtk_cell_area_get_preferred_width (area->area, area->context, widget,
                 &min, &nat);
         gtk_style_context_restore (context);
@@ -215,7 +226,7 @@ donna_status_bar_get_preferred_height (GtkWidget      *widget,
 
         gtk_style_context_save (context);
         gtk_style_context_add_class (context, area->name);
-        set_renderers (area);
+        set_renderers (widget, area);
         gtk_cell_area_get_preferred_height (area->area, area->context, widget,
                 &min, &nat);
         gtk_style_context_restore (context);
@@ -372,7 +383,7 @@ donna_status_bar_draw (GtkWidget          *widget,
 
         gtk_style_context_save (context);
         gtk_style_context_add_class (context, area->name);
-        set_renderers (area);
+        set_renderers (widget, area);
         cell.x = area->x;
         cell.width = area->width;
         gtk_cell_area_render (area->area, area->context, widget, cr,
@@ -418,7 +429,7 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
 
             gtk_style_context_save (context);
             gtk_style_context_add_class (context, area->name);
-            set_renderers (area);
+            set_renderers (widget, area);
             renderer = gtk_cell_area_get_cell_at_position (area->area, area->context,
                     widget, &cell, x, y, NULL);
             gtk_style_context_restore (context);
@@ -458,7 +469,7 @@ status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
 
             gtk_style_context_save (context);
             gtk_style_context_add_class (context, area->name);
-            set_renderers (area);
+            set_renderers ((GtkWidget *) sb, area);
             /* reset to allow area to get smaller */
             gtk_cell_area_context_reset (area->context);
             gtk_cell_area_get_preferred_width (area->area, area->context,
