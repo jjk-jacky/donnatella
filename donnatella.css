@@ -355,6 +355,7 @@ DonnaTreeView row highlight-overflow.hl-blue.focused-row:selected,
 DonnaTreeView row highlight-overflow.hl-blue.focused-row:selected:focused
 { background: blue; color: white; }
 
+DonnaStatusBar.keys { font: Mono; }
 
 .title { font-size: 12px; font-weight: bold; }
 .details { padding-top: 4px; padding-bottom: 6px; }
