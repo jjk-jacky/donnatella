@@ -174,7 +174,10 @@ donna_status_bar_get_preferred_width (GtkWidget      *widget,
                                       gint           *natural)
 {
     DonnaStatusBarPrivate *priv = ((DonnaStatusBar *) widget)->priv;
+    GtkStyleContext *context;
     guint i;
+
+    context = gtk_widget_get_style_context (widget);
 
     *minimum = *natural = ((gint) priv->areas->len - 1) * SPACING_BETWEEN_AREAS;
     for (i = 0; i < priv->areas->len; ++i)
@@ -182,9 +185,12 @@ donna_status_bar_get_preferred_width (GtkWidget      *widget,
         struct area *area = &g_array_index (priv->areas, struct area, i);
         gint min, nat;
 
+        gtk_style_context_save (context);
+        gtk_style_context_add_class (context, area->name);
         set_renderers (area);
         gtk_cell_area_get_preferred_width (area->area, area->context, widget,
                 &min, &nat);
+        gtk_style_context_restore (context);
         *minimum += min;
         *natural += nat;
     }
@@ -196,7 +202,10 @@ donna_status_bar_get_preferred_height (GtkWidget      *widget,
                                        gint           *natural)
 {
     DonnaStatusBarPrivate *priv = ((DonnaStatusBar *) widget)->priv;
+    GtkStyleContext *context;
     guint i;
+
+    context = gtk_widget_get_style_context (widget);
 
     *minimum = *natural = 0;
     for (i = 0; i < priv->areas->len; ++i)
@@ -204,9 +213,12 @@ donna_status_bar_get_preferred_height (GtkWidget      *widget,
         struct area *area = &g_array_index (priv->areas, struct area, i);
         gint min, nat;
 
+        gtk_style_context_save (context);
+        gtk_style_context_add_class (context, area->name);
         set_renderers (area);
         gtk_cell_area_get_preferred_height (area->area, area->context, widget,
                 &min, &nat);
+        gtk_style_context_restore (context);
         *minimum = MAX (*minimum, min);
         *natural = MAX (*natural, nat);
     }
@@ -333,6 +345,7 @@ donna_status_bar_draw (GtkWidget          *widget,
                        cairo_t            *cr)
 {
     DonnaStatusBarPrivate *priv = ((DonnaStatusBar *) widget)->priv;
+    GtkStyleContext *context;
     GdkRectangle clip;
     GdkRectangle cell;
     guint i;
@@ -341,6 +354,7 @@ donna_status_bar_draw (GtkWidget          *widget,
     if (!gdk_cairo_get_clip_rectangle (cr, &clip))
         return TRUE;
 
+    context = gtk_widget_get_style_context (widget);
     h = gtk_widget_get_allocated_height (widget);
 
     cell.x = 0;
@@ -356,11 +370,14 @@ donna_status_bar_draw (GtkWidget          *widget,
         else if (area->x > clip.x + clip.width)
             break;
 
+        gtk_style_context_save (context);
+        gtk_style_context_add_class (context, area->name);
         set_renderers (area);
         cell.x = area->x;
         cell.width = area->width;
         gtk_cell_area_render (area->area, area->context, widget, cr,
                 &cell, &cell, 0, FALSE);
+        gtk_style_context_restore (context);
     }
 
     return FALSE;
@@ -374,7 +391,10 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
                                 GtkTooltip *tooltip)
 {
     DonnaStatusBarPrivate *priv = ((DonnaStatusBar *) widget)->priv;
+    GtkStyleContext *context;
     guint i;
+
+    context = gtk_widget_get_style_context (widget);
 
     for (i = 0; i < priv->areas->len; ++i)
     {
@@ -396,9 +416,12 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
             cell.width = area->width;
             cell.height = gtk_widget_get_allocated_height (widget);
 
+            gtk_style_context_save (context);
+            gtk_style_context_add_class (context, area->name);
             set_renderers (area);
             renderer = gtk_cell_area_get_cell_at_position (area->area, area->context,
                     widget, &cell, x, y, NULL);
+            gtk_style_context_restore (context);
             if (!renderer)
                 return FALSE;
             c = (gchar) GPOINTER_TO_INT (g_object_get_data ((GObject *) renderer,
@@ -418,7 +441,10 @@ static void
 status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
 {
     DonnaStatusBarPrivate *priv = sb->priv;
+    GtkStyleContext *context;
     guint i;
+
+    context = gtk_widget_get_style_context ((GtkWidget *) sb);
 
     for (i = 0; i < priv->areas->len; ++i)
     {
@@ -430,11 +456,14 @@ status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
 
             gtk_widget_get_allocation ((GtkWidget *) sb, &alloc);
 
+            gtk_style_context_save (context);
+            gtk_style_context_add_class (context, area->name);
             set_renderers (area);
             /* reset to allow area to get smaller */
             gtk_cell_area_context_reset (area->context);
             gtk_cell_area_get_preferred_width (area->area, area->context,
                     (GtkWidget *) sb, NULL, &nat);
+            gtk_style_context_restore (context);
             if (nat == area->width)
             {
                 /* simply invalidate this area */
