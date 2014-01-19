@@ -3122,6 +3122,112 @@ get_column_by_name (DonnaTreeView *tree, const gchar *name)
     return NULL;
 }
 
+/* used from functions wrapped in commands, to get a column from a possibly
+ * incomplete name. Useful so commands can be used from keys via spec, where
+ * only one letter can be specified.
+ * This is also why, as a special bonus, we support using a number to get the
+ * nth column, in the order they are on treeview */
+static struct column *
+get_column_from_name (DonnaTreeView *tree, const gchar *name, GError **error)
+{
+    struct column *ret = NULL;
+    GSList *l;
+    gsize len;
+
+    if (!name)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "TreeView '%s': Unable to find column: no name specified",
+                tree->priv->name);
+        return NULL;
+    }
+
+    if (*name >= '0' && *name <= '9')
+    {
+        GList *list, *ll;
+        gint nb;
+        gchar *s;
+
+        nb = (gint) g_ascii_strtoll (name, &s, 10);
+        if (!s || *s != '\0' || nb <= 0)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                    "TreeView '%s': Unable to find column: Invalid name '%s'",
+                    tree->priv->name, name);
+            return NULL;
+        }
+
+        list = gtk_tree_view_get_columns ((GtkTreeView *) tree);
+        for (ll = list; ll; ll = ll->next)
+        {
+            struct column *_col = get_column_by_column (tree, ll->data);
+
+            /* blankcol */
+            if (!_col)
+                continue;
+
+            if (--nb == 0)
+            {
+                ret = _col;
+                break;
+            }
+        }
+        g_list_free (list);
+
+        if (!ret)
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                    "TreeView '%s': Unable to find column '%s': "
+                    "Not that many columns in treeview",
+                    tree->priv->name, name);
+        return ret;
+    }
+
+    len = strlen (name);
+    for (l = tree->priv->columns; l; l = l->next)
+    {
+        struct column *_col = l->data;
+        gsize _len = strlen (_col->name);
+
+        /* name is too long, skip */
+        if (len > _len)
+            continue;
+        /* same length, can be an exact match */
+        else if (len == _len)
+        {
+            /* we make this a special case so "foo" will match column "foo" even
+             * if there's a column "foobar" */
+            if (streq (name, _col->name))
+            {
+                ret = _col;
+                break;
+            }
+        }
+
+        if (!streqn (name, _col->name, len))
+            continue;
+        else if (ret)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_COLUMN_NAME_TOO_BROAD,
+                    "TreeView '%s': Unable to find column '%s': More than one match",
+                    tree->priv->name, name);
+            return NULL;
+        }
+
+        ret = _col;
+    }
+
+    if (!ret)
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "TreeView '%s': Unable to find column '%s'",
+                tree->priv->name, name);
+    return ret;
+}
+
 static void
 show_err_on_task_failed (DonnaTask      *task,
                          gboolean        timeout_called,
@@ -11475,15 +11581,9 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     g_return_val_if_fail (column != NULL, FALSE);
     priv = tree->priv;
 
-    _col = get_column_by_name (tree, column);
+    _col = get_column_from_name (tree, column, error);
     if (!_col)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
-                "TreeView '%s': Cannot edit column, unknown column '%s'",
-                priv->name, column);
         return FALSE;
-    }
 
     type = convert_row_id_to_iter (tree, rowid, &iter);
     if (type != ROW_ID_ROW)
@@ -11541,15 +11641,9 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     g_return_val_if_fail (value != NULL, FALSE);
     priv = tree->priv;
 
-    _col = get_column_by_name (tree, column);
+    _col = get_column_from_name (tree, column, error);
     if (!_col)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
-                "TreeView '%s': Cannot set column option, unknown column '%s'",
-                priv->name, column);
         return FALSE;
-    }
 
     if (streq (option, "title"))
     {
@@ -11650,15 +11744,9 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
     g_return_val_if_fail (column != NULL, FALSE);
     priv = tree->priv;
 
-    _col = get_column_by_name (tree, column);
+    _col = get_column_from_name (tree, column, error);
     if (!_col)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_UNKNOWN_COLUMN,
-                "TreeView '%s': Cannot set column value, unknown column '%s'",
-                priv->name, column);
         return FALSE;
-    }
 
     nodes = donna_tree_view_get_nodes (tree, rowid, to_focused, error);
 
@@ -13325,7 +13413,7 @@ donna_tree_view_toggle_column (DonnaTreeView      *tree,
     g_return_val_if_fail (column != NULL, FALSE);
     priv = tree->priv;
 
-    _col = get_column_by_name (tree, column);
+    _col = get_column_from_name (tree, column, NULL);
     if (_col)
     {
         /* toggle off -- for sanity reason, let's not allow to remove the
@@ -16941,15 +17029,9 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     {
         struct column *_col;
 
-        _col = get_column_by_name (tree, column);
+        _col = get_column_from_name (tree, column, error);
         if (!_col)
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                    "TreeView '%s': Cannot get context nodes, no column '%s'",
-                    priv->name, column);
             return NULL;
-        }
         conv.col_name = _col->name;
     }
     else
@@ -17174,22 +17256,14 @@ donna_tree_view_set_sort_order (DonnaTreeView      *tree,
                                 DonnaSortOrder      order,
                                 GError            **error)
 {
-    DonnaTreeViewPrivate *priv;
     struct column *_col;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (column != NULL, FALSE);
-    priv = tree->priv;
 
-    _col = get_column_by_name (tree, column);
+    _col = get_column_from_name (tree, column, error);
     if (!_col)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "TreeView '%s': Cannot sort by column '%s': Column doesn't exist",
-                priv->name, column);
         return FALSE;
-    }
 
     set_sort_column (tree, _col->column, order, FALSE);
     return TRUE;
@@ -17201,22 +17275,14 @@ donna_tree_view_set_second_sort_order (DonnaTreeView      *tree,
                                        DonnaSortOrder      order,
                                        GError            **error)
 {
-    DonnaTreeViewPrivate *priv;
     struct column *_col;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (column != NULL, FALSE);
-    priv = tree->priv;
 
-    _col = get_column_by_name (tree, column);
+    _col = get_column_from_name (tree, column, error);
     if (!_col)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "TreeView '%s': Cannot second sort by column '%s': Column doesn't exist",
-                priv->name, column);
         return FALSE;
-    }
 
     set_second_sort_column (tree, _col->column, order, FALSE);
     return TRUE;
