@@ -75,9 +75,9 @@
  *   for a simple underline of the full row; or "column-underline" to combine
  *   both the cell highlight and the full row underline.
  * - <systemitem>key_mode</systemitem> &lpar;string&rpar; : Default key mode for
- *   the treeview. See <link linkend="KeyModes">Key Modes</link> for more.
+ *   the treeview. See #key-modes for more.
  * - <systemitem>click_mode</systemitem> &lpar;string&rpar; : Click mode for the
- *   treeview.  See <link linkend="ClickModes">Click Modes</link> for more.
+ *   treeview.  See #click-modes for more.
  *
  * </para></refsect2>
  *
@@ -147,7 +147,7 @@
  * - <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/arrangement</systemitem>
  *
  * For lists however, there's a little more to it. First off, donna allows
- * "dynamic arrangements" which must contain an option "mask" a pattern that,
+ * "dynamic arrangements" which must contain an option "mask" a #pattern that,
  * when matched against the list's current location, will be loaded.
  *
  * Those dynamic arrangements will be looked for using typical option path:
@@ -211,6 +211,265 @@
  *
  * Other options depend on their column types, each having its own options (or
  * none). See #DonnaColumnType.description
+ * </para></refsect2>
+ *
+ * <refsect2 id="list">
+ * <title>Treeview: Lists</title>
+ * <para>
+ * A list is where content of the current location will be listed. Lists usually
+ * have multiple columns (name, size, etc), and you can easilly filter/sort by
+ * the column(s) of your choice. Lists support multiple selection, i.e. more
+ * than one row can be selected at a time.
+ *
+ * Lists are "flat" (i.e. no expanders), but have column headers visible.
+ *
+ * See #tree-and-list-options for common options to trees & lists. In addition,
+ * the following list-specific options, using treeview's #option-paths as well,
+ * are available :
+ *
+ * - <systemitem>focusing_click</systemitem> (boolean) : When donna isn't
+ *   focused, any left-click will be treated as a focusing click, and therefore
+ *   otherwise ignored. That way you can safely click to activate/focus donna
+ *   without worrying that said click might do something you didn't want (e.g.
+ *   lose selection, focus row, etc).  With this option set to true (the
+ *   default), it will do the same when the focus wasn't on the list itself,
+ *   even though donna was focused (e.g. another treeview was focused).
+ * - <systemitem>goto_item_set</systemitem> (integer:tree-set) : Defines what
+ *   happens when an item is given as new location. Obviously, the current
+ *   location will be set to its parent, but you can then use "scroll" to scroll
+ *   to the row of item itself; "focus" to focus the row; or "cursor" to set the
+ *   cursor to that row (Setting the cursor means unselect all, select, focus
+ *   and scroll to the row).  You can also combine those, even though combining
+ *   anything with "cursor" makes little sense. The default is "focus,scroll"
+ * - <systemitem>history_max</systemitem> (integer) : Defines the maximum number
+ *   of items stored in the history; Defaults to 100.
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="tree">
+ * <title>Treeview: Trees</title>
+ * <para>
+ * A tree shows one or more user-specifed rows, and lists its children in a
+ * hierarchy. Trees will usually have only one column (name), so no column
+ * header will be shown. It can only have one row selected at a time.
+ *
+ * Trees can be synchronized with another treeview, a list. In such a case the
+ * tree's selection might be automatically adjusted to follow the list's current
+ * location, according to option <systemitem>sync_mode</systemitem> (see below).
+ *
+ * In most file managers, the root of the tree is the root of the file system.
+ * Sometimes another root can be available, your home directory. In donna, you
+ * can have as many roots as you want, in the order you want, each pointing to
+ * any node of your choice.
+ *
+ * Trees also support #tree-visuals: those are row-specific properties that you
+ * can define manually on rows of your choice. donna also supports node visuals,
+ * where visuals can be automatically applied based on the node behind the row.
+ * See #node-visuals for more, as well as option
+ * <systemitem>node_visuals</systemitem> below.
+ *
+ * See #tree-and-list-options for common options to trees & lists. In addition,
+ * the following tree-specific options, using treeview's #option-paths as well,
+ * are available :
+ *
+ * - <systemitem>is_minitree</systemitem> (boolean): Defines whether the tree is
+ *   a mini-tree or not.  Minitrees are awesome, see #minitree for why.
+ *   Defaults to false.
+ * - <systemitem>sync_with</systemitem> (string): Name of the list to be
+ *   synchronized with. This means both that on change of selection/current
+ *   location, the list will be set to the same location, as well as have the
+ *   tree adjust its selection/current location based on the list's. You can use
+ *   ":active" to syncronized with the active list (auto-adjusting when the
+ *   active list changes). Defaults to nothing.
+ * - <systemitem>sync_mode</systemitem> (integer:sync): Defines the level of
+ *   synchonization; Defaults to "full". Can be one of "none", "nodes",
+ *   "known-children", "children" or "full". With "none" the tree won't react on
+ *   list's change of location. With "nodes" it will only sync if a row for the
+ *   location already exists on tree and is accessible (i.e. not a children with
+ *   an ancestor collapsed). With "known-children" a row must exists on tree,
+ *   but expansion might happen if needed. With "children" there might be
+ *   first-time expansion loading/adding children to the tree. And with "full"
+ *   if no parent row to be expanded is found, a new root will be automatically
+ *   added.
+ * - <systemitem>sync_scroll</systemitem> (boolean): Whether to scroll to the
+ *   new selection/current location or not; Defaults to true.
+ * - <systemitem>auto_focus_sync</systemitem> (boolean): When true, on a change
+ *   of location the focus will automatically be sent to the list. This means
+ *   after e.g. click on a row to change the list's location, the focus will
+ *   automatically be sent to the list. Defaults to true.
+ * - <systemitem>node_visuals</systemitem> (integer:visuals): Defines which
+ *   visuals can be loaded from the node and applied on tree.
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="minitree">
+ * <title>More than a tree: a Mini-Tree</title>
+ * <para>
+ * A mini-tree is basically your regular tree (also referred to a maxi-tree)
+ * only with a simple twist: only show you what you need. Or, more specifically,
+ * only show rows for location you've actually visited.
+ *
+ * A simple example: you start on the root of your filesystem, so only one
+ * single row on the tree: <filename>/</filename>
+ * Now you go into <filename>/etc</filename> and the tree synchonizes, thus
+ * expanding its only row.  And now on tree appear all the children of said
+ * row, the <filename>bin</filename>, <filename>boot</filename>,
+ * <filename>dev</filename>, <filename>home</filename>,
+ * <filename>lib</filename>, <filename>proc</filename>,
+ * <filename>run</filename>, <filename>var</filename> & all the others. And of
+ * course, the one you actually are interested in, <filename>etc</filename>.
+ *
+ * Then you go into <filename>nginx</filename>, and again: lots of other rows
+ * are added to your tree, the <filename>audit</filename>,
+ * <filename>cron.d</filename>, <filename>dbus-1</filename>,
+ * <filename>modprobe.d</filename> & other <filename>udev</filename>. Your tree
+ * is now already quite crowed, just because you went into
+ * <filename>/etc/nginx</filename> Now imagine you also go into a few other
+ * places - e.g. <filename>/etc/php/conf.d</filename>,
+ * <filename>/var/log/nginx</filename>, <filename>/tmp</filename> &
+ * <filename>/home/user/projects/www</filename> - can you imagine what your tree
+ * would look like?
+ *
+ * It's a mess that has you scrolling every so often while you're only working
+ * on a few places. Now with a minitree, only the places you actually visited
+ * would have been added to the tree. So upon going into
+ * <filename>/etc</filename>, only one single row would have been added:
+ * <filename>etc</filename>.
+ * Same thing going down into <filename>nginx</filename>.
+ *
+ * And going to <filename>/var/log/nginx</filename> would have resulted in no
+ * more than 3 rows added to the tree: <filename>var</filename>,
+ * <filename>log</filename>, and <filename>nginx</filename>. A much more compact
+ * tree, with only the minimum, what you actually need to see, what you'll use,
+ * nothing else.
+ *
+ * In such a scenario, parent rows such as <filename>/etc</filename> would be in
+ * a state of partial expansion, i.e. there are children loaded, but not all of
+ * them. Of course you can easilly have them maxi expanded, i.e. load all
+ * missing children. You can also remove any row from your minitree, when you
+ * don't need it anymore.
+ *
+ * It's a simple idea, but one that will change your perception of the tree,
+ * making it much more useable, and useful; One you might get addicted to once
+ * you're used to it. And as an added bonus, because donna only needs to add
+ * rows for the locations visited, it can skip the scanning of each expanded
+ * location (to list all children to add), so navigation is that much faster.
+ *
+ * By default (it can be customized via #css) expanders in donna can be of one
+ * of three colors:
+ * - red: when the row has never been expanded, and no children are currently
+ *   loaded on tree.
+ * - orange: (minitree only): row is partially expanded, i.e. not all children
+ *   are loaded on tree. Note that in fact all children might be there, since
+ *   donna doesn't check after adding children that there are more left.
+ * - black: row is maxi expanded, i.e. all children are loaded on tree.
+ *
+ * Note that those also apply on maxitree, thus you can tell is expanding a row
+ * might result in scanning the location for children to add on tree, or not.
+ * (Might, because the list of children might be obtained by other means, e.g.
+ * from the list.)
+ * Also note that the color of the expander only refer to its expand state, not
+ * whether or not the row is actually expanded or collapsed.
+ * And finally, if option <systemitem>show_hidden</systemitem> is false, the
+ * tree completely ignores dotted items, and thus will consider rows to be
+ * maxi-expanded if all non-dotted children are loaded.
+ * </para></refsect2>
+ *
+ * <refsect2 id="tree-visuals">
+ * <title>Tree Visuals</title>
+ * <para>
+ * Tree visuals are row-specific properties that you can define manually on rows
+ * of your choice. Note donna also supports #node-visuals.
+ *
+ * There are 5 tree visuals you can use, though one isn't really a "visual"
+ * per-se:
+ *
+ * - name: Define a custom name to be used instead of the name property of the
+ *   node. This is meant to be used (mostly) on tree roots. For example, you can
+ *   want to work on a project, adding
+ *   <filename>/home/user/projects/foobar</filename> as new root on your tree,
+ *   yet have it show as "Project foobar" instead of just "foobar", or actually
+ *   show the full path, or even "~/projects/foobar".
+ * - icon: Define a custom icon to be used intead of the one from the property
+ *   icon of the node. This can be either the full path to an image file, or
+ *   name of an icon to load from the theme.
+ * - box: Define the name of the class to be used for the "boxed branch" effect.
+ *   This will have the node and all its children under a set background color.
+ *   It is meant as a visual indicator, to very easily/quickly identifies when
+ *   you are under a certain location. Boxed branch can be nested of course, in
+ *   which case all colors will be visible on each row in the expander area. Box
+ *   effect will also remain visible in that expander area even when selected
+ *   with full row highlight effect (see option
+ *   <systemitem>select_highlight</systemitem>).
+ *   Note that this is only available with a patched GTK.
+ * - highlight: Define the name of the class to be used for the highlight
+ *   effect. This will have the row's name under a special set of colors,
+ *   providing an highlight effect. This will extend a bit more to the right, so
+ *   that it remains visible even when selected.
+ * - click_mode: Define the name of the click mode to use for that row. While
+ *   not a visual it works exactly the same, and is therefore found under Tree
+ *   Visuals. Note that it is not, however, part of the visuals available as
+ *   #node-visuals. Click modes define how to process clicks, see #click-modes
+ *   for more.
+ *
+ * Note that tree visuals take precedence over node visuals, if both are
+ * specified.
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="rowid">
+ * <title>Referencing rows (in commands)</title>
+ * <para>
+ * When interacting with treeviews via commands, it is required to reference
+ * rows. This is done using "row ids" which allow different ways to identify a
+ * row:
+ *
+ * - Using a row; this will be used when commands return a rowid.  This is an
+ *   internal reference that will allow to identify one specific row.
+ * - Using a node, or its full location; this allows to identify the node
+ *   represented by that row. On list, it's obviously enough, but on trees you
+ *   can have the same node represented by more than one rows. In such a case,
+ *   there's no rule as to which row will be returned.
+ * - Using a path; this is a string used to reference one or more rows. You
+ *   can simply use a line number, starting at 1.
+ *   You can also prefix it with the percent sign, to reference the visible row
+ *   at the specified percent. So, "\%23" is the row at 23% in the visible area
+ *   of the treeview (i.e. there will never be scrolling needed to reach the
+ *   row).
+ *   Adding another percent sign at the end will then refer to the specified
+ *   percent in the entire tree, not only the visible area. In other words,
+ *   "\%100%" is the last row on the treeview, whereas "\%100" is the last
+ *   visible row.
+ *   Using a colon as prefix allows for special row identifiers, as detailled
+ *   below.
+ *
+ * The following row identifiers can be used in (rowid's) path, prefixed with a
+ * colon:
+ * - all: special one, to reference all rows
+ * - selected: special one, to reference all selected rows
+ * - focused: to reference the focused row
+ * - prev: to reference the previous row (above focused one)
+ * - next: to reference the next row (below focused one)
+ * - last: to reference the last row (e.g. same as "\%100%")
+ * - up: to reference the parent of the focused row (tree only)
+ * - down: to reference the first child of the focused row (tree only)
+ * - top: to reference the first visible row (at least 2/3rd of the row must be
+ *   visible to be considered)
+ * - bottom: to reference the last visible row (again, 2/3rd visibility required)
+ * - prev-same-depth: next row at the same level (tree only)
+ * - next-same-depth: previous row at the same level (tree only)
+ * - item: to reference the first next row to be an item
+ * - container: to reference the first next row to be a container
+ * - other: to reference the first next row to be of different type (than
+ *   focused row)
+ *
+ * Note that when using ":all" or ":selected" the first row in the list will be
+ * the focused row, then all (selected) rows as scanning the treeview to the
+ * end, and finally going back to the first (selected) row from the top and back
+ * to the focused row. This allows to give you a little control over the order
+ * in which rows/nodes are listed, which might matter in certain cases (e.g.
+ * when the first (few) names are used as templates, etc).
+ * This same principle is used for ":item", ":container" and ":other"
  * </para></refsect2>
  */
 
