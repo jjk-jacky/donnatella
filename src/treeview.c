@@ -1347,10 +1347,8 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
     it_int[i].in_file   = "highlight";
     it_int[i].label     = "Highlighted Folders";
     ++i;
-    it_int[i].value     = DONNA_TREE_VISUAL_CLICK_MODE;
-    it_int[i].in_file   = "click_mode";
-    it_int[i].label     = "Custom Click Modes";
-    ++i;
+    /* we don't add click_mode because the only option of this type is
+     * node_visual, which don't support it */
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS, "visuals", "Tree Visuals",
                     i, it_int, error)))
