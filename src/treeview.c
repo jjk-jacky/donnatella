@@ -11465,7 +11465,17 @@ editable_remove_widget_cb (GtkCellEditable *editable, struct inline_edit *ie)
             else
                 ie->row->iter = g_hash_table_lookup (priv->hashtable, ie->row->node);
 
-            g_idle_add ((GSourceFunc) move_inline_edit, ie);
+            /* we use a HIGH priority to avoid unneeded drawing & related
+             * slowness. That is, with a line numbers column w/ related number
+             * only if focused, we would see the treeview drawn as it gets the
+             * focus (relative numbers) when the widget is destroyed, then again
+             * as the new editing takes place (line numbers); which was not
+             * really nice and slow.
+             * With a HIGH priority we don't get those "glitches" and things are
+             * much better. There might still be some little glitches/slowness,
+             * but nothing unbearable. */
+            g_idle_add_full (G_PRIORITY_HIGH_IDLE,
+                    (GSourceFunc) move_inline_edit, ie, NULL);
             return;
         }
     }
