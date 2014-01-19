@@ -210,6 +210,134 @@
  * See #DonnaTreeView.description for more about all the many unique options/features both
  * trees & lists offer.
  * </para></refsect3>
+ *
+ * <refsect3 id="dynamic-arrangements">
+ * <title>Dynamic Arrangements (on Lists)</title>
+ * <para>
+ * donna allows dynamic arrangements to be used on lists, to have specific
+ * column layout/options, sort orders or color filters based on the the list's
+ * current location.
+ * See #arrangements for more.
+ * </para></refsect3>
+ *
+ * <refsect3 id="node-visuals">
+ * <title>Node Visuals</title>
+ * <para>
+ * Trees support #tree-visuals, allowing you to set row-specific name, icon,
+ * box or highlight effect. It is also possible not to define those as
+ * tree-specific settings, but have them set on the node itself.
+ *
+ * This is done by simply creating numbered categories under category
+ * <systemitem>visuals</systemitem> in the configuration. Each category
+ * represents a node visual definition, and must at least contain a string
+ * option <systemitem>node</systemitem> which must be the full location of the
+ * node on which the following visuals can be set (all string options):
+ *
+ * - <systemitem>name</systemitem>: custom name to be used. Set as string
+ *   property <systemitem>visual-name</systemitem> on nodes.
+ * - <systemitem>icon</systemitem>: custom icon to be used. Can be the full path
+ *   to a picture file, or the name of an icon to be loaded from the theme.
+ *   Set as string property <systemitem>visual-icon</systemitem> on nodes.
+ * - <systemitem>box</systemitem>: name of the class for the box effect. Set as
+ *   string property <systemitem>visual-box</systemitem> on nodes.
+ * - <systemitem>highlight</systemitem>: name of the class for the highlight
+ *   effect. Set as string property <systemitem>visual-highlight</systemitem> on
+ *   nodes.
+ *
+ * Which visuals will actually be loaded/used on trees will depend on their
+ * option <systemitem>node_visuals</systemitem>.
+ * </para></refsect3>
+ *
+ * </para></refsect2>
+ *
+ * <refsect2 id="css">
+ * <title>CSS Customizations</title>
+ * <para>
+ * Being a GTK3 application, donna's appearance can be customized the same way
+ * any other GTK3 application can, using some CSS.
+ *
+ * Every UI component (treeview, etc) in donna will have its name set and
+ * available via CSS, so for a treeview "foobar" you can use "\#foobar" as
+ * selector.
+ *
+ * In some dialogs, such as those of commands ask() or ask_text(), a title and
+ * optionally a details text are featured. The former has class
+ * <systemitem>title</systemitem> applied, while the later has class
+ * <systemitem>details</systemitem>.
+ *
+ * <refsect3 id="CSS-treeviews">
+ * <title>Treeview-specific CSS</title>
+ * <para>
+ * Treeviews also offer some special classes:
+ *
+ * - <systemitem>second-arrow</systemitem>: used to draw the arrow for secondary
+ *   sort order
+ * - <systemitem>focused-row</systemitem>: used on the focused row. Unlike
+ *   pseudo-class <systemitem>:focused</systemitem> this one is applied on the
+ *   focused row, regardless of the whether the treeview is focused or not.
+ * - <systemitem>select-row-underline</systemitem>: used on the row underline
+ *   effect, when applicable based on option
+ *   <systemitem>select_highlight</systemitem>
+ *
+ * </para></refsect3>
+ *
+ * <refsect3 id="css-trees">
+ * <title>Tree-specific CSS</title>
+ * <para>
+ * Trees have the following additional classes:
+ *
+ * - <systemitem>minitree-unknown</systemitem>: used on rows which have never
+ *   been expanded
+ * - <systemitem>minitree-partial</systemitem>: used on rows in partial expanded
+ *   state. See #minitree for more on the expand state, and not that those
+ *   classes are used regardless of the value of the
+ *   <systemitem>is_minitree</systemitem> option (i.e. on maxitree as well).
+ *
+ * In addition, trees have some specific CSS that are used to apply the boxed
+ * branch & highlight effects from #tree-visuals.
+ *
+ * For the box effect, a region <systemitem>boxed</systemitem> is created in the
+ * expander area, that is meant to always be of the boxed color even when
+ * focused/selected. See <filename>donnatella.css</filename> for examples.
+ *
+ * For the highlight effect, you can use special option
+ * <systemitem>-DonnaTreeView-highlighted-size</systemitem> to define the width
+ * by which the highlight effect should extend, making sure it remains visible
+ * even when selected.
+ * This will be available in CSS as region
+ * <systemitem>highlight-overflow</systemitem>; Again you can refer to
+ * <filename>donnatella.css</filename> to see how it's done.
+ *
+ * For both effects, a set of effects/classes are provided, each with a
+ * different color. All classes for the box effect are prefixed with "box-"
+ * while the ones for the highlight effect are prefixed with "hl-"
+ * Classes are available for the following colors: pink, violet, black, white,
+ * red, orange, lime, green, yellow, cyan, and blue.
+ *
+ * </para></refsect3>
+ *
+ * <refsect3 id="css-lists">
+ * <title>List-specific CSS</title>
+ * <para>
+ * Lists also have additional classes applied, based on the domain of their
+ * current location. A class by the name of the domain, prefixed with "domain-",
+ * will be applied.
+ * So e.g. when in the configuration (domain "config"), the class
+ * <systemitem>domain-config</systemitem> will be applied to the treeview. By
+ * default this is used to have a special background color on certain domains,
+ * e.g. orange in config, blue on exec (e.g. search results).
+ * </para></refsect3>
+ *
+ * <refsect3 id="css-statusbar">
+ * <title>Statusbar-specific CSS</title>
+ * <para>
+ * The statusbar will also have a class applied on each area/section, the name
+ * of said section (no prefix). (So it's probably best to use
+ * <systemitem>DonnaStatusBar.section</systemitem> as selector) It also makes
+ * sure that any font properties are applied, so you can set specific font
+ * properties on a per-area basis.
+ * </para></refsect3>
+ *
  * </para></refsect2>
  */
 
