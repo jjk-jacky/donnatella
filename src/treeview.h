@@ -154,6 +154,7 @@ typedef enum
     DONNA_TREE_VIEW_GOTO_LINE,
     DONNA_TREE_VIEW_GOTO_REPEAT,
     DONNA_TREE_VIEW_GOTO_PERCENT,
+    DONNA_TREE_VIEW_GOTO_VISIBLE,
 } DonnaTreeViewGoto;
 
 /* must be same as DonnaColumnOptionSaveLocation */

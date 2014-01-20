@@ -13875,31 +13875,65 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
     priv  = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
-    if (nb_type == DONNA_TREE_VIEW_GOTO_PERCENT)
+    if (nb_type == DONNA_TREE_VIEW_GOTO_PERCENT
+            || nb_type == DONNA_TREE_VIEW_GOTO_VISIBLE)
     {
+        GtkTreeIter iter_top;
+        guint top;
         gint height;
 
-        /* locate first row */
-        path = gtk_tree_path_new_from_indices (0, -1);
+        /* locate first/top row */
+        if (nb_type == DONNA_TREE_VIEW_GOTO_PERCENT)
+            path = gtk_tree_path_new_from_indices (0, -1);
+        else
+        {
+            DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":top" };
+            if (convert_row_id_to_iter (tree, &rid, &iter_top) == ROW_ID_INVALID)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "TreeView '%s': Failed getting the top row",
+                        priv->name);
+                return FALSE;
+            }
+            path = gtk_tree_model_get_path (model, &iter_top);
+            if (!priv->is_tree)
+                top = (guint) gtk_tree_path_get_indices (path)[0];
+        }
         gtk_tree_view_get_background_area (treev, path, NULL, &rect);
         gtk_tree_path_free (path);
         height = ABS (rect.y);
 
-        /* locate last row */
-        if (!_gtk_tree_model_iter_last (model, &iter))
+        /* locate last/bottom row */
+        if (nb_type == DONNA_TREE_VIEW_GOTO_PERCENT)
         {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Failed getting the last line",
-                    priv->name);
-            return FALSE;
+            if (!_gtk_tree_model_iter_last (model, &iter))
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "TreeView '%s': Failed getting the last row",
+                        priv->name);
+                return FALSE;
+            }
+        }
+        else
+        {
+            DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":bottom" };
+            if (convert_row_id_to_iter (tree, &rid, &iter) == ROW_ID_INVALID)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "TreeView '%s': Failed getting the bottom row",
+                        priv->name);
+                return FALSE;
+            }
         }
         path = gtk_tree_model_get_path (model, &iter);
         if (!path)
         {
             g_set_error (error, DONNA_TREE_VIEW_ERROR,
                     DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Failed getting path to the last line",
+                    "TreeView '%s': Failed getting path to the last row",
                     priv->name);
             return FALSE;
         }
@@ -13912,12 +13946,25 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
 
         /* get the one at specified percent */
         nb = (guint) ((gdouble) rows * ((gdouble) nb / 100.0)) + 1;
-
-        /* this can now be treated as LINE */
-        nb_type = DONNA_TREE_VIEW_GOTO_LINE;
+        nb = CLAMP (nb, 1, rows);
+        if (nb_type == DONNA_TREE_VIEW_GOTO_VISIBLE)
+        {
+            if (priv->is_tree)
+                iter = iter_top;
+            else
+            {
+                nb += top;
+                /* this can now be treated as LINE */
+                nb_type = DONNA_TREE_VIEW_GOTO_LINE;
+            }
+        }
+        else
+            /* this can now be treated as LINE */
+            nb_type = DONNA_TREE_VIEW_GOTO_LINE;
     }
 
-    if (nb_type == DONNA_TREE_VIEW_GOTO_LINE && nb > 0)
+    if (nb > 0 && (nb_type == DONNA_TREE_VIEW_GOTO_LINE
+                || nb_type == DONNA_TREE_VIEW_GOTO_VISIBLE))
     {
         if (!priv->is_tree)
         {
@@ -13932,7 +13979,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
                 {
                     g_set_error (error, DONNA_TREE_VIEW_ERROR,
                             DONNA_TREE_VIEW_ERROR_OTHER,
-                            "TreeView '%s': Failed getting the last line (<%d)",
+                            "TreeView '%s': Failed getting the last row (<%d)",
                             priv->name, nb);
                     return FALSE;
                 }
@@ -13944,15 +13991,18 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             GtkTreeIter it;
             guint i;
 
-            /* tree, so we'll go to the first and move down */
-            if (!gtk_tree_model_iter_children (model, &iter, NULL))
-            {
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                        DONNA_TREE_VIEW_ERROR_OTHER,
-                        "TreeView '%s': Failed getting the first line (going to %d)",
-                        priv->name, nb);
-                return FALSE;
-            }
+            /* tree: we can't just get a path, so we'll go to the first/top row
+             * and move down. If nb_type is still VISIBLE it means iter has
+             * already been set to the top row */
+            if (nb_type == DONNA_TREE_VIEW_GOTO_LINE)
+                if (!gtk_tree_model_iter_children (model, &iter, NULL))
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "TreeView '%s': Failed getting the first row (going to %d)",
+                            priv->name, nb);
+                    return FALSE;
+                }
 
             it = iter;
             for (i = 1; i < nb; )

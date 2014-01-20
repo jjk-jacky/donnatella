@@ -2183,9 +2183,10 @@ cmd_tv_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *c_set[] = { "scroll", "focus", "cursor" };
     DonnaTreeViewSet sets[] = { DONNA_TREE_VIEW_SET_SCROLL,
         DONNA_TREE_VIEW_SET_FOCUS, DONNA_TREE_VIEW_SET_CURSOR };
-    const gchar *c_nb_type[] = { "repeat", "line", "percent" };
+    const gchar *c_nb_type[] = { "repeat", "line", "percent", "visible" };
     DonnaTreeViewGoto nb_types[] = { DONNA_TREE_VIEW_GOTO_REPEAT,
-        DONNA_TREE_VIEW_GOTO_LINE, DONNA_TREE_VIEW_GOTO_PERCENT };
+        DONNA_TREE_VIEW_GOTO_LINE, DONNA_TREE_VIEW_GOTO_PERCENT,
+        DONNA_TREE_VIEW_GOTO_VISIBLE };
     DonnaTreeViewSet set;
     const gchar *c_action[] = { "select", "unselect", "invert", "define" };
     DonnaSelAction actions[] = { DONNA_SEL_SELECT, DONNA_SEL_UNSELECT,
