@@ -448,9 +448,17 @@ donna_status_bar_query_tooltip (GtkWidget  *widget,
     return FALSE;
 }
 
-static void
-status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
+struct changed
 {
+    DonnaStatusBar *sb;
+    DonnaStatusProvider *sp;
+    guint id;
+};
+
+static gboolean
+real_status_changed (struct changed *changed)
+{
+    DonnaStatusBar *sb = changed->sb;
     DonnaStatusBarPrivate *priv = sb->priv;
     GtkStyleContext *context;
     guint i;
@@ -460,7 +468,7 @@ status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
     for (i = 0; i < priv->areas->len; ++i)
     {
         struct area *area = &g_array_index (priv->areas, struct area, i);
-        if (area->sp == sp && area->id == id)
+        if (area->sp == changed->sp && area->id == changed->id)
         {
             GtkAllocation alloc;
             gint nat;
@@ -491,11 +499,27 @@ status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
                  * queueing a redraw */
                 gtk_widget_queue_resize ((GtkWidget *) sb);
 
-            return;
+            goto done;
         }
     }
     g_warning ("StatusBar: signal 'status-changed' for %p (%d) found no match",
-            sp, id);
+            changed->sp, changed->id);
+
+done:
+    g_slice_free (struct changed, changed);
+    return G_SOURCE_REMOVE;
+}
+
+static void
+status_changed (DonnaStatusProvider *sp, guint id, DonnaStatusBar *sb)
+{
+    struct changed *changed;
+
+    changed = g_slice_new (struct changed);
+    changed->sb = sb;
+    changed->sp = sp;
+    changed->id = id;
+    g_main_context_invoke (NULL, (GSourceFunc) real_status_changed, changed);
 }
 
 gboolean
