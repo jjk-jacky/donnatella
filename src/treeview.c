@@ -18888,7 +18888,7 @@ next:
 
             case KEY_DIRECT:
                 priv->key_val = event->keyval;
-                trigger_key (tree, 0);
+                /* don't trigger now, to check combine */
                 break;
 
             case KEY_SPEC:
@@ -18924,6 +18924,8 @@ next:
             }
             g_free (s);
         }
+        if (type == KEY_DIRECT)
+            trigger_key (tree, 0);
     }
 
     g_free (from);
