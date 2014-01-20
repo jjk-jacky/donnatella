@@ -18673,10 +18673,13 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         if (!donna_app_trigger_fl (priv->app, fl, intrefs, TRUE, NULL))
         {
             g_free (fl);
-            return TRUE;
+            wrong_key (TRUE);
         }
         g_free (fl);
         intrefs = NULL;
+        g_free (from);
+        g_free (alias);
+        from = alias = NULL;
     }
 
     key = gdk_keyval_name (priv->key_val);
