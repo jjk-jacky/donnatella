@@ -606,6 +606,8 @@ enum spec_type
     SPEC_DIGITS     = (1 << 2),
     /* anything translating to a character in SPEC_EXTRA_CHARS (below) */
     SPEC_EXTRA      = (1 << 3),
+    /* custom set of characters, set in option custom_chars */
+    SPEC_CUSTOM     = (1 << 4),
 
     /* key of type motion (can obviously not be combined w/ anything else) */
     SPEC_MOTION     = (1 << 9),
@@ -872,7 +874,7 @@ struct _DonnaTreeViewPrivate
     /* info to handle the keys */
     gchar               *key_mode;          /* current key mode */
     gchar               *key_combine_name;  /* combine that was used */
-    gchar                key_combine;       /* combine that was pressed */
+    guint                key_combine_val;   /* combine key that was pressed */
     gchar                key_combine_spec;  /* the spec from the combine */
     enum spec_type       key_spec_type;     /* spec we're waiting for */
     guint                key_m;             /* key modifier */
@@ -1699,6 +1701,10 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
     it_int[i].value     = SPEC_EXTRA;
     it_int[i].in_file   = "extra";
     it_int[i].label     = "Extra chars (see doc)";
+    ++i;
+    it_int[i].value     = SPEC_CUSTOM;
+    it_int[i].in_file   = "custom";
+    it_int[i].label     = "Custom chars (option custom_chars)";
     ++i;
     it_int[i].value     = SPEC_MOTION;
     it_int[i].in_file   = "motion";
@@ -14222,7 +14228,7 @@ donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
     /* wrong_key */
     g_free (priv->key_combine_name);
     priv->key_combine_name = NULL;
-    priv->key_combine = 0;
+    priv->key_combine_val = 0;
     priv->key_combine_spec = 0;
     priv->key_spec_type = SPEC_NONE;
     priv->key_m = 0;
@@ -14301,7 +14307,7 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
     /* wrong_key */
     g_free (priv->key_combine_name);
     priv->key_combine_name = NULL;
-    priv->key_combine = 0;
+    priv->key_combine_val = 0;
     priv->key_combine_spec = 0;
     priv->key_spec_type = SPEC_NONE;
     priv->key_m = 0;
@@ -18579,7 +18585,7 @@ repeat:
     g_free (alias);                     \
     g_free (priv->key_combine_name);    \
     priv->key_combine_name = NULL;      \
-    priv->key_combine = 0;              \
+    priv->key_combine_val = 0;          \
     priv->key_combine_spec = 0;         \
     priv->key_spec_type = SPEC_NONE;    \
     priv->key_m = 0;                    \
@@ -18711,7 +18717,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     g_free (alias);
     g_free (priv->key_combine_name);
     priv->key_combine_name = NULL;
-    priv->key_combine = 0;
+    priv->key_combine_val = 0;
     priv->key_combine_spec = 0;
     priv->key_spec_type = SPEC_NONE;
     priv->key_m = 0;
@@ -18760,6 +18766,26 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
         if ((priv->key_spec_type & SPEC_EXTRA)
                 && strchr (SPEC_EXTRA_CHARS, (gint) gdk_keyval_to_unicode (event->keyval)))
             goto next;
+        if (priv->key_spec_type & SPEC_CUSTOM)
+        {
+            gchar *key_combine;
+            gchar *chars;
+            gchar *found = NULL;
+
+            key_combine = gdk_keyval_name (priv->key_combine_val);
+            if (find_key_from (tree, config, &key_combine, &alias, &from) == -1)
+                wrong_key (TRUE);
+            if (!donna_config_get_string (config, NULL, &chars,
+                        "%s/custom_chars", from))
+                wrong_key (TRUE);
+            found = strchr (chars, (gint) gdk_keyval_to_unicode (event->keyval));
+            g_free (chars);
+            g_free (from);
+            g_free (alias);
+            from = alias = NULL;
+            if (found)
+                goto next;
+        }
         if (priv->key_spec_type & SPEC_MOTION)
         {
             gboolean is_motion = FALSE;
@@ -18885,7 +18911,7 @@ next:
                             priv->name, key);
                     wrong_key (TRUE);
                 }
-                priv->key_combine = (gchar) gdk_keyval_to_unicode (event->keyval);
+                priv->key_combine_val = event->keyval;
                 priv->key_spec_type = CLAMP (i, 1, 512);
                 break;
 
@@ -19473,8 +19499,9 @@ status_provider_render (DonnaStatusProvider    *sp,
 
             case 'k':
                 g_string_append_len (str, fmt, s - fmt);
-                if (priv->key_combine)
-                    g_string_append_c (str, priv->key_combine);
+                if (priv->key_combine_val)
+                    g_string_append_c (str,
+                            (gchar) gdk_keyval_to_unicode (priv->key_combine_val));
                 if (priv->key_combine_spec)
                     g_string_append_c (str, priv->key_combine_spec);
                 if (priv->key_m)
