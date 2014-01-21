@@ -3191,7 +3191,11 @@ btn_clicked (struct set_option *so)
         return;
     }
 
-    if (streq (type, ":string"))
+    if (streq (type, ":category"))
+    {
+        /* done */
+    }
+    else if (streq (type, ":string"))
     {
         if (streq (gtk_entry_get_text ((GtkEntry *) w), ""))
         {
