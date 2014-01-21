@@ -71,6 +71,7 @@ struct _DonnaAppInterface
                                                      const gchar    *intref);
     gchar *             (*parse_fl)                 (DonnaApp       *app,
                                                      gchar          *fl,
+                                                     gboolean        must_free_fl,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data,
@@ -172,6 +173,7 @@ gboolean            donna_app_free_int_ref          (DonnaApp       *app,
                                                      const gchar    *intref);
 gchar *             donna_app_parse_fl              (DonnaApp       *app,
                                                      gchar          *fl,
+                                                     gboolean        must_free_fl,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data,

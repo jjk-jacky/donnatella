@@ -534,6 +534,7 @@ static gboolean         donna_donna_free_int_ref    (DonnaApp       *app,
                                                      const gchar    *intref);
 static gchar *          donna_donna_parse_fl        (DonnaApp       *app,
                                                      gchar          *fl,
+                                                     gboolean        must_free_fl,
                                                      const gchar    *conv_flags,
                                                      conv_flag_fn    conv_fn,
                                                      gpointer        conv_data,
@@ -1582,6 +1583,7 @@ enum
 static gchar *
 donna_donna_parse_fl (DonnaApp       *app,
                       gchar          *_fl,
+                      gboolean        must_free_fl,
                       const gchar    *conv_flags,
                       conv_flag_fn    conv_fn,
                       gpointer        conv_data,
@@ -1592,7 +1594,7 @@ donna_donna_parse_fl (DonnaApp       *app,
     gchar *s = fl;
 
     if (G_UNLIKELY (!conv_flags || !conv_fn))
-        return _fl;
+        return (must_free_fl) ? _fl : g_strdup (_fl);
 
     while ((s = strchr (s, '%')))
     {
@@ -1787,10 +1789,11 @@ donna_donna_parse_fl (DonnaApp       *app,
     }
 
     if (!str)
-        return _fl;
+        return (must_free_fl) ? _fl : g_strdup (_fl);
 
     g_string_append (str, fl);
-    g_free (_fl);
+    if (must_free_fl)
+        g_free (_fl);
     return g_string_free (str, FALSE);
 }
 
@@ -1948,7 +1951,7 @@ trigger_event (DonnaDonna   *donna,
         {
             gboolean ret;
 
-            fl = donna_donna_parse_fl ((DonnaApp *) donna, fl,
+            fl = donna_donna_parse_fl ((DonnaApp *) donna, fl, TRUE,
                     conv_flags, conv_fn, conv_data, &intrefs);
             if (!trigger_fl ((DonnaApp *) donna, fl, intrefs,
                         is_confirm, &ret, &err))
@@ -2185,6 +2188,7 @@ menuitem_button_release_cb (GtkWidget           *item,
     struct menu_trigger *mt;
     GPtrArray *intrefs = NULL;
     gchar *fl = NULL;
+    gboolean must_free_fl = TRUE;
     /* longest possible is "ctrl_shift_middle_click" (len=23) */
     gchar buf[24];
     gchar *b = buf;
@@ -2234,13 +2238,16 @@ menuitem_button_release_cb (GtkWidget           *item,
     if (!fl)
     {
         if (streq (buf, "left_click"))
+        {
             /* hard-coded default for sanity */
-            fl = g_strdup ("command:node_trigger (%n)");
+            fl = (gchar *) "command:node_trigger (%n)";
+            must_free_fl = FALSE;
+        }
         else
             return FALSE;
     }
 
-    fl = donna_app_parse_fl ((DonnaApp *) mc->donna, fl, "nN",
+    fl = donna_app_parse_fl ((DonnaApp *) mc->donna, fl, must_free_fl, "nN",
             (conv_flag_fn) menu_conv_flag, node, &intrefs);
 
     /* we use an idle source to trigger it, because otherwise this could lead to

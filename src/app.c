@@ -578,6 +578,7 @@ donna_app_free_int_ref (DonnaApp       *app,
 gchar *
 donna_app_parse_fl (DonnaApp       *app,
                     gchar          *fl,
+                    gboolean        must_free_fl,
                     const gchar    *conv_flags,
                     conv_flag_fn    conv_fn,
                     gpointer        conv_data,
@@ -593,7 +594,8 @@ donna_app_parse_fl (DonnaApp       *app,
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->parse_fl != NULL, NULL);
 
-    return (*interface->parse_fl) (app, fl, conv_flags, conv_fn, conv_data, intrefs);
+    return (*interface->parse_fl) (app, fl, must_free_fl,
+            conv_flags, conv_fn, conv_data, intrefs);
 }
 
 gboolean

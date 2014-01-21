@@ -452,14 +452,16 @@ container_children_cb (DonnaTask    *task,
 
 static DonnaNode *
 get_node_trigger (DonnaApp      *app,
-                  gchar         *fl,
+                  const gchar   *_fl,
                   const gchar   *conv_flags,
                   conv_flag_fn   conv_fn,
                   gpointer       conv_data)
 {
     DonnaNode *node;
+    gchar *fl;
 
-    fl = donna_app_parse_fl (app, g_strdup (fl), conv_flags, conv_fn, conv_data, NULL);
+    fl = donna_app_parse_fl (app, (gchar *) _fl, FALSE,
+            conv_flags, conv_fn, conv_data, NULL);
     node = donna_app_get_node (app, fl, NULL);
     if (G_UNLIKELY (!node))
     {
@@ -922,7 +924,7 @@ get_user_item_info (const gchar             *item,
 
     if (type == TYPE_TRIGGER)
     {
-        info->node = get_node_trigger (app, (gchar *) info->trigger,
+        info->node = get_node_trigger (app, info->trigger,
                 conv_flags, conv_fn, conv_data);
         g_free ((gchar *) info->trigger);
         info->trigger = NULL;
@@ -1009,7 +1011,7 @@ get_user_item_info (const gchar             *item,
     if (import > 0)
     {
         if (!node_trigger)
-            node_trigger = get_node_trigger (app, (gchar *) info->trigger,
+            node_trigger = get_node_trigger (app, info->trigger,
                     conv_flags, conv_fn, conv_data);
         if (!node_trigger)
             g_warning ("Context-menu: Cannot import options from node trigger "
@@ -1499,8 +1501,7 @@ parse_items (DonnaApp               *app,
                     /* we do the parsing, but ignore intrefs since the trigger is
                      * just a string property, so they'll be cleaned via GC */
                     info.trigger = donna_app_parse_fl (app,
-                            (info.free_trigger)
-                            ? (gchar *) info.trigger : g_strdup (info.trigger),
+                            (gchar *) info.trigger, info.free_trigger,
                             conv_flags, conv_fn, conv_data, NULL);
 
                     g_value_init (&v, G_TYPE_STRING);
@@ -1602,8 +1603,7 @@ parse_items (DonnaApp               *app,
                 else
                 {
                     ni->fl = donna_app_parse_fl (app,
-                            (info.free_trigger)
-                            ? (gchar *) info.trigger : g_strdup (info.trigger),
+                            (gchar *) info.trigger, info.free_trigger,
                             conv_flags, conv_fn, conv_data, &ni->intrefs);
                     ni->free_fl = TRUE;
                 }
