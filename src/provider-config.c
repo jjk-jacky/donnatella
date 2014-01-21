@@ -3262,6 +3262,13 @@ btn_clicked (struct set_option *so)
                 break;
             }
         }
+        if (G_UNLIKELY ((guint) i >= so->extras->len))
+        {
+            gtk_info_bar_set_message_type (so->infobar, GTK_MESSAGE_ERROR);
+            gtk_label_set_text (so->lblerr, "Internal error");
+            gtk_widget_show ((GtkWidget *) so->infobar);
+            return;
+        }
 
         if (_e->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST)
         {
