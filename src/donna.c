@@ -4278,6 +4278,7 @@ init_donna (DonnaDonna *donna)
                     "visuals/%s/highlight", arr->pdata[i]);
             g_hash_table_insert (priv->visuals, s, visuals);
         }
+        g_ptr_array_unref (arr);
     }
 }
 
