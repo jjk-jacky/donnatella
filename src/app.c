@@ -235,6 +235,7 @@ donna_app_get_provider (DonnaApp       *app,
 DonnaNode *
 donna_app_get_node (DonnaApp    *app,
                     const gchar *full_location,
+                    gboolean     do_user_parse,
                     GError     **error)
 {
     DonnaAppInterface *interface;
@@ -242,20 +243,30 @@ donna_app_get_node (DonnaApp    *app,
     DonnaNode *node;
     gchar buf[64], *b = buf;
     const gchar *location;
+    gchar *fl = NULL;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (full_location != NULL, NULL);
 
     interface = DONNA_APP_GET_INTERFACE (app);
-
     g_return_val_if_fail (interface != NULL, NULL);
     g_return_val_if_fail (interface->get_provider != NULL, NULL);
+
+    if (do_user_parse)
+    {
+        g_return_val_if_fail (interface->parse_fl != NULL, NULL);
+
+        fl = (*interface->parse_fl) (app, (gchar *) full_location, FALSE,
+                NULL, NULL, NULL, NULL);
+        full_location = fl;
+    }
 
     location = strchr (full_location, ':');
     if (G_UNLIKELY (!location))
     {
         g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
                 "Invalid full location");
+        g_free (fl);
         return NULL;
     }
 
@@ -274,6 +285,7 @@ donna_app_get_node (DonnaApp    *app,
                 "Unknown provider: %s", b);
         if (b != buf)
             g_free (b);
+        g_free (fl);
         return NULL;
     }
     if (b != buf)
@@ -281,6 +293,7 @@ donna_app_get_node (DonnaApp    *app,
 
     node = donna_provider_get_node (provider, ++location, error);
     g_object_unref (provider);
+    g_free (fl);
     return node;
 }
 
@@ -313,6 +326,7 @@ trigger_node_cb (DonnaTask *task, gboolean timeout_called, struct trigger_node *
 gboolean
 donna_app_trigger_node (DonnaApp       *app,
                         const gchar    *full_location,
+                        gboolean        do_user_parse,
                         GError        **error)
 {
     DonnaNode *node;
@@ -322,7 +336,7 @@ donna_app_trigger_node (DonnaApp       *app,
     g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
     g_return_val_if_fail (full_location != NULL, FALSE);
 
-    node = donna_app_get_node (app, full_location, error);
+    node = donna_app_get_node (app, full_location, do_user_parse, error);
     if (!node)
         return FALSE;
 

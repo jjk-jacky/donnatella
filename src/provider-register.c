@@ -1081,7 +1081,7 @@ register_get_nodes (DonnaProviderRegister   *pr,
             node = donna_provider_get_node (pfs, (gchar *) l->data, &err);
         else
             node = donna_app_get_node (((DonnaProviderBase *) pr)->app,
-                    (gchar *) l->data, &err);
+                    (gchar *) l->data, FALSE, &err);
 
         if (!node)
         {
@@ -1164,7 +1164,7 @@ emit_node_children_from_arr (DonnaProviderRegister  *pr,
         GError *err = NULL;
         DonnaNode *node;
 
-        node = donna_app_get_node (app, arr->pdata[i], &err);
+        node = donna_app_get_node (app, arr->pdata[i], FALSE, &err);
         if (!node)
         {
             gchar *fl = donna_node_get_full_location (parent);
@@ -2183,7 +2183,7 @@ provider_register_trigger_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    if (!donna_app_trigger_node (_provider->app, s, &err))
+    if (!donna_app_trigger_node (_provider->app, s, FALSE, &err))
     {
         g_prefix_error (&err, "Provider 'register': Failed to trigger node 'register:%s': ",
                 location);
@@ -3050,7 +3050,7 @@ cmd_register_nodes_io (DonnaTask               *task,
         g_string_append_c (str, ')');
 
         /* get the node for ask_text() */
-        n = donna_app_get_node (app, str->str, &err);
+        n = donna_app_get_node (app, str->str, FALSE, &err);
         g_string_free (str, TRUE);
         if (G_UNLIKELY (!n))
         {

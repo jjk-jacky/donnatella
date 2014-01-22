@@ -437,7 +437,8 @@ donna_provider_get_flags (DonnaProvider *provider)
  * been processed as a result.
  *
  * Note that you can also use helper donna_app_get_node() if you don't have the
- * #DonnaProvider but a full-location instead.
+ * #DonnaProvider but a full-location instead; or want to have a user-provided
+ * full location go through "user-parsing" (prefixes, aliases, etc)
  *
  * Returns: The #DonnaNode for @location, or %NULL
  */

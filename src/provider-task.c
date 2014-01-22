@@ -1831,7 +1831,7 @@ tm_conv_fn (const gchar      c,
     switch (c)
     {
         case 'o':
-            *ptr = donna_app_get_node (conv->tm->priv->app, "task:/", NULL);
+            *ptr = donna_app_get_node (conv->tm->priv->app, "task:/", FALSE, NULL);
             if (G_UNLIKELY (!*ptr))
                 return FALSE;
             *type = DONNA_ARG_TYPE_NODE;

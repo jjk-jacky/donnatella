@@ -12540,7 +12540,7 @@ load_list (DonnaTreeView *tree, struct load_list *ll)
         GtkTreePath *path;
 
         *s = '\0';
-        node = donna_app_get_node (priv->app, data, &err);
+        node = donna_app_get_node (priv->app, data, FALSE, &err);
         if (!node)
         {
             if (!errmsg)
@@ -12664,7 +12664,7 @@ selection:
         while ((s = strchr (data, '\n')))
         {
             *s = '\0';
-            node = donna_app_get_node (priv->app, data, &err);
+            node = donna_app_get_node (priv->app, data, FALSE, &err);
             if (!node)
             {
                 if (!errmsg)
@@ -12751,7 +12751,7 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
     }
 
     *s = '\0';
-    node = donna_app_get_node (priv->app, data, error);
+    node = donna_app_get_node (priv->app, data, FALSE, error);
     if (!node)
     {
         g_prefix_error (error, "TreeView '%s': Failed to load from file; "
@@ -13253,7 +13253,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
         {
 
             /* get node */
-            node = donna_app_get_node (priv->app, s, &err);
+            node = donna_app_get_node (priv->app, s, FALSE, &err);
             if (!node)
             {
                 g_warning ("TreeView '%s': Failed to get node for '%s': %s",
@@ -13277,7 +13277,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
 
             if (!node)
             {
-                node = donna_app_get_node (priv->app, s, &err);
+                node = donna_app_get_node (priv->app, s, FALSE, &err);
                 if (!node)
                 {
                     g_warning ("TreeView '%s': Failed to get node for '%s': %s",
@@ -14894,7 +14894,7 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
         return FALSE;
     }
 
-    node = donna_app_get_node (priv->app, fl, error);
+    node = donna_app_get_node (priv->app, fl, FALSE, error);
     if (!node)
     {
         g_prefix_error (error, "TreeView '%s': Failed to move in history: ",
@@ -15008,7 +15008,7 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
         /* go to root */
         *++location = '\0';
 
-    node = donna_app_get_node (priv->app, fl, error);
+    node = donna_app_get_node (priv->app, fl, FALSE, error);
     g_free (fl);
     if (!node)
     {
@@ -15247,7 +15247,7 @@ donna_tree_view_get_node_down (DonnaTreeView      *tree,
         DonnaNode *node;
 
 found:
-        node = donna_app_get_node (priv->app, best, error);
+        node = donna_app_get_node (priv->app, best, FALSE, error);
         g_strfreev (items);
         g_strfreev (items_f);
         g_free (fl);
@@ -16479,7 +16479,7 @@ tree_context_get_item_info (const gchar             *item,
         if (snprintf (buf, 64, "register:%s/%s", extra, item) >= 64)
             b = g_strdup_printf ("register:%s/%s", extra, item);
 
-        node = donna_app_get_node (priv->app, b, error);
+        node = donna_app_get_node (priv->app, b, FALSE, error);
         if (!node)
         {
             g_prefix_error (error, "TreeView '%s': "

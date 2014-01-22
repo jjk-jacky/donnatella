@@ -1243,7 +1243,7 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
             {
                 if (G_VALUE_TYPE (&v) == G_TYPE_STRING)
                 {
-                    if (!donna_app_trigger_node (app, g_value_get_string (&v), &err))
+                    if (!donna_app_trigger_node (app, g_value_get_string (&v), FALSE, &err))
                     {
                         gchar *fl = donna_node_get_full_location (node);
                         g_prefix_error (&err, "Command 'node_trigger': "

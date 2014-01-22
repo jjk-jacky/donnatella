@@ -808,7 +808,7 @@ convert:
         DonnaRowId *rid = g_new (DonnaRowId, 1);
         gpointer ptr;
 
-        if (*s == '[')
+        if (*s == '[' && s[strlen (s) - 1] == ']')
         {
             DonnaRow *row = g_new (DonnaRow, 1);
             if (sscanf (s, "[%p;%p]", &row->node, &row->iter) != 2)
@@ -828,17 +828,8 @@ convert:
             rid->type = DONNA_ARG_TYPE_PATH;
             rid->ptr = g_strdup (s);
         }
-        else if (*s == '<')
+        else if (*s == '<' && s[strlen (s) - 1] == '>')
         {
-            gsize len = strlen (s) - 1;
-
-            if (s[len] != '>')
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Invalid node reference: '%s'",
-                        rc->command->name, rc->i + 1, s);
-                goto error;
-            }
             ptr = donna_app_get_int_ref (app, s, DONNA_ARG_TYPE_NODE);
             if (!ptr)
             {
@@ -852,7 +843,7 @@ convert:
         }
         else
         {
-            ptr = donna_app_get_node (app, s, &err);
+            ptr = donna_app_get_node (app, s, TRUE, &err);
             if (!ptr)
             {
                 g_free (rid);
@@ -871,17 +862,8 @@ convert:
         GPtrArray *arr = NULL;
         gpointer ptr;
 
-        if (*s == '<')
+        if (*s == '<' && s[strlen (s) - 1] == '>')
         {
-            gsize len = strlen (s) - 1;
-            if (s[len] != '>')
-            {
-                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                        "Command '%s', argument %d: Invalid node full location/reference: '%s'",
-                        rc->command->name, rc->i + 1, s);
-                goto error;
-            }
-
             /* if an array, try an intref for an array of nodes first */
             if (rc->command->arg_type[rc->i] & DONNA_ARG_IS_ARRAY)
             {
@@ -954,7 +936,7 @@ convert:
                     *++e = '\0';
                 }
 
-                ptr = donna_app_get_node (app, start, &err);
+                ptr = donna_app_get_node (app, start, TRUE, &err);
                 if (!ptr)
                 {
                     g_propagate_prefixed_error (error, err,
@@ -994,7 +976,7 @@ convert:
              * already been unquoted. "Double-quoting" can only happen in case
              * of arrays, where the list is quoted, and so are each element */
 
-            ptr = donna_app_get_node (app, s, &err);
+            ptr = donna_app_get_node (app, s, TRUE, &err);
             if (!ptr)
             {
                 g_propagate_prefixed_error (error, err,

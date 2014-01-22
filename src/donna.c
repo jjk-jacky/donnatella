@@ -2071,7 +2071,7 @@ trigger_fl (DonnaApp    *app,
     DonnaNode *node;
     DonnaTask *task;
 
-    node = donna_app_get_node (app, fl, error);
+    node = donna_app_get_node (app, fl, FALSE, error);
     if (!node)
         return FALSE;
 

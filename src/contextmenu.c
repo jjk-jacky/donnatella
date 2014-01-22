@@ -462,7 +462,7 @@ get_node_trigger (DonnaApp      *app,
 
     fl = donna_app_parse_fl (app, (gchar *) _fl, FALSE,
             conv_flags, conv_fn, conv_data, NULL);
-    node = donna_app_get_node (app, fl, NULL);
+    node = donna_app_get_node (app, fl, FALSE, NULL);
     if (G_UNLIKELY (!node))
     {
         g_free (fl);
@@ -1576,7 +1576,7 @@ parse_items (DonnaApp               *app,
             {
                 if (info.is_container)
                 {
-                    ni->node_trigger = donna_app_get_node (app, info.trigger, &err);
+                    ni->node_trigger = donna_app_get_node (app, info.trigger, TRUE, &err);
                     if (!ni->node_trigger)
                     {
                         g_prefix_error (error, "Error for item '%s': "

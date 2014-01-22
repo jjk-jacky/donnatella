@@ -479,7 +479,7 @@ get_mark_node (DonnaTask            *task,
         return DONNA_TASK_FAILED;
     }
 
-    n = donna_app_get_node (app, mark->value, &err);
+    n = donna_app_get_node (app, mark->value, TRUE, &err);
     if (G_UNLIKELY (!n))
     {
         g_mutex_unlock (&priv->mutex);

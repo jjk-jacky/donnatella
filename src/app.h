@@ -140,9 +140,11 @@ DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
                                                      const gchar    *domain);
 DonnaNode *         donna_app_get_node              (DonnaApp       *app,
                                                      const gchar    *full_location,
+                                                     gboolean        do_user_parse,
                                                      GError        **error);
 gboolean            donna_app_trigger_node          (DonnaApp       *app,
                                                      const gchar    *full_location,
+                                                     gboolean        do_user_parse,
                                                      GError        **error);
 DonnaColumnType *   donna_app_get_column_type       (DonnaApp       *app,
                                                      const gchar    *type);
