@@ -14,6 +14,7 @@
 #include "task.h"
 #include "task-process.h"
 #include "app.h"
+#include "misc.h"
 #include "macros.h"
 
 struct io_engine
@@ -989,8 +990,7 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
                       const gchar        *location)
 {
     DonnaNode   *node;
-    GString     *str = NULL;
-    const gchar *s;
+    gchar       *s;
     GValue      *value;
 
     /* must start with a '/' */
@@ -1002,38 +1002,18 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    /* convert e.g. "///tmp///" into "/tmp" as is expected */
-    for (s = location + 1; *s != '\0'; ++s)
-    {
-        if (*s == '/' && s[-1] == '/')
-        {
-            if (!str)
-            {
-                str = g_string_sized_new (strlen (location) - 1);
-                g_string_append_len (str, location, s - location);
-            }
-        }
-        else if (str)
-            g_string_append_c (str, *s);
-    }
-    if (!str && s - location > 1 && s[-1] == '/')
-        str = g_string_new (location);
-    if (str && str->len > 1 && str->str[str->len - 1] == '/')
-        g_string_truncate (str, str->len - 1);
-
-    s = (str) ? str->str : location;
-    node = new_node (_provider, s, NULL);
+    s = _resolve_path (NULL, location);
+    node = new_node (_provider, (s) ? s : location, NULL);
     if (!node)
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_OTHER,
-                "Cannot create node, file doesn't exist: %s", s);
-        if (str)
-            g_string_free (str, TRUE);
+                "Cannot create node, file doesn't exist: %s",
+                (s) ? s : location);
+        g_free (s);
         return DONNA_TASK_FAILED;
     }
-    if (str)
-        g_string_free (str, TRUE);
+    g_free (s);
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, G_TYPE_OBJECT);
