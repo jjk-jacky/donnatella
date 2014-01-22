@@ -248,6 +248,64 @@
  * option <systemitem>node_visuals</systemitem>.
  * </para></refsect3>
  *
+ * <refsect3 id="user-parsing">
+ * <title>Full Location: prefixes, aliases and more</title>
+ * <para>
+ * As you might know, donna uses the concept of nodes (#DonnaNode) to represent
+ * both items (e.g. files) & containers (e.g. folders) everywhere in the
+ * application, starting with treeviews or menus.
+ *
+ * A node belongs to a domain, for example "fs" represents the filesystem,
+ * "config" donna's configuration, etc
+ * As a result, every location in donna is identified via a "full location." A
+ * full location is a string made of the domain & the location within the
+ * domain, separated by a colon. For example, when in <filename>/tmp</filename>
+ * donna will refer to this as <systemitem>fs:/tmp</systemitem>
+ *
+ * This can be cumbersome to type, and is why you some facilities are available
+ * when dealing with full locations, known as "user parsing" of full locations.
+ * Note that there might be places where an actual full location is required
+ * (e.g. in list/tree files), but all user input support this user parsing.
+ *
+ * First of all, prefixes can be defined. A prefix is a string of one or more
+ * characters that cannot start with a letter. Defined under numbered categories
+ * in <systemitem>donna/prefixes</systemitem> in the configuration, each
+ * definition can be made of the following options:
+ *
+ * - <systemitem>prefix</systemitem> (string; required): the actual prefix to
+ *   look for at the beginning of the full location.
+ * - <systemitem>is_strict</systemitem> (boolean; optional): By default, a match
+ *   will be whenever the full location starts with the prefix. When true, it
+ *   will also required that the full location contains more than the prefix,
+ *   and that the first character after the prefix isn't a space. This is to
+ *   allow the use of the same string as alias, and use them all as needed.
+ * - <systemitem>replacement</systemitem> (string; required): The string the
+ *   prefix will be replaced with in the full location.
+ * - <systemitem>is_home_dir</systemitem> (boolean; optional): A special mode,
+ *   where if true option <systemitem>replacement</systemitem> will be ignored
+ *   (and isn't even in fact needed) and instead the prefix will be replaced
+ *   with the user's home dir (prefixed with "fs:").
+ *
+ * When a prefix match if found, replacement occurs and user parsing is
+ * completed. (I.e. the result cannot include other prefixes or aliases.)
+ *
+ * If no prefix match occured, donna will look for the first character that is
+ * either a colon, a slash or a space.
+ *
+ * - If a colon, assume a full location was given and be done.
+ * - If a space (or nothing), look for the corresponding alias.
+ * - If a slash, and the current location (of the active list) is in a
+ *   non-flat domain (e.g. fs), then try to resolve the full location as a
+ *   relative path of said location.
+ *
+ * An alias, like a prefix, will consist of replacing it with a replacement.
+ * Said replacement will be looked for in
+ * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement</systemitem>.
+ * If the full location was nothing else than the alias (i.e. no space after it)
+ * then the replacement will first be looked for in
+ * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
+ * </para></refsect3>
+ *
  * </para></refsect2>
  *
  * <refsect2 id="css">
@@ -1589,13 +1647,185 @@ donna_donna_parse_fl (DonnaApp       *app,
                       gpointer        conv_data,
                       GPtrArray     **intrefs)
 {
+    GError *err = NULL;
+    DonnaConfig *config = donna_app_peek_config (app);
+    GPtrArray *arr;
     GString *str = NULL;
     gchar *fl = _fl;
-    gchar *s = fl;
+    gchar *s;
+    guint i;
 
-    if (G_UNLIKELY (!conv_flags || !conv_fn))
-        return (must_free_fl) ? _fl : g_strdup (_fl);
+    /* prefixes (cannot not start with a letter) */
+    if (!((*fl >= 'a' && *fl <= 'z') || (*fl >= 'A' && *fl <= 'Z')))
+    {
+        arr = NULL;
+        if (!donna_config_list_options (config, &arr,
+                    DONNA_CONFIG_OPTION_TYPE_NUMBERED, "donna/prefixes"))
+            goto prefix_done;
 
+        for (i = 0; i < arr->len; ++i)
+        {
+            gsize len;
+            gboolean is_set;
+
+            if (!donna_config_get_string (config, &err, &s,
+                        "donna/prefixes/%s/prefix", arr->pdata[i]))
+            {
+                g_warning ("Skipping prefix 'donna/prefixes/%s': %s",
+                        (gchar *) arr->pdata[i],
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+                continue;
+            }
+
+            len = strlen (s);
+            if (!streqn (fl, s, len))
+            {
+                g_free (s);
+                continue;
+            }
+            g_free (s);
+
+            /* strict matching means the prefix must be "used as such," i.e. it
+             * needs to be followed by something, that doesn't start by a space.
+             * This allows to have an alias of the same thing, and have the
+             * possibility of treating all 3 cases: prefix, alias_no_args, alias
+             */
+            if (donna_config_get_boolean (config, NULL, &is_set,
+                        "donna/prefixes/%s/is_strict", arr->pdata[i])
+                    && is_set && (fl[len] == ' ' || fl[len] == '\0'))
+                continue;
+
+            if (donna_config_get_boolean (config, NULL, &is_set,
+                        "donna/prefixes/%s/is_home_dir", arr->pdata[i])
+                    && is_set)
+            {
+                str = g_string_new ("fs:");
+                g_string_append (str, g_get_home_dir ());
+                fl += len;
+                i = (guint) -1;
+                break;
+            }
+
+            if (!donna_config_get_string (config, &err, &s,
+                        "donna/prefixes/%s/replacement", arr->pdata[i]))
+            {
+                g_warning ("Skipping prefix 'donna/prefixes/%s': No replacement: %s",
+                        (gchar *) arr->pdata[i],
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+                continue;
+            }
+
+            str = g_string_new (s);
+            g_free (s);
+            fl += len;
+            i = (guint) -1;
+            break;
+        }
+        g_ptr_array_unref (arr);
+
+        /* if there was a match, don't go through aliases, etc */
+        if (i == (guint) -1)
+            goto context_parsing;
+    }
+prefix_done:
+
+
+    /* aliases: look for the first possible "separator" */
+    for (s = fl; *s != ' ' && *s != ':' && *s != '/' && *s != '\0'; ++s)
+        ;
+
+    /* space (or EOF): alias */
+    if (*s == ' ' || *s == '\0')
+    {
+        gint len = (gint) (s - fl);
+
+        if (*s == ' ' && donna_config_get_string (config, NULL, &s,
+                    "donna/aliases/%.*s/replacement_no_args", len, fl))
+        {
+            str = g_string_new (s);
+            g_free (s);
+            fl += len;
+        }
+        else if (!donna_config_get_string (config, &err, &s,
+                    "donna/aliases/%.*s/replacement", len, fl))
+        {
+            if (donna_config_has_category (config, NULL,
+                        "donna/aliases/%.*s", len, fl))
+                g_warning ("Skipping prefix 'donna/aliases/%.*s': No replacement: %s",
+                        len, fl, (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+        else
+        {
+            str = g_string_new (s);
+            g_free (s);
+            fl += len;
+        }
+    }
+    /* slash: special handling of relative path (non-flat domains only) */
+    else if (*s == '/')
+    {
+        DonnaNode *node;
+
+        node = donna_app_get_current_location (app, &err);
+        if (!node)
+        {
+            g_warning ("Failed to perform relative path handling: "
+                    "Couldn't get current location: %s",
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+            goto context_parsing;
+        }
+
+        if (donna_provider_get_flags (donna_node_peek_provider (node))
+                & DONNA_PROVIDER_FLAG_FLAT)
+        {
+            g_warning ("Failed to perform relative path handling: "
+                    "domain '%s' is flat",
+                    donna_node_get_domain (node));
+            g_object_unref (node);
+            goto context_parsing;
+        }
+
+        if (*fl == '/')
+        {
+            str = g_string_new (donna_node_get_domain (node));
+            g_string_append_c (str, ':');
+            g_object_unref (node);
+            goto context_parsing;
+        }
+
+        s = _resolve_path (node, fl);
+        g_object_unref (node);
+        if (s)
+        {
+            /* set up new fl */
+            fl = s;
+            if (must_free_fl)
+                g_free (_fl);
+            else
+                must_free_fl = TRUE;
+            _fl = fl;
+        }
+        else
+        {
+            gchar *ss = donna_node_get_full_location (node);
+            str = g_string_new (ss);
+            g_string_append_c (str, '/');
+            g_free (ss);
+        }
+    }
+    /* colon: regular full location; nothing to do */
+
+
+context_parsing:
+    /* context */
+    if (!conv_flags || !conv_fn)
+        goto done;
+
+    s = fl;
     while ((s = strchr (s, '%')))
     {
         guint dereference;
@@ -1677,9 +1907,9 @@ donna_donna_parse_fl (DonnaApp       *app,
                     {
                         GString *string;
                         GString *str_arr;
-                        GPtrArray *arr = (GPtrArray *) ptr;
                         gchar sep;
-                        guint i;
+
+                        arr = (GPtrArray *) ptr;
 
                         if (dereference == DEREFERENCE_FS)
                         {
@@ -1788,6 +2018,7 @@ donna_donna_parse_fl (DonnaApp       *app,
             break;
     }
 
+done:
     if (!str)
         return (must_free_fl) ? _fl : g_strdup (_fl);
 
