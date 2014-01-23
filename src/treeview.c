@@ -10412,6 +10412,30 @@ unselect_path (gpointer p, gpointer s)
     gtk_tree_selection_unselect_path ((GtkTreeSelection *) s, (GtkTreePath *) p);
 }
 
+/**
+ * donna_tree_view_selection:
+ * @tree: A #DonnaTreeView
+ * @action: Which action to perform on the selection
+ * @rowid: Identifier of a row; See #rowid for more
+ * @to_focused: When %TRUE rows affected will be the range from @rowid to the
+ * focused row
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Affects the selection on @tree. For trees, the only supported action is
+ * %DONNA_SEL_SELECT to set the selection on one row. This is pretty much the
+ * same as using donna_tree_view_set_location() but allows to specify the row,
+ * in case the same location exists for more than one rows on tree.
+ *
+ * For lists, you can select, unselect, invert or define the selection.
+ *
+ * If @to_focused is %TRUE then @rowid must point to a row which will be used as
+ * other boundary (with focused row) to make the range of rows to be used.
+ *
+ * Note that inverting a range (using @to_focused) is only supported with a
+ * patched GTK.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_selection (DonnaTreeView        *tree,
                            DonnaSelAction        action,
@@ -10575,6 +10599,21 @@ donna_tree_view_selection (DonnaTreeView        *tree,
 }
 
 /* mode list only */
+/**
+ * donna_tree_view_selection_nodes:
+ * @tree: A #DonnaTreeView
+ * @action: Which action to perform on the selection
+ * @nodes: (element-type DonnaNode): An array of nodes
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Similar to donna_tree_view_selection() only using the given nodes instead of
+ * a rowid. Any node not found if the treeview will be
+ * ignored/skipped.
+ *
+ * Note that this is only supported in lists.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_selection_nodes (DonnaTreeView      *tree,
                                  DonnaSelAction      action,
@@ -10606,7 +10645,7 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
     if (priv->is_tree)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
                 "TreeView '%s': Cannot update selection, incompatible with mode tree",
                 priv->name);
         return FALSE;
@@ -10654,6 +10693,20 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_set_focus:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Make @rowid the focused row.
+ *
+ * Note that this only set the focused row, nothing else. Specifically,
+ * selection will not be affected, nor will any scrolling take place. If you
+ * want to e.g. also scroll to the row, see donna_tree_view_goto_line()
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_set_focus (DonnaTreeView        *tree,
                            DonnaRowId           *rowid,
@@ -10685,6 +10738,23 @@ donna_tree_view_set_focus (DonnaTreeView        *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_set_cursor:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @no_scroll: %TRUE not to scroll to @rowid
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set the cursor on @rowid. This is the GTK terminology for the following:
+ * - unselect all
+ * - make @rowid the focused row
+ * - scroll to @rowid (unless @no_scroll is %TRUE)
+ *
+ * Note that you can have more control over what to do (select, scroll, etc)
+ * using donna_tree_view_goto_line()
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_set_cursor (DonnaTreeView        *tree,
                             DonnaRowId           *rowid,
@@ -10728,6 +10798,23 @@ donna_tree_view_set_cursor (DonnaTreeView        *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_activate_row:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * "Activates" @rowid; Activating a row means:
+ * - for container, make it the new current location
+ * - for items, trigger it (e.g. open the file w/ associated application)
+ *
+ * Note that if @rowid refers to more than one row (i.e. all/selected rows) then
+ * containers will wimply be skipped.
+ *
+ * Returns: %TRUE on success, else %FALSE. Note that success here means all rows
+ * were succesfully activated (or skipped), which only means the task was
+ * started, regardless of whether or not it succeeded.
+ */
 gboolean
 donna_tree_view_activate_row (DonnaTreeView      *tree,
                               DonnaRowId         *rowid,
@@ -10833,6 +10920,26 @@ next:
     return ret;
 }
 
+/* mode tree only */
+/**
+ * donna_tree_view_toggle_row:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @toggle: Which type of toggling to perform
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Toggle @rowid, i.e. collapse or expand the row.
+ *
+ * Maxi toggle (%DONNA_TREE_TOGGLE_MAXI) is a special operation:
+ * - if @rowid is expanded, but only partially (i.e. in #minitree) then it will
+ *   remain expanded, but switch to maxi expand. Else it is maxi collapsed.
+ * - if @rowid is collapsed and has never been expanded, it is maxi expanded. If
+ *   it had been expanded before, it is maxi collapsed.
+ *
+ * Note that this obviously is only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_toggle_row (DonnaTreeView      *tree,
                             DonnaRowId         *rowid,
@@ -10853,8 +10960,9 @@ donna_tree_view_toggle_row (DonnaTreeView      *tree,
 
     if (G_UNLIKELY (!priv->is_tree))
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
-                "TreeView '%s': toggle_node() doesn't apply in mode list",
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "TreeView '%s': toggle_row() doesn't apply in mode list",
                 priv->name);
         return FALSE;
     }
@@ -10976,6 +11084,19 @@ full_expand_children (DonnaTreeView *tree, GtkTreeIter *iter)
     } while (gtk_tree_model_iter_next (model, &child));
 }
 
+/**
+ * donna_tree_view_full_expand:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Perform a full expand of @rowid. Full expand means that it will expand the
+ * row itself, as well as every one of its children (and so on recursively).
+ *
+ * Note that this is obviously only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_full_expand (DonnaTreeView      *tree,
                              DonnaRowId         *rowid,
@@ -10991,7 +11112,8 @@ donna_tree_view_full_expand (DonnaTreeView      *tree,
 
     if (G_UNLIKELY (!priv->is_tree))
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
                 "TreeView '%s': full_expand() doesn't apply in mode list",
                 priv->name);
         return FALSE;
@@ -11028,6 +11150,19 @@ reset_expand_flag (GtkTreeModel *model, GtkTreeIter *iter)
     } while (gtk_tree_model_iter_next (model, &child));
 }
 
+/**
+ * donna_tree_view_full_collapse:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Perform a full collapse of @rowid. Full collapse means that it will collapse
+ * the row itself, as well as every one of its children (and so on recursively).
+ *
+ * Note that this is obviously only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_full_collapse (DonnaTreeView      *tree,
                                DonnaRowId         *rowid,
@@ -11044,7 +11179,8 @@ donna_tree_view_full_collapse (DonnaTreeView      *tree,
 
     if (G_UNLIKELY (!priv->is_tree))
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
                 "TreeView '%s': full_collapse() doesn't apply in mode list",
                 priv->name);
         return FALSE;
@@ -11070,6 +11206,20 @@ donna_tree_view_full_collapse (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_maxi_expand:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Perform a maxi expand of @rowid. Maxi expand means that it will expand
+ * the row, but also make sure the row is maxi expanded, i.e. that all of its
+ * children are loaded on tree.
+ *
+ * Note that this is obviously only supported on #minitree<!-- -->s.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_maxi_expand (DonnaTreeView      *tree,
                              DonnaRowId         *rowid,
@@ -11085,7 +11235,8 @@ donna_tree_view_maxi_expand (DonnaTreeView      *tree,
 
     if (G_UNLIKELY (!priv->is_tree))
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
                 "TreeView '%s': maxi_expand() doesn't apply in mode list",
                 priv->name);
         return FALSE;
@@ -11112,6 +11263,20 @@ donna_tree_view_maxi_expand (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_maxi_collapse:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Perform a maxi collapse of @rowid. Maxi collapse means that it will collapse
+ * the row, but also remove all its children from the tree.
+ *
+ * Note that this is obviously only supported on trees, even "maxi-tree" (i.e.
+ * not a #minitree).
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
                                DonnaRowId         *rowid,
@@ -11127,7 +11292,8 @@ donna_tree_view_maxi_collapse (DonnaTreeView      *tree,
 
     if (G_UNLIKELY (!priv->is_tree))
     {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
                 "TreeView '%s': maxi_collapse() doesn't apply in mode list",
                 priv->name);
         return FALSE;
@@ -11238,6 +11404,20 @@ set_tree_visual (DonnaTreeView  *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_set_visual:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @visual: Which visual to set
+ * @value: New value to set for @visual
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set the value of the specified #tree-visuals.
+ *
+ * Note that this is obviously only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_set_visual (DonnaTreeView      *tree,
                             DonnaRowId         *rowid,
@@ -11275,6 +11455,35 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     return set_tree_visual (tree, &iter, visual, value, error);
 }
 
+/**
+ * donna_tree_view_get_visual:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @visual: Which visual to set
+ * @source: From where to get the value of @visual
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Return the value of the specified visuals.
+ *
+ * Trees support #tree-visuals, which can be applied either as tree-specific, or
+ * via #node-visuals. @source determines where the value will come from. Using
+ * %DONNA_TREE_VISUAL_SOURCE_ANY will return the tree-specific value if any,
+ * else the value from the node if any, else %NULL.
+ *
+ * Note that when getting the value from the node, it will only return a value
+ * if the visual is actually used/shown on @tree (via option
+ * <systemitem>node_visuals</systemitem>).
+ * IOW when e.g. custom icons are not shown as part of node visuals, %NULL will
+ * be returned even if a custom icon is defined on the node as visual, because
+ * it isn't used on @tree. If you're looking for the value of the node visual
+ * regardless, see #node-visuals to see which property to get value of from the
+ * node directly.
+ *
+ * Note that this is obviously only supported on trees.
+ *
+ * Returns: (transfer full): A newly-allocated string, value of the visual. Free
+ * it using g_free() when done.
+ */
 gchar *
 donna_tree_view_get_visual (DonnaTreeView           *tree,
                             DonnaRowId              *rowid,
@@ -11580,6 +11789,26 @@ renderer_edit (GtkCellRenderer *renderer, struct re_data *data)
     return ret;
 }
 
+/**
+ * donna_tree_view_column_edit:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @column: Name of the column
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Enable editing mode for @column on @rowid. Note that in case of success,
+ * @rowid will automatically become the focused row.
+ *
+ * Valid values for @column are the column's full name, simply as many of the
+ * first characters as needed to identify it, or a number to get the nth column
+ * on @tree.
+ *
+ * How the editing is actually done (e.g. inline or via a new dialog) depends on
+ * the columntype. (Some columntypes could also have different behavior
+ * depending on whether there is a selection on @tree or not, etc)
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_column_edit (DonnaTreeView      *tree,
                              DonnaRowId         *rowid,
@@ -11638,6 +11867,25 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_column_set_option:
+ * @tree: A #DonnaTreeView
+ * @column: Name of the column
+ * @option: Name of the option
+ * @value: String representation of the value to set
+ * @save_location: Where to save the option
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set a new value derived from @value for the column option @option of column
+ * @column, saving it in the location indicated by @save_location.
+ * See #option-paths and #define-columns for more.
+ *
+ * Valid values for @column are the column's full name, simply as many of the
+ * first characters as needed to identify it, or a number to get the nth column
+ * on @tree.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_column_set_option (DonnaTreeView      *tree,
                                    const gchar        *column,
@@ -11740,6 +11988,40 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_column_set_value:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @to_focused: When %TRUE rows affected will be the range from @rowid to the
+ * focused row
+ * @column: Name of the column
+ * @value: String representation of the value to set
+ * @rowid_ref: (allow-none): Identifier of the row used as reference, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set a new value derived from @value for the property handled by @column on
+ * the node(s) represented by @rowid
+ *
+ * See donna_tree_view_get_nodes() for more on which nodes will be affected.
+ *
+ * The node behind @rowid_ref will be given to the columntype as a "reference"
+ * which can then be used. For example, it could be used to set the value of the
+ * property on the node(s) behind @rowid to that of the one behind @rowid_ref
+ *
+ * If @column handles more than one property, it's up to the columntype to
+ * determine which property to update. This might be defined via e.g. switches
+ * in @value.
+ *
+ * Columntypes are expected, after validating @value (and converting it to the
+ * actual value to set) to use donna_tree_view_set_node_property() for the
+ * actual change to be applied, thus providing user with feedback if needed.
+ *
+ * Valid values for @column are the column's full name, simply as many of the
+ * first characters as needed to identify it, or a number to get the nth column
+ * on @tree.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_column_set_value (DonnaTreeView      *tree,
                                   DonnaRowId         *rowid,
@@ -12005,6 +12287,20 @@ _convert_value (DonnaTreeView           *tree,
         }                                                                   \
     }
 
+/**
+ * donna_tree_view_set_option:
+ * @tree: A #DonnaTreeView
+ * @option: Name of the option
+ * @value: String representation of the value to set
+ * @save_location: Where to save the option
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set a new value derived from @value for the tree option @option of @tree,
+ * saving it in the location indicated by @save_location.
+ * See #option-paths for more.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_set_option (DonnaTreeView      *tree,
                             const gchar        *option,
@@ -12188,6 +12484,20 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_move_root:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @move: Number indication how to move the row
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Moves @rowid (which must be a root) by @move. If @move is negative, the row
+ * will move up, else it'll move down.
+ *
+ * Note that this is obviously only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_move_root (DonnaTreeView     *tree,
                            DonnaRowId        *rowid,
@@ -12322,6 +12632,40 @@ save_to_file (DonnaTreeView *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_save_list_file:
+ * @tree: A #DonnaTreeView
+ * @filename: Name of the file to save to
+ * @elements: Which elements to include in the saved list file
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Saves the state of list @tree into a list file, so it can be loaded back
+ * later using donna_tree_view_load_list_file()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename()
+ *
+ * A list file is a simple text file with different information stored on each
+ * line.
+ *
+ * 1: full location of the current location
+ * 2: full location of the focused row
+ * 3: sort orders, in the form: column:a,second_column:d
+ * 4: scroll position (as a floating number)
+ * 5: selection; one full location per line, for as many lines as selected rows
+ *
+ * Of all those, only the first line is required, everything else will depend on
+ * @elements (Of course empty lines are then still required, since position/line
+ * number is part of the format.)
+ *
+ * Usually you'll want to save every information you might need, since you can
+ * decide which one(s) to load via donna_tree_view_load_list_file()
+ *
+ * Note that this is obviously only supported on lists. For trees, see
+ * donna_tree_view_save_tree_file()
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_save_list_file (DonnaTreeView      *tree,
                                 const gchar        *filename,
@@ -12709,6 +13053,38 @@ free:
     free_load_list (ll);
 }
 
+/**
+ * donna_tree_view_load_list_file:
+ * @tree: A #DonnaTreeView
+ * @filename: Name of the list file to load from
+ * @elements: Which elements to load from the list file
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Loads the state of list @tree from list file @filename, usually a file
+ * previsouly saved using donna_tree_view_save_list_file()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename()
+ *
+ * For more information on the format of the file, see
+ * donna_tree_view_save_list_file()
+ *
+ * Different information can be saved in a list file, of which only the current
+ * location is always loaded. @elements allows to define which other information
+ * will be loaded, assuming they were saved/are present in the file of course
+ * (if not, this won't be an error).
+ *
+ * Much like donna_tree_view_set_location() this function returns %TRUE when the
+ * change of location has been initiated, not when it has actually been done.
+ * Meaning it might take a little while to happen (if e.g. the location is on a
+ * slow device needing to be waked, etc) or even fail (though in case e.g. the
+ * location doesn't exist, this function will fail).
+ *
+ * Note that this is obviously only supported on lists. For trees, see
+ * donna_tree_view_load_tree_file()
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_load_list_file (DonnaTreeView      *tree,
                                 const gchar        *filename,
@@ -12926,6 +13302,75 @@ save_row (DonnaTreeView     *tree,
     g_object_unref (node);
 }
 
+/**
+ * donna_tree_view_save_tree_file:
+ * @tree: A #DonnaTreeView
+ * @filename: Name of the file to save to
+ * @visuals: Which #tree-visuals to include in the tree file
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Saves the tree @tree into a tree file, so it can be loaded back later using
+ * donna_tree_view_load_tree_file()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename()
+ *
+ * A tree file is a simple text file where every line represents a row, and is
+ * formatted as such:
+ * <systemitem>&lt;LEVEL-INDICATOR&gt;&lt;TREE-VISUALS&gt;&lt;FLAGS&gt;&lt;FULL-LOCATION&gt;</systemitem>;
+ * Where:
+ *
+ * - <systemitem>LEVEL-INDICATOR</systemitem> is nothing for roots, or as many
+ *   dash as needed to represent the row's level, followed by a space. So
+ *   children of a root will have "- " as indicator, while their children have
+ *   "-- " and so on.
+ * - <systemitem>FLAGS</systemitem> can be one or more of the flags described
+ *   below
+ * - <systemitem>TREE-VISUALS</systemitem> are the row's tree visuals (if any)
+ *   as set in @visuals, which also includes custom click_mode. See below for
+ *   syntax.
+ *
+ * Supported flags are:
+ *
+ * - Star (<systemitem>*</systemitem>) to indicate the row was in maxi expand
+ *   state (i.e. all children were loaded; doesn't mean it was expanded)
+ * - Plus sign (<systemitem>+</systemitem>) to indicate the row was in partial
+ *   expand state (i.e. only some children were loaded; doesn't indicate it was
+ *   expanded). See #minitree for more.
+ * - Less than sign (<systemitem>&lt;</systemitem>) to indicate the row was
+ *   expanded
+ * - Exclamation point (<systemitem>!</systemitem>) to indicate the current
+ *   location
+ *
+ * Any tree visual is saved as a string enclosed with signs indicating which
+ * tree visual it is, followed by a space:
+ *
+ * - Custom names are put in between quotes (<systemitem>"..."</systemitem>)
+ * - Custom icons are put in between at-sign (<systemitem>@...@</systemitem>). As
+ *   usual this will be the full path/name of the file to use, or the name of an
+ *   icon to load from the theme
+ * - Box class names are put in between brackets
+ *   (<systemitem>{...}</systemitem>)
+ * - Highlight class names are put in between square brackets
+ *   (<systemitem>[...]</systemitem>)
+ * - Custom click_mode names are put in between parenthesis
+ *   (<systemitem>(...)</systemitem>)
+ *
+ * Lastly, a tree can have tree visuals in memory that aren't (yet) applied,
+ * because the row isn't loaded on tree (e.g. a parent hasn't been expanded
+ * yet), in which case such tree visuals will be features on lines using the
+ * same syntax, only with the equal sign (<systemitem>=</systemitem>) as prefix
+ * instead of level indicator.
+ * Such tree visuals will then belong in/be linked to the last defined root.
+ *
+ * Usually you'll want to save every information you might need, since you can
+ * decide which one(s) to load via donna_tree_view_load_tree_file()
+ *
+ * Note that this is obviously only supported on trees. For lists, see
+ * donna_tree_view_save_list_file()
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_save_tree_file (DonnaTreeView      *tree,
                                 const gchar        *filename,
@@ -13074,6 +13519,30 @@ donna_tree_view_save_tree_file (DonnaTreeView      *tree,
     return save_to_file (tree, filename, str, error);
 }
 
+/**
+ * donna_tree_view_load_tree_file:
+ * @tree: A #DonnaTreeView
+ * @filename: Name of the tree file to load from
+ * @visuals: Which #tree-visuals to load from the tree file
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Loads the content of @tree from tree file @filename, usually a file
+ * previsouly saved using donna_tree_view_save_tree_file()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename()
+ *
+ * For more information on the format of the file, see
+ * donna_tree_view_save_tree_file()
+ *
+ * Tree files can include #tree-visuals, only those specified in @visuals will
+ * be loaded into @tree.
+ *
+ * Note that this is obviously only supported on trees. For lists, see
+ * donna_tree_view_load_list_file()
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_load_tree_file (DonnaTreeView      *tree,
                                 const gchar        *filename,
@@ -13414,6 +13883,20 @@ next:
     return TRUE;
 }
 
+/**
+ * donna_tree_view_toggle_column:
+ * @tree: A #DonnaTreeView
+ * @column: Name of the column
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Toggle column @column
+ *
+ * Valid values for @column are the column's full name, simply as many of the
+ * first characters as needed to identify it, or a number to get the nth column
+ * on @tree.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_toggle_column (DonnaTreeView      *tree,
                                const gchar        *column,
