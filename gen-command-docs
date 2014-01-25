@@ -1,0 +1,163 @@
+#!/usr/bin/gawk -f
+
+BEGIN {
+    in_cmt = 0
+    fn = ""
+    command = ""
+    arg = 0
+}
+
+# openning doc comment
+/^\/\*\*$/ {
+    in_cmt = 1
+    next
+}
+
+# get the function/command name
+/^ \* .*:$/ {
+    if (in_cmt == 0) next
+    fn = substr ($0, 4, length ($0) - 4)
+    next
+}
+
+# an argument
+/^ \* @.*:/ {
+    if (in_cmt == 0) next
+    e = index ($0, ": ")
+    arg++
+    fn_arg[fn][arg] = substr ($0, 5, e - 5)
+    fn_opt[fn][arg] = index ($0, " (allow-none)") > 0
+    fn_arr[fn][arg] = index ($0, " (array)") > 0
+    fn_args[fn] = arg
+    next
+}
+
+# return value
+/^ \* Returns: .*/ {
+    if (in_cmt == 0) next
+    fn_arr[fn][0] = index ($0, " (array)") > 0
+    next
+}
+
+# closing doc comment
+/^ \*\/$/ {
+    if (arg == 0) {
+        fn_args[fn] = 0;
+    }
+    in_cmt = 0
+    arg = 0
+    next
+}
+
+
+# new argument for a command
+/^[[:blank:]]*arg_type\[\+\+i\]/ {
+    p = index ($0, "=")
+    type = substr ($0, p + 1, length ($0) - p - 1)
+    if (index (type, "DONNA_ARG_IS_ARRAY") > 0)
+    {
+        arr = 1
+        gsub ("DONNA_ARG_IS_ARRAY", "", type)
+    }
+    else
+    {
+        arr = 0
+    }
+    if (index (type, "DONNA_ARG_IS_OPTIONAL") > 0)
+    {
+        opt = 1
+        gsub ("DONNA_ARG_IS_OPTIONAL", "", type)
+    }
+    else
+    {
+        opt = 0
+    }
+
+    gsub ("[ |]", "", type)
+    arg++
+    args[arg] = type
+    is_arr[arg] = arr
+    is_opt[arg] = opt
+    next
+}
+
+# add new command
+/^[[:blank:]]*add_command \(/ {
+    p = index ($0, "(")
+    e = index ($0, ",")
+    command = substr ($0, p + 1, e - p - 1)
+    next
+}
+
+# every line -- used to get command's return type, and process everything
+{
+    if (command == "") next
+
+    e = index ($0, ")")
+    if (e == 0) next
+
+    p = index ($0, ",")
+    ret = substr ($0, p, e - p - 1)
+    if (index (ret, "DONNA_ARG_IS_ARRAY") > 0)
+    {
+        ret_arr = 1
+        gsub ("DONNA_ARG_IS_ARRAY", "", ret)
+    }
+    else
+    {
+        ret_arr = 0
+    }
+    gsub ("[^A-Z_]", "", ret)
+
+    has_doc = 0
+    for (fn in fn_args) {
+        if (fn == command) {
+            has_doc = 1;
+            if (arg != fn_args[fn]) {
+                warn("command " fn ": args number mismatch:" \
+                        " " arg " (doc) vs " fn_args[fn] " (def)")
+            }
+            else
+            {
+                for (i = 1; i <= arg; i++) {
+                    if (is_opt[i] != fn_opt[fn][i]) {
+                        warn("command " fn " arg " i ": flag 'optional' mismatch")
+                    }
+                    if (is_arr[i] != fn_arr[fn][i]) {
+                        warn("command " fn " arg " i ": flag 'array' mismatch")
+                    }
+                }
+            }
+            if (ret_arr != fn_arr[fn][0]) {
+                warn("command " fn " return value: flag 'array' mismatch")
+            }
+            break
+        }
+    }
+    if (system ("grep ^" command \
+        "$ docs/reference/donnatella-sections.txt 2>&1 >/dev/null") != 0) {
+            warn("command " command " is missing in donnatella-sections.txt")
+    }
+    if (has_doc == 0) {
+        warn("command " command " has no documentation");
+    }
+
+    print sprintf ("%s %s (", ret, command)
+    for (i = 1; i <= arg; i++) {
+        print sprintf ("%s %s%s",
+        args[i],
+        (has_doc == 1) ? fn_arg[fn][i] : "",
+        (i < arg) ? "," : ");")
+    }
+    if (arg == 0) print ");"
+    print ""
+
+    command = ""
+    arg = 0
+    next
+}
+
+# requires gawk for redirection
+function warn(msg) {
+    print "\x1b[33mWARNING\x1b[0m: " msg > "/dev/stderr"
+}

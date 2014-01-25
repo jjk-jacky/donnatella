@@ -1,5 +1,11 @@
 
+DISTCLEANFILES = src/command-docs.h
+
 SUBDIRS = . docs/reference
+
+DEF_COMMANDS = src/command.c \
+			   src/provider-mark.c \
+			   src/provider-register.c
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -15,6 +21,8 @@ bin_PROGRAMS = donnatella
 AM_CFLAGS = -D_GNU_SOURCE \
 			-DDOCDIR='"$(docdir)"' \
 			${WARNING_CFLAGS}
+
+BUILT_SOURCES = src/command-docs.h
 
 noinst_LTLIBRARIES = libdonnatella.la
 libdonnatella_la_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
@@ -121,3 +129,7 @@ AM_CFLAGS += -g -O0
 libdonnatella_la_SOURCES += src/debug.c
 endif
 
+EXTRA_DIST = src/gen-command-docs
+
+src/command-docs.h: $(DEF_COMMANDS)
+	$(AM_V_GEN)./gen-command-docs $(DEF_COMMANDS) > src/command-docs.h
