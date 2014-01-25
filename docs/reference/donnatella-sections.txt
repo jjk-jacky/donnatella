@@ -71,8 +71,9 @@ donna_cell_renderer_text_get_type
 
 <SECTION>
 <FILE>closures</FILE>
-g_cclosure_user_marshal_VOID__BOXED_STRING
-g_cclosure_user_marshal_VOID__BOXED_UINT_BOXED
+g_cclosure_user_marshal_VOID__OBJECT_STRING
+g_cclosure_user_marshal_VOID__OBJECT_UINT_BOXED
+g_cclosure_user_marshal_VOID__OBJECT_OBJECT
 g_cclosure_user_marshal_VOID__BOXED_BOXED
 g_cclosure_user_marshal_VOID__BOOLEAN_INT_BOOLEAN_STRING
 g_cclosure_user_marshal_POINTER__STRING_OBJECT
@@ -676,7 +677,6 @@ donna_provider_invalid_get_type
 <SECTION>
 <FILE>provider-mark</FILE>
 <TITLE>DonnaProviderMark</TITLE>
-DonnaMarkType
 DonnaProviderMark
 DonnaProviderMarkClass
 <SUBSECTION Standard>
