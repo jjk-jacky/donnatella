@@ -10,9 +10,7 @@ mark_delete
 <TITLE>DonnaApp</TITLE>
 DONNA_APP_ERROR
 DonnaAppError
-DonnaAppInterface
 DonnaApp
-donna_app_treeview_loaded
 donna_app_ensure_focused
 donna_app_add_window
 donna_app_set_floating_window
@@ -26,7 +24,7 @@ donna_app_get_filter
 donna_app_run_task
 donna_app_run_task_and_wait
 donna_app_peek_task_manager
-donna_app_get_treeview
+donna_app_get_tree_view
 donna_app_get_current_location
 donna_app_get_current_dirname
 donna_app_get_conf_filename
@@ -45,9 +43,12 @@ donna_app_ask
 donna_app_ask_text
 <SUBSECTION Standard>
 DONNA_APP
-DONNA_APP_GET_INTERFACE
+DONNA_APP_CLASS
+DONNA_APP_GET_CLASS
 DONNA_IS_APP
+DONNA_IS_APP_CLASS
 DONNA_TYPE_APP
+DonnaAppPrivate
 donna_app_get_type
 </SECTION>
 
@@ -298,22 +299,6 @@ GDB
 donna_debug_set_valid
 donna_debug_reset_valid
 donna_debug_flags
-</SECTION>
-
-<SECTION>
-<FILE>donna</FILE>
-<TITLE>DonnaDonna</TITLE>
-DonnaDonna
-DonnaDonnaClass
-<SUBSECTION Standard>
-DONNA_DONNA
-DONNA_DONNA_CLASS
-DONNA_DONNA_GET_CLASS
-DONNA_IS_DONNA
-DONNA_IS_DONNA_CLASS
-DONNA_TYPE_DONNA
-DonnaDonnaPrivate
-donna_donna_get_type
 </SECTION>
 
 <SECTION>

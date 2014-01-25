@@ -591,7 +591,7 @@ donna_filter_is_match (DonnaFilter    *filter,
             error);
 }
 
-/* this is needed for filter_toggle_ref_cb() in donna.c where we need to get the
+/* this is needed for filter_toggle_ref_cb() in app.c where we need to get the
  * filter string, but can't use g_object_get() as it would take a ref on it,
  * thus triggering the toggle_ref and enterring an infinite recursion... */
 gchar *

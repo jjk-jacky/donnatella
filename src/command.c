@@ -19,7 +19,7 @@
  */
 
 
-/* internal, used by donna.c */
+/* internal, used by app.c */
 void _donna_add_commands (GHashTable *commands);
 
 

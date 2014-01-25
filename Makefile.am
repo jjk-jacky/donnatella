@@ -55,8 +55,6 @@ libdonnatella_la_SOURCES = \
 					 src/contextmenu.c \
 					 src/contextmenu.h \
 					 src/debug.h \
-					 src/donna.c \
-					 src/donna.h \
 					 src/filter.c \
 					 src/filter.h \
 					 src/fsengine-basic.c \

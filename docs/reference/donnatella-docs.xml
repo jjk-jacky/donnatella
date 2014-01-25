@@ -18,7 +18,7 @@
       <title>Donnatella</title>
       <chapter id="overview">
           <title>Overview</title>
-          <xi:include href="xml/donna.xml"/>
+          <xi:include href="xml/app.xml"/>
           <xi:include href="xml/treeview.xml"/>
           <xi:include href="xml/commands.xml"/>
       </chapter>
@@ -54,7 +54,6 @@
       <title>Internals</title>
       <chapter id="internals">
           <title>Donnatella</title>
-          <xi:include href="xml/app.xml"/>
           <xi:include href="xml/cellrenderertext.xml"/>
           <xi:include href="xml/closures.xml"/>
           <xi:include href="xml/colorfilter.xml"/>

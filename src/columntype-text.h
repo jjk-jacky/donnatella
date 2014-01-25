@@ -3,7 +3,6 @@
 #define __DONNA_COLUMN_TYPE_TEXT_H__
 
 #include "columntype.h"
-#include "donna.h"
 
 G_BEGIN_DECLS
 

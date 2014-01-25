@@ -7,7 +7,7 @@
 #include "columntype-name.h"
 #include "renderer.h"
 #include "node.h"
-#include "donna.h"
+#include "app.h"
 #include "conf.h"
 #include "sort.h"
 #include "misc.h"

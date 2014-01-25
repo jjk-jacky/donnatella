@@ -1,37 +1,150 @@
 
-#ifndef __DONNA_H__
-#define __DONNA_H__
+#ifndef __DONNA_APP_H__
+#define __DONNA_APP_H__
 
-#include "app.h"
+#include <gtk/gtk.h>
+#include "common.h"
+#include "conf.h"
+#include "task-manager.h"
+#include "treeview.h"
 #include "columntype.h"
+#include "filter.h"
 
 G_BEGIN_DECLS
 
-typedef struct _DonnaDonna              DonnaDonna;
-typedef struct _DonnaDonnaClass         DonnaDonnaClass;
-typedef struct _DonnaDonnaPrivate       DonnaDonnaPrivate;
-
-#define DONNA_TYPE_DONNA                (donna_donna_get_type ())
-#define DONNA_DONNA(obj)                (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_DONNA, DonnaDonna))
-#define DONNA_DONNA_CLASS(klass)        (G_TYPE_CHECK_CLASS_CAST ((klass), DONNA_TYPE_DONNA, DonnaDonnaClass))
-#define DONNA_IS_DONNA(obj)             (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_DONNA))
-#define DONNA_IS_DONNA_CLASS(klass)     (G_TYPE_CHECK_CLASS_TYPE ((klass), DONNA_TYPE_DONNA))
-#define DONNA_DONNA_GET_CLASS(obj)      (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_DONNA, DonnaDonnaClass))
-
-struct _DonnaDonna
+#define DONNA_APP_ERROR         g_quark_from_static_string ("DonnaApp-Error")
+typedef enum
 {
-    GObject parent;
+    DONNA_APP_ERROR_EMPTY,
+    DONNA_APP_ERROR_OTHER,
+} DonnaAppError;
 
-    DonnaDonnaPrivate *priv;
+struct _DonnaApp
+{
+    /*< private >*/
+    GObject object;
+    DonnaAppPrivate *priv;
 };
 
-struct _DonnaDonnaClass
+struct _DonnaAppClass
 {
-    GObjectClass parent;
+    /*< private >*/
+    GObjectClass parent_class;
+
+    /*< public >*/
+    void                (*tree_view_loaded)         (DonnaApp       *app,
+                                                     DonnaTreeView  *tree);
+    gboolean            (*event)                    (DonnaApp       *app,
+                                                     const gchar    *event,
+                                                     const gchar    *source,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data);
 };
 
-GType               donna_donna_get_type            (void) G_GNUC_CONST;
+gint                donna_app_run                   (DonnaApp       *app,
+                                                     gint            argc,
+                                                     gchar          *argv[]);
+void                donna_app_ensure_focused        (DonnaApp       *app);
+void                donna_app_add_window            (DonnaApp       *app,
+                                                     GtkWindow      *window,
+                                                     gboolean        destroy_with_parent);
+void                donna_app_set_floating_window   (DonnaApp       *app,
+                                                     GtkWindow      *window);
+DonnaConfig *       donna_app_get_config            (DonnaApp       *app);
+DonnaConfig *       donna_app_peek_config           (DonnaApp       *app);
+DonnaProvider *     donna_app_get_provider          (DonnaApp       *app,
+                                                     const gchar    *domain);
+DonnaNode *         donna_app_get_node              (DonnaApp       *app,
+                                                     const gchar    *full_location,
+                                                     gboolean        do_user_parse,
+                                                     GError        **error);
+gboolean            donna_app_trigger_node          (DonnaApp       *app,
+                                                     const gchar    *full_location,
+                                                     gboolean        do_user_parse,
+                                                     GError        **error);
+DonnaColumnType *   donna_app_get_column_type       (DonnaApp       *app,
+                                                     const gchar    *type);
+DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
+                                                     const gchar    *filter);
+void                donna_app_run_task              (DonnaApp       *app,
+                                                     DonnaTask      *task);
+gboolean            donna_app_run_task_and_wait     (DonnaApp       *app,
+                                                     DonnaTask      *task,
+                                                     DonnaTask      *current_task,
+                                                     GError        **error);
+DonnaTaskManager *  donna_app_peek_task_manager     (DonnaApp       *app);
+DonnaTreeView *     donna_app_get_tree_view         (DonnaApp       *app,
+                                                     const gchar    *name);
+DonnaNode *         donna_app_get_current_location  (DonnaApp       *app,
+                                                     GError        **error);
+gchar *             donna_app_get_current_dirname   (DonnaApp       *app);
+gchar *             donna_app_get_conf_filename     (DonnaApp       *app,
+                                                     const gchar    *fmt,
+                                                     ...);
+gchar *             donna_app_new_int_ref           (DonnaApp       *app,
+                                                     DonnaArgType    type,
+                                                     gpointer        ptr);
+gpointer            donna_app_get_int_ref           (DonnaApp       *app,
+                                                     const gchar    *intref,
+                                                     DonnaArgType    type);
+gboolean            donna_app_free_int_ref          (DonnaApp       *app,
+                                                     const gchar    *intref);
+gchar *             donna_app_parse_fl              (DonnaApp       *app,
+                                                     gchar          *fl,
+                                                     gboolean        must_free_fl,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data,
+                                                     GPtrArray     **intrefs);
+gboolean            donna_app_trigger_fl            (DonnaApp       *app,
+                                                     const gchar    *fl,
+                                                     GPtrArray      *intrefs,
+                                                     gboolean        blocking,
+                                                     GError        **error);
+gboolean            donna_app_emit_event            (DonnaApp       *app,
+                                                     const gchar    *event,
+                                                     gboolean        is_confirm,
+                                                     const gchar    *conv_flags,
+                                                     conv_flag_fn    conv_fn,
+                                                     gpointer        conv_data,
+                                                     const gchar    *fmt_source,
+                                                     ...);
+gboolean            donna_app_show_menu             (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     const gchar    *menu,
+                                                     GError        **error);
+void                donna_app_show_error            (DonnaApp       *app,
+                                                     const GError   *error,
+                                                     const gchar    *fmt,
+                                                     ...);
+gpointer            donna_app_get_ct_data           (const gchar    *col_name,
+                                                     DonnaApp       *app);
+gboolean            donna_app_filter_nodes          (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     const gchar    *filter,
+                                                     GError       **error);
+DonnaTask *         donna_app_nodes_io_task         (DonnaApp       *app,
+                                                     GPtrArray      *nodes,
+                                                     DonnaIoType     io_type,
+                                                     DonnaNode      *dest,
+                                                     const gchar    *new_name,
+                                                     GError        **error);
+gint                donna_app_ask                   (DonnaApp       *app,
+                                                     const gchar    *title,
+                                                     const gchar    *details,
+                                                     const gchar    *btn1_icon,
+                                                     const gchar    *btn1_label,
+                                                     const gchar    *btn2_icon,
+                                                     const gchar    *btn2_label,
+                                                     ...);
+gchar *             donna_app_ask_text              (DonnaApp       *app,
+                                                     const gchar    *title,
+                                                     const gchar    *details,
+                                                     const gchar    *main_default,
+                                                     const gchar   **other_defaults,
+                                                     GError        **error);
 
 G_END_DECLS
 
-#endif /* __DONNA_H__ */
+#endif /* __DONNA_APP_H__ */

@@ -2,7 +2,6 @@
 #include "config.h"
 
 #include <locale.h>
-#include <gtk/gtk.h>
 #include <stdlib.h>     /* free() */
 #include <ctype.h>      /* isblank() */
 #include <string.h>
@@ -11,7 +10,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #endif
-#include "donna.h"
 #include "debug.h"
 #include "app.h"
 #include "provider.h"
@@ -42,9 +40,10 @@
 #include "misc.h"
 #include "util.h"
 #include "macros.h"
+#include "closures.h"
 
 /**
- * SECTION:donna
+ * SECTION:app
  * @Short_Description: Overview of your file manager: donnatella
  *
  * donnatella - donna for short - is a free, open-source GUI file manager for
@@ -267,43 +266,7 @@
  * Note that there might be places where an actual full location is required
  * (e.g. in list/tree files), but all user input support this user parsing.
  *
- * First of all, prefixes can be defined. A prefix is a string of one or more
- * characters that cannot start with a letter. Defined under numbered categories
- * in <systemitem>donna/prefixes</systemitem> in the configuration, each
- * definition can be made of the following options:
- *
- * - <systemitem>prefix</systemitem> (string; required): the actual prefix to
- *   look for at the beginning of the full location.
- * - <systemitem>is_strict</systemitem> (boolean; optional): By default, a match
- *   will be whenever the full location starts with the prefix. When true, it
- *   will also required that the full location contains more than the prefix,
- *   and that the first character after the prefix isn't a space. This is to
- *   allow the use of the same string as alias, and use them all as needed.
- * - <systemitem>replacement</systemitem> (string; required): The string the
- *   prefix will be replaced with in the full location.
- * - <systemitem>is_home_dir</systemitem> (boolean; optional): A special mode,
- *   where if true option <systemitem>replacement</systemitem> will be ignored
- *   (and isn't even in fact needed) and instead the prefix will be replaced
- *   with the user's home dir (prefixed with "fs:").
- *
- * When a prefix match if found, replacement occurs and user parsing is
- * completed. (I.e. the result cannot include other prefixes or aliases.)
- *
- * If no prefix match occured, donna will look for the first character that is
- * either a colon, a slash or a space.
- *
- * - If a colon, assume a full location was given and be done.
- * - If a space (or nothing), look for the corresponding alias.
- * - If a slash, and the current location (of the active list) is in a
- *   non-flat domain (e.g. fs), then try to resolve the full location as a
- *   relative path of said location.
- *
- * An alias, like a prefix, will consist of replacing it with a replacement.
- * Said replacement will be looked for in
- * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement</systemitem>.
- * If the full location was nothing else than the alias (i.e. no space after it)
- * then the replacement will first be looked for in
- * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
+ * See donna_app_parse_fl() for more on user parsing.
  * </para></refsect3>
  *
  * </para></refsect2>
@@ -411,6 +374,13 @@ enum
 
 enum
 {
+    TREE_VIEW_LOADED,
+    EVENT,
+    NB_SIGNALS
+};
+
+enum
+{
     COL_TYPE_NAME = 0,
     COL_TYPE_SIZE,
     COL_TYPE_TIME,
@@ -474,7 +444,7 @@ struct status
     GArray  *providers;
 };
 
-struct _DonnaDonnaPrivate
+struct _DonnaAppPrivate
 {
     GtkWindow       *window;
     GSList          *windows;
@@ -526,6 +496,10 @@ static GThread *main_thread;
 static GLogLevelFlags show_log = G_LOG_LEVEL_WARNING;
 guint donna_debug_flags = 0;
 
+static GParamSpec * donna_app_props[NB_PROPS] = { NULL, };
+static guint        donna_app_signals[NB_SIGNALS] = { 0 };
+static GSList *     event_confirm = NULL;
+
 /* internal from treeview.c */
 gboolean
 _donna_tree_view_register_extras (DonnaConfig *config, GError **error);
@@ -535,162 +509,136 @@ gboolean
 _donna_context_register_extras (DonnaConfig *config, GError **error);
 
 
-static inline void      set_active_list             (DonnaDonna     *donna,
-                                                     DonnaTreeView  *list);
+static gboolean event_accumulator (GSignalInvocationHint    *ihint,
+                                   GValue                   *value_accu,
+                                   const GValue             *value_handler,
+                                   gpointer                  data);
 
-static void             donna_donna_log_handler     (const gchar    *domain,
+/* internal; used from treeview.c with its own get_ct_data */
+gboolean
+_donna_app_filter_nodes (DonnaApp        *app,
+                         GPtrArray       *nodes,
+                         const gchar     *filter_str,
+                         get_ct_data_fn   get_ct_data,
+                         gpointer         data,
+                         GError         **error);
+
+
+static void             donna_app_log_handler       (const gchar    *domain,
                                                      GLogLevelFlags  log_level,
                                                      const gchar    *message,
                                                      gpointer        data);
-static void             donna_donna_set_property    (GObject        *object,
+static void             donna_app_set_property      (GObject        *object,
                                                      guint           prop_id,
                                                      const GValue   *value,
                                                      GParamSpec     *pspec);
-static void             donna_donna_get_property    (GObject        *object,
+static void             donna_app_get_property      (GObject        *object,
                                                      guint           prop_id,
                                                      GValue         *value,
                                                      GParamSpec     *pspec);
-static void             donna_donna_finalize        (GObject        *object);
+static void             donna_app_finalize          (GObject        *object);
 
-/* DonnaApp */
-static gint             donna_donna_run             (DonnaApp       *app,
-                                                     gint            argc,
-                                                     gchar          *argv[]);
-static void             donna_donna_ensure_focused  (DonnaApp       *app);
-static void             donna_donna_add_window      (DonnaApp       *app,
-                                                     GtkWindow      *window,
-                                                     gboolean        destroy_with_parent);
-static void             donna_donna_set_floating_window (
-                                                     DonnaApp       *app,
-                                                     GtkWindow      *window);
-static DonnaConfig *    donna_donna_get_config      (DonnaApp       *app);
-static DonnaConfig *    donna_donna_peek_config     (DonnaApp       *app);
-static DonnaProvider *  donna_donna_get_provider    (DonnaApp       *app,
-                                                     const gchar    *domain);
-static DonnaColumnType *donna_donna_get_column_type (DonnaApp       *app,
-                                                     const gchar    *type);
-static DonnaFilter *    donna_donna_get_filter      (DonnaApp       *app,
-                                                     const gchar    *filter);
-static void             donna_donna_run_task        (DonnaApp       *app,
-                                                     DonnaTask      *task);
-static DonnaTaskManager*donna_donna_peek_task_manager(DonnaApp       *app);
-static DonnaTreeView *  donna_donna_get_tree_view   (DonnaApp       *app,
-                                                     const gchar    *name);
-static gchar *          donna_donna_get_current_dirname (
-                                                     DonnaApp       *app);
-static gchar *          donna_donna_get_conf_filename (
-                                                     DonnaApp       *app,
-                                                     const gchar    *fmt,
-                                                     va_list         va_args);
-static gchar *          donna_donna_new_int_ref     (DonnaApp       *app,
-                                                     DonnaArgType    type,
-                                                     gpointer        ptr);
-static gpointer         donna_donna_get_int_ref     (DonnaApp       *app,
-                                                     const gchar    *intref,
-                                                     DonnaArgType    type);
-static gboolean         donna_donna_free_int_ref    (DonnaApp       *app,
-                                                     const gchar    *intref);
-static gchar *          donna_donna_parse_fl        (DonnaApp       *app,
-                                                     gchar          *fl,
-                                                     gboolean        must_free_fl,
-                                                     const gchar    *conv_flags,
-                                                     conv_flag_fn    conv_fn,
-                                                     gpointer        conv_data,
-                                                     GPtrArray     **intrefs);
-static gboolean         donna_donna_trigger_fl      (DonnaApp       *app,
-                                                     const gchar    *fl,
-                                                     GPtrArray      *intrefs,
-                                                     gboolean        blocking,
-                                                     GError        **error);
-static gboolean         donna_donna_emit_event      (DonnaApp       *app,
-                                                     const gchar    *event,
-                                                     gboolean        is_confirm,
-                                                     const gchar    *source,
-                                                     const gchar    *conv_flags,
-                                                     conv_flag_fn    conv_fn,
-                                                     gpointer        conv_data);
-static gboolean         donna_donna_show_menu       (DonnaApp       *app,
-                                                     GPtrArray      *nodes,
-                                                     const gchar    *menu,
-                                                     GError       **error);
-static void             donna_donna_show_error      (DonnaApp       *app,
-                                                     const gchar    *title,
-                                                     const GError   *error);
-static gpointer         donna_donna_get_ct_data     (DonnaApp       *app,
-                                                     const gchar    *col_name);
-static DonnaTask *      donna_donna_nodes_io_task   (DonnaApp       *app,
-                                                     GPtrArray      *nodes,
-                                                     DonnaIoType     io_type,
-                                                     DonnaNode      *dest,
-                                                     const gchar    *new_name,
-                                                     GError        **error);
-static gint             donna_donna_ask             (DonnaApp       *app,
-                                                     const gchar    *title,
-                                                     const gchar    *details,
-                                                     const gchar    *btn1_icon,
-                                                     const gchar    *btn1_label,
-                                                     const gchar    *btn2_icon,
-                                                     const gchar    *btn2_label,
-                                                     va_list         va_args);
-static gchar *          donna_donna_ask_text        (DonnaApp       *app,
-                                                     const gchar    *title,
-                                                     const gchar    *details,
-                                                     const gchar    *main_default,
-                                                     const gchar   **other_defaults,
-                                                     GError        **error);
+
+static GSList *         load_arrangements           (DonnaConfig    *config,
+                                                     const gchar    *sce);
+static inline void      set_active_list             (DonnaApp       *app,
+                                                     DonnaTreeView  *list);
+
+
+G_DEFINE_TYPE (DonnaApp, donna_app, G_TYPE_OBJECT);
 
 static void
-donna_donna_app_init (DonnaAppInterface *interface)
-{
-    interface->run                  = donna_donna_run;
-    interface->ensure_focused       = donna_donna_ensure_focused;
-    interface->add_window           = donna_donna_add_window;
-    interface->set_floating_window  = donna_donna_set_floating_window;
-    interface->get_config           = donna_donna_get_config;
-    interface->peek_config          = donna_donna_peek_config;
-    interface->get_provider         = donna_donna_get_provider;
-    interface->get_column_type      = donna_donna_get_column_type;
-    interface->get_filter           = donna_donna_get_filter;
-    interface->run_task             = donna_donna_run_task;
-    interface->peek_task_manager    = donna_donna_peek_task_manager;
-    interface->get_tree_view        = donna_donna_get_tree_view;
-    interface->get_current_dirname  = donna_donna_get_current_dirname;
-    interface->get_conf_filename    = donna_donna_get_conf_filename;
-    interface->new_int_ref          = donna_donna_new_int_ref;
-    interface->get_int_ref          = donna_donna_get_int_ref;
-    interface->free_int_ref         = donna_donna_free_int_ref;
-    interface->parse_fl             = donna_donna_parse_fl;
-    interface->trigger_fl           = donna_donna_trigger_fl;
-    interface->emit_event           = donna_donna_emit_event;
-    interface->show_menu            = donna_donna_show_menu;
-    interface->show_error           = donna_donna_show_error;
-    interface->get_ct_data          = donna_donna_get_ct_data;
-    interface->nodes_io_task        = donna_donna_nodes_io_task;
-    interface->ask                  = donna_donna_ask;
-    interface->ask_text             = donna_donna_ask_text;
-}
-
-G_DEFINE_TYPE_WITH_CODE (DonnaDonna, donna_donna, G_TYPE_OBJECT,
-        G_IMPLEMENT_INTERFACE (DONNA_TYPE_APP, donna_donna_app_init))
-
-static void
-donna_donna_class_init (DonnaDonnaClass *klass)
+donna_app_class_init (DonnaAppClass *klass)
 {
     GObjectClass *o_class;
 
     o_class = G_OBJECT_CLASS (klass);
-    o_class->set_property   = donna_donna_set_property;
-    o_class->get_property   = donna_donna_get_property;
-    o_class->finalize       = donna_donna_finalize;
+    o_class->set_property   = donna_app_set_property;
+    o_class->get_property   = donna_app_get_property;
+    o_class->finalize       = donna_app_finalize;
 
-    g_object_class_override_property (o_class, PROP_ACTIVE_LIST, "active-list");
-    g_object_class_override_property (o_class, PROP_JUST_FOCUSED, "just-focused");
+    /**
+     * DonnaApp:active-list:
+     *
+     * The #DonnaTreeView thatis the active list.
+     *
+     * In case you use a #layout with more than one list, there is always one
+     * that will be the "active" one. This is the one defining the app/current
+     * location, or the one treeview that is used by commands when using
+     * ":active" as special name.
+     */
+    donna_app_props[PROP_ACTIVE_LIST] =
+        g_param_spec_object ("active-list", "active-list",
+                "Active list",
+                DONNA_TYPE_TREE_VIEW,
+                G_PARAM_READWRITE);
 
-    g_type_class_add_private (klass, sizeof (DonnaDonnaPrivate));
+    /**
+     * DonnaApp:just-focused:
+     *
+     * Will be %TRUE when the application's main window was just focused, and
+     * (it it was done via click) the click hasn't been processed/consumed yet.
+     *
+     * It will be %TRUE on focus-in and for 42 ms, unless it is set to %FALSE
+     * (which could happen e.g. in a treeview when processing (or ignoring) the
+     * click)
+     */
+    donna_app_props[PROP_JUST_FOCUSED] =
+        g_param_spec_boolean ("just-focused", "just-focused",
+                "Whether or not the main window was just focused",
+                FALSE,  /* default */
+                G_PARAM_READWRITE);
+
+    g_object_class_install_properties (o_class, NB_PROPS, donna_app_props);
+
+    /**
+     * DonnaApp::tree-view-loaded:
+     * @app: The #DonnaApp
+     * @tree: The #DonnaTreeView just loaded
+     *
+     * Emitted when a treeview was loaded into the layout. This happens on app
+     * startup (since treeviews cannot be (un)loaded at will), but allows e.g.
+     * for a tree to synchonize with a list as soon as said list is loaded.
+     */
+    donna_app_signals[TREE_VIEW_LOADED] =
+        g_signal_new ("tree-view-loaded",
+            DONNA_TYPE_APP,
+            G_SIGNAL_RUN_LAST,
+            G_STRUCT_OFFSET (DonnaAppClass, tree_view_loaded),
+            NULL,
+            NULL,
+            g_cclosure_marshal_VOID__OBJECT,
+            G_TYPE_NONE,
+            1,
+            DONNA_TYPE_TREE_VIEW);
+
+    /**
+     * DonnaApp::event:
+     *
+     * Emitted whenever an event occurs in donna, via calls to
+     * donna_app_emit_event()
+     */
+    donna_app_signals[EVENT] =
+        g_signal_new ("event",
+            DONNA_TYPE_APP,
+            G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+            G_STRUCT_OFFSET (DonnaAppClass, event),
+            event_accumulator,
+            &event_confirm,
+            g_cclosure_user_marshal_BOOLEAN__STRING_STRING_STRING_POINTER_POINTER,
+            G_TYPE_BOOLEAN,
+            5,
+            G_TYPE_STRING,
+            G_TYPE_STRING,
+            G_TYPE_STRING,
+            G_TYPE_POINTER,
+            G_TYPE_POINTER);
+
+    g_type_class_add_private (klass, sizeof (DonnaAppPrivate));
 }
 
 static gboolean
-donna_donna_task_run (DonnaTask *task)
+donna_app_task_run (DonnaTask *task)
 {
     donna_task_run (task);
     g_object_unref (task);
@@ -771,20 +719,19 @@ free_intref (struct intref *ir)
 }
 
 static void
-donna_donna_init (DonnaDonna *donna)
+donna_app_init (DonnaApp *app)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
 
     main_thread = g_thread_self ();
-    g_log_set_default_handler (donna_donna_log_handler, NULL);
+    g_log_set_default_handler (donna_app_log_handler, NULL);
 
-    priv = donna->priv = G_TYPE_INSTANCE_GET_PRIVATE (donna,
-            DONNA_TYPE_DONNA, DonnaDonnaPrivate);
+    priv = app->priv = G_TYPE_INSTANCE_GET_PRIVATE (app, DONNA_TYPE_APP, DonnaAppPrivate);
 
     g_rw_lock_init (&priv->lock);
     g_rec_mutex_init (&priv->rec_mutex);
 
-    priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", donna, NULL);
+    priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", app, NULL);
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].desc = "Name (and Icon)";
     priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMN_TYPE_NAME;
@@ -810,9 +757,9 @@ donna_donna_init (DonnaDonna *donna)
     priv->column_types[COL_TYPE_VALUE].desc = "Value (of config option)";
     priv->column_types[COL_TYPE_VALUE].type = DONNA_TYPE_COLUMN_TYPE_VALUE;
 
-    priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", donna, NULL);
+    priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", app, NULL);
 
-    priv->pool = g_thread_pool_new ((GFunc) donna_donna_task_run, NULL,
+    priv->pool = g_thread_pool_new ((GFunc) donna_app_task_run, NULL,
             5, FALSE, NULL);
 
     priv->filters = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -826,26 +773,26 @@ donna_donna_init (DonnaDonna *donna)
 }
 
 static void
-donna_donna_set_property (GObject       *object,
-                          guint          prop_id,
-                          const GValue  *value,
-                          GParamSpec    *pspec)
+donna_app_set_property (GObject       *object,
+                        guint          prop_id,
+                        const GValue  *value,
+                        GParamSpec    *pspec)
 {
-    DonnaDonnaPrivate *priv = DONNA_DONNA (object)->priv;
+    DonnaAppPrivate *priv = DONNA_APP (object)->priv;
 
     if (prop_id == PROP_ACTIVE_LIST)
-        set_active_list ((DonnaDonna *) object, g_value_get_object (value));
+        set_active_list ((DonnaApp *) object, g_value_get_object (value));
     else if (prop_id == PROP_JUST_FOCUSED)
         priv->just_focused = g_value_get_boolean (value);
 }
 
 static void
-donna_donna_get_property (GObject       *object,
-                          guint          prop_id,
-                          GValue        *value,
-                          GParamSpec    *pspec)
+donna_app_get_property (GObject       *object,
+                        guint          prop_id,
+                        GValue        *value,
+                        GParamSpec    *pspec)
 {
-    DonnaDonnaPrivate *priv = DONNA_DONNA (object)->priv;
+    DonnaAppPrivate *priv = DONNA_APP (object)->priv;
 
     if (prop_id == PROP_ACTIVE_LIST)
         g_value_set_object (value, priv->active_list);
@@ -870,12 +817,12 @@ free_arrangements (GSList *list)
 }
 
 static void
-donna_donna_finalize (GObject *object)
+donna_app_finalize (GObject *object)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     guint i;
 
-    priv = DONNA_DONNA (object)->priv;
+    priv = DONNA_APP (object)->priv;
 
     g_free (priv->config_dir);
     g_rw_lock_clear (&priv->lock);
@@ -896,14 +843,14 @@ donna_donna_finalize (GObject *object)
             g_object_unref (priv->column_types[i].ct);
     }
 
-    G_OBJECT_CLASS (donna_donna_parent_class)->finalize (object);
+    G_OBJECT_CLASS (donna_app_parent_class)->finalize (object);
 }
 
 static void
-donna_donna_log_handler (const gchar    *domain,
-                         GLogLevelFlags  log_level,
-                         const gchar    *message,
-                         gpointer        data)
+donna_app_log_handler (const gchar    *domain,
+                       GLogLevelFlags  log_level,
+                       const gchar    *message,
+                       gpointer        data)
 {
     GThread *thread = g_thread_self ();
     time_t now;
@@ -1004,33 +951,79 @@ donna_donna_log_handler (const gchar    *domain,
 #endif
 }
 
-void
-donna_donna_ensure_focused (DonnaApp *app)
+static gboolean
+event_accumulator (GSignalInvocationHint    *ihint,
+                   GValue                   *value_accu,
+                   const GValue             *value_handler,
+                   gpointer                  data)
 {
-    DonnaDonnaPrivate *priv;
+    GSList *l = * (GSList **) data;
+    gboolean is_confirm = FALSE;
 
-    g_return_if_fail (DONNA_IS_DONNA (app));
-    priv = ((DonnaDonna *) app)->priv;
+    for ( ; l; l = l->next)
+        if ((GQuark) GPOINTER_TO_UINT (l->data) == ihint->detail)
+        {
+            is_confirm = TRUE;
+            break;
+        }
+
+    if (!is_confirm)
+        return TRUE;
+
+    if (g_value_get_boolean (value_handler))
+    {
+        g_value_set_boolean (value_accu, TRUE);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/**
+ * donna_app_ensure_focused:
+ * @app: The #DonnaApp
+ *
+ * Makes sure the main window (toplevel) is focused, and if not "present" (GTK
+ * terminology) it
+ */
+void
+donna_app_ensure_focused (DonnaApp       *app)
+{
+    DonnaAppPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_APP (app));
+    priv = app->priv;
 
     if (!gtk_window_has_toplevel_focus (priv->window))
         gtk_window_present_with_time (priv->window, GDK_CURRENT_TIME);
 }
 
 static void
-window_destroyed (GtkWindow *window, DonnaDonna *donna)
+window_destroyed (GtkWindow *window, DonnaApp *app)
 {
-    donna->priv->windows = g_slist_remove (donna->priv->windows, window);
+    app->priv->windows = g_slist_remove (app->priv->windows, window);
 }
 
+/**
+ * donna_app_add_window:
+ * @app: The #DonnaApp
+ * @window: The %GtkWindow to add
+ * @destroy_with_parent: Whether to destroy @window with the main window or not
+ *
+ * This will make @window transient for the main window, and if
+ * @destroy_with_parent is %TRUE will make sure it gets destroyed alongside the
+ * main window.
+ */
 void
-donna_donna_add_window (DonnaApp       *app,
-                        GtkWindow      *window,
-                        gboolean        destroy_with_parent)
+donna_app_add_window (DonnaApp       *app,
+                      GtkWindow      *window,
+                      gboolean        destroy_with_parent)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
 
-    g_return_if_fail (DONNA_IS_DONNA (app));
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (GTK_IS_WINDOW (window));
+    priv = app->priv;
 
     gtk_window_set_transient_for (window, priv->window);
     if (destroy_with_parent)
@@ -1041,18 +1034,34 @@ donna_donna_add_window (DonnaApp       *app,
 }
 
 static void
-floating_window_destroy_cb (GtkWidget *w, DonnaDonna *donna)
+floating_window_destroy_cb (GtkWidget *w, DonnaApp *app)
 {
-    donna->priv->floating_window = NULL;
+    app->priv->floating_window = NULL;
 }
 
+/**
+ * donna_app_set_floating_window:
+ * @app: The #DonnaApp
+ * @window: The window to become the new app's floating window
+ *
+ * At any given time, the app can only have one floating window (e.g. window to
+ * show/set permissions on a file). Once the window has been created, it should
+ * be passed to this function to destroy any previous floating window, and set
+ * @window as new floating window.
+ *
+ * Floating window will automatically be destroyed if the main window is focused
+ * again. When @window is destroyed, the floating window internal pointer is
+ * automacially reset (i.e. don't call this with %NULL as @window)
+ */
 void
-donna_donna_set_floating_window (DonnaApp *app, GtkWindow *window)
+donna_app_set_floating_window (DonnaApp       *app,
+                               GtkWindow      *window)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
 
-    g_return_if_fail (DONNA_IS_DONNA (app));
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (window == NULL || GTK_IS_WINDOW (window));
+    priv = app->priv;
 
     if (priv->floating_window)
         gtk_widget_destroy (priv->floating_window);
@@ -1068,18 +1077,36 @@ donna_donna_set_floating_window (DonnaApp *app, GtkWindow *window)
             (GCallback) floating_window_destroy_cb, app);
 }
 
+/**
+ * donna_app_get_config:
+ * @app: The #DonnaApp
+ *
+ * Returns the configuration manager with an added reference. If you don't need
+ * it, use donna_app_peek_config()
+ *
+ * Returns: (transfer full): The configuration manager; call g_object_unref()
+ * when done
+ */
 DonnaConfig *
-donna_donna_get_config (DonnaApp *app)
+donna_app_get_config (DonnaApp       *app)
 {
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    return g_object_ref (DONNA_DONNA (app)->priv->config);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    return g_object_ref (app->priv->config);
 }
 
+/**
+ * donna_app_peek_config:
+ * @app: The #DonnaApp
+ *
+ * Returns the configuration manager without adding a reference.
+ *
+ * Returns: (transfer none): The configuration manager
+ */
 DonnaConfig *
-donna_donna_peek_config (DonnaApp *app)
+donna_app_peek_config (DonnaApp *app)
 {
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    return DONNA_DONNA (app)->priv->config;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    return app->priv->config;
 }
 
 static gboolean
@@ -1090,14 +1117,14 @@ visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name)
 }
 
 static void
-new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
+new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
 {
     gchar *fl;
     struct visuals *visuals;
 
     fl = donna_node_get_full_location (node);
-    g_rw_lock_reader_lock (&donna->priv->lock);
-    visuals = g_hash_table_lookup (donna->priv->visuals, fl);
+    g_rw_lock_reader_lock (&app->priv->lock);
+    visuals = g_hash_table_lookup (app->priv->visuals, fl);
     if (visuals)
     {
         GValue value = G_VALUE_INIT;
@@ -1154,20 +1181,30 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaDonna *donna)
             g_value_unset (&value);
         }
     }
-    g_rw_lock_reader_unlock (&donna->priv->lock);
+    g_rw_lock_reader_unlock (&app->priv->lock);
     g_free (fl);
 }
 
+/**
+ * donna_app_get_provider:
+ * @app: The #DonnaApp
+ * @domain: The domain you want the provider of
+ *
+ * Returns the provider for @domain
+ *
+ * Returns: (transfer full): The provider of @domain, or %NULL
+ */
 DonnaProvider *
-donna_donna_get_provider (DonnaApp    *app,
-                          const gchar *domain)
+donna_app_get_provider (DonnaApp       *app,
+                        const gchar    *domain)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     DonnaProvider *provider = NULL;
     GSList *l;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (domain != NULL, NULL);
+    priv = app->priv;
 
     if (streq (domain, "config"))
         return g_object_ref (priv->config);
@@ -1208,16 +1245,168 @@ donna_donna_get_provider (DonnaApp    *app,
     return g_object_ref (provider);
 }
 
-DonnaColumnType *
-donna_donna_get_column_type (DonnaApp      *app,
-                             const gchar   *type)
+/**
+ * donna_app_get_node:
+ * @app: The #DonnaApp
+ * @full_location: The full location of the wanted node
+ * @do_user_parse: Whether to do user parsing of @full_location or not
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Helper function to get the node corresponding to @full_location, optionally
+ * after having applied #user-parsing to @full_location
+ *
+ * Returns: (transfer full): The #DonnaNode for (user-parsed) @full_location
+ */
+DonnaNode *
+donna_app_get_node (DonnaApp    *app,
+                    const gchar *full_location,
+                    gboolean     do_user_parse,
+                    GError     **error)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaProvider *provider;
+    DonnaNode *node;
+    gchar buf[64], *b = buf;
+    const gchar *location;
+    gchar *fl = NULL;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (full_location != NULL, NULL);
+
+    if (do_user_parse)
+    {
+        fl = donna_app_parse_fl (app, (gchar *) full_location, FALSE,
+                NULL, NULL, NULL, NULL);
+        full_location = fl;
+    }
+
+    location = strchr (full_location, ':');
+    if (!location)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Invalid full location: '%s'", full_location);
+        g_free (fl);
+        return NULL;
+    }
+
+    if (G_UNLIKELY (location - full_location >= 64))
+        b = g_strdup_printf ("%.*s", (gint) (location - full_location),
+                full_location);
+    else
+    {
+        *buf = '\0';
+        strncat (buf, full_location, (size_t) (location - full_location));
+    }
+    provider = donna_app_get_provider (app, buf);
+    if (!provider)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Unknown provider: '%s'", b);
+        if (b != buf)
+            g_free (b);
+        g_free (fl);
+        return NULL;
+    }
+    if (b != buf)
+        g_free (b);
+
+    node = donna_provider_get_node (provider, ++location, error);
+    g_object_unref (provider);
+    g_free (fl);
+    return node;
+}
+
+struct trigger_node
+{
+    DonnaApp *app;
+    DonnaNode *node;
+};
+
+static void
+free_tn (struct trigger_node *tn)
+{
+    g_object_unref (tn->node);
+    g_slice_free (struct trigger_node, tn);
+}
+
+static void
+trigger_node_cb (DonnaTask *task, gboolean timeout_called, struct trigger_node *tn)
+{
+    if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+    {
+        gchar *fl = donna_node_get_full_location (tn->node);
+        donna_app_show_error (tn->app, donna_task_get_error (task),
+                "Failed to trigger node '%s'", fl);
+        g_free (fl);
+    }
+    free_tn (tn);
+}
+
+/**
+ * donna_app_trigger_node:
+ * @app: The #DonnaApp
+ * @full_location: The full location of the wanted node to trigger
+ * @do_user_parse: Whether to do user parsing of @full_location or not
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Helper function to trigger the node corresponding to @full_location,
+ * optionally after having applied #user-parsing to @full_location
+ *
+ * Returns: %TRUE if the corresponding task was run (doesn't mean it succedeed,
+ * or even that it has started yet), else %FALSE
+ */
+gboolean
+donna_app_trigger_node (DonnaApp       *app,
+                        const gchar    *full_location,
+                        gboolean        do_user_parse,
+                        GError        **error)
+{
+    DonnaNode *node;
+    DonnaTask *task;
+    struct trigger_node *tn;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (full_location != NULL, FALSE);
+
+    node = donna_app_get_node (app, full_location, do_user_parse, error);
+    if (!node)
+        return FALSE;
+
+    task = donna_node_trigger_task (node, error);
+    if (!task)
+    {
+        g_object_unref (node);
+        return FALSE;
+    }
+
+    tn = g_slice_new (struct trigger_node);
+    tn->app = app;
+    tn->node = node;
+
+    donna_task_set_callback (task, (task_callback_fn) trigger_node_cb, tn,
+            (GDestroyNotify) free_tn);
+    donna_app_run_task (app, task);
+    return TRUE;
+}
+
+/**
+ * donna_app_get_column_type:
+ * @app: The #DonnaApp
+ * @type: Name of the wanted columntype
+ *
+ * Returns the columntype for @type
+ *
+ * Returns: (transfer full): The #DonnaColumnType for @type, or %NULL
+ */
+DonnaColumnType *
+donna_app_get_column_type (DonnaApp      *app,
+                           const gchar   *type)
+{
+    DonnaAppPrivate *priv;
     gint i;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-
-    priv = DONNA_DONNA (app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (type != NULL, NULL);
+    priv = app->priv;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < NB_COL_TYPES; ++i)
@@ -1236,7 +1425,7 @@ donna_donna_get_column_type (DonnaApp      *app,
 
 struct filter_toggle
 {
-    DonnaDonna *donna;
+    DonnaApp *app;
     gchar *filter_str;
 };
 
@@ -1250,7 +1439,7 @@ free_filter_toggle (struct filter_toggle *t)
 static gboolean
 filter_remove (struct filter_toggle *t)
 {
-    DonnaDonnaPrivate *priv = t->donna->priv;
+    DonnaAppPrivate *priv = t->app->priv;
     struct filter *f;
 
     g_rec_mutex_lock (&priv->rec_mutex);
@@ -1273,9 +1462,9 @@ filter_remove (struct filter_toggle *t)
  * Mostly useful since on each location change/new arrangement, all color
  * filters are let go, then loaded again (assuming they stay active). */
 static void
-filter_toggle_ref_cb (DonnaDonna *donna, DonnaFilter *filter, gboolean is_last)
+filter_toggle_ref_cb (DonnaApp *app, DonnaFilter *filter, gboolean is_last)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     struct filter *f;
     gchar *filter_str;
 
@@ -1296,7 +1485,7 @@ filter_toggle_ref_cb (DonnaDonna *donna, DonnaFilter *filter, gboolean is_last)
             return;
         }
         t = g_new (struct filter_toggle, 1);
-        t->donna = donna;
+        t->app = app;
         t->filter_str = filter_str;
         f->timeout = g_timeout_add_seconds_full (G_PRIORITY_LOW,
                 60 * 15, /* 15min */
@@ -1317,15 +1506,15 @@ filter_toggle_ref_cb (DonnaDonna *donna, DonnaFilter *filter, gboolean is_last)
 }
 
 DonnaFilter *
-donna_donna_get_filter (DonnaApp    *app,
-                        const gchar *filter)
+donna_app_get_filter (DonnaApp       *app,
+                      const gchar    *filter)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     struct filter *f;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (filter != NULL, NULL);
+    priv = app->priv;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     f = g_hash_table_lookup (priv->filters, filter);
@@ -1350,36 +1539,93 @@ donna_donna_get_filter (DonnaApp    *app,
     return f->filter;
 }
 
+/**
+ * donna_app_run_task:
+ * @app: The #DonnaApp
+ * @task: The #DonnaTask to run
+ *
+ * This is how every #DonnaTask should always be run, regardless of what it
+ * is/how it should run. It will run the task according to its visibility:
+ *
+ * - %DONNA_TASK_VISIBILITY_INTERNAL_GUI tasks are run in the main/UI thread
+ * - %DONNA_TASK_VISIBILITY_INTERNAL_FAST tasks are run in the current thread
+ * - %DONNA_TASK_VISIBILITY_INTERNAL tasks are run in a thread for the internal
+ *   thread pool
+ * - %DONNA_TASK_VISIBILITY_PULIC tasks are deferred to the task manager via
+ *   donna_task_manager_add_task()
+ *
+ * If you need to run a task and wait for it to be done in a blocking manner
+ * (i.e. you cant use a callback via donna_task_set_callback()), you might use
+ * donna_task_wait_for_it()
+ * When doing so from a task worker, see helper donna_app_run_task_and_wait()
+ */
 void
-donna_donna_run_task (DonnaApp    *app,
-                      DonnaTask   *task)
+donna_app_run_task (DonnaApp       *app,
+                    DonnaTask      *task)
 {
     DonnaTaskVisibility visibility;
 
-    g_return_if_fail (DONNA_IS_DONNA (app));
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (DONNA_IS_TASK (task));
 
     donna_task_prepare (task);
     g_object_get (task, "visibility", &visibility, NULL);
     if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI)
-        g_main_context_invoke (NULL, (GSourceFunc) donna_donna_task_run,
+        g_main_context_invoke (NULL, (GSourceFunc) donna_app_task_run,
                 g_object_ref_sink (task));
     else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
-        donna_donna_task_run (g_object_ref_sink (task));
+        donna_app_task_run (g_object_ref_sink (task));
     else if (visibility == DONNA_TASK_VISIBILITY_PULIC)
-        donna_task_manager_add_task (((DonnaDonna *) app)->priv->task_manager,
-                task, NULL);
+        donna_task_manager_add_task (app->priv->task_manager, task, NULL);
     else
-        g_thread_pool_push (DONNA_DONNA (app)->priv->pool,
-                g_object_ref_sink (task), NULL);
+        g_thread_pool_push (app->priv->pool, g_object_ref_sink (task), NULL);
+}
+
+/**
+ * donna_app_run_task_and_wait:
+ * @app: The #DonnaApp
+ * @task: The #DonnaTask to run
+ * @current_task: The current #DonnaTask
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * This is an helper meant to be used from a task worker, that of @current_task,
+ * and it will run @task and block until it is done, using
+ * donna_task_wait_for_it() It will also change the visibility of @task from
+ * %DONNA_TASK_VISIBILITY_INTERNAL to %DONNA_TASK_VISIBILITY_INTERNAL_FAST so it
+ * runs in the current thread instead of using another thread uselessly.
+ *
+ * Returns: See donna_task_wait_for_it()
+ */
+gboolean
+donna_app_run_task_and_wait (DonnaApp       *app,
+                             DonnaTask      *task,
+                             DonnaTask      *current_task,
+                             GError        **error)
+{
+    DonnaTaskVisibility visibility;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (DONNA_IS_TASK (current_task), FALSE);
+
+    g_object_get (task, "visibility", &visibility, NULL);
+    if (visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+        /* make it FAST so it runs inside the current thread instead of a new
+         * one. This in intended to be used from a task worker, so no need to
+         * "waste" an internal thread for no reason. */
+        donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
+
+    donna_app_run_task (app, task);
+    return donna_task_wait_for_it (task, current_task, error);
 }
 
 static DonnaArrangement *
 tree_select_arrangement (DonnaTreeView  *tree,
                          const gchar    *tv_name,
                          DonnaNode      *node,
-                         DonnaDonna     *donna)
+                         DonnaApp       *app)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     DonnaArrangement *arr = NULL;
     GSList *list, *l;
     gchar _source[255];
@@ -1494,7 +1740,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
 
                 if (!(arr->flags & DONNA_ARRANGEMENT_HAS_COLOR_FILTERS))
                     donna_config_arr_load_color_filters (priv->config,
-                            (DonnaApp *) donna, arr,
+                            app, arr,
                             "%s/%s", sce, argmt->name);
 
                 if ((arr->flags & DONNA_ARRANGEMENT_HAS_ALL) == DONNA_ARRANGEMENT_HAS_ALL)
@@ -1520,50 +1766,67 @@ tree_select_arrangement (DonnaTreeView  *tree,
     return arr;
 }
 
-static DonnaTaskManager *
-donna_donna_peek_task_manager (DonnaApp *app)
+/**
+ * donna_app_peek_task_manager:
+ * @app: The #DonnaApp
+ *
+ * Returns the task manager
+ *
+ * Returns: (transfer none): The #DonnaTaskManager
+ */
+DonnaTaskManager *
+donna_app_peek_task_manager (DonnaApp       *app)
 {
-    DonnaDonnaPrivate *priv;
-
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    priv = ((DonnaDonna *) app)->priv;
-
-    return priv->task_manager;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    return app->priv->task_manager;
 }
 
 static DonnaTreeView *
-donna_load_tree_view (DonnaDonna *donna, const gchar *name)
+load_tree_view (DonnaApp *app, const gchar *name)
 {
     DonnaTreeView *tree;
 
-    tree = donna_donna_get_tree_view ((DonnaApp *) donna, name);
+    tree = donna_app_get_tree_view (app, name);
     if (!tree)
     {
         /* shall we load it indeed */
-        tree = (DonnaTreeView *) donna_tree_view_new ((DonnaApp *) donna, name);
+        tree = (DonnaTreeView *) donna_tree_view_new (app, name);
         if (tree)
         {
             g_signal_connect (tree, "select-arrangement",
-                    G_CALLBACK (tree_select_arrangement), donna);
-            donna->priv->tree_views = g_slist_prepend (donna->priv->tree_views,
+                    G_CALLBACK (tree_select_arrangement), app);
+            app->priv->tree_views = g_slist_prepend (app->priv->tree_views,
                     g_object_ref (tree));
-            donna_app_tree_view_loaded ((DonnaApp *) donna, tree);
+            g_signal_emit (app, donna_app_signals[TREE_VIEW_LOADED], 0, tree);
         }
     }
     return tree;
 }
 
-static DonnaTreeView *
-donna_donna_get_tree_view (DonnaApp      *app,
-                           const gchar   *name)
+/**
+ * donna_app_get_tree_view:
+ * @app: The #DonnaApp
+ * @name: The name of the wanted treeview
+ *
+ * Returns the treeview @name
+ *
+ * Note: On app startup, you might try to get a treeview that hasn't yet been
+ * loaded. See signal #DonnaApp::tree-view-loaded for such cases.
+ *
+ * Returns: (transfer full): The #DonnaTreeView @name, or %NULL
+ */
+DonnaTreeView *
+donna_app_get_tree_view (DonnaApp    *app,
+                         const gchar *name)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     DonnaTreeView *tree = NULL;
     GSList *l;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (name != NULL, NULL);
+    priv = app->priv;
 
-    priv = ((DonnaDonna *) app)->priv;
     for (l = priv->tree_views; l; l = l->next)
     {
         if (streq (name, donna_tree_view_get_name (l->data)))
@@ -1583,9 +1846,9 @@ intrefs_remove (gchar *key, struct intref *ir, gpointer data)
 }
 
 static gboolean
-intrefs_gc (DonnaDonna *donna)
+intrefs_gc (DonnaApp *app)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     gboolean keep_going;
 
     g_rec_mutex_lock (&priv->rec_mutex);
@@ -1598,25 +1861,95 @@ intrefs_gc (DonnaDonna *donna)
     return keep_going;
 }
 
-static gchar *
-donna_donna_get_current_dirname (DonnaApp       *app)
+/**
+ * donna_app_get_current_location:
+ * @app: The #DonnaApp
+ * @error: Return location of a #GError, or %NULL
+ *
+ * Helper to get the node of the current location (of the active list)
+ *
+ * Returns: (transfer full): The #DonnaNode of the current location of
+ * #DonnaApp:active-list
+ */
+DonnaNode *
+donna_app_get_current_location (DonnaApp       *app,
+                                GError        **error)
 {
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    return g_strdup (((DonnaDonna *) app)->priv->cur_dirname);
+    DonnaNode *node;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+
+    if (!app->priv->active_list)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Cannot get current location: failed to get active-list");
+        return NULL;
+    }
+
+    g_object_get (app->priv->active_list, "location", &node, NULL);
+    if (!node)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Cannot get current location: failed to get it from treeview '%s'",
+                donna_tree_view_get_name (app->priv->active_list));
+        return NULL;
+    }
+
+    return node;
 }
 
-static gchar *
-donna_donna_get_conf_filename (DonnaApp       *app,
-                               const gchar    *fmt,
-                               va_list         va_args)
+/**
+ * donna_app_get_current_dirname:
+ * @app: The #DonnaApp
+ *
+ * Returns the full path of the current directory. The current directory is the
+ * last known location of the active list in domain "fs"
+ * So if you changed active-list, or changed location of the active list, to a
+ * location outside of "fs" (e.g. in "config") then this will still return the
+ * last location in "fs" whereas donna_app_get_current_location() will return
+ * the node of the current location (in "config")
+ *
+ * This is therefore useful to always get a valid path (in "fs"), e.g. when
+ * running external scripts/applications needing a working directory.
+ *
+ * Returns: (transfer full): A newly allocated string of the path of the current
+ * directory (free it with g_free() when done), or %NULL
+ */
+gchar *
+donna_app_get_current_dirname (DonnaApp       *app)
+{
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    return g_strdup (app->priv->cur_dirname);
+}
+
+/**
+ * donna_app_get_conf_filename:
+ * @app: The #DonnaApp
+ * @fmt: printf-like string for the filename
+ * @...: %NULL-terminated list of printf-like arguments
+ *
+ * Returns the full path for a filename named according to @fmt and located in
+ * the application's configuration directory.
+ *
+ * Returns: (transfer full): A newly allocated string in the filename encoding;
+ * Free using g_free() when done
+ */
+gchar *
+donna_app_get_conf_filename (DonnaApp       *app,
+                             const gchar    *fmt,
+                             ...)
 {
     GString *str;
+    va_list va_args;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (fmt != NULL, NULL);
 
-    str = g_string_new (((DonnaDonna *) app)->priv->config_dir);
+    va_start (va_args, fmt);
+    str = g_string_new (app->priv->config_dir);
     g_string_append_c (str, '/');
     g_string_append_vprintf (str, fmt, va_args);
+    va_end (va_args);
 
     if (!g_get_filename_charsets (NULL))
     {
@@ -1638,14 +1971,88 @@ enum
     DEREFERENCE_FULL,
     DEREFERENCE_FS
 };
-static gchar *
-donna_donna_parse_fl (DonnaApp       *app,
-                      gchar          *_fl,
-                      gboolean        must_free_fl,
-                      const gchar    *conv_flags,
-                      conv_flag_fn    conv_fn,
-                      gpointer        conv_data,
-                      GPtrArray     **intrefs)
+
+/**
+ * donna_app_parse_fl:
+ * @app: The #DonnaApp
+ * @fl: The full location to parse
+ * @must_free_fl: Whether @fl must be freed (using g_free()) or not
+ * @conv_flags: context conv flags
+ * @conv_fn: context conv fn
+ * @conv_data: context conv data
+ * @intrefs: (allow-none): Return location where a #GPtrArray of all created
+ * intrefs will be created, if needed; Or %NULL
+ *
+ * Parse the full location @fl. There are 2 parsing that can be performed:
+ * - #user-parsing which should be performed on all user-provided full
+ *   locations, see below for more.
+ * - contextual parsing, performed according the @conv_flags & co
+ *
+ * User parsing is a process of "extending" the given full location using
+ * prefixes, aliases, etc
+ *
+ * First of all, prefixes can be defined. A prefix is a string of one or more
+ * characters that cannot start with a letter. Defined under numbered categories
+ * in <systemitem>donna/prefixes</systemitem> in the configuration, each
+ * definition can be made of the following options:
+ *
+ * - <systemitem>prefix</systemitem> (string; required): the actual prefix to
+ *   look for at the beginning of the full location.
+ * - <systemitem>is_strict</systemitem> (boolean; optional): By default, a match
+ *   will be whenever the full location starts with the prefix. When true, it
+ *   will also required that the full location contains more than the prefix,
+ *   and that the first character after the prefix isn't a space. This is to
+ *   allow the use of the same string as alias, and use them all as needed.
+ * - <systemitem>replacement</systemitem> (string; required): The string the
+ *   prefix will be replaced with in the full location.
+ * - <systemitem>is_home_dir</systemitem> (boolean; optional): A special mode,
+ *   where if true option <systemitem>replacement</systemitem> will be ignored
+ *   (and isn't even in fact needed) and instead the prefix will be replaced
+ *   with the user's home dir (prefixed with "fs:").
+ *
+ * When a prefix match if found, replacement occurs and user parsing is
+ * completed. (I.e. the result cannot include other prefixes or aliases.)
+ *
+ * If no prefix match occured, donna will look for the first character that is
+ * either a colon, a slash or a space.
+ *
+ * - If a colon, assume a full location was given and be done.
+ * - If a space (or nothing), look for the corresponding alias.
+ * - If a slash, and the current location (of the active list) is in a
+ *   non-flat domain (e.g. fs), then try to resolve the full location as a
+ *   relative path of said location.
+ *
+ * An alias, like a prefix, will consist of replacing it with a replacement.
+ * Said replacement will be looked for in
+ * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement</systemitem>.
+ * If the full location was nothing else than the alias (i.e. no space after it)
+ * then the replacement will first be looked for in
+ * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
+ *
+ *
+ * Contextual parsing happens on actions, when certain variables (e.g. \%o, etc)
+ * can be used in the full location/trigger, and need to be parsed before
+ * processing.
+ * If intrefs were created during said parsing (see donna_app_new_int_ref()) and
+ * @intrefs is not %NULL, A #GPtrArray will be created and filled with string
+ * representations of intrefs. This is intended to be then used with
+ * donna_app_trigger_fl() so intrefs are freed afterwards.
+ *
+ * If no parsing/changes was done, @fl will be returned unless @must_free_fl
+ * was %FALSE, in which case a g_strdup() is returned. If parsing happens, @fl
+ * will be freed unless @must_free_fl was %FALSE.
+ *
+ * Returns: (transfer full): A newly allocated string to be freed with g_free(),
+ * the new/parsed full location
+ */
+gchar *
+donna_app_parse_fl (DonnaApp       *app,
+                    gchar          *_fl,
+                    gboolean        must_free_fl,
+                    const gchar    *conv_flags,
+                    conv_flag_fn    conv_fn,
+                    gpointer        conv_data,
+                    GPtrArray     **intrefs)
 {
     GError *err = NULL;
     DonnaConfig *config = donna_app_peek_config (app);
@@ -1654,6 +2061,9 @@ donna_donna_parse_fl (DonnaApp       *app,
     gchar *fl = _fl;
     gchar *s;
     guint i;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (fl != NULL, NULL);
 
     /* prefixes (cannot not start with a letter) */
     if (!((*fl >= 'a' && *fl <= 'z') || (*fl >= 'A' && *fl <= 'Z')))
@@ -2056,8 +2466,7 @@ trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
     if (donna_task_get_state (task) == DONNA_TASK_FAILED)
         donna_app_show_error (fir->app, donna_task_get_error (task),
                 "Action trigger failed");
-    if (fir)
-        free_fir (fir);
+    free_fir (fir);
 }
 
 static gboolean
@@ -2137,13 +2546,39 @@ trigger_fl (DonnaApp    *app,
     return TRUE;
 }
 
-static gboolean
-donna_donna_trigger_fl (DonnaApp     *app,
-                        const gchar  *fl,
-                        GPtrArray    *intrefs,
-                        gboolean      blocking,
-                        GError      **error)
+/**
+ * donna_app_trigger_fl:
+ * @app: The #DonnaApp
+ * @fl: The full location to trigger
+ * @intrefs: (allow-none): A #GPtrArray of all intrefs to free afterwards
+ * @blocking: Is %TRUE block until the task has run
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Helper that will get the node for @fl and trigger it.
+ *
+ * If @intrefs was specified, it must be an array of string representations of
+ * all intrefs to be freed after the task has run. Usually this will have been
+ * created by donna_app_parse_fl()
+ *
+ * If @blocking is %FALSE, it returns %FALSE if fails to get the node or its
+ * trigger task, else returns %TRUE after calling donna_app_run_task()
+ *
+ * If @blocking is %TRUE then it will block until the task has run, using
+ * donna_task_wait_for_it(). It will only then return %TRUE is the task was
+ * successful (ended in %DONNA_TASK_DONE), else %FALSE.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
+gboolean
+donna_app_trigger_fl (DonnaApp       *app,
+                      const gchar    *fl,
+                      GPtrArray      *intrefs,
+                      gboolean        blocking,
+                      GError        **error)
 {
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (fl != NULL, NULL);
+
     return trigger_fl (app, fl, intrefs, blocking, NULL, error);
 }
 
@@ -2154,7 +2589,7 @@ arr_str_cmp (gconstpointer a, gconstpointer b)
 }
 
 static gboolean
-trigger_event (DonnaDonna   *donna,
+trigger_event (DonnaApp     *app,
                const gchar  *event,
                gboolean      is_confirm,
                const gchar  *source,
@@ -2162,10 +2597,11 @@ trigger_event (DonnaDonna   *donna,
                conv_flag_fn  conv_fn,
                gpointer      conv_data)
 {
+    DonnaAppPrivate *priv = app->priv;
     GPtrArray *arr = NULL;
     guint i;
 
-    if (!donna_config_list_options (donna->priv->config, &arr,
+    if (!donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_OPTION, "%s/events/%s", source, event))
         return FALSE;
 
@@ -2176,18 +2612,17 @@ trigger_event (DonnaDonna   *donna,
         GPtrArray *intrefs = NULL;
         gchar *fl;
 
-        if (donna_config_get_string (donna->priv->config, NULL, &fl,
+        if (donna_config_get_string (priv->config, NULL, &fl,
                     "%s/events/%s/%s",
                     source, event, arr->pdata[i]))
         {
             gboolean ret;
 
-            fl = donna_donna_parse_fl ((DonnaApp *) donna, fl, TRUE,
+            fl = donna_app_parse_fl (app, fl, TRUE,
                     conv_flags, conv_fn, conv_data, &intrefs);
-            if (!trigger_fl ((DonnaApp *) donna, fl, intrefs,
-                        is_confirm, &ret, &err))
+            if (!trigger_fl (app, fl, intrefs, is_confirm, &ret, &err))
             {
-                donna_app_show_error ((DonnaApp *) donna, err,
+                donna_app_show_error (app, err,
                         "Event '%s': Failed to trigger '%s'%s%s%s",
                         event, arr->pdata[i],
                         (*source != '\0') ? " from '" : "",
@@ -2209,42 +2644,139 @@ trigger_event (DonnaDonna   *donna,
     return FALSE;
 }
 
-static gboolean
-donna_donna_emit_event (DonnaApp        *app,
-                        const gchar     *event,
-                        gboolean         is_confirm,
-                        const gchar     *source,
-                        const gchar     *conv_flags,
-                        conv_flag_fn     conv_fn,
-                        gpointer         conv_data)
+/**
+ * donna_app_emit_event:
+ * @app: The #DonnaApp
+ * @event: The name of the event
+ * @is_confirm: Whether this is a "confirm event" or not
+ * @conv_flags: context conv flags
+ * @conv_fn: context conv fn
+ * @conv_data: context conv data
+ * @fmt_source: printf-like format for the source of the event
+ * @...: %NULL terminated printf-like arguments
+ *
+ * Emit an event. TODO: document the whole event thing, but not before we've
+ * redone it.
+ *
+ * Returns: %TRUE or %FALSE
+ */
+gboolean
+donna_app_emit_event (DonnaApp       *app,
+                      const gchar    *event,
+                      gboolean        is_confirm,
+                      const gchar    *conv_flags,
+                      conv_flag_fn    conv_fn,
+                      gpointer        conv_data,
+                      const gchar    *fmt_source,
+                      ...)
 {
-    g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
+    GQuark q;
+    GSList *l;
+    gchar *source;
+    gboolean ret;
 
-    if (source)
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (event != NULL, NULL);
+
+    if (is_confirm)
     {
-        gboolean ret;
+        gboolean in_list = FALSE;
 
-        ret = trigger_event ((DonnaDonna *) app, event, is_confirm, source,
-                conv_flags, conv_fn, conv_data);
-        if (is_confirm && ret)
-            return TRUE;
+        q = g_quark_from_string (event);
+        for (l = event_confirm; l; l = l->next)
+        {
+            if ((GQuark) GPOINTER_TO_UINT (l->data) == q)
+            {
+                in_list = TRUE;
+                break;
+            }
+        }
+
+        if (!in_list)
+            event_confirm = g_slist_prepend (event_confirm, GUINT_TO_POINTER (q));
     }
 
-    return trigger_event ((DonnaDonna *) app, event, is_confirm, "",
-            conv_flags, conv_fn, conv_data);
+    if (fmt_source)
+    {
+        va_list va_args;
+        va_start (va_args, fmt_source);
+        source = g_strdup_vprintf (fmt_source, va_args);
+        va_end (va_args);
+    }
+    else
+        source = NULL;
+
+    g_signal_emit (app, donna_app_signals[EVENT],
+            g_quark_from_string (event),
+            event, source, conv_flags, conv_fn, conv_data,
+            &ret);
+
+    if (!is_confirm || !ret)
+    {
+        if (source)
+        {
+            ret = trigger_event (app, event, is_confirm, source,
+                    conv_flags, conv_fn, conv_data);
+            if (is_confirm && ret)
+            {
+                g_free (source);
+                return TRUE;
+            }
+        }
+
+        ret = trigger_event (app, event, is_confirm, "",
+                conv_flags, conv_fn, conv_data);
+    }
+
+    if (is_confirm)
+        event_confirm = g_slist_remove (event_confirm, GUINT_TO_POINTER (q));
+    g_free (source);
+    return ret;
 }
 
-static gchar *
-donna_donna_new_int_ref (DonnaApp       *app,
-                         DonnaArgType    type,
-                         gpointer        ptr)
+/**
+ * donna_app_new_int_ref:
+ * @app: The #DonnaApp
+ * @type: The type of the object to create an intref for
+ * @ptr: The pointer to the object to store in the intref
+ *
+ * Creates a new intref (internal reference) for @ptr, object of type @type
+ *
+ * When a command returns an "object" (node, treeview, arrays, etc) it might
+ * have to be represented as a string, e.g. in order to be used as argument in
+ * another command (or via script).
+ *
+ * Sometimes it is possible to use a "direct" string representation, e.g.
+ * strings (!) or treeviews, identified with their names. When it isn't
+ * possible, by default intrefs will be used, to provide a typed "link" to the
+ * object in memory.
+ *
+ * Once created the intref can now be accessed via the returned string, which is
+ * a number in between inequality signs. This string can be used to then
+ * accessed the object in memory via (other) commands.
+ *
+ * It should be noted that all intrefs should be freed after use, and that as a
+ * "garbage collecting" process, all intrefs will be freed automatically after
+ * 15 minutes of inactivity.
+ *
+ * Returns: (transfer full): A newly allocated string representing the intref;
+ * Must be free-d using g_free()
+ */
+gchar *
+donna_app_new_int_ref (DonnaApp       *app,
+                       DonnaArgType    type,
+                       gpointer        ptr)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     struct intref *ir;
     gchar *s;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (ptr != NULL, NULL);
+    g_return_val_if_fail (type == DONNA_ARG_TYPE_TREE_VIEW
+            || type == DONNA_ARG_TYPE_NODE
+            || (type & DONNA_ARG_IS_ARRAY), NULL);
+    priv = app->priv;
 
     ir = g_new (struct intref, 1);
     ir->type = type;
@@ -2267,17 +2799,34 @@ donna_donna_new_int_ref (DonnaApp       *app,
     return s;
 }
 
-static gpointer
-donna_donna_get_int_ref (DonnaApp       *app,
-                         const gchar    *intref,
-                         DonnaArgType    type)
+/**
+ * donna_app_get_int_ref:
+ * @app: The #DonnaApp
+ * @intref: The string representation of af intref, as returned by
+ * donna_app_new_int_ref()
+ * @type: The type of the requested intref
+ *
+ * Returns the intref identified by @intref if it is of type @type, else (or if
+ * no sch intref exists) %NULL will be returned
+ *
+ * Returns: (transfer full): The object pointed to by @intref (of type @type),
+ * with an added reference. Removing it depends on the type of the returned
+ * object (e.g. g_object_unref() or g_ptr_array_unref())
+ */
+gpointer
+donna_app_get_int_ref (DonnaApp       *app,
+                       const gchar    *intref,
+                       DonnaArgType    type)
+
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     struct intref *ir;
     gpointer ptr = NULL;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (intref != NULL, NULL);
+    g_return_val_if_fail (type != DONNA_ARG_TYPE_NOTHING, NULL);
+    priv = app->priv;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     ir = g_hash_table_lookup (priv->intrefs, intref);
@@ -2295,15 +2844,29 @@ donna_donna_get_int_ref (DonnaApp       *app,
     return ptr;
 }
 
-static gboolean
-donna_donna_free_int_ref (DonnaApp       *app,
-                          const gchar    *intref)
+/**
+ * donna_app_free_int_ref:
+ * @app: The #DonnaApp
+ * @intref: String representation of the intref to free
+ *
+ * Frees the memory of intref @intref and removes its reference of the linked
+ * object (which might as a result be freed if it was the last reference)
+ *
+ * Note that intrefs are automatically freed after 15 minutes of inactivity, as
+ * part of a garbage collecting process.
+ *
+ * Returns: %TRUE if the intref was freed, else (intref didn't exist) %FALSE
+ */
+gboolean
+donna_app_free_int_ref (DonnaApp       *app,
+                        const gchar    *intref)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     gboolean ret;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), NULL);
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (intref != NULL, NULL);
+    priv = app->priv;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     /* frees key & value */
@@ -2315,7 +2878,7 @@ donna_donna_free_int_ref (DonnaApp       *app,
 
 struct menu_click
 {
-    DonnaDonna          *donna;
+    DonnaApp            *app;
     /* options are loaded, but this is used when processing clicks */
     gchar               *name;
     /* this is only used to hold references to the nodes for the menu */
@@ -2414,7 +2977,7 @@ menuitem_button_release_cb (GtkWidget           *item,
                             GdkEventButton      *event,
                             struct menu_click   *mc)
 {
-    DonnaDonnaPrivate *priv = mc->donna->priv;
+    DonnaAppPrivate *priv = mc->app->priv;
     DonnaNode *node;
     struct menu_trigger *mt;
     GPtrArray *intrefs = NULL;
@@ -2478,7 +3041,7 @@ menuitem_button_release_cb (GtkWidget           *item,
             return FALSE;
     }
 
-    fl = donna_app_parse_fl ((DonnaApp *) mc->donna, fl, must_free_fl, "nN",
+    fl = donna_app_parse_fl (mc->app, fl, must_free_fl, "nN",
             (conv_flag_fn) menu_conv_flag, node, &intrefs);
 
     /* we use an idle source to trigger it, because otherwise this could lead to
@@ -2486,7 +3049,7 @@ menuitem_button_release_cb (GtkWidget           *item,
      * main loop, all that from this thread, so as a result the menu wouldn't be
      * closed (since the event hasn't finished being processed) */
     mt = g_slice_new (struct menu_trigger);
-    mt->app = (DonnaApp *) mc->donna;
+    mt->app = mc->app;
     mt->fl = fl;
     mt->intrefs = intrefs;
     g_idle_add ((GSourceFunc) menu_trigger, mt);
@@ -2749,7 +3312,7 @@ load_submenu (struct load_submenu *ls)
     g_atomic_int_inc (&ls->ref_count);
     ls->task = task;
 
-    donna_app_run_task ((DonnaApp *) ls->mc->donna, task);
+    donna_app_run_task (ls->mc->app, task);
     if (ls->blocking)
     {
         donna_task_wait_for_it (task, NULL, NULL);
@@ -2783,15 +3346,15 @@ load_submenu (struct load_submenu *ls)
 } while (0)
 
 static struct menu_click *
-load_mc (DonnaDonna *donna, const gchar *name, GPtrArray *nodes)
+load_mc (DonnaApp *app, const gchar *name, GPtrArray *nodes)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     struct menu_click *mc;
     gboolean b;
     gint i;
 
     mc = g_slice_new0 (struct menu_click);
-    mc->donna = donna;
+    mc->app   = app;
     mc->name  = g_strdup (name);
     mc->nodes = nodes;
     if (nodes)
@@ -3082,7 +3645,7 @@ load_menu (struct menu_click *mc)
                     if (has == DONNA_NODE_VALUE_SET)
                     {
                         if (G_VALUE_TYPE (&v) == G_TYPE_STRING)
-                            sub_mc = load_mc (mc->donna, g_value_get_string (&v), NULL);
+                            sub_mc = load_mc (mc->app, g_value_get_string (&v), NULL);
                         g_value_unset (&v);
                     }
                 }
@@ -3180,18 +3743,125 @@ load_menu (struct menu_click *mc)
     return menu;
 }
 
-static gboolean
-donna_donna_show_menu (DonnaApp       *app,
-                       GPtrArray      *nodes,
-                       const gchar    *name,
-                       GError       **error)
+/**
+ * donna_app_show_menu:
+ * @app: The #DonnaApp
+ * @nodes: (element-type DonnaNode): An array of nodes to show in a menu
+ * @menu: Name of the menu definition to use
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Shows a menu consisting the all the #DonnaNode<!-- -->s in @nodes, using menu
+ * definition @menu.
+ *
+ * As you probably know, donna uses nodes to represent about everything. Nodes
+ * can be shown in a #DonnaTreeView, of course, but also in menus.
+ * Nothing specfic needs to be done, and any node can be used. It is however
+ * possible to extra special properties on nodes, to be used in menus.
+ *
+ * If you don't intend to sort the nodes on the menu (see below), you can also
+ * include %NULL in the array @nodes, to indicate where to include separator.
+ * donna will make sure there's no separator as first or last item, and that
+ * there's no more than one in a row.
+ *
+ * When the menu is shown, it will use the "menu definition" @menu. This must
+ * simply be the name of a category found under <systemitem>menus</systemitem> i
+ * config, which will include options for the menu, as well as how to handle the
+ * action on click.
+ *
+ * Available options are:
+ *
+ * - <systemitem>show_icons</systemitem> (boolean): Whether to show icons or
+ *   not; Defaults to true
+ * - <systemitem>use_default_icons</systemitem> (boolean): When showing icons
+ *   and there's no icon set on the node, fallback to default file/folder icons
+ *   (based on node type). Defaults to true
+ * - <systemitem>submenus</systemitem> (integer:enabled): How to handle
+ *   containers. If "enabled" they will be submenus (with their
+ *   content/children); If "disabled" they will be menuitems (that can be
+ *   clicked, same as items); If "combine" then menuitems will be both clickable
+ *   and include a submenu.  Defaults to "disabled"
+ * - <systemitem>children</systemitem> (integer:node-type): Define which node
+ *   type to show on submenus: "item", "container", or "all" Defaults to "all"
+ * - <systemitem>children_show_hidden</systemitem> (boolean): Whether or not to
+ *   include "hidden"/dot files in submenus (similar to the
+ *   <systemitem>show_hidden</systemitem> option of treeviews) Defaults to true
+ * - <systemitem>can_children_submenus</systemitem> (boolean): Whether to use
+ *   node's <systemitem>menu-submenus</systemitem> property to overwrite option
+ *   <systemitem>submenus</systemitem> Defaults to true
+ * - <systemitem>can_children_menu</systemitem> (boolean): Whether to use node's
+ *   <systemitem>menu-menu</systemitem> property to overwrite @menu
+ * - <systemitem>sort</systemitem> (boolean): Whether to sort nodes in menu. See
+ *   #ct-name-options for sort-related options. Defaults to false
+ *
+ *
+ * Node properties used in menus are:
+ *
+ * - <systemitem>name</systemitem>: The label of the menuitem
+ * - <systemitem>menu-is-name-markup</systemitem> (boolean): Whether the label
+ *   contains markup
+ * - <systemitem>desc</systemitem>: The tooltip of the menuitem
+ * - <systemitem>menu-is-sensitive</systemitem> (boolean): Whether the menuitem
+ *   is sensitive or not
+ * - <systemitem>menu-is-combined-sensitive</systemitem> (boolean): If the item
+ *   is in "combine" mode (i.e. both a menuitem and submenu), whether only the
+ *   item-part is sensitive or not
+ * - <systemitem>menu-is-label-bold</systemitem> (boolean): Whether the label
+ *   must be in bold or not
+ * - <systemitem>menu-submenus</systemitem> (uint): Overwrite
+ *   <systemitem>submenus</systemitem> if
+ *   <systemitem>can_children_submenus</systemitem> is true
+ * - <systemitem>menu-menu</systemitem> (string): Overwrite @menu if
+ *   <systemitem>can_children_menu</systemitem> is true
+ *
+ * Additionally, if <systemitem>show_icons</systemitem> is true:
+ *
+ * - <systemitem>menu-image-special</systemitem> (uint): A
+ *   %DonnaImageMenuItemImageSpecial if the menuitem is a check or radio option
+ * - <systemitem>menu-is-active</systemitem>: If check or radio, whether it is
+ *   active/checked or not
+ * - <systemitem>menu-is-inconsistent</systemitem>: If check, whether it is
+ *   inconsistent or not
+ * - <systemitem>icon</systemitem>: If image, the actual icon to use
+ * - <systemitem>menu-image-selected</systemitem> (icon): If image, the actual
+ *   icon to use when the menuitem is selected
+ *
+ *
+ * When a menuitem is clicked, processing said click happens very much like
+ * on treeviews, except instead of using <systemitem>click_modes</systemitem>
+ * the triggers are looked for in category @menu under
+ * <systemitem>menus</systemitem> (alongside the options).
+ *
+ * Triggers will be parsed using the following variables:
+ *
+ * - <systemitem>\%N</systemitem>: Location of the clicked node
+ * - <systemitem>\%n</systemitem>: The clicked node
+ *
+ * For both options & clicks/triggers, if nothing if found under @menu then
+ * category <systemitem>defaults/menus</systemitem> is used.
+ *
+ * Returns: %TRUE is the menu was popped up, else %FALSE
+ */
+gboolean
+donna_app_show_menu (DonnaApp       *app,
+                     GPtrArray      *nodes,
+                     const gchar    *name,
+                     GError        **error)
 {
     struct menu_click *mc;
     GtkMenu *menu;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), FALSE);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (nodes != NULL, NULL);
 
-    mc = load_mc ((DonnaDonna *) app, name, nodes);
+    if (G_UNLIKELY (nodes->len == 0))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Unable to show menu, empty array of nodes given");
+        g_ptr_array_unref (nodes);
+        return FALSE;
+    }
+
+    mc = load_mc (app, name, nodes);
     /* menu will not be packed anywhere, so we need to take ownership and handle
      * it when done, i.e. on "unmap-event". It will trigger the widget's destroy
      * which is when we'll free mc */
@@ -3212,22 +3882,43 @@ donna_donna_show_menu (DonnaApp       *app,
     return TRUE;
 }
 
-static void
-donna_donna_show_error (DonnaApp       *app,
-                        const gchar    *title,
-                        const GError   *error)
+/**
+ * donna_app_show_error:
+ * @app: The #DonnaApp
+ * @error: (allow-none): Related #GError to show the message of
+ * @fmt: printf-like format of the error message
+ * @...: printf-like arguments
+ *
+ * Show an error message.
+ *
+ * @fmt will be the main message/title shown on the window, while the error
+ * message from @error (if any) will be used as secondary text below.
+ */
+void
+donna_app_show_error (DonnaApp       *app,
+                      const GError   *error,
+                      const gchar    *fmt,
+                      ...)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     GtkWidget *w;
+    gchar *title;
+    va_list va_args;
 
-    g_return_if_fail (DONNA_IS_DONNA (app));
-    priv = DONNA_DONNA (app)->priv;
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (fmt != NULL);
+    priv = app->priv;
+
+    va_start (va_args, fmt);
+    title = g_strdup_vprintf (fmt, va_args);
+    va_end (va_args);
 
     w = gtk_message_dialog_new (priv->window,
             GTK_DIALOG_DESTROY_WITH_PARENT | ((priv->exiting) ? GTK_DIALOG_MODAL : 0),
             GTK_MESSAGE_ERROR,
             GTK_BUTTONS_CLOSE,
             "%s", title);
+    g_free (title);
     gtk_message_dialog_format_secondary_text ((GtkMessageDialog *) w, "%s",
             (error) ? error->message : "");
     g_signal_connect_swapped (w, "response", (GCallback) gtk_widget_destroy, w);
@@ -3239,12 +3930,29 @@ donna_donna_show_error (DonnaApp       *app,
         gtk_dialog_run ((GtkDialog *) w);
 }
 
-static gpointer
-donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
+/**
+ * donna_app_get_ct_data:
+ * @col_name: Name of the column
+ * @app: The #DonnaApp
+ *
+ * Returns the columntype data for @column
+ *
+ * <note><para>Note that the order of arguments is unlike other functions, so
+ * this function can be used as #get_ct_data_fn</para></note>
+ *
+ * Returns: The columntype data (to be used e.g. by filters)
+ */
+gpointer
+donna_app_get_ct_data (const gchar    *col_name,
+                       DonnaApp       *app)
 {
-    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    DonnaAppPrivate *priv;
     gchar *type = NULL;
     guint i;
+
+    g_return_val_if_fail (col_name != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    priv = app->priv;
 
     if (!donna_config_get_string (priv->config, NULL, &type,
             "columns/%s/type", col_name))
@@ -3274,17 +3982,129 @@ donna_donna_get_ct_data (DonnaApp *app, const gchar *col_name)
     return NULL;
 }
 
-static DonnaTask *
-donna_donna_nodes_io_task (DonnaApp       *app,
-                           GPtrArray      *nodes,
-                           DonnaIoType     io_type,
-                           DonnaNode      *dest,
-                           const gchar    *new_name,
-                           GError        **error)
+gboolean
+_donna_app_filter_nodes (DonnaApp        *app,
+                         GPtrArray       *nodes,
+                         const gchar     *filter_str,
+                         get_ct_data_fn   get_ct_data,
+                         gpointer         data,
+                         GError         **error)
+{
+    GError *err = NULL;
+    DonnaFilter *filter;
+    guint i;
+
+    g_return_val_if_fail (get_ct_data != NULL, FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    g_return_val_if_fail (filter_str != NULL, FALSE);
+
+    if (G_UNLIKELY (nodes->len == 0))
+        return FALSE;
+
+    filter = donna_app_get_filter (app, filter_str);
+    if (G_UNLIKELY (!filter))
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to create a filter object for '%s'",
+                filter_str);
+        return FALSE;
+    }
+
+    for (i = 0; i < nodes->len; )
+        if (!donna_filter_is_match (filter, nodes->pdata[i],
+                    get_ct_data, data, &err))
+        {
+            if (err)
+            {
+                g_propagate_error (error, err);
+                g_object_unref (filter);
+                return FALSE;
+            }
+            /* last element comes here, hence no need to increment i */
+            g_ptr_array_remove_index_fast (nodes, i);
+        }
+        else
+            ++i;
+
+    g_object_unref (filter);
+    return TRUE;
+}
+
+/**
+ * donna_app_filter_nodes:
+ * @app: The #DonnaApp
+ * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s to filter
+ * @filter: The actual filter to apply
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Filter @nodes using @filter
+ *
+ * Filters references columns, and might therefore be linked to a treeview (in
+ * order to use treeview-specific column options). This will instead use
+ * "generic" options, as the filtering happens via donna/app and not any
+ * treeview (i.e. it uses donna_app_get_ct_data()).
+ *
+ * To filter nodes via a treeview, see donna_tree_view_filter_nodes()
+ *
+ * <note><para>Every node that doesn't match the filter will be removed from
+ * @nodes. Make sure to own the array, since it will be changed (i.e. don't use
+ * an array returned from a get-children task, as it could also be
+ * referenced/used elsewhere)</para></note>
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
+gboolean
+donna_app_filter_nodes (DonnaApp       *app,
+                        GPtrArray      *nodes,
+                        const gchar    *filter,
+                        GError       **error)
+{
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+
+    return _donna_app_filter_nodes (app, nodes, filter,
+            (get_ct_data_fn) donna_app_get_ct_data, app, error);
+}
+
+/**
+ * donna_app_nodes_io_task:
+ * @app: The #DonnaApp
+ * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s, source(s) of
+ * the IO operation
+ * @io_type: Type of IO operation
+ * @dest: Container #DonnaNode, destination of the IO operation
+ * @new_name: (allow-none): New name to be used in the IO operation, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns a task to perform the specified IO operation. For %DONNA_IO_COPY and
+ * %DONNA_IO_MOVE it is possible to specify @new_name, a new name to be used in
+ * the operation (e.g. to rename the item as it is copied/moved).
+ * @dest can be omitted (and will be ignored) for %DONNA_IO_DELETE operations.
+ *
+ * All nodes in @nodes must be from the same provider. The provider of source
+ * nodes in @nodes will be used first, and if it failed to provide a task then
+ * the provider of @dest (if different) will be tried.
+ *
+ * Returns: (transfer floating): A floating #DonnaTask to perform the IO
+ * operation, or %NULL
+ */
+DonnaTask *
+donna_app_nodes_io_task (DonnaApp       *app,
+                         GPtrArray      *nodes,
+                         DonnaIoType     io_type,
+                         DonnaNode      *dest,
+                         const gchar    *new_name,
+                         GError        **error)
 {
     DonnaProvider *provider;
     DonnaTask *task;
     guint i;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    g_return_val_if_fail (io_type == DONNA_IO_COPY || io_type == DONNA_IO_MOVE
+            || io_type == DONNA_IO_DELETE, FALSE);
+    if (io_type != DONNA_IO_DELETE)
+        g_return_val_if_fail (DONNA_IS_NODE (dest), FALSE);
 
     if (G_UNLIKELY (nodes->len == 0))
     {
@@ -3338,26 +4158,55 @@ btn_clicked (GObject *btn, struct ask *ask)
     gtk_widget_destroy (ask->win);
 }
 
-static gint
-donna_donna_ask (DonnaApp       *app,
-                 const gchar    *title,
-                 const gchar    *details,
-                 const gchar    *btn1_icon,
-                 const gchar    *btn1_label,
-                 const gchar    *btn2_icon,
-                 const gchar    *btn2_label,
-                 va_list         va_args)
+/**
+ * donna_app_ask:
+ * @app: The #DonnaApp
+ * @title: Title of the dialog
+ * @details: (allow-none): Additional text to shown below the title
+ * @btn1_icon: (allow-none): Name of the icon to use on button 1
+ * @btn1_label: (allow-none): Label of button 1
+ * @btn2_icon: (allow-none): Name of the icon to use on button 2
+ * @btn2_label: (allow-none): Label of button 2
+ * @...: %NULL terminated icon/label for other buttons
+ *
+ * Show a dialog asking the user to make a choice. This will consist of @title,
+ * optionally a longer text in @details which can begin with prefix "markup:" to
+ * indicate that it must be parsed using Pango markup.
+ *
+ * The dialog will then have at least 2 buttons, allowing the user to make a
+ * choice. Buttons are numbered from 1, and will be placed from right to left.
+ * All buttons will close the dialog, and the button number will be returned.
+ *
+ * If not specified, button 1 will default to "Yes" with "gtk-yes" as icon. If
+ * not specified, button 2 will default to "No" with "gtk-no" as icon.
+ *
+ * Note that a new main loop will be started after showing the dialog, waiting
+ * for a choice to be made.
+ *
+ * Returns: The number of the button pressed
+ */
+gint
+donna_app_ask (DonnaApp       *app,
+               const gchar    *title,
+               const gchar    *details,
+               const gchar    *btn1_icon,
+               const gchar    *btn1_label,
+               const gchar    *btn2_icon,
+               const gchar    *btn2_label,
+               ...)
 {
-    DonnaDonnaPrivate *priv;
+    DonnaAppPrivate *priv;
     struct ask ask = { NULL, };
     GtkWidget *area;
     GtkBox *box;
     GtkWidget *btn;
     GtkWidget *w;
     gint i = 0;
+    va_list va_args;
 
-    g_return_val_if_fail (DONNA_IS_DONNA (app), 0);
-    priv = ((DonnaDonna *) app)->priv;
+    g_return_val_if_fail (DONNA_IS_APP (app), 0);
+    g_return_val_if_fail (title != NULL, 0);
+    priv = app->priv;
 
     ask.win = gtk_message_dialog_new (priv->window,
             GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -3398,6 +4247,7 @@ donna_donna_ask (DonnaApp       *app,
     g_signal_connect (btn, "clicked", (GCallback) btn_clicked, &ask);
     gtk_box_pack_end (box, btn, FALSE, TRUE, 0);
 
+    va_start (va_args, btn2_label);
     for (;;)
     {
         const gchar *s;
@@ -3419,6 +4269,7 @@ donna_donna_ask (DonnaApp       *app,
         g_signal_connect (btn, "clicked", (GCallback) btn_clicked, &ask);
         gtk_box_pack_end (box, btn, FALSE, TRUE, 0);
     }
+    va_end (va_args);
 
     ask.loop = g_main_loop_new (NULL, TRUE);
     g_signal_connect_swapped (ask.win, "destroy",
@@ -3451,15 +4302,53 @@ key_press_cb (struct ask_text *data, GdkEventKey *event)
     return FALSE;
 }
 
-static gchar *
-donna_donna_ask_text (DonnaApp       *app,
-                      const gchar    *title,
-                      const gchar    *details,
-                      const gchar    *main_default,
-                      const gchar   **other_defaults,
-                      GError        **error)
+/**
+ * donna_app_ask_text:
+ * @app: The #DonnaApp
+ * @title: Title of the dialog
+ * @details: (allow-none): Additional text to shown below the title
+ * @main_default: (allow-none): Default to use in the entry
+ * @other_defaults: (allow-none): %NULL terminated array of strings, to use as
+ * other defaults in the popdown menu of the entry
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Shows a dialog asking the user for input.
+ *
+ * The window will have the CSS id/name <systemitem>ask-text</systemitem> to
+ * allow customization. @title will be shown on the dialog, with CSS class
+ * <systemitem>title</systemitem>
+ * If @details was specified, it will be shown below, using CSS class
+ * <systemitem>details</systemitem> If it starts with prefix "markup:" then it
+ * will be processed using Pango markup.
+ *
+ * If specified, @main_default will be featured in the entry. If @other_defaults
+ * was specified, the entry will also feature a popdown menu including the given
+ * strings, in the given order.
+ *
+ * Note that, as in other places in donna, using Ctrl+A will automatically allow
+ * to select all if nothing is selected, if the basename only is selected (e.g.
+ * everything before last dot) then it selects all, else select the basename
+ * only.
+ *
+ * The window will include two buttons: Ok and Cancel. If the user presses Esc
+ * or clicks Cancel then %NULL will be returned. If nothing was enterred, an
+ * empty string will be returned.
+ *
+ * Note that a new main loop will be started after showing the dialog, until the
+ * dialog is closed.
+ *
+ * Returns: (transfer full): Newly allocated string (use g_free() when done)
+ * enterred by the user, or %NULL.
+ */
+gchar *
+donna_app_ask_text (DonnaApp       *app,
+                    const gchar    *title,
+                    const gchar    *details,
+                    const gchar    *main_default,
+                    const gchar   **other_defaults,
+                    GError        **error)
 {
-    DonnaDonnaPrivate *priv = ((DonnaDonna *) app)->priv;
+    DonnaAppPrivate *priv;
     GtkStyleContext *context;
     GMainLoop *loop;
     struct ask_text data = { NULL, };
@@ -3467,6 +4356,10 @@ donna_donna_ask_text (DonnaApp       *app,
     GtkBox *btn_box;
     GtkLabel *lbl;
     GtkWidget *w;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+    g_return_val_if_fail (title != NULL, FALSE);
+    priv = app->priv;
 
     data.win = (GtkWindow *) gtk_window_new (GTK_WINDOW_TOPLEVEL);
     gtk_widget_set_name ((GtkWidget *) data.win, "ask-text");
@@ -3553,7 +4446,7 @@ donna_donna_ask_text (DonnaApp       *app,
 }
 
 static gboolean
-window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaDonna *donna)
+window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaApp *app)
 {
     static gboolean in_pre_exit = FALSE;
 
@@ -3565,18 +4458,17 @@ window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaDonna *donna)
     in_pre_exit = TRUE;
 
     /* FALSE means it wasn't aborted */
-    if (!donna_app_emit_event ((DonnaApp *) donna, "pre-exit", TRUE,
-                NULL, NULL, NULL, NULL))
+    if (!donna_app_emit_event (app, "pre-exit", TRUE, NULL, NULL, NULL, NULL))
     {
         GSList *l;
 
         gtk_widget_hide (window);
 
         /* our version of destroy_with_parent */
-        for (l = donna->priv->windows; l; l = l->next)
+        for (l = app->priv->windows; l; l = l->next)
             gtk_widget_destroy ((GtkWidget *) l->data);
-        g_slist_free (donna->priv->windows);
-        donna->priv->windows = NULL;
+        g_slist_free (app->priv->windows);
+        app->priv->windows = NULL;
 
         gtk_main_quit ();
     }
@@ -3586,26 +4478,26 @@ window_delete_event_cb (GtkWidget *window, GdkEvent *event, DonnaDonna *donna)
 }
 
 static gboolean
-just_focused_expired (DonnaDonna *donna)
+just_focused_expired (DonnaApp *app)
 {
-    donna->priv->just_focused = FALSE;
-    return FALSE;
+    app->priv->just_focused = FALSE;
+    return G_SOURCE_REMOVE;
 }
 
 static gboolean
-focus_in_event_cb (GtkWidget *w, GdkEvent *event, DonnaDonna *donna)
+focus_in_event_cb (GtkWidget *w, GdkEvent *event, DonnaApp *app)
 {
-    donna->priv->just_focused = TRUE;
-    g_timeout_add (42, (GSourceFunc) just_focused_expired, donna);
-    if (donna->priv->floating_window)
-        gtk_widget_destroy (donna->priv->floating_window);
+    app->priv->just_focused = TRUE;
+    g_timeout_add (42, (GSourceFunc) just_focused_expired, app);
+    if (app->priv->floating_window)
+        gtk_widget_destroy (app->priv->floating_window);
     return FALSE;
 }
 
 static gchar *
-parse_string (DonnaDonna *donna, gchar *fmt)
+parse_string (DonnaApp *app, gchar *fmt)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     GString *str = NULL;
     gchar *s = fmt;
     DonnaNode *node;
@@ -3696,9 +4588,9 @@ parse_string (DonnaDonna *donna, gchar *fmt)
 }
 
 static void
-refresh_window_title (DonnaDonna *donna)
+refresh_window_title (DonnaApp *app)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     gchar *def = (gchar *) "%L - Donnatella";
     gchar *fmt;
     gchar *str;
@@ -3706,7 +4598,7 @@ refresh_window_title (DonnaDonna *donna)
     if (!donna_config_get_string (priv->config, NULL, &fmt, "donna/title"))
         fmt = def;
 
-    str = parse_string (donna, fmt);
+    str = parse_string (app, fmt);
     gtk_window_set_title (priv->window, (str) ? str : fmt);
     g_free (str);
     if (fmt != def)
@@ -3714,9 +4606,9 @@ refresh_window_title (DonnaDonna *donna)
 }
 
 static void
-update_cur_dirname (DonnaDonna *donna)
+update_cur_dirname (DonnaApp *app)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     DonnaNode *node;
     gchar *s;
 
@@ -3737,16 +4629,16 @@ update_cur_dirname (DonnaDonna *donna)
 }
 
 static void
-active_location_changed (GObject *object, GParamSpec *spec, DonnaDonna *donna)
+active_location_changed (GObject *object, GParamSpec *spec, DonnaApp *app)
 {
-    update_cur_dirname (donna);
-    refresh_window_title (donna);
+    update_cur_dirname (app);
+    refresh_window_title (app);
 }
 
 static void
-switch_statuses_source (DonnaDonna *donna, guint source, DonnaStatusProvider *sp)
+switch_statuses_source (DonnaApp *app, guint source, DonnaStatusProvider *sp)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     GSList *l;
 
     for (l = priv->statuses; l; l = l->next)
@@ -3807,33 +4699,33 @@ switch_statuses_source (DonnaDonna *donna, guint source, DonnaStatusProvider *sp
 }
 
 static inline void
-set_active_list (DonnaDonna *donna, DonnaTreeView *list)
+set_active_list (DonnaApp *app, DonnaTreeView *list)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
 
     if (priv->sid_active_location > 0)
         g_signal_handler_disconnect (priv->active_list, priv->sid_active_location);
     priv->sid_active_location = g_signal_connect (list, "notify::location",
-            (GCallback) active_location_changed, donna);
+            (GCallback) active_location_changed, app);
 
-    switch_statuses_source (donna, ST_SCE_ACTIVE, (DonnaStatusProvider *) list);
+    switch_statuses_source (app, ST_SCE_ACTIVE, (DonnaStatusProvider *) list);
 
     priv->active_list = g_object_ref (list);
-    update_cur_dirname (donna);
-    refresh_window_title (donna);
-    g_object_notify ((GObject *) donna, "active-list");
+    update_cur_dirname (app);
+    refresh_window_title (app);
+    g_object_notify ((GObject *) app, "active-list");
 }
 
+
 static void
-window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
+window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaApp *app)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
 
     if (DONNA_IS_TREE_VIEW (widget))
     {
         priv->focused_tree = (DonnaTreeView *) widget;
-        switch_statuses_source (donna, ST_SCE_FOCUSED,
-                (DonnaStatusProvider *) widget);
+        switch_statuses_source (app, ST_SCE_FOCUSED, (DonnaStatusProvider *) widget);
 
         if (!donna_tree_view_is_tree ((DonnaTreeView *) widget)
                 && (DonnaTreeView *) widget != priv->active_list)
@@ -3845,18 +4737,18 @@ window_set_focus_cb (GtkWindow *window, GtkWidget *widget, DonnaDonna *donna)
                     && skip)
                 return;
 
-            set_active_list (donna, (DonnaTreeView *) widget);
+            set_active_list (app, (DonnaTreeView *) widget);
         }
     }
 }
 
 static GtkWidget *
-load_widget (DonnaDonna  *donna,
+load_widget (DonnaApp    *app,
              gchar      **def,
              gchar      **active_list_name,
              GtkWidget  **active_list_widget)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     GtkWidget *w;
     gchar *end;
     gchar *sep = NULL;
@@ -3878,7 +4770,7 @@ load_widget (DonnaDonna  *donna,
                 *def = end + 1;
                 for (;;)
                 {
-                    w = load_widget (donna, def, active_list_name, active_list_widget);
+                    w = load_widget (app, def, active_list_name, active_list_widget);
                     if (!w)
                     {
                         g_object_unref (g_object_ref_sink (box));
@@ -3916,7 +4808,7 @@ load_widget (DonnaDonna  *donna,
                 is_fixed = (**def == '!');
                 if (is_fixed)
                     ++*def;
-                w = load_widget (donna, def, active_list_name, active_list_widget);
+                w = load_widget (app, def, active_list_name, active_list_widget);
                 if (!w)
                 {
                     g_object_unref (g_object_ref_sink (paned));
@@ -3947,7 +4839,7 @@ load_widget (DonnaDonna  *donna,
                 is_fixed = (**def == '!');
                 if (is_fixed)
                     ++*def;
-                w = load_widget (donna, def, active_list_name, active_list_widget);
+                w = load_widget (app, def, active_list_name, active_list_widget);
                 if (!w)
                 {
                     g_object_unref (g_object_ref_sink (paned));
@@ -3987,7 +4879,7 @@ load_widget (DonnaDonna  *donna,
                 *end = '\0';
 
                 w = gtk_scrolled_window_new (NULL, NULL);
-                tree = donna_load_tree_view (donna, *def);
+                tree = load_tree_view (app, *def);
                 if (!donna_tree_view_is_tree (tree) && !priv->active_list)
                 {
                     gboolean skip;
@@ -4027,11 +4919,10 @@ load_widget (DonnaDonna  *donna,
 }
 
 static inline enum rc
-create_gui (DonnaDonna *donna, gchar *layout, gboolean maximized)
+create_gui (DonnaApp *app, gchar *layout, gboolean maximized)
 {
     GError              *err = NULL;
-    DonnaApp            *app = (DonnaApp *) donna;
-    DonnaDonnaPrivate   *priv = donna->priv;
+    DonnaAppPrivate     *priv = app->priv;
     GtkWindow           *window;
     GtkWidget           *active_list_widget = NULL;
     GtkWidget           *w;
@@ -4049,7 +4940,7 @@ create_gui (DonnaDonna *donna, gchar *layout, gboolean maximized)
     g_signal_connect (window, "focus-in-event",
             (GCallback) focus_in_event_cb, app);
     g_signal_connect (window, "delete-event",
-            (GCallback) window_delete_event_cb, donna);
+            (GCallback) window_delete_event_cb, app);
 
     if (!layout
             && !donna_config_get_string (priv->config, &err, &layout, "donna/layout"))
@@ -4088,7 +4979,7 @@ create_gui (DonnaDonna *donna, gchar *layout, gboolean maximized)
         active_list_name = NULL;
 
     def = s;
-    w = load_widget ((DonnaDonna *) app, &def, &active_list_name, &active_list_widget);
+    w = load_widget (app, &def, &active_list_name, &active_list_widget);
     g_free (s);
     if (!w)
     {
@@ -4121,7 +5012,7 @@ create_gui (DonnaDonna *donna, gchar *layout, gboolean maximized)
         }
     }
     priv->active_list = NULL;
-    set_active_list ((DonnaDonna *) app, (DonnaTreeView *) active_list_widget);
+    set_active_list (app, (DonnaTreeView *) active_list_widget);
     priv->focused_tree = (DonnaTreeView *) active_list_widget;
 
     /* status bar */
@@ -4236,7 +5127,7 @@ next:
                 && maximized))
         gtk_window_maximize (window);
 
-    refresh_window_title ((DonnaDonna *) app);
+    refresh_window_title (app);
     gtk_widget_show_all ((GtkWidget *) window);
     gtk_widget_grab_focus (active_list_widget);
     g_signal_connect (window, "set-focus",
@@ -4246,17 +5137,17 @@ next:
 }
 
 static inline gboolean
-prepare_donna (DonnaDonna *donna, GError **error)
+prepare_app (DonnaApp *app, GError **error)
 {
-    DonnaConfig *config = donna->priv->config;
+    DonnaConfig *config = app->priv->config;
     DonnaConfigItemExtraList    it_lst[8];
     DonnaConfigItemExtraListInt it_int[8];
     gint i;
 
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
-        it_lst[i].value = donna->priv->column_types[i].name;
-        it_lst[i].label = donna->priv->column_types[i].desc;
+        it_lst[i].value = app->priv->column_types[i].name;
+        it_lst[i].label = app->priv->column_types[i].desc;
     }
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST, "ct", "Column Type",
@@ -4295,8 +5186,8 @@ prepare_donna (DonnaDonna *donna, GError **error)
      * load the providers, but since for the commands the providers need to be
      * there, and they'll probably be used often, let's do this (instead of
      * having to ref/unref on each command call) */
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "register"));
-    g_object_unref (donna_donna_get_provider ((DonnaApp *) donna, "mark"));
+    g_object_unref (donna_app_get_provider (app, "register"));
+    g_object_unref (donna_app_get_provider (app, "mark"));
 
     return TRUE;
 }
@@ -4451,9 +5342,9 @@ load_css (const gchar *dir)
 }
 
 static inline void
-init_donna (DonnaDonna *donna)
+init_app (DonnaApp *app)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     GPtrArray *arr = NULL;
     const gchar *main_dir;
     const gchar * const *extra_dirs;
@@ -4577,15 +5468,15 @@ cmdline_cb (const gchar         *option,
     return FALSE;
 }
 
-static gboolean
-parse_cmdline (DonnaDonna    *donna,
+static inline gboolean
+parse_cmdline (DonnaApp      *app,
                gchar        **layout,
                gboolean      *maximized,
                int           *argc,
                char         **argv[],
                GError       **error)
 {
-    DonnaDonnaPrivate *priv = donna->priv;
+    DonnaAppPrivate *priv = app->priv;
     struct cmdline_opt data = { G_LOG_LEVEL_WARNING, };
     gchar *config_dir = NULL;
     gchar *log_level = NULL;
@@ -4683,18 +5574,33 @@ parse_cmdline (DonnaDonna    *donna,
     return TRUE;
 }
 
-static gint
-donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
+/**
+ * donna_app_run:
+ * @app: The #DonnaApp
+ * @argc: argc
+ * @argv: argv
+ *
+ * Runs donnatella
+ *
+ * Returns: Return code
+ */
+gint
+donna_app_run (DonnaApp       *app,
+               gint            argc,
+               gchar          *argv[])
 {
     GError *err = NULL;
-    DonnaDonna *donna = (DonnaDonna *) app;
+    DonnaAppPrivate *priv;
     enum rc rc;
     gchar *layout = NULL;
     gboolean maximized = FALSE;
 
+    g_return_if_fail (DONNA_IS_APP (app));
+    priv = app->priv;
+
     g_main_context_acquire (g_main_context_default ());
 
-    if (!parse_cmdline (donna, &layout, &maximized, &argc, &argv, &err))
+    if (!parse_cmdline (app, &layout, &maximized, &argc, &argv, &err))
     {
         fputs (err->message, stderr);
         fputc ('\n', stderr);
@@ -4704,7 +5610,7 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
     }
 
     /* load config extras, registers commands, etc */
-    if (G_UNLIKELY (!prepare_donna (donna, &err)))
+    if (G_UNLIKELY (!prepare_app (app, &err)))
     {
         GtkWidget *w = gtk_message_dialog_new (NULL,
                 GTK_DIALOG_MODAL,
@@ -4720,40 +5626,40 @@ donna_donna_run (DonnaApp *app, gint argc, gchar *argv[])
     }
 
     /* load config, css arrangements, required providers, etc */
-    init_donna (donna);
+    init_app (app);
 
     /* create & show the main window */
-    rc = create_gui (donna, layout, maximized);
+    rc = create_gui (app, layout, maximized);
     if (G_UNLIKELY (rc != 0))
         return rc;
 
-    donna_app_emit_event ((DonnaApp *) donna, "start", FALSE, NULL, NULL, NULL, NULL);
+    donna_app_emit_event (app, "start", FALSE, NULL, NULL, NULL, NULL);
 
     /* in the off-chance something before already led to closing the app (could
      * happen e.g. if something had started its own mainloop (e.g. in event
      * "start" there was a command that does, like ask_text) and the user then
      * closed the main window */
-    if (G_LIKELY (gtk_widget_get_realized ((GtkWidget *) donna->priv->window)))
+    if (G_LIKELY (gtk_widget_get_realized ((GtkWidget *) priv->window)))
         gtk_main ();
 
-    donna->priv->exiting = TRUE;
-    donna_app_emit_event ((DonnaApp *) donna, "exit", FALSE, NULL, NULL, NULL, NULL);
+    priv->exiting = TRUE;
+    donna_app_emit_event (app, "exit", FALSE, NULL, NULL, NULL, NULL);
 
     /* let's make sure all (internal) tasks (e.g. triggered from event "exit")
      * are done before we die */
     g_thread_pool_stop_unused_threads ();
-    while (g_thread_pool_get_num_threads (donna->priv->pool) > 0)
+    while (g_thread_pool_get_num_threads (priv->pool) > 0)
     {
         if (gtk_events_pending ())
             gtk_main_iteration ();
         g_thread_pool_stop_unused_threads ();
     }
-    gtk_widget_destroy ((GtkWidget *) donna->priv->window);
+    gtk_widget_destroy ((GtkWidget *) priv->window);
     g_main_context_release (g_main_context_default ());
 
 #ifdef DONNA_DEBUG_ENABLED
     donna_debug_reset_valid ();
 #endif
-    g_object_unref (donna);
+    g_object_unref (app);
     return rc;
 }

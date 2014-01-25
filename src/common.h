@@ -58,15 +58,18 @@ typedef gboolean (*conv_flag_fn) (const gchar     c,
                                   gpointer        data);
 
 
-typedef struct _DonnaApp                    DonnaApp; /* dummy typedef */
-typedef struct _DonnaAppInterface           DonnaAppInterface;
+typedef struct _DonnaApp                DonnaApp;
+typedef struct _DonnaAppClass           DonnaAppClass;
+typedef struct _DonnaAppPrivate         DonnaAppPrivate;
 
-#define DONNA_TYPE_APP                      (donna_app_get_type ())
-#define DONNA_APP(obj)                      (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_APP, DonnaApp))
-#define DONNA_IS_APP(obj)                   (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_APP))
-#define DONNA_APP_GET_INTERFACE(obj)        (G_TYPE_INSTANCE_GET_INTERFACE ((obj), DONNA_TYPE_APP, DonnaAppInterface))
+#define DONNA_TYPE_APP                  (donna_app_get_type ())
+#define DONNA_APP(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), DONNA_TYPE_APP, DonnaApp))
+#define DONNA_APP_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), DONNA_TYPE_APP, DonnaAppClass))
+#define DONNA_IS_APP(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), DONNA_TYPE_APP))
+#define DONNA_IS_APP_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), DONNA_TYPE_APP))
+#define DONNA_APP_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), DONNA_TYPE_APP, DonnaAppClass))
 
-GType           donna_app_get_type          (void) G_GNUC_CONST;
+GType           donna_app_get_type      (void) G_GNUC_CONST;
 
 
 typedef struct _DonnaNode               DonnaNode;

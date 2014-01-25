@@ -988,7 +988,7 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
                                       const gchar *option,
                                       guint        from);
 
-/* internal; used by donna.c */
+/* internal; used by app.c */
 gboolean _donna_tree_view_register_extras (DonnaConfig *config, GError **error);
 
 static inline struct column *

@@ -11,7 +11,7 @@
 #include "columntype.h"
 #include "columntype-perms.h"
 #include "node.h"
-#include "donna.h"
+#include "app.h"
 #include "conf.h"
 #include "macros.h"
 #include "debug.h"

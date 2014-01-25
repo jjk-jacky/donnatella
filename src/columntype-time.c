@@ -7,7 +7,7 @@
 #include "columntype.h"
 #include "columntype-time.h"
 #include "node.h"
-#include "donna.h"
+#include "app.h"
 #include "conf.h"
 #include "util.h"
 #include "macros.h"

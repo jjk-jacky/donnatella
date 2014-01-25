@@ -5,7 +5,7 @@
 #include "columntype.h"
 #include "columntype-text.h"
 #include "node.h"
-#include "donna.h"
+#include "app.h"
 #include "conf.h"
 #include "sort.h"
 #include "macros.h"

@@ -2,6 +2,8 @@
 #ifndef __DONNA_DEBUG_H__
 #define __DONNA_DEBUG_H__
 
+#include <glib.h>
+
 G_BEGIN_DECLS
 
 typedef enum

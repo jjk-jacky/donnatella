@@ -42,7 +42,7 @@ struct node_internal
     gboolean     free_fl;
 };
 
-/* internal, used from donna.c */
+/* internal, used from app.c */
 gboolean _donna_context_register_extras (DonnaConfig *config, GError **error);
 
 gboolean

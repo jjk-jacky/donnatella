@@ -6,7 +6,7 @@
 #include "columntype-size.h"
 #include "renderer.h"
 #include "node.h"
-#include "donna.h"
+#include "app.h"
 #include "conf.h"
 #include "util.h"
 #include "macros.h"
