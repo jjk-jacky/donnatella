@@ -3488,7 +3488,13 @@ donna_donna_ask_text (DonnaApp       *app,
 
     if (details)
     {
-        w = gtk_label_new (details);
+        if (streqn (details, "markup:", 7))
+        {
+            w = gtk_label_new (NULL);
+            gtk_label_set_markup ((GtkLabel *) w, details + 7);
+        }
+        else
+            w = gtk_label_new (details);
         gtk_label_set_selectable ((GtkLabel *) w, TRUE);
         gtk_misc_set_alignment ((GtkMisc *) w, 0, 0.5);
         context = gtk_widget_get_style_context (w);
