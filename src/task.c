@@ -218,7 +218,7 @@ enum
 static GParamSpec * donna_task_props[NB_PROPS] = { NULL, };
 
 /* internal; used by provider-task.c */
-inline const gchar * state_name (DonnaTaskState state);
+const gchar * state_name (DonnaTaskState state);
 
 static void donna_task_get_property (GObject        *object,
                                      guint           prop_id,
@@ -1360,7 +1360,7 @@ donna_task_get_return_value (DonnaTask *task)
     return task->priv->value;
 }
 
-inline const gchar *
+const gchar *
 state_name (DonnaTaskState state)
 {
     switch (state)

@@ -966,7 +966,7 @@ set_value (struct tv_col_data   *data,
     GString *str = NULL;
     gboolean is_ts_fixed;
     const gchar *prop;
-    guint64 ts;
+    guint64 ts = 0;
     guint i = 0;
 
     if (data->which == WHICH_MTIME)
@@ -1575,7 +1575,7 @@ ct_time_is_match_filter (DonnaColumnType    *ct,
     DonnaNodeHasValue has;
     guint64 time;
     GDateTime *dt;
-    guint64 r;
+    guint64 r = 0;
 
     if (G_UNLIKELY (!*filter_data))
     {
@@ -1853,7 +1853,7 @@ compile_done:
             }
         case UNIT_AGE:
             {
-                GDateTime *dt2;
+                GDateTime *dt2 = NULL;
 
                 dt = g_date_time_new_now_local ();
                 if (fd->ref == 0)

@@ -280,7 +280,7 @@ get_ct (DonnaFilter *filter, const gchar *col_name)
     return ct;
 }
 
-static inline gchar *
+static gchar *
 get_quoted_string (gchar **str, gboolean get_string)
 {
     GString *string;

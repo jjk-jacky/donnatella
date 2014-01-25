@@ -1185,6 +1185,24 @@ static gboolean     columntype_get_context_item_info (
                                                      DonnaContextInfo  *info,
                                                      GError           **error);
 
+#ifdef DONNA_DEBUG
+/* this is a hack to "silence" warings, because otherwise we get lots of warning
+ * about how inlining failed for g_string_append_c() because call is unlikely &
+ * code size would grow */
+#undef g_string_append_c
+GString *
+g_string_append_c (GString *str, gchar c)
+{
+    if (str->len + 1 < str->allocated_len)
+    {
+        str->str[str->len++] = c;
+        str->str[str->len] = 0;
+    }
+    else
+        g_string_insert_c (str, -1, c);
+    return str;
+}
+#endif
 
 #ifndef GTK_IS_JJK
 static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree);
@@ -5156,13 +5174,31 @@ rend_func (GtkTreeViewColumn  *column,
             gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path_focus, NULL);
             if (path_focus)
             {
+                gint _ln;
+
                 /* get the focus number */
                 ln = gtk_tree_path_get_indices (path_focus)[0];
 
                 /* calculate the relative number. For current line that falls to
                  * 0, which will then be turned to the current line number */
-                ln -= gtk_tree_path_get_indices (path)[0];
-                ln = ABS (ln);
+                /* we could do:
+                 *
+                 * ln -= gtk_tree_path_get_indices (path)[0];
+                 * ln = ABS (ln);
+                 *
+                 * but then we get a warning: assuming signed overflow does not
+                 * occur when simplifying conditional to constant
+                 * [-Wstrict-overflow]
+                 * if (ln == 0)
+                 *     ^
+                 *
+                 * so this is our way to avoid/silence it.
+                 */
+                _ln = gtk_tree_path_get_indices (path)[0];
+                if (ln > _ln)
+                    ln -= _ln;
+                else
+                    ln = _ln - ln;
 
                 if (ln > 0)
                 {
@@ -8729,7 +8765,7 @@ get_closest_iter_for_node (DonnaTreeView *tree,
             if (n == node || is_node_ancestor (n, node, provider, location))
             {
                 GSList *list;
-                GtkTreeIter *i;
+                GtkTreeIter *i = NULL;
                 gboolean match;
 
                 /* get the iter from the hashtable (we cannot end up return the
@@ -8954,7 +8990,7 @@ get_best_iter_for_node (DonnaTreeView   *tree,
         gchar *s;
         GSList *list;
         GtkTreeIter it;
-        GtkTreeIter *i;
+        GtkTreeIter *i = NULL;
 
         /* the tree is empty, we need to add the first root */
         s = strchr (location, '/');
@@ -13829,7 +13865,7 @@ donna_tree_view_load_tree_file (DonnaTreeView      *tree,
         /* add visuals for non-loaded row */
         else if (name || icon || box || highlight || click_mode)
         {
-            GSList *l;
+            GSList *l = NULL;
             struct visuals *visual;
 
             /* get current root */
@@ -14245,6 +14281,9 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
                 return FALSE;
             }
 
+            /* to silence warnings, since really the first one will always be
+             * accessible (a root) hence next_fn will always be set anyways */
+            next_fn = _gtk_tree_model_iter_next;
             do
             {
                 if (!is_row_accessible (tree, &it))
@@ -14362,7 +14401,7 @@ donna_tree_view_goto_line (DonnaTreeView      *tree,
             || nb_type == DONNA_TREE_VIEW_GOTO_VISIBLE)
     {
         GtkTreeIter iter_top;
-        guint top;
+        guint top = 0;
         gint height;
 
         /* locate first/top row */
@@ -16814,8 +16853,7 @@ tree_context_get_item_info (const gchar             *item,
     }
     else if (streqn (item, "refresh", 7))
     {
-        info->is_visible = info->is_sensitive = G_LIKELY (priv->is_tree
-                || priv->location != NULL);
+        info->is_visible = info->is_sensitive = priv->is_tree || priv->location != NULL;
         info->icon_name = "view-refresh";
 
         if (item[7] == '\0')

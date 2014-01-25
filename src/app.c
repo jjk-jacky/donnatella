@@ -1748,7 +1748,7 @@ static gboolean
 intrefs_remove (gchar *key, struct intref *ir, gpointer data)
 {
     /* remove after 15min */
-    return ir->last + (G_USEC_PER_SEC * 60 * 15) <= g_get_monotonic_time ();
+    return ir->last + (G_USEC_PER_SEC * 60 * 15) - g_get_monotonic_time () <= 0;
 }
 
 static gboolean
@@ -2614,7 +2614,7 @@ donna_app_emit_event (DonnaApp       *app,
                       const gchar    *fmt_source,
                       ...)
 {
-    GQuark q;
+    GQuark q = 0;
     GSList *l;
     gchar *source;
     gboolean ret;
@@ -3330,7 +3330,7 @@ load_menu (struct menu_click *mc)
 
             if (mc->show_icons)
             {
-                GtkWidget *image;
+                GtkWidget *image = NULL;
                 DonnaImageMenuItemImageSpecial img;
 
                 donna_node_get (node, TRUE, "menu-image-special", &has, &v, NULL);
@@ -5363,7 +5363,7 @@ init_app (DonnaApp *app)
     }
 }
 
-static inline gboolean
+static gboolean
 prepare_app (DonnaApp *app, GError **error)
 {
     DonnaConfig *config = app->priv->config;
@@ -5477,7 +5477,7 @@ cmdline_cb (const gchar         *option,
     return FALSE;
 }
 
-static inline gboolean
+static gboolean
 parse_cmdline (DonnaApp      *app,
                gchar        **layout,
                gboolean      *maximized,

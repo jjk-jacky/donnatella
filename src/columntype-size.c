@@ -943,10 +943,10 @@ ct_size_get_context_item_info (DonnaColumnType   *ct,
                                GError           **error)
 {
     struct tv_col_data *data = _data;
-    const gchar *value;
-    const gchar *ask_title;
-    const gchar *ask_current;
-    const gchar *save_location;
+    const gchar *value = NULL;
+    const gchar *ask_title = NULL;
+    const gchar *ask_current = NULL;
+    const gchar *save_location = NULL;
     gboolean quote_value = FALSE;
 
     save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->

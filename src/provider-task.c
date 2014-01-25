@@ -166,7 +166,7 @@ static void             exit_cb                     (DonnaApp               *app
 
 
 /* internal -- from task.c */
-inline const gchar *state_name (DonnaTaskState state);
+const gchar *state_name (DonnaTaskState state);
 
 static void
 provider_task_provider_init (DonnaProviderInterface *interface)
@@ -1803,7 +1803,7 @@ done:
     return DONNA_TASK_DONE;
 }
 
-static inline void
+static void
 run_task_refresh_tm (DonnaProviderTask *tm)
 {
     DonnaProviderTaskPrivate *priv = tm->priv;
@@ -1884,7 +1884,7 @@ static void
 notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
 {
     DonnaProviderTaskPrivate *priv = tm->priv;
-    DonnaTaskState state;
+    DonnaTaskState state = 0;
     DonnaNode *node = NULL;
     gchar location[32];
     gboolean is_state;

@@ -779,7 +779,7 @@ ct_name_is_match_filter (DonnaColumnType    *ct,
     GPtrArray *arr;
     guint i;
     gchar *name;
-    gboolean ret;
+    gboolean ret = FALSE;
 
     if (G_UNLIKELY (!*filter_data))
     {

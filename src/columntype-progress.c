@@ -553,8 +553,8 @@ ct_progress_node_cmp (DonnaColumnType    *ct,
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
     GValue value = G_VALUE_INIT;
-    gint p1;
-    gint p2;
+    gint p1 = 0;
+    gint p2 = 0;
 
     donna_node_get (node1, TRUE, data->property, &has1, &value, NULL);
     if (has1 == DONNA_NODE_VALUE_SET)

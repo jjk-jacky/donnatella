@@ -292,7 +292,7 @@ donna_status_bar_size_allocate (GtkWidget     *widget,
     }
     else if (alloc >= nat)
     {
-        gint exp;
+        gint exp = 0;
 
         if (nb_expand > 0)
             exp = (alloc - nat) / nb_expand;
@@ -312,7 +312,7 @@ donna_status_bar_size_allocate (GtkWidget     *widget,
     }
     else if (alloc >= min)
     {
-        gint exp;
+        gint exp = 0;
 
         if (nb_expand > 0)
             exp = (alloc - min) / nb_expand;

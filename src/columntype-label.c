@@ -429,8 +429,8 @@ ct_label_node_cmp (DonnaColumnType    *ct,
     DonnaNodeHasValue has1;
     DonnaNodeHasValue has2;
     GValue value = G_VALUE_INIT;
-    gint id1;
-    gint id2;
+    gint id1 = 0;
+    gint id2 = 0;
 
     donna_node_get (node1, TRUE, data->property, &has1, &value, NULL);
     if (has1 == DONNA_NODE_VALUE_SET)

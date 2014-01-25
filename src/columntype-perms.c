@@ -760,9 +760,9 @@ apply_cb (struct editing_data *data)
     GtkTreeIter iter;
     gboolean use_arr;
     guint set = 0;
-    mode_t mode;
-    uid_t uid;
-    gid_t gid;
+    mode_t mode = 0;
+    uid_t uid = 0;
+    gid_t gid = 0;
     guint i;
 
     gtk_widget_hide (data->window);
@@ -1748,6 +1748,8 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
             S_GRP = S_IXGRP;
             S_USR = S_IXUSR;
             break;
+        default:
+            g_return_if_reached ();
     }
 
     if (mode & S_OTH)
@@ -2004,9 +2006,9 @@ ct_perms_render (DonnaColumnType    *ct,
     DonnaNodeHasValue has;
     GPtrArray *arr = NULL;
     guint val;
-    mode_t mode;
-    uid_t uid;
-    gid_t gid;
+    mode_t mode = 0;
+    uid_t uid = 0;
+    gid_t gid = 0;
     gchar buf[20], *b = buf;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
@@ -2833,10 +2835,10 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
 {
     DonnaColumnTypePermsPrivate *priv = ((DonnaColumnTypePerms *) ct)->priv;
     struct tv_col_data *data = _data;
-    const gchar *value;
-    const gchar *ask_title;
-    const gchar *ask_current;
-    const gchar *save_location;
+    const gchar *value = NULL;
+    const gchar *ask_title = NULL;
+    const gchar *ask_current = NULL;
+    const gchar *save_location = NULL;
     gboolean quote_value = FALSE;
 
     save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->

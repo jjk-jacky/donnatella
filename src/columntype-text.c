@@ -849,9 +849,9 @@ ct_text_get_context_item_info (DonnaColumnType   *ct,
 {
     struct tv_col_data *data = _data;
     const gchar *value = NULL;
-    const gchar *ask_title;
-    const gchar *ask_current;
-    const gchar *save_location;
+    const gchar *ask_title = NULL;
+    const gchar *ask_current = NULL;
+    const gchar *save_location = NULL;
 
     save_location = DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->
         helper_get_save_location (ct, &extra, FALSE, error);

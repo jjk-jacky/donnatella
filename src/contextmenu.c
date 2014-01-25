@@ -395,7 +395,7 @@ container_children_cb (DonnaTask    *task,
 {
     GValue *value;
     gboolean has_children = FALSE;
-    GPtrArray *arr;
+    GPtrArray *arr = NULL;
     guint i;
 
     if (children->len == 0
@@ -725,8 +725,8 @@ get_user_item_info (const gchar             *item,
     gboolean import_from_trigger = FALSE;
     guint import = 0;
     gboolean b;
-    const gchar *s_c;
-    const gchar *s_C;
+    const gchar *s_c = NULL;
+    const gchar *s_C = NULL;
     gchar *s;
 
     if (!donna_config_has_category (config, &err, "context_menus/%s/%s",

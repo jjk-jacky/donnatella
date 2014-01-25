@@ -289,7 +289,7 @@ gboolean        donna_column_type_get_context_item_info (
                                                  GError            **error);
 
 
-inline GtkWindow * donna_column_type_new_floating_window (
+GtkWindow *     donna_column_type_new_floating_window (
                                                  DonnaTreeView      *tree,
                                                  gboolean            destroy_on_sel_changed);
 

@@ -376,7 +376,7 @@ provider_fs_io_task (DonnaProvider      *provider,
                      GError            **error)
 {
     DonnaProviderFs *pfs = (DonnaProviderFs *) provider;
-    DonnaTask *task;
+    DonnaTask *task = NULL;
     GSList *l;
     struct io_engine *ioe;
 
@@ -468,7 +468,7 @@ provider_fs_get_context_item_info (DonnaProvider            *provider,
     return FALSE;
 }
 
-static inline gboolean
+static gboolean
 stat_node (DonnaNode *node, const gchar *filename)
 {
     struct stat st;
@@ -507,7 +507,7 @@ stat_node (DonnaNode *node, const gchar *filename)
     return TRUE;
 }
 
-static inline gchar *
+static gchar *
 content_type_guess (const gchar *filename)
 {
     gboolean uncertain;

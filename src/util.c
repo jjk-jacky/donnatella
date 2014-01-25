@@ -140,7 +140,7 @@ donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
     const gchar *f = fmt;
     gchar *s;
     gchar *age = NULL;
-    gsize l;
+    gsize l = 0;
     gchar *tmp = NULL;
     gchar *t;
     gsize  alloc = 0;
@@ -447,7 +447,7 @@ donna_g_string_append_concat (GString            *str,
     va_end (va_args);
 }
 
-inline void
+void
 donna_g_object_unref (gpointer object)
 {
     if (object)

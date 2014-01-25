@@ -1180,7 +1180,7 @@ donna_column_type_get_context_item_info (DonnaColumnType   *ct,
  *
  * Return: (transfer full): A new g_object_ref_sink()ed #GtkWindow
  */
-inline GtkWindow *
+GtkWindow *
 donna_column_type_new_floating_window (DonnaTreeView *tree,
                                        gboolean       destroy_on_sel_changed)
 {

@@ -346,9 +346,6 @@ donna_provider_config_init (DonnaProviderConfig *provider)
 static inline void
 config_option_set (DonnaConfig *config, const gchar *name)
 {
-    g_return_if_fail (DONNA_IS_CONFIG (config));
-    g_return_if_fail (name != NULL);
-
     g_signal_emit (config, donna_config_signals[OPTION_SET],
             g_quark_from_string (name), name);
 }
@@ -356,9 +353,6 @@ config_option_set (DonnaConfig *config, const gchar *name)
 static inline void
 config_option_deleted (DonnaConfig *config, const gchar *name)
 {
-    g_return_if_fail (DONNA_IS_CONFIG (config));
-    g_return_if_fail (name != NULL);
-
     g_signal_emit (config, donna_config_signals[OPTION_DELETED],
             g_quark_from_string (name), name);
 }
@@ -884,7 +878,7 @@ free_parsed_data_section (struct parsed_data *parsed)
 }
 
 /* assumes a lock on config */
-static inline GNode *
+static GNode *
 get_child_node (GNode *parent, const gchar *name, gsize len)
 {
     GNode *node;
@@ -1301,7 +1295,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 /* string */
                 else
                 {
-                    gsize len;
+                    gsize len = 0;
                     gchar *v = parsed->value;
 
                     /* remove quotes for quoted values */
@@ -1995,7 +1989,7 @@ donna_config_list_options (DonnaConfig               *config,
         goto dest;                                                  \
 } while (0)
 
-static inline struct option *
+static struct option *
 __get_option (DonnaConfig   *config,
               GType          type,
               gboolean       leave_lock_on,
@@ -3413,7 +3407,7 @@ combo_changed (struct set_option *so)
     }
     else
     {
-        DonnaConfigExtra *_e;
+        DonnaConfigExtra *_e = NULL;
         gint i;
 
         for (i = 0; (guint) i < so->extras->len; ++i)
@@ -4869,11 +4863,11 @@ node_children (DonnaTask *task, struct node_children_data *data)
     GNode *gnode;
     gboolean is_root;
     gchar *location;
-    gsize len;
+    gsize len = 0;
     gboolean want_item;
     gboolean want_categories;
     GValue *value;
-    gboolean match;
+    gboolean match = FALSE;
 
     location = donna_node_get_location (data->node);
     priv = data->config->priv;

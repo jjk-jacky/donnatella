@@ -701,7 +701,7 @@ add_node_to_reg (struct reg *reg, DonnaNode *node, gboolean is_clipboard)
 }
 
 /* assumes lock */
-static inline void
+static void
 add_reg_to_registers (DonnaProviderRegister *pr,
                       struct reg            *reg,
                       gboolean               need_node,
@@ -1203,7 +1203,7 @@ register_import (DonnaProviderRegister  *pr,
 {
     DonnaProviderRegisterPrivate *priv = pr->priv;
     DonnaNode *node_root = NULL;
-    DonnaNode *node;
+    DonnaNode *node = NULL;
     GPtrArray *arr;
     struct reg *new_reg;
     struct reg *reg;
@@ -2286,7 +2286,7 @@ provider_register_new_child (DonnaProviderBase  *_provider,
     DonnaProviderRegisterPrivate *priv = ((DonnaProviderRegister *) _provider)->priv;
     struct reg *reg;
     DonnaNode *node_root = NULL;
-    DonnaNode *node;
+    DonnaNode *node = NULL;
     GValue *value;
     gchar *s;
 
@@ -2444,7 +2444,7 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
             /* same with reg_clipboard, except we import */
             else if (*location == *reg_clipboard)
             {
-                DonnaNode *nr, *n;
+                DonnaNode *nr = NULL, *n = NULL;
                 GString *string = NULL;
 
                 reg = new_register (reg_clipboard, DONNA_REGISTER_UNKNOWN);
@@ -2972,6 +2972,7 @@ cmd_register_nodes_io (DonnaTask               *task,
 
     switch (c_io)
     {
+        default:
         case 0:
             drop = DONNA_DROP_REGISTER_ON_CUT;
             break;
