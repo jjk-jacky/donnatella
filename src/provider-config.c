@@ -1753,6 +1753,17 @@ _get_option (DonnaConfig *config,
     return option != NULL;                  \
 } while (0)
 
+/**
+ * donna_config_has_boolean:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Returns whether option @fmt exists and is boolean or not
+ *
+ * Returns: %TRUE if option exists and is boolean, else %FALSE
+ */
 gboolean
 donna_config_has_boolean (DonnaConfig *config,
                           GError      **error,
@@ -1762,6 +1773,17 @@ donna_config_has_boolean (DonnaConfig *config,
     _has_opt (G_TYPE_BOOLEAN);
 }
 
+/**
+ * donna_config_has_int:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Returns whether option @fmt exists and is integer or not
+ *
+ * Returns: %TRUE if option exists and is integer, else %FALSE
+ */
 gboolean
 donna_config_has_int (DonnaConfig *config,
                       GError     **error,
@@ -1771,6 +1793,17 @@ donna_config_has_int (DonnaConfig *config,
     _has_opt (G_TYPE_INT);
 }
 
+/**
+ * donna_config_has_double:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Returns whether option @fmt exists and is double or not
+ *
+ * Returns: %TRUE if option exists and is double, else %FALSE
+ */
 gboolean
 donna_config_has_double (DonnaConfig *config,
                          GError     **error,
@@ -1780,6 +1813,17 @@ donna_config_has_double (DonnaConfig *config,
     _has_opt (G_TYPE_DOUBLE);
 }
 
+/**
+ * donna_config_has_string:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Returns whether option @fmt exists and is string or not
+ *
+ * Returns: %TRUE if option exists and is string, else %FALSE
+ */
 gboolean
 donna_config_has_string (DonnaConfig *config,
                          GError     **error,
@@ -1789,6 +1833,17 @@ donna_config_has_string (DonnaConfig *config,
     _has_opt (G_TYPE_STRING);
 }
 
+/**
+ * donna_config_has_category:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Returns whether option @fmt exists and is a category or not
+ *
+ * Returns: %TRUE if option exists and is a category, else %FALSE
+ */
 gboolean
 donna_config_has_category (DonnaConfig *config,
                            GError     **error,
@@ -1798,6 +1853,27 @@ donna_config_has_category (DonnaConfig *config,
     _has_opt (G_TYPE_INVALID /* i.e. category */);
 }
 
+/**
+ * donna_config_has_option:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @type: (allow-none) (out): Return location for the %GType of the option, or
+ * %NULL
+ * @extra_name: (allow-none) (out): Return location for the extra of the option
+ * (if any), or %NULL
+ * @extra: (allow-none) (out): Return location for the %DonnaConfigExtra of the
+ * option (if any), or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Returns %TRUE if the option exist (and isn't a category), and set @type,
+ * @extra_name and/or @extra
+ *
+ * If set, both values in @extra_name and @extra are owned by @config and
+ * shouldn't be freed.
+ *
+ * Returns: %TRUE if option exists and is not a category, else %FALSE
+ */
 gboolean
 donna_config_has_option (DonnaConfig             *config,
                          GError                 **error,
@@ -1873,6 +1949,19 @@ donna_config_has_option (DonnaConfig             *config,
     return option != NULL;                              \
 } while (0)
 
+/**
+ * donna_config_get_boolean:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: (out): Return location to put the value of the option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Get the value of boolean option @fmt and set it in @value
+ *
+ * Returns: %TRUE if @value was set, else %FALSE (option doesn't exist, or is a
+ * another type)
+ */
 gboolean
 donna_config_get_boolean (DonnaConfig    *config,
                           GError        **error,
@@ -1883,6 +1972,19 @@ donna_config_get_boolean (DonnaConfig    *config,
     _get_opt (G_TYPE_BOOLEAN, g_value_get_boolean);
 }
 
+/**
+ * donna_config_get_int:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: (out): Return location to put the value of the option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Get the value of integer option @fmt and set it in @value
+ *
+ * Returns: %TRUE if @value was set, else %FALSE (option doesn't exist, or is a
+ * another type)
+ */
 gboolean
 donna_config_get_int (DonnaConfig    *config,
                       GError        **error,
@@ -1893,6 +1995,19 @@ donna_config_get_int (DonnaConfig    *config,
     _get_opt (G_TYPE_INT, g_value_get_int);
 }
 
+/**
+ * donna_config_get_double:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: (out): Return location to put the value of the option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Get the value of double option @fmt and set it in @value
+ *
+ * Returns: %TRUE if @value was set, else %FALSE (option doesn't exist, or is a
+ * another type)
+ */
 gboolean
 donna_config_get_double (DonnaConfig    *config,
                          GError        **error,
@@ -1903,6 +2018,19 @@ donna_config_get_double (DonnaConfig    *config,
     _get_opt (G_TYPE_DOUBLE, g_value_get_double);
 }
 
+/**
+ * donna_config_get_string:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: (out): Return location to put the value of the option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Get the value of string option @fmt and set it in @value
+ *
+ * Returns: %TRUE if @value was set, else %FALSE (option doesn't exist, or is a
+ * another type)
+ */
 gboolean
 donna_config_get_string (DonnaConfig          *config,
                          GError              **error,
@@ -3017,6 +3145,23 @@ _set_option (DonnaConfig    *config,
     return ret;                                         \
 } while (0)
 
+/**
+ * donna_config_new_boolean:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_node: (allow-none) (out): Return location for the #DonnaNode of the
+ * newly-created option; or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates a new boolean option @fmt and sets it to @value
+ *
+ * Will fail and return %FALSE if an option already exist, even if it is of the
+ * same type (and same value).
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_new_boolean (DonnaConfig            *config,
                           GError                **error,
@@ -3029,6 +3174,28 @@ donna_config_new_boolean (DonnaConfig            *config,
     _set_opt (G_TYPE_BOOLEAN, NULL, FALSE, g_value_set_boolean, new_node);
 }
 
+/**
+ * donna_config_new_int:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_node: (allow-none) (out): Return location for the #DonnaNode of the
+ * newly-created option; or %NULL
+ * @extra: (allow-none): Name of the extra of the option to create
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates a new integer option @fmt (of extra @extra, is specified) and sets it
+ * to @value
+ *
+ * Will fail and return %FALSE if an option already exist, even if it is of the
+ * same type (and same value).
+ *
+ * If you want to create an option with an extra, using the "in-file" values
+ * instead of the actual value, see donna_config_set_option()
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_new_int (DonnaConfig            *config,
                       GError                **error,
@@ -3041,6 +3208,23 @@ donna_config_new_int (DonnaConfig            *config,
     _set_opt (G_TYPE_INT, extra, FALSE, g_value_set_int, new_node);
 }
 
+/**
+ * donna_config_new_double:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_node: (allow-none) (out): Return location for the #DonnaNode of the
+ * newly-created option; or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates a new double option @fmt and sets it to @value
+ *
+ * Will fail and return %FALSE if an option already exist, even if it is of the
+ * same type (and same value).
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_new_double (DonnaConfig            *config,
                          GError                **error,
@@ -3052,6 +3236,30 @@ donna_config_new_double (DonnaConfig            *config,
     _set_opt (G_TYPE_DOUBLE, NULL, FALSE, g_value_set_double, new_node);
 }
 
+/**
+ * donna_config_new_string:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_node: (allow-none) (out): Return location for the #DonnaNode of the
+ * newly-created option; or %NULL
+ * @extra: (allow-none): Name of the extra of the option to create
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates a new string option @fmt (of extra @extra, is specified) and sets it
+ * to (a copy of) @value
+ * If you want @config to take owership of @value (and use g_free() when done
+ * with it) use donna_config_new_string_take()
+ *
+ * Will fail and return %FALSE if an option already exist, even if it is of the
+ * same type (and same value).
+ *
+ * If you want to create an option with an extra, using the "in-file" values
+ * instead of the actual value, see donna_config_set_option()
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_new_string (DonnaConfig            *config,
                          GError                **error,
@@ -3064,6 +3272,28 @@ donna_config_new_string (DonnaConfig            *config,
     _set_opt (G_TYPE_STRING, extra, FALSE, g_value_set_string, new_node);
 }
 
+/**
+ * donna_config_new_string_take:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_node: (allow-none) (out): Return location for the #DonnaNode of the
+ * newly-created option; or %NULL
+ * @extra: (allow-none): Name of the extra of the option to create
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates a new string option @fmt (of extra @extra, is specified) and sets it
+ * to @value, assuming ownerhsip (using g_free() when done with it)
+ *
+ * Will fail and return %FALSE if an option already exist, even if it is of the
+ * same type (and same value).
+ *
+ * If you want to create an option with an extra, using the "in-file" values
+ * instead of the actual value, see donna_config_set_option()
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_new_string_take (DonnaConfig            *config,
                               GError                **error,
@@ -3076,6 +3306,22 @@ donna_config_new_string_take (DonnaConfig            *config,
     _set_opt (G_TYPE_STRING, extra, FALSE, g_value_take_string, new_node);
 }
 
+/**
+ * donna_config_new_category:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_node: (allow-none) (out): Return location for the #DonnaNode of the
+ * newly-created option; or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates a new category
+ *
+ * Will fail and return %FALSE if an option already exist, even if it is a
+ * category.
+ *
+ * Returns: %TRUE if category was created, else %FALSE
+ */
 gboolean
 donna_config_new_category (DonnaConfig            *config,
                            GError                **error,
@@ -3087,6 +3333,20 @@ donna_config_new_category (DonnaConfig            *config,
     _set_opt (G_TYPE_INVALID, NULL, FALSE, g_value_set_int, new_node);
 }
 
+/**
+ * donna_config_set_boolean:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Sets boolean option @fmt to @value. Create the option if it doesn't exist.
+ * If the option exists, its value is changed unless it isn't compatible
+ * (different type).
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_set_boolean (DonnaConfig   *config,
                           GError       **error,
@@ -3097,6 +3357,20 @@ donna_config_set_boolean (DonnaConfig   *config,
     _set_opt (G_TYPE_BOOLEAN, NULL, TRUE, g_value_set_boolean, NULL);
 }
 
+/**
+ * donna_config_set_int:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Sets integer option @fmt to @value. Create the option if it doesn't exist.
+ * If the option exists, its value is changed unless it isn't compatible
+ * (different type, or @value invalid with the option's extra).
+ *
+ * Returns: %TRUE if option was set to @value, else %FALSE
+ */
 gboolean
 donna_config_set_int (DonnaConfig   *config,
                       GError       **error,
@@ -3107,6 +3381,20 @@ donna_config_set_int (DonnaConfig   *config,
     _set_opt (G_TYPE_INT, NULL, TRUE, g_value_set_int, NULL);
 }
 
+/**
+ * donna_config_set_double:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Sets double option @fmt to @value. Create the option if it doesn't exist.
+ * If the option exists, its value is changed unless it isn't compatible
+ * (different type).
+ *
+ * Returns: %TRUE if option was created & set, else %FALSE
+ */
 gboolean
 donna_config_set_double (DonnaConfig    *config,
                          GError        **error,
@@ -3117,6 +3405,24 @@ donna_config_set_double (DonnaConfig    *config,
     _set_opt (G_TYPE_DOUBLE, NULL, TRUE, g_value_set_double, NULL);
 }
 
+/**
+ * donna_config_set_string:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Sets string option @fmt to (a copy of) @value. Create the option if it
+ * doesn't exist.
+ * If the option exists, its value is changed unless it isn't compatible
+ * (different type, or @value invalid with the option's extra).
+ *
+ * For @config to take ownership of @value instead, use
+ * donna_config_take_string()
+ *
+ * Returns: %TRUE if option was set to @value, else %FALSE
+ */
 gboolean
 donna_config_set_string (DonnaConfig         *config,
                          GError             **error,
@@ -3127,6 +3433,23 @@ donna_config_set_string (DonnaConfig         *config,
     _set_opt (G_TYPE_STRING, NULL, TRUE, g_value_set_string, NULL);
 }
 
+/**
+ * donna_config_set_string:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @value: Value for the new option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Sets string option @fmt to @value, taking owernship (will use g_free() when
+ * done). Create the option if it doesn't exist.
+ * If the option exists, its value is changed unless it isn't compatible
+ * (different type, or @value invalid with the option's extra).
+ *
+ * For @config to make a copy of @value instead, use donna_config_set_string()
+ *
+ * Returns: %TRUE if option was set to @value, else %FALSE
+ */
 gboolean
 donna_config_take_string (DonnaConfig        *config,
                           GError            **error,
@@ -3510,6 +3833,44 @@ arr_extras_cmp (gconstpointer extra1, gconstpointer extra2)
     return strcmp (e1->extra->any.title, e2->extra->any.title);
 }
 
+/**
+ * donna_config_set_option:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @node: (allow-none) (out): Return location for the #DonnaNode of the option;
+ * or %NULL
+ * @create_only: %TRUE to only create option (i.e. fail if already exists, even
+ * if of same type)
+ * @ask_user: %TRUE if a window will be shown, for the user to see/change the
+ * option name/type/value; possibly cancelling the operation
+ * @type: (allow-none): Name of the type of the option
+ * @name: (allow-none): Name of the option to set/create
+ * @value: (allow-none): String representation of the value to set
+ * @fmt: <function>printf</function>-like format for the full/option/name of he
+ * parent to create the option in
+ * @...: <function>printf</function>-like arguments
+ *
+ * Creates/sets an option to the value represented by @value
+ *
+ * If @create_only is %TRUE only option creation will be performed, i.e. if the
+ * option exists it will fail (even if option is of the same type)
+ *
+ * If @ask_user is %TRUE then a window will be shown, allowing user to change
+ * the name, type and value of the option to set/create. In that case, @value
+ * will be used as default value, and if it wasn't specified and the option
+ * exists, then the current value will be used as default.
+ * The window will have the CSS id/name "config-set-option"
+ *
+ * @type must be either ":category", ":boolean", ":int", ":string" or the name
+ * of an extra.
+ * Note that this can therefore obviously be used to create a category.
+ *
+ * @value must be the string representation of the value to set. So for extras
+ * you should use the "in-file" values (i.e. what's found/used in the conf
+ * file).
+ *
+ * Returns: %TRUE if option was set, else %FALSE
+ */
 gboolean
 donna_config_set_option (DonnaConfig            *config,
                          GError                **error,
@@ -3930,6 +4291,18 @@ donna_config_set_option (DonnaConfig            *config,
     return ret;
 }
 
+/**
+ * donna_config_rename_option:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_name: New name for the option
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Rename option @fmt to @new_name
+ *
+ * Returns: %TRUE if option was renamed, else %FALSE
+ */
 gboolean
 donna_config_rename_option (DonnaConfig            *config,
                             GError                **error,
@@ -4143,6 +4516,18 @@ traverse_renaming_category (GNode *node, struct renaming_category *data)
     return FALSE;
 }
 
+/**
+ * donna_config_rename_category:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @new_name: New name for the category
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Rename category @fmt to @new_name
+ *
+ * Returns: %TRUE if category was renamed, else %FALSE
+ */
 gboolean
 donna_config_rename_category (DonnaConfig            *config,
                               GError                **error,
@@ -4466,6 +4851,17 @@ done:
     return ret;                                                 \
 } while (0)
 
+/**
+ * donna_config_remove_option:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Removes option @fmt
+ *
+ * Returns: %TRUE if option was removed, else %FALSE
+ */
 gboolean
 donna_config_remove_option (DonnaConfig    *config,
                             GError        **error,
@@ -4475,6 +4871,17 @@ donna_config_remove_option (DonnaConfig    *config,
     __remove_option (FALSE);
 }
 
+/**
+ * donna_config_remove_category:
+ * @config: The #DonnaConfig
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ * @fmt: <function>printf</function>-like format for the full/option/name
+ * @...: <function>printf</function>-like arguments
+ *
+ * Removes category @fmt
+ *
+ * Returns: %TRUE if category was removed, else %FALSE
+ */
 gboolean
 donna_config_remove_category (DonnaConfig    *config,
                               GError        **error,
