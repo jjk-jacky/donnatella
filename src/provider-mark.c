@@ -1108,7 +1108,12 @@ cmd_mark_load (DonnaTask         *task,
     guint i;
 
     if (filename && *filename == '/')
-        file = (gchar *) filename;
+    {
+        if (!g_get_filename_charsets (NULL))
+            file = g_filename_from_utf8 (filename, -1, NULL, NULL, NULL);
+        else
+            file = (gchar *) filename;
+    }
     else
         file = donna_app_get_conf_filename (app, (filename) ? filename : "marks.conf");
 
@@ -1270,7 +1275,12 @@ cmd_mark_save (DonnaTask        *task,
     GHashTableIter iter;
 
     if (filename && *filename == '/')
-        file = (gchar *) filename;
+    {
+        if (!g_get_filename_charsets (NULL))
+            file = g_filename_from_utf8 (filename, -1, NULL, NULL, NULL);
+        else
+            file = (gchar *) filename;
+    }
     else
         file = donna_app_get_conf_filename (app, (filename) ? filename : "marks.conf");
 
