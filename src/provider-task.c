@@ -2112,6 +2112,23 @@ donna_task_manager_add_task (DonnaTaskManager       *tm,
     return TRUE;
 }
 
+/**
+ * donna_task_manager_set_state:
+ * @tm: The #DonnaTaskManager
+ * @node: The #DonnaNode of the task
+ * @state: The state to set on the task
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Tries to change the state of the task behind @node based on its current
+ * state. If the current state is incompatible, an error will occur. The actual
+ * state of the task might not change right away. For instance, if the task was
+ * paused and @state was %DONNA_TASK_RUNNING it might only become
+ * %DONNA_TASK_WAITING while e.g. other tasks with higher priority complete
+ * their run.
+ *
+ * Returns: %TRUE if the task was already in requested state, or the required
+ * action took place
+ */
 gboolean
 donna_task_manager_set_state (DonnaTaskManager  *tm,
                               DonnaNode         *node,
@@ -2299,6 +2316,27 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
     return ret;
 }
 
+/**
+ * donna_task_manager_switch_tasks:
+ * @tm: The #DonnaTaskManager
+ * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s for tasks to
+ * switch
+ * @switch_on: Whether to turn tasks on, or off
+ * @fail_on_failure: Whether to fail if at least one failure occured
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Every #DonnaNode in @nodes must represent a task. If @switch_on is %TRUE all
+ * tasks that are stopped or paused will be started; If @switch_on is %FALSE all
+ * tasks that are running, waiting, or on hold will be paused. Any task in
+ * another state will be ignored/skipped.
+ *
+ * If a change of state (i.e. call to donna_task_manager_set_state()) fails and
+ * @fail_on_failure is %TRUE, this call will return %FALSE (with @error set, if
+ * specified). If @fail_on_failure was %FALSE then no error will be set and
+ * %TRUE returned.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
                                  GPtrArray          *nodes,
@@ -2418,6 +2456,16 @@ donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
     return TRUE;
 }
 
+/**
+ * donna_task_manager_cancel:
+ * @tm: The #DonnaTaskManager
+ * @node: The #DonnaNode of the task to cancel
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Send a cancellation request to the task behind @node
+ *
+ * Returns: %TRUE if donna_task_cancel() was called
+ */
 gboolean
 donna_task_manager_cancel (DonnaTaskManager     *tm,
                            DonnaNode            *node,
@@ -2457,6 +2505,19 @@ donna_task_manager_cancel (DonnaTaskManager     *tm,
     return TRUE;
 }
 
+/**
+ * donna_task_manager_show_ui:
+ * @tm: The #DonnaTaskManager
+ * @node: The #DonnaNode of the task
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Shows the #DonnaTaskUI (e.g. Details) for the task.
+ *
+ * If the task doesn't have a task UI attached, an error will occur. If the
+ * task UI's window was already visible, it will be bring into view/focused.
+ *
+ * Returns: %TRUE if the task UI was shown, else %FALSE
+ */
 gboolean
 donna_task_manager_show_ui (DonnaTaskManager    *tm,
                             DonnaNode           *node,
@@ -2511,6 +2572,15 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
     return TRUE;
 }
 
+/**
+ * donna_task_manager_cancel_all:
+ * @tm: The #DonnaTaskManager
+ *
+ * Cancels all tasks not in %DONNA_TASK_POST_RUN state
+ *
+ * Can be useful in event "pre-exit" to cancel everything on exit. See also
+ * donna_task_manager_pre_exit()
+ */
 void
 donna_task_manager_cancel_all (DonnaProviderTask      *tm)
 {
@@ -2530,6 +2600,21 @@ donna_task_manager_cancel_all (DonnaProviderTask      *tm)
     unlock_manager (tm, TM_BUSY_READ);
 }
 
+/**
+ * donna_task_manager_pre_exit:
+ * @tm: The #DonnaTaskManager
+ * @always_confirm: %TRUE to always ask for a confirmation
+ *
+ * This is meant to be used from the "pre-exit" event. It will determine if the
+ * task manager is busy, i.e. has at least one task not in %DONNA_TASK_POST_RUN
+ * state.
+ *
+ * If so, user will be asked to confirm cancelling all pending tasks and exit.
+ * Else, a confirmation to exit will be asked if @always_confirm is %TRUE
+ *
+ * Returns: %TRUE to abort event "pre-exit" (i.e. user didn't confirm), else
+ * %FALSE
+ */
 gboolean
 donna_task_manager_pre_exit (DonnaProviderTask      *tm,
                              gboolean                always_confirm)
