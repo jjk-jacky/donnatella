@@ -2476,7 +2476,7 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
         gchar *fl = donna_node_get_full_location (node);
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_INVALID_VALUE,
-                "Provider 'task': Cannot switch tasks, node '%s' isn't a task",
+                "Provider 'task': Cannot show TaskUI, node '%s' isn't a task",
                 fl);
         g_free (fl);
         return FALSE;
