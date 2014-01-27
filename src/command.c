@@ -152,24 +152,24 @@ show_err_on_task_failed (DonnaTask  *task,
 
 /**
  * ask:
- * @title: Title of the dialog, the question to ask
- * @details: (optional): Details below the title
- * @btn1_icon: (optional): Name of the icon for button 1
- * @btn1_label: (optional): Label of button 1
- * @btn2_icon: (optional): Name of the icon for button 2
- * @btn2_label: (optional): Label of button 2
- * @btn3_icon: (optional): Name of the icon for button 3
- * @btn3_label: (optional): Label of button 3
- * @btn4_icon: (optional): Name of the icon for button 4
- * @btn4_label: (optional): Label of button 4
- * @btn5_icon: (optional): Name of the icon for button 5
- * @btn5_label: (optional): Label of button 5
+ * @title: Title, the question to ask
+ * @details: (allow-none): Details below the title
+ * @btn1_icon: (allow-none): Name of the icon for button 1
+ * @btn1_label: (allow-none): Label of button 1
+ * @btn2_icon: (allow-none): Name of the icon for button 2
+ * @btn2_label: (allow-none): Label of button 2
+ * @btn3_icon: (allow-none): Name of the icon for button 3
+ * @btn3_label: (allow-none): Label of button 3
+ * @btn4_icon: (allow-none): Name of the icon for button 4
+ * @btn4_label: (allow-none): Label of button 4
+ * @btn5_icon: (allow-none): Name of the icon for button 5
+ * @btn5_label: (allow-none): Label of button 5
  *
- * Ask someting.
+ * Shows a popup with at least 2 buttons. Useful for confirmations, etc
  *
  * See donna_app_ask() for more.
  *
- * Returns: Number of the button pressed
+ * Returns: Number of the pressed button
  */
 static DonnaTaskState
 cmd_ask (DonnaTask *task, DonnaApp *app, gpointer *args)
@@ -202,6 +202,20 @@ cmd_ask (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * ask_text:
+ * @title: Title
+ * @details: (allow-none): Details below the title
+ * @main_default: (allow-none): Default value pre-set in the entry
+ * @other_defaults: (allow-none) (array): Other default value(s)
+ *
+ * Shows a dialog asking user for an input. Pressing button "Cancel" will have
+ * the command end as %DONNA_TASK_CANCELLED
+ *
+ * See donna_app_ask_text() for more.
+ *
+ * Returns: The text
+ */
 static DonnaTaskState
 cmd_ask_text (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -239,6 +253,17 @@ cmd_ask_text (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_get_boolean:
+ * @name: Name of the option
+ *
+ * Returns the value of a boolean option. If the option doesn't exist or isn't a
+ * boolean, command will fail.
+ *
+ * See donna_config_get_boolean()
+ *
+ * Returns: The value (%TRUE or %FALSE) of the option
+ */
 static DonnaTaskState
 cmd_config_get_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -261,6 +286,17 @@ cmd_config_get_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_get_int:
+ * @name: Name of the option
+ *
+ * Returns the value of an integer option. If the option doesn't exist or isn't
+ * an integer, command will fail.
+ *
+ * See donna_config_get_int()
+ *
+ * Returns: The value of the option
+ */
 static DonnaTaskState
 cmd_config_get_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -283,6 +319,17 @@ cmd_config_get_int (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_get_string:
+ * @name: Name of the option
+ *
+ * Returns the value of a string option. If the option doesn't exist or isn't a
+ * string, command will fail.
+ *
+ * See donna_config_get_string()
+ *
+ * Returns: The value of the option
+ */
 static DonnaTaskState
 cmd_config_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -305,6 +352,19 @@ cmd_config_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_has_boolean:
+ * @name: Name of the option
+ *
+ * Returns %TRUE if the option exists and is a boolean.
+ *
+ * Note that if the option doesn't exist or is not a boolean, the command will
+ * fail; Hence, the command can only ever return %TRUE
+ *
+ * See donna_config_has_boolean()
+ *
+ * Returns: %TRUE
+ */
 static DonnaTaskState
 cmd_config_has_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -327,6 +387,19 @@ cmd_config_has_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_has_category:
+ * @name: Name of the option
+ *
+ * Returns %TRUE if the option exists and is a category.
+ *
+ * Note that if the option doesn't exist or is not a category, the command will
+ * fail; Hence, the command can only ever return %TRUE
+ *
+ * See donna_config_has_category()
+ *
+ * Returns: %TRUE
+ */
 static DonnaTaskState
 cmd_config_has_category (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -349,6 +422,19 @@ cmd_config_has_category (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_has_int:
+ * @name: Name of the option
+ *
+ * Returns %TRUE if the option exists and is an integer.
+ *
+ * Note that if the option doesn't exist or is not an integer, the command will
+ * fail; Hence, the command can only ever return %TRUE
+ *
+ * See donna_config_has_int()
+ *
+ * Returns: %TRUE
+ */
 static DonnaTaskState
 cmd_config_has_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -371,6 +457,22 @@ cmd_config_has_int (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_has_option:
+ * @name: Name of the option
+ * @extra: (allow-none): Name of the extra
+ *
+ * Returns %TRUE if the option exists and is of extra @extra (if specified)
+ *
+ * Note that if the option doesn't exist or is not of the specified extra, the
+ * command will fail; Hence, it can only ever return %TRUE
+ *
+ * If @extra was not specified, the command will succeed/return %TRUE if the
+ * option exists, regardless of its type (it will however fail if it's a
+ * category).
+ *
+ * Returns: %TRUE
+ */
 static DonnaTaskState
 cmd_config_has_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -406,6 +508,19 @@ cmd_config_has_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_has_string:
+ * @name: Name of the option
+ *
+ * Returns %TRUE if the option exists and is a string.
+ *
+ * Note that if the option doesn't exist or is not a string, the command will
+ * fail; Hence, the command can only ever return %TRUE
+ *
+ * See donna_config_has_string()
+ *
+ * Returns: %TRUE
+ */
 static DonnaTaskState
 cmd_config_has_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -428,6 +543,18 @@ cmd_config_has_string (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_new_boolean:
+ * @name: Name of the option
+ * @value: Value to set
+ *
+ * Creates a new boolean option @name and sets it to @value. Will fail if the
+ * option already exists.
+ *
+ * See donna_config_new_boolean()
+ *
+ * Returns: The #DonnaNode of the newly created option
+ */
 static DonnaTaskState
 cmd_config_new_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -453,6 +580,16 @@ cmd_config_new_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_new_category:
+ * @name: Name of the option
+ *
+ * Creates a new category @name. Will fail if the category already exists.
+ *
+ * See donna_config_new_category()
+ *
+ * Returns: The #DonnaNode of the newly created category
+ */
 static DonnaTaskState
 cmd_config_new_category (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -477,6 +614,19 @@ cmd_config_new_category (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_new_int:
+ * @name: Name of the option
+ * @extra: (allow-none): Name of the extra for the new option
+ * @value: Value to set
+ *
+ * Creates a new integer option @name (of extra @extra) and sets it to @value.
+ * Will fail if the option already exists.
+ *
+ * See donna_config_new_int()
+ *
+ * Returns: The #DonnaNode of the newly created option
+ */
 static DonnaTaskState
 cmd_config_new_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -503,6 +653,19 @@ cmd_config_new_int (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_new_string:
+ * @name: Name of the option
+ * @extra: (allow-none): Name of the extra for the new option
+ * @value: Value to set
+ *
+ * Creates a new string option @name (of extra @extra) and sets it to @value.
+ * Will fail if the option already exists.
+ *
+ * See donna_config_new_string()
+ *
+ * Returns: The #DonnaNode of the newly created option
+ */
 static DonnaTaskState
 cmd_config_new_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -529,6 +692,14 @@ cmd_config_new_string (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_remove_category:
+ * @name: Name of the category
+ *
+ * Remove category @name
+ *
+ * See donna_config_remove_category()
+ */
 static DonnaTaskState
 cmd_config_remove_category (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -545,6 +716,14 @@ cmd_config_remove_category (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_remove_option:
+ * @name: Name of the option
+ *
+ * Remove option @name
+ *
+ * See donna_config_remove_option()
+ */
 static DonnaTaskState
 cmd_config_remove_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -561,6 +740,15 @@ cmd_config_remove_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_rename_category:
+ * @category: Full name of the category to rename
+ * @new_name: New name for the category
+ *
+ * Renames category @category to @new_name
+ *
+ * See donna_config_rename_category()
+ */
 static DonnaTaskState
 cmd_config_rename_category (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -578,6 +766,15 @@ cmd_config_rename_category (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_rename_option:
+ * @option: Full name of the option to rename
+ * @new_name: New name for the option
+ *
+ * Renames option @option to @new_name
+ *
+ * See donna_config_rename_option()
+ */
 static DonnaTaskState
 cmd_config_rename_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -595,6 +792,15 @@ cmd_config_rename_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_set_boolean:
+ * @name: Name of the option to set
+ * @value: Value to set
+ *
+ * Sets boolean option @name to @value, creating it if needed
+ *
+ * See donna_config_set_boolean()
+ */
 static DonnaTaskState
 cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -612,6 +818,15 @@ cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_set_int:
+ * @name: Name of the option to set
+ * @value: Value to set
+ *
+ * Sets integer option @name to @value, creating it if needed
+ *
+ * See donna_config_set_int()
+ */
 static DonnaTaskState
 cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -628,6 +843,23 @@ cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     return DONNA_TASK_DONE;
 }
+
+/**
+ * config_set_option:
+ * @parent: Full name of the category to create/set the option in
+ * @type: (allow-none): Name of the type of the option
+ * @name: (allow-none): Name of the option to create/set
+ * @value: (allow-none): String representation of the value to set
+ * @create_only: (allow-none): Whether to perform option creation only or not
+ * @ask_user: (allow-none): Whether to show a window or not
+ *
+ * Creates/sets an option to the value represented by @value, optionally showing
+ * a window to change the option name/type/value.
+ *
+ * See donna_config_set_option() for more.
+ *
+ * Returns: The node of set/created option
+ */
 static DonnaTaskState
 cmd_config_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -662,6 +894,15 @@ cmd_config_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * config_set_string:
+ * @name: Name of the option to set
+ * @value: Value to set
+ *
+ * Sets string option @name to @value, creating it if needed
+ *
+ * See donna_config_set_string()
+ */
 static DonnaTaskState
 cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -679,6 +920,15 @@ cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * menu_popup:
+ * @nodes: (array): The nodes to show in a menu
+ * @menu: (allow-none): The menu definition to use
+ *
+ * Show @nodes in a popup menu
+ *
+ * See donna_app_show_menu() for more.
+ */
 static DonnaTaskState
 cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -696,6 +946,29 @@ cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * node_get_property:
+ * @node: The node to get @property from
+ * @property: The name of the property to get
+ * @options: (allow-none): Formatting options
+ *
+ * Retrieve the value of @property on @node
+ *
+ * This can only work on properties that can have a string representation of
+ * their value, so it won't work for icons.
+ *
+ * For properties holding a timestamp (e.g. mtime, etc) or size (e.g. size) you
+ * can use @options to specify how it should be formatted.
+ *
+ * @options should be either "time" or "size" to use the corresponding from
+ * "defaults/time" or "defaults/size" respectively. You can also add "@" then
+ * the name of the category to load options from, or use "=" and specify the
+ * actual format to use directly.
+ *
+ * Property "node-type" will return either "Item" or "Container"
+ *
+ * Returns: String representation of the value of @property on @node
+ */
 static DonnaTaskState
 cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -949,6 +1222,18 @@ err:
     return DONNA_TASK_DONE;
 }
 
+/**
+ * node_new_child:
+ * @node: The parent node to create a child in
+ * @type: The type of node to create
+ * @name: The name of the node to create
+ *
+ * Creates a new node named @name under @node.
+ *
+ * @type must be either "item" or "container"
+ *
+ * Returns: The newly-created node
+ */
 static DonnaTaskState
 cmd_node_new_child (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1061,6 +1346,25 @@ popup_children (DonnaTask *task, struct popup_children_data *data)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * node_popup_children:
+ * @node: The node to popup children of in a menu
+ * @children: Which types of children to show
+ * @menus: (allow-none): Menu definition to use
+ * @filter: (allow-none): Filter to use to filter which children to show
+ * @tree: (allow-none): Name of the treeview to filter children through
+ *
+ * Show a popup menu with the children of @node
+ *
+ * @children must be one of "all", "item" or "container"
+ *
+ * @filter can be a string used to filter children, only including in the menu
+ * the ones that match. Note that to only show non-hidden (dot files) children
+ * you can use options via @menus
+ *
+ * See donna_app_show_menu() for more on menus; See donna_app_filter_nodes() for
+ * more on node filtering.
+ */
 static DonnaTaskState
 cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1157,6 +1461,31 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
     return state;
 }
 
+/**
+ * node_trigger:
+ * @node: The node to trigger
+ * @on_item: (allow-none): What to do when @node is an item
+ * @on_container: (allow-none): What to do when @node is a container
+ *
+ * Triggers @node.
+ *
+ * @on_item must be one of "trigger" or "goto" and defines what will be done if
+ * @node is an item. "trigger" will run the trigger task for the item; What is
+ * actually done depends on the node/its provider. For example, on "fs" items
+ * will be executed/opened with associated application.
+ * "goto" will set @node as new current location of the active-list
+ *
+ * @on_container must be a combination of "trigger", "goto" and "popup" and
+ * defines what will be done if @node is a container. "trigger" will look for a
+ * property "container-trigger" on @node, which can be a string (full location
+ * of the node to trigger) or a node to trigger.
+ * "popup" will call node_popup_children() for all children of @node.
+ * Finally "goto" will set @node as new current location of the active-list.
+ *
+ * For containers, if "trigger" was set it will be tried. If there was no
+ * property "container-trigger" then if "popup" was set it'll be used, else if
+ * "goto" was set it'll be used.
+ */
 static DonnaTaskState
 cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1300,6 +1629,30 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * nodes_filter:
+ * @nodes: (array): The nodes to filter
+ * @filter: The filter to use
+ * @tree: (allow-none): Name of the treeview to filter children through
+ * @duplicate: (allow-none): Whether to duplicate the array @nodes or not
+ *
+ * Filters @nodes, removing from the array all nodes not matching @filter
+ *
+ * @filter is the string used to filter @nodes, which will be applied using
+ * column options from @tree is specified, else the (non tree-specific)
+ * defaults.
+ *
+ * If @duplicate is %TRUE the array of nodes will be duplicated, else nodes will
+ * be removed from the array directly.
+ *
+ * <note><para>If you want to filter nodes from an array obtained e.g. from an
+ * event, i.e. where you don't own the array and it could be used elsewhere, it
+ * is important to set @duplicate so a copy is used.</para></note>
+ *
+ * See donna_app_filter_nodes() for more on node filtering.
+ *
+ * Returns: (array): The filtered array
+ */
 static DonnaTaskState
 cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1349,6 +1702,22 @@ cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * nodes_io:
+ * @nodes: (array): The source nodes for the operation
+ * @io_type: The type of IO operation to perform
+ * @dest: (allow-none): The destination of the operation
+ * @new_name: (allow-none): The new name to use in the operation
+ *
+ * Performs the specified IO operation
+ *
+ * @io_type must be one of "copy", "move" or "delete"
+ *
+ * See donna_app_nodes_io_task() for more.
+ *
+ * Returns: (array) (allow-none): For copy/move operations, the resulting nodes
+ * will be returned. For delete operation, there won't be no return value
+ */
 static DonnaTaskState
 cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1423,6 +1792,15 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
     return state;
 }
 
+/**
+ * nodes_remove_from:
+ * @nodes: (array): Nodes to remove from @source
+ * @source: Source where to removes @nodes from
+ *
+ * Removes @nodes from @source
+ *
+ * See donna_provider_remove_from_task() for more
+ */
 static DonnaTaskState
 cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1479,6 +1857,14 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * task_cancel:
+ * @node: The node of the task to cancel
+ *
+ * Cancel the task behind @node
+ *
+ * See donna_task_manager_cancel() for more
+ */
 static DonnaTaskState
 cmd_task_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1494,6 +1880,17 @@ cmd_task_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * task_set_state:
+ * @node: The node of the task
+ * @state: The state to set
+ *
+ * Change the state of the task behind @node to @state
+ *
+ * @state must be one of "run", "pause", "cancel", "stop" or "wait"
+ *
+ * See donna_task_manager_set_state() for more
+ */
 static DonnaTaskState
 cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1540,6 +1937,14 @@ cmd_task_set_state (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * task_show_ui:
+ * @node: Node of the task
+ *
+ * Shows the TasKUI (details) for the task
+ *
+ * See donna_task_manager_show_ui() for more
+ */
 static DonnaTaskState
 cmd_task_show_ui (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1555,6 +1960,16 @@ cmd_task_show_ui (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * task_toggle:
+ * @node: The node of the task
+ *
+ * Toggles the task behind @node (e.g. resume a paused task, pause a
+ * running/waiting task, etc)
+ *
+ * Note that this can also be done by using node_trigger() as this is what is
+ * done here, except with ensuring first that @node belongs in "task"
+ */
 static DonnaTaskState
 cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1603,6 +2018,14 @@ cmd_task_toggle (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tasks_cancel:
+ * @nodes: (array): The nodes of tasks to cancel
+ *
+ * Cancels all the tasks behind @nodes
+ *
+ * See donna_task_manager_cancel() for more
+ */
 static DonnaTaskState
 cmd_tasks_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1624,6 +2047,13 @@ cmd_tasks_cancel (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tasks_cancel_all:
+ *
+ * Cancels all tasks in task manager
+ *
+ * See donna_task_manager_cancel_all() for more
+ */
 static DonnaTaskState
 cmd_tasks_cancel_all (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1631,6 +2061,16 @@ cmd_tasks_cancel_all (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tasks_pre_exit:
+ * @always_confirm: (allow-none): Whether to always ask for confirmation
+ *
+ * Intended to be used from event "pre-exit" to ask for confirmation
+ *
+ * See donna_task_manager_pre_exit() for more
+ *
+ * Returns: 1 to abort the event (i.e. user didn't confirm), else 0
+ */
 static DonnaTaskState
 cmd_tasks_pre_exit (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1650,6 +2090,17 @@ cmd_tasks_pre_exit (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tasks_switch:
+ * @nodes: (array): Nodes representing the tasks to switch
+ * @switch_on: (allow-none): 1 to switch tasks on, else switch them off
+ * @fail_on_failure: (allow-none): 1 for the command to fail if at least one
+ * state change request failed
+ *
+ * Switches the tasks behind @nodes according to @switch_on
+ *
+ * See donna_task_manager_switch_tasks() for more
+ */
 static DonnaTaskState
 cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1668,6 +2119,14 @@ cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_abort:
+ * @tree: A treeview
+ *
+ * Abort any running task to change @tree's location
+ *
+ * See donna_tree_view_abort() for more
+ */
 static DonnaTaskState
 cmd_tv_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1677,6 +2136,15 @@ cmd_tv_abort (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_activate_row:
+ * @tree: A treeview
+ * @rid: A #rowid
+ *
+ * Activates the row at @rowid
+ *
+ * See donna_tree_view_activate_row() for more
+ */
 static DonnaTaskState
 cmd_tv_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1693,6 +2161,15 @@ cmd_tv_activate_row (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_add_root:
+ * @tree: A treeview
+ * @node: The node to add as new root
+ *
+ * Adds a new root @node to @tree
+ *
+ * See donna_tree_view_add_root() for more
+ */
 static DonnaTaskState
 cmd_tv_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1708,6 +2185,16 @@ cmd_tv_add_root (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_column_edit:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @col_name: The name of a column
+ *
+ * Start editing for column @col_name of row @rowid in @tree
+ *
+ * See donna_tree_view_column_edit() for more
+ */
 static DonnaTaskState
 cmd_tv_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1725,6 +2212,21 @@ cmd_tv_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_column_set_option:
+ * @tree: A treeview
+ * @column: The name of a column
+ * @option: The name of the column option to set
+ * @value: The value to set
+ * @location: (allow-none): Save location for the option
+ *
+ * Sets the column option @option for @column in @tree to @value
+ *
+ * @location can be one of "memory", "current"," ask", "arrangement", "tree",
+ * "mode" or "default" It defaults to "memory"
+ *
+ * See donna_tree_view_column_set_option() for more
+ */
 static DonnaTaskState
 cmd_tv_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1775,6 +2277,21 @@ cmd_tv_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_column_set_value:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @to_focused: (allow-none): If 1 then rows affected will be the range from
+ * @rowid to the focused row
+ * @column: Name of the column
+ * @value: Value to set
+ * @rid_ref: (allow-none): A #rowid to use as reference
+ *
+ * Set @value for the property handled by @column on the node(s) represented by
+ * @rowid
+ *
+ * See donna_tree_view_column_set_value() for more
+ */
 static DonnaTaskState
 cmd_tv_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1796,6 +2313,19 @@ cmd_tv_column_set_value (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_context_get_nodes:
+ * @tree: A treeview
+ * @rowid: (allow-none): A #rowid to be used as reference
+ * @column: (allow-none): A column name
+ * @items: (allow-none): Items to load nodes from
+ *
+ * Returns the nodes to be used in context menu, as defined on @items
+ *
+ * See donna_tree_view_context_get_nodes() for more
+ *
+ * Returns: (array): The nodes to be used in a context menu
+ */
 static DonnaTaskState
 cmd_tv_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1823,6 +2353,20 @@ cmd_tv_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_context_popup:
+ * @tree: A treeview
+ * @rowid: (allow-none): A #rowid to be used as reference
+ * @column: (allow-none): A column name
+ * @items: (allow-none): Items to load nodes from
+ * @menus: (allow-none): Menu definition to use
+ * @no_focus_grab: (allow-none): If %TRUE @tree won't grab focus first
+ *
+ * Gets the nodes to be used in context menu, as defined on @items, and show
+ * them in a popup menu.
+ *
+ * See donna_tree_view_context_popup() for more
+ */
 static DonnaTaskState
 cmd_tv_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1844,6 +2388,15 @@ cmd_tv_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_full_collapse:
+ * @tree: A treeview
+ * @rowid: A #rowid to full collapse
+ *
+ * Full collapse the row at @rowid
+ *
+ * See donna_tree_view_full_collapse() for more
+ */
 static DonnaTaskState
 cmd_tv_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1860,6 +2413,15 @@ cmd_tv_full_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_full_expand:
+ * @tree: A treeview
+ * @rowid: A #rowid to full expand
+ *
+ * Full expand the row at @rowid
+ *
+ * See donna_tree_view_full_expand() for more
+ */
 static DonnaTaskState
 cmd_tv_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1876,6 +2438,15 @@ cmd_tv_full_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_location:
+ * @tree: A treeview
+ *
+ * Returns the current location of @tree; If @tree has no current location set,
+ * the command will fail
+ *
+ * Returns: The node of the current location of @tree
+ */
 static DonnaTaskState
 cmd_tv_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1901,6 +2472,17 @@ cmd_tv_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_node_at_row:
+ * @tree: A treeview
+ * @rid: A #rowid
+ *
+ * Returns the node behind @rowid
+ *
+ * See donna_tree_view_get_node_at_row() for more
+ *
+ * Returns: The node behind @rowid
+ */
 static DonnaTaskState
 cmd_tv_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1925,6 +2507,19 @@ cmd_tv_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_nodes:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @to_focused: (allow-none): When %TRUE rows will be the range from @rowid to
+ * the focused row
+ *
+ * Returns the nodes behind the row(s) at @rowid
+ *
+ * See donna_tree_view_get_nodes() for more
+ *
+ * Returns: (array): The nodes behind the specified row(s)
+ */
 static DonnaTaskState
 cmd_tv_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -1951,6 +2546,22 @@ cmd_tv_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_visual:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @visual: Which tree visual to get the value of
+ * @source: Where to get the visual from
+ *
+ * Returns the value of specified tree visual for @rowid
+ *
+ * @visual must be one of "name", "icon", "box", "highlight" or "click_mode"
+ * @source must be one of "any", "tree" or "node"
+ *
+ * See donna_tree_view_get_visual() for more
+ *
+ * Returns: The value of the tree visual
+ */
 static DonnaTaskState
 cmd_tv_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2010,6 +2621,17 @@ cmd_tv_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_node_down:
+ * @tree: A treeview
+ * @level: (allow-none): Level wanted
+ *
+ * Returns a node from @tree's history that is a descendant of current location.
+ *
+ * See donna_tree_view_get_node_down() for more
+ *
+ * Returns: A node descendant of current location from @tree's history
+ */
 static DonnaTaskState
 cmd_tv_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2039,6 +2661,16 @@ cmd_tv_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_go_down:
+ * @tree: A treeview
+ * @level: (allow-none): Level wanted (Defaults to 1)
+ *
+ * Changes location to that from @tree's history that is a descendant of current
+ * location.
+ *
+ * See donna_tree_view_go_down() for more
+ */
 static DonnaTaskState
 cmd_tv_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2058,6 +2690,16 @@ cmd_tv_go_down (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_node_root:
+ * @tree: A treeview
+ *
+ * Returns the node of the root of the current branch
+ *
+ * See donna_tree_view_get_node_root() for more
+ *
+ * Returns: The node of the root of the current branch
+ */
 static DonnaTaskState
 cmd_tv_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2083,6 +2725,14 @@ cmd_tv_get_node_root (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_go_root:
+ * @tree: A treeview
+ *
+ * Change location to that of the root of the current location
+ *
+ * See donna_tree_view_go_root() for more
+ */
 static DonnaTaskState
 cmd_tv_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2099,6 +2749,17 @@ cmd_tv_go_root (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_get_node_up:
+ * @tree: A treeview
+ * @level: (allow-none): Level wanted
+ *
+ * Returns a node that is the @level-nth ascendant of current location
+ *
+ * See donna_tree_view_get_node_up() for more
+ *
+ * Returns: A node, @level-nth ascendant of current location
+ */
 static DonnaTaskState
 cmd_tv_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2131,6 +2792,22 @@ cmd_tv_get_node_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_go_up:
+ * @tree: A treeview
+ * @level: (allow-none): Level wanted; Defaults to 1
+ * @set: (allow-none): For lists only: What to set on child after location
+ * change
+ *
+ * Changes location to the @level-nth ascendant of current location
+ *
+ * @set can be one or more of "scroll", "focus" and "cursor"
+ *
+ * Note that to go the the root you must use -1 as @level, because when using 0
+ * it will be reset to its default of 1.
+ *
+ * See donna_tree_view_go_up() for more
+ */
 static DonnaTaskState
 cmd_tv_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2174,6 +2851,29 @@ cmd_tv_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_goto_line:
+ * @tree: A treeview
+ * @set: Which element(s) to set
+ * @rowid: A #rowid
+ * @nb: (allow-none): Number of line/times to repeat the move
+ * @nb_type: (allow-none): Define how to interpret @nb
+ * @action: (allow-none): Action to perform on the selection
+ * @to_focused: (allow-none): When %TRUE rows will be the range from @rowid to
+ *
+ * "Goes" to the specified row according to @set, updating selection as per
+ * @action
+ *
+ * @set must be one or more of "scroll", "focus" and "cursor"
+ *
+ * @nb_type can be one of "repeat", "line", "percent" or "visible" Defaults to
+ * "repeat"
+ *
+ * @action can be one of "select", "unselect", "invert" or "define" No defaults
+ * (i.e. selection won't be affected)
+ *
+ * See donna_tree_view_goto_line() for more
+ */
 static DonnaTaskState
 cmd_tv_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2252,6 +2952,18 @@ cmd_tv_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_history_clear:
+ * @tree: A treeview
+ * @direction: (allow-none): Direction(s) to clear
+ *
+ * Clears @tree's history going @direction
+ *
+ * @direction can be one or more of "backward" and "forward" Defaults to
+ * "backward+forward"
+ *
+ * See donna_tree_view_history_clear() for more
+ */
 static DonnaTaskState
 cmd_tv_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2289,6 +3001,22 @@ cmd_tv_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_history_get:
+ * @tree: A treeview
+ * @direction: (allow-none): Direction(s) to look into @tree's history
+ * @nb: (allow-none): How many items to return
+ *
+ * Returns nodes representing items from @tree's history, e.g. to show in a
+ * popup menu.
+ *
+ * @direction can be one or more of "backward" and "forward" Defaults to
+ * "backward+forward"
+ *
+ * See donna_tree_view_history_get() for more
+ *
+ * Returns: (array): The nodes of the history items
+ */
 static DonnaTaskState
 cmd_tv_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2336,6 +3064,23 @@ cmd_tv_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_history_get_node:
+ * @tree: A treeview
+ * @direction: (allow-none): Direction to look into @tree's history
+ * @nb: (allow-none): How many steps to go into history
+ *
+ * Get the node of the @nb-th item from @tree's history going @direction
+ *
+ * @direction can be one or more of "backward" and "forward" Defaults to
+ * "backward"
+ *
+ * If @nb is not specified (or 0) it defaults to 1
+ *
+ * See donna_tree_view_history_get_node() for more
+ *
+ * Returns: The node for the history item
+ */
 static DonnaTaskState
 cmd_tv_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2386,6 +3131,21 @@ cmd_tv_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_history_move:
+ * @tree: A treeview
+ * @direction: (allow-none): Direction to look into @tree's history
+ * @nb: (allow-none): How many steps to go into history
+ *
+ * Set current location by moving @nb steps into @tree's history going
+ * @direction
+ *
+ * @direction can be one of "backward" or "forward" Defaults to "backward"
+ *
+ * If @nb is not specified (or 0) it defaults to 1
+ *
+ * See donna_tree_view_history_move() for more
+ */
 static DonnaTaskState
 cmd_tv_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2429,6 +3189,20 @@ cmd_tv_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_load_list_file:
+ * @tree: A treeview
+ * @file: Name of the file
+ * @elements: (allow-none): Which elements to load from @file
+ *
+ * Loads the state of list @tree from list file @file, usually a file
+ * previously saved using command tv_save_list_file()
+ *
+ * @elements can be one of more of "focus", "sort", "scroll" and "selection" No
+ * defaults.
+ *
+ * See donna_tree_view_load_list_file() for more
+ */
 static DonnaTaskState
 cmd_tv_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2468,6 +3242,20 @@ cmd_tv_load_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_load_tree_file:
+ * @tree: A treeview
+ * @file: Name of the file
+ * @visuals: (allow-none): Which #tree-visuals to load from @file
+ *
+ * Loads the content of @tree from tree file @file, usually a file saved using
+ * command tv_save_tree_file()
+ *
+ * @visuals can be one or more of "name", "icon", "box", "highlight",
+ * "click_mode", or simply "all" to quickly refer to all of them.
+ *
+ * See donna_tree_view_load_tree_file() for more
+ */
 static DonnaTaskState
 cmd_tv_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2511,6 +3299,15 @@ cmd_tv_load_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_maxi_collapse:
+ * @tree: A treeview
+ * @rowid: A #rowid to maxi collapse
+ *
+ * Maxi collapse the row at @rowid
+ *
+ * See donna_tree_view_maxi_collapse() for more
+ */
 static DonnaTaskState
 cmd_tv_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2527,6 +3324,15 @@ cmd_tv_maxi_collapse (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_maxi_expand:
+ * @tree: A treeview
+ * @rowid: A #rowid to maxi expand
+ *
+ * Maxi expand the row at @rowid
+ *
+ * See donna_tree_view_maxi_expand() for more
+ */
 static DonnaTaskState
 cmd_tv_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2543,6 +3349,16 @@ cmd_tv_maxi_expand (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_move_root:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @move: Number indication how to move the row
+ *
+ * Moves the root pointed to by @rowid by @move
+ *
+ * See donna_tree_view_move_root() for more
+ */
 static DonnaTaskState
 cmd_tv_move_root (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2560,6 +3376,17 @@ cmd_tv_move_root (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_refresh:
+ * @tree: A treeview
+ * @mode: The refresh mode
+ *
+ * Refreshes @tree
+ *
+ * @mode must be one of "visible", "simple", "normal" or "reload"
+ *
+ * See donna_tree_view_refresh() for more
+ */
 static DonnaTaskState
 cmd_tv_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2593,6 +3420,15 @@ cmd_tv_refresh (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_remove_row:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ *
+ * Removes the row at @rowid from @tree
+ *
+ * See donna_tree_view_remove_row() for more
+ */
 static DonnaTaskState
 cmd_tv_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2608,6 +3444,14 @@ cmd_tv_remove_row (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_reset_keys:
+ * @tree: A treeview
+ *
+ * Reset keys for @tree
+ *
+ * See donna_tree_view_reset_keys() for more
+ */
 static DonnaTaskState
 cmd_tv_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2617,6 +3461,20 @@ cmd_tv_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_save_list_file:
+ * @tree: A treeview
+ * @file: Name of the file
+ * @elements: (allow-none): Which elements to save to @file
+ *
+ * Saves the state of list @tree into a list file, so it can be loaded back
+ * later using command tv_load_list_file()
+ *
+ * @elements can be one of more of "focus", "sort", "scroll" and "selection" No
+ * defaults.
+ *
+ * See donna_tree_view_save_list_file() for more
+ */
 static DonnaTaskState
 cmd_tv_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2656,6 +3514,20 @@ cmd_tv_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_save_tree_file:
+ * @tree: A treeview
+ * @file: Name of the file
+ * @visuals: (allow-none): Which #tree-visuals to save to @file
+ *
+ * Saves the tree @tree into a tree file, so it can be loaded back later using
+ * command tv_load_tree_file()
+ *
+ * @visuals can be one or more of "name", "icon", "box", "highlight",
+ * "click_mode", or simply "all" to quickly refer to all of them.
+ *
+ * See donna_tree_view_save_tree_file() for more
+ */
 static DonnaTaskState
 cmd_tv_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2699,6 +3571,20 @@ cmd_tv_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_selection:
+ * @tree: A treeview
+ * @action: Which action to perform on the selection
+ * @rowid: A #rowid
+ * @to_focused: (allow-none): When %TRUE rows will be the range from @rowid to
+ * the focused row
+ *
+ * Affects the selection on @tree
+ *
+ * @action must be one of "select", "unselect", "invert" or "define"
+ *
+ * See donna_tree_view_selection() for more
+ */
 static DonnaTaskState
 cmd_tv_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2733,6 +3619,18 @@ cmd_tv_selection (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_selection_nodes:
+ * @tree: A treeview
+ * @action: Which action to perform on the selection
+ * @nodes: (array): The nodes to perform the action onto
+ *
+ * Affects the selection on @tree using @nodes
+ *
+ * @action must be one of "select", "unselect", "invert" or "define"
+ *
+ * See donna_tree_view_selection_nodes() for more
+ */
 static DonnaTaskState
 cmd_tv_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2766,6 +3664,16 @@ cmd_tv_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_cursor:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @no_scroll: (allow-none): Set to 1 to disable any scrolling
+ *
+ * Sets cursor on @rowid
+ *
+ * See donna_tree_view_set_cursor() for more
+ */
 static DonnaTaskState
 cmd_tv_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2783,6 +3691,15 @@ cmd_tv_set_cursor (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_focus:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ *
+ * Sets focus on @rowid
+ *
+ * See donna_tree_view_set_focus() for more
+ */
 static DonnaTaskState
 cmd_tv_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2799,6 +3716,15 @@ cmd_tv_set_focus (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_key_mode:
+ * @tree: A treeview
+ * @key_mode: The key mode to set
+ *
+ * Sets @key_mode as @tree's key mode
+ *
+ * See donna_tree_view_set_key_mode() for more
+ */
 static DonnaTaskState
 cmd_tv_set_key_mode (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2809,6 +3735,15 @@ cmd_tv_set_key_mode (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_location:
+ * @tree: A treeview
+ * @node: A node
+ *
+ * Sets @node as new location of @tree
+ *
+ * See donna_tree_view_set_location() for more
+ */
 static DonnaTaskState
 cmd_tv_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2825,6 +3760,20 @@ cmd_tv_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_option:
+ * @tree: A treeview
+ * @option: The option name
+ * @value: The new value to set
+ * @location: (allow-none): The location to save the value to
+ *
+ * Sets @value as new value of @tree's option @option
+ *
+ * @location can be on of "memory", "current", "ask", "tree" and "mode" Defaults
+ * to "memory"
+ *
+ * See donna_tree_view_set_option() for more
+ */
 static DonnaTaskState
 cmd_tv_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2869,6 +3818,18 @@ cmd_tv_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_second_sort:
+ * @tree: A treeview
+ * @column: Name of the column
+ * @order: (allow-none): The sort order
+ *
+ * Set @tree's second sort order on @column (using order @order)
+ *
+ * @order can be one of "asc", "desc" or "unknown" Defaults to "unknown"
+ *
+ * See donna_tree_view_set_second_sort_order() for more
+ */
 static DonnaTaskState
 cmd_tv_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2907,6 +3868,18 @@ cmd_tv_set_second_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_sort:
+ * @tree: A treeview
+ * @column: Name of the column
+ * @order: (allow-none): The sort order
+ *
+ * Set @tree's sort order on @column (using order @order)
+ *
+ * @order can be one of "asc", "desc" or "unknown" Defaults to "unknown"
+ *
+ * See donna_tree_view_set_sort_order() for more
+ */
 static DonnaTaskState
 cmd_tv_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2945,6 +3918,19 @@ cmd_tv_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_set_visual:
+ * @tree: A treevie
+ * @rowid: A #rowid
+ * @visual: Which visual to set
+ * @value: The value to set @visual to
+ *
+ * Sets tree visual @visual for @rowid to @value
+ *
+ * @visual must be one of "name", "icon", "box", "highlight" or "click_mode"
+ *
+ * See donna_tree_view_set_visual() for more
+ */
 static DonnaTaskState
 cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -2984,6 +3970,15 @@ cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_toggle_column:
+ * @tree: A treeview
+ * @column: A column name
+ *
+ * Toggles column @column in @tree
+ *
+ * See donna_tree_view_toggle_column() for more
+ */
 static DonnaTaskState
 cmd_tv_toggle_column (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -3000,6 +3995,18 @@ cmd_tv_toggle_column (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * tv_toggle_row:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @toggle: Which toggle to perform
+ *
+ * Toggles @rowid accoding to @toggle
+ *
+ * @toggle must be one of "standard", "full" or "maxi"
+ *
+ * See donna_tree_view_toggle_row() for more
+ */
 static DonnaTaskState
 cmd_tv_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
@@ -3033,6 +4040,31 @@ cmd_tv_toggle_row (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
+/**
+ * void:
+ * @Param1: (allow-none): Argument
+ * @Param2: (allow-none): Argument
+ * @Param3: (allow-none): Argument
+ * @Param4: (allow-none): Argument
+ * @Param5: (allow-none): Argument
+ * @Param6: (allow-none): Argument
+ * @Param7: (allow-none): Argument
+ * @Param8: (allow-none): Argument
+ *
+ * Does nothing.
+ *
+ * This is intended to be used in a trigger, to run more than one command. For
+ * example, using:
+ * <programlisting>
+ * command:void (@foo (), @bar ())
+ * </programlisting>
+ *
+ * Will run command foo (to get its return value, even if it doesn't return
+ * anything), and then run command bar (unless foo failed/was cancelled)
+ *
+ * If you need to run more than 8 commands, you might wanna consider using
+ * command exec() and a script. Or just use recursion.
+ */
 static DonnaTaskState
 cmd_void (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
