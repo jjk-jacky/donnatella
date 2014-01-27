@@ -6663,6 +6663,18 @@ add_node_to_tree (DonnaTreeView *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_add_root:
+ * @tree: A #DonnaTreeView
+ * @node: The #DonnaNode to add as root
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Adds a new root @node in @tree
+ *
+ * This obviously only works on trees.
+ *
+ * Returns: %TRUE if the new root was added, else %FALSE
+ */
 gboolean
 donna_tree_view_add_root (DonnaTreeView *tree, DonnaNode *node, GError **error)
 {
@@ -9843,6 +9855,14 @@ donna_tree_view_set_location (DonnaTreeView  *tree,
         return change_location (tree, CHANGING_LOCATION_ASKED, node, NULL, error);
 }
 
+/**
+ * donna_tree_view_get_location:
+ * @tree: A #DonnaTreeView
+ *
+ * Returns the current location of @tree
+ *
+ * Returns: (transfer full): The #DonnaNode of the current location, or %NULL
+ */
 DonnaNode *
 donna_tree_view_get_location (DonnaTreeView      *tree)
 {
@@ -13097,7 +13117,7 @@ free:
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Loads the state of list @tree from list file @filename, usually a file
- * previsouly saved using donna_tree_view_save_list_file()
+ * previously saved using donna_tree_view_save_list_file()
  *
  * @filename can be either a full path to a file, or it will be processed
  * through donna_app_get_conf_filename()
@@ -13563,7 +13583,7 @@ donna_tree_view_save_tree_file (DonnaTreeView      *tree,
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Loads the content of @tree from tree file @filename, usually a file
- * previsouly saved using donna_tree_view_save_tree_file()
+ * previously saved using donna_tree_view_save_tree_file()
  *
  * @filename can be either a full path to a file, or it will be processed
  * through donna_app_get_conf_filename()
@@ -14143,6 +14163,34 @@ may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter)
     return ret;
 }
 
+/**
+ * donna_tree_view_refresh:
+ * @tree: A #DonnaTreeView
+ * @mode: The refresh mode
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Triggers a refresh of @tree
+ *
+ * Treeviews support different kinds of refresh operations, defined by @mode.
+ *
+ * %DONNA_TREE_VIEW_REFRESH_VISIBLE and %DONNA_TREE_VIEW_REFRESH_SIMPLE will
+ * both simply ask each node to refrsh all its properties, but the former will
+ * only do so on visible nodes while the later will do it on all nodes in the
+ * treeview.
+ *
+ * %DONNA_TREE_VIEW_REFRESH_NORMAL will perform the "standard" refresh
+ * operation, which also includes refreshing the list of children. For trees,
+ * that is children of all nodes in maxi expand state; for lists children of the
+ * current location.
+ *
+ * %DONNA_TREE_VIEW_REFRESH_RELOAD is intended to perform a full reloading of
+ * the treeview. For lists, it will also include clearing the treeview and
+ * re-filling it, as well as updating the current arrangement if needed.
+ *
+ * For trees, this isn't yet implement and is a no-op.
+ *
+ * Returns: %TRUE if refresh was initiated, else %FALSE
+ */
 gboolean
 donna_tree_view_refresh (DonnaTreeView          *tree,
                          DonnaTreeViewRefreshMode mode,
@@ -14357,6 +14405,26 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_filter_nodes:
+ * @tree: A #DonnaTreeView
+ * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s to filter
+ * @filter_str: Filter to use
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Filters @nodes and remove all nodes that don't match @filter_str, using
+ * column options from @tree
+ *
+ * To filter using default column options (i.e. not linked to any treeview), use
+ * donna_app_filter_nodes()
+ *
+ * <note><para>Every node that doesn't match the filter will be removed from
+ * @nodes. Make sure to own the array, since it will be changed (i.e. don't use
+ * an array returned from a get-children task, as it could also be
+ * referenced/used elsewhere)</para></note>
+ *
+ * Returns: %TRUE if @nodes was filtered, else %FALSE
+ */
 gboolean
 donna_tree_view_filter_nodes (DonnaTreeView *tree,
                               GPtrArray     *nodes,
@@ -14368,6 +14436,42 @@ donna_tree_view_filter_nodes (DonnaTreeView *tree,
             (get_ct_data_fn) get_ct_data, tree, error);
 }
 
+/**
+ * donna_tree_view_goto_line:
+ * @tree: A #DonnaTreeView
+ * @set: Which element to set on @rowid
+ * @rowid: Identifier of a row; See #rowid for more
+ * @nb: Number of line/times to repeat the move
+ * @nb_type: Define how to interpret @nb
+ * @action: Action to perform on the selection
+ * @to_focused: When %TRUE rows will be the range from @rowid to the focused row
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * "Goes" to the row behind @rowid. What is actually done depends on @set,
+ * defining which of the scroll, focus and/or cursor will be put on the final
+ * destination row.
+ *
+ * @nb_type defines how to process @nb: it can be a line number or a percentage
+ * (of the entire tree, or just the visible area) to go to, in which case @rowid
+ * will be ignored. (Note however that if @nb is 0 and @nb_type is
+ * %DONNA_TREE_VIEW_GOTO_LINE then @rowid is used, since line numbers start at
+ * 1.)
+ *
+ * If it is %DONNA_TREE_VIEW_GOTO_REPEAT (and @nb > 0) then the operation will
+ * be repeated @nb times.
+ * Obviously this only makes sense with certain rowids, specifically ":top",
+ * ":bottom" which, if already there, will then move one screen up/down; and
+ * ":prev", ":next", ":up", ":down", ":prev-same-depth" and ":next-same-depth"
+ * which will simply be repeated. For any other rowid, the operation isn't
+ * repeated and @nb is simply ignored.
+ *
+ * In addition, the selection can also be affected, according to @action and
+ * @to_focused. See donna_tree_view_selection() for more, which will be called
+ * with the final destination row as rowid, before scroll, focus or cursor have
+ * been set.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_goto_line (DonnaTreeView      *tree,
                            DonnaTreeViewSet    set,
@@ -14754,6 +14858,16 @@ move:
     return TRUE;
 }
 
+/**
+ * donna_tree_view_get_node_at_row:
+ * @tree: A #DonnaTreeview
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns the #DonnaNode behind the row at @rowid
+ *
+ * Returns: (transfer full): The #DonnaNode behind the row at @rowid
+ */
 DonnaNode *
 donna_tree_view_get_node_at_row (DonnaTreeView  *tree,
                                  DonnaRowId     *rowid,
@@ -14785,6 +14899,16 @@ donna_tree_view_get_node_at_row (DonnaTreeView  *tree,
     return node;
 }
 
+/**
+ * donna_tree_view_set_key_mode:
+ * @tree: A #DonnaTreeView
+ * @key_mode: The name of the key mode to set
+ *
+ * Sets the current key mode for @tree to @key_mode (See #key-modes for more)
+ *
+ * Will also reset the current key status, much like
+ * donna_tree_view_reset_keys() would.
+ */
 void
 donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
 {
@@ -14810,6 +14934,24 @@ donna_tree_view_set_key_mode (DonnaTreeView *tree, const gchar *key_mode)
     check_statuses (tree, STATUS_CHANGED_ON_KEYS | STATUS_CHANGED_ON_KEY_MODE);
 }
 
+/**
+ * donna_tree_view_remove_row:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Removes the row behind @rowid from the @tree
+ *
+ * Removing a row from the tree doesn't affect the actual node behind it, i.e.
+ * no folder will be deleted from the file system.
+ *
+ * This only make sense for roots, unless you're using a #minitree of course, in
+ * which case any row can be removed at will.
+ *
+ * Obviously this is only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_remove_row (DonnaTreeView   *tree,
                             DonnaRowId      *rowid,
@@ -14864,6 +15006,17 @@ donna_tree_view_remove_row (DonnaTreeView   *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_reset_keys:
+ * @tree: A #DonnaTreeView
+ *
+ * Resets the current key status. That is, if any keys had been typed and not
+ * yet fully processed (e.g. a combine was typed, waiting for the association
+ * key/command to be pressed) they will be dropped.
+ *
+ * Additionally, the current key mode will be reloaded from configuration. (See
+ * #key-modes for more)
+ */
 void
 donna_tree_view_reset_keys (DonnaTreeView *tree)
 {
@@ -14890,6 +15043,14 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
 }
 
 /* mode list only */
+/**
+ * donna_tree_view_abort:
+ * @tree: A #DonnaTreeView
+ *
+ * Abort any running task changing @tree's current location
+ *
+ * Note that this obviously only works on lists (i.e. is a no-op on trees).
+ */
 void
 donna_tree_view_abort (DonnaTreeView *tree)
 {
@@ -14907,6 +15068,22 @@ donna_tree_view_abort (DonnaTreeView *tree)
     }
 }
 
+/**
+ * donna_tree_view_get_nodes:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @to_focused: When %TRUE rows will be the range from @rowid to the focused row
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns the nodes behind the row, or rows, pointed by @rowid
+ *
+ * If @to_focused is %TRUE then @rowid must point to a row which will be used as
+ * other boundary (with focused row) to make the range of rows to be used.
+ * @to_focused can only be used on lists.
+ *
+ * Returns: (transfer full) (element-type DonnaNode): The #DonnaNode<!-- -->s
+ * behind specified rows, or %NULL
+ */
 GPtrArray *
 donna_tree_view_get_nodes (DonnaTreeView      *tree,
                            DonnaRowId         *rowid,
@@ -15162,6 +15339,28 @@ get_node_for_history (DonnaTreeView         *tree,
 }
 
 /* mode list only */
+/**
+ * donna_tree_view_history_get:
+ * @tree: A #DonnaTreeView
+ * @direction: Direction(s) to look into @tree's history
+ * @nb: How many items to return
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns nodes representing items from @tree's history, e.g. to show in a
+ * popup menu.
+ *
+ * This items returned will be ordered from oldest to most recent, unless
+ * @direction was set to only %DONNA_HISTORY_BACKWARD in which case they'll be
+ * ordered from most recent to oldest.
+ *
+ * If @direction was set to both direction, then the current location will also
+ * be included in between the two, as one might expect.
+ *
+ * This is obviously only supported on lists, as trees don't have an history.
+ *
+ * Returns: (transfer container) (element-type DonnaNode): Array of nodes from
+ * @tree's history, or %NULL
+ */
 GPtrArray *
 donna_tree_view_history_get (DonnaTreeView          *tree,
                              DonnaHistoryDirection   direction,
@@ -15333,6 +15532,24 @@ donna_tree_view_history_get (DonnaTreeView          *tree,
 }
 
 /* mode list only */
+/**
+ * donna_tree_view_history_get_node:
+ * @tree: A #DonnaTreeView
+ * @direction: Direction to look into @tree's history
+ * @nb: How many steps to go into history
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns the node of the @nb-th item from @tree's history going @direction
+ *
+ * Note that the returned node isn't that of the location, but an internal node
+ * from @tree's history. You can however still use it via
+ * donna_tree_view_set_location() to change location & history accordingly.
+ *
+ * This is obviously only supported on lists, as trees don't have an history.
+ *
+ * Returns: (transfer full): The #DonnaNode for the corresponding history item,
+ * or %NULL
+ */
 DonnaNode *
 donna_tree_view_history_get_node (DonnaTreeView          *tree,
                                   DonnaHistoryDirection   direction,
@@ -15384,6 +15601,20 @@ donna_tree_view_history_get_node (DonnaTreeView          *tree,
 }
 
 /* mode list only */
+/**
+ * donna_tree_view_history_move:
+ * @tree: A #DonnaTreeView
+ * @direction: Direction to look into @tree's history
+ * @nb: How many steps to go into history
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set current location by moving @nb steps into @tree's history going
+ * @direction
+ *
+ * This is obviously only supported on lists, as trees don't have an history.
+ *
+ * Returns: %TRUE is location change was initiated; else %FALSE
+ */
 gboolean
 donna_tree_view_history_move (DonnaTreeView         *tree,
                               DonnaHistoryDirection  direction,
@@ -15433,6 +15664,20 @@ donna_tree_view_history_move (DonnaTreeView         *tree,
 }
 
 /* mode list only */
+/**
+ * donna_tree_view_history_clear:
+ * @tree: A #DonnaTreeView
+ * @direction: Direction(s) to look into @tree's history
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Clears @tree's history going @direction
+ *
+ * Set @direction to %DONNA_HISTORY_BOTH to clear the entire history.
+ *
+ * This is obviously only supported on lists, as trees don't have an history.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_history_clear (DonnaTreeView        *tree,
                                DonnaHistoryDirection direction,
@@ -15456,6 +15701,21 @@ donna_tree_view_history_clear (DonnaTreeView        *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_get_node_up:
+ * @tree: A #DonnaTreeView
+ * @level: Level wanted
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns a node that is the @level-nth ascendant of current location
+ *
+ * This is obviously only possible if there is a current location in a non-flat
+ * domain (e.g. "fs" or "config"). If @level is too high or negative, the node
+ * of the root of the domain will be returned.
+ *
+ * Returns: (transfer full): A #DonnaNode, @level-nth ascendant of current
+ * location, or %NULL
+ */
 DonnaNode *
 donna_tree_view_get_node_up (DonnaTreeView      *tree,
                              gint                level,
@@ -15578,6 +15838,26 @@ go_up_cb (DonnaTreeView *tree, struct cl_go_up *data)
     free_go_up (data);
 }
 
+/**
+ * donna_tree_view_go_up:
+ * @tree: A #DonnaTreeView
+ * @level: Level wanted
+ * @set: For lists only: What to set on child
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Changes location to the @level-nth ascendant of current location
+ *
+ * See donna_tree_view_get_node_up() for how the node (for new current
+ * location) is obtained
+ *
+ * For lists only, @set defines what will be set after location change on the
+ * origin child. That is, once in the new location, the focus, scroll and/or
+ * cursor can be set of the child that was the previous location (or its
+ * ascendant).
+ *
+ * Returns: %TRUE if the location change was initiated, or if no nodes to go to
+ * were found; else %FALSE
+ */
 gboolean
 donna_tree_view_go_up (DonnaTreeView      *tree,
                        gint                level,
@@ -15632,6 +15912,27 @@ donna_tree_view_go_up (DonnaTreeView      *tree,
 }
 
 /* mode list only (history based) */
+/**
+ * donna_tree_view_get_node_down:
+ * @tree: A #DonnaTreeView
+ * @level: Level wanted
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns a node from @tree's history that is a descendant of current location.
+ *
+ * History is looked first in forward direction, then backward, always from most
+ * to less recent. If a descendant is found, but isn't @level down, then the
+ * search continues. Either a matching descendant will be found and returned,
+ * else the closest (to @level) will be returned. (If more than one descendant
+ * at the same level were found, the first match will be returned.)
+ *
+ * This is only supported for lists, as this is history-based (and trees don't
+ * have history). It is also only possible if the current location is in a
+ * non-flat domain (e.g. "fs" or "config").
+ *
+ * Returns: (transfer full): A #DonnaNode descendant of current location, or
+ * %NULL
+ */
 DonnaNode *
 donna_tree_view_get_node_down (DonnaTreeView      *tree,
                                gint                level,
@@ -15794,6 +16095,24 @@ found:
 }
 
 /* mode list only (history based) */
+/**
+ * donna_tree_view_go_down:
+ * @tree: A #DonnaTreeView
+ * @level: Level wanted
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Changes location to that from @tree's history that is a descendant of current
+ * location.
+ *
+ * See donna_tree_view_get_node_down() for how the node (for new current
+ * location) is obtained
+ *
+ * This is only supported for lists, as this is history-based (and trees don't
+ * have history).
+ *
+ * Returns: %TRUE if the location change was initiated, or if no nodes to go to
+ * were found; else %FALSE
+ */
 gboolean
 donna_tree_view_go_down (DonnaTreeView      *tree,
                          gint                level,
@@ -17590,6 +17909,45 @@ err:
     return FALSE;
 }
 
+/**
+ * donna_tree_view_context_get_nodes:
+ * @tree: A #DonnaTreeView
+ * @rowid: (allow-none): Identifier of a row; See #rowid for more
+ * @column: (allow-none): Name of a column
+ * @items: (allow-none): The items to load as context nodes
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns the nodes to be used in context menu, as defined on @items
+ *
+ * If @items is not specified, a few options will be tried to get the items to
+ * use. First option
+ * <systemitem>tree_views/&lt;TREE-NAME&gt;/context_menu_&lt;DOMAIN&gt;</systemitem>
+ * is tried (where DOMAIN is the domain of the current location).
+ * If it doesn't exist, option
+ * <systemitem>tree_views/&lt;TREE-NAME&gt;/context_menu</systemitem> is tried.
+ *
+ * Next defaults are tried using the same logic:
+ * <systemitem>defaults/&lt;TREE-MODE&gt;/context_menu_&lt;DOMAIN&gt;</systemitem>
+ * first, and if it doesn't exist
+ * <systemitem>defaults/&lt;TREE-MODE&gt;/context_menu</systemitem> is tried.
+ *
+ * If none of those options exist, an error is returned.
+ *
+ * #DonnaNode<!-- -->s from the specified items are then loaded (see
+ * donna_context_menu_get_nodes()) and returned.
+ * The context used will have the row behind @rowid (if any) set as reference,
+ * and the column @column (if specified) will also be use/available in
+ * contextual parsing.
+ *
+ * Valid values for @column are the column's full name, simply as many of the
+ * first characters as needed to identify it, or a number to get the nth column
+ * on @tree.
+ *
+ * TODO: document internal aliases & items
+ *
+ * Returns: (transfer full) (element-type DonnaNode): The contextual nodes (to
+ * show in a popup menu), or %NULL
+ */
 GPtrArray *
 donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
                                    DonnaRowId         *rowid,
@@ -17701,6 +18059,30 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     return nodes;
 }
 
+/**
+ * donna_tree_view_context_popup:
+ * @tree: A #DonnaTreeView
+ * @rowid: (allow-none): Identifier of a row; See #rowid for more
+ * @column: (allow-none): Name of a column
+ * @items: (allow-none): The items to load as context nodes
+ * @menus: (allow-none): Menu definition to use
+ * @no_focus_grab: If %TRUE @tree won't grab focus before showing the menu
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Gets the nodes to be used in context menu, as defined on @items, and show
+ * them in a popup menu.
+ *
+ * See donna_context_menu_get_nodes() for more on getting the nodes, and how
+ * @rowid, @column and @items are used.
+ *
+ * If @menus isn't specified, value of treeview option
+ * <systemitem>context_menu_menus</systemitem> will be used, following the usual
+ * option path.
+ *
+ * See donna_app_show_menu() for more on how the menu is shown.
+ *
+ * Returns: %TRUE is the menu was shown, else %FALSE
+ */
 gboolean
 donna_tree_view_context_popup (DonnaTreeView      *tree,
                                DonnaRowId         *rowid,
@@ -17752,6 +18134,19 @@ donna_tree_view_context_popup (DonnaTreeView      *tree,
 }
 
 /* mode tree only */
+/**
+ * donna_tree_view_get_node_root:
+ * @tree: A #DonnaTreeView
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns the node of the root of the current branch, that is the one of the
+ * current location.
+ *
+ * This obviously only works on tree, and only if the current location is in a
+ * non-flat domain (e.g. "fs" or "config").
+ *
+ * Returns: (transfer full): The #DonnaNode of the root of current branch
+ */
 DonnaNode *
 donna_tree_view_get_node_root   (DonnaTreeView      *tree,
                                  GError            **error)
@@ -17806,6 +18201,18 @@ donna_tree_view_get_node_root   (DonnaTreeView      *tree,
 }
 
 /* mode tree only */
+/**
+ * donna_tree_view_go_root:
+ * @tree: A #DonnaTreeView
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Change location to the root of the current branch
+ *
+ * See donna_tree_view_get_node_root() for more
+ *
+ * Returns: %TRUE if current location was changed, or no destination was found
+ * (e.g. there's no current location); else %FALSE
+ */
 gboolean
 donna_tree_view_go_root (DonnaTreeView      *tree,
                          GError            **error)
@@ -17836,6 +18243,21 @@ donna_tree_view_go_root (DonnaTreeView      *tree,
     return ret;
 }
 
+/**
+ * donna_tree_view_set_sort_order:
+ * @tree: A #DonnaTreeView
+ * @column: Name of the column to sort by
+ * @order: Order to sort
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set @tree's sort order on @column (using order @order)
+ *
+ * If @order if %DONNA_SORT_UNKNOWN the default sort order for @column will be
+ * used, unless sort order was already there in which case the order is
+ * reserved.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_set_sort_order (DonnaTreeView      *tree,
                                 const gchar        *column,
@@ -17855,6 +18277,21 @@ donna_tree_view_set_sort_order (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_set_second_sort_order:
+ * @tree: A #DonnaTreeView
+ * @column: Name of the column to second sort by
+ * @order: Order to sort
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set @tree's second sort order on @column (using order @order)
+ *
+ * If @order if %DONNA_SORT_UNKNOWN the default sort order for @column will be
+ * used, unless second sort order was already there in which case the order is
+ * reserved.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
 donna_tree_view_set_second_sort_order (DonnaTreeView      *tree,
                                        const gchar        *column,
