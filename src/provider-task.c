@@ -2354,7 +2354,7 @@ donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
             case ST_PAUSED:
                 if (switch_on)
                     if (!donna_task_manager_set_state (tm, nodes->pdata[i],
-                            DONNA_TASK_RUNNING, (fail_on_failure) ? &err : NULL)
+                                DONNA_TASK_RUNNING, (fail_on_failure) ? &err : NULL)
                             && fail_on_failure)
                     {
                         if (!str)
@@ -2370,7 +2370,8 @@ donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
             case ST_ON_HOLD:
                 if (!switch_on)
                     if (!donna_task_manager_set_state (tm, nodes->pdata[i],
-                                DONNA_TASK_PAUSED, (fail_on_failure) ? &err : NULL))
+                                DONNA_TASK_PAUSED, (fail_on_failure) ? &err : NULL)
+                            && fail_on_failure)
                     {
                         if (!str)
                             str = g_string_new (NULL);
@@ -2384,7 +2385,8 @@ donna_task_manager_switch_tasks (DonnaTaskManager   *tm,
             case ST_WAITING:
                 if (!switch_on)
                     if (!donna_task_manager_set_state (tm, nodes->pdata[i],
-                            DONNA_TASK_STOPPED, (fail_on_failure) ? &err : NULL))
+                                DONNA_TASK_STOPPED, (fail_on_failure) ? &err : NULL)
+                            && fail_on_failure)
                     {
                         if (!str)
                             str = g_string_new (NULL);
