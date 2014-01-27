@@ -14002,7 +14002,6 @@ donna_tree_view_toggle_column (DonnaTreeView      *tree,
     return TRUE;
 }
 
-
 struct refresh_list
 {
     DonnaTreeView *tree;
@@ -15471,7 +15470,7 @@ donna_tree_view_get_node_up (DonnaTreeView      *tree,
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
     priv = tree->priv;
 
-    if (G_UNLIKELY (!priv->location))
+    if (!priv->location)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,
@@ -17767,7 +17766,7 @@ donna_tree_view_get_node_root   (DonnaTreeView      *tree,
     priv = tree->priv;
     model = (GtkTreeModel *) priv->store;
 
-    if (G_UNLIKELY (!priv->location))
+    if (!priv->location)
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_NOT_FOUND,

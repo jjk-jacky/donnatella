@@ -280,12 +280,12 @@ GPtrArray *     donna_tree_view_context_get_nodes (
                                                  DonnaTreeView      *tree,
                                                  DonnaRowId         *rowid,
                                                  const gchar        *column,
-                                                 gchar              *sections,
+                                                 gchar              *items,
                                                  GError            **error);
 gboolean        donna_tree_view_context_popup   (DonnaTreeView      *tree,
                                                  DonnaRowId         *rowid,
                                                  const gchar        *column,
-                                                 gchar              *sections,
+                                                 gchar              *items,
                                                  const gchar        *menus,
                                                  gboolean            no_focus_grab,
                                                  GError            **error);
