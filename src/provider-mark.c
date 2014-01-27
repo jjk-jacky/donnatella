@@ -960,9 +960,9 @@ provider_mark_remove_from (DonnaProviderBase  *_provider,
 
 /**
  * mark_delete:
- * @name: Name of the mark to delete
+ * @location: Location of the mark to delete
  *
- * Delete the mark @mark
+ * Delete the mark @location
  */
 static DonnaTaskState
 cmd_mark_delete (DonnaTask         *task,
@@ -983,6 +983,18 @@ cmd_mark_delete (DonnaTask         *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * mark_get_node:
+ * @location: Location of the mark
+ *
+ * Get the node the mark @location resolves to.
+ *
+ * This isn't the node of the mark (inside domain "mark") but the node it
+ * resolves to, so for standard mark the node of its value, and for dynamix mark
+ * to node obtained from triggering the node of its value.
+ *
+ * Returns: The node mark @location resolves to
+ */
 static DonnaTaskState
 cmd_mark_get_node (DonnaTask         *task,
                    DonnaApp          *app,
@@ -1083,6 +1095,25 @@ set_mark (DonnaProviderMark *pm,
                 get_node_for (pm, GET_CREATE_FROM_MARK, m, NULL));
 }
 
+/**
+ * mark_load:
+ * @filename: (allow-none): Name of the file to load from
+ * @ignore_no_file: (allow-none): Set to 1 to ignore if @filename doesn't exist
+ * @reset: (allow-none): Set to 1 to reset/remove all existing marks before
+ *
+ * Load marks from @filename, usually saved using command mark_save()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename() (Defaulting to "marks.conf" if not
+ * specified)
+ *
+ * If @ignore_no_file is set and @file doesn't exist, this will do nothing, else
+ * it would fail.
+ *
+ * If @reset is set, any & all existing marks will be removed before loading the
+ * new ones (this happens after @file was read), else they are merged (any mark
+ * already set will be replaced, new ones added, others left untouched).
+ */
 static DonnaTaskState
 cmd_mark_load (DonnaTask         *task,
                DonnaApp          *app,
@@ -1258,6 +1289,27 @@ cmd_mark_load (DonnaTask         *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * mark_save:
+ * @filename: (allow-none): Name of the file to load from
+ *
+ * Save current marks to @filename, which can later be loaded using command
+ * mark_load()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename() (Defaulting to "marks.conf" if not
+ * specified)
+ *
+ * The format of the file is a simple text file with lines containing
+ * "key=value" data. There can't be spaces before the key or around the equal
+ * sign. There's no comment per-se, but any lines other than the supported keys
+ * will be silently ignored on load.
+ *
+ * First should be key "mark" with the mark's location as value. Then key "type"
+ * can be used, with a value of 0 for standard marks (default), or 1 for dynamic
+ * marks. Key "name" can be featured to specify as value the mark's name.
+ * Finally key "value" with the value of the mark.
+ */
 static DonnaTaskState
 cmd_mark_save (DonnaTask        *task,
               DonnaApp          *app,
@@ -1315,6 +1367,22 @@ cmd_mark_save (DonnaTask        *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * mark_set:
+ * @location: Location of the mark
+ * @name: (allow-none): Name to set for the mark
+ * @type: (allow-none): Type to set for the mark
+ * @value: (allow-none): Value to set for the mark
+ *
+ * Set the specified data for the mark @location
+ *
+ * @type can be one of "standard" or "dynamic"
+ *
+ * Only specified values will be set. If the mark doesn't exist it will be
+ * created.
+ *
+ * Returns: The node of the mark @location (i.e. in domain "mark")
+ */
 static DonnaTaskState
 cmd_mark_set (DonnaTask         *task,
               DonnaApp          *app,
