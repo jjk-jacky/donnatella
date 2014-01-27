@@ -843,7 +843,7 @@ cmd_node_get_property (DonnaTask *task, DonnaApp *app, gpointer *args)
                     DONNA_COMMAND_ERROR_OTHER,
                     "Command 'node_get_property': "
                     "Failed to format property '%s' on node '%s': "
-                    "Invalid formatting options, neither 'date' nor 'size': %s",
+                    "Invalid formatting options, neither 'time' nor 'size': %s",
                     name, s, options);
             g_free (s);
             return DONNA_TASK_FAILED;
@@ -1803,12 +1803,12 @@ cmd_tv_context_get_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
     DonnaRowId *rowid = args[1]; /* opt */
     const gchar *column = args[2]; /* opt */
-    gchar *sections = args[3]; /* opt */
+    gchar *items = args[3]; /* opt */
 
     GPtrArray *nodes;
     GValue *value;
 
-    nodes = donna_tree_view_context_get_nodes (tree, rowid, column, sections, &err);
+    nodes = donna_tree_view_context_get_nodes (tree, rowid, column, items, &err);
     if (!nodes)
     {
         donna_task_take_error (task, err);
@@ -1830,11 +1830,11 @@ cmd_tv_context_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
     DonnaRowId *rowid = args[1]; /* opt */
     const gchar *column = args[2]; /* opt */
-    gchar *sections = args[3]; /* opt */
+    gchar *items = args[3]; /* opt */
     const gchar *menus = args[4]; /* opt */
     gboolean no_focus_grab = GPOINTER_TO_INT (args[5]); /* opt */
 
-    if (!donna_tree_view_context_popup (tree, rowid, column, sections, menus,
+    if (!donna_tree_view_context_popup (tree, rowid, column, items, menus,
                 no_focus_grab, &err))
     {
         donna_task_take_error (task, err);
@@ -1886,7 +1886,13 @@ cmd_tv_get_location (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     node = donna_tree_view_get_location (tree);
     if (!node)
+    {
+        donna_task_set_error (task, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "Command 'tv_get_location': TreeView '%s' has no current location",
+                donna_tree_view_get_name (tree));
         return DONNA_TASK_FAILED;
+    }
 
     v = donna_task_grab_return_value (task);
     g_value_init (v, DONNA_TYPE_NODE);
@@ -2272,7 +2278,7 @@ cmd_tv_history_clear (DonnaTask *task, DonnaApp *app, gpointer *args)
         }
     }
     else
-        dir = DONNA_HISTORY_BACKWARD;
+        dir = DONNA_HISTORY_BOTH;
 
     if (!donna_tree_view_history_clear (tree, dir, &err))
     {
@@ -2313,7 +2319,7 @@ cmd_tv_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
         }
     }
     else
-        dir = DONNA_HISTORY_BACKWARD | DONNA_HISTORY_FORWARD;
+        dir = DONNA_HISTORY_BOTH;
 
     arr = donna_tree_view_history_get (tree, dir, nb, &err);
     if (!arr)
