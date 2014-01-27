@@ -2622,7 +2622,7 @@ cmd_register_get_nodes (DonnaTask               *task,
 {
     GError *err = NULL;
     const gchar *name = args[0]; /* opt */
-    gchar *drop = args[1];
+    gchar *drop = args[1]; /* opt */
 
     const gchar *c_drop[] = { "not", "always", "on-cut" };
     DonnaDropRegister drops[] = { DONNA_DROP_REGISTER_NOT,
@@ -2637,16 +2637,21 @@ cmd_register_get_nodes (DonnaTask               *task,
         return DONNA_TASK_FAILED;
     }
 
-    c = _get_choice (c_drop, drop);
-    if (c < 0)
+    if (drop)
     {
-        donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                DONNA_COMMAND_ERROR_SYNTAX,
-                "Command 'register_get_nodes': Invalid drop option: '%s'; "
-                "Must be 'not', 'always' or 'on-cut'",
-                drop);
-        return DONNA_TASK_FAILED;
+        c = _get_choice (c_drop, drop);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
+                    "Command 'register_get_nodes': Invalid drop option: '%s'; "
+                    "Must be 'not', 'always' or 'on-cut'",
+                    drop);
+            return DONNA_TASK_FAILED;
+        }
     }
+    else
+        c = 2; /* DONNA_DROP_REGISTER_ON_CUT */
 
     if (!register_get_nodes (pr, name, drops[c],
                 NULL, &arr, &err))
@@ -3468,7 +3473,7 @@ provider_register_contructed (GObject *object)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (register_get_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
