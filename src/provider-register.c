@@ -2548,6 +2548,15 @@ provider_register_remove_from (DonnaProviderBase  *_provider,
 
 /* commands */
 
+/**
+ * register_add_nodes:
+ * @name: (allow-none): Name of the register
+ * @nodes: (array): Nodes to add
+ *
+ * Add @nodes to register @name. If @name isn't specified, use default register
+ *
+ * Returns: The node of the register @name
+ */
 static DonnaTaskState
 cmd_register_add_nodes (DonnaTask               *task,
                         DonnaApp                *app,
@@ -2591,6 +2600,16 @@ cmd_register_add_nodes (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_drop:
+ * @name: (allow-none): Name of the register
+ *
+ * Drop register @name, or default register if @name not specified
+ *
+ * Dropping a non-existing register does nothing. Dropping default register or
+ * register "+" (clipboard) will simply reset/empty them, since they always
+ * exist.
+ */
 static DonnaTaskState
 cmd_register_drop (DonnaTask               *task,
                    DonnaApp                *app,
@@ -2614,6 +2633,20 @@ cmd_register_drop (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_get_nodes:
+ * @name: (allow-none): Name of the register
+ * @drop: (allow-none): How to drop (or not) the register afterwards
+ *
+ * Get the nodes from register @name (or default if not specified) and drops it
+ * (or not), according to @drop
+ *
+ * @drop can be one of "not" (do not drop register), "always" (drop register),
+ * or "on-cut" (drop register only if it was of type "cut"). Defaults to
+ * "on-cut"
+ *
+ * Returns: (array): The nodes from the register
+ */
 static DonnaTaskState
 cmd_register_get_nodes (DonnaTask               *task,
                         DonnaApp                *app,
@@ -2668,6 +2701,14 @@ cmd_register_get_nodes (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_get_type:
+ * @name: (allow-none): The name of the register
+ *
+ * Get the type of the register. Can be one of "unknown", "cut" or "copy"
+ *
+ * Returns: The type of the register @name, or default one if not specified
+ */
 static DonnaTaskState
 cmd_register_get_type (DonnaTask               *task,
                        DonnaApp                *app,
@@ -2704,6 +2745,25 @@ cmd_register_get_type (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_load:
+ * @name: (allow-none): The name of the register
+ * @filename: Name of the file to load from
+ * @file_type: (allow-none): Type/format of @filename
+ *
+ * Load content of register @name (or default one) from @filename, usually saved
+ * using command register_save()
+ *
+ * @filename can be either a full path to a file, or the filename in the current
+ * location (according to donna_app_get_current_dirname())
+ *
+ * @file_type can be one of "nodes", "files" or "uris" See register_save() for
+ * more. Defaults to "nodes"
+ *
+ * If the register already existed, it will basically be dropped first.
+ *
+ * Returns: The node of the register
+ */
 static DonnaTaskState
 cmd_register_load (DonnaTask               *task,
                    DonnaApp                *app,
@@ -2768,6 +2828,25 @@ cmd_register_load (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_load_all:
+ * @filename: (allow-none): Name of the file to load from
+ * @ignore_no_file: (allow-none): Set to 1 to ignore if @filename doesn't exist
+ * @reset: (allow-none): Set to 1 to drop all existing registers first
+ *
+ * Load all registers from @filename, usually created via command
+ * register_save_all()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename() (Defaulting to "registers" if not
+ * specified)
+ *
+ * If @ignore_no_file is set and @file doesn't exist, this will do nothing, else
+ * it would fail.
+ *
+ * If @reset is set, all registers will be dropped prior to loading new ones
+ * (but after reading @file's content, though no syntax check has been done yet).
+ */
 static DonnaTaskState
 cmd_register_load_all (DonnaTask                *task,
                        DonnaApp                 *app,
@@ -2930,6 +3009,36 @@ finish:
     return ret;
 }
 
+/**
+ * register_nodes_io:
+ * @name: (allow-none): Name of the register
+ * @io_type: (allow-none): Type of IO operation to perform
+ * @dest: (allow-none): Destination for the IO operation
+ * @in_new_folder: (allow-none): Set to 1 to set destination in a newly created
+ * folder
+ *
+ * Perform the IO operation requested on register @name, or the default one if
+ * not specified.
+ *
+ * @io_type canbe one of "auto" (based on the type of the register), "copy"
+ * (force copy even for register "cut"), "move" (force move even for register
+ * "copy") or "delete" (to delete the content of the register, instead of
+ * copying/moving it) Defaults to "auto"
+ *
+ * Note that dropping register if done when getting the nodes and before
+ * starting the actual IO operation so register might be dropped even though the
+ * IO operation failed.
+ *
+ * @in_new_folder cannot be used with @io_type "delete" When set, the user will
+ * be asked to enter the name of a new folder to create inside @dest, and to be
+ * used as new destination of the IO operation.
+ * IOW this allows to copy/move inside a new folder, created on the fly. Default
+ * names for the new folder will be offered, being the names (with & w/out
+ * extension) of the 3 first nodes in the register.
+ *
+ * Returns: (array) (allow-none): For copy/move operations, the resulting nodes
+ * will be returned. For delete operation, there won't be no return value.
+ */
 static DonnaTaskState
 cmd_register_nodes_io (DonnaTask               *task,
                        DonnaApp                *app,
@@ -3209,6 +3318,34 @@ cmd_register_nodes_io (DonnaTask               *task,
     return state;
 }
 
+/**
+ * register_save:
+ * @name: (allow-none): Name of the register
+ * @filename: Name of the file to save to
+ * @file_type: (allow-none): Type/format of @filename
+ *
+ * Save content of register @name (or default one) to @filename, so it can later
+ * be loaded using register_load()
+ *
+ * @filename can be either a full path to a file, or the filename in the current
+ * location (according to donna_app_get_current_dirname())
+ *
+ * @file_type can be one of "nodes", "files" or "uris" Defaults to "nodes"
+ *
+ * Every file type uses the same format: the first line contains either "cut" or
+ * "copy", indicating the type of register (i.e. how items were put in the
+ * register).
+ * Then every line contains an identifier:
+ *
+ * - "nodes": the full location of the node
+ * - "files": the location, only for nodes in "fs" (others are skipped)
+ * - "uris": the location encoded as URI, only for nodes in "fs" (others are
+ *   skipped)
+ *
+ * Using "nodes" allows to use any nodes from donna and reload the full register
+ * later. The other two follow comon standard (including that of the clipboard)
+ * and are likely to be supported by other applications.
+ */
 static DonnaTaskState
 cmd_register_save (DonnaTask               *task,
                    DonnaApp                *app,
@@ -3256,6 +3393,26 @@ cmd_register_save (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_save_all:
+ * @filename: (allow-none): Name of the file to save to
+ *
+ * Saves all registers into @filename, so they can be loaded later using
+ * register_load_all()
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename() (Defaulting to "registers" if not
+ * specified)
+ *
+ * The format of the file is a simple text file with the name of the register on
+ * one line, then the content of the register as done using command
+ * register_save() with file type "nodes", and an empty line to indidcate the
+ * end. Repeat with as many registers as there are.
+ *
+ * <note><para>Note that the clipboard (register "+") is not included in the
+ * file, as it is a special case and its content can be defined by any other
+ * application.</para></note>
+ */
 static DonnaTaskState
 cmd_register_save_all (DonnaTask                *task,
                        DonnaApp                 *app,
@@ -3337,6 +3494,18 @@ cmd_register_save_all (DonnaTask                *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_set:
+ * @name: (allow-none): Name of the register
+ * @type: Type to set
+ * @nodes: (array): Nodes to set in the register
+ *
+ * Set @nodes in register @name (or default one if not specified) as type @type
+ *
+ * @type must be one of "cut" or "copy"
+ *
+ * Returns: The node of the register
+ */
 static DonnaTaskState
 cmd_register_set (DonnaTask               *task,
                   DonnaApp                *app,
@@ -3396,6 +3565,17 @@ cmd_register_set (DonnaTask               *task,
     return DONNA_TASK_DONE;
 }
 
+/**
+ * register_set_type:
+ * @name: (allow-none): Name of the register
+ * @type: Type to set for the register
+ *
+ * Sets register @name (or default name if not specified) to @type
+ *
+ * @type must be one of "cut" or "copy"
+ *
+ * Returns: The node of the register
+ */
 static DonnaTaskState
 cmd_register_set_type (DonnaTask               *task,
                        DonnaApp                *app,
