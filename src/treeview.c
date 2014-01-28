@@ -19943,9 +19943,22 @@ next:
                  * will "resolve" aliases */
                 /* fall through */
             case KEY_DISABLED:
+                /* to silence warning, but it can't happen since find_key_from()
+                 * will return -1 (error) in such case */
                 /* fall through */
             default:
-                wrong_key (priv->key_m || priv->key_combine_name);
+                /* i.e. key isn't defined or disabled */
+                if (priv->key_m || priv->key_combine_name)
+                    wrong_key (TRUE);
+                else
+                {
+                    /* didn't handle this. This will allow GTK to process it,
+                     * e.g. for key bindgins such as [Ctrl/Shift]Tab to move
+                     * focus around the widgets in main window */
+                    g_free (from);
+                    g_free (alias);
+                    return FALSE;
+                }
         }
         if (type != KEY_COMBINE && priv->key_combine_name)
         {
