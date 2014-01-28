@@ -1090,6 +1090,8 @@ static gboolean donna_tree_view_button_release_event(GtkWidget      *widget,
                                                      GdkEventButton *event);
 static gboolean donna_tree_view_key_press_event     (GtkWidget      *widget,
                                                      GdkEventKey    *event);
+static gboolean donna_tree_view_focus               (GtkWidget      *widget,
+                                                     GtkDirectionType direction);
 #ifdef GTK_IS_JJK
 static void     donna_tree_view_rubber_banding_active (
                                                      GtkTreeView    *treev);
@@ -1327,10 +1329,11 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     tv_class->cursor_changed        = donna_tree_view_cursor_changed;
 
     w_class = GTK_WIDGET_CLASS (klass);
-    w_class->draw = donna_tree_view_draw;
-    w_class->button_press_event = donna_tree_view_button_press_event;
-    w_class->button_release_event = donna_tree_view_button_release_event;
-    w_class->key_press_event = donna_tree_view_key_press_event;
+    w_class->draw                   = donna_tree_view_draw;
+    w_class->button_press_event     = donna_tree_view_button_press_event;
+    w_class->button_release_event   = donna_tree_view_button_release_event;
+    w_class->key_press_event        = donna_tree_view_key_press_event;
+    w_class->focus                  = donna_tree_view_focus;
 
     o_class = G_OBJECT_CLASS (klass);
     o_class->get_property   = donna_tree_view_get_property;
@@ -20221,6 +20224,59 @@ donna_tree_view_draw (GtkWidget *w, cairo_t *cr)
         gtk_style_context_restore (context);
     g_object_unref (layout);
     return FALSE;
+}
+
+/* this is *very* similar to that of GtkTreeView, only with minor changes.
+ * Mainly, we don't want GTK_DIR_TAB_BACKWARD to put the focus on the colum
+ * headers, instead we jump to another widget.
+ * This is because I like it better that way, also goes along the fact that upon
+ * clicking a column header (e.g. set sort order) we send the focus back to the
+ * treeview.
+ */
+static gboolean
+donna_tree_view_focus (GtkWidget        *widget,
+                       GtkDirectionType  direction)
+{
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) widget)->priv;
+
+    if (!gtk_widget_is_sensitive (widget) || !gtk_widget_get_can_focus (widget))
+        return FALSE;
+
+    /* we need to stop editing if there was any. Luckily, we can do this. We
+     * also return FALSE then so the focus moves to another widget */
+    if (priv->renderer_editable)
+    {
+        /* we abort the editing -- we just do this, because our signal handlers
+         * for remove-widget will take care of removing handlers and whatnot */
+        g_object_set (priv->renderer_editable, "editing-canceled", TRUE, NULL);
+        gtk_cell_editable_editing_done (priv->renderer_editable);
+        gtk_cell_editable_remove_widget (priv->renderer_editable);
+        return FALSE;
+    }
+
+    /* Case 1.  Headers currently have focus. */
+    if (gtk_container_get_focus_child ((GtkContainer *) widget))
+        /* we let GTK handle this, so the LEFT/RIGHT can work. It'll also handle
+         * BACKWARD/FORWARD ofc */
+        return GTK_WIDGET_CLASS (donna_tree_view_parent_class)->focus (widget,
+                direction);
+
+    /* Case 2. We don't have focus at all. */
+    if (!gtk_widget_has_focus (widget))
+    {
+        /* same as GTK */
+        gtk_widget_grab_focus (widget);
+        return TRUE;
+    }
+
+    /* Case 3. We have focus already. */
+    if (direction == GTK_DIR_TAB_BACKWARD || direction == GTK_DIR_TAB_FORWARD)
+        /* both case we want to jump to another widget */
+        return FALSE;
+
+    /* Other directions caught by the keybindings (same as GTK) */
+    gtk_widget_grab_focus (widget);
+    return TRUE;
 }
 
 const gchar *
