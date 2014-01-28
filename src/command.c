@@ -921,6 +921,64 @@ cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * focus_move:
+ * @move: (allow-none): How to move focus
+ *
+ * Moves the focus around in main window
+ *
+ * See donna_app_move_focus() for more
+ */
+static DonnaTaskState
+cmd_focus_move (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    gint move = GPOINTER_TO_INT (args[0]); /* opt */
+
+    donna_app_move_focus (app, (move == 0) ? 1 : move);
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * focus_set:
+ * @type: Type of GUI element to focus
+ * @name: Name of GUI element to focus
+ *
+ * Focus the element @name of type @type
+ *
+ * @type must be one of "treeview"
+ *
+ * See donna_app_set_focus() for more
+ */
+static DonnaTaskState
+cmd_focus_set (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    const gchar *type = args[0];
+    const gchar *name = args[1];
+
+    const gchar *c_type[] = { "treeview" };
+    gint c;
+
+    c = _get_choice (c_type, type);
+    if (c < 0)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
+                "Invalid type of GUI element: '%s'; "
+                "Must be 'treeview'",
+                type);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_set_focus (app, c_type[c], name, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * menu_popup:
  * @nodes: (array): The nodes to show in a menu
  * @menu: (allow-none): The menu definition to use
@@ -4232,6 +4290,17 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_set_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (focus_move, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (focus_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

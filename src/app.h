@@ -16,6 +16,8 @@ G_BEGIN_DECLS
 typedef enum
 {
     DONNA_APP_ERROR_EMPTY,
+    DONNA_APP_ERROR_UNKNOWN_TYPE,
+    DONNA_APP_ERROR_NOT_FOUND,
     DONNA_APP_ERROR_OTHER,
 } DonnaAppError;
 
@@ -46,6 +48,12 @@ gint                donna_app_run                   (DonnaApp       *app,
                                                      gint            argc,
                                                      gchar          *argv[]);
 void                donna_app_ensure_focused        (DonnaApp       *app);
+void                donna_app_move_focus            (DonnaApp       *app,
+                                                     gint            move);
+gboolean            donna_app_set_focus             (DonnaApp       *app,
+                                                     const gchar    *type,
+                                                     const gchar    *name,
+                                                     GError        **error);
 void                donna_app_add_window            (DonnaApp       *app,
                                                      GtkWindow      *window,
                                                      gboolean        destroy_with_parent);

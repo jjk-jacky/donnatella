@@ -23,6 +23,8 @@ config_set_boolean
 config_set_int
 config_set_option
 config_set_string
+focus_move
+focus_set
 menu_popup
 node_get_property
 node_new_child
@@ -112,6 +114,8 @@ DONNA_APP_ERROR
 DonnaAppError
 DonnaApp
 donna_app_ensure_focused
+donna_app_move_focus
+donna_app_set_focus
 donna_app_add_window
 donna_app_set_floating_window
 donna_app_get_config

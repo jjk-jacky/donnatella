@@ -969,6 +969,75 @@ donna_app_ensure_focused (DonnaApp       *app)
         gtk_window_present_with_time (priv->window, GDK_CURRENT_TIME);
 }
 
+/**
+ * donna_app_move_focus:
+ * @app: The #DonnaApp
+ * @move: How many times to move focus
+ *
+ * Moves the focus @move times to the next (previous if negative) widget in main
+ * window
+ *
+ * Typical use would be for handling [Shift+]Tab keys
+ */
+void
+donna_app_move_focus (DonnaApp          *app,
+                      gint               move)
+{
+    g_return_if_fail (DONNA_IS_APP (app));
+    while (move != 0)
+    {
+        gtk_widget_child_focus ((GtkWidget *) app->priv->window,
+                (move > 0) ? GTK_DIR_TAB_FORWARD : GTK_DIR_TAB_BACKWARD);
+        if (move > 0)
+            --move;
+        else
+            ++move;
+    }
+}
+
+/**
+ * donna_app_set_focus:
+ * @app: The #DonnaApp
+ * @type: The type of GUI element to focus
+ * @name: The name of the element to focus
+ * @error: Return location of a #GError, or %NULL
+ *
+ * Set the focus to the GUI element @name of type @type
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
+gboolean
+donna_app_set_focus (DonnaApp       *app,
+                     const gchar    *type,
+                     const gchar    *name,
+                     GError        **error)
+{
+    GtkWidget *w = NULL;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
+
+    if (streq (type, "treeview"))
+        w = (GtkWidget *) donna_app_get_tree_view (app, name);
+    else
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_UNKNOWN_TYPE,
+                "Cannot set focus, unknown type of GUI element: '%s'",
+                type);
+        return FALSE;
+    }
+
+    if (!w)
+    {
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_NOT_FOUND,
+                "Cannot set focus to TreeView '%s': not found",
+                name);
+        return FALSE;
+    }
+
+    gtk_widget_grab_focus (w);
+    return TRUE;
+}
+
 static void
 window_destroyed (GtkWindow *window, DonnaApp *app)
 {
