@@ -417,6 +417,100 @@
  *
  * </para></refsect2>
  *
+ * <refsect2 id="click-modes">
+ * <title>Click Modes, or how clicks are processed</title>
+ * <para>
+ * Commonly in applications, while you might be able to assign keyboard
+ * shortcuts to map certains keys to operations of your choosing (see #key-modes
+ * to see how donna gives you full control over your keys), things are different
+ * when it comes to mouse clicks.
+ *
+ * In donna, however, you also get full control for clicks. Whenever you click
+ * somewhere, a string identifying the type of click will be computed, and be
+ * used as an option name to get the full location to trigger.
+ *
+ * First of all, which click was this? We're talking here about something like
+ * "left_click" or "ctrl_middle_double_click"
+ *
+ * First off, there might have been modifiers held. Supported are Control
+ * ("ctrl") and Shift ("shift"), checked and added in that order (i.e. if both
+ * were held, prefix "ctrl_shift_" will be used).
+ * Then the button: "left", "middle" or "right" is added.
+ * Except for column headers, there might then be a "specifier" for the type of
+ * click: "double" or "slow".
+ * After that comes the string "click"
+ *
+ * A double click is just that, using the GTK settings "gtk-double-click-time"
+ * as expected. A slow click is a "slow double click" that happened after said
+ * delay (else it'd be a double click) and before that delay expired again (then
+ * it's simple a new click).
+ *
+ * It should be noted that donna will wait for the delay to expire before
+ * processing a click, thus allowing to hav a double click triggered without a
+ * click being triggered first. This is, however, not true for simple left click
+ * (i.e. for middle/right clicks, or left click with Control and/or Shift held)
+ * because otherwise the application feels a bit slow/unresponsive, and
+ * expectations are usually that the first click is processed before the double
+ * click is (e.g. left_click sets focus, left_double_click acts on focused row).
+ *
+ * That's for the type of click. Certain areas, when clicked, will result in a
+ * prefix be used. Those are "colheader_" for column headers, "blankrow_" when
+ * clicking on the blank space after the last row, "blankcol_" when clicking on
+ * the blank space to the right of the last column, "blank_" when clicking on
+ * blank space within a column (on a row), and "expander_" when clicking on an
+ * expander. There can, of course, only be one of those used at a time (they are
+ * evaluated in the specified order, so "blankcol_" takes precedence over
+ * "blankrow_").
+ *
+ * This gives an option name, whose value must be the full location to trigger.
+ * This full location will first be parsed contextually of course.
+ *
+ * Now where should this option be? This is where the notion of "click modes"
+ * will becomes apparent: treeview option "click_mode" defines the name of the
+ * click mode used in tree view (Note that it can be changed used command
+ * tv_set_key_mode()).
+ *
+ * A click mode is defined under
+ * <systemitem>click_modes/&lt;CLICK-MODE&gt;</systemitem>
+ * Before describing the full option path used, it should be noted that a click
+ * mode can have an option <systemitem>fallback</systemitem> set, name of
+ * another click mode that will be used as fallback if the option isn't found.
+ * This is useful to preserve a click mode as it is, and only make a small set
+ * of changes. It will be refered to as &lt;FALLBACK&gt; in the option path
+ * below.
+ *
+ * (Note that when looking for options in a fallback click mode, its own option
+ * <systemitem>fallback</systemitem> (if any) will be ignored.)
+ *
+ * So, the full option path goes as follow (using &lt;CLICK&gt; to refer to the
+ * option name as described above):
+ *
+ * If the click was on a selected row:
+ *
+ * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/columns/&lt;COLUMN&gt;/selected/&lt;CLICK&gt;</systemitem>
+ *   if the click was on a column
+ * - <systemitem>click_modes/&lt;FALLBACK&gt;/columns/&lt;COLUMN&gt;/selected/&lt;CLICK&gt;</systemitem>
+ *   if the click was on a column
+ * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/selected/&lt;CLICK&gt;</systemitem>
+ * - <systemitem>click_modes/&lt;FALLBACK&gt;/selected/&lt;CLICK&gt;</systemitem>
+ *
+ * If nothing was found, or the click wasn't on a selected row:
+ *
+ * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/columns/&lt;COLUMN&gt;/&lt;CLICK&gt;</systemitem>
+ *   if the click was on a column
+ * - <systemitem>click_modes/&lt;FALLBACK&gt;/columns/&lt;COLUMN&gt;/&lt;CLICK&gt;</systemitem>
+ *   if the click was on a column
+ * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/&lt;CLICK&gt;</systemitem>
+ * - <systemitem>click_modes/&lt;FALLBACK&gt;/&lt;CLICK&gt;</systemitem>
+ *
+ * If nothing was found, nothing happens. Else the trigger (option value) is
+ * contextually parsed and the associated node triggered.
+ *
+ * As a result, you can control absolutely any & every clicks made. See
+ * #default-click-modes for description of how to use donna with default
+ * options.
+ * </para></refsect2>
+ *
  * <refsect2 id="rowid">
  * <title>Referencing rows (in commands)</title>
  * <para>
