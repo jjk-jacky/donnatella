@@ -417,6 +417,161 @@
  *
  * </para></refsect2>
  *
+ * <refsect2 id="key-modes">
+ * <title>Key Modes, or how keys are handled</title>
+ * <para>
+ * donna works in a different way than most file managers, in that it uses
+ * vim-inspired key modes to handle key presses. While in most file managers if
+ * you start typing something this is processed as some sort of "find as you
+ * type" search, things are quite different in donna (and you certainly
+ * shouldn't start typing things like that!).
+ *
+ * Indeed, each key can be assign an action of sorts. Almost every key can be
+ * set, with exceptions like numbers (0-9) or modifiers (Ctrl, Shift, Alt...)
+ * Obviously when you press keys, you want some kind of trigger to happen as
+ * response. The most simple way being that the action happens when the key is
+ * pressed; This is the type "direct" As is usual in donna, the action will be a
+ * full location, parsed contextually and triggered.
+ *
+ * The reason numbers aren't usable is that they're automatically used to handle
+ * the "modifier," a number you can enter before pressing the key to trigger the
+ * action.  Commonly, this is used to have the action be triggered a certain
+ * number of times, e.g. to specify by how many rows to move the focus. However,
+ * the way multiplier works in donna isn't by repeating the action as many times
+ * as specified via the multiplier (for multiple reasons, where it wouldn't work
+ * (as expected)).
+ * Instead, the multiplier will be available as variable
+ * <systemitem>\%m</systemitem> on the trigger/full location. It does mean that
+ * if not used, the multiplier is simply ignored, however commands such as
+ * tv_goto_line() support an argument especially made for the multipier.
+ *
+ * In addition to "direct" keys, you can use type "spec" A "spec" key is very
+ * much like a direct one except that after pressing it nothing happens, as it
+ * waits for another key to be pressed, the so-called "spec."
+ * This spec can be restricted (e.g. only numbers, and/or letters, etc) and will
+ * be available on trigger as variable <systemitem>\%k</systemitem> (think key).
+ *
+ * This allows to quickly specify an argument to e.g. the triggered command. In
+ * addition, it is possible to have keys use a spec motion, which means that the
+ * key pressed should be a "motion."
+ *
+ * A motion key is simply any key (direct or spec) that was flagged as such, to
+ * indicate that it will move the focus on treeview. The idea is that two
+ * actions will then take place:
+ *
+ * - first, the motion key is triggered, so the focus can move.
+ * - then, the original (spec) key is triggered, but it will now have the
+ *   originally focused row available through variables
+ *   <systemitem>\%r</systemitem> and <systemitem>\%n</systemitem> (instead of
+ *   the focused row).
+ *
+ * This pretty much allows to do the same kind of operation that are possible
+ * via mouse (where it is possible to click on a row other than the focused
+ * row), but using the keyboard only.
+ *
+ * Note that donna doesn't ensure that a key marked as motion actually is/moves
+ * the focus.
+ *
+ * Any spec key with a spec motion will also support to be pressed again, to
+ * indicate that no motion should occur and instead the action can be triggered.
+ * This is common to what one can find in vim, so it is possible to do similar
+ * things: press 'y' twice to yank/copy the focused row, or press 'y' then a
+ * motion to yank the whole range of the rows; E.g. "y2j" would yank the focused
+ * row and the two below, ending with the focus moved two row below, assuming
+ * 'j' is a motion key to move focus down obvisouly. As you can see, it is
+ * possible to use multipliers on a spec motion. It is also possible that the
+ * motion key is of type "spec" thus requiring yet another key to be pressed.
+ *
+ * Another type of key supported is "combine" which works just the like spec, in
+ * that it requires another key to be pressed just the same (expect you can't
+ * use a spec motion), and it will be available as variable
+ * <systemitem>\%c</systemitem>
+ * However, a combine is meant to be used as an optional argument, one that can
+ * be used on more than one key. For example, when dealing with registers you
+ * could have a few keys set, to yank/paste/etc to/from a register. But to avoid
+ * having to define all keys as spec, and thus losing the ability to make those
+ * keys spec (e.g. with a spec motion), you would use a combine.
+ *
+ * The combine key will set the name of combine it is (which is simply a string
+ * used to identify the combine), and for other (direct/spec) keys to
+ * accept/work with such combine, the same name must have been defined there as
+ * accepted/compatible combine.
+ *
+ * Lastly, a type "alias" is available to define a key as alias of another one,
+ * to have multiple keys behave exactly the same. E.g. set key 'j' an alias of
+ * key 'Down' (or the other way around).
+ *
+ * While much less powerfull than what you find in vim, it clearly takes
+ * inspiration in how things can be done in vim, and should allow to do quite a
+ * lot from the keyboard only. See #default-key-modes for what is available by
+ * default.
+ *
+ * Now that we've seen how keys are handled by donna, let's have a look at how
+ * all of this work/is configured.
+ *
+ * <refsect3 id="key-modes-config">
+ * <title>How keys are defined</title>
+ * <para>
+ * First of all, treeviews have an option <systemitem>key_mode</systemitem>
+ * which defines the default key mode for the treeview. This is simply the name
+ * of a category under <systemitem>key_modes</systemitem>.
+ *
+ * Much like with #click-modes, a key mode can have an option
+ * <systemitem>fallback</systemitem> which is simply the name of another key
+ * mode that will be used as fallback if the option isn't found.  This is useful
+ * to preserve a key mode as it is, and only make a small set of changes. It
+ * will be refered to as &lt;FALLBACK&gt;.
+ *
+ * (Note that when looking for options in a fallback key mode, its own option
+ * <systemitem>fallback</systemitem> (if any) will be ignored.)
+ *
+ * When a key is pressed, donna determines which key it is, using
+ * gdk_keyval_name(), referred to as &lt;KEY&gt;
+ *
+ * Then it looks for category
+ * <systemitem>key_modes/&lt;KEY-MODE&gt;/key_&lt;KEY&gt;</systemitem>
+ * If not found, then
+ * <systemitem>key_modes/&lt;FALLBACK&gt;/key_&lt;KEY&gt;</systemitem> is tried.
+ * If not found, the key is not defined.
+ *
+ * When a category is found, a few options are available, defining the key:
+ *
+ * - <systemitem>type</systemitem> &lpar;integer:key&rpar;: The type of key, one
+ *   of "disabled" (as if the key wasn't defined, except without fallback
+ *   lookup), "combine", "direct", "spec" or "alias" Defaults to "direct"
+ *
+ * For "alias":
+ *
+ * - <systemitem>key</systemitem> &lpar;string&rpar;: Name of the key
+ *   (definition) to use
+ *
+ * For "direct" and "spec":
+ *
+ * - <systemitem>trigger</systemitem> &lpar;string&rpar; : Full location to trigger
+ * - <systemitem>is_motion</systemitem> &lpar;optional; boolean&rpar; : Whether
+ *   this is a motion or not (Defaults to false)
+ * - <systemitem>combine</systemitem> &lpar;optional; string&rpar; : Name of the
+ *   combine that can be used with this key
+ *
+ * For "spec":
+ *
+ * - <systemitem>spec</systemitem> &lpar;integer:spec&rpar; : Type of keys allowed as
+ *   spec; One or more of "lower", "upper", "digits", "extra" or "custom" (see
+ *   option <systemitem>custom_chars</systemitem>) Can also be "motion" Defaults
+ *   to "lower,upper"
+ * - <systemitem>custom_chars</systemitem> &lpar;optional; string&rpar; : The
+ *   list of allowed characters when using "custom" in
+ *   <systemitem>spec</systemitem>
+ *
+ * For "combine":
+ *
+ * - <systemitem>combine</systemitem> &lpar;string&rpar; : Name of the combine
+ * - <systemitem>spec</systemitem> &lpar;integer:spec&rpar; : Same as
+ *   <systemitem>spec</systemitem> above, except that "motion" cannot be used.
+ *
+ * </para></refsect3>
+ * </para></refsect2>
+ *
  * <refsect2 id="click-modes">
  * <title>Click Modes, or how clicks are processed</title>
  * <para>
