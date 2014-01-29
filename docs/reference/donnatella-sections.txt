@@ -19,6 +19,7 @@ config_remove_category
 config_remove_option
 config_rename_category
 config_rename_option
+config_save
 config_set_boolean
 config_set_int
 config_set_option

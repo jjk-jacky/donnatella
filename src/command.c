@@ -793,6 +793,51 @@ cmd_config_rename_option (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * config_save:
+ * @filename: (allow-none): Filename to save configuration to
+ *
+ * Saves the current configuration to @filename
+ *
+ * @filename can be either a full path to a file, or it will be processed
+ * through donna_app_get_conf_filename()
+ */
+static DonnaTaskState
+cmd_config_save (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    const gchar *filename = args[0]; /* opt */
+
+    gchar *file;
+    gchar *data;
+
+    if (filename && *filename == '/')
+    {
+        if (!g_get_filename_charsets (NULL))
+            file = g_filename_from_utf8 (filename, -1, NULL, NULL, NULL);
+        else
+            file = (gchar *) filename;
+    }
+    else
+        file = donna_app_get_conf_filename (app, (filename) ? filename : "donnatella.conf");
+
+    data = donna_config_export_config (donna_app_peek_config (app));
+    if (!g_file_set_contents (file, data, -1, &err))
+    {
+        g_prefix_error (&err, "Command 'config_save': Failed to save configuration "
+                "to '%s': ", (filename) ? filename : "donnatella.conf");
+        g_free (data);
+        if (file != filename)
+            g_free (file);
+        return DONNA_TASK_FAILED;
+    }
+
+    g_free (data);
+    if (file != filename)
+        g_free (file);
+    return DONNA_TASK_DONE;
+}
+
+/**
  * config_set_boolean:
  * @name: Name of the option to set
  * @value: Value to set
@@ -4262,6 +4307,11 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_rename_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (config_save, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
