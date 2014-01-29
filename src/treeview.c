@@ -19872,12 +19872,18 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
             goto next;
         if (priv->key_spec_type & SPEC_CUSTOM)
         {
-            gchar *key_combine;
+            gchar *key_spec_owner;
             gchar *chars;
             gchar *found = NULL;
 
-            key_combine = gdk_keyval_name (priv->key_combine_val);
-            if (find_key_from (tree, config, &key_combine, &alias, &from) == -1)
+            if (priv->key_motion)
+                key_spec_owner = gdk_keyval_name (priv->key_motion);
+            else if (priv->key_combine_val && priv->key_combine_spec == 0)
+                key_spec_owner = gdk_keyval_name (priv->key_combine_val);
+            else
+                key_spec_owner = gdk_keyval_name (priv->key_val);
+
+            if (find_key_from (tree, config, &key_spec_owner, &alias, &from) == -1)
                 wrong_key (TRUE);
             if (!donna_config_get_string (config, NULL, &chars,
                         "%s/custom_chars", from))
