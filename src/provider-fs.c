@@ -924,7 +924,10 @@ new_node (DonnaProviderBase *_provider,
         }
     }
 
-    if (!g_file_test (filename, G_FILE_TEST_EXISTS))
+    /* G_FILE_TEST_EXISTS follows symlink and will therefore fail for "broken"
+     * symlinks, which is why we also test if it's a symlink */
+    if (!g_file_test (filename, G_FILE_TEST_EXISTS)
+            && !g_file_test (filename, G_FILE_TEST_IS_SYMLINK))
     {
         if (free_filename)
             g_free ((gchar *) filename);
@@ -1123,7 +1126,7 @@ has_get_children (DonnaProviderBase  *_provider,
                 if (n)
                     g_ptr_array_add (arr, n);
                 else
-                    g_warning ("Provider 'fs': Unable to create a node for '%s'",
+                    g_critical ("Provider 'fs': Unable to create a node for '%s'",
                             location);
                 if (location != b)
                     g_free (location);
