@@ -19841,7 +19841,7 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
     gchar *key;
     gchar *alias = NULL;
     gchar *from  = NULL;
-    enum key_type type;
+    enum key_type type = -1;
     gint i;
 
     /* ignore modifier or AltGr */
@@ -19917,7 +19917,8 @@ donna_tree_view_key_press_event (GtkWidget *widget, GdkEventKey *event)
                 return TRUE;
             }
 
-            if (find_key_from (tree, config, &key, &alias, &from) == -1)
+            type = find_key_from (tree, config, &key, &alias, &from);
+            if ((gint) type == -1)
                 wrong_key (TRUE);
 
             donna_config_get_boolean (config, NULL, &is_motion,
@@ -19948,7 +19949,6 @@ next:
             priv->key_spec_type = SPEC_NONE;
             priv->key_motion = event->keyval;
 
-            type = find_key_from (tree, config, &key, &alias, &from);
             if (type == KEY_DIRECT)
                 trigger_key (tree, 0);
             else if (type == KEY_SPEC)
