@@ -1477,20 +1477,10 @@ export_config (DonnaProviderConfigPrivate   *priv,
                                 ? "true" : "false");
                         break;
                     case G_TYPE_INT:
-                        {
-                            gint i;
-
-                            i = g_value_get_int (&option->value);
-                            if (i >= 0)
-                                g_string_append_printf (str, "%s=+%d\n",
-                                        option->name,
-                                        g_value_get_int (&option->value));
-                            else
-                                g_string_append_printf (str, "%s=%d\n",
-                                        option->name,
-                                        g_value_get_int (&option->value));
-                            break;
-                        }
+                        g_string_append_printf (str, "%s=%d\n",
+                                option->name,
+                                g_value_get_int (&option->value));
+                        break;
                     case G_TYPE_DOUBLE:
                         g_string_append_printf (str, "%s=%lf\n",
                                 option->name,
