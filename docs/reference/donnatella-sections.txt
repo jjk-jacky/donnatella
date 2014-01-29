@@ -113,6 +113,7 @@ register_set_type
 DONNA_APP_ERROR
 DonnaAppError
 DonnaApp
+donna_app_run
 donna_app_ensure_focused
 donna_app_move_focus
 donna_app_set_focus
@@ -238,6 +239,7 @@ donna_column_type_is_match_filter
 donna_column_type_free_filter_data
 donna_column_type_get_context_alias
 donna_column_type_get_context_item_info
+donna_column_type_new_floating_window
 <SUBSECTION Standard>
 DONNA_COLUMN_TYPE
 DONNA_COLUMN_TYPE_GET_INTERFACE
@@ -1087,6 +1089,7 @@ donna_tree_view_set_second_sort_order
 donna_tree_view_set_option
 donna_tree_view_save_tree_file
 donna_tree_view_load_tree_file
+donna_tree_view_toggle_column
 donna_tree_view_add_root
 donna_tree_view_set_visual
 donna_tree_view_get_visual
@@ -1127,8 +1130,10 @@ donna_tree_view_get_type
 donna_print_size
 donna_print_time
 duplicate_gvalue
+donna_g_ptr_array_contains
 donna_g_string_append_quoted
 donna_g_string_append_concat
+donna_g_object_unref
 donna_fd_source_new
 donna_fd_add_source
 </SECTION>
