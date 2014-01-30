@@ -25,6 +25,12 @@ LT_INIT
 # Option to make doc
 m4_ifdef([GTK_DOC_CHECK], [
 GTK_DOC_CHECK([1.19],[--flavour no-tmpl])
+AC_PATH_PROG([XSLTPROC], [xsltproc])
+  if test -z "$XSLTPROC"; then
+    if test "$enable_man" = yes ; then
+        AC_MSG_ERROR([xsltproc is required for --enable-gtk-doc])
+    fi
+  fi
 ],[
 AM_CONDITIONAL([ENABLE_GTK_DOC], false)
 ])

@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+               "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
+]>
+<refentry id="donnatella">
+
+<refentryinfo>
+  <title>donnatella</title>
+  <productname>Donnatella</productname>
+  <authorgroup>
+    <author>
+      <contrib>Developer</contrib>
+      <firstname>Olivier</firstname>
+      <surname>Brunel</surname>
+    </author>
+  </authorgroup>
+</refentryinfo>
+
+<refmeta>
+  <refentrytitle>donnatella</refentrytitle>
+  <manvolnum>1</manvolnum>
+  <refmiscinfo class="manual">User Commands</refmiscinfo>
+</refmeta>
+
+<refnamediv>
+  <refname>donnatella</refname>
+  <refpurpose>your file manager</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+<cmdsynopsis>
+<command>donnatella</command>
+<arg choice="opt">--config-dir <arg choice="plain"><replaceable>DIR</replaceable></arg></arg>
+<arg choice="opt">--log-level <arg choice="plain"><replaceable>LEVEL</replaceable></arg></arg>
+<arg choice="opt">--verbose</arg>
+<arg choice="opt">--quiet</arg>
+<arg choice="opt">--layout <arg choice="plain"><replaceable>LAYOUT</replaceable></arg></arg>
+<arg choice="opt">--maximized</arg>
+<arg choice="opt">--debug <arg choice="plain"><replaceable>FILTERS</replaceable></arg></arg>
+</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1><title>Description</title>
+<para>
+  <command>donnatella</command> is a GUI file manager.
+</para>
+</refsect1>
+
+<refsect1><title>Options</title>
+<variablelist>
+  <varlistentry>
+    <term>-c</term>
+    <term>--config-dir=<replaceable>DIR</replaceable></term>
+    <listitem><para>Use <replaceable>DIR</replaceable> as configuration
+            directory.</para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-L</term>
+    <term>--log-level=<replaceable>LEVEL</replaceable></term>
+    <listitem><para>Set the log level to <replaceable>LEVEL</replaceable>.</para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-v</term>
+    <term>--verbose</term>
+    <listitem><para>Increase verbosity of log; Can be repeated multiple times.
+            </para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-q</term>
+    <term>--quiet</term>
+    <listitem><para>Turns off verbosity;Same as
+            <systemitem>--log-level=error</systemitem></para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-y</term>
+    <term>--layout=<replaceable>LAYOUT</replaceable></term>
+    <listitem><para>Use <replaceable>LAYOUT</replaceable> as layout for the
+            main window, instead of option <systemitem>donna/layout</systemitem>
+            </para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-M</term>
+    <term>--maximized</term>
+    <listitem><para>Start main window maximized.</para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-d</term>
+    <term>--debug=<replaceable>FILTERS</replaceable></term>
+    <listitem><para>Define "filters" for the debug log messages.</para></listitem>
+  </varlistentry>
+</variablelist>
+</refsect1>
+
+</refentry>

@@ -19,6 +19,7 @@
       <title>Donnatella</title>
       <chapter id="overview">
           <title>Overview</title>
+          <xi:include href="donnatella.xml"/>
           <xi:include href="xml/app.xml"/>
           <xi:include href="xml/treeview.xml"/>
           <xi:include href="xml/commands.xml"/>
