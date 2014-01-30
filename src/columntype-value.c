@@ -1033,7 +1033,8 @@ ct_value_set_tooltip (DonnaColumnType    *ct,
         gtk_tooltip_set_text (tooltip, text);
 
     g_free (free);
-    g_value_unset (&value);
+    if (G_IS_VALUE (&value))
+        g_value_unset (&value);
     return text != NULL;
 }
 
