@@ -28,6 +28,7 @@ docs/reference/donnatella.signals
 docs/reference/donnatella-undeclared.txt
 docs/reference/donnatella-undocumented.txt
 docs/reference/donnatella-unused.txt
+src/command-docs.h
 Makefile
 Makefile.in
 aclocal.m4
