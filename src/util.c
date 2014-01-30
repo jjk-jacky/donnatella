@@ -31,13 +31,13 @@ donna_print_size (gchar       *str,
             switch (fmt[1])
             {
                 case 'r':
-                    need = snprintf (str, max, "%li", size);
+                    need = snprintf (str, max, "%" G_GUINT64_FORMAT, size);
                     break;
                 case 'b':
-                    need = snprintf (str, max, "%'li", size);
+                    need = snprintf (str, max, "%'" G_GUINT64_FORMAT, size);
                     break;
                 case 'B':
-                    need = snprintf (str, max, "%'li %s", size, unit[0]);
+                    need = snprintf (str, max, "%'" G_GUINT64_FORMAT " %s", size, unit[0]);
                     break;
                 case 'k':
                     dbl = (gdouble) size / 1024.0;
