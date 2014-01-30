@@ -132,4 +132,4 @@ libdonnatella_la_SOURCES += src/debug.c
 endif
 
 src/command-docs.h: $(DEF_COMMANDS)
-	$(AM_V_GEN)./gen-command-docs $(DEF_COMMANDS) > src/command-docs.h
+	$(AM_V_GEN)./docs/gen-command-docs $(DEF_COMMANDS) > src/command-docs.h
