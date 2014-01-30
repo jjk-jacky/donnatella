@@ -131,5 +131,10 @@ AM_CFLAGS += -g -O0
 libdonnatella_la_SOURCES += src/debug.c
 endif
 
+miscdir = @xdgdir@/${PACKAGE}
+dist_misc_DATA = misc/donnatella.conf \
+				 misc/donnatella.css \
+				 misc/marks.conf
+
 src/command-docs.h: $(DEF_COMMANDS)
 	$(AM_V_GEN)./docs/gen-command-docs $(DEF_COMMANDS) > src/command-docs.h

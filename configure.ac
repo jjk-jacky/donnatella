@@ -36,6 +36,14 @@ AC_ARG_ENABLE([git-version],
                              [wantgitver=$enableval],
                              [wantgitver=no])
 
+# XDG dir (for default conf/css)
+AC_ARG_WITH([xdg-dir],
+            AS_HELP_STRING([--with-xdg-dir],
+                           [set default configuration/css dir]),
+                           [xdgdir=$withval],
+                           [xdgdir=${sysconfdir}/xdg])
+AC_SUBST(xdgdir)
+
 # Extra compiler warning flags
 AC_ARG_ENABLE([warning-flags],
               AS_HELP_STRING([--enable-warning-flags],
@@ -167,17 +175,18 @@ echo "
     ${PACKAGE} version ${PACKAGE_VERSION}${gitver}
 
  Build information:
-   source code location     : ${srcdir}
-   prefix                   : ${prefix}
-   compiler warning flags   : ${WARNING_CFLAGS}
+   source code location         : ${srcdir}
+   prefix                       : ${prefix}
+   compiler warning flags       : ${WARNING_CFLAGS}
 
-   debug messages           : ${with_debug}
-   autobreak on critical    : ${with_autobreak}
+   debug messages               : ${with_debug}
+   autobreak on critical        : ${with_autobreak}
 
-   build html documentation : ${enable_gtk_doc}
+   build html documentation     : ${enable_gtk_doc}
 
  Install paths:
-   binaries                 : $(eval echo $(eval echo ${bindir}))
-   html documentation       : $(eval echo $(eval echo $(eval echo ${HTML_DIR})))
-   man page                 : $(eval echo $(eval echo ${mandir}))
+   binaries                     : $(eval echo $(eval echo ${bindir}))
+   default configuration/css    : $(eval echo $(eval echo ${xdgdir}))
+   html documentation           : $(eval echo $(eval echo $(eval echo ${HTML_DIR})))
+   man page                     : $(eval echo $(eval echo ${mandir}))
 "
