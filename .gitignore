@@ -16,6 +16,7 @@ docs/reference/sgml.stamp
 docs/reference/scan-build.stamp
 docs/reference/setup-build.stamp
 docs/reference/xml
+docs/reference/version.xml
 docs/reference/donnatella.args
 docs/reference/donnatella-decl-list.txt
 docs/reference/donnatella-decl.txt

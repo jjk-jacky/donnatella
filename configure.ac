@@ -168,7 +168,7 @@ else
     AC_MSG_RESULT([no])
 fi
 
-AC_CONFIG_FILES([Makefile docs/reference/Makefile])
+AC_CONFIG_FILES([Makefile docs/reference/Makefile docs/reference/version.xml])
 AC_OUTPUT
 
 echo "
