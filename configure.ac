@@ -56,7 +56,9 @@ AC_ARG_ENABLE([debug],
     ,
     with_debug=no)
 AM_CONDITIONAL([DONNA_DEBUG_ENABLED], [test "x$with_debug" = "xyes"])
-AC_DEFINE([DONNA_DEBUG_ENABLED], 1, [Define to 1 to enable debug messages])
+if test "x$with_debug" = "xyes"; then
+    AC_DEFINE([DONNA_DEBUG_ENABLED], 1, [Define to 1 to enable debug messages])
+fi
 
 # Automagic breakpoint on critical messages when under GDB/trace
 AC_ARG_ENABLE([autobreak-on-critical],
@@ -72,7 +74,9 @@ AC_ARG_ENABLE([autobreak-on-critical],
     ,
     with_autobreak=no)
 AM_CONDITIONAL([DONNA_DEBUG_AUTOBREAK], [test "x$with_autobreak" = "xyes"])
-AC_DEFINE([DONNA_DEBUG_AUTOBREAK], 1, [Define to 1 to autobreak on critical messages])
+if test "x$with_autobreak" = "xyes"; then
+    AC_DEFINE([DONNA_DEBUG_AUTOBREAK], 1, [Define to 1 to autobreak on critical messages])
+fi
 
 # Checks for libraries.
 PKG_CHECK_MODULES(GTK, [gtk+-3.0], , AC_MSG_ERROR([GTK+3 is required]))
