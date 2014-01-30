@@ -174,10 +174,10 @@ echo "
    debug messages           : ${with_debug}
    autobreak on critical    : ${with_autobreak}
 
-   build documentation      : ${enable_gtk_doc}
+   build html documentation : ${enable_gtk_doc}
 
  Install paths:
    binaries                 : $(eval echo $(eval echo ${bindir}))
-   documentation            : $(eval echo $(eval echo ${docdir}))
-   man pages                : $(eval echo $(eval echo ${mandir}))
+   html documentation       : $(eval echo $(eval echo $(eval echo ${HTML_DIR})))
+   man page                 : $(eval echo $(eval echo ${mandir}))
 "
