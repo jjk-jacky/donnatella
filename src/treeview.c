@@ -19243,7 +19243,7 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
     GtkTreeModel *model;
     GtkTreeIter iter;
     gint x, y;
-    gboolean tree_might_grab_focus;
+    gboolean tree_might_grab_focus = FALSE;
 
     if (event->button == 1)
         click |= DONNA_CLICK_LEFT;
