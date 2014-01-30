@@ -1467,6 +1467,7 @@ static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tr
 void
 gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
 {
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) treev)->priv;
     GtkTreeSelection *sel;
     GtkTreePath *p;
     gint y;
@@ -1475,7 +1476,7 @@ gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
     sel = gtk_tree_view_get_selection (treev);
     scroll = gtk_tree_view_get_path_at_pos (treev, 0, 0, &p, NULL, NULL, &y);
 
-    if (((DonnaTreeView *) treev)->priv->is_tree)
+    if (priv->is_tree)
     {
         GtkSelectionMode mode;
         GtkTreeIter iter;
@@ -1483,7 +1484,7 @@ gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
         if (gtk_tree_selection_get_selected (sel, NULL, &iter))
             g_signal_handlers_block_by_func (sel, selection_changed_cb, treev);
         else
-            iter.stamp == 0;
+            iter.stamp = 0;
 
         mode = gtk_tree_selection_get_mode (sel);
         priv->changing_sel_mode = TRUE;
@@ -2855,6 +2856,7 @@ real_option_cb (struct option_data *data)
             else
                 val = cfg_get_select_highlight (tree, config, NULL);
 
+#ifdef GTK_IS_JJK
             if (data->opt == OPT_IN_MEMORY || priv->select_highlight != (guint) val)
             {
                 GtkTreeView *treev = (GtkTreeView *) data->tree;
@@ -2894,6 +2896,7 @@ real_option_cb (struct option_data *data)
 
                 gtk_widget_queue_draw ((GtkWidget *) treev);
             }
+#endif
         }
         else if (streq (opt, "key_mode"))
         {
@@ -8368,8 +8371,10 @@ static void
 set_node_prop_timeout (DonnaTask *task, struct set_node_prop_data *data)
 {
     DonnaTreeViewPrivate *priv = data->tree->priv;
+#ifdef GTK_IS_JJK
     GtkTreeModel *model;
     GSList *list;
+#endif
     guint i;
     GPtrArray *arr;
     struct active_spinners *as;
