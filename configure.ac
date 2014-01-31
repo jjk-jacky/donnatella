@@ -194,6 +194,7 @@ echo "
    binaries                     : $(eval echo $(eval echo ${bindir}))
    .desktop file                : $(eval echo $(eval echo ${datadir}))/applications
    default configuration/css    : $(eval echo $(eval echo ${xdgdir}))
+   documentation                : $(eval echo $(eval echo ${docdir}))
    html documentation           : $(eval echo $(eval echo $(eval echo ${HTML_DIR})))
    man page                     : $(eval echo $(eval echo ${mandir}))
 "
