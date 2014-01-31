@@ -1463,8 +1463,13 @@ static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tr
  * use set_cursor() to set the focus, and that can trigger some minimum
  * scrolling.
  * We try to "undo" it, but let's be clear: the patched version is obviously
- * much better. */
-void
+ * much better.
+ * Also, gtk_tree_view_set_cursor() is a focus grabber, which could have an
+ * impact since the patched version is not. For instance, in
+ * donna_tree_view_column_edit() & renderer_edit() we need to work around this,
+ * because otherwise setting the focused after the inline editing started would
+ * cancel it right away. */
+static void
 gtk_tree_view_set_focused_row (GtkTreeView *treev, GtkTreePath *path)
 {
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) treev)->priv;
@@ -12164,6 +12169,15 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
             TREE_VIEW_COL_NODE, &node,
             -1);
 
+#ifndef GTK_IS_JJK
+    /* if not patched, a call to gtk_tree_view_set_focused_row() is actually a
+     * wrapper around gtk_tree_view_set_cursor() which is a focus grabber, and
+     * doing so would then cancel any inline editing that barely started. So to
+     * avoid this, we need to do it prior */
+    gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
+    check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+#endif
+
     if (!donna_column_type_edit (_col->ct, _col->ct_data, node,
                 (GtkCellRenderer **) _col->renderers->pdata,
                 (renderer_edit_fn) renderer_edit, &re_data, tree, error))
@@ -12172,8 +12186,10 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
         return FALSE;
     }
 
+#ifdef GTK_IS_JJK
     gtk_tree_view_set_focused_row ((GtkTreeView *) tree, re_data.path);
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+#endif
 
     gtk_tree_path_free (re_data.path);
     g_object_unref (node);
