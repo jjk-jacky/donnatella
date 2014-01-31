@@ -5218,14 +5218,16 @@ load_arrangements (DonnaConfig *config, const gchar *sce)
 }
 
 static void
-load_css (const gchar *dir)
+load_css (const gchar *dir, gboolean is_main)
 {
     GtkCssProvider *css_provider;
     gchar buf[255], *b = buf;
     gchar *file = NULL;
 
-    if (snprintf (buf, 255, "%s/donnatella.css", dir) >= 255)
-        b = g_strdup_printf ("%s/donnatella.css", dir);
+    if (snprintf (buf, 255, "%s%s/donnatella.css",
+                dir, (is_main) ? "" : "/donnatella") >= 255)
+        b = g_strdup_printf ("%s%s/donnatella.css",
+                dir, (is_main) ? "" : "/donnatella");
 
     if (!g_get_filename_charsets (NULL))
         file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
@@ -5397,10 +5399,10 @@ init_app (DonnaApp *app)
     if (dir != first)
     {
         for (--dir; dir != first; --dir)
-            load_css (*dir);
-        load_css (*dir);
+            load_css (*dir, FALSE);
+        load_css (*dir, FALSE);
     }
-    load_css (main_dir);
+    load_css (main_dir, TRUE);
 
     /* compile patterns of arrangements' masks */
     priv->arrangements = load_arrangements (priv->config, "arrangements");
