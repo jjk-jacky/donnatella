@@ -1104,7 +1104,10 @@ donna_app_set_floating_window (DonnaApp       *app,
     priv = app->priv;
 
     if (priv->floating_window)
+    {
         gtk_widget_destroy (priv->floating_window);
+        priv->floating_window = NULL;
+    }
 
     /* make sure all events are processed before we switch to the new window,
      * otherwise this could lead to immediate destruction of said new floating
