@@ -136,5 +136,8 @@ dist_misc_DATA = misc/donnatella.conf \
 				 misc/donnatella.css \
 				 misc/marks.conf
 
+desktopdir = ${datadir}/applications
+dist_desktop_DATA = misc/donnatella.desktop
+
 src/command-docs.h: $(DEF_COMMANDS)
 	$(AM_V_GEN)./docs/gen-command-docs $(DEF_COMMANDS) > src/command-docs.h
