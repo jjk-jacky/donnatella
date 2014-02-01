@@ -52,6 +52,7 @@ struct task
     DonnaTask   *task;
     guint        in_pool    : 1; /* did we add it in a pool */
     guint        own_pause  : 1; /* did we pause it */
+    guint        post_run   : 1; /* event was emitted when reached POST_RUN state */
 };
 
 /* statusbar */
@@ -1952,6 +1953,7 @@ tm_conv_fn (const gchar      c,
 struct emit_event
 {
     DonnaTaskManager *tm;
+    DonnaTask *task;
     DonnaNode *node;
     DonnaTaskState state;
 };
@@ -1959,18 +1961,43 @@ struct emit_event
 static gboolean
 emit_event (struct emit_event *ee)
 {
+    DonnaProviderTaskPrivate *priv = ee->tm->priv;
     struct conv conv = { ee->tm, ee->node };
+    guint i;
+    gboolean emit = FALSE;
 
-    if (ee->state == DONNA_TASK_DONE)
-        donna_app_emit_event (ee->tm->priv->app, "task_done", FALSE,
-                "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
-    else if (ee->state == DONNA_TASK_FAILED)
-        donna_app_emit_event (ee->tm->priv->app, "task_failed", FALSE,
-                "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
-    else /* DONNA_TASK_CANCELLED */
-        donna_app_emit_event (ee->tm->priv->app, "task_cancelled", FALSE,
-                "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+    /* WRITE because we might change the post_run flag */
+    lock_manager (ee->tm, TM_BUSY_WRITE);
+    for (i = 0; i < priv->tasks->len; ++i)
+    {
+        struct task *t = &g_array_index (priv->tasks, struct task, i);
+        if (t->task == ee->task)
+        {
+            /* in case we'd get more than one notify::state */
+            if (!t->post_run)
+            {
+                t->post_run = TRUE;
+                emit = TRUE;
+            }
+            break;
+        }
+    }
+    unlock_manager (ee->tm, TM_BUSY_WRITE);
 
+    if (emit)
+    {
+        if (ee->state == DONNA_TASK_DONE)
+            donna_app_emit_event (ee->tm->priv->app, "task_done", FALSE,
+                    "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+        else if (ee->state == DONNA_TASK_FAILED)
+            donna_app_emit_event (ee->tm->priv->app, "task_failed", FALSE,
+                    "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+        else /* DONNA_TASK_CANCELLED */
+            donna_app_emit_event (ee->tm->priv->app, "task_cancelled", FALSE,
+                    "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+    }
+
+    g_object_unref (ee->task);
     g_object_unref (ee->node);
     g_slice_free (struct emit_event, ee);
     return G_SOURCE_REMOVE;
@@ -2130,6 +2157,7 @@ next:
 
              ee = g_slice_new (struct emit_event);
              ee->tm = tm;
+             ee->task = g_object_ref (task);
              ee->state = state;
              ee->node = g_object_ref (node);
 
