@@ -1201,6 +1201,59 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
     }
 }
 
+struct gcem
+{
+    DonnaProviderInternal *pi;
+    gchar *errmsg;
+};
+
+static void
+free_gcem (struct gcem *gcem)
+{
+    g_object_unref (gcem->pi);
+    g_free (gcem->errmsg);
+    g_free (gcem);
+}
+
+static DonnaTaskState
+get_children_errmsg (DonnaTask      *task,
+                     DonnaNode      *node,
+                     DonnaNodeType   node_types,
+                     gboolean        get_children,
+                     struct gcem    *gcem)
+{
+    GValue *value;
+
+    value = donna_task_grab_return_value (task);
+    if (get_children)
+    {
+        GPtrArray *arr;
+
+        arr = g_ptr_array_new_with_free_func (g_object_unref);
+        if (node_types & DONNA_NODE_ITEM)
+            g_ptr_array_add (arr, donna_provider_internal_new_node (gcem->pi,
+                    gcem->errmsg,
+                    FALSE, NULL, /* no icon */
+                    NULL, /* desc */
+                    DONNA_NODE_ITEM,
+                    FALSE, /* sensitive */
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (internal_fn) gtk_false, NULL, NULL,
+                    NULL));
+
+        g_value_init (value, G_TYPE_PTR_ARRAY);
+        g_value_take_boxed (value, arr);
+    }
+    else
+    {
+        g_value_init (value, G_TYPE_BOOLEAN);
+        g_value_set_boolean (value, node_types & DONNA_NODE_ITEM);
+    }
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
 enum parse
 {
     PARSE_DEFAULT       = 0,
@@ -1563,6 +1616,8 @@ parse_items (DonnaApp               *app,
         }
         else /* not a submenu */
         {
+            struct gcem *gcem = NULL;
+
             if (info.node)
             {
                 g_ptr_array_add (nodes, info.node);
@@ -1579,15 +1634,20 @@ parse_items (DonnaApp               *app,
             {
                 if (info.is_container)
                 {
-                    ni->node_trigger = donna_app_get_node (app, info.trigger, TRUE, error);
+                    ni->node_trigger = donna_app_get_node (app, info.trigger, TRUE, &err);
                     if (!ni->node_trigger)
                     {
-                        g_prefix_error (error, "Error for item '%s': "
-                                "couldn't create node_trigger: ", items);
-                        free_context_info (&info);
-                        free_node_internal (ni);
-                        g_ptr_array_unref (nodes);
-                        return NULL;
+                        gcem = g_new (struct gcem, 1);
+                        gcem->pi = g_object_ref (pi);
+
+                        if (err)
+                            gcem->errmsg = g_strdup (err->message);
+                        else
+                            gcem->errmsg = g_strdup_printf (
+                                    "Failed to get children for item '%s' "
+                                    "(no error message)",
+                                    items);
+                        g_clear_error (&err);
                     }
                     else if (donna_node_get_node_type (ni->node_trigger)
                             != DONNA_NODE_CONTAINER)
@@ -1622,9 +1682,9 @@ parse_items (DonnaApp               *app,
                     (info.is_container) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
                     info.is_sensitive,
                     (info.is_container) ? DONNA_TASK_VISIBILITY_INTERNAL : DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-                    (info.is_container) ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
-                    ni,
-                    (GDestroyNotify) free_node_internal,
+                    (gcem) ? (internal_fn) get_children_errmsg : (info.is_container) ? (internal_fn) node_children_cb : (internal_fn) node_internal_cb,
+                    (gcem) ? (gpointer) gcem : (gpointer) ni,
+                    (gcem) ? (GDestroyNotify) free_gcem : (GDestroyNotify) free_node_internal,
                     error);
             if (G_UNLIKELY (!node))
             {
