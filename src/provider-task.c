@@ -35,8 +35,11 @@ enum
 
 typedef enum
 {
+    /* for adding/removing tasks; or updating flags (struct task) */
     TM_BUSY_WRITE       = (1 << 0),
+    /* for reading only */
     TM_BUSY_READ        = (1 << 1),
+    /* for refresh_tm(); only one at a time, can change flags (struct task) */
     TM_BUSY_REFRESH     = (1 << 2),
 
     TM_REFRESH_PENDING  = (1 << 3),
@@ -2272,7 +2275,8 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                  * might start the task or not, based or other tasks in the
                  * manager.  If we already own the pause, nothing to do. */
 
-                lock_manager (tm, TM_BUSY_READ);
+                /* WRITE because we want to change own_pause */
+                lock_manager (tm, TM_BUSY_WRITE);
                 for (i = 0; i < priv->tasks->len; ++i)
                 {
                     struct task *t = &g_array_index (priv->tasks, struct task, i);
@@ -2294,7 +2298,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                         break;
                     }
                 }
-                unlock_manager (tm, TM_BUSY_READ);
+                unlock_manager (tm, TM_BUSY_WRITE);
             }
             else if (cur_state == DONNA_TASK_PAUSING)
                 /* try to override the pausing we a resume */
@@ -2319,7 +2323,8 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                 /* if we owned the pause, we shall release it, so it becomes a
                  * manual pause again (and not "on hold") */
 
-                lock_manager (tm, TM_BUSY_READ);
+                /* WRITE because we want to change own_pause */
+                lock_manager (tm, TM_BUSY_WRITE);
                 for (i = 0; i < priv->tasks->len; ++i)
                 {
                     struct task *t = &g_array_index (priv->tasks, struct task, i);
@@ -2341,7 +2346,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                         break;
                     }
                 }
-                unlock_manager (tm, TM_BUSY_READ);
+                unlock_manager (tm, TM_BUSY_WRITE);
             }
             else if (cur_state != DONNA_TASK_PAUSING)
                 ret = FALSE;
