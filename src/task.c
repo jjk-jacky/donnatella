@@ -466,8 +466,8 @@ donna_task_finalize (GObject *object)
 
     priv = DONNA_TASK (object)->priv;
     DONNA_DEBUG (TASK, NULL,
-            g_debug4 ("Finalizing task: %s",
-                (priv->desc) ? priv->desc : "(no desc)"));
+            g_debug4 ("Finalizing task %p: %s",
+                object, (priv->desc) ? priv->desc : "(no desc)"));
     g_free (priv->desc);
     if (priv->devices)
         g_ptr_array_unref (priv->devices);
@@ -578,15 +578,15 @@ donna_task_set_property (GObject        *object,
             s = priv->desc;
             priv->desc = g_value_dup_string (value);
             DONNA_DEBUG (TASK, NULL,
-                    g_debug2 ("Task '%s': new description: %s",
-                        (s) ? s : "(no desc)", priv->desc));
+                    g_debug2 ("Task %p (%s): new description: %s",
+                        object, (s) ? s : "(no desc)", priv->desc));
             g_free (s);
             break;
         case PROP_PRIORITY:
             priv->priority = g_value_get_int (value);
             DONNA_DEBUG (TASK, NULL,
-                    g_debug2 ("Task '%s': set priority to %d",
-                        (priv->desc) ? priv->desc : "(no desc)",
+                    g_debug2 ("Task %p (%s): set priority to %d",
+                        object, (priv->desc) ? priv->desc : "(no desc)",
                         priv->priority));
             break;
         default:
@@ -804,7 +804,8 @@ donna_task_set_visibility (DonnaTask          *task,
 
     task->priv->visibility = visibility;
     DONNA_DEBUG (TASK, NULL,
-            g_debug2 ("Task '%s': set visibility to %s",
+            g_debug2 ("Task %p (%s): set visibility to %s",
+                task,
                 (task->priv->desc) ? task->priv->desc : "(no desc)",
                 (visibility == DONNA_TASK_VISIBILITY_INTERNAL) ? "internal"
                 : ((visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI) ? "internal GUI"
@@ -868,8 +869,8 @@ donna_task_set_desc (DonnaTask *task, const gchar *desc)
     s = priv->desc;
     priv->desc = g_strdup (desc);
     DONNA_DEBUG (TASK, NULL,
-            g_debug2 ("Task '%s': new description: %s",
-                (s) ? s : "(no desc)", priv->desc));
+            g_debug2 ("Task %p (%s): new description: %s",
+                task, (s) ? s : "(no desc)", priv->desc));
     g_free (s);
 
     notify_prop (task, PROP_DESC);
@@ -902,8 +903,8 @@ donna_task_take_desc (DonnaTask *task, gchar *desc)
     s = priv->desc;
     priv->desc = desc;
     DONNA_DEBUG (TASK, NULL,
-            g_debug2 ("Task '%s': new description: %s",
-                (s) ? s : "(no desc)", priv->desc));
+            g_debug2 ("Task %p (%s): new description: %s",
+                task, (s) ? s : "(no desc)", priv->desc));
     g_free (s);
 
     notify_prop (task, PROP_DESC);
@@ -943,16 +944,16 @@ donna_task_prefix_desc (DonnaTask *task, const gchar *prefix)
         old = priv->desc;
         priv->desc = s;
         DONNA_DEBUG (TASK, NULL,
-                g_debug2 ("Task '%s': new description: %s",
-                    (old) ? old : "(new desc)", priv->desc));
+                g_debug2 ("Task %p (%s): new description: %s",
+                    task, (old) ? old : "(new desc)", priv->desc));
         g_free (old);
     }
     else
     {
         priv->desc = g_strdup (prefix);
         DONNA_DEBUG (TASK, NULL,
-                g_debug2 ("Task '(no desc)': new description: %s",
-                    priv->desc));
+                g_debug2 ("Task %p (no desc): new description: %s",
+                    task, priv->desc));
     }
 
     notify_prop (task, PROP_DESC);
@@ -1414,8 +1415,8 @@ timeout_cb (gpointer data)
      * meanwhile (this is in main thread), it'll wait for the timeout callback
      * to end) */
     DONNA_DEBUG (TASK, NULL,
-            g_debug2 ("Timeout for task: %s",
-                (priv->desc) ? priv->desc : "(no desc)"));
+            g_debug2 ("Timeout for task %p: %s",
+                task, (priv->desc) ? priv->desc : "(no desc)"));
     priv->timeout_fn (task, priv->timeout_data);
     priv->timeout_ran = 1;
 
@@ -1431,8 +1432,8 @@ callback_cb (gpointer data)
     DonnaTaskPrivate *priv = task->priv;
 
     DONNA_DEBUG (TASK, NULL,
-            g_debug2 ("Callback for task: %s",
-                (priv->desc) ? priv->desc : "(no desc)"));
+            g_debug2 ("Callback for task %p: %s",
+                task, (priv->desc) ? priv->desc : "(no desc)"));
     priv->callback_fn (task, priv->timeout_ran, priv->callback_data);
 
     /* remove the reference we had on the task */
@@ -1463,8 +1464,8 @@ donna_task_prepare (DonnaTask *task)
 
     priv = task->priv;
     DONNA_DEBUG (TASK, NULL,
-            g_debug ("Preparing task: %s",
-                (priv->desc) ? priv->desc : "(no desc)"));
+            g_debug ("Preparing task %p: %s",
+                task, (priv->desc) ? priv->desc : "(no desc)"));
 
     LOCK_TASK (task);
 
@@ -1473,7 +1474,8 @@ donna_task_prepare (DonnaTask *task)
     {
         UNLOCK_TASK (task);
         DONNA_DEBUG (TASK, NULL,
-                g_debug ("Cannot prepare task, not in a pre-run state (%s): %s",
+                g_debug ("Cannot prepare task %p, not in a pre-run state (%s): %s",
+                    task,
                     state_name (priv->state),
                     (priv->desc) ? priv->desc : "(no desc)"));
         return;
@@ -1509,8 +1511,8 @@ donna_task_run (DonnaTask *task)
 
     priv = task->priv;
     DONNA_DEBUG (TASK, NULL,
-            g_debug ("Starting task: %s",
-                (priv->desc) ? priv->desc : "(no desc)"));
+            g_debug ("Starting task %p: %s",
+                task, (priv->desc) ? priv->desc : "(no desc)"));
 
     LOCK_TASK (task);
 
@@ -1519,7 +1521,8 @@ donna_task_run (DonnaTask *task)
     {
         UNLOCK_TASK (task);
         DONNA_DEBUG (TASK, NULL,
-                g_debug ("Ending task, not in a pre-run state (%s): %s",
+                g_debug ("Ending task %p, not in a pre-run state (%s): %s",
+                    task,
                     state_name (priv->state),
                     (priv->desc) ? priv->desc : "(no desc)"));
         return;
@@ -1588,7 +1591,8 @@ donna_task_run (DonnaTask *task)
     notify_prop (task, PROP_STATE);
 
     DONNA_DEBUG (TASK, NULL,
-            g_debug ("Ending task (%s): %s",
+            g_debug ("Ending task %p (%s): %s",
+                task,
                 state_name (priv->state),
                 (priv->desc) ? priv->desc : "(no desc)"));
 
@@ -1902,8 +1906,8 @@ donna_task_is_cancelling (DonnaTask *task)
                 gboolean ret;
                 priv->state = DONNA_TASK_PAUSED;
                 DONNA_DEBUG (TASK, NULL,
-                        g_debug ("Paused task: %s",
-                            (priv->desc) ? priv->desc : "(no desc)"));
+                        g_debug ("Paused task %p: %s",
+                            task, (priv->desc) ? priv->desc : "(no desc)"));
                 /* notify change of state (in main thread) */
                 notify_prop (task, PROP_STATE);
                 /* wait for a change of state */
@@ -1918,7 +1922,8 @@ donna_task_is_cancelling (DonnaTask *task)
                 /* state can now only by running (resume) or cancelling */
                 ret = priv->state == DONNA_TASK_CANCELLING;
                 DONNA_DEBUG (TASK, NULL,
-                        g_debug ("Unpaused task (%s): %s",
+                        g_debug ("Unpaused task %p (%s): %s",
+                            task,
                             (ret) ? "cancelled" : "resumed",
                             (priv->desc) ? priv->desc : "(no desc)"));
                 UNLOCK_TASK (task);
@@ -2155,8 +2160,8 @@ donna_task_grab_return_value (DonnaTask *task)
     /* we de NOT unlock the task, this is done by release_return_value below */
 
     DONNA_DEBUG (TASK, NULL,
-            g_debug4 ("Grabbing return value of task: %s",
-                (priv->desc) ? priv->desc : "(no desc)"));
+            g_debug4 ("Grabbing return value of task %p: %s",
+                task, (priv->desc) ? priv->desc : "(no desc)"));
     return priv->value;
 }
 
@@ -2172,7 +2177,7 @@ donna_task_release_return_value (DonnaTask *task)
 {
     g_return_if_fail (DONNA_IS_TASK (task));
     DONNA_DEBUG (TASK, NULL,
-            g_debug4 ("Releasing return value of task: %s",
-                (task->priv->desc) ? task->priv->desc : "(no desc)"));
+            g_debug4 ("Releasing return value of task %p: %s",
+                task, (task->priv->desc) ? task->priv->desc : "(no desc)"));
     UNLOCK_TASK (task);
 }
