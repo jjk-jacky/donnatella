@@ -455,15 +455,16 @@ get_node_trigger (DonnaApp      *app,
                   const gchar   *_fl,
                   const gchar   *conv_flags,
                   conv_flag_fn   conv_fn,
-                  gpointer       conv_data)
+                  gpointer       conv_data,
+                  GError       **error)
 {
     DonnaNode *node;
     gchar *fl;
 
     fl = donna_app_parse_fl (app, (gchar *) _fl, FALSE,
             conv_flags, conv_fn, conv_data, NULL);
-    node = donna_app_get_node (app, fl, FALSE, NULL);
-    if (G_UNLIKELY (!node))
+    node = donna_app_get_node (app, fl, FALSE, error);
+    if (!node)
     {
         g_free (fl);
         return NULL;
@@ -925,16 +926,15 @@ get_user_item_info (const gchar             *item,
     if (type == TYPE_TRIGGER)
     {
         info->node = get_node_trigger (app, info->trigger,
-                conv_flags, conv_fn, conv_data);
+                conv_flags, conv_fn, conv_data, error);
         g_free ((gchar *) info->trigger);
         info->trigger = NULL;
         info->free_trigger = FALSE;
 
         if (!info->node)
         {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "Failed to get node for item 'context_menus/%s/%s'",
+            g_prefix_error (error,
+                    "Failed to get node for item 'context_menus/%s/%s': ",
                     source, item);
             return FALSE;
         }
@@ -1012,11 +1012,14 @@ get_user_item_info (const gchar             *item,
     {
         if (!node_trigger)
             node_trigger = get_node_trigger (app, info->trigger,
-                    conv_flags, conv_fn, conv_data);
+                    conv_flags, conv_fn, conv_data, &err);
         if (!node_trigger)
+        {
             g_warning ("Context-menu: Cannot import options from node trigger "
-                    "for item 'context_menus/%s/%s': Failed to get node",
-                    source, item);
+                    "for item 'context_menus/%s/%s': Failed to get node: %s",
+                    source, item, (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
         else
             import_info_from_node (node_trigger, import, info);
     }
@@ -1537,7 +1540,7 @@ parse_items (DonnaApp               *app,
                                     &v,
                                     (refresher_fn) gtk_true,
                                     NULL,
-                                    &err)))
+                                    error)))
                     {
                         g_prefix_error (error, "Error for item '%s': "
                                 "Failed to set 'container-trigger': ",
@@ -1576,7 +1579,7 @@ parse_items (DonnaApp               *app,
             {
                 if (info.is_container)
                 {
-                    ni->node_trigger = donna_app_get_node (app, info.trigger, TRUE, &err);
+                    ni->node_trigger = donna_app_get_node (app, info.trigger, TRUE, error);
                     if (!ni->node_trigger)
                     {
                         g_prefix_error (error, "Error for item '%s': "
