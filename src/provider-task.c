@@ -82,6 +82,10 @@ struct _DonnaProviderTaskPrivate
     gboolean     cancel_all_in_exit;
 };
 
+static gboolean lock_manager    (DonnaProviderTask *tm, TmState state);
+static void     unlock_manager  (DonnaProviderTask *tm, TmState state);
+
+
 static void             provider_task_get_property  (GObject            *object,
                                                      guint               prop_id,
                                                      GValue             *value,
@@ -321,6 +325,63 @@ provider_task_get_flags (DonnaProvider *provider)
     g_return_val_if_fail (DONNA_IS_PROVIDER_TASK (provider),
             DONNA_PROVIDER_FLAG_INVALID);
     return 0;
+}
+
+static DonnaTask *
+get_task_from_node (DonnaTaskManager    *tm,
+                    DonnaNode           *node,
+                    GError             **error)
+{
+    DonnaProviderTaskPrivate *priv = tm->priv;
+    DonnaTask *task;
+    gchar *location;
+    guint i;
+
+    if (donna_node_peek_provider (node) != (DonnaProvider *) tm
+            /* not an item == a container == root/task manager */
+            || donna_node_get_node_type (node) != DONNA_NODE_ITEM)
+    {
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Task Manager: Invalid node: not a task");
+        return NULL;
+    }
+
+    location = donna_node_get_location (node);
+    if (sscanf (location, "/%p", &task) != 1)
+    {
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Task Manager: Can't get task, invalid node location '%s'",
+                location);
+        g_free (location);
+        return NULL;
+    }
+    g_free (location);
+
+    lock_manager (tm, TM_BUSY_READ);
+    for (i = 0; i < priv->tasks->len; ++i)
+    {
+        struct task *t = &g_array_index (priv->tasks, struct task, i);
+        if (t->task == task)
+        {
+            g_object_ref (task);
+            break;
+        }
+    }
+    unlock_manager (tm, TM_BUSY_READ);
+
+    if (i >= priv->tasks->len)
+    {
+        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
+                DONNA_TASK_MANAGER_ERROR_OTHER,
+                "Task Manager: Cannot find task for node 'task:%s'",
+                location);
+        g_free (location);
+        return NULL;
+    }
+
+    return task;
 }
 
 static gboolean
@@ -608,7 +669,6 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
     else if (streq (item, "show_ui"))
     {
         DonnaTask *task;
-        gchar *location;
 
         info->name = "Show Task UI...";
 
@@ -620,13 +680,13 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
 
         info->is_visible = TRUE;
 
-        location = donna_node_get_location (node_ref);
-        if (sscanf (location, "/%p", &task) == 1)
+        task = get_task_from_node ((DonnaTaskManager *) provider, node_ref, NULL);
+        if (task)
         {
             info->is_sensitive = donna_task_has_taskui (task);
             info->trigger = "command:task_show_ui (%n)";
+            g_object_unref (task);
         }
-        g_free (location);
 
         return TRUE;
     }
@@ -711,16 +771,12 @@ refresher (DonnaTask    *task,
            const gchar  *name)
 {
     DonnaTask *t;
-    gchar *location;
     GValue v = G_VALUE_INIT;
 
-    location = donna_node_get_location (node);
-    if (sscanf (location, "/%p", &t) != 1)
-    {
-        g_free (location);
+    t = get_task_from_node ((DonnaTaskManager *) donna_node_peek_provider (node),
+            node, NULL);
+    if (!t)
         return FALSE;
-    }
-    g_free (location);
 
     if (streq (name, "name"))
     {
@@ -811,10 +867,14 @@ refresher (DonnaTask    *task,
         }
     }
     else
+    {
+        g_object_unref (t);
         return FALSE;
+    }
 
     donna_node_set_property_value (node, name, &v);
     g_value_unset (&v);
+    g_object_unref (t);
     return TRUE;
 }
 
@@ -1260,59 +1320,66 @@ provider_task_io (DonnaProviderBase             *_provider,
 {
     DonnaProviderTask *tm = (DonnaProviderTask *) _provider;
     DonnaProviderTaskPrivate *priv = tm->priv;
+    GString *str = NULL;
+    DonnaTaskManagerError err_type = DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE;
+    guint nb_err = 0;
     guint i;
 
-    /* first we make sure all tasks are valid/in POST_RUN state */
+    lock_manager (tm, TM_BUSY_WRITE);
     for (i = 0; i < sources->len; ++i)
     {
         DonnaNode *node = sources->pdata[i];
         DonnaTask *t;
         gchar *location;
+        guint j;
 
         location = donna_node_get_location (node);
         if (G_UNLIKELY (sscanf (location, "/%p", &t) != 1))
         {
-            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                    DONNA_PROVIDER_ERROR_OTHER,
-                    "Provider 'task': invalid location '%s'", location);
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Invalid location '%s'",
+                    location);
             g_free (location);
-            return DONNA_TASK_FAILED;
+            err_type = DONNA_TASK_MANAGER_ERROR_OTHER;
+            ++nb_err;
+            continue;
         }
-        g_free (location);
+
+        /* make sure the task exists/is know to the TM (i.e. we have a ref on
+         * it) */
+        for (j = 0; j < priv->tasks->len; ++j)
+        {
+            struct task *_t = &g_array_index (priv->tasks, struct task, j);
+            if (_t->task == t)
+                break;
+        }
+
+        if (j >= priv->tasks->len)
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Task not found for node '%s'",
+                    location);
+            g_free (location);
+            err_type = DONNA_TASK_MANAGER_ERROR_OTHER;
+            ++nb_err;
+            continue;
+        }
 
         if (!(donna_task_get_state (t) & DONNA_TASK_POST_RUN))
         {
-            donna_task_set_error (task, DONNA_TASK_MANAGER_ERROR,
-                    DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE,
-                    "Task Manager: Cannot delete task, invalid state. "
-                    "Only tasks that finished running (successful or not) "
-                    "or were cancelled can be deleted.");
-            return DONNA_TASK_FAILED;
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Task in invalid state (%s) for node '%s'",
+                    state_name (donna_task_get_state (t)), location);
+            g_free (location);
+            ++nb_err;
+            continue;
         }
-    }
 
-    /* then we do the removals */
-    lock_manager (tm, TM_BUSY_WRITE);
-    for (i = 0; i < sources->len; ++i)
-    {
-        DonnaNode *node = sources->pdata[i];
-        DonnaTask *_task;
-        gchar *location;
-        guint j;
-
-        location = donna_node_get_location (node);
-        sscanf (location, "/%p", &_task);
-        g_free (location);
-
-        for (j = 0; j < priv->tasks->len; ++j)
-        {
-            struct task *t = &g_array_index (priv->tasks, struct task, j);
-            if (t->task == _task)
-            {
-                g_array_remove_index_fast (priv->tasks, j);
-                break;
-            }
-        }
+        /* remove task */
+        g_array_remove_index_fast (priv->tasks, j);
     }
     unlock_manager (tm, TM_BUSY_WRITE);
 
@@ -1320,7 +1387,33 @@ provider_task_io (DonnaProviderBase             *_provider,
     for (i = 0; i < sources->len; ++i)
         donna_provider_node_deleted ((DonnaProvider *) _provider, sources->pdata[i]);
 
-    return DONNA_TASK_DONE;
+    if (str)
+    {
+        if (nb_err == 1)
+        {
+            if (err_type == DONNA_TASK_MANAGER_ERROR_INVALID_TASK_STATE)
+                donna_task_set_error (task, DONNA_TASK_MANAGER_ERROR, err_type,
+                        "Task Manager: Cannot delete task: %s\n"
+                        "Only tasks that finished running (successful or not) "
+                        "or were cancelled can be deleted.",
+                        /* +3 == skip "\n- " */
+                        str->str + 3);
+            else
+                donna_task_set_error (task, DONNA_TASK_MANAGER_ERROR, err_type,
+                        "Task Manager: Cannot delete task: %s",
+                        /* +3 == skip "\n- " */
+                        str->str + 3);
+        }
+        else
+            donna_task_set_error (task, DONNA_TASK_MANAGER_ERROR, err_type,
+                    "Task Manager: Failed to delete all tasks:%s",
+                    str->str);
+
+        g_string_free (str, TRUE);
+        return DONNA_TASK_FAILED;
+    }
+    else
+        return DONNA_TASK_DONE;
 }
 
 
@@ -2138,7 +2231,6 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
     DonnaProviderTaskPrivate *priv;
     DonnaTask *task;
     DonnaTaskState cur_state;
-    gchar *location;
     gboolean ret = TRUE;
 
     g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
@@ -2156,16 +2248,9 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
         return FALSE;
     }
 
-    location = donna_node_get_location (node);
-    if (sscanf (location, "/%p", &task) != 1)
-    {
-        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
-                DONNA_TASK_MANAGER_ERROR_OTHER,
-                "Failed to get task from node 'task:%s'", location);
-        g_free (location);
+    task = get_task_from_node (tm, node, error);
+    if (!task)
         return FALSE;
-    }
-    g_free (location);
 
     cur_state = donna_task_get_state (task);
 
@@ -2298,6 +2383,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                         "Cannot set state of task '%s', invalid state (%d)",
                         desc, state);
                 g_free (desc);
+                g_object_unref (task);
                 return FALSE;
             }
 
@@ -2313,6 +2399,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
         g_free (desc);
     }
 
+    g_object_unref (task);
     return ret;
 }
 
@@ -2472,7 +2559,6 @@ donna_task_manager_cancel (DonnaTaskManager     *tm,
                            GError              **error)
 {
     DonnaTask *task;
-    gchar *location;
 
     g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -2490,18 +2576,12 @@ donna_task_manager_cancel (DonnaTaskManager     *tm,
         return FALSE;
     }
 
-    location = donna_node_get_location (node);
-    if (sscanf (location, "/%p", &task) != 1)
-    {
-        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
-                DONNA_TASK_MANAGER_ERROR_OTHER,
-                "Failed to get task from node 'task:%s'", location);
-        g_free (location);
+    task = get_task_from_node (tm, node, error);
+    if (!task)
         return FALSE;
-    }
-    g_free (location);
 
     donna_task_cancel (task);
+    g_object_unref (task);
     return TRUE;
 }
 
@@ -2525,7 +2605,6 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
 {
     DonnaTask *task;
     DonnaTaskUi *taskui;
-    gchar *location;
 
     g_return_val_if_fail (DONNA_IS_TASK_MANAGER (tm), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -2543,16 +2622,9 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
         return FALSE;
     }
 
-    location = donna_node_get_location (node);
-    if (sscanf (location, "/%p", &task) != 1)
-    {
-        g_set_error (error, DONNA_TASK_MANAGER_ERROR,
-                DONNA_TASK_MANAGER_ERROR_OTHER,
-                "Failed to get task from node 'task:%s'", location);
-        g_free (location);
+    task = get_task_from_node (tm, node, error);
+    if (!task)
         return FALSE;
-    }
-    g_free (location);
 
     g_object_get (task, "taskui", &taskui, NULL);
     if (!taskui)
@@ -2563,11 +2635,13 @@ donna_task_manager_show_ui (DonnaTaskManager    *tm,
                 "Provider 'task': No TaskUI available for task '%s'",
                 desc);
         g_free (desc);
+        g_object_unref (task);
         return FALSE;
     }
 
     donna_taskui_show (taskui);
     g_object_unref (taskui);
+    g_object_unref (task);
 
     return TRUE;
 }
