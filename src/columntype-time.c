@@ -36,7 +36,7 @@
  *   similar syntax as "format" only without &percnt;o/&percnt;O obviously) that
  *   will be used if not in the <systemitem>age_span_seconds</systemitem>;
  *   Defaults to "&percnt;F &percnt;T"
-
+ *
  * Then another batch of the same options - suffixed with "_tooltip" - for the
  * tooltip:
  *
@@ -422,7 +422,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "time",
-            "format", "%O", NULL);
+            "format", "%F %T", NULL);
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -475,7 +475,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/time",
-            "format_tooltip", "%c", NULL);
+            "format_tooltip", "%R", NULL);
     if (!streq (data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
