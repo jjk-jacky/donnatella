@@ -5441,18 +5441,20 @@ static gboolean
 prepare_app (DonnaApp *app, GError **error)
 {
     DonnaConfig *config = app->priv->config;
-    DonnaConfigItemExtraList    it_lst[8];
-    DonnaConfigItemExtraListInt it_int[8];
+    DonnaConfigItemExtraList    it_lst[NB_COL_TYPES + 1];
+    DonnaConfigItemExtraListInt it_int[NB_COL_TYPES + 1];
     gint i;
 
+    it_lst[0].value = "line-number";
+    it_lst[0].label = "Line Numbers";
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
-        it_lst[i].value = app->priv->column_types[i].name;
-        it_lst[i].label = app->priv->column_types[i].desc;
+        it_lst[i + 1].value = app->priv->column_types[i].name;
+        it_lst[i + 1].label = app->priv->column_types[i].desc;
     }
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST, "ct", "Column Type",
-                    i, it_lst, error)))
+                    i + 1, it_lst, error)))
         return FALSE;
 
     i = 0;
