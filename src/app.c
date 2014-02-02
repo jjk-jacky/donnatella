@@ -5258,6 +5258,178 @@ load_css (const gchar *dir, gboolean is_main)
     g_free (file);
 }
 
+enum cfgdir
+{
+    CFGDIR_EXIST,
+    CFGDIR_CREATED,
+    CFGDIR_CREATION_FAILED
+};
+
+static enum cfgdir
+create_and_init_config_dir (DonnaConfig *config,
+                            const gchar *sce,
+                            const gchar *dst,
+                            gchar       *data)
+{
+    GError *err = NULL;
+    GPtrArray *arr = NULL;
+    gchar buf[255], *b = buf;
+    gchar *file = NULL;
+    gint cat;
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (dst, -1, NULL, NULL, NULL);
+    if (g_file_test ((file) ? file : dst, G_FILE_TEST_IS_DIR))
+    {
+        g_free (file);
+        return CFGDIR_EXIST;
+    }
+
+    DONNA_DEBUG (APP, NULL,
+            g_debug3 ("Create config dir '%s'", dst));
+    if (g_mkdir_with_parents ((file) ? file : dst, 0700) == -1)
+    {
+        gint _errno = errno;
+        g_warning ("Failed to create config dir '%s': %s",
+                dst,
+                g_strerror (_errno));
+        g_free (file);
+        g_free (data);
+        return CFGDIR_CREATION_FAILED;
+    }
+    g_free (file);
+    file = NULL;
+
+    /* we're gonna load the config, make some runtime changes, then save it */
+    donna_config_load_config (config, data); /* frees data */
+
+    /* box (highlight if unpatched) the homedir */
+    cat = 0;
+    if (!donna_config_has_category (config, NULL, "visuals"))
+        donna_config_new_category (config, NULL, NULL, "visuals");
+    else if (donna_config_list_options (config, &arr,
+                DONNA_CONFIG_OPTION_TYPE_NUMBERED, "visuals"))
+    {
+        cat = (gint) g_ascii_strtoll (arr->pdata[arr->len - 1], NULL, 10);
+        g_ptr_array_unref (arr);
+    }
+    if (donna_config_new_category (config, NULL, NULL, "visuals/%d", ++cat))
+    {
+        donna_config_new_string_take (config, NULL, NULL, NULL,
+                g_strconcat ("fs:", g_get_home_dir (), NULL),
+                "visuals/%d/node", cat);
+#ifdef GTK_IS_JJK
+        donna_config_new_string (config, NULL, NULL, NULL, "box-yellow",
+                "visuals/%d/box", cat);
+#else
+        donna_config_new_string (config, NULL, NULL, NULL, "hl-blue",
+                "visuals/%d/highlight", cat);
+#endif
+    }
+
+#ifndef GTK_IS_JJK
+    /* change key/click mode to unpatched version */
+    donna_config_set_string (config, NULL, "donna_unpatched",
+            "defaults/trees/key_mode");
+    donna_config_set_string (config, NULL, "tree_unpatched",
+            "defaults/trees/click_mode");
+    donna_config_set_string (config, NULL, "donna_unpatched",
+            "defaults/lists/key_mode");
+    donna_config_set_string (config, NULL, "list_unpatched",
+            "defaults/lists/click_mode");
+#endif
+
+    /* save config */
+    data = donna_config_export_config (config);
+
+    if (snprintf (buf, 255, "%s/donnatella.conf-ref", dst) >= 255)
+        b = g_strdup_printf ("%s/donnatella.conf-ref", dst);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    DONNA_DEBUG (APP, NULL,
+            g_debug3 ("Writing '%s'", b));
+    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+    {
+        g_warning ("Failed to import configuration to '%s': %s",
+                dst, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        g_free (data);
+        return CFGDIR_CREATION_FAILED;
+    }
+
+    /* remove the "-ref" bit */
+    b[strlen (b) - 4] = '\0';
+    if (file)
+        file[strlen (file) - 4] = '\0';
+
+    DONNA_DEBUG (APP, NULL,
+            g_debug3 ("Writing '%s'", b));
+    if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+    {
+        g_warning ("Failed to write new configuration to '%s': %s",
+                dst, err->message);
+        g_clear_error (&err);
+        if (b != buf)
+            g_free (b);
+        g_free (file);
+        g_free (data);
+        return CFGDIR_CREATION_FAILED;
+    }
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+    g_free (data);
+
+    /* copy default marks.conf */
+    DONNA_DEBUG (APP, NULL,
+            g_debug3 ("Copy default 'marks.conf'"));
+
+    if (snprintf (buf, 255, "%s/donnatella/marks.conf", sce) >= 255)
+        b = g_strdup_printf ("%s/donnatella/marks.conf", sce);
+
+    if (!g_get_filename_charsets (NULL))
+        file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+    if (!g_file_get_contents ((file) ? file : b, &data, NULL, &err))
+    {
+        g_warning ("Failed to read '%s': %s", b, err->message);
+        g_clear_error (&err);
+    }
+    else
+    {
+        g_free (file);
+        file = NULL;
+        if (b != buf)
+        {
+            g_free (b);
+            b = buf;
+        }
+
+        if (snprintf (buf, 255, "%s/marks.conf", dst) >= 255)
+            b = g_strdup_printf ("%s/marks.conf", dst);
+
+        if (!g_get_filename_charsets (NULL))
+            file = g_filename_from_utf8 (b, -1, NULL, NULL, NULL);
+
+        if (!g_file_set_contents ((file) ? file : b, data, -1, &err))
+        {
+            g_warning ("Failed to write '%s': %s", b, err->message);
+            g_clear_error (&err);
+        }
+        g_free (data);
+    }
+
+    if (b != buf)
+        g_free (b);
+    g_free (file);
+    return CFGDIR_CREATED;
+}
+
 static gboolean
 copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
 {
@@ -5265,6 +5437,7 @@ copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
     gchar buf[255], *b = buf;
     gchar *file = NULL;
     gchar *data;
+    enum cfgdir cfgdir;
 
     if (snprintf (buf, 255, "%s/donnatella/donnatella.conf", sce) >= 255)
         b = g_strdup_printf ("%s/donnatella/donnatella.conf", sce);
@@ -5285,8 +5458,20 @@ copy_and_load_conf (DonnaConfig *config, const gchar *sce, const gchar *dst)
         return FALSE;
     }
     if (b != buf)
+    {
         g_free (b);
+        b = buf;
+    }
     g_free (file);
+    file = NULL;
+
+    /* if dst doesn't exist, we create it and do some extra init stuff */
+    cfgdir = create_and_init_config_dir (config, sce, dst, data);
+    if (cfgdir == CFGDIR_CREATED)
+        return TRUE;
+    else if (cfgdir == CFGDIR_CREATION_FAILED)
+        return FALSE;
+    /* CFGDIR_EXIST */
 
     if (snprintf (buf, 255, "%s/donnatella.conf-ref", dst) >= 255)
         b = g_strdup_printf ("%s/donnatella.conf-ref", dst);
