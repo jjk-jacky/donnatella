@@ -5476,6 +5476,29 @@ prepare_app (DonnaApp *app, GError **error)
                     i, it_int, error)))
         return FALSE;
 
+    i = 0;
+    it_int[i].value     = DONNA_ENABLED_TYPE_ENABLED;
+    it_int[i].in_file   = "enabled";
+    it_int[i].label     = "Enabled";
+    ++i;
+    it_int[i].value     = DONNA_ENABLED_TYPE_DISABLED;
+    it_int[i].in_file   = "disabled";
+    it_int[i].label     = "Disabled";
+    ++i;
+    it_int[i].value     = DONNA_ENABLED_TYPE_COMBINE;
+    it_int[i].in_file   = "combine";
+    it_int[i].label     = "Combine";
+    ++i;
+    it_int[i].value     = DONNA_ENABLED_TYPE_IGNORE;
+    it_int[i].in_file   = "ignore";
+    it_int[i].label     = "Ignore";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "enabled",
+                    "Enabled state",
+                    i, it_int, error)))
+        return FALSE;
+
     /* have treeview register its extras */
     if (G_UNLIKELY (!_donna_tree_view_register_extras (config, error)))
         return FALSE;
