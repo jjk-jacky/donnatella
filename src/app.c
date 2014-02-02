@@ -547,6 +547,9 @@ static void             donna_app_get_property      (GObject        *object,
 static void             donna_app_finalize          (GObject        *object);
 
 
+static void             new_node_cb                 (DonnaProvider  *provider,
+                                                     DonnaNode      *node,
+                                                     DonnaApp       *app);
 static GSList *         load_arrangements           (DonnaConfig    *config,
                                                      const gchar    *sce);
 static inline void      set_active_list             (DonnaApp       *app,
@@ -771,6 +774,7 @@ donna_app_init (DonnaApp *app)
     g_rec_mutex_init (&priv->rec_mutex);
 
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", app, NULL);
+    g_signal_connect (priv->config, "new-node", (GCallback) new_node_cb, app);
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].desc = "Name (and Icon)";
     priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMN_TYPE_NAME;
@@ -797,6 +801,7 @@ donna_app_init (DonnaApp *app)
     priv->column_types[COL_TYPE_VALUE].type = DONNA_TYPE_COLUMN_TYPE_VALUE;
 
     priv->task_manager = g_object_new (DONNA_TYPE_PROVIDER_TASK, "app", app, NULL);
+    g_signal_connect (priv->task_manager, "new-node", (GCallback) new_node_cb, app);
 
     priv->pool = g_thread_pool_new ((GFunc) donna_app_task_run, NULL,
             5, FALSE, NULL);
