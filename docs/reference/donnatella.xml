@@ -24,7 +24,7 @@
 
 <refnamediv>
   <refname>donnatella</refname>
-  <refpurpose>your file manager</refpurpose>
+  <refpurpose>command-line arguments</refpurpose>
 </refnamediv>
 
 <refsynopsisdiv>
@@ -52,13 +52,41 @@
     <term>-c</term>
     <term>--config-dir=<replaceable>DIR</replaceable></term>
     <listitem><para>Use <replaceable>DIR</replaceable> as configuration
-            directory.</para></listitem>
+            directory, instead of the default
+            (<systemitem>$XDG_CONFIG_HOME/donnatella</systemitem>).</para>
+        <para>If it doesn't exist, it will be created and default configuration
+            &amp; marks will be loaded from the system config dir (e.g.
+            <systemitem>/etc/xdg/donnatella</systemitem>)</para>
+    </listitem>
   </varlistentry>
 
   <varlistentry>
     <term>-L</term>
     <term>--log-level=<replaceable>LEVEL</replaceable></term>
-    <listitem><para>Set the log level to <replaceable>LEVEL</replaceable>.</para></listitem>
+    <listitem><para>Set the log level to <replaceable>LEVEL</replaceable>,
+            defining which messages will be shown by the log handler.</para>
+        <para>Valid log levels are (in order) :</para>
+        <itemizedlist>
+            <listitem><para><systemitem>error</systemitem> : only show fatal
+                    error messages</para></listitem>
+            <listitem><para><systemitem>critical</systemitem> : also show
+                    critical warnings</para></listitem>
+            <listitem><para><systemitem>warning</systemitem> : also show
+                    warnings (default log level)</para></listitem>
+            <listitem><para><systemitem>message</systemitem> : also show
+                    messages</para></listitem>
+            <listitem><para><systemitem>info</systemitem> : also show informative
+                    messages</para></listitem>
+            <listitem><para><systemitem>debug</systemitem> : also show main debug
+                    messages</para></listitem>
+            <listitem><para><systemitem>debug2</systemitem> : show more debug
+                    messages</para></listitem>
+            <listitem><para><systemitem>debug3</systemitem> : show even more
+                    debug messages</para></listitem>
+            <listitem><para><systemitem>debug4</systemitem> : show all possible
+                    debug messages</para></listitem>
+        </itemizedlist>
+    </listitem>
   </varlistentry>
 
   <varlistentry>
@@ -92,7 +120,47 @@
   <varlistentry>
     <term>-d</term>
     <term>--debug=<replaceable>FILTERS</replaceable></term>
-    <listitem><para>Define "filters" for the debug log messages.</para></listitem>
+    <listitem><para>Define "filters" for the debug log messages, and sets the
+            log level to <systemitem>debug</systemitem>.</para>
+        <para>In addition to the log level, by default only "generic" debug
+            messages will be shown. Certain debug messages are assigned to a
+            component of donna, and a corresponding filter must be activated for
+            such messages to show.</para>
+        <para>The following filters are available:</para>
+        <itemizedlist>
+            <listitem><para><systemitem>node</systemitem> : debug messages
+                    relating to nodes. Can be restructed using domain.
+            </para></listitem>
+            <listitem><para><systemitem>task</systemitem> : debug messages
+                    relating to tasks.
+            </para></listitem>
+            <listitem><para><systemitem>treeview</systemitem> : debug messages
+                    relating to treeviews. Can be restricted using treeview
+                    names.
+            </para></listitem>
+            <listitem><para><systemitem>task-manager</systemitem> : debug
+                    messages relating to the task manager.
+            </para></listitem>
+            <listitem><para><systemitem>provider</systemitem> : debug messages
+                    relating to providers. Can be restricted using domain.
+            </para></listitem>
+            <listitem><para><systemitem>config</systemitem> : debug messages
+                    relating to the configuration manager.
+            </para></listitem>
+            <listitem><para><systemitem>app</systemitem> : debug messages
+                    relating to donna in general.
+            </para></listitem>
+            <listitem><para><systemitem>all</systemitem> : all debug messages
+                    (same as specifying all the filters above)
+            </para></listitem>
+        </itemizedlist>
+        <para>Certain filters allow "restrictions," where you can follow the
+            filter by a colon and one or more identifiers (as specified above),
+            separated by a plus sign, to limit which the messages to show.</para>
+        <para>For example, to only show debug messages from treeviews "foo" and
+            "bar" you would use: <systemitem>--debug treeview:foo+bar</systemitem>
+        </para>
+    </listitem>
   </varlistentry>
 </variablelist>
 </refsect1>
