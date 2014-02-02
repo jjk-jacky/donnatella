@@ -321,7 +321,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "size",
-            "format", "%R", NULL);
+            "format", "%b", NULL);
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -332,8 +332,8 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL,
-            "format_tooltip", "%B", NULL);
+            arr_name, tv_name, is_tree, "column_types/size",
+            "format_tooltip", "%R", NULL);
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -345,7 +345,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
 
     i = donna_config_get_int_column (config, col_name,
             arr_name, tv_name, is_tree, "size",
-            "digits", 1, NULL);
+            "digits", 2, NULL);
     /* we enforce [0,2] because it's what makes sense */
     i = CLAMP (i, 0, 2);
     if (data->digits != i)
