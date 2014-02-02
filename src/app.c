@@ -5251,7 +5251,8 @@ load_css (const gchar *dir, gboolean is_main)
     gtk_css_provider_load_from_path (css_provider, (file) ? file : b, NULL);
     gtk_style_context_add_provider_for_screen (gdk_screen_get_default (),
             (GtkStyleProvider *) css_provider,
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+            (is_main) ? GTK_STYLE_PROVIDER_PRIORITY_USER
+            : GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     if (b != buf)
         g_free (b);
