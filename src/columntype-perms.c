@@ -8,6 +8,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <ctype.h>
+#include <errno.h>
 #include "columntype.h"
 #include "columntype-perms.h"
 #include "node.h"
@@ -357,7 +358,13 @@ donna_column_type_perms_init (DonnaColumnTypePerms *ct)
     priv->user_id = getuid ();
     priv->nb_groups = getgroups (0, NULL);
     priv->group_ids = g_new (gid_t, (gsize) priv->nb_groups);
-    getgroups (priv->nb_groups, priv->group_ids);
+    if (G_UNLIKELY (getgroups (priv->nb_groups, priv->group_ids) == -1))
+    {
+        gint _errno = errno;
+        g_warning ("ColumnType 'perms': Failed to get groups: %s",
+                g_strerror (_errno));
+        memset (priv->group_ids, 0, sizeof (gid_t) * (gsize) priv->nb_groups);
+    }
 }
 
 static void
