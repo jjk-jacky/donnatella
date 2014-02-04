@@ -25,15 +25,23 @@ struct _DonnaTaskHelper
 
 /* base functions for helpers */
 
+static inline void
+unblock_fd (gint fd)
+{
+    guint64 one = 1;
+
+again:
+    if (write (fd, &one, sizeof (one)) == -1 && errno == EINTR)
+        goto again;
+}
+
 void
 donna_task_helper_done (DonnaTaskHelper    *th)
 {
-    guint64 one;
-
     g_mutex_lock (&th->mutex);
     if (th->has_destroy == 0)
         /* unblock thread if there's no destroy_ui() pending */
-        write (th->fd, &one, sizeof (one));
+        unblock_fd (th->fd);
     else
         /* flag that UI is done, to abort the pending call to destroy_ui() */
         ++th->has_destroy;
@@ -60,11 +68,9 @@ do_destroy_ui (DonnaTaskHelper *th)
     }
     else
     {
-        guint64 one;
-
         /* user actually already, so UI is done: just unblock thread */
         th->rc = DONNA_TASK_HELPER_RC_SUCCESS;
-        write (th->fd, &one, sizeof (one));
+        unblock_fd (th->fd);
         g_mutex_unlock (&th->mutex);
     }
 

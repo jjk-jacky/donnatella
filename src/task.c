@@ -595,6 +595,16 @@ donna_task_set_property (GObject        *object,
     }
 }
 
+static inline void
+unblock_fd (gint fd)
+{
+    guint64 one = 1;
+
+again:
+    if (write (fd, &one, sizeof (one)) == -1 && errno == EINTR)
+        goto again;
+}
+
 struct notify_prop_data
 {
     GObject *obj;
@@ -1211,7 +1221,6 @@ int
 donna_task_get_wait_fd (DonnaTask          *task)
 {
     DonnaTaskPrivate *priv;
-    guint64 one = 1;
 
     g_return_val_if_fail (DONNA_IS_TASK (task), -1);
     priv = task->priv;
@@ -1229,7 +1238,7 @@ donna_task_get_wait_fd (DonnaTask          *task)
         goto done;
 
     if (priv->state & DONNA_TASK_POST_RUN)
-        write (priv->fd_block, &one, sizeof (one));
+        unblock_fd (priv->fd_block);
 
 done:
     UNLOCK_TASK (task);
@@ -1579,10 +1588,7 @@ donna_task_run (DonnaTask *task)
 
     /* someone blocked for us? */
     if (priv->fd_block >= 0)
-    {
-        guint64 one = 1;
-        write (priv->fd_block, &one, sizeof (one));
-    }
+        unblock_fd (priv->fd_block);
 
     /* we're done with the lock */
     UNLOCK_TASK (task);
@@ -1700,10 +1706,7 @@ donna_task_pause (DonnaTask *task)
 
     /* unblock the fd, so task_fn can see the change of state */
     if (priv->fd >= 0)
-    {
-        guint64 one = 1;
-        write (priv->fd, &one, sizeof (one));
-    }
+        unblock_fd (priv->fd);
 
     UNLOCK_TASK (task);
 
@@ -1784,10 +1787,7 @@ donna_task_cancel (DonnaTask *task)
 
         /* someone blocked for us? */
         if (priv->fd_block >= 0)
-        {
-            guint64 one = 1;
-            write (priv->fd_block, &one, sizeof (one));
-        }
+            unblock_fd (priv->fd_block);
 
         UNLOCK_TASK (task);
 
@@ -1816,10 +1816,7 @@ donna_task_cancel (DonnaTask *task)
 
     /* unblock the fd, so task_fn can see the change of state */
     if (priv->fd >= 0)
-    {
-        guint64 one = 1;
-        write (priv->fd, &one, sizeof (one));
-    }
+        unblock_fd (priv->fd);
 
     /* wake up task_fn if we're cancelling a paused task */
     if (state == DONNA_TASK_PAUSED)
