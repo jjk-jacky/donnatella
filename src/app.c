@@ -123,8 +123,9 @@
  *
  * The following variables are available to use in the window title :
  *
- * - <systemitem>\%v</systemitem> : version number
  * - <systemitem>\%a</systemitem> : treeview name of the active list
+ * - <systemitem>\%d</systemitem> : current directory; See
+ *   donna_app_get_current_dirname() for difference with current location
  * - <systemitem>\%l</systemitem> : full location of the active list's current
  *   location
  * - <systemitem>\%L</systemitem> : active's list current location. What is
@@ -135,6 +136,7 @@
  *   With the later a string option <systemitem>custom_&lt;DOMAIN&gt;</systemitem>
  *   will be looked. If it exists, it is used; else the name of the current
  *   location will be used.
+ * - <systemitem>\%v</systemitem> : version number
  *
  * </para></refsect3>
  *
@@ -4714,6 +4716,16 @@ parse_string (DonnaApp *app, gchar *fmt)
                     str = g_string_new (NULL);
                 g_string_append_len (str, fmt, s - fmt);
                 g_string_append (str, donna_tree_view_get_name (priv->active_list));
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'd':
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_len (str, fmt, s - fmt);
+                if (priv->cur_dirname)
+                    g_string_append (str, priv->cur_dirname);
                 s += 2;
                 fmt = s;
                 break;
