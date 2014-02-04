@@ -102,6 +102,42 @@
  * <refsect2 id="features">
  * <title>Features</title>
  * <para>
+ * <refsect3 id="window">
+ * <title>Customize the main window</title>
+ * <para>
+ * On start, donna's main window will be created according to a few options, all
+ * found under category <systemitem>donna</systemitem> :
+ *
+ * - <systemitem>width</systemitem> & <systemitem>height</systemitem> : to
+ *   define the initial size of the main window
+ * - <systemitem>maximized</systemitem> : A boolean, set to true to have the
+ *   window maximized on start.
+ *   In that case, the width & height will be used when unmaximizing the window.
+ *   Note that it is also possible to start with a maximized window using
+ *   command line option <systemitem>--maximized</systemitem>
+ * - <systemitem>active_list</systemitem> : must be the name of a treeview in
+ *   mode list, to be the active-list. If not set, the first list created will
+ *   be the active-list.
+ * - <systemitem>layout</systemitem> : the actual layout; see #layout for more
+ * - <systemitem>tile</systemitem> : the title of the window
+ *
+ * The following variables are available to use in the window title :
+ *
+ * - <systemitem>\%v</systemitem> : version number
+ * - <systemitem>\%a</systemitem> : treeview name of the active list
+ * - <systemitem>\%l</systemitem> : full location of the active list's current
+ *   location
+ * - <systemitem>\%L</systemitem> : active's list current location. What is
+ *   actually used depends on the domain of the current location. An option
+ *   <systemitem>domain_&lt;DOMAIN&gt;</systemitem> (integer:title-domain) is
+ *   looked up, and can be "full", "loc" or "custom"
+ *   The first two will have the full location or location used, respectively.
+ *   With the later a string option <systemitem>custom_&lt;DOMAIN&gt;</systemitem>
+ *   will be looked. If it exists, it is used; else the name of the current
+ *   location will be used.
+ *
+ * </para></refsect3>
+ *
  * <refsect3 id="layout">
  * <title>Layout: Single pane, dual pane, hexapane...</title>
  * <para>
@@ -177,18 +213,6 @@
  * <systemitem>--layout</systemitem>
  * Note that it is, however, not possible to change layout while donna is
  * running.
- *
- * A couple other options are available regarding the main window, all going
- * under the same section <systemitem>[donna]</systemitem> :
- *
- * - <systemitem>width</systemitem> & <systemitem>height</systemitem> : to
- *   define the initial size of the main window
- * - <systemitem>maximized</systemitem> : A boolean, set to true to have the
- *   window maximized on start.
- *   In that case, the width & height will be used when unmaximizing the window.
- * - <systemitem>active_list</systemitem> : must be the name of a treeview in
- *   mode list, to be the active-list. If not set, the first list created will
- *   be the active-list.
  *
  * </para></refsect3>
  *
