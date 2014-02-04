@@ -10981,26 +10981,22 @@ donna_tree_view_selection_nodes (DonnaTreeView      *tree,
     priv->filling_list = TRUE;
     for (i = 0; i < nodes->len; ++i)
     {
-        DonnaNode *node = nodes->pdata[i];
-        GSList *list, *l;
+        GtkTreeIter *iter;
 
-        list = g_hash_table_lookup (priv->hashtable, node);
-        if (!list)
+        iter = g_hash_table_lookup (priv->hashtable, nodes->pdata[i]);
+        if (!iter)
             continue;
 
-        for (l = list; l; l = l->next)
+        if (action == DONNA_SEL_SELECT)
+            gtk_tree_selection_select_iter (sel, iter);
+        else if (action == DONNA_SEL_UNSELECT)
+            gtk_tree_selection_unselect_iter (sel, iter);
+        else /* DONNA_SEL_INVERT */
         {
-            if (action == DONNA_SEL_SELECT)
-                gtk_tree_selection_select_iter (sel, l->data);
-            else if (action == DONNA_SEL_UNSELECT)
-                gtk_tree_selection_unselect_iter (sel, l->data);
-            else /* DONNA_SEL_INVERT */
-            {
-                if (gtk_tree_selection_iter_is_selected (sel, l->data))
-                    gtk_tree_selection_unselect_iter (sel, l->data);
-                else
-                    gtk_tree_selection_select_iter (sel, l->data);
-            }
+            if (gtk_tree_selection_iter_is_selected (sel, iter))
+                gtk_tree_selection_unselect_iter (sel, iter);
+            else
+                gtk_tree_selection_select_iter (sel, iter);
         }
     }
     /* restore things, and also make sure the status are updated (since we
