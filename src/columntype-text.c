@@ -4,6 +4,7 @@
 #include <glib-object.h>
 #include "columntype.h"
 #include "columntype-text.h"
+#include "renderer.h"
 #include "node.h"
 #include "app.h"
 #include "conf.h"
@@ -544,9 +545,12 @@ ct_text_render (DonnaColumnType    *ct,
     }
 
     g_object_set (renderer,
-            "visible",  TRUE,
-            "text",     g_value_get_string (&value),
+            "visible",      TRUE,
+            "text",         g_value_get_string (&value),
+            "ellipsize",    PANGO_ELLIPSIZE_END,
+            "ellipsize-set",TRUE,
             NULL);
+    donna_renderer_set (renderer, "ellipsize-set", NULL);
     g_value_unset (&value);
     return NULL;
 }

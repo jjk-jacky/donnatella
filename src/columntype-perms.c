@@ -11,6 +11,7 @@
 #include <errno.h>
 #include "columntype.h"
 #include "columntype-perms.h"
+#include "renderer.h"
 #include "node.h"
 #include "app.h"
 #include "conf.h"
@@ -2076,7 +2077,13 @@ ct_perms_render (DonnaColumnType    *ct,
 
     b = format_perms ((DonnaColumnTypePerms *) ct, data, data->format,
             mode, uid, gid, b, 20);
-    g_object_set (renderer, "visible", TRUE, "markup", b, NULL);
+    g_object_set (renderer,
+            "visible",      TRUE,
+            "markup",       b,
+            "ellipsize",    PANGO_ELLIPSIZE_END,
+            "ellipsize-set",TRUE,
+            NULL);
+    donna_renderer_set (renderer, "ellipsize-set", NULL);
     if (b != buf)
         g_free (b);
     return NULL;

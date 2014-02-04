@@ -4,6 +4,7 @@
 #include <glib-object.h>
 #include "columntype.h"
 #include "columntype-value.h"
+#include "renderer.h"
 #include "app.h"
 #include "node.h"
 #include "sort.h"
@@ -991,12 +992,15 @@ ct_value_render (DonnaColumnType    *ct,
         arr = get_text_for_value (ct, data, index, node, &value, &text, &free);
 
     if (text)
+    {
         g_object_set (renderer,
                 "text",         text,
                 "ellipsize",    PANGO_ELLIPSIZE_END,
                 "ellipsize-set",TRUE,
                 "visible",      TRUE,
                 NULL);
+        donna_renderer_set (renderer, "ellipsize-set", NULL);
+    }
     else
         g_object_set (renderer, "visible", FALSE, NULL);
 

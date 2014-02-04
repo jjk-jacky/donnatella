@@ -475,8 +475,14 @@ ct_size_render (DonnaColumnType    *ct,
     }
 
     b = format_size (size, data, data->format, b, 20);
-    g_object_set (renderer, "visible", TRUE, "text", b, "xalign", 1.0, NULL);
-    donna_renderer_set (renderer, "xalign", NULL);
+    g_object_set (renderer,
+            "visible",      TRUE,
+            "text",         b,
+            "xalign",       1.0,
+            "ellipsize",    PANGO_ELLIPSIZE_END,
+            "ellipsize-set",TRUE,
+            NULL);
+    donna_renderer_set (renderer, "xalign", "ellipsize-set", NULL);
     if (b != buf)
         g_free (b);
     return NULL;

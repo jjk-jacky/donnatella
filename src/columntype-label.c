@@ -5,6 +5,7 @@
 #include <string.h>
 #include "columntype.h"
 #include "columntype-label.h"
+#include "renderer.h"
 #include "app.h"
 #include "node.h"
 #include "util.h"
@@ -411,9 +412,12 @@ ct_label_render (DonnaColumnType    *ct,
         s = g_strdup_printf ("<unknown id:%d>", id);
 
     g_object_set (renderer,
-            "visible",  TRUE,
-            "text",     s,
+            "visible",      TRUE,
+            "text",         s,
+            "ellipsize",    PANGO_ELLIPSIZE_END,
+            "ellipsize-set",TRUE,
             NULL);
+    donna_renderer_set (renderer, "ellipsize-set", NULL);
     g_value_unset (&value);
     g_free (s);
     return NULL;

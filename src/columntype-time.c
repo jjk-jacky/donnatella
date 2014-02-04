@@ -6,6 +6,7 @@
 #include <time.h>
 #include "columntype.h"
 #include "columntype-time.h"
+#include "renderer.h"
 #include "node.h"
 #include "app.h"
 #include "conf.h"
@@ -1406,7 +1407,13 @@ ct_time_render (DonnaColumnType    *ct,
     }
 
     s = donna_print_time (time, data->format, &data->options);
-    g_object_set (renderer, "visible", TRUE, "text", s, NULL);
+    g_object_set (renderer,
+            "visible",      TRUE,
+            "text",         s,
+            "ellipsize",    PANGO_ELLIPSIZE_END,
+            "ellipsize-set",TRUE,
+            NULL);
+    donna_renderer_set (renderer, "ellipsize-set", NULL);
     g_free (s);
     return NULL;
 }
