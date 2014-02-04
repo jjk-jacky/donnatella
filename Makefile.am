@@ -131,6 +131,12 @@ AM_CFLAGS += -g -O0
 libdonnatella_la_SOURCES += src/debug.c
 endif
 
+dist_doc_DATA = README.md \
+				AUTHORS \
+				COPYING \
+				LICENSE \
+				HISTORY
+
 miscdir = @xdgdir@/${PACKAGE}
 dist_misc_DATA = misc/donnatella.conf \
 				 misc/donnatella.css \
