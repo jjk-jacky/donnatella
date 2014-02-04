@@ -4771,7 +4771,7 @@ parse_string (DonnaApp *app, gchar *fmt)
                 if (!str)
                     str = g_string_new (NULL);
                 g_string_append_len (str, fmt, s - fmt);
-                g_string_append (str, /* FIXME PACKAGE_VERSION */ "0.00");
+                g_string_append (str, PACKAGE_VERSION);
                 s += 2;
                 fmt = s;
                 break;
