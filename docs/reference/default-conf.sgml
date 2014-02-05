@@ -1,0 +1,289 @@
+<?xml version="1.0"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+               "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
+]>
+<refentry id="default-conf">
+  <refmeta>
+    <refentrytitle>Default Configuration</refentrytitle>
+    <manvolnum>3</manvolnum>
+    <refmiscinfo>donnatella</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>Default Configuration Overview</refname>
+    <refpurpose>Default keys &amp; clicks</refpurpose>
+  </refnamediv>
+
+  <refsect1>
+    <title>Overview</title>
+    <para>
+    As you know, all keys &amp; clicks handled by donna are configurable. See
+    <link linkend="key-modes">key modes</link> and <link
+    linkend="click-modes">click modes</link> for more information.
+    </para>
+    <para>
+    donna comes with a default configuration containing click &amp; key modes
+    with sensible defaults, allowing to do quite a few things.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Clicks on Trees</title>
+    <para>Things are relatively simple on trees, where most of what's
+    interesting revolves around the expander:</para>
+    <itemizedlist>
+    <listitem><para>left click:</para>
+    <para>Toggle the row, as you would expect.</para></listitem>
+    <listitem><para>Ctrl+left click:</para>
+    <para>Maxi-expand the row, i.e. load all children</para></listitem>
+    <listitem><para>Shift+left click:</para>
+    <para>Maxi-collapse the row, i.e. unload children</para></listitem>
+    <listitem><para>middle click:</para>
+    <para>Maxi toggle the row, i.e. smart toggle between (maxi) expanded and
+    (maxi) collapsed; See <link linkend="tv-toggle-row">tv_toggle_row()</link>
+    for more</para></listitem>
+    <listitem><para>Ctrl+middle click:</para>
+    <para>Full toggle the row, i.e. toggle it but expand/collapse every child
+    row as well.</para></listitem>
+    <listitem><para>right click:</para>
+    <para>Pop up a menu with the children container (subfolders), allowing you
+    to easily &amp; quickly go somewhere down. Especially useful in <link
+    linkend="minitree">minitree</link>.</para></listitem>
+    <listitem><para>Shift+right click:</para>
+    <para>Same as right click, only without "hidden" folders</para></listitem>
+    </itemizedlist>
+
+    <para>Outside of the expander, a few things are of course possible:</para>
+    <itemizedlist>
+    <listitem><para>left click on name:</para>
+    <para>Set cursor, i.e. focus &amp; select the row (thus changing location
+    of the sync'ed with list)</para></listitem>
+    <listitem><para>right click:</para>
+    <para>Pop up context menu</para></listitem>
+    <listitem><para>Shift+middle click on a row:</para>
+    <para>Remove the row. Works on any row in minitree, roots on
+    maxitree.</para></listitem>
+    </itemizedlist>
+
+    <para>Finally, it should be noted that if you're not running a patched GTK,
+    donna cannot tell whether the expander was clicked or not, and therefore
+    clicks on the expander aren't supported (a double click will toggle the row,
+    but that's it).</para>
+    <para>In such a case a special click mode is used, remapping the following
+    clicks:</para>
+    <itemizedlist>
+    <listitem><para>middle click on row:</para>
+    <para>Toggle the row</para></listitem>
+    <listitem><para>Ctrl+middle click on row:</para>
+    <para>Maxi-toggle the row</para></listitem>
+    </itemizedlist>
+  </refsect1>
+
+  <refsect1>
+    <title>Clicks on Lists</title>
+    <para>Lists work slightly differently than what you might be used to
+    elsewhere. Whereas the standard is to have left click sets the cursor (i.e.
+    unselect all, then focus &amp; select the clicked row), in donna much less
+    will be done, as only the focus will be set (leaving selection
+    unchanged).</para>
+
+    <para>First of all, you can click on column headers:</para>
+    <itemizedlist>
+    <listitem><para>left click:</para>
+    <para>Set sort order on column (reverse order if already
+    there)</para></listitem>
+    <listitem><para>Ctrl+left click or middle click:</para>
+    <para>Set second order on column (reverse order if already
+    there)</para></listitem>
+    <listitem><para>right click:</para>
+    <para>Pop up column context menu</para></listitem>
+    </itemizedlist>
+
+    <para>Now for the clicks on the list itself:</para>
+    <itemizedlist>
+    <listitem><para>middle click on blank space:</para>
+    <para>Scroll to focused row</para></listitem>
+    <listitem><para>middle double click on blank space:</para>
+    <para>Scroll &amp; focus the first "other" item, i.e. first file if a
+    folder is focused, first folder if a file is focused. See <link
+    linkend="rowid">rowid</link> for more.</para></listitem>
+    <listitem><para>right click on blank space:</para>
+    <para>Focus row &amp; pop up context menu</para></listitem>
+    <listitem><para>left click:</para>
+    <para>Unselect all</para></listitem>
+    <listitem><para>right click:</para>
+    <para>Pop up context menu</para></listitem>
+    <listitem><para>Ctrl+left click on a column:</para>
+    <para>Invert selected state of the row</para></listitem>
+    <listitem><para>Shift+left click on a column:</para>
+    <para>Invert selected state of the range (from focused to click
+    row)</para></listitem>
+    <listitem><para>Ctrl+Shift+left click on a column:</para>
+    <para>Select the range (from focused to clicked row)</para></listitem>
+    <listitem><para>left double click:</para>
+    <para>Activate row (e.g. open/execute item)</para></listitem>
+    <listitem><para>middle click on a column:</para>
+    <para>Edit column (e.g. rename, set time, permissions, etc)</para></listitem>
+    <listitem><para>left click on name:</para>
+    <para>Set focus to the row</para></listitem>
+    <listitem><para>left double click on selected name:</para>
+    <para>Activate selection</para></listitem>
+    </itemizedlist>
+  </refsect1>
+
+  <refsect1>
+    <title>Using keys</title>
+    <para>Unlike most GUI file manager, donna use vim-inspired key modes, which
+    means every key can be assign a specific meaning, used to trigger an action.
+    If you are keyboard-driven, this will allow you to perform a lot without
+    having to use the mouse.</para>
+    <itemizedlist>
+    <listitem><para>Motion (moving the focus around):</para>
+    <para>You can use keys <systemitem>Up</systemitem> and
+    <systemitem>Down</systemitem> to move the focus up &amp; down. You can also
+    use keys <systemitem>k</systemitem> and <systemitem>j</systemitem> to do the
+    same. You can use a multiplier to move by more than one row.</para>
+    <para>Using <systemitem>Home</systemitem> (or <systemitem>g</systemitem>)
+    will go to the first line, unless a multiplier was specified, the line
+    number to go to. Similarly, <systemitem>End</systemitem> (or
+    <systemitem>G</systemitem>) will go to the last line, or the one specified
+    via multiplier</para>
+    <para>You can also move the focus to the top/bottom row (if the focus is
+    already there, it will then jump one screen up/down) using keys
+    <systemitem>braceleft</systemitem> (<systemitem>{</systemitem>) and
+    <systemitem>braceright</systemitem> (<systemitem>}</systemitem>)
+    respectively.
+    Both support a multiplier, to repeat the operation as many times as
+    specified.</para>
+    <para>You can also specify a multiplier to be used as a percentage: to key
+    <systemitem>percent</systemitem> (<systemitem>%</systemitem>) to go to the
+    corresponding row in the entire list; to key <systemitem>ugrave</systemitem>
+    (<systemitem>ù</systemitem>) to go to the corresponding row in the visible
+    area. Should those keys be pressed without multiplier, you'll go to the
+    first row.</para>
+    <para>Key <systemitem>twosuperior</systemitem> (<systemitem>²</systemitem>)
+    will jump to the the first "other" item, i.e. first file if a folder is
+    focused, first folder if a file is focused. (See <link
+    linkend="rowid">rowid</link> for more.)</para>
+    <para>Key <systemitem>notsign</systemitem> (<systemitem>¬</systemitem>) can
+    be used to scroll to the focused row.</para>
+    <para>You can also scroll up/down without moving the focus, using keys
+    <systemitem>Page_Up</systemitem> and
+    <systemitem>Page_Down</systemitem>.</para>
+    </listitem>
+
+    <listitem><para>History</para>
+    <para>You can go back using key <systemitem>Left</systemitem>, and go
+    forward with <systemitem>Right</systemitem>. You can also popup the history
+    using <systemitem>h</systemitem>.</para>
+    </listitem>
+
+    <listitem><para>Marks</para>
+    <para>As you could expect if you're a vim user, you can set a mark to the
+    current location with <systemitem>m</systemitem>. You can also use
+    <systemitem>M</systemitem> instead, to set the mark to the focused row. Of
+    course, use <systemitem>apostrophe</systemitem> (<systemitem>'</systemitem>)
+    to jump to the mark.</para>
+    </listitem>
+
+    <listitem><para>Other ways to change location</para>
+    <para>A couple other keys allow you to change location:
+    <systemitem>BackSpace</systemitem> can be used to go up, while
+    <systemitem>Insert</systemitem> will go down. For both a multipler can be
+    specified to indicate how many levels to go up/down. Note that when going
+    up, the focus will then be set to the originating child.</para>
+    </listitem>
+
+    <listitem><para>Sort order(s)</para>
+    <para>You can set the main &amp; second sort order using key
+    <systemitem>s</systemitem> and <systemitem>S</systemitem> respectively,
+    followed by the first letter of the column name (e.g. "s" for size), or a
+    number to identify it by its position.
+    You can prefix those with <systemitem>numbersign</systemitem>
+    (<systemitem>#</systemitem>) and either <systemitem>a</systemitem> or
+    <systemitem>d</systemitem>, to force the order to be ascending or
+    descending (else column's default, or reversed if already on column).</para>
+    </listitem>
+
+    <listitem><para>Action on files</para>
+    <para>Of couse, <systemitem>Return</systemitem> (Enter) will go in the
+    folder, or open/execute the file. <systemitem>Delete</systemitem> will
+    delete all selected files, or the focused one if there's no selection. You
+    can also use <systemitem>d</systemitem> to delete the focus (regardless of
+    selection), or <systemitem>D</systemitem> to delete the selection (failing
+    if there's none).</para>
+    <para>Using key <systemitem>e</systemitem> followed by a similar "column
+    identification" as for sort orders above, you can enable column editing - if
+    supported. This allows you to e.g. rename (<systemitem>en</systemitem> for
+    name) or change modified date (<systemitem>et</systemitem> for time).</para>
+    <para><systemitem>F6</systemitem> can be used to edit the focused file via
+    vim in a terminal; <systemitem>F9</systemitem> can be used to view it via
+    less in a terminal.</para>
+    </listitem>
+
+    <listitem><para>Registers (clipboard)</para>
+    <para>Again similarily to what can be done in vim, you can use register to
+    cut/copy files and later paste (copy/move) them, or even delete them.
+    Key <systemitem>y</systemitem> will yank (or copy) to the register, key
+    <systemitem>x</systemitem> will cut and key <systemitem>a</systemitem> will
+    append. All of them take a motion afterwards, to affect all corresponding
+    rows. You can also repeat the key itself to only affect the focused row.
+    Keys <systemitem>Y</systemitem>, <systemitem>X</systemitem> and
+    <systemitem>A</systemitem> can also be used to yank/cut/append the selection
+    to the register, in which case there's obviously no motion to be
+    pressed.</para>
+    <para>Key <systemitem>p</systemitem> can be used to paste the content of the
+    register to the current location. <systemitem>P</systemitem> will do the
+    same, forcing to copy items (regardless of how they were put in the
+    register, i.e. even if cut) where as <systemitem>O</systemitem> will paste
+    them forcing a move. <systemitem>N</systemitem> will paste into a new folder
+    to be created on the fly, the name of which you will be prompted for.
+    Finally, key <systemitem>E</systemitem> will delete the content of the
+    register (i.e. delete the actual files).</para>
+    <para>Of course, all of those can be prefixed with
+    <systemitem>quotedbl</systemitem> (<systemitem>"</systemitem>) and the name
+    of the register.</para>
+    </listitem>
+
+    <listitem><para>Selection</para>
+    <para>Pressing <systemitem>v</systemitem> and a motion (or
+    <systemitem>v</systemitem> again) will invert the selected state of the
+    corresponding rows.
+    It should be noted that if not using a patched GTK, inverting a range isn't
+    possible, and therefore a special key mode has <systemitem>v</systemitem>
+    simply toggle the focused row.</para>
+    <para>Pressing <systemitem>V</systemitem> will select the focused row, and
+    enter key mode "select" See below for what keys are then available.</para>
+    </listitem>
+
+    <listitem><para>Misc.</para>
+    <para>Some other keys are available, such as <systemitem>F5</systemitem> to
+    trigger a refresh, <systemitem>Escape</systemitem> to reset keys &amp; abort
+    any pending change of location, or <systemitem>Menu</systemitem> to pop up
+    the context menu.</para>
+    <para>You can also use <systemitem>colon</systemitem>
+    (<systemitem>:</systemitem>) to enter a full location to trigger, e.g.  a
+    location to go to, a command to execute, etc</para>
+    </listitem>
+
+    </itemizedlist>
+
+    <para>As indicated above, pressing <systemitem>V</systemitem> will enter key
+    mode "select", which has the following keys defined:</para>
+    <para><systemitem>Up</systemitem> (or <systemitem>k</systemitem>),
+    <systemitem>Down</systemitem> (or <systemitem>j</systemitem>) to go up/down,
+    selecting everything. <systemitem>g</systemitem> and
+    <systemitem>G</systemitem> to go to the first/last row, selecting
+    everything. <systemitem>braceleft</systemitem> (<systemitem>{</systemitem>)
+    and <systemitem>braceright</systemitem> (<systemitem>}</systemitem>) can be
+    used to go to the top/bottom row respectively, selecting everyting as
+    well.</para>
+    <para>You can also use <systemitem>y</systemitem>,
+    <systemitem>a</systemitem> or <systemitem>x</systemitem> to yank (copy),
+    add, or cut the selection to the register, unselect all and reset keys (i.e.
+    go back to default key mode).
+    Those of course can be prefixed with <systemitem>quotedbl</systemitem>
+    (<systemitem>"</systemitem>) and a register name.</para>
+  </refsect1>
+
+</refentry>
