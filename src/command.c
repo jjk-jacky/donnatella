@@ -34,9 +34,34 @@
 
 /**
  * SECTION:commands
- * @Short_description: Commands that can be used in donna
+ * @Short_description: Supported commands
  *
- * Donna uses "commands" to allow...
+ * As you probably know, about everything that can be done in donna is done via
+ * commands, which you can use from keys, clicks, on (context) menus, etc
+ *
+ * For more about commands and their syntax, please see
+ * #DonnaProviderCommand.description
+ *
+ * Below is the list of all supported commands. For each argument as well as the
+ * return value, annotations can be found. "allow-none" means the argument is
+ * optional and can be omitted (defaulting then to 0/nothing, unless specified
+ * otherwise); "array" means the argument/return value is an array. For
+ * arguments, you can use either one element (e.g. node), or an array.
+ *
+ * Some commands allow for a string argument either one of many strings, or a
+ * combination of strings (using plus sign (<systemitem>+</systemitem>) as
+ * separator). In such cases, you don't have to specify the entire string, but
+ * only as many characters as needed to uniquely identify it.
+ *
+ * For example, command tv_goto_line() has an argument @set that must be one or
+ * more of "scroll", "focus" and "cursor"
+ * So you could use e.g. "scroll+focus", "scro+foc" or simply "s+f"
+ * Similarly, its argument @action can be one of "select", "unselect", "invert"
+ * or "define"; So you could as well use "s", "u", "i" or "d" respectively.
+ *
+ * Note that lots of commands are "wrappers" around internal functions, so a
+ * more detailed documentation is to be found at the documentation of the
+ * function itself.
  */
 
 

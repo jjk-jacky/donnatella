@@ -31,6 +31,59 @@
 #include "macros.h"
 #include "debug.h"
 
+/**
+ * SECTION:provider-command
+ * @Short_description: The commands at your disposal in donna
+ *
+ * As you probably know, about everything that can be done in donna is done via
+ * commands, which you can use from keys, clicks, on (context) menus, etc
+ *
+ * Commands are used by simply specifying a node to trigger, in domain "command"
+ * and with for location the actual command to execute, with its arguments (if
+ * any).
+ *
+ * Because this is a node, you can therefore use them in donna just like you'd
+ * use other nodes.
+ *
+ * Locations must always start with the command to execute, followed by
+ * parenthesis. In between parenthesis can be found arguments, separated by
+ * commas. If an argument can include a comma or parenthesis, simply quote it
+ * using double quotes (<systemitem>"</systemitem>).
+ *
+ * To then use quotes, you'll need to escape them using backslash
+ * (<systemitem>\</systemitem>), which must also be escaped to be used
+ * literally.
+ *
+ * Commands can have arguments, and a return value, all of which have a type.
+ * Obviously some automatic convertion to string representation is performed as
+ * needed. For instance, when a treeview is used, its name will actually be
+ * used. For nodes, you can simply use a full location.
+ *
+ * It is also possible to use arrays (of nodes or strings), in which case you
+ * need to quote the entire array, quoting each element if needed. For example,
+ * an array of nodes could be used as such:
+ * <systemitem>"\"/tmp/foo\",\"/tmp/bar\""</systemitem>
+ * Although, because quotes aren't required here, this would also work:
+ * <systemitem>"/tmp/foo,/tmp/bar"</systemitem>
+ *
+ * When an argument is an array, it is possible to simply specify one element.
+ * Similarly, when an argument takes e.g. a node, and an array of nodes is given
+ * (e.g. return value of a command), if the array contains exactly one
+ * element/node, it will work. If more elements are present, it obviously won't.
+ *
+ * It is possible to use another command's return value as argument, by using
+ * the at sign (<systemitem>@</systemitem>) followed by the command. In such a
+ * case, this command will first be executed, and its return value used as
+ * argument.
+ * If the return value isn't of the same type as the argument, then it will be
+ * converted to a string representation. So e.g. using a command returning a
+ * node as argument of anything other than a(n array of) node(s) will have the
+ * node's full location be used as argument.
+ *
+ * For the list of all supported commands, refer to
+ * #donnatella-Commands.description
+ */
+
 enum
 {
     PROP_0,
