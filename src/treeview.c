@@ -811,8 +811,10 @@
  *   than one, else nothing
  *
  * Note that <systemitem>\%A</systemitem>, <systemitem>\%V</systemitem> and
- * <systemitem>\%S</systemitem> will use format <systemitem>\%R</systemitem>
- * to format the size, alognside options <systemitem>digits</systemitem> and
+ * <systemitem>\%S</systemitem> will use the format as specified in option
+ * <systemitem>size_format</systemitem> (defaulting to that of
+ * <systemitem>defaults/size/format</systemitem> to format the size, alongside
+ * options <systemitem>digits</systemitem> and
  * <systemitem>long_unit</systemitem> (defaulting to whatever is set under
  * <systemitem>defaults/size</systemitem>).
  * You can however specify the format to use, by putting it in between brackets
@@ -20708,8 +20710,9 @@ status_provider_create_status (DonnaStatusProvider    *sp,
         return 0;
     }
 
-    status.id  = ++priv->last_status_id;
-    status.fmt = s;
+    status.id   = ++priv->last_status_id;
+    status.name = g_strdup (name);
+    status.fmt  = s;
     status.changed_on = 0;
 
     if (!donna_config_get_int (config, NULL, &status.digits,
@@ -20727,13 +20730,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
                 "statusbar/%s/key_modes_colors", name))
         status.key_modes_colors = FALSE;
     if (status.key_modes_colors)
-    {
-        status.name = g_strdup (name);
         status.changed_on |= STATUS_CHANGED_ON_KEY_MODE;
-    }
-    else
-        /* name only needed to load key_modes_colors options */
-        status.name = NULL;
 
     while ((s = strchr (s, '%')))
     {
@@ -21023,8 +21020,15 @@ status_provider_render (DonnaStatusProvider    *sp,
             case 'A':
             case 'V':
             case 'S':
+                ss = NULL;
+                if (!donna_config_get_string (donna_app_peek_config (priv->app),
+                            NULL, &ss, "statusbar/%s/size_format", status->name))
+                    donna_config_get_string (donna_app_peek_config (priv->app),
+                            NULL, &ss, "defaults/size/format");
                 g_string_append_len (str, fmt, s - fmt);
-                st_render_size (sp, status, str, s[1], (gchar *) "%R", &sel);
+                st_render_size (sp, status, str, s[1],
+                        (ss) ? ss : (gchar *) "%R", &sel);
+                g_free (ss);
                 s += 2;
                 fmt = s;
                 break;
