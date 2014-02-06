@@ -316,6 +316,37 @@
  * See donna_app_parse_fl() for more on user parsing.
  * </para></refsect3>
  *
+ * <refsect3 id="statusbar">
+ * <title>Custom statusbar</title>
+ * <para>
+ * The statusbar, automatically displayed at the bottom of the main window if
+ * defined, is made of as many "areas" as needed. You define the content of the
+ * statusbar simply via string option <systemitem>statusbar/areas</systemitem>
+ * which must simply be a comma-separated list of area names.
+ *
+ * Said name being the name of a section in configuration, under
+ * <systemitem>statusbar</systemitem>
+ * Each area is defined in said section, with at least one required string
+ * option, <systemitem>source</systemitem>. The source is the component which
+ * will handle the area (drawing, etc), and can be one of the following:
+ *
+ * - <systemitem>:task</systemitem> : the task manager, see #taskmanager-status
+ * - <systemitem>:active</systemitem> : the treeview currently active-list
+ * - <systemitem>:focused</systemitem> : the treeview currently focused
+ * - or the name of a treeview
+ *
+ * Integer option <systemitem>width</systemitem> can be used to set the
+ * (minimum) size of the area, and boolean option
+ * <systemitem>expand</systemitem> can bet set to false if you don't want the
+ * area to automatically expand when more space is available. By default, all
+ * remaining space in the statusbar is distributed amongst all areas; setting
+ * <systemitem>expand</systemitem> to false excludes the area, so it remains at
+ * the specified size.
+ *
+ * Other options that can be used in the section depend on its source. For
+ * treeviews, refer to #treeview-status.
+ * </para></refsect3>
+ *
  * </para></refsect2>
  *
  * <refsect2 id="css">

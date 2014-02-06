@@ -779,6 +779,54 @@
  * when the first (few) names are used as templates, etc).
  * This same principle is used for ":item", ":container" and ":other"
  * </para></refsect2>
+ *
+ * <refsect2 id="treeview-status">
+ * <title>Treeview as status provider</title>
+ * <para>
+ * You can use a treeview as source of a statusbar area (See #statusbar for
+ * more). In that case, you must specify string option
+ * <systemitem>format</systemitem>, defining the format of what to show in the
+ * area. The following variable are available:
+ *
+ * - <systemitem>\%o</systemitem> : treeview name
+ * - <systemitem>\%l</systemitem> : full location of current location; a dash
+ *   (-) if no current location is set
+ * - <systemitem>\%L</systemitem> : location of current location if in "fs",
+ *   else full location; a dash (-) if no current location is set
+ * - <systemitem>\%K</systemitem> : current key mode
+ * - <systemitem>\%k</systemitem> : current key status; that is the current
+ *   combine if any, the current combine spec if any, the current multiplier if
+ *   any, the current key pressed if any (waiting for its spec), and the current
+ *   multiplier of the spec motion if any. Can be an empty string.
+ * - <systemitem>\%a</systemitem> : number of all rows (i.e. including hidden
+ *   ones for lists)
+ * - <systemitem>\%v</systemitem> : number of visible rows
+ * - <systemitem>\%s</systemitem> : number of selected rows
+ * - <systemitem>\%A</systemitem> : total size of all rows
+ * - <systemitem>\%V</systemitem> : total size of visible rows
+ * - <systemitem>\%S</systemitem> : total size of selected rows
+ * - <systemitem>\%n</systemitem> : name of focused row, if any
+ * - <systemitem>\%N</systemitem> : name of selected item if there's only one,
+ *   string "n items selected" (with n the number of selected items) if more
+ *   than one, else nothing
+ *
+ * Note that <systemitem>\%A</systemitem>, <systemitem>\%V</systemitem> and
+ * <systemitem>\%S</systemitem> will use format <systemitem>\%R</systemitem>
+ * to format the size, alognside options <systemitem>digits</systemitem> and
+ * <systemitem>long_unit</systemitem> (defaulting to whatever is set under
+ * <systemitem>defaults/size</systemitem>).
+ * You can however specify the format to use, by putting it in between brackets
+ * right after the percent sign, e.g. <systemitem>\%{\%b}S</systemitem>
+ *
+ * Additionally, you can use option <systemitem>key_modes_colors</systemitem> to
+ * enable using colors based on the current key mode. When set to true, if
+ * string option <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground</systemitem>
+ * is set, it will be used as foreground color. If not, string option
+ * <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground-rgba</systemitem> is tried,
+ * which can be a string as per gdk_rgba_parse()
+ * Similarly named options for the background color are also used in the same
+ * way.
+ * </para></refsect2>
  */
 
 enum
