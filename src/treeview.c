@@ -452,7 +452,8 @@
  * Obviously when you press keys, you want some kind of trigger to happen as
  * response. The most simple way being that the action happens when the key is
  * pressed; This is the type "direct" As is usual in donna, the action will be a
- * full location, parsed contextually and triggered.
+ * full location, parsed contextually and triggered; See #treeview-context for
+ * more.
  *
  * The reason numbers aren't usable is that they're automatically used to handle
  * the "modifier," a number you can enter before pressing the key to trigger the
@@ -680,11 +681,48 @@
  * - <systemitem>click_modes/&lt;FALLBACK&gt;/&lt;CLICK&gt;</systemitem>
  *
  * If nothing was found, nothing happens. Else the trigger (option value) is
- * contextually parsed and the associated node triggered.
+ * contextually parsed and the associated node triggered; Also see
+ * #treeview-context
  *
  * As a result, you can control absolutely any & every clicks made. See
  * #default-click-modes for description of how to use donna with default
  * options.
+ * </para></refsect2>
+ *
+ * <refsect2 id="treeview-context">
+ * <title>Context variables from treeviews</title>
+ * <para>
+ * On multiple occasions in donna, you can use a full location, also refered to
+ * as trigger, that will be contextually parsed before the corresponding node is
+ * triggered. For instance this happens from keys, clicks or context menus.
+ *
+ * The whole point of the context, is that you can use variables in said
+ * trigger, to refer e.g. to the clicked row, or simply know which treeview to
+ * use.
+ *
+ * It is possible for a row and/or a column to be available in the context. For
+ * example, on a click the reference row and the column will be those clicked,
+ * if applicable.
+ * For context menu, it will be what was specified on
+ * tv_context_get_nodes()
+ *
+ * The following variables are available:
+ *
+ * - <systemitem>\%o</systemitem>: treeview
+ * - <systemitem>\%l</systemitem>: node of the current location (if any)
+ * - <systemitem>\%R</systemitem>: name of the column (if any)
+ * - <systemitem>\%r</systemitem>: reference row (if any)
+ * - <systemitem>\%n</systemitem>: node of the reference row (if any)
+ * - <systemitem>\%f</systemitem>: node of the focused row (if any)
+ * - <systemitem>\%s</systemitem>: array of selected nodes (might be empty)
+ * - <systemitem>\%S</systemitem>: array of selected nodes if any, else node of
+ *   the focused row (same as <systemitem>\%f</systemitem>)
+ * - <systemitem>\%m</systemitem>: current multiplier (if any)
+ * - <systemitem>\%k</systemitem>: current key pressed &amp; waiting for its
+ *   specifier (spec) (if any)
+ * - <systemitem>\%c</systemitem>: current combine (if any)
+ *
+ * See also donna_app_parse_fl() about dereferencing such variables.
  * </para></refsect2>
  *
  * <refsect2 id="rowid">
