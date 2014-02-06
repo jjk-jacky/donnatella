@@ -2101,6 +2101,23 @@ enum
  * Contextual parsing happens on actions, when certain variables (e.g. \%o, etc)
  * can be used in the full location/trigger, and need to be parsed before
  * processing.
+ *
+ * When processing such variables, it should be known that by default so-called
+ * "intrefs" (for internal references) can be used; For example, if a variable
+ * points to a node, an intref will be used. An intref is simply a string
+ * referencing said node in memory.
+ *
+ * It is possible to "dereference" a variable, so that instead of using an
+ * intref, the full location of the node will be used. This is done by using a
+ * star after the percent sign, e.g. <systemitem>\%*n</systemitem>
+ * This can be useful if it isn't meant to be used as a command argument, but
+ * e.g. to be used as part of a string or something.
+ * Additionally, you can also use a special dereferencing, using a colon
+ * instead, e.g. <systemitem>\%:n</systemitem>
+ * This will use the location for nodes in "fs", and skip/use empty string for
+ * any node in another domain; Particularly useful for use in command line of
+ * external process.
+ *
  * If intrefs were created during said parsing (see donna_app_new_int_ref()) and
  * @intrefs is not %NULL, A #GPtrArray will be created and filled with string
  * representations of intrefs. This is intended to be then used with
