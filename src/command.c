@@ -4120,6 +4120,23 @@ cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_start_interactive_search:
+ * @tree: A treeview
+ *
+ * Start interactive search on @tree
+ *
+ * See donna_tree_view_start_interactive_search()
+ */
+static DonnaTaskState
+cmd_tv_start_interactive_search (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    DonnaTreeView *tree = args[0];
+
+    donna_tree_view_start_interactive_search (tree);
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_toggle_column:
  * @tree: A treeview
  * @column: A column name
@@ -4803,6 +4820,11 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (tv_set_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    add_command (tv_start_interactive_search, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

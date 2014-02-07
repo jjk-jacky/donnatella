@@ -18689,6 +18689,84 @@ donna_tree_view_set_second_sort_order (DonnaTreeView      *tree,
     return TRUE;
 }
 
+static gboolean
+interactive_search (GtkTreeModel    *model,
+                    gint             column,
+                    const gchar     *key,
+                    GtkTreeIter     *iter,
+                    DonnaTreeView   *tree)
+{
+    DonnaNode *node;
+    gchar *name;
+    gchar *norm1 = NULL;
+    gchar *norm2 = NULL;
+    gboolean match = FALSE;
+    gboolean from_start;
+
+    gtk_tree_model_get (model, iter, TREE_VIEW_COL_NODE, &node, -1);
+    if (!node)
+        return TRUE;
+    name = donna_node_get_name (node);
+    g_object_unref (node);
+
+    norm1 = g_utf8_normalize (name, -1, G_NORMALIZE_ALL);
+    g_free (name);
+    from_start = *key == '^';
+    if (from_start)
+        ++key;
+    norm2 = g_utf8_normalize (key, -1, G_NORMALIZE_ALL);
+
+    if (norm1 && norm2)
+    {
+        gchar *s1, *s2;
+
+        s1 = g_utf8_casefold (norm1, -1);
+        s2 = g_utf8_casefold (norm2, -1);
+        if (from_start)
+            match = streqn (s1, s2, strlen (s2));
+        else if (strstr (s1, s2))
+            match = TRUE;
+        g_free (s1);
+        g_free (s2);
+    }
+    g_free (norm1);
+    g_free (norm2);
+
+    return !match;
+}
+
+/**
+ * donna_tree_view_start_interactive_search:
+ * @tree: A #DonnaTreeView
+ *
+ * Starts the interactive search, i.e. show the entry to perform the search
+ *
+ * An entry will show up (at the bottom right of the treeview) allowing to enter
+ * the text to search. Said text will be searched in the name of all (visible)
+ * rows, case insensitively.
+ *
+ * If you prefix your criteria with a caret (^) then the text must match the
+ * beginning of the name, else it can be contained anywhere in the name.
+ *
+ * When triggered, any selection is lost. The first match will then be scrolled
+ * to, focused & selected. If you continue typing, the search is instantly
+ * adjusted. If not match is found, there will be no selection.
+ *
+ * When a match is found/selected, you can use keys Up & Down to move to the
+ * previous/next match.
+ *
+ * You can press Esc to exit interactive search mode, or simply wait as it will
+ * automatically expire after a little while (5s) without searching (i.e. moving
+ * or changing the text to search for).
+ */
+void
+donna_tree_view_start_interactive_search (DonnaTreeView      *tree)
+{
+    gboolean r;
+    g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+    g_signal_emit_by_name (tree, "start-interactive-search", &r);
+}
+
 
 /* mode list only */
 GPtrArray *
@@ -21516,6 +21594,11 @@ donna_tree_view_new (DonnaApp    *app,
 
     g_signal_connect (G_OBJECT (sel), "changed",
             G_CALLBACK (selection_changed_cb), tree);
+
+    /* interactive search */
+    gtk_tree_view_set_search_equal_func (treev,
+            (GtkTreeViewSearchEqualFunc) interactive_search, tree, NULL);
+    gtk_tree_view_set_search_column (treev, 0);
 
     return w;
 }

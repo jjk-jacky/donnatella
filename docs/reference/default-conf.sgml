@@ -256,6 +256,13 @@
     enter key mode "select" See below for what keys are then available.</para>
     </listitem>
 
+    <listitem><para>Interactive search</para>
+    <para>Pressing <systemitem>slash</systemitem> (<systemitem>/</systemitem>)
+    will enter interactive search, aka inline/find-as-you-type search. A quick
+    way to search search for files in the current location. For more, see <link
+    linkend="tv-start-interactive-search">tv_start_interactive_search()</link></para>
+    </listitem>
+
     <listitem><para>Misc.</para>
     <para>Some other keys are available, such as <systemitem>F5</systemitem> to
     trigger a refresh, <systemitem>Escape</systemitem> to reset keys &amp; abort

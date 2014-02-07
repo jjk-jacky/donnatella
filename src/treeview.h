@@ -327,6 +327,8 @@ gboolean        donna_tree_view_set_option      (DonnaTreeView      *tree,
 gboolean        donna_tree_view_toggle_column   (DonnaTreeView      *tree,
                                                  const gchar        *column,
                                                  GError            **error);
+void            donna_tree_view_start_interactive_search (
+                                                 DonnaTreeView      *tree);
 /* mode Tree */
 gboolean        donna_tree_view_save_tree_file  (DonnaTreeView      *tree,
                                                  const gchar        *filename,

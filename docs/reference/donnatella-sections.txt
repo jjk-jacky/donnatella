@@ -87,6 +87,7 @@ tv_set_option
 tv_set_second_sort
 tv_set_sort
 tv_set_visual
+tv_start_interactive_search
 tv_toggle_column
 tv_toggle_row
 void
@@ -1104,6 +1105,7 @@ donna_tree_view_move_root
 donna_tree_view_maxi_expand
 donna_tree_view_maxi_collapse
 donna_tree_view_save_list_file
+donna_tree_view_start_interactive_search
 donna_tree_view_load_list_file
 donna_tree_view_selection_nodes
 donna_tree_view_get_selected_nodes
