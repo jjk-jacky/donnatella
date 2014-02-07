@@ -6031,6 +6031,12 @@ donna_app_run (DonnaApp       *app,
         return RC_PARSE_CMDLINE_FAILED;
     }
 
+    g_info ("donnatella v" PACKAGE_VERSION
+#ifdef GTK_IS_JJK
+            " [GTK_IS_JJK]"
+#endif
+            );
+
     /* load config extras, registers commands, etc */
     if (G_UNLIKELY (!prepare_app (app, &err)))
     {
