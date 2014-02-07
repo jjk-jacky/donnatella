@@ -10,8 +10,10 @@
     <title>Donnatella Reference Manual</title>
     <releaseinfo>
       for donnatella &version;
+      <!--
       The latest version of this documentation can be found on-line at
       <ulink role="online-location" url="http://jjacky.com/donnatella/index.html">http://jjacky.com/donnatella/</ulink>.
+      -->
     </releaseinfo>
   </bookinfo>
 

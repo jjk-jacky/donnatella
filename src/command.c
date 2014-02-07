@@ -4069,7 +4069,7 @@ cmd_tv_set_sort (DonnaTask *task, DonnaApp *app, gpointer *args)
 
 /**
  * tv_set_visual:
- * @tree: A treevie
+ * @tree: A treeview
  * @rowid: A #rowid
  * @visual: Which visual to set
  * @value: The value to set @visual to
