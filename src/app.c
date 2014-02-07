@@ -5884,6 +5884,7 @@ parse_cmdline (DonnaApp      *app,
     struct cmdline_opt data = { G_LOG_LEVEL_WARNING, };
     gchar *config_dir = NULL;
     gchar *log_level = NULL;
+    gboolean version = FALSE;
     GOptionContext *context;
     GOptionEntry entries[] =
     {
@@ -5903,6 +5904,8 @@ parse_cmdline (DonnaApp      *app,
         { "debug",      'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, cmdline_cb,
             "Define \"filters\" for the debug log messages", "FILTERS" },
 #endif
+        { "version",    'V', 0, G_OPTION_ARG_NONE, &version,
+            "Show version and exit", NULL },
         { NULL }
     };
     GOptionGroup *group;
@@ -5916,6 +5919,21 @@ parse_cmdline (DonnaApp      *app,
     g_option_context_add_group (context, gtk_get_option_group (TRUE));
     if (!g_option_context_parse (context, argc, argv, error))
         return FALSE;
+
+    if (version)
+    {
+        puts (  "donnatella v" PACKAGE_VERSION
+#ifdef GTK_IS_JJK
+                " [GTK_IS_JJK]"
+#endif
+                "\n"
+                "Copyright (C) 2014 Olivier Brunel - http://jjacky.com/donnatella\n"
+                "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\n"
+                "This is free software: you are free to change and redistribute it.\n"
+                "There is NO WARRANTY, to the extent permitted by law."
+                );
+        exit (RC_OK);
+    }
 
     /* set up config dir */
     if (!config_dir)

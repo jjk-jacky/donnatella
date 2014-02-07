@@ -37,6 +37,7 @@
 <arg choice="opt">--layout <arg choice="plain"><replaceable>LAYOUT</replaceable></arg></arg>
 <arg choice="opt">--maximized</arg>
 <arg choice="opt">--debug <arg choice="plain"><replaceable>FILTERS</replaceable></arg></arg>
+<arg choice="opt">--version</arg>
 </cmdsynopsis>
 </refsynopsisdiv>
 
@@ -162,6 +163,13 @@
         </para>
     </listitem>
   </varlistentry>
+
+  <varlistentry>
+    <term>-V</term>
+    <term>--version</term>
+    <listitem><para>Show version info &amp; exit</para></listitem>
+  </varlistentry>
+
 </variablelist>
 </refsect1>
 
