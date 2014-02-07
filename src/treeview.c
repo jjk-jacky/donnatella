@@ -20040,10 +20040,8 @@ repeat:
 
 #define wrong_key(beep) do {            \
     if (beep)                           \
-    {                                   \
-        printf ("\a"); /* beep */       \
-        fflush (stdout);                \
-    }                                   \
+        gtk_widget_error_bell (         \
+                (GtkWidget *) tree);    \
     g_free (from);                      \
     g_free (alias);                     \
     g_free (priv->key_combine_name);    \
