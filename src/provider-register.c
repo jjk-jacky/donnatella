@@ -331,7 +331,8 @@ clipboard_get (GtkClipboard             *clipboard,
     if (G_UNLIKELY (!reg))
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
-        g_warning ("Provider 'register': clipboard_get() for CLIPBOARD triggered while register '+' doesn't exist");
+        g_warning ("Provider 'register': clipboard_get() for CLIPBOARD triggered "
+                "while register '+' doesn't exist");
         return;
     }
 
@@ -345,26 +346,38 @@ clipboard_get (GtkClipboard             *clipboard,
         GError *err = NULL;
         gchar *s;
 
-        s = g_filename_to_uri ((gchar *) l->data, NULL, &err);
-        if (G_UNLIKELY (!s))
+        if (info < 99)
         {
-            g_warning ("Provider 'register': clipboard_get() for CLIPBOARD: Failed to convert '%s' to URI: %s",
-                    (gchar *) l->data, err->message);
-            g_clear_error (&err);
+            s = g_filename_to_uri ((gchar *) l->data, NULL, &err);
+            if (G_UNLIKELY (!s))
+            {
+                g_warning ("Provider 'register': clipboard_get() for CLIPBOARD: "
+                        "Failed to convert '%s' to URI: %s",
+                        (gchar *) l->data, err->message);
+                g_clear_error (&err);
+            }
+            else
+            {
+                g_string_append (str, s);
+                g_string_append_c (str, '\n');
+                g_free (s);
+            }
         }
         else
         {
-            g_string_append (str, s);
+            g_string_append (str, l->data);
             g_string_append_c (str, '\n');
-            g_free (s);
         }
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
 
-    gtk_selection_data_set (sd, (info == 1) ? atom_gnome
-            : ((info == 2) ? atom_kde : atom_uris),
-            8,
-            (const guchar *) str->str, (gint) str->len);
+    if (info < 99)
+        gtk_selection_data_set (sd, (info == 1) ? atom_gnome
+                : ((info == 2) ? atom_kde : atom_uris),
+                8,
+                (const guchar *) str->str, (gint) str->len);
+    else
+        gtk_selection_data_set_text (sd, str->str, (gint) str->len);
     g_string_free (str, TRUE);
 }
 
@@ -382,17 +395,25 @@ task_take_clipboard_ownership (DonnaTask *task, gpointer _data)
         gboolean clear;
     } *data = _data;
     GtkClipboard *clipboard;
+    GtkTargetList *list;
     GtkTargetEntry targets[] = {
         { (gchar *) _ATOM_GNOME, 0, 1 },
         { (gchar *) _ATOM_KDE,   0, 2 },
         { (gchar *) _ATOM_URIS,  0, 3 },
     };
+    GtkTargetEntry *entries;
+    gint nb;
     gboolean ret;
 
     clipboard = gtk_clipboard_get (GDK_SELECTION_CLIPBOARD);
     if (G_UNLIKELY (!clipboard))
         return DONNA_TASK_FAILED;
-    ret = gtk_clipboard_set_with_owner (clipboard, targets, 3,
+
+    list = gtk_target_list_new (targets, 3);
+    gtk_target_list_add_text_targets (list, 99);
+    entries = gtk_target_table_new_from_list (list, &nb);
+
+    ret = gtk_clipboard_set_with_owner (clipboard, entries, (guint) nb,
             (GtkClipboardGetFunc) clipboard_get,
             (GtkClipboardClearFunc) clipboard_clear,
             (GObject *) data->pr);
@@ -401,6 +422,8 @@ task_take_clipboard_ownership (DonnaTask *task, gpointer _data)
     if (ret && data->clear)
         gtk_clipboard_clear (clipboard);
 
+    gtk_target_table_free (entries, nb);
+    gtk_target_list_unref (list);
     return (ret) ? DONNA_TASK_DONE : DONNA_TASK_FAILED;
 }
 
