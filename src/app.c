@@ -2845,6 +2845,68 @@ donna_app_emit_event (DonnaApp       *app,
     return ret;
 }
 
+struct context
+{
+    gchar *message;
+    const gchar *details;
+};
+
+static gboolean
+conv_event_info (const gchar     c,
+                 DonnaArgType   *type,
+                 gpointer       *ptr,
+                 GDestroyNotify *destroy,
+                 struct context *context)
+{
+    if (c == 'm')
+    {
+        *type = DONNA_ARG_TYPE_STRING;
+        *ptr = context->message;
+        return TRUE;
+    }
+    else if (c == 'd')
+    {
+        *type = DONNA_ARG_TYPE_STRING;
+        *ptr = (context->details) ? (gpointer) context->details : (gpointer) "";
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/**
+ * donna_app_emit_info:
+ * @app: The #DonnaApp
+ * @details: (allow-none): Details if @message wasn't complete
+ * @fmt_msg: printf-like format for the message of the event (should be short)
+ * @...: printf-like arguments
+ *
+ * Helper to emit event "info" with the appropriate context, that is
+ * <systemitem>\%m</systemitem> for the message and <systemitem>\%d</systemitem>
+ * for the details (empty string if none specified).
+ */
+void
+donna_app_emit_info (DonnaApp       *app,
+                     const gchar    *details,
+                     const gchar    *fmt_msg,
+                     ...)
+{
+    struct context context = { NULL, details };
+    va_list va_args;
+
+    g_return_if_fail (DONNA_IS_APP (app));
+    g_return_if_fail (fmt_msg != NULL);
+
+    va_start (va_args, fmt_msg);
+    context.message = g_strdup_vprintf (fmt_msg, va_args);
+    va_end (va_args);
+
+    donna_app_emit_event (app, "info", FALSE,
+            "tm", (conv_flag_fn) conv_event_info, &context,
+            NULL);
+    g_free (context.message);
+}
+
 struct menu_click
 {
     DonnaApp            *app;
