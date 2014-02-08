@@ -5441,8 +5441,6 @@ create_and_init_config_dir (DonnaConfig *config,
             "defaults/trees/click_mode");
     donna_config_set_string (config, NULL, "donna_unpatched",
             "defaults/lists/key_mode");
-    donna_config_set_string (config, NULL, "list_unpatched",
-            "defaults/lists/click_mode");
 #endif
 
     /* save config */
