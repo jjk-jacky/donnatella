@@ -2770,10 +2770,26 @@ trigger_event (DonnaApp     *app,
  * @fmt_source: printf-like format for the source of the event
  * @...: %NULL terminated printf-like arguments
  *
- * Emit an event. TODO: document the whole event thing, but not before we've
- * redone it.
+ * Emit event @event.
  *
- * Returns: %TRUE or %FALSE
+ * Emitting an event consist of 2 steps:
+ *
+ * - First, a signal EVENT is emitted on @app, for internal callbacks
+ * - Then, triggers will be looked for in "events/&lt;EVENT&gt;" if no source
+ *   was specified, else in "&lt;source&gt;/events/&lt;EVENT&gt;"
+ *
+ * All string options will be sorted by their names, then their values
+ * contextually parsed and triggered.
+ *
+ * If @is_confirm is TRUE, commands triggered are expected to return an integer
+ * value (or a string representation of one), 1 to abort or 0 to continue. Abort
+ * means no other triggers are processed and TRUE is returned; continue means
+ * other trigger are processed until one returns 1 or there are no more.
+ *
+ * This is intended to give user/commands a chance to abort something, e.g.
+ * event "pre-exit" can be aborted to cancel closing/exiting donna.
+ *
+ * Returns: %TRUE if a trigger asked to abort, else %FALSE
  */
 gboolean
 donna_app_emit_event (DonnaApp       *app,
@@ -2786,65 +2802,45 @@ donna_app_emit_event (DonnaApp       *app,
                       ...)
 {
     GQuark q = 0;
-    GSList *l;
     gchar *source;
     gboolean ret;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (event != NULL, NULL);
 
-    if (is_confirm)
-    {
-        gboolean in_list = FALSE;
-
-        q = g_quark_from_string (event);
-        for (l = event_confirm; l; l = l->next)
-        {
-            if ((GQuark) GPOINTER_TO_UINT (l->data) == q)
-            {
-                in_list = TRUE;
-                break;
-            }
-        }
-
-        if (!in_list)
-            event_confirm = g_slist_prepend (event_confirm, GUINT_TO_POINTER (q));
-    }
-
     if (fmt_source)
     {
+        gchar *s;
         va_list va_args;
+
         va_start (va_args, fmt_source);
         source = g_strdup_vprintf (fmt_source, va_args);
         va_end (va_args);
+
+        s = g_strconcat (source, "--", event, NULL);
+        q = g_quark_from_string (s);
+        g_free (s);
     }
     else
+    {
         source = NULL;
+        q = g_quark_from_string (event);
+    }
 
-    g_signal_emit (app, donna_app_signals[EVENT],
-            g_quark_from_string (event),
+    if (is_confirm)
+        event_confirm = g_slist_prepend (event_confirm, GUINT_TO_POINTER (q));
+
+    g_signal_emit (app, donna_app_signals[EVENT], q,
             event, source, conv_flags, conv_fn, conv_data,
             &ret);
 
     if (!is_confirm || !ret)
-    {
-        if (source)
-        {
-            ret = trigger_event (app, event, is_confirm, source,
-                    conv_flags, conv_fn, conv_data);
-            if (is_confirm && ret)
-            {
-                g_free (source);
-                return TRUE;
-            }
-        }
-
-        ret = trigger_event (app, event, is_confirm, "",
+        ret = trigger_event (app, event, is_confirm, (source) ? source : "",
                 conv_flags, conv_fn, conv_data);
-    }
 
     if (is_confirm)
         event_confirm = g_slist_remove (event_confirm, GUINT_TO_POINTER (q));
+
     g_free (source);
     return ret;
 }
