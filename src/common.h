@@ -28,6 +28,11 @@
 
 G_BEGIN_DECLS
 
+#if defined(GIT_VERSION)
+#undef PACKAGE_VERSION
+#define PACKAGE_VERSION GIT_VERSION
+#endif
+
 typedef enum
 {
     DONNA_ENABLED_TYPE_UNKNOWN = 0,
