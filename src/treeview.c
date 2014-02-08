@@ -13043,6 +13043,10 @@ save_to_file (DonnaTreeView *tree,
     g_string_free (str, TRUE);
     if (file != filename)
         g_free (file);
+
+    donna_app_emit_info (tree->priv->app, NULL, "TreeView '%s': Save to file '%s'",
+            tree->priv->name, filename);
+
     return TRUE;
 }
 
@@ -13571,6 +13575,10 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
 
     ret = change_location (tree, CHANGING_LOCATION_ASKED, node, ll, error);
     g_object_unref (node);
+
+    if (ret)
+        donna_app_emit_info (priv->app, NULL, "TreeView '%s': Loaded from file '%s'",
+                priv->name, filename);
     return ret;
 }
 
@@ -14292,8 +14300,11 @@ next:
 #undef load_visual
 
     g_array_free (array, TRUE);
-
     g_free (data);
+
+    donna_app_emit_info (priv->app, NULL, "TreeView '%s': Loaded from file '%s'",
+            priv->name, filename);
+
     return TRUE;
 }
 
