@@ -333,7 +333,6 @@
  * - <systemitem>:task</systemitem> : the task manager, see #taskmanager-status
  * - <systemitem>:active</systemitem> : the treeview currently active-list
  * - <systemitem>:focused</systemitem> : the treeview currently focused
- * - or the name of a treeview
  *
  * Integer option <systemitem>width</systemitem> can be used to set the
  * (minimum) size of the area, and boolean option
