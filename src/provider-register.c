@@ -1043,8 +1043,8 @@ register_get_nodes (DonnaProviderRegister   *pr,
     struct reg *reg = NULL;
     DonnaRegisterType reg_type;
     GHashTable *hashtable;
-    GList *list;
-    GList *l;
+    GList *list = NULL;
+    GList *l = NULL;
     GString *str = NULL;
     gboolean do_drop;
 
