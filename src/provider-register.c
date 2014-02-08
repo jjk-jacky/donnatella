@@ -396,6 +396,8 @@ task_take_clipboard_ownership (DonnaTask *task, gpointer _data)
             (GtkClipboardGetFunc) clipboard_get,
             (GtkClipboardClearFunc) clipboard_clear,
             (GObject *) data->pr);
+    /* so data can be stored when donna exits */
+    gtk_clipboard_set_can_store (clipboard, NULL, 0);
     if (ret && data->clear)
         gtk_clipboard_clear (clipboard);
 
