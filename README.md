@@ -230,7 +230,7 @@ because some of the features of donna were not doable using GTK+ as it is,
 especially when it comes to the treeview, a patchset is available.
 
 This [set of patches for
-GTK+](http://jjacky.com/donnatella/gtk3-donnatella.tar.gz "Patchset for GTK+3")
+GTK+](http://jjacky.com/donnatella/gtk3-donnatella.1.tar.gz "Patchset for GTK+3")
 will fix some bugs & add extra features, all the while remaining 100% compatible
 with GTK+3. You can safely compile your patched GTK+ and install it, replacing
 the vanilla GTK+. It won't change anything for other applications (unless they
