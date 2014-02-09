@@ -4739,8 +4739,6 @@ node_get_children_tree_cb (DonnaTask                   *task,
 }
 
 /* mode tree only */
-/* this should only be used for rows that we want expanded and are either
- * NEVER or UNKNOWN */
 static gboolean
 expand_row (DonnaTreeView           *tree,
             GtkTreeIter             *iter,
@@ -4750,6 +4748,7 @@ expand_row (DonnaTreeView           *tree,
 {
     DonnaTreeViewPrivate *priv = tree->priv;
     GtkTreeModel *model = GTK_TREE_MODEL (priv->store);
+    GPtrArray *arr = NULL;
     DonnaNode *node;
     DonnaTask *task;
     struct node_children_data *data;
@@ -4794,6 +4793,7 @@ expand_row (DonnaTreeView           *tree,
                     continue;
                 }
 
+                arr = g_ptr_array_new_with_free_func (g_object_unref);
                 do
                 {
                     DonnaNode *n;
@@ -4801,85 +4801,30 @@ expand_row (DonnaTreeView           *tree,
                     gtk_tree_model_get (model, &child,
                             TREE_COL_NODE,  &n,
                             -1);
-                    add_node_to_tree_filtered (tree, iter, n, NULL);
-                    g_object_unref (n);
+                    g_ptr_array_add (arr, n);
                 } while (gtk_tree_model_iter_next (model, &child));
 
-                /* update expand state */
-                set_es (priv, iter, TREE_EXPAND_MAXI);
-
-                if (expand_row)
-                {
-                    GtkTreePath *path;
-
-                    path = gtk_tree_model_get_path (model, iter);
-                    gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
-                    gtk_tree_path_free (path);
-                }
-
-                if (scroll_current)
-                    scroll_to_current (tree);
-
-                if (extra_callback)
-                    extra_callback (tree, iter);
-
-                return TRUE;
+                break;
             }
         }
     }
 
     /* can we get them from our sync_with list ? */
-    if (node == priv->location && priv->sync_with)
-    {
-        GPtrArray *arr;
-
+    if (!arr && node == priv->location && priv->sync_with)
         arr = donna_tree_view_get_children (priv->sync_with, node, priv->node_types);
-        if (arr)
-        {
-            guint i;
 
-            /* quite unlikely, but still */
-            if (arr->len == 0)
-            {
-                GtkTreeIter child;
+    if (arr)
+    {
+        set_children (tree, iter, priv->node_types, arr, expand_row, FALSE);
+        g_ptr_array_unref (arr);
 
-                /* update expand state */
-                set_es (priv, iter, TREE_EXPAND_NONE);
+        if (scroll_current)
+            scroll_to_current (tree);
 
-                if (gtk_tree_model_iter_children (model, &child, iter))
-                    while (remove_row_from_tree (tree, &child, RR_IS_REMOVAL))
-                        ;
+        if (extra_callback)
+            extra_callback (tree, iter);
 
-                if (scroll_current)
-                    scroll_to_current (tree);
-
-                return TRUE;
-            }
-
-            for (i = 0; i < arr->len; ++i)
-                add_node_to_tree_filtered (tree, iter, arr->pdata[i], NULL);
-            g_ptr_array_unref (arr);
-
-            /* update expand state */
-            set_es (priv, iter, TREE_EXPAND_MAXI);
-
-            if (expand_row)
-            {
-                GtkTreePath *path;
-
-                path = gtk_tree_model_get_path (model, iter);
-                gtk_tree_view_expand_row (GTK_TREE_VIEW (tree), path, FALSE);
-                gtk_tree_path_free (path);
-            }
-
-            if (scroll_current)
-                scroll_to_current (tree);
-
-            if (extra_callback)
-                extra_callback (tree, iter);
-
-            return TRUE;
-        }
+        return TRUE;
     }
 
     task = donna_node_get_children_task (node, priv->node_types, NULL);
