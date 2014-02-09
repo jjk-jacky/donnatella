@@ -1412,6 +1412,12 @@ static struct active_spinners * get_as_for_node         (DonnaTreeView   *tree,
                                                          DonnaNode       *node,
                                                          guint           *index,
                                                          gboolean         create);
+static void set_children                                (DonnaTreeView *tree,
+                                                         GtkTreeIter   *iter,
+                                                         DonnaNodeType  node_types,
+                                                         GPtrArray     *children,
+                                                         gboolean       expand,
+                                                         gboolean       refresh);
 static gboolean change_location                         (DonnaTreeView  *tree,
                                                          enum cl         cl,
                                                          DonnaNode      *node,
@@ -2326,6 +2332,8 @@ perform_sync_location (DonnaTreeView    *tree,
     sel = gtk_tree_view_get_selection (treev);
     if (iter)
     {
+        GtkTreeModel *model = (GtkTreeModel *) priv->store;
+        enum tree_expand es;
         GtkTreePath *path;
 
         gtk_tree_selection_set_mode (sel, GTK_SELECTION_BROWSE);
@@ -2359,6 +2367,21 @@ perform_sync_location (DonnaTreeView    *tree,
         gtk_tree_view_set_focused_row (treev, path);
         gtk_tree_selection_select_path (sel, path);
         gtk_tree_path_free (path);
+
+        /* if we're in EXPAND_MAXI let's try and refresh our children */
+        gtk_tree_model_get (model, iter, TREE_COL_EXPAND_STATE, &es, -1);
+        if (es == TREE_EXPAND_MAXI)
+        {
+            GPtrArray *arr;
+
+            arr = donna_tree_view_get_children (priv->sync_with,
+                    priv->location, priv->node_types);
+            if (arr)
+            {
+                set_children (tree, iter, priv->node_types, arr, FALSE, FALSE);
+                g_ptr_array_unref (arr);
+            }
+        }
 
         if (priv->sync_scroll)
         {
@@ -4805,9 +4828,7 @@ expand_row (DonnaTreeView           *tree,
         }
     }
 
-    /* can we get them from our sync_with list ? (typical case of expansion of
-     * the current location, when it was set from sync_with, i.e. we ignored the
-     * node_children signal then because it wasn't yet our current location) */
+    /* can we get them from our sync_with list ? */
     if (node == priv->location && priv->sync_with)
     {
         GPtrArray *arr;
