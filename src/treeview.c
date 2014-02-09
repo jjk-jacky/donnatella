@@ -6382,6 +6382,10 @@ real_new_child_cb (struct new_child_data *data)
             if (!change_location (data->tree, CHANGING_LOCATION_GOT_CHILD,
                     data->node, NULL, NULL))
                 goto free;
+            /* emit signal */
+            g_object_notify_by_pspec ((GObject *) data->tree,
+                    donna_tree_view_props[PROP_LOCATION]);
+
         }
         else if (priv->cl == CHANGING_LOCATION_GOT_CHILD)
         {
@@ -9706,6 +9710,10 @@ no_task:
         data->cb_destroy = NULL;
     }
 
+    /* emit signal */
+    g_object_notify_by_pspec ((GObject *) data->tree,
+            donna_tree_view_props[PROP_LOCATION]);
+
 free:
     free_node_get_children_list_data (data);
 }
@@ -10188,9 +10196,10 @@ change_location (DonnaTreeView *tree,
                 donna_history_take_item (priv->history,
                         donna_node_get_full_location (priv->location));
 
-            /* emit signal */
-            g_object_notify_by_pspec ((GObject *) tree,
-                    donna_tree_view_props[PROP_LOCATION]);
+            /* we don't emit the notify signal from here, because it should be
+             * emitted AFTER the list has been updated, in case e.g. another
+             * treeview ask us for the children (e.g. a tree to update its
+             * chidren) */
         }
 
         if (cl == CHANGING_LOCATION_NOT)
