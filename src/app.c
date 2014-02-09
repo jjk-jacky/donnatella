@@ -330,6 +330,7 @@
  * option, <systemitem>source</systemitem>. The source is the component which
  * will handle the area (drawing, etc), and can be one of the following:
  *
+ * - <systemitem>:app</systemitem> : donnatella
  * - <systemitem>:task</systemitem> : the task manager, see #taskmanager-status
  * - <systemitem>:active</systemitem> : the treeview currently active-list
  * - <systemitem>:focused</systemitem> : the treeview currently focused
@@ -344,6 +345,29 @@
  *
  * Other options that can be used in the section depend on its source. For
  * treeviews, refer to #treeview-status.
+ *
+ * For donna (:app), the following options are available:
+ *
+ * - <systemitem>format</systemitem> (string): format to display
+ * - <systemitem>format_tooltip</systemitem> (string): format for the tooltip
+ * - <systemitem>format_i</systemitem> (string): format to use for \%i when
+ *   there's no info to show
+ * - <systemitem>format_d</systemitem> (string): format to use for \%d when
+ *   there's no details to show
+ * - <systemitem>timeout</systemitem> (integer): numberof seconds an info will
+ *   remain; 0 for unlimited
+ *
+ * The following variables are available in the different formats:
+ *
+ * - <systemitem>\%i</systemitem> : the message from last event info
+ * - <systemitem>\%d</systemitem> : the details from last event info
+ * - <systemitem>\%v</systemitem> : version number
+ *
+ * As indicated, when using \%i or \%d in <systemitem>format</systemitem> or
+ * <systemitem>format_tooltip</systemitem>, the formats specified in
+ * <systemitem>format_i</systemitem> and <systemitem>format_d</systemitem>
+ * will be used if specified, else it resolves to nothing (empty string).
+ *
  * </para></refsect3>
  *
  * </para></refsect2>
@@ -510,10 +534,20 @@ struct intref
 
 enum
 {
-    ST_SCE_DONNA,
+    ST_SCE_APP,
     ST_SCE_ACTIVE,
     ST_SCE_FOCUSED,
     ST_SCE_TASK,
+};
+
+struct status_donna
+{
+    guint    id;
+    gchar   *name;
+    gulong   sid_info;
+    guint    sce_timeout;
+    gchar   *info;
+    gchar   *details;
 };
 
 struct provider
@@ -546,6 +580,7 @@ struct _DonnaAppPrivate
     DonnaTreeView   *focused_tree;
     gulong           sid_active_location;
     GSList          *statuses;
+    GArray          *status_donna;
     gchar           *config_dir;
     gchar           *cur_dirname;
     /* visuals are under a RW lock so everyone can read them at the same time
@@ -632,8 +667,36 @@ static GSList *         load_arrangements           (DonnaConfig    *config,
 static inline void      set_active_list             (DonnaApp       *app,
                                                      DonnaTreeView  *list);
 
+/* DonnaStatusProvider */
+static guint    status_provider_create_status       (DonnaStatusProvider    *sp,
+                                                     gpointer                config,
+                                                     GError                **error);
+static void     status_provider_free_status         (DonnaStatusProvider    *sp,
+                                                     guint                   id);
+static const gchar * status_provider_get_renderers  (DonnaStatusProvider    *sp,
+                                                     guint                   id);
+static void     status_provider_render              (DonnaStatusProvider    *sp,
+                                                     guint                   id,
+                                                     guint                   index,
+                                                     GtkCellRenderer        *renderer);
+static gboolean status_provider_set_tooltip         (DonnaStatusProvider    *sp,
+                                                     guint                   id,
+                                                     guint                   index,
+                                                     GtkTooltip             *tooltip);
 
-G_DEFINE_TYPE (DonnaApp, donna_app, G_TYPE_OBJECT);
+static void
+donna_app_status_provider_init (DonnaStatusProviderInterface *interface)
+{
+    interface->create_status    = status_provider_create_status;
+    interface->free_status      = status_provider_free_status;
+    interface->get_renderers    = status_provider_get_renderers;
+    interface->render           = status_provider_render;
+    interface->set_tooltip      = status_provider_set_tooltip;
+}
+
+G_DEFINE_TYPE_WITH_CODE (DonnaApp, donna_app, G_TYPE_OBJECT,
+        G_IMPLEMENT_INTERFACE (DONNA_TYPE_STATUS_PROVIDER,
+            donna_app_status_provider_init));
 
 static void
 donna_app_class_init (DonnaAppClass *klass)
@@ -4477,6 +4540,370 @@ donna_app_ask_text (DonnaApp       *app,
 }
 
 
+/* DonnaStatusProvider */
+
+struct status_clear
+{
+    DonnaApp *app;
+    guint id;
+};
+
+static void
+free_status_clear (struct status_clear *sc)
+{
+    g_slice_free (struct status_clear, sc);
+}
+
+static gboolean
+status_clear (struct status_clear *sc)
+{
+    DonnaAppPrivate *priv = sc->app->priv;
+    struct status_donna *sd;
+    guint i;
+
+    for (i = 0; i < priv->status_donna->len; ++i)
+    {
+        sd = &g_array_index (priv->status_donna, struct status_donna, i);
+        if (sd->id == sc->id)
+            break;
+    }
+
+    if (G_UNLIKELY (i >= priv->status_donna->len))
+        return G_SOURCE_REMOVE;
+
+    g_free (sd->info);
+    g_free (sd->details);
+    sd->info = sd->details = NULL;
+
+    donna_status_provider_status_changed ((DonnaStatusProvider *) sc->app, sc->id);
+
+    if (sd->sce_timeout > 0)
+    {
+        g_source_remove (sd->sce_timeout);
+        sd->sce_timeout = 0;
+    }
+
+    return G_SOURCE_REMOVE;
+}
+
+static void status_info (DonnaApp       *app,
+                         const gchar    *event,
+                         const gchar    *source,
+                         const gchar    *conv_flags,
+                         conv_flag_fn    conv_fn,
+                         gpointer        conv_data,
+                         gpointer        _id)
+{
+    DonnaAppPrivate *priv = app->priv;
+    DonnaArgType type;
+    GDestroyNotify destroy;
+    struct status_donna *sd;
+    guint id = GPOINTER_TO_UINT (_id);
+    guint i;
+    gchar *s;
+    gint timeout;
+
+    for (i = 0; i < priv->status_donna->len; ++i)
+    {
+        sd = &g_array_index (priv->status_donna, struct status_donna, i);
+        if (sd->id == id)
+            break;
+    }
+
+    if (G_UNLIKELY (i >= priv->status_donna->len))
+        return;
+
+    g_free (sd->info);
+    g_free (sd->details);
+    sd->info = sd->details = NULL;
+
+    destroy = NULL;
+    if (conv_fn ('m', &type, (gpointer *) &s, &destroy, conv_data))
+    {
+        if (G_LIKELY (type == DONNA_ARG_TYPE_STRING))
+            sd->info = g_strdup (s);
+        if (destroy)
+            destroy (s);
+    }
+
+    destroy = NULL;
+    if (conv_fn ('d', &type, (gpointer *) &s, &destroy, conv_data))
+    {
+        /* when no details, this will be an empty string */
+        if (G_LIKELY (type == DONNA_ARG_TYPE_STRING) && *s != '\0')
+            sd->details = g_strdup (s);
+        if (destroy)
+            destroy (s);
+    }
+
+    donna_status_provider_status_changed ((DonnaStatusProvider *) app, id);
+
+    if (sd->sce_timeout > 0)
+    {
+        g_source_remove (sd->sce_timeout);
+        sd->sce_timeout = 0;
+    }
+
+    if (sd->info && donna_config_get_int (priv->config, NULL, &timeout,
+                "statusbar/%s/timeout", sd->name))
+    {
+        if (timeout > 0)
+        {
+            struct status_clear *sc;
+
+            sc = g_slice_new (struct status_clear);
+            sc->app = app;
+            sc->id  = id;
+
+            sd->sce_timeout = g_timeout_add_full (G_PRIORITY_DEFAULT,
+                    1000 * (guint) timeout,
+                    (GSourceFunc) status_clear, sc, (GDestroyNotify) free_status_clear);
+        }
+    }
+}
+
+static guint
+status_provider_create_status (DonnaStatusProvider    *sp,
+                               gpointer                _name,
+                               GError                **error)
+{
+    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    struct status_donna sd = { 0, };
+    gchar *fmt;
+    gchar *s;
+
+    sd.name = g_strdup (_name);
+    if (!donna_config_get_string (priv->config, error, &fmt,
+                "statusbar/%s/format", sd.name))
+    {
+        g_prefix_error (error, "App: Status '%s': No format: ", sd.name);
+        return 0;
+    }
+
+    if (!priv->status_donna)
+        priv->status_donna = g_array_sized_new (FALSE, FALSE,
+                sizeof (struct status_donna), 1);
+    sd.id = priv->status_donna->len + 1;
+
+    s = fmt;
+    while ((s = strchr (s, '%')))
+    {
+        if (s[1] == 'i')
+        {
+            sd.sid_info = g_signal_connect (sp, "event::info",
+                    (GCallback) status_info, GINT_TO_POINTER (sd.id));
+            break;
+        }
+        ++s;
+    }
+    g_free (fmt);
+
+    g_array_append_val (priv->status_donna, sd);
+    return sd.id;
+}
+
+static void
+status_provider_free_status (DonnaStatusProvider    *sp,
+                             guint                   id)
+{
+    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    guint i;
+
+    for (i = 0; i < priv->status_donna->len; ++i)
+    {
+        struct status_donna *sd = &g_array_index (priv->status_donna,
+                struct status_donna, i);
+
+        if (sd->id == id)
+        {
+            g_free (sd->name);
+            if (sd->sid_info > 0)
+                g_signal_handler_disconnect (sp, sd->sid_info);
+            if (sd->sce_timeout > 0)
+                g_source_remove (sd->sce_timeout);
+            g_array_remove_index_fast (priv->status_donna, i);
+            break;
+        }
+    }
+}
+
+static const gchar *
+status_provider_get_renderers (DonnaStatusProvider    *sp,
+                               guint                   id)
+{
+    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    guint i;
+
+    for (i = 0; i < priv->status_donna->len; ++i)
+    {
+        struct status_donna *sd = &g_array_index (priv->status_donna,
+                struct status_donna, i);
+
+        if (sd->id == id)
+            return "t";
+    }
+    return NULL;
+}
+
+static void
+status_parse_fmt (DonnaApp              *app,
+                  struct status_donna   *sd,
+                  gchar                 *fmt,
+                  GString              **_str,
+                  gboolean               is_main)
+{
+    DonnaAppPrivate *priv = app->priv;
+    GString *str = *_str;
+    gchar *s;
+
+    s = fmt;
+    if (!str)
+        *_str = str = g_string_new (NULL);
+    while ((s = strchr (s, '%')))
+    {
+        switch (s[1])
+        {
+            case 'v':
+                g_string_append_len (str, fmt, s - fmt);
+                g_string_append (str, PACKAGE_VERSION);
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'i':
+                g_string_append_len (str, fmt, s - fmt);
+                if (sd->info)
+                    g_string_append (str, sd->info);
+                else if (is_main)
+                {
+                    gchar *ss;
+
+                    if (donna_config_get_string (priv->config, NULL, &ss,
+                                "statusbar/%s/format_i", sd->name))
+                    {
+                        status_parse_fmt (app, sd, ss, &str, FALSE);
+                        g_free (ss);
+                    }
+                }
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'd':
+                g_string_append_len (str, fmt, s - fmt);
+                if (sd->details)
+                    g_string_append (str, sd->details);
+                else if (is_main)
+                {
+                    gchar *ss;
+
+                    if (donna_config_get_string (priv->config, NULL, &ss,
+                                "statusbar/%s/format_d", sd->name))
+                    {
+                        status_parse_fmt (app, sd, ss, &str, FALSE);
+                        g_free (ss);
+                    }
+                }
+                s += 2;
+                fmt = s;
+                break;
+
+            default:
+                s += 2;
+                break;
+        }
+    }
+    g_string_append (str, fmt);
+}
+
+static void
+status_provider_render (DonnaStatusProvider    *sp,
+                        guint                   id,
+                        guint                   index,
+                        GtkCellRenderer        *renderer)
+{
+    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    struct status_donna *sd;
+    GString *str = NULL;
+    gchar *fmt;
+    guint i;
+
+    for (i = 0; i < priv->status_donna->len; ++i)
+    {
+        sd = &g_array_index (priv->status_donna, struct status_donna, i);
+        if (sd->id == id)
+            break;
+    }
+
+    if (G_UNLIKELY (i >= priv->status_donna->len))
+    {
+        g_object_set (renderer, "visible", FALSE, NULL);
+        return;
+    }
+
+    if (!donna_config_get_string (priv->config, NULL, &fmt,
+                "statusbar/%s/format", sd->name))
+    {
+        g_object_set (renderer, "visible", FALSE, NULL);
+        return;
+    }
+
+    status_parse_fmt ((DonnaApp *) sp, sd, fmt, &str, TRUE);
+    g_free (fmt);
+
+    if (str && str->len > 0)
+        g_object_set (renderer,
+                "visible",  TRUE,
+                "text",     str->str,
+                NULL);
+    else
+        g_object_set (renderer,
+                "visible",  FALSE,
+                NULL);
+
+    if (str)
+        g_string_free (str, TRUE);
+}
+
+static gboolean
+status_provider_set_tooltip (DonnaStatusProvider    *sp,
+                             guint                   id,
+                             guint                   index,
+                             GtkTooltip             *tooltip)
+{
+    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    struct status_donna *sd;
+    GString *str = NULL;
+    gchar *fmt;
+    guint i;
+    gboolean show;
+
+    for (i = 0; i < priv->status_donna->len; ++i)
+    {
+        sd = &g_array_index (priv->status_donna, struct status_donna, i);
+        if (sd->id == id)
+            break;
+    }
+
+    if (G_UNLIKELY (i >= priv->status_donna->len))
+        return FALSE;
+
+    if (!donna_config_get_string (priv->config, NULL, &fmt,
+                "statusbar/%s/format_tooltip", sd->name))
+        return FALSE;
+
+    status_parse_fmt ((DonnaApp *) sp, sd, fmt, &str, TRUE);
+    g_free (fmt);
+
+    show = str && str->len > 0;
+    if (show)
+        gtk_tooltip_set_text (tooltip, str->str);
+    if (str)
+        g_string_free (str, TRUE);
+    return show;
+}
+
+
 /* DONNATELLA */
 
 static DonnaArrangement *
@@ -5273,10 +5700,11 @@ create_gui (DonnaApp *app, gchar *layout, gboolean maximized)
                 status->source = ST_SCE_TASK;
                 provider.sp = (DonnaStatusProvider *) priv->task_manager;
             }
-#if 0
-            else if (streq (s, "donna"))
-                status->source = ST_SCE_DONNA;
-#endif
+            else if (streq (sce, ":app"))
+            {
+                status->source = ST_SCE_APP;
+                provider.sp = (DonnaStatusProvider *) app;
+            }
             else
             {
                 g_free (status->name);
