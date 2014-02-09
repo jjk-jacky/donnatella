@@ -1,4 +1,14 @@
 
+# 2014-02-09, v0.1.1
+
+! Fix clicks not working by default when not patched (due to using a
+  non-existing click_mode)
+! Fix possible segfault using clipboard (register '+')
++ When putting files in clipboard (register '+'), it is now possible to paste
+  the list of full filenames as text (e.g. in terminal/text editor)
+! A few other fixes
+
+
 # 2014-02-08, v0.1.0
 
-- first pre-alpha release
+* first pre-alpha release
