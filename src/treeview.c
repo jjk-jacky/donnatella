@@ -4326,7 +4326,7 @@ set_children (DonnaTreeView *tree,
     GtkTreeModel *model = (GtkTreeModel *) priv->store;
     gboolean is_match;
 
-    is_match = node_types == priv->node_types;
+    is_match = (node_types & priv->node_types) == priv->node_types;
 
 #ifdef GTK_IS_JJK
     /* list: make sure we don't try to perform a rubber band on two different
