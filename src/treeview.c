@@ -9627,6 +9627,10 @@ no_task:
 
         gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
 
+        /* do it now (before processing event) so the request happens now and
+         * the size is correct for the first drawing */
+        check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
+
         /* in order to scroll properly, we need to have the tree sorted &
          * everything done; i.e. we need to have all pending events processed.
          * Note: here this should be fine, as there shouldn't be any pending
@@ -10052,6 +10056,8 @@ change_location (DonnaTreeView *tree,
         g_hash_table_remove_all (priv->hashtable);
         /* and show the "please wait" message */
         set_draw_state (tree, DRAW_WAIT);
+        /* no more files on list */
+        check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
     }
     else /* CHANGING_LOCATION_GOT_CHILD || CHANGING_LOCATION_NOT */
     {
@@ -10185,7 +10191,6 @@ change_location (DonnaTreeView *tree,
             /* emit signal */
             g_object_notify_by_pspec ((GObject *) tree,
                     donna_tree_view_props[PROP_LOCATION]);
-            check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
         }
 
         if (cl == CHANGING_LOCATION_NOT)
