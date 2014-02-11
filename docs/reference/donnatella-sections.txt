@@ -187,7 +187,7 @@ g_cclosure_user_marshal_VOID__BOOLEAN_INT_BOOLEAN_STRING
 g_cclosure_user_marshal_POINTER__STRING_OBJECT
 g_cclosure_user_marshal_VOID__INT_LONG_STRING
 g_cclosure_user_marshal_VOID__INT_STRING
-g_cclosure_user_marshal_BOOLEAN__STRING_STRING_STRING_POINTER_POINTER
+g_cclosure_user_marshal_BOOLEAN__POINTER_POINTER_POINTER
 </SECTION>
 
 <SECTION>
@@ -385,7 +385,15 @@ DonnaEnabledTypes
 DonnaIoType
 DonnaClick
 DonnaArgType
+</SECTION>
+
+<SECTION>
+<FILE>context</FILE>
+DonnaContextOptions
 conv_flag_fn
+conv_custom_fn
+DonnaContext
+donna_context_parse
 </SECTION>
 
 <SECTION>

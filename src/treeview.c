@@ -1439,6 +1439,7 @@ static gboolean select_arrangement_accumulator      (GSignalInvocationHint  *hin
                                                      gpointer                data);
 static void check_statuses (DonnaTreeView *tree, enum changed_on changed);
 static gboolean tree_conv_flag                          (const gchar      c,
+                                                         gchar           *extra,
                                                          DonnaArgType    *type,
                                                          gpointer        *ptr,
                                                          GDestroyNotify  *destroy,
@@ -16622,11 +16623,10 @@ static gchar *
 tree_context_get_alias (const gchar             *alias,
                         const gchar             *extra,
                         DonnaContextReference    reference,
-                        const gchar             *conv_flags,
-                        conv_flag_fn             conv_fn,
-                        struct conv             *conv,
+                        DonnaContext            *context,
                         GError                 **error)
 {
+    struct conv *conv = context->data;
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
 
@@ -17097,12 +17097,11 @@ static gboolean
 tree_context_get_item_info (const gchar             *item,
                             const gchar             *extra,
                             DonnaContextReference    reference,
-                            const gchar             *conv_flags,
-                            conv_flag_fn             conv_fn,
-                            struct conv             *conv,
+                            DonnaContext            *context,
                             DonnaContextInfo        *info,
                             GError                 **error)
 {
+    struct conv *conv = context->data;
     DonnaTreeView *tree = conv->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
 
@@ -18328,6 +18327,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     DonnaTreeViewPrivate *priv;
     DonnaContextReference reference = 0;
     struct conv conv = { NULL, };
+    DonnaContext context = { "olrRnfsS", FALSE, (conv_flag_fn) tree_conv_flag, &conv };
     GtkTreeSelection *sel;
     GPtrArray *nodes;
     row_id_type type;
@@ -18412,7 +18412,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     nodes = donna_context_menu_get_nodes (priv->app, items, reference, "tree_views",
                 (get_alias_fn) tree_context_get_alias,
                 (get_item_info_fn) tree_context_get_item_info,
-                "olrRnfsS", (conv_flag_fn) tree_conv_flag, &conv, error);
+                &context, error);
 
     if (conv.row)
         g_free (conv.row);
@@ -19019,6 +19019,7 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
 
 static gboolean
 tree_conv_flag (const gchar      c,
+                gchar           *extra,
                 DonnaArgType    *type,
                 gpointer        *ptr,
                 GDestroyNotify  *destroy,
@@ -19219,6 +19220,7 @@ handle_click (DonnaTreeView     *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
     struct conv conv = { NULL, };
+    DonnaContext context = { "olrRnfsS", FALSE, (conv_flag_fn) tree_conv_flag, &conv };
     struct column *_col;
     GPtrArray *intrefs = NULL;
     gchar *fl = NULL;
@@ -19354,8 +19356,7 @@ handle_click (DonnaTreeView     *tree,
     if (iter)
         conv.row = get_row_for_iter (tree, iter);
 
-    fl = donna_app_parse_fl (priv->app, fl, TRUE, "olrRnfsS",
-            (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+    fl = donna_app_parse_fl (priv->app, fl, TRUE, &context, &intrefs);
 
     if (iter)
         g_free (conv.row);
@@ -20103,6 +20104,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     gchar *from  = NULL;
     gchar *fl;
     struct conv conv = { NULL, };
+    DonnaContext context = { "olrnmfsS", FALSE, (conv_flag_fn) tree_conv_flag, &conv };
     GPtrArray *intrefs = NULL;
 
     config = donna_app_peek_config (priv->app);
@@ -20127,8 +20129,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         conv.key_m = priv->key_motion_m;
         conv.row = get_row_for_iter (tree, &iter);
 
-        fl = donna_app_parse_fl (priv->app, fl, TRUE, "olrnmfsS",
-                (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+        fl = donna_app_parse_fl (priv->app, fl, TRUE, &context, &intrefs);
         if (!donna_app_trigger_fl (priv->app, fl, intrefs, TRUE, NULL))
         {
             g_free (fl);
@@ -20160,8 +20161,7 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     parse_specs (fl, spec, priv->key_combine_spec);
     conv.key_m = priv->key_m;
-    fl = donna_app_parse_fl (priv->app, fl, TRUE, "olrnmfsS",
-            (conv_flag_fn) tree_conv_flag, &conv, &intrefs);
+    fl = donna_app_parse_fl (priv->app, fl, TRUE, &context, &intrefs);
     g_free (conv.row);
     donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
     g_free (fl);

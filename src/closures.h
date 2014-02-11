@@ -91,14 +91,15 @@ extern void g_cclosure_user_marshal_VOID__INT_STRING (GClosure     *closure,
                                                       gpointer      invocation_hint,
                                                       gpointer      marshal_data);
 
-/* BOOLEAN:STRING,STRING,STRING,POINTER,POINTER (closures.def:9) */
-extern void g_cclosure_user_marshal_BOOLEAN__STRING_STRING_STRING_POINTER_POINTER (GClosure     *closure,
-                                                                                   GValue       *return_value,
-                                                                                   guint         n_param_values,
-                                                                                   const GValue *param_values,
-                                                                                   gpointer      invocation_hint,
-                                                                                   gpointer      marshal_data);
+/* BOOLEAN:POINTER,POINTER,POINTER (closures.def:9) */
+extern void g_cclosure_user_marshal_BOOLEAN__POINTER_POINTER_POINTER (GClosure     *closure,
+                                                                      GValue       *return_value,
+                                                                      guint         n_param_values,
+                                                                      const GValue *param_values,
+                                                                      gpointer      invocation_hint,
+                                                                      gpointer      marshal_data);
 
 G_END_DECLS
 
 #endif /* __g_cclosure_user_marshal_MARSHAL_H__ */
+

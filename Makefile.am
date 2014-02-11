@@ -62,6 +62,8 @@ libdonnatella_la_SOURCES = \
 					 src/command.h \
 					 src/common.h \
 					 src/conf.h \
+					 src/context.c \
+					 src/context.h \
 					 src/contextmenu.c \
 					 src/contextmenu.h \
 					 src/debug.h \

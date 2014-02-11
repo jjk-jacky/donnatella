@@ -73,15 +73,12 @@ typedef enum
     DONNA_ARG_TYPE_PATH         = (1 << 5),
     DONNA_ARG_TYPE_ROW_ID       = (1 << 6),
 
+    /*< private >*/
+    _DONNA_ARG_TYPE_CUSTOM      = (1 << 14),
+    /*< public >*/
     DONNA_ARG_IS_OPTIONAL       = (1 << 15),
     DONNA_ARG_IS_ARRAY          = (1 << 16),
 } DonnaArgType;
-
-typedef gboolean (*conv_flag_fn) (const gchar     c,
-                                  DonnaArgType   *type,
-                                  gpointer       *ptr,
-                                  GDestroyNotify *destroy,
-                                  gpointer        data);
 
 
 typedef struct _DonnaApp                DonnaApp;

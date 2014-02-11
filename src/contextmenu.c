@@ -474,16 +474,13 @@ container_children_cb (DonnaTask    *task,
 static DonnaNode *
 get_node_trigger (DonnaApp      *app,
                   const gchar   *_fl,
-                  const gchar   *conv_flags,
-                  conv_flag_fn   conv_fn,
-                  gpointer       conv_data,
+                  DonnaContext  *context,
                   GError       **error)
 {
     DonnaNode *node;
     gchar *fl;
 
-    fl = donna_app_parse_fl (app, (gchar *) _fl, FALSE,
-            conv_flags, conv_fn, conv_data, NULL);
+    fl = donna_app_parse_fl (app, (gchar *) _fl, FALSE, context, NULL);
     node = donna_app_get_node (app, fl, FALSE, error);
     if (!node)
     {
@@ -733,9 +730,7 @@ get_user_item_info (const gchar             *item,
                     DonnaContextReference    reference,
                     DonnaApp                *app,
                     const gchar             *source,
-                    const gchar             *conv_flags,
-                    conv_flag_fn             conv_fn,
-                    gpointer                 conv_data,
+                    DonnaContext            *context,
                     DonnaContextInfo        *info,
                     GError                 **error)
 {
@@ -946,8 +941,7 @@ get_user_item_info (const gchar             *item,
 
     if (type == TYPE_TRIGGER)
     {
-        info->node = get_node_trigger (app, info->trigger,
-                conv_flags, conv_fn, conv_data, error);
+        info->node = get_node_trigger (app, info->trigger, context, error);
         g_free ((gchar *) info->trigger);
         info->trigger = NULL;
         info->free_trigger = FALSE;
@@ -1032,8 +1026,7 @@ get_user_item_info (const gchar             *item,
     if (import > 0)
     {
         if (!node_trigger)
-            node_trigger = get_node_trigger (app, info->trigger,
-                    conv_flags, conv_fn, conv_data, &err);
+            node_trigger = get_node_trigger (app, info->trigger, context, &err);
         if (!node_trigger)
         {
             g_warning ("Context-menu: Cannot import options from node trigger "
@@ -1292,9 +1285,7 @@ parse_items (DonnaApp               *app,
              get_item_info_fn        get_item_info,
              DonnaContextReference   reference,
              const gchar            *source,
-             const gchar            *conv_flags,
-             conv_flag_fn            conv_fn,
-             gpointer                conv_data,
+             DonnaContext           *context,
              GError                **error)
 {
     GPtrArray *nodes;
@@ -1436,8 +1427,7 @@ parse_items (DonnaApp               *app,
             gchar *s;
 
             if (parse & PARSE_IS_INTERNAL)
-                alias = get_alias (items, extra, reference,
-                        conv_flags, conv_fn, conv_data, error);
+                alias = get_alias (items, extra, reference, context, error);
             else
                 alias = get_user_alias (items, extra, app, source, error);
             if (!alias)
@@ -1454,8 +1444,7 @@ parse_items (DonnaApp               *app,
             {
                 s = alias;
                 arr = parse_items (app, pi, cur_parse | PARSE_IS_ALIAS, &s,
-                        get_alias, get_item_info, reference, source,
-                        conv_flags, conv_fn, conv_data, error);
+                        get_alias, get_item_info, reference, source, context, error);
                 if (!arr)
                 {
                     g_free (alias);
@@ -1479,11 +1468,10 @@ parse_items (DonnaApp               *app,
             goto next;
         }
         else if (parse & PARSE_IS_INTERNAL)
-            r = get_item_info (items, extra, reference,
-                    conv_flags, conv_fn, conv_data, &info, error);
+            r = get_item_info (items, extra, reference, context, &info, error);
         else
             r = get_user_item_info (items, extra, reference, app, source,
-                    conv_flags, conv_fn, conv_data, &info, error);
+                    context, &info, error);
         if (!r)
         {
             g_ptr_array_unref (nodes);
@@ -1497,8 +1485,7 @@ parse_items (DonnaApp               *app,
 
             ++end;
             children = parse_items (app, pi, cur_parse | PARSE_IN_CONTAINER, &end,
-                    get_alias, get_item_info, reference, source,
-                    conv_flags, conv_fn, conv_data, error);
+                    get_alias, get_item_info, reference, source, context, error);
             if (!children)
             {
                 g_prefix_error (error, "Failed to get children for item '%s': ",
@@ -1579,7 +1566,7 @@ parse_items (DonnaApp               *app,
                      * just a string property, so they'll be cleaned via GC */
                     info.trigger = donna_app_parse_fl (app,
                             (gchar *) info.trigger, info.free_trigger,
-                            conv_flags, conv_fn, conv_data, NULL);
+                            context, NULL);
 
                     g_value_init (&v, G_TYPE_STRING);
                     g_value_take_string (&v, (gchar *) info.trigger);
@@ -1688,7 +1675,7 @@ parse_items (DonnaApp               *app,
                 {
                     ni->fl = donna_app_parse_fl (app,
                             (gchar *) info.trigger, info.free_trigger,
-                            conv_flags, conv_fn, conv_data, &ni->intrefs);
+                            context, &ni->intrefs);
                     ni->free_fl = TRUE;
                 }
                 info.trigger = NULL;
@@ -1750,9 +1737,7 @@ donna_context_menu_get_nodes (DonnaApp               *app,
                               const gchar            *source,
                               get_alias_fn            get_alias,
                               get_item_info_fn        get_item_info,
-                              const gchar            *conv_flags,
-                              conv_flag_fn            conv_fn,
-                              gpointer                conv_data,
+                              DonnaContext           *context,
                               GError                **error)
 {
     DonnaProviderInternal *pi;
@@ -1772,7 +1757,7 @@ donna_context_menu_get_nodes (DonnaApp               *app,
     }
 
     nodes = parse_items (app, pi, PARSE_DEFAULT, &items, get_alias, get_item_info,
-            reference, source, conv_flags, conv_fn, conv_data, error);
+            reference, source, context, error);
 
     g_object_unref (pi);
     return nodes;
@@ -1785,16 +1770,14 @@ donna_context_menu_popup (DonnaApp              *app,
                           const gchar           *source,
                           get_alias_fn           get_alias,
                           get_item_info_fn       get_item_info,
-                          const gchar           *conv_flags,
-                          conv_flag_fn           conv_fn,
-                          gpointer               conv_data,
+                          DonnaContext          *context,
                           const gchar           *menu,
                           GError               **error)
 {
     GPtrArray *nodes;
 
     nodes = donna_context_menu_get_nodes (app, items, reference, source,
-            get_alias, get_item_info, conv_flags, conv_fn, conv_data, error);
+            get_alias, get_item_info, context, error);
     if (!nodes)
         return FALSE;
 

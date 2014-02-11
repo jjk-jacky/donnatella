@@ -221,16 +221,12 @@ static void             provider_task_render        (DonnaStatusProvider    *sp,
 static gboolean         pre_exit_cb                 (DonnaApp               *app,
                                                      const gchar            *event,
                                                      const gchar            *source,
-                                                     const gchar            *conv_flags,
-                                                     conv_flag_fn            conv_fn,
-                                                     gpointer                conv_data,
+                                                     DonnaContext           *context,
                                                      DonnaProviderTask      *tm);
 static void             exit_cb                     (DonnaApp               *app,
                                                      const gchar            *event,
                                                      const gchar            *source,
-                                                     const gchar            *conv_flags,
-                                                     conv_flag_fn            conv_fn,
-                                                     gpointer                conv_data,
+                                                     DonnaContext           *context,
                                                      DonnaProviderTask      *tm);
 
 
@@ -1982,6 +1978,7 @@ struct conv
 
 static gboolean
 tm_conv_fn (const gchar      c,
+            gchar           *extra,
             DonnaArgType    *type,
             gpointer        *ptr,
             GDestroyNotify  *destroy,
@@ -2048,15 +2045,17 @@ emit_event (struct emit_event *ee)
 
     if (emit)
     {
+        DonnaContext context = { "onN", FALSE, (conv_flag_fn) tm_conv_fn, &conv };
+
         if (ee->state == DONNA_TASK_DONE)
             donna_app_emit_event (ee->tm->priv->app, "task_done", FALSE,
-                    "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+                    &context, "task_manager");
         else if (ee->state == DONNA_TASK_FAILED)
             donna_app_emit_event (ee->tm->priv->app, "task_failed", FALSE,
-                    "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+                    &context, "task_manager");
         else /* DONNA_TASK_CANCELLED */
             donna_app_emit_event (ee->tm->priv->app, "task_cancelled", FALSE,
-                    "onN", (conv_flag_fn) tm_conv_fn, &conv, "task_manager");
+                    &context, "task_manager");
     }
 
     g_object_unref (ee->task);
@@ -2831,9 +2830,7 @@ static gboolean
 pre_exit_cb (DonnaApp               *app,
              const gchar            *event,
              const gchar            *source,
-             const gchar            *conv_flags,
-             conv_flag_fn            conv_fn,
-             gpointer                conv_data,
+             DonnaContext           *context,
              DonnaProviderTask      *tm)
 {
     tm->priv->cancel_all_in_exit = FALSE;
@@ -2935,9 +2932,7 @@ static void
 exit_cb (DonnaApp               *app,
          const gchar            *event,
          const gchar            *event_source,
-         const gchar            *conv_flags,
-         conv_flag_fn            conv_fn,
-         gpointer                conv_data,
+         DonnaContext           *context,
          DonnaProviderTask      *tm)
 {
     struct refresh_exit_waiting rew;

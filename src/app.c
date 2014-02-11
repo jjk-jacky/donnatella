@@ -776,12 +776,10 @@ donna_app_class_init (DonnaAppClass *klass)
             G_STRUCT_OFFSET (DonnaAppClass, event),
             event_accumulator,
             &event_confirm,
-            g_cclosure_user_marshal_BOOLEAN__STRING_STRING_STRING_POINTER_POINTER,
+            g_cclosure_user_marshal_BOOLEAN__POINTER_POINTER_POINTER,
             G_TYPE_BOOLEAN,
-            5,
-            G_TYPE_STRING,
-            G_TYPE_STRING,
-            G_TYPE_STRING,
+            3,
+            G_TYPE_POINTER,
             G_TYPE_POINTER,
             G_TYPE_POINTER);
 
@@ -1462,8 +1460,7 @@ donna_app_get_node (DonnaApp    *app,
 
     if (do_user_parse)
     {
-        fl = donna_app_parse_fl (app, (gchar *) full_location, FALSE,
-                NULL, NULL, NULL, NULL);
+        fl = donna_app_parse_fl (app, (gchar *) full_location, FALSE, NULL, NULL);
         full_location = fl;
     }
 
@@ -2138,16 +2135,14 @@ enum
  * @app: The #DonnaApp
  * @fl: The full location to parse
  * @must_free_fl: Whether @fl must be freed (using g_free()) or not
- * @conv_flags: context conv flags
- * @conv_fn: context conv fn
- * @conv_data: context conv data
+ * @context: The context to use for parsing
  * @intrefs: (allow-none): Return location where a #GPtrArray of all created
  * intrefs will be created, if needed; Or %NULL
  *
  * Parse the full location @fl. There are 2 parsing that can be performed:
  * - #user-parsing which should be performed on all user-provided full
  *   locations, see below for more.
- * - contextual parsing, performed according the @conv_flags & co
+ * - contextual parsing, performed according the @context
  *
  * User parsing is a process of "extending" the given full location using
  * prefixes, aliases, etc
@@ -2190,31 +2185,7 @@ enum
  * then the replacement will first be looked for in
  * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
  *
- *
- * Contextual parsing happens on actions, when certain variables (e.g. \%o, etc)
- * can be used in the full location/trigger, and need to be parsed before
- * processing.
- *
- * When processing such variables, it should be known that by default so-called
- * "intrefs" (for internal references) can be used; For example, if a variable
- * points to a node, an intref will be used. An intref is simply a string
- * referencing said node in memory.
- *
- * It is possible to "dereference" a variable, so that instead of using an
- * intref, the full location of the node will be used. This is done by using a
- * star after the percent sign, e.g. <systemitem>\%*n</systemitem>
- * This can be useful if it isn't meant to be used as a command argument, but
- * e.g. to be used as part of a string or something.
- * Additionally, you can also use a special dereferencing, using a colon
- * instead, e.g. <systemitem>\%:n</systemitem>
- * This will use the location for nodes in "fs", and skip/use empty string for
- * any node in another domain; Particularly useful for use in command line of
- * external process.
- *
- * If intrefs were created during said parsing (see donna_app_new_int_ref()) and
- * @intrefs is not %NULL, A #GPtrArray will be created and filled with string
- * representations of intrefs. This is intended to be then used with
- * donna_app_trigger_fl() so intrefs are freed afterwards.
+ * See donna_context_parse() for more on contextual parsing, and @intrefs.
  *
  * If no parsing/changes was done, @fl will be returned unless @must_free_fl
  * was %FALSE, in which case a g_strdup() is returned. If parsing happens, @fl
@@ -2227,9 +2198,7 @@ gchar *
 donna_app_parse_fl (DonnaApp       *app,
                     gchar          *_fl,
                     gboolean        must_free_fl,
-                    const gchar    *conv_flags,
-                    conv_flag_fn    conv_fn,
-                    gpointer        conv_data,
+                    DonnaContext   *context,
                     GPtrArray     **intrefs)
 {
     GError *err = NULL;
@@ -2410,203 +2379,9 @@ prefix_done:
 
 context_parsing:
     /* context */
-    if (!conv_flags || !conv_fn)
-        goto done;
+    if (context)
+        donna_context_parse (context, 0, app, fl, &str, intrefs);
 
-    s = fl;
-    while ((s = strchr (s, '%')))
-    {
-        guint dereference;
-        gboolean match;
-
-        if (s[1] == '*')
-            dereference = DEREFERENCE_FULL;
-        else if (s[1] == ':')
-            dereference = DEREFERENCE_FS;
-        else
-            dereference = DEREFERENCE_NONE;
-
-        if (dereference == DEREFERENCE_NONE)
-            match = s[1] != '\0' && strchr (conv_flags, s[1]) != NULL;
-        else
-            match = s[2] != '\0' && strchr (conv_flags, s[2]) != NULL;
-
-        if (match)
-        {
-            DonnaArgType type;
-            gpointer ptr;
-            GDestroyNotify destroy = NULL;
-
-            if (!str)
-                str = g_string_new (NULL);
-            g_string_append_len (str, fl, s - fl);
-            if (dereference != DEREFERENCE_NONE)
-                ++s;
-
-            if (G_UNLIKELY (!conv_fn (s[1], &type, &ptr, &destroy, conv_data)))
-            {
-                fl = ++s;
-                ++s;
-                continue;
-            }
-
-            /* we don't need to test for all possible types, only those can make
-             * sense. That is, it could be a ROW, but not a ROW_ID (or PATH)
-             * since those only make sense the other way around (or as type of
-             * ROW_ID) */
-
-            if (type & DONNA_ARG_TYPE_TREE_VIEW)
-                g_string_append (str, donna_tree_view_get_name ((DonnaTreeView *) ptr));
-            else if (type & DONNA_ARG_TYPE_ROW)
-            {
-                DonnaRow *row = (DonnaRow *) ptr;
-                if (dereference != DEREFERENCE_NONE)
-                {
-                    gchar *l = NULL;
-
-                    if (dereference == DEREFERENCE_FULL)
-                        /* FULL = full location */
-                        l = donna_node_get_full_location (row->node);
-                    else if (streq (donna_node_get_domain (row->node), "fs"))
-                        /* FS && domain "fs" = location */
-                        l = donna_node_get_location (row->node);
-                    else
-                    {
-                        /* FS && another domain == empty string */
-                        g_string_append_c (str, '"');
-                        g_string_append_c (str, '"');
-                    }
-
-                    if (l)
-                    {
-                        donna_g_string_append_quoted (str, l, FALSE);
-                        g_free (l);
-                    }
-                }
-                else
-                    g_string_append_printf (str, "[%p;%p]", row->node, row->iter);
-            }
-            /* this will do nodes, array of nodes, array of strings */
-            else if (type & (DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY))
-            {
-                if (dereference != DEREFERENCE_NONE)
-                {
-                    if (type & DONNA_ARG_IS_ARRAY)
-                    {
-                        GString *string;
-                        GString *str_arr;
-                        gchar sep;
-
-                        arr = (GPtrArray *) ptr;
-
-                        if (dereference == DEREFERENCE_FS)
-                        {
-                            string = str;
-                            sep = ' ';
-                        }
-                        else
-                        {
-                            string = str_arr = g_string_new (NULL);
-                            sep = ',';
-                        }
-
-                        if (type & DONNA_ARG_TYPE_NODE)
-                            for (i = 0; i < arr->len; ++i)
-                            {
-                                DonnaNode *node = arr->pdata[i];
-                                gchar *l = NULL;
-
-                                if (dereference == DEREFERENCE_FULL)
-                                    l = donna_node_get_full_location (node);
-                                else if (streq (donna_node_get_domain (node), "fs"))
-                                    l = donna_node_get_location (node);
-                                /* no need to add a bunch of empty strings here */
-
-                                if (l)
-                                {
-                                    donna_g_string_append_quoted (string, l, FALSE);
-                                    g_string_append_c (string, sep);
-                                    g_free (l);
-                                }
-                            }
-                        else
-                            for (i = 0; i < arr->len; ++i)
-                            {
-                                donna_g_string_append_quoted (string,
-                                        (gchar *) arr->pdata[i], FALSE);
-                                g_string_append_c (string, sep);
-                            }
-
-                        /* remove last sep */
-                        g_string_truncate (string, string->len - 1);
-                        if (dereference != DEREFERENCE_FS)
-                        {
-                            /* str_arr is a list of quoted strings/FL, but we
-                             * also need to quote the list itself */
-                            donna_g_string_append_quoted (str, str_arr->str, FALSE);
-                            g_string_free (str_arr, TRUE);
-                        }
-                    }
-                    else
-                    {
-                        DonnaNode *node = ptr;
-                        gchar *l = NULL;
-
-                        if (dereference == DEREFERENCE_FULL)
-                            l = donna_node_get_full_location (node);
-                        else if (streq (donna_node_get_domain (node), "fs"))
-                            l = donna_node_get_location (node);
-                        else
-                        {
-                            g_string_append_c (str, '"');
-                            g_string_append_c (str, '"');
-                        }
-
-                        if (l)
-                        {
-                            donna_g_string_append_quoted (str, l, FALSE);
-                            g_free (l);
-                        }
-                    }
-                }
-                else
-                {
-                    gchar *ir = donna_app_new_int_ref (app, type, ptr);
-                    g_string_append (str, ir);
-                    if (intrefs)
-                    {
-                        if (!*intrefs)
-                            *intrefs = g_ptr_array_new_with_free_func (g_free);
-                        g_ptr_array_add (*intrefs, ir);
-                    }
-                    else
-                        g_free (ir);
-                }
-            }
-            else if (type & DONNA_ARG_TYPE_STRING)
-                donna_g_string_append_quoted (str, (gchar *) ptr, FALSE);
-            else if (type & DONNA_ARG_TYPE_INT)
-                g_string_append_printf (str, "%d", * (gint *) ptr);
-
-            if (destroy)
-                destroy (ptr);
-
-            s += 2;
-            fl = s;
-        }
-        else if (s[1] != '\0')
-        {
-            if (!str)
-                str = g_string_new (NULL);
-            g_string_append_len (str, fl, s - fl);
-            fl = ++s;
-            ++s;
-        }
-        else
-            break;
-    }
-
-done:
     if (!str)
         return (must_free_fl) ? _fl : g_strdup (_fl);
 
@@ -2771,9 +2546,7 @@ trigger_event (DonnaApp     *app,
                const gchar  *event,
                gboolean      is_confirm,
                const gchar  *source,
-               const gchar  *conv_flags,
-               conv_flag_fn  conv_fn,
-               gpointer      conv_data)
+               DonnaContext *context)
 {
     DonnaAppPrivate *priv = app->priv;
     GPtrArray *arr = NULL;
@@ -2796,8 +2569,7 @@ trigger_event (DonnaApp     *app,
         {
             gboolean ret;
 
-            fl = donna_app_parse_fl (app, fl, TRUE,
-                    conv_flags, conv_fn, conv_data, &intrefs);
+            fl = donna_app_parse_fl (app, fl, TRUE, context, &intrefs);
             if (!trigger_fl (app, fl, intrefs, is_confirm, &ret, &err))
             {
                 donna_app_show_error (app, err,
@@ -2827,9 +2599,7 @@ trigger_event (DonnaApp     *app,
  * @app: The #DonnaApp
  * @event: The name of the event
  * @is_confirm: Whether this is a "confirm event" or not
- * @conv_flags: context conv flags
- * @conv_fn: context conv fn
- * @conv_data: context conv data
+ * @context: The context for the event
  * @fmt_source: printf-like format for the source of the event
  * @...: %NULL terminated printf-like arguments
  *
@@ -2858,9 +2628,7 @@ gboolean
 donna_app_emit_event (DonnaApp       *app,
                       const gchar    *event,
                       gboolean        is_confirm,
-                      const gchar    *conv_flags,
-                      conv_flag_fn    conv_fn,
-                      gpointer        conv_data,
+                      DonnaContext   *context,
                       const gchar    *fmt_source,
                       ...)
 {
@@ -2893,13 +2661,10 @@ donna_app_emit_event (DonnaApp       *app,
     if (is_confirm)
         event_confirm = g_slist_prepend (event_confirm, GUINT_TO_POINTER (q));
 
-    g_signal_emit (app, donna_app_signals[EVENT], q,
-            event, source, conv_flags, conv_fn, conv_data,
-            &ret);
+    g_signal_emit (app, donna_app_signals[EVENT], q, event, source, context, &ret);
 
     if (!is_confirm || !ret)
-        ret = trigger_event (app, event, is_confirm, (source) ? source : "",
-                conv_flags, conv_fn, conv_data);
+        ret = trigger_event (app, event, is_confirm, (source) ? source : "", context);
 
     if (is_confirm)
         event_confirm = g_slist_remove (event_confirm, GUINT_TO_POINTER (q));
@@ -2916,6 +2681,7 @@ struct context
 
 static gboolean
 conv_event_info (const gchar     c,
+                 gchar          *extra,
                  DonnaArgType   *type,
                  gpointer       *ptr,
                  GDestroyNotify *destroy,
@@ -2954,20 +2720,19 @@ donna_app_emit_info (DonnaApp       *app,
                      const gchar    *fmt_msg,
                      ...)
 {
-    struct context context = { NULL, details };
+    struct context data = { NULL, details };
+    DonnaContext context = { "tm", FALSE, (conv_flag_fn) conv_event_info, &data };
     va_list va_args;
 
     g_return_if_fail (DONNA_IS_APP (app));
     g_return_if_fail (fmt_msg != NULL);
 
     va_start (va_args, fmt_msg);
-    context.message = g_strdup_vprintf (fmt_msg, va_args);
+    data.message = g_strdup_vprintf (fmt_msg, va_args);
     va_end (va_args);
 
-    donna_app_emit_event (app, "info", FALSE,
-            "tm", (conv_flag_fn) conv_event_info, &context,
-            NULL);
-    g_free (context.message);
+    donna_app_emit_event (app, "info", FALSE, &context, NULL);
+    g_free (data.message);
 }
 
 struct menu_click
@@ -3010,6 +2775,7 @@ free_menu_click (struct menu_click *mc)
 
 static gboolean
 menu_conv_flag (const gchar      c,
+                gchar           *extra,
                 DonnaArgType    *type,
                 gpointer        *ptr,
                 GDestroyNotify  *destroy,
@@ -3073,6 +2839,7 @@ menuitem_button_release_cb (GtkWidget           *item,
 {
     DonnaAppPrivate *priv = mc->app->priv;
     DonnaNode *node;
+    DonnaContext context = { "nN", FALSE, (conv_flag_fn) menu_conv_flag, NULL };
     struct menu_trigger *mt;
     GPtrArray *intrefs = NULL;
     gchar *fl = NULL;
@@ -3135,8 +2902,8 @@ menuitem_button_release_cb (GtkWidget           *item,
             return FALSE;
     }
 
-    fl = donna_app_parse_fl (mc->app, fl, must_free_fl, "nN",
-            (conv_flag_fn) menu_conv_flag, node, &intrefs);
+    context.data = node;
+    fl = donna_app_parse_fl (mc->app, fl, must_free_fl, &context, &intrefs);
 
     /* we use an idle source to trigger it, because otherwise this could lead to
      * e.g. ask the user something (e.g. @ask_text) which would start its own
@@ -4589,9 +4356,7 @@ status_clear (struct status_clear *sc)
 static void status_info (DonnaApp       *app,
                          const gchar    *event,
                          const gchar    *source,
-                         const gchar    *conv_flags,
-                         conv_flag_fn    conv_fn,
-                         gpointer        conv_data,
+                         DonnaContext   *context,
                          gpointer        _id)
 {
     DonnaAppPrivate *priv = app->priv;
@@ -4618,20 +4383,41 @@ static void status_info (DonnaApp       *app,
     sd->info = sd->details = NULL;
 
     destroy = NULL;
-    if (conv_fn ('m', &type, (gpointer *) &s, &destroy, conv_data))
+    if (context->conv ('m', NULL, &type, (gpointer *) &s, &destroy, context->data))
     {
         if (G_LIKELY (type == DONNA_ARG_TYPE_STRING))
             sd->info = g_strdup (s);
+        else if (type == _DONNA_ARG_TYPE_CUSTOM)
+        {
+            GString *str = g_string_new (NULL);
+            ((conv_custom_fn) s) ('m', NULL, 0, str, context->data);
+            s = g_string_free (str, FALSE);
+        }
         if (destroy)
             destroy (s);
     }
 
     destroy = NULL;
-    if (conv_fn ('d', &type, (gpointer *) &s, &destroy, conv_data))
+    if (context->conv ('d', NULL, &type, (gpointer *) &s, &destroy, context->data))
     {
         /* when no details, this will be an empty string */
-        if (G_LIKELY (type == DONNA_ARG_TYPE_STRING) && *s != '\0')
-            sd->details = g_strdup (s);
+        if (G_LIKELY (type == DONNA_ARG_TYPE_STRING))
+        {
+            if (*s != '\0')
+                sd->details = g_strdup (s);
+        }
+        else if (type == _DONNA_ARG_TYPE_CUSTOM)
+        {
+            GString *str = g_string_new (NULL);
+            ((conv_custom_fn) s) ('m', NULL, 0, str, context->data);
+            if (str->len > 0)
+                s = g_string_free (str, FALSE);
+            else
+            {
+                s = NULL;
+                g_string_free (str, TRUE);
+            }
+        }
         if (destroy)
             destroy (s);
     }

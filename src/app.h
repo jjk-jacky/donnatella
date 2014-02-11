@@ -30,6 +30,7 @@
 #include "treeview.h"
 #include "columntype.h"
 #include "filter.h"
+#include "context.h"
 
 G_BEGIN_DECLS
 
@@ -60,9 +61,7 @@ struct _DonnaAppClass
     gboolean            (*event)                    (DonnaApp       *app,
                                                      const gchar    *event,
                                                      const gchar    *source,
-                                                     const gchar    *conv_flags,
-                                                     conv_flag_fn    conv_fn,
-                                                     gpointer        conv_data);
+                                                     DonnaContext   *context);
 };
 
 gint                donna_app_run                   (DonnaApp       *app,
@@ -122,9 +121,7 @@ gboolean            donna_app_free_int_ref          (DonnaApp       *app,
 gchar *             donna_app_parse_fl              (DonnaApp       *app,
                                                      gchar          *fl,
                                                      gboolean        must_free_fl,
-                                                     const gchar    *conv_flags,
-                                                     conv_flag_fn    conv_fn,
-                                                     gpointer        conv_data,
+                                                     DonnaContext   *context,
                                                      GPtrArray     **intrefs);
 gboolean            donna_app_trigger_fl            (DonnaApp       *app,
                                                      const gchar    *fl,
@@ -134,9 +131,7 @@ gboolean            donna_app_trigger_fl            (DonnaApp       *app,
 gboolean            donna_app_emit_event            (DonnaApp       *app,
                                                      const gchar    *event,
                                                      gboolean        is_confirm,
-                                                     const gchar    *conv_flags,
-                                                     conv_flag_fn    conv_fn,
-                                                     gpointer        conv_data,
+                                                     DonnaContext   *context,
                                                      const gchar    *fmt_source,
                                                      ...);
 void                donna_app_emit_info             (DonnaApp       *app,

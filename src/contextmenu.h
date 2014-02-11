@@ -25,6 +25,7 @@
 
 #include <gtk/gtk.h>
 #include "common.h"
+#include "context.h"
 
 G_BEGIN_DECLS
 
@@ -109,16 +110,12 @@ typedef GPtrArray * (*get_sel_fn)   (gpointer data, GError **error);
 typedef gchar *  (*get_alias_fn)     (const gchar             *alias,
                                       const gchar             *extra,
                                       DonnaContextReference    reference,
-                                      const gchar             *conv_flags,
-                                      conv_flag_fn             conv_fn,
-                                      gpointer                 conv_data,
+                                      DonnaContext            *context,
                                       GError                 **error);
 typedef gboolean (*get_item_info_fn) (const gchar             *item,
                                       const gchar             *extra,
                                       DonnaContextReference    reference,
-                                      const gchar             *conv_flags,
-                                      conv_flag_fn             conv_fn,
-                                      gpointer                 conv_data,
+                                      DonnaContext            *context,
                                       DonnaContextInfo        *info,
                                       GError                 **error);
 
@@ -128,9 +125,7 @@ GPtrArray *     donna_context_menu_get_nodes    (DonnaApp               *app,
                                                  const gchar            *source,
                                                  get_alias_fn            get_alias,
                                                  get_item_info_fn        get_item_info,
-                                                 const gchar            *conv_flags,
-                                                 conv_flag_fn            conv_fn,
-                                                 gpointer                conv_data,
+                                                 DonnaContext           *context,
                                                  GError                **error);
 
 inline gboolean
@@ -140,9 +135,7 @@ donna_context_menu_popup (DonnaApp              *app,
                           const gchar           *source,
                           get_alias_fn           get_alias,
                           get_item_info_fn       get_item_info,
-                          const gchar           *conv_flags,
-                          conv_flag_fn           conv_fn,
-                          gpointer               conv_data,
+                          DonnaContext          *context,
                           const gchar           *menu,
                           GError               **error);
 
