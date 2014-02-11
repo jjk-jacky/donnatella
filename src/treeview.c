@@ -892,7 +892,7 @@ enum tree_expand
 
 #define CONTEXT_FLAGS               "olrnfsS"
 #define CONTEXT_COLUMN_FLAGS        "R"
-#define CONTEXT_KEYS_FLAGS          "m"
+#define CONTEXT_KEYS_FLAGS          "kcm"
 
 enum tree_sync
 {
@@ -1113,6 +1113,7 @@ struct conv
     DonnaTreeView   *tree;
     DonnaRow        *row;
     gchar           *col_name;
+    gchar            key_spec;
     guint            key_m;
     /* context menus: selected nodes, if asked by a provider */
     GPtrArray       *selection;
@@ -19022,6 +19023,25 @@ check_children_post_expand (DonnaTreeView *tree, GtkTreeIter *iter)
      == (DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT)         \
      && !(event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
 
+static void
+tree_conv_custom (const gchar         c,
+                  gchar              *extra,
+                  DonnaContextOptions options,
+                  GString            *str,
+                  struct conv        *conv)
+{
+    if (c == 'k')
+    {
+        if (conv->key_spec > 0)
+            g_string_append_c (str, conv->key_spec);
+    }
+    else /* 'c' */
+    {
+        if (conv->tree->priv->key_combine_spec > 0)
+            g_string_append_c (str, conv->tree->priv->key_combine_spec);
+    }
+}
+
 static gboolean
 tree_conv_flag (const gchar      c,
                 gchar           *extra,
@@ -19112,13 +19132,17 @@ focused:
             *destroy = (GDestroyNotify) g_ptr_array_unref;
             return TRUE;
 
-        /* keys only -- Note that keys also parse 'k' & 'c' on its own,
-         * because they are signle-letter replacement (and going through here
-         * would mean STRING, and get them quoted) */
-
         case 'm':
             *type = DONNA_ARG_TYPE_INT;
             *ptr = &conv->key_m;
+            return TRUE;
+
+        case 'k':
+        case 'c':
+            /* CUSTOM because as STRING they would get quoted and we don't want
+             * that, so here we can add nothing/only the char */
+            *type = _DONNA_ARG_TYPE_CUSTOM;
+            *ptr = tree_conv_custom;
             return TRUE;
     }
 
@@ -20057,47 +20081,6 @@ repeat:
     return TRUE;                        \
 } while (0)
 
-/* we parse those two on our own (i.e. not through donna_app_parse_fl())
- * because those are single-character, and we don't want them treated as
- * strings, because that would get them to be quoted (which isn't nice) */
-static inline void
-parse_specs (gchar *str, gchar spec, gchar combine)
-{
-    while ((str = strchr (str, '%')))
-    {
-        gchar *s;
-        gint n = 1;
-
-        if (str[1] == 'k')
-        {
-            if (spec > 0)
-                *str = spec;
-            else
-                ++n;
-        }
-        else if (str[1] == 'c')
-        {
-            if (combine > 0)
-                *str = combine;
-            else
-                ++n;
-        }
-        else
-        {
-            str += 2;
-            continue;
-        }
-
-        for (s = str + ((n == 1) ? 1 : 0); ; ++s)
-        {
-            *s = s[n];
-            if (*s == '\0')
-                break;
-        }
-        ++str;
-    }
-}
-
 static gboolean
 trigger_key (DonnaTreeView *tree, gchar spec)
 {
@@ -20116,10 +20099,13 @@ trigger_key (DonnaTreeView *tree, gchar spec)
 
     config = donna_app_peek_config (priv->app);
     conv.tree = tree;
+    conv.key_spec = spec;
 
     /* is there a motion? */
     if (priv->key_motion)
     {
+        gchar combine_spec;
+
         gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
         if (!path)
             wrong_key (TRUE);
@@ -20132,11 +20118,14 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         if (!donna_config_get_string (config, NULL, &fl, "%s/trigger", from))
             wrong_key (TRUE);
 
-        parse_specs (fl, spec, 0);
         conv.key_m = priv->key_motion_m;
         conv.row = get_row_for_iter (tree, &iter);
 
+        /* "disable" combine_spec for now */
+        combine_spec = priv->key_combine_spec;
+        priv->key_combine_spec = 0;
         fl = donna_app_parse_fl (priv->app, fl, TRUE, &context, &intrefs);
+        priv->key_combine_spec = combine_spec;
         if (!donna_app_trigger_fl (priv->app, fl, intrefs, TRUE, NULL))
         {
             g_free (fl);
@@ -20166,7 +20155,6 @@ trigger_key (DonnaTreeView *tree, gchar spec)
         }
     }
 
-    parse_specs (fl, spec, priv->key_combine_spec);
     conv.key_m = priv->key_m;
     fl = donna_app_parse_fl (priv->app, fl, TRUE, &context, &intrefs);
     g_free (conv.row);
