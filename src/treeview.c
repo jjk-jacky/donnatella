@@ -9659,6 +9659,7 @@ no_task:
     }
     else
     {
+        check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
         /* show the "location empty" message */
         set_draw_state (data->tree, DRAW_EMPTY);
     }
