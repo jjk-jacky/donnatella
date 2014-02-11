@@ -890,6 +890,10 @@ enum tree_expand
 #define ROW_CLASS_MINITREE          "minitree-unknown"
 #define ROW_CLASS_PARTIAL           "minitree-partial"
 
+#define CONTEXT_FLAGS               "olrnfsS"
+#define CONTEXT_COLUMN_FLAGS        "R"
+#define CONTEXT_KEYS_FLAGS          "m"
+
 enum tree_sync
 {
     TREE_SYNC_NONE = 0,
@@ -18327,7 +18331,8 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
     DonnaTreeViewPrivate *priv;
     DonnaContextReference reference = 0;
     struct conv conv = { NULL, };
-    DonnaContext context = { "olrRnfsS", FALSE, (conv_flag_fn) tree_conv_flag, &conv };
+    DonnaContext context = { CONTEXT_FLAGS CONTEXT_COLUMN_FLAGS, FALSE,
+        (conv_flag_fn) tree_conv_flag, &conv };
     GtkTreeSelection *sel;
     GPtrArray *nodes;
     row_id_type type;
@@ -19220,7 +19225,8 @@ handle_click (DonnaTreeView     *tree,
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
     struct conv conv = { NULL, };
-    DonnaContext context = { "olrRnfsS", FALSE, (conv_flag_fn) tree_conv_flag, &conv };
+    DonnaContext context = { CONTEXT_FLAGS CONTEXT_COLUMN_FLAGS, FALSE,
+        (conv_flag_fn) tree_conv_flag, &conv };
     struct column *_col;
     GPtrArray *intrefs = NULL;
     gchar *fl = NULL;
@@ -20104,7 +20110,8 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     gchar *from  = NULL;
     gchar *fl;
     struct conv conv = { NULL, };
-    DonnaContext context = { "olrnmfsS", FALSE, (conv_flag_fn) tree_conv_flag, &conv };
+    DonnaContext context = { CONTEXT_FLAGS CONTEXT_KEYS_FLAGS, FALSE,
+        (conv_flag_fn) tree_conv_flag, &conv };
     GPtrArray *intrefs = NULL;
 
     config = donna_app_peek_config (priv->app);
