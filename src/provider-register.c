@@ -331,11 +331,22 @@ clipboard_get (GtkClipboard             *clipboard,
 
     g_rec_mutex_lock (&priv->rec_mutex);
     reg = get_register (priv->registers, reg_clipboard);
-    if (G_UNLIKELY (!reg))
+    if (!reg)
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
-        g_warning ("Provider 'register': clipboard_get() for CLIPBOARD triggered "
-                "while register '+' doesn't exist");
+        /* we don't have a reg means we dropped it. IOW we own the clipboard,
+         * and it is empty */
+        if (info == 99)
+            /* because setting an empty string (len=0) doesn't seem to work
+             * properly, and pasting gets "n " for some reason */
+            gtk_selection_data_set_text (sd, "\0", 1);
+        else if (info == 3)
+            gtk_selection_data_set (sd, atom_uris, 8,
+                    (const guchar *) "", 0);
+        else
+            gtk_selection_data_set (sd, (info == 1) ? atom_gnome : atom_kde,
+                    8,
+                    (const guchar *) "copy\n", 5);
         return;
     }
 
