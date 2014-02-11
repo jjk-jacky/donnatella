@@ -20901,18 +20901,51 @@ calculate_size_selected (GtkTreeModel    *model,
     return FALSE; /* keep iterating */
 }
 
-static void
-st_render_size (DonnaStatusProvider *sp,
-                struct status       *status,
-                GString             *str,
-                gchar                c,
-                gchar               *fmt,
-                GtkTreeSelection   **sel)
+struct sp_conv
 {
-    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
+    DonnaTreeView *tree;
+    struct status *status;
+    GtkTreeSelection *sel;
+    gint nb;
+};
+
+static void
+sp_custom_conv (const gchar          c,
+                gchar               *extra,
+                DonnaContextOptions options,
+                GString            *str,
+                struct sp_conv     *sp_conv)
+{
+    DonnaTreeViewPrivate *priv = sp_conv->tree->priv;
+    gchar *fmt = extra;
     struct calc_size cs = { FALSE, 0 };
     gchar buf[20], *b = buf;
     gsize len;
+
+    /* we know that options == DONNA_CONTEXT_NO_QUOTES */
+
+    if (c == 'k')
+    {
+        if (priv->key_combine_val)
+            g_string_append_c (str,
+                    (gchar) gdk_keyval_to_unicode (priv->key_combine_val));
+        if (priv->key_combine_spec)
+            g_string_append_c (str, priv->key_combine_spec);
+        if (priv->key_m)
+            g_string_append_printf (str, "%d", priv->key_m);
+        if (priv->key_val)
+            g_string_append_c (str,
+                    (gchar) gdk_keyval_to_unicode (priv->key_val));
+        if (priv->key_motion_m)
+            g_string_append_printf (str, "%d", priv->key_motion_m);
+
+        return;
+    }
+
+    if (!fmt && !donna_config_get_string (donna_app_peek_config (priv->app),
+                NULL, &fmt, "statusbar/%s/size_format", sp_conv->status->name))
+        donna_config_get_string (donna_app_peek_config (priv->app),
+                NULL, &fmt, "defaults/size/format");
 
     switch (c)
     {
@@ -20926,23 +20959,179 @@ st_render_size (DonnaStatusProvider *sp,
             break;
 
         case 'S':
-            if (!*sel)
-                *sel = gtk_tree_view_get_selection ((GtkTreeView *) sp);
-            gtk_tree_selection_selected_foreach (*sel,
+            if (!sp_conv->sel)
+                sp_conv->sel = gtk_tree_view_get_selection ((GtkTreeView *) sp_conv->tree);
+            gtk_tree_selection_selected_foreach (sp_conv->sel,
                     (GtkTreeSelectionForeachFunc) calculate_size_selected, &cs.size);
             break;
     }
 
     b = buf;
-    len = donna_print_size (b, 20, fmt, cs.size, status->digits, status->long_unit);
+    len = donna_print_size (b, 20, (fmt) ? fmt : "%R", cs.size,
+            sp_conv->status->digits, sp_conv->status->long_unit);
     if (len >= 20)
     {
         b = g_new (gchar, ++len);
-        donna_print_size (b, len, fmt, cs.size, status->digits, status->long_unit);
+        donna_print_size (b, len, (fmt) ? fmt : "%R", cs.size,
+                sp_conv->status->digits, sp_conv->status->long_unit);
     }
+
     g_string_append (str, b);
     if (b != buf)
         g_free (b);
+    if (fmt && fmt != extra)
+        g_free (fmt);
+}
+
+static gboolean
+status_provider_conv (const gchar     c,
+                      gchar          *extra,
+                      DonnaArgType   *type,
+                      gpointer       *ptr,
+                      GDestroyNotify *destroy,
+                      struct sp_conv *sp_conv)
+{
+    DonnaTreeViewPrivate *priv = sp_conv->tree->priv;
+
+    switch (c)
+    {
+        case 'o':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = priv->name;
+            return TRUE;
+
+        case 'l':
+        case 'L':
+            *type = DONNA_ARG_TYPE_STRING;
+            if (G_LIKELY (priv->location))
+            {
+                if (c == 'L'
+                        && streq ("fs", donna_node_get_domain (priv->location)))
+                    *ptr = donna_node_get_location (priv->location);
+                else
+                    *ptr = donna_node_get_full_location (priv->location);
+                *destroy = g_free;
+            }
+            else
+                *ptr = (gpointer) "-";
+            return TRUE;
+
+        case 'K':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = priv->key_mode;
+            return TRUE;
+
+        case 'k':
+            *type = _DONNA_ARG_TYPE_CUSTOM;
+            *ptr = sp_custom_conv;
+            return TRUE;
+
+        case 'a':
+            *type = DONNA_ARG_TYPE_INT;
+            sp_conv->nb = (gint) g_hash_table_size (priv->hashtable);
+            *ptr = &sp_conv->nb;
+            return TRUE;
+
+        case 'v':
+            *type = DONNA_ARG_TYPE_INT;
+            sp_conv->nb = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
+            *ptr = &sp_conv->nb;
+            return TRUE;
+
+        case 's':
+            *type = DONNA_ARG_TYPE_INT;
+            if (!sp_conv->sel)
+                sp_conv->sel = gtk_tree_view_get_selection ((GtkTreeView *) sp_conv->tree);
+            sp_conv->nb = gtk_tree_selection_count_selected_rows (sp_conv->sel);
+            *ptr = &sp_conv->nb;
+            return TRUE;
+
+        case 'A':
+        case 'V':
+        case 'S':
+            *type = _DONNA_ARG_TYPE_CUSTOM;
+            *ptr = sp_custom_conv;
+            return TRUE;
+
+        case 'n':
+            {
+                GtkTreePath *path;
+                GtkTreeIter iter;
+                gint nb;
+
+                nb = 0;
+                gtk_tree_view_get_cursor ((GtkTreeView *) sp_conv->tree, &path, NULL);
+                if (path)
+                {
+                    if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                                &iter, path))
+                    {
+                        DonnaNode *node;
+
+                        gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                                TREE_VIEW_COL_NODE, &node,
+                                -1);
+                        if (node)
+                        {
+                            nb = 1;
+                            *type = DONNA_ARG_TYPE_STRING;
+                            *ptr = donna_node_get_name (node);
+                            *destroy = g_free;
+                            g_object_unref (node);
+                        }
+                    }
+                    gtk_tree_path_free (path);
+                }
+                /* returning FALSE will simply not resolve to anything; and
+                 * since we know the is used with NO_QUOTES we don't have to
+                 * return an empty string (to ba added/quoted) */
+                return nb == 1;
+            }
+
+        case 'N':
+            {
+                gint nb;
+
+                *type = DONNA_ARG_TYPE_STRING;
+                *ptr = (gpointer) "";
+
+                if (!sp_conv->sel)
+                    sp_conv->sel = gtk_tree_view_get_selection (
+                            (GtkTreeView *) sp_conv->tree);
+                nb = gtk_tree_selection_count_selected_rows (sp_conv->sel);
+                if (nb == 1)
+                {
+                    GtkTreeIter iter;
+                    GList *list;
+
+                    list = gtk_tree_selection_get_selected_rows (sp_conv->sel, NULL);
+                    if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                                &iter, list->data))
+                    {
+                        DonnaNode *node;
+
+                        gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                                TREE_VIEW_COL_NODE, &node,
+                                -1);
+                        if (node)
+                        {
+                            *ptr = donna_node_get_name (node);
+                            *destroy = g_free;
+                            g_object_unref (node);
+                        }
+                    }
+                    g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
+                }
+                else if (nb > 1)
+                {
+                    *ptr = g_strdup_printf ("%d items selected", nb);
+                    *destroy = g_free;
+                }
+
+                return TRUE;
+            }
+    }
+    return FALSE;
 }
 
 static void
@@ -20953,11 +21142,10 @@ status_provider_render (DonnaStatusProvider    *sp,
 {
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
     struct status *status;
-    GtkTreeSelection *sel = NULL;
+    struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, 0 };
+    DonnaContext context = { "olLkKaAvVsSnN", TRUE,
+        (conv_flag_fn) status_provider_conv, &sp_conv };
     GString *str = NULL;
-    gchar *fmt;
-    gchar *s;
-    gchar *ss;
     guint i;
 
     for (i = 0; i < priv->statuses->len; ++i)
@@ -20973,211 +21161,14 @@ status_provider_render (DonnaStatusProvider    *sp,
         return;
     }
 
-    s = fmt = status->fmt;
-    str = g_string_new (NULL);
-    while ((s = strchr (s, '%')))
-    {
-        switch (s[1])
-        {
-            case 'o':
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append (str, priv->name);
-                s += 2;
-                fmt = s;
-                break;
+    sp_conv.status = status;
+    donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, priv->app,
+            status->fmt, &str, NULL);
 
-            case 'l':
-            case 'L':
-                g_string_append_len (str, fmt, s - fmt);
-                if (G_LIKELY (priv->location))
-                {
-                    if (s[1] == 'L'
-                            && streq ("fs", donna_node_get_domain (priv->location)))
-                        ss = donna_node_get_location (priv->location);
-                    else
-                        ss = donna_node_get_full_location (priv->location);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                }
-                else
-                    g_string_append_c (str, '-');
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'K':
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append (str, priv->key_mode);
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'k':
-                g_string_append_len (str, fmt, s - fmt);
-                if (priv->key_combine_val)
-                    g_string_append_c (str,
-                            (gchar) gdk_keyval_to_unicode (priv->key_combine_val));
-                if (priv->key_combine_spec)
-                    g_string_append_c (str, priv->key_combine_spec);
-                if (priv->key_m)
-                    g_string_append_printf (str, "%d", priv->key_m);
-                if (priv->key_val)
-                    g_string_append_c (str,
-                            (gchar) gdk_keyval_to_unicode (priv->key_val));
-                if (priv->key_motion_m)
-                    g_string_append_printf (str, "%d", priv->key_motion_m);
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'a':
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append_printf (str, "%d",
-                        g_hash_table_size (priv->hashtable));
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'v':
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append_printf (str, "%d",
-                        _gtk_tree_model_get_count ((GtkTreeModel *) priv->store));
-                s += 2;
-                fmt = s;
-                break;
-
-            case 's':
-                g_string_append_len (str, fmt, s - fmt);
-                if (!sel)
-                    sel = gtk_tree_view_get_selection ((GtkTreeView *) sp);
-                g_string_append_printf (str, "%d",
-                        gtk_tree_selection_count_selected_rows (sel));
-                s += 2;
-                fmt = s;
-                break;
-
-            /* %{...}X is a syntax supported to have between brackets a format
-             * for the size, when X represents a size (A/V/S) */
-            case '{':
-                ss = strchr (s, '}');
-                if (!ss)
-                {
-                    s += 2;
-                    continue;
-                }
-
-                if (ss[1] == 'A' || ss[1] == 'V' || ss[1] == 'S')
-                {
-                    g_string_append_len (str, fmt, s - fmt);
-                    *ss = '\0';
-                    st_render_size (sp, status, str, ss[1], s + 2, &sel);
-                    *ss = '}';
-                    s = ss + 2;
-                }
-                else
-                    s += 2;
-
-                fmt = s;
-                break;
-
-            case 'A':
-            case 'V':
-            case 'S':
-                ss = NULL;
-                if (!donna_config_get_string (donna_app_peek_config (priv->app),
-                            NULL, &ss, "statusbar/%s/size_format", status->name))
-                    donna_config_get_string (donna_app_peek_config (priv->app),
-                            NULL, &ss, "defaults/size/format");
-                g_string_append_len (str, fmt, s - fmt);
-                st_render_size (sp, status, str, s[1],
-                        (ss) ? ss : (gchar *) "%R", &sel);
-                g_free (ss);
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'n':
-                {
-                    GtkTreePath *path;
-                    GtkTreeIter iter;
-
-                    g_string_append_len (str, fmt, s - fmt);
-                    gtk_tree_view_get_cursor ((GtkTreeView *) sp, &path, NULL);
-                    if (path)
-                    {
-                        if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                                    &iter, path))
-                        {
-                            DonnaNode *node;
-
-                            gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
-                                    TREE_VIEW_COL_NODE, &node,
-                                    -1);
-                            if (node)
-                            {
-                                ss = donna_node_get_name (node);
-                                g_string_append (str, ss);
-                                g_free (ss);
-                                g_object_unref (node);
-                            }
-                        }
-                        gtk_tree_path_free (path);
-                    }
-                    s += 2;
-                    fmt = s;
-                    break;
-                }
-
-            case 'N':
-                {
-                    gint nb;
-
-                    g_string_append_len (str, fmt, s - fmt);
-                    if (!sel)
-                        sel = gtk_tree_view_get_selection ((GtkTreeView *) sp);
-                    nb = gtk_tree_selection_count_selected_rows (sel);
-                    if (nb == 1)
-                    {
-                        GtkTreeIter iter;
-                        GList *list;
-
-                        list = gtk_tree_selection_get_selected_rows (sel, NULL);
-                        if (gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
-                                    &iter, list->data))
-                        {
-                            DonnaNode *node;
-
-                            gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
-                                    TREE_VIEW_COL_NODE, &node,
-                                    -1);
-                            if (node)
-                            {
-                                ss = donna_node_get_name (node);
-                                g_string_append (str, ss);
-                                g_free (ss);
-                                g_object_unref (node);
-                            }
-                        }
-                        g_list_free_full (list, (GDestroyNotify) gtk_tree_path_free);
-                    }
-                    else if (nb > 1)
-                        g_string_append_printf (str, "%d items selected", nb);
-
-                    s += 2;
-                    fmt = s;
-                    break;
-                }
-
-            default:
-                s += 2;
-                break;
-        }
-    }
-
-    g_string_append (str, fmt);
     if (status->key_modes_colors)
     {
         DonnaConfig *config;
+        gchar *s;
 
         config = donna_app_peek_config (priv->app);
         if (priv->key_mode)
@@ -21239,8 +21230,12 @@ status_provider_render (DonnaStatusProvider    *sp,
             }
         }
     }
-    g_object_set (renderer, "visible", TRUE, "text", str->str, NULL);
-    g_string_free (str, TRUE);
+    g_object_set (renderer,
+            "visible",  TRUE,
+            "text",     (str) ? str->str : status->fmt,
+            NULL);
+    if (str)
+        g_string_free (str, TRUE);
 }
 
 static gboolean
