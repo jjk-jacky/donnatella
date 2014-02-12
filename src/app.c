@@ -4531,75 +4531,88 @@ status_provider_get_renderers (DonnaStatusProvider    *sp,
     return NULL;
 }
 
-static void
+struct status_context
+{
+    DonnaApp *app;
+    struct status_donna *sd;
+    GString **str;
+    gboolean is_main;
+};
+
+static inline void status_parse_fmt (DonnaApp              *app,
+                                     struct status_donna   *sd,
+                                     gchar                 *fmt,
+                                     GString              **str,
+                                     gboolean               is_main);
+
+static gboolean
+status_conv (const gchar             c,
+             gchar                  *extra,
+             DonnaArgType           *type,
+             gpointer               *ptr,
+             GDestroyNotify         *destroy,
+             struct status_context  *sc)
+{
+    switch (c)
+    {
+        case 'v':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = (gpointer) PACKAGE_VERSION;
+            return TRUE;
+
+        case 'i':
+            *type = DONNA_ARG_TYPE_STRING;
+            if (sc->sd->info)
+            {
+                *ptr = sc->sd->info;
+                return TRUE;
+            }
+            else if (sc->is_main)
+            {
+                gchar *ss;
+
+                if (!donna_config_get_string (sc->app->priv->config, NULL, &ss,
+                            "statusbar/%s/format_i", sc->sd->name))
+                    return FALSE;
+
+                status_parse_fmt (sc->app, sc->sd, ss, sc->str, FALSE);
+                g_free (ss);
+                return TRUE;
+            }
+
+        case 'd':
+            *type = DONNA_ARG_TYPE_STRING;
+            if (sc->sd->details)
+            {
+                *ptr = sc->sd->details;
+                return TRUE;
+            }
+            else if (sc->is_main)
+            {
+                gchar *ss;
+
+                if (!donna_config_get_string (sc->app->priv->config, NULL, &ss,
+                            "statusbar/%s/format_d", sc->sd->name))
+                    return FALSE;
+
+                status_parse_fmt (sc->app, sc->sd, ss, sc->str, FALSE);
+                g_free (ss);
+                return TRUE;
+            }
+    }
+    return FALSE;
+}
+
+static inline void
 status_parse_fmt (DonnaApp              *app,
                   struct status_donna   *sd,
                   gchar                 *fmt,
-                  GString              **_str,
+                  GString              **str,
                   gboolean               is_main)
 {
-    DonnaAppPrivate *priv = app->priv;
-    GString *str = *_str;
-    gchar *s;
-
-    s = fmt;
-    if (!str)
-        *_str = str = g_string_new (NULL);
-    while ((s = strchr (s, '%')))
-    {
-        switch (s[1])
-        {
-            case 'v':
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append (str, PACKAGE_VERSION);
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'i':
-                g_string_append_len (str, fmt, s - fmt);
-                if (sd->info)
-                    g_string_append (str, sd->info);
-                else if (is_main)
-                {
-                    gchar *ss;
-
-                    if (donna_config_get_string (priv->config, NULL, &ss,
-                                "statusbar/%s/format_i", sd->name))
-                    {
-                        status_parse_fmt (app, sd, ss, &str, FALSE);
-                        g_free (ss);
-                    }
-                }
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'd':
-                g_string_append_len (str, fmt, s - fmt);
-                if (sd->details)
-                    g_string_append (str, sd->details);
-                else if (is_main)
-                {
-                    gchar *ss;
-
-                    if (donna_config_get_string (priv->config, NULL, &ss,
-                                "statusbar/%s/format_d", sd->name))
-                    {
-                        status_parse_fmt (app, sd, ss, &str, FALSE);
-                        g_free (ss);
-                    }
-                }
-                s += 2;
-                fmt = s;
-                break;
-
-            default:
-                s += 2;
-                break;
-        }
-    }
-    g_string_append (str, fmt);
+    struct status_context sc = { app, sd, str, is_main };
+    DonnaContext context = { "vid", FALSE, (conv_flag_fn) status_conv, &sc };
+    donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, app, fmt, str, NULL);
 }
 
 static void
