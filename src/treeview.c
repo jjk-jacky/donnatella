@@ -7135,17 +7135,14 @@ column_button_press_event_cb (GtkWidget         *btn,
  * don't use gtk_tree_view_column_set_sort_column_id() to handle the sorting
  * because we want control to do things like have a default order (ASC/DESC)
  * based on the type, etc
- * Then, we also don't use the signal clicked because we want to provider
+ * Then, we also don't use the signal clicked because we want to provide
  * support for a second sort order, which is why instead we're connecting to
- * signals of the button making the column header:
- * - in button-press-event (above) we set a flag stating that a click was done.
- *   We also set whether Ctrl was held or not
- * - in button-release-event (below) we check that flag. If there was a click,
- *   we then check that there's no DND class that was added (which would signal
- *   a dragging of the column (header) is taking place, in which case we shall
- *   ignore the click). If good, we can then process the click.
- * This should allow us to deal with a regular click as well as a Ctrl+click for
- * second order, while preserving normal drawing as well as dragging. */
+ * signals of the button making the column header.
+ * - clicks are processed like any other, so for things to work as expected when
+ *   it comes to dragging, colheader_left_click_on_rls should be true (it is by
+ *   default, but that's still a .conf thing)
+ * - we only validate/trigger on rls if within dbl-click distance of press event
+ */
 static gboolean
 column_button_release_event_cb (GtkWidget       *btn,
                                 GdkEventButton  *event,
