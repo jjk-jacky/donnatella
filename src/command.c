@@ -2372,7 +2372,7 @@ cmd_tv_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
  * Sets the column option @option for @column in @tree to @value
  *
  * @location can be one of "memory", "current"," ask", "arrangement", "tree",
- * "mode" or "default" It defaults to "memory"
+ * "mode", "default" or "save-location" It defaults to "save-location"
  *
  * See donna_tree_view_column_set_option() for more
  */
@@ -2387,15 +2387,16 @@ cmd_tv_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *s_l    = args[4]; /* opt */
 
     const gchar *c_s_l[] = { "memory", "current", "ask", "arrangement", "tree",
-        "mode", "default" };
-    DonnaColumnOptionSaveLocation save_location[] = {
-        DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
-        DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
-        DONNA_COLUMN_OPTION_SAVE_IN_ASK,
-        DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT,
-        DONNA_COLUMN_OPTION_SAVE_IN_TREE,
-        DONNA_COLUMN_OPTION_SAVE_IN_MODE,
-        DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT };
+        "mode", "default", "save-location" };
+    DonnaTreeViewOptionSaveLocation save_location[] = {
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION };
     gint c;
 
     if (s_l)
@@ -2407,14 +2408,14 @@ cmd_tv_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
                     DONNA_COMMAND_ERROR_OTHER,
                     "Cannot set column option, invalid save location: '%s'; "
                     "Must be 'memory', 'current', 'ask', 'arrangement', 'tree', "
-                    "'mode' or 'default'",
+                    "'mode', 'default' or 'save-location'",
                     s_l);
             return DONNA_TASK_FAILED;
         }
     }
     else
-        /* default: IN_MEMORY */
-        c = 0;
+        /* default: SAVE_LOCATION */
+        c = 7;
 
     if (!donna_tree_view_column_set_option (tree, column, option, value,
                 save_location[c], &err))
@@ -3918,8 +3919,8 @@ cmd_tv_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
  *
  * Sets @value as new value of @tree's option @option
  *
- * @location can be on of "memory", "current", "ask", "tree" and "mode" Defaults
- * to "memory"
+ * @location can be on of "memory", "current", "ask", "tree", "mode" and
+ * "save-location" Defaults to "save-location"
  *
  * See donna_tree_view_set_option() for more
  */
@@ -3932,13 +3933,16 @@ cmd_tv_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     const gchar *value  = args[2];
     const gchar *s_l    = args[3]; /* opt */
 
-    const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "mode" };
+    const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "mode",
+        "save-location" };
     DonnaTreeViewOptionSaveLocation save_location[] = {
-        DONNA_COLUMN_OPTION_SAVE_IN_MEMORY,
-        DONNA_COLUMN_OPTION_SAVE_IN_CURRENT,
-        DONNA_COLUMN_OPTION_SAVE_IN_ASK,
-        DONNA_COLUMN_OPTION_SAVE_IN_TREE,
-        DONNA_COLUMN_OPTION_SAVE_IN_MODE };
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE,
+        DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION
+    };
     gint c;
 
     if (s_l)
@@ -3949,14 +3953,15 @@ cmd_tv_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
                     "Cannot set tree option, invalid save location: '%s'; "
-                    "Must be 'memory', 'current', 'ask', 'tree' or 'mode'",
+                    "Must be 'memory', 'current', 'ask', 'tree', 'mode' "
+                    "or 'save-location'",
                     s_l);
             return DONNA_TASK_FAILED;
         }
     }
     else
-        /* default: IN_MEMORY */
-        c = 0;
+        /* default: USE_DEFAULT */
+        c = 5;
 
     if (!donna_tree_view_set_option (tree, option, value, save_location[c], &err))
     {

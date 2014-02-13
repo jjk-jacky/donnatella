@@ -1273,6 +1273,7 @@ struct _DonnaTreeViewPrivate
     gboolean                 show_hidden;
     enum sort_container      sort_groups; /* containers (always) first/mixed */
     enum select_highlight    select_highlight; /* only used if GTK_IS_JJK */
+    DonnaColumnOptionSaveLocation default_save_location;
     /* mode Tree */
     gboolean                 is_minitree;
     enum tree_sync           sync_mode;
@@ -2133,6 +2134,24 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
                     i, it_int, error)))
         return FALSE;
 
+    i = 0;
+    it_int[i].value     = DONNA_COLUMN_OPTION_SAVE_IN_MEMORY;
+    it_int[i].in_file   = "memory";
+    it_int[i].label     = "In Memory";
+    ++i;
+    it_int[i].value     = DONNA_COLUMN_OPTION_SAVE_IN_CURRENT;
+    it_int[i].in_file   = "current";
+    it_int[i].label     = "Same As Current";
+    ++i;
+    it_int[i].value     = DONNA_COLUMN_OPTION_SAVE_IN_ASK;
+    it_int[i].in_file   = "ask";
+    it_int[i].label     = "Ask";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "save-location", "Save Location",
+                    i, it_int, error)))
+        return FALSE;
+
     return TRUE;
 }
 
@@ -2913,6 +2932,8 @@ config_get_string (DonnaTreeView   *tree,
     config_get_string (t, c, "key_mode", "donna", f)
 #define cfg_get_click_mode(t,c,f) \
     config_get_string (t, c, "click_mode", "donna", f)
+#define cfg_get_default_save_location(t,c,f) \
+    config_get_int (t, c, "default_save_location", DONNA_COLUMN_OPTION_SAVE_IN_ASK, f)
 
 static gboolean
 real_option_cb (struct option_data *data)
@@ -3069,6 +3090,16 @@ real_option_cb (struct option_data *data)
             }
             else if (data->opt != OPT_IN_MEMORY)
                 g_free (s);
+        }
+        else if (streq (opt, "default_save_location"))
+        {
+            if (data->opt == OPT_IN_MEMORY)
+                val = * (gint *) data->val;
+            else
+                val = cfg_get_default_save_location (tree, config, NULL);
+
+            if (data->opt == OPT_IN_MEMORY || priv->default_save_location != (guint) val)
+                priv->default_save_location = val;
         }
         else if (priv->is_tree)
         {
@@ -3441,6 +3472,7 @@ load_config (DonnaTreeView *tree)
     priv->select_highlight = cfg_get_select_highlight (tree, config, NULL);
     priv->key_mode = cfg_get_key_mode (tree, config, NULL);
     priv->click_mode = cfg_get_click_mode (tree, config, NULL);
+    priv->default_save_location = cfg_get_default_save_location (tree, config, NULL);
 
     if (priv->is_tree)
     {
@@ -12312,7 +12344,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                                    const gchar        *column,
                                    const gchar        *option,
                                    const gchar        *value,
-                                   DonnaColumnOptionSaveLocation save_location,
+                                   DonnaTreeViewOptionSaveLocation save_location,
                                    GError            **error)
 {
     GError *err = NULL;
@@ -12324,11 +12356,22 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     g_return_val_if_fail (column != NULL, FALSE);
     g_return_val_if_fail (option != NULL, FALSE);
     g_return_val_if_fail (value != NULL, FALSE);
+    g_return_val_if_fail (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION, FALSE);
     priv = tree->priv;
 
     _col = get_column_from_name (tree, column, error);
     if (!_col)
         return FALSE;
+
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION)
+        save_location = priv->default_save_location;
 
     if (streq (option, "title"))
     {
@@ -12349,7 +12392,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     &err))
             goto done;
 
-        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+        if (save_location != DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
             return TRUE;
 
         gtk_tree_view_column_set_title (_col->column, value);
@@ -12376,7 +12419,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     &err))
             goto done;
 
-        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+        if (save_location != DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
             return TRUE;
 
         gtk_tree_view_column_set_fixed_width (_col->column, new);
@@ -12747,15 +12790,32 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     g_return_val_if_fail (value != NULL, FALSE);
     g_return_val_if_fail (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE
-            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK, FALSE);
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION, FALSE);
     priv = tree->priv;
+
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INCOMPATIBLE_OPTION,
+                "TreeView '%s': Cannot use IN_ARRANGEMENT or IN_DEFAULT "
+                "as save_location for tree view options", priv->name);
+        return FALSE;
+    }
+
     config = donna_app_peek_config (priv->app);
     od.tree = tree;
     od.option = (gchar *) option;
     od.opt = OPT_IN_MEMORY;
     od.len = 0;
+
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION)
+        save_location = priv->default_save_location;
 
     need_cur = save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
         || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK;
@@ -12770,6 +12830,8 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     handle_option_int_extra ("select_highlight", "highlight", INT, select_highlight)
     handle_option_string ("key_mode", key_mode)
     handle_option_string ("click_mode", click_mode)
+    handle_option_int_extra ("default_save_location", "save-location",
+            INT, default_save_location)
     else if (priv->is_tree)
     {
         if (0)
@@ -16836,7 +16898,7 @@ tree_context_get_alias (const gchar             *alias,
             extra = "";
         else if (!(streq (extra, "memory") || streq (extra, "current")
                 || streq (extra, "ask") || streq (extra, "tree")
-                || streq (extra, "default")))
+                || streq (extra, "default") || streq (extra, "save-location")))
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
                     DONNA_CONTEXT_MENU_ERROR_OTHER,
@@ -16942,6 +17004,15 @@ tree_context_get_alias (const gchar             *alias,
                         ":tv_options.click_mode:@", extra, ":", arr->pdata[i], NULL);
             g_string_append_c (str, '>');
             g_ptr_array_unref (arr);
+        }
+
+        g_string_append (str, ",-,");
+        if (!_add_items_for_extra (tree, str,
+                    "save-location", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                    "default_save_location", extra, error))
+        {
+            g_string_free (str, TRUE);
+            return FALSE;
         }
 
         return g_string_free (str, FALSE);
@@ -17827,6 +17898,8 @@ tree_context_get_item_info (const gchar             *item,
                 save = "mode";
             else if (streqn (extra, "default", len))
                 save = "default";
+            else if (streqn (extra, "save-location", len))
+                save = "save-location";
             else
             {
                 g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
@@ -17987,6 +18060,27 @@ tree_context_get_item_info (const gchar             *item,
                 info->free_trigger = TRUE;
             }
             return TRUE;
+        }
+        else if (streqn (item, "default_save_location", 21))
+        {
+            if (item[21] == '\0')
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Default Save Location...";
+                info->desc = "Default save location for treeview/column options";
+                info->submenus = 1;
+                return TRUE;
+            }
+            else if (item[21] == '.')
+            {
+                if (!_set_item_from_extra (tree, info, priv->default_save_location,
+                            "save-location", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                            "default_save_location", item + 22, save, error))
+                    return FALSE;
+
+                info->is_visible = info->is_sensitive = TRUE;
+                return TRUE;
+            }
         }
         else if (priv->is_tree)
         {

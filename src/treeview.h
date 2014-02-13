@@ -183,11 +183,12 @@ typedef enum
 {
     DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY = 0, /* i.e. don't save, only apply */
     DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT,
-    _DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT,
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT,
     DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE,
     DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE,
-    _DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT,
-    DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT,
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK,
+    DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION /* treeview option default_save_location */
 } DonnaTreeViewOptionSaveLocation;
 
 typedef enum
@@ -256,7 +257,7 @@ gboolean        donna_tree_view_column_set_option (
                                                  const gchar        *column,
                                                  const gchar        *option,
                                                  const gchar        *value,
-                                                 DonnaColumnOptionSaveLocation save_location,
+                                                 DonnaTreeViewOptionSaveLocation save_location,
                                                  GError            **error);
 gboolean        donna_tree_view_column_set_value(DonnaTreeView      *tree,
                                                  DonnaRowId         *rowid,

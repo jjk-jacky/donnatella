@@ -222,6 +222,8 @@ helper_get_save_location (DonnaColumnType    *ct,
             save = "mode";
         else if (streqn (*extra, "default", len))
             save = "default";
+        else if (streqn (*extra, "save-location", len))
+            save = "save-location";
         else
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
