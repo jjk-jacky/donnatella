@@ -12359,6 +12359,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     else if (streq (option, "width"))
     {
         gint current = gtk_tree_view_column_get_fixed_width (_col->column);
+        gint new = (gint) g_ascii_strtoll (value, NULL, 10);
 
         /* we "abuse" the fact that we are a columntype as well */
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (tree)->helper_set_option (_col->ct,
@@ -12371,15 +12372,14 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     option,
                     G_TYPE_INT,
                     &current,
-                    (gpointer) value,
+                    &new,
                     &err))
             goto done;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return TRUE;
 
-        current = (gint) g_ascii_strtoll (value, NULL, 10);
-        gtk_tree_view_column_set_fixed_width (_col->column, current);
+        gtk_tree_view_column_set_fixed_width (_col->column, new);
         return TRUE;
     }
 
