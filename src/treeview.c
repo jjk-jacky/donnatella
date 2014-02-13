@@ -12318,7 +12318,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     GError *err = NULL;
     DonnaTreeViewPrivate *priv;
     struct column *_col;
-    DonnaColumnTypeNeed need;
+    DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (column != NULL, FALSE);
@@ -12346,8 +12346,8 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     G_TYPE_STRING,
                     &current,
                     (gpointer) value,
-                    error))
-            return FALSE;
+                    &err))
+            goto done;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return TRUE;
@@ -12372,8 +12372,8 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     G_TYPE_INT,
                     &current,
                     (gpointer) value,
-                    error))
-            return FALSE;
+                    &err))
+            goto done;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return TRUE;
@@ -12393,6 +12393,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
             save_location,
             &err);
 
+done:
     if (err)
     {
         g_propagate_prefixed_error (error, err, "TreeView '%s': "
