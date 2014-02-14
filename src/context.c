@@ -73,7 +73,7 @@
  * #DONNA_CONTEXT_DEREFERENCE_NONE. If none are specified,
  * #DONNA_CONTEXT_DEREFERENCE_NONE is used.
  *
- * @str can point either to an existing #GSring, or %NULL. In the former case,
+ * @str can point either to an existing #GString, or %NULL. In the former case,
  * it will be used as is, adding to it. If nothing needed to be done (e.g. no
  * variable used in @fmt) then @fmt will be added to the #GString.
  * In the later case, a #GString will only be created when & if needed, so if
