@@ -327,8 +327,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "column_types/size",
-            "property", "size", NULL);
+            arr_name, tv_name, is_tree, "column_types/size", "property", "size");
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -341,8 +340,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "size",
-            "format", "%b", NULL);
+            arr_name, tv_name, is_tree, "size", "format", "%b");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -353,8 +351,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, "column_types/size",
-            "format_tooltip", "%R", NULL);
+            arr_name, tv_name, is_tree, "column_types/size", "format_tooltip", "%R");
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -365,8 +362,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     i = donna_config_get_int_column (config, col_name,
-            arr_name, tv_name, is_tree, "size",
-            "digits", 2, NULL);
+            arr_name, tv_name, is_tree, "size", "digits", 2);
     /* we enforce [0,2] because it's what makes sense */
     i = CLAMP (i, 0, 2);
     if (data->digits != i)
@@ -376,8 +372,7 @@ ct_size_refresh_data (DonnaColumnType    *ct,
     }
 
     i = donna_config_get_boolean_column (config, col_name,
-            arr_name, tv_name, is_tree, "size",
-            "long_unit", FALSE, NULL);
+            arr_name, tv_name, is_tree, "size", "long_unit", FALSE);
     if (data->long_unit != i)
     {
         data->long_unit = i;

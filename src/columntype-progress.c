@@ -275,8 +275,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL,
-            "property", "progress", NULL);
+            arr_name, tv_name, is_tree, NULL, "property", "progress");
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -287,8 +286,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL,
-            "label", "%P", NULL);
+            arr_name, tv_name, is_tree, NULL, "label", "%P");
     if (!streq (data->label, s))
     {
         g_free (data->label);
@@ -297,8 +295,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
     }
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL,
-            "property_lbl", "", NULL);
+            arr_name, tv_name, is_tree, NULL, "property_lbl", "");
     if (*s == '\0')
     {
         g_free (s);
@@ -314,8 +311,7 @@ ct_progress_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL,
-            "property_pulse", "pulse", NULL);
+            arr_name, tv_name, is_tree, NULL, "property_pulse", "pulse");
     if (!streq (data->property_pulse, s))
     {
         g_free (data->property_pulse);

@@ -287,7 +287,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
 
     if (data->show_type != donna_config_get_boolean_column (config, col_name,
                 arr_name, tv_name, is_tree, "column_types/value",
-                "show_type", FALSE, NULL))
+                "show_type", FALSE))
     {
         need |= DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
         data->show_type = !data->show_type;
@@ -295,7 +295,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/value",
-            "property_value", "option-value", NULL);
+            "property_value", "option-value");
     if (!streq (s, data->prop_value))
     {
         g_free (data->prop_value);
@@ -308,7 +308,7 @@ ct_value_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/value",
-            "property_extra", "option-extra", NULL);
+            "property_extra", "option-extra");
     if (!streq (s, data->prop_extra))
     {
         g_free (data->prop_extra);

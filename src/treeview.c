@@ -2790,22 +2790,13 @@ static gint
 config_get_int (DonnaTreeView   *tree,
                 DonnaConfig     *config,
                 const gchar     *option,
-                gint             def,
-                guint           *from)
+                gint             def)
 {
     gint val;
 
     if (donna_config_get_int (config, NULL, &val, "tree_views/%s/%s",
             tree->priv->name, option))
-    {
-        if (from)
-            *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
         return val;
-    }
-
-    if (from)
-        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
-
     if (donna_config_get_int (config, NULL, &val, "defaults/%s/%s",
                 (tree->priv->is_tree) ? "trees" : "lists", option))
         return val;
@@ -2824,22 +2815,13 @@ static gboolean
 config_get_boolean (DonnaTreeView   *tree,
                     DonnaConfig     *config,
                     const gchar     *option,
-                    gboolean         def,
-                    guint           *from)
+                    gboolean         def)
 {
     gboolean val;
 
     if (donna_config_get_boolean (config, NULL, &val, "tree_views/%s/%s",
             tree->priv->name, option))
-    {
-        if (from)
-            *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
         return val;
-    }
-
-    if (from)
-        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
-
     if (donna_config_get_boolean (config, NULL, &val, "defaults/%s/%s",
                 (tree->priv->is_tree) ? "trees" : "lists", option))
         return val;
@@ -2858,22 +2840,13 @@ static gchar *
 config_get_string (DonnaTreeView   *tree,
                    DonnaConfig     *config,
                    const gchar     *option,
-                   const gchar     *def,
-                   guint           *from)
+                   const gchar     *def)
 {
     gchar *val;
 
     if (donna_config_get_string (config, NULL, &val, "tree_views/%s/%s",
             tree->priv->name, option))
-    {
-        if (from)
-            *from = _DONNA_CONFIG_COLUMN_FROM_TREE;
         return val;
-    }
-
-    if (from)
-        *from = _DONNA_CONFIG_COLUMN_FROM_MODE;
-
     if (donna_config_get_string (config, NULL, &val, "defaults/%s/%s",
                 (tree->priv->is_tree) ? "trees" : "lists", option))
         return val;
@@ -2890,50 +2863,50 @@ config_get_string (DonnaTreeView   *tree,
     return g_strdup (def);
 }
 
-#define cfg_get_is_tree(t,c,f) \
-    config_get_boolean (t, c, "is_tree", FALSE, f)
-#define cfg_get_show_hidden(t,c,f) \
-    config_get_boolean (t, c, "show_hidden", TRUE, f)
-#define cfg_get_node_types(t,c,f) \
+#define cfg_get_is_tree(t,c) \
+    config_get_boolean (t, c, "is_tree", FALSE)
+#define cfg_get_show_hidden(t,c) \
+    config_get_boolean (t, c, "show_hidden", TRUE)
+#define cfg_get_node_types(t,c) \
     CLAMP (config_get_int (t, c, "node_types", \
                 ((t)->priv->is_tree) ? DONNA_NODE_CONTAINER \
-                : DONNA_NODE_CONTAINER | DONNA_NODE_ITEM, f), \
+                : DONNA_NODE_CONTAINER | DONNA_NODE_ITEM), \
                 0, 3)
-#define cfg_get_sort_groups(t,c,f) \
-    CLAMP (config_get_int (t, c, "sort_groups", SORT_CONTAINER_FIRST, f), 0, 2)
+#define cfg_get_sort_groups(t,c) \
+    CLAMP (config_get_int (t, c, "sort_groups", SORT_CONTAINER_FIRST), 0, 2)
 #ifdef GTK_IS_JJK
-#define cfg_get_select_highlight(t,c,f) \
+#define cfg_get_select_highlight(t,c) \
     CLAMP (config_get_int (t, c, "select_highlight", \
                 ((t)->priv->is_tree) ? SELECT_HIGHLIGHT_COLUMN \
-                : SELECT_HIGHLIGHT_COLUMN_UNDERLINE, f), 0, 3)
+                : SELECT_HIGHLIGHT_COLUMN_UNDERLINE), 0, 3)
 #else
-#define cfg_get_select_highlight(t,c,f) SELECT_HIGHLIGHT_FULL_ROW
+#define cfg_get_select_highlight(t,c) SELECT_HIGHLIGHT_FULL_ROW
 #endif
-#define cfg_get_node_visuals(t,c,f) \
-    CLAMP (config_get_int (t, c, "node_visuals", DONNA_TREE_VISUAL_NOTHING, f), 0, 31)
-#define cfg_get_is_minitree(t,c,f) \
-    config_get_boolean (t, c, "is_minitree", FALSE, f)
-#define cfg_get_sync_mode(t,c,f) \
-    CLAMP (config_get_int (t, c, "sync_mode", TREE_SYNC_FULL, f), 0, 4)
-#define cfg_get_sync_with(t,c,f) \
-    config_get_string (t, c, "sync_with", NULL, f)
-#define cfg_get_sync_scroll(t,c,f) \
-    config_get_boolean (t, c, "sync_scroll", TRUE, f)
-#define cfg_get_auto_focus_sync(t,c,f) \
-    config_get_boolean (t, c, "auto_focus_sync", TRUE, f)
-#define cfg_get_focusing_click(t,c,f) \
-    config_get_boolean (t, c, "focusing_click", TRUE, f)
-#define cfg_get_goto_item_set(t,c,f) \
+#define cfg_get_node_visuals(t,c) \
+    CLAMP (config_get_int (t, c, "node_visuals", DONNA_TREE_VISUAL_NOTHING), 0, 31)
+#define cfg_get_is_minitree(t,c) \
+    config_get_boolean (t, c, "is_minitree", FALSE)
+#define cfg_get_sync_mode(t,c) \
+    CLAMP (config_get_int (t, c, "sync_mode", TREE_SYNC_FULL), 0, 4)
+#define cfg_get_sync_with(t,c) \
+    config_get_string (t, c, "sync_with", NULL)
+#define cfg_get_sync_scroll(t,c) \
+    config_get_boolean (t, c, "sync_scroll", TRUE)
+#define cfg_get_auto_focus_sync(t,c) \
+    config_get_boolean (t, c, "auto_focus_sync", TRUE)
+#define cfg_get_focusing_click(t,c) \
+    config_get_boolean (t, c, "focusing_click", TRUE)
+#define cfg_get_goto_item_set(t,c) \
     CLAMP (config_get_int (t, c, "goto_item_set", \
-            DONNA_TREE_VIEW_SET_SCROLL | DONNA_TREE_VIEW_SET_FOCUS, f), 0, 7)
-#define cfg_get_history_max(t,c,f) \
-    config_get_int (t, c, "history_max", 100, f)
-#define cfg_get_key_mode(t,c,f) \
-    config_get_string (t, c, "key_mode", "donna", f)
-#define cfg_get_click_mode(t,c,f) \
-    config_get_string (t, c, "click_mode", "donna", f)
-#define cfg_get_default_save_location(t,c,f) \
-    config_get_int (t, c, "default_save_location", DONNA_COLUMN_OPTION_SAVE_IN_ASK, f)
+            DONNA_TREE_VIEW_SET_SCROLL | DONNA_TREE_VIEW_SET_FOCUS), 0, 7)
+#define cfg_get_history_max(t,c) \
+    config_get_int (t, c, "history_max", 100)
+#define cfg_get_key_mode(t,c) \
+    config_get_string (t, c, "key_mode", "donna")
+#define cfg_get_click_mode(t,c) \
+    config_get_string (t, c, "click_mode", "donna")
+#define cfg_get_default_save_location(t,c) \
+    config_get_int (t, c, "default_save_location", DONNA_COLUMN_OPTION_SAVE_IN_ASK)
 
 static gboolean
 real_option_cb (struct option_data *data)
@@ -2961,7 +2934,7 @@ real_option_cb (struct option_data *data)
         if (streq (opt, "is_tree"))
         {
             /* cannot be OPT_IN_MEMORY */
-            val = cfg_get_is_tree (tree, config, NULL);
+            val = cfg_get_is_tree (tree, config);
             if (priv->is_tree != val)
             {
                 donna_app_show_error (priv->app, NULL,
@@ -2975,7 +2948,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 val = (* (gboolean *) data->val) ? TRUE : FALSE;
             else
-                val = cfg_get_show_hidden (tree, config, NULL);
+                val = cfg_get_show_hidden (tree, config);
 
             if (data->opt == OPT_IN_MEMORY || priv->show_hidden != val)
             {
@@ -2991,7 +2964,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 val = CLAMP (* (gint *) data->val, 0, 3);
             else
-                val = cfg_get_node_types (tree, config, NULL);
+                val = cfg_get_node_types (tree, config);
 
             if (data->opt == OPT_IN_MEMORY || priv->node_types != (guint) val)
             {
@@ -3005,7 +2978,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 val = CLAMP (* (gint *) data->val, 0, 2);
             else
-                val = cfg_get_sort_groups (tree, config, NULL);
+                val = cfg_get_sort_groups (tree, config);
 
             if (data->opt == OPT_IN_MEMORY || priv->sort_groups != (guint) val)
             {
@@ -3018,7 +2991,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 val = CLAMP (* (gint *) data->val, 0, 3);
             else
-                val = cfg_get_select_highlight (tree, config, NULL);
+                val = cfg_get_select_highlight (tree, config);
 
 #ifdef GTK_IS_JJK
             if (data->opt == OPT_IN_MEMORY || priv->select_highlight != (guint) val)
@@ -3067,7 +3040,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 s = * (gchar **) data->val;
             else
-                s = cfg_get_key_mode (tree, config, NULL);
+                s = cfg_get_key_mode (tree, config);
 
             if (data->opt == OPT_IN_MEMORY || !streq (priv->key_mode, s))
                 donna_tree_view_set_key_mode (tree, s);
@@ -3080,7 +3053,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 s = * (gchar **) data->val;
             else
-                s = cfg_get_click_mode (tree, config, NULL);
+                s = cfg_get_click_mode (tree, config);
 
             if (data->opt == OPT_IN_MEMORY || !streq (priv->click_mode, s))
             {
@@ -3096,7 +3069,7 @@ real_option_cb (struct option_data *data)
             if (data->opt == OPT_IN_MEMORY)
                 val = * (gint *) data->val;
             else
-                val = cfg_get_default_save_location (tree, config, NULL);
+                val = cfg_get_default_save_location (tree, config);
 
             if (data->opt == OPT_IN_MEMORY || priv->default_save_location != (guint) val)
                 priv->default_save_location = val;
@@ -3108,7 +3081,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = CLAMP (* (gint *) data->val, 0, 31);
                 else
-                    val = cfg_get_node_visuals (tree, config, NULL);
+                    val = cfg_get_node_visuals (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->node_visuals != (guint) val)
                 {
@@ -3123,7 +3096,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = (* (gboolean *) data->val) ? TRUE : FALSE;
                 else
-                    val = cfg_get_is_minitree (tree, config, NULL);
+                    val = cfg_get_is_minitree (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->is_minitree != val)
                 {
@@ -3142,7 +3115,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = CLAMP (* (gint *) data->val, 0, 4);
                 else
-                    val = cfg_get_sync_mode (tree, config, NULL);
+                    val = cfg_get_sync_mode (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->sync_mode != (guint) val)
                 {
@@ -3159,7 +3132,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     s = * (gchar **) data->val;
                 else
-                    s = cfg_get_sync_with (tree, config, NULL);
+                    s = cfg_get_sync_with (tree, config);
 
                 if (streq (s, ":active"))
                     g_object_get (priv->app, "active-list", &sw, NULL);
@@ -3239,7 +3212,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = (* (gboolean *) data->val) ? TRUE : FALSE;
                 else
-                    val = cfg_get_sync_scroll (tree, config, NULL);
+                    val = cfg_get_sync_scroll (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->sync_scroll != val)
                     priv->sync_scroll = val;
@@ -3249,7 +3222,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = (* (gboolean *) data->val) ? TRUE : FALSE;
                 else
-                    val = cfg_get_auto_focus_sync (tree, config, NULL);
+                    val = cfg_get_auto_focus_sync (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->auto_focus_sync != val)
                     priv->auto_focus_sync = val;
@@ -3262,7 +3235,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = (* (gboolean *) data->val) ? TRUE : FALSE;
                 else
-                    val = cfg_get_focusing_click (tree, config, NULL);
+                    val = cfg_get_focusing_click (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->focusing_click != val)
                     priv->focusing_click = val;
@@ -3272,7 +3245,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = * (gint *) data->val;
                 else
-                    val = cfg_get_goto_item_set (tree, config, NULL);
+                    val = cfg_get_goto_item_set (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY || priv->goto_item_set != (guint) val)
                     priv->goto_item_set = val;
@@ -3282,7 +3255,7 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY)
                     val = * (gint *) data->val;
                 else
-                    val = cfg_get_history_max (tree, config, NULL);
+                    val = cfg_get_history_max (tree, config);
 
                 if (data->opt == OPT_IN_MEMORY
                         || donna_history_get_max (priv->history) != (guint) val)
@@ -3316,7 +3289,7 @@ real_option_cb (struct option_data *data)
                             priv->name,
                             priv->is_tree,
                             NULL,
-                            "title", ss, NULL);
+                            "title", ss);
                     gtk_tree_view_column_set_title (_col->column, ss);
                     gtk_label_set_text ((GtkLabel *) _col->label, ss);
                     g_free (ss);
@@ -3333,7 +3306,7 @@ real_option_cb (struct option_data *data)
                             priv->name,
                             priv->is_tree,
                             NULL,
-                            "width", w, NULL);
+                            "width", w);
                     gtk_tree_view_column_set_fixed_width (_col->column, w);
                 }
                 else
@@ -3438,7 +3411,7 @@ tree_view_loaded_cb (DonnaApp *app, DonnaTreeView *loaded_tree, DonnaTreeView *t
     DonnaTreeViewPrivate *priv = tree->priv;
     gchar *s;
 
-    s = cfg_get_sync_with (tree, donna_app_peek_config (priv->app), NULL);
+    s = cfg_get_sync_with (tree, donna_app_peek_config (priv->app));
     if (!priv->sync_with && streq (s, loaded_tree->priv->name))
     {
         g_signal_handler_disconnect (priv->app, priv->sid_tree_view_loaded);
@@ -3465,24 +3438,24 @@ load_config (DonnaTreeView *tree)
     priv = tree->priv;
     config = donna_app_peek_config (priv->app);
 
-    priv->is_tree = cfg_get_is_tree (tree, config, NULL);
-    priv->show_hidden = cfg_get_show_hidden (tree, config, NULL);
-    priv->node_types = cfg_get_node_types (tree, config, NULL);
-    priv->sort_groups = cfg_get_sort_groups (tree, config, NULL);
-    priv->select_highlight = cfg_get_select_highlight (tree, config, NULL);
-    priv->key_mode = cfg_get_key_mode (tree, config, NULL);
-    priv->click_mode = cfg_get_click_mode (tree, config, NULL);
-    priv->default_save_location = cfg_get_default_save_location (tree, config, NULL);
+    priv->is_tree = cfg_get_is_tree (tree, config);
+    priv->show_hidden = cfg_get_show_hidden (tree, config);
+    priv->node_types = cfg_get_node_types (tree, config);
+    priv->sort_groups = cfg_get_sort_groups (tree, config);
+    priv->select_highlight = cfg_get_select_highlight (tree, config);
+    priv->key_mode = cfg_get_key_mode (tree, config);
+    priv->click_mode = cfg_get_click_mode (tree, config);
+    priv->default_save_location = cfg_get_default_save_location (tree, config);
 
     if (priv->is_tree)
     {
         gchar *s;
 
-        priv->node_visuals = cfg_get_node_visuals (tree, config, NULL);
-        priv->is_minitree = cfg_get_is_minitree (tree, config, NULL);
-        priv->sync_mode = cfg_get_sync_mode (tree, config, NULL);
+        priv->node_visuals = cfg_get_node_visuals (tree, config);
+        priv->is_minitree = cfg_get_is_minitree (tree, config);
+        priv->sync_mode = cfg_get_sync_mode (tree, config);
 
-        s = cfg_get_sync_with (tree, config, NULL);
+        s = cfg_get_sync_with (tree, config);
         if (streq (s, ":active"))
         {
             g_object_get (priv->app, "active-list", &priv->sync_with, NULL);
@@ -3502,17 +3475,17 @@ load_config (DonnaTreeView *tree)
                     "tree_view_loaded",
                     (GCallback) tree_view_loaded_cb, tree);
 
-        priv->sync_scroll = cfg_get_sync_scroll (tree, config, NULL);
-        priv->auto_focus_sync = cfg_get_auto_focus_sync (tree, config, NULL);
+        priv->sync_scroll = cfg_get_sync_scroll (tree, config);
+        priv->auto_focus_sync = cfg_get_auto_focus_sync (tree, config);
     }
     else
     {
         guint max;
 
-        priv->focusing_click = cfg_get_focusing_click (tree, config, NULL);
-        priv->goto_item_set = cfg_get_goto_item_set (tree, config, NULL);
+        priv->focusing_click = cfg_get_focusing_click (tree, config);
+        priv->goto_item_set = cfg_get_goto_item_set (tree, config);
 
-        max = (guint) cfg_get_history_max (tree, config, NULL);
+        max = (guint) cfg_get_history_max (tree, config);
         priv->history = donna_history_new (max);
     }
 
@@ -7819,7 +7792,7 @@ load_arrangement (DonnaTreeView     *tree,
                 b = g_strdup_printf ("column_types/%s", col_type);
             width = donna_config_get_int_column (config, col,
                     arrangement->columns_options, priv->name, priv->is_tree, b,
-                    "width", 230, NULL);
+                    "width", 230);
             gtk_tree_view_column_set_min_width (column, 23);
             gtk_tree_view_column_set_fixed_width (column, width);
             if (b != buf)
@@ -7831,7 +7804,7 @@ load_arrangement (DonnaTreeView     *tree,
             /* title */
             title = donna_config_get_string_column (config, col,
                     arrangement->columns_options, priv->name, priv->is_tree, NULL,
-                    "title", col, NULL);
+                    "title", col);
             gtk_tree_view_column_set_title (column, title);
             gtk_label_set_text (GTK_LABEL (_col->label), title);
             g_free (title);
@@ -8230,7 +8203,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                             donna_column_type_get_renderers (_col->ct));
                 width = donna_config_get_int_column (config, _col->name,
                         arr->columns_options, priv->name, priv->is_tree, b,
-                        "width", 230, NULL);
+                        "width", 230);
                 gtk_tree_view_column_set_fixed_width (_col->column, width);
                 if (b != buf)
                 {
@@ -8241,7 +8214,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 /* title */
                 title = donna_config_get_string_column (config, _col->name,
                         arr->columns_options, priv->name, priv->is_tree, NULL,
-                        "title", _col->name, NULL);
+                        "title", _col->name);
                 gtk_tree_view_column_set_title (_col->column, title);
                 gtk_label_set_text (GTK_LABEL (_col->label), title);
                 g_free (title);
@@ -12646,6 +12619,15 @@ _convert_value (DonnaTreeView           *tree,
     return TRUE;
 }
 
+
+#define get_from(option_name, type)  do {                           \
+    if (donna_config_has_string (config, NULL, "tree_views/%s/%s",  \
+                priv->name, option_name))                           \
+        from = _DONNA_CONFIG_COLUMN_FROM_TREE;                      \
+    else                                                            \
+        from = _DONNA_CONFIG_COLUMN_FROM_MODE;                      \
+} while (0)
+
 #define handle_option_int_extra(option_name, extra_name, extra_type, lower) \
     else if (streq (option, option_name))                                   \
     {                                                                       \
@@ -12660,19 +12642,8 @@ _convert_value (DonnaTreeView           *tree,
                 == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)                      \
             val = (gint) (priv->lower ^ (guint) val);                       \
                                                                             \
-        if (need_cur)                                                       \
-        {                                                                   \
-            cur = cfg_get_##lower (tree, config, &from);                    \
-            if (cur != (gint) priv->lower)                                  \
-            {                                                               \
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
-                        DONNA_TREE_VIEW_ERROR_OTHER,                        \
-                        "TreeView '%s': Cannot set option '%s'; "           \
-                        "Values not matching: '%d' (config) vs '%d' (memory)", \
-                        priv->name, option, cur, priv->lower);              \
-                return FALSE;                                               \
-            }                                                               \
-        }                                                                   \
+        if (need_from)                                                      \
+            get_from (option_name, int);                                    \
         else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
         {                                                                   \
             od.val = &val;                                                  \
@@ -12700,19 +12671,8 @@ _convert_value (DonnaTreeView           *tree,
             return FALSE;                                                   \
         }                                                                   \
                                                                             \
-        if (need_cur)                                                       \
-        {                                                                   \
-            cur = cfg_get_##lower (tree, config, &from);                    \
-            if (cur != priv->lower)                                         \
-            {                                                               \
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
-                        DONNA_TREE_VIEW_ERROR_OTHER,                        \
-                        "TreeView '%s': Cannot set option '%s'; "           \
-                        "Values not matching: '%d' (config) vs '%d' (memory)", \
-                        priv->name, option, cur, priv->lower);              \
-                return FALSE;                                               \
-            }                                                               \
-        }                                                                   \
+        if (need_from)                                                      \
+            get_from (option_name, boolean);                                \
         else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
         {                                                                   \
             od.val = &val;                                                  \
@@ -12728,19 +12688,8 @@ _convert_value (DonnaTreeView           *tree,
                                                                             \
         s_val = value;                                                      \
                                                                             \
-        if (need_cur)                                                       \
-        {                                                                   \
-            s_cur = cfg_get_##lower (tree, config, &from);                  \
-            if (!streq (s_cur, priv->lower))                                \
-            {                                                               \
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,                  \
-                        DONNA_TREE_VIEW_ERROR_OTHER,                        \
-                        "TreeView '%s': Cannot set option '%s'; "           \
-                        "Values not matching: '%s' (config) vs '%s' (memory)", \
-                        priv->name, option, s_cur, priv->lower);            \
-                return FALSE;                                               \
-            }                                                               \
-        }                                                                   \
+        if (need_from)                                                      \
+            get_from (option_name, string);                                 \
         else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
         {                                                                   \
             od.val = &s_val;                                                \
@@ -12774,12 +12723,10 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     DonnaConfig *config;
     struct option_data od;
     GType type;
-    guint from;
-    gint cur;
+    guint from = 0;
     gint val;
-    gchar *s_cur;
     const gchar *s_val;
-    gboolean need_cur;
+    gboolean need_from;
     gchar *loc;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
@@ -12814,7 +12761,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION)
         save_location = priv->default_save_location;
 
-    need_cur = save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
+    need_from = save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
         || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK;
 
     if (0)
@@ -12846,36 +12793,8 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
             s_val = value;
 
-            if (need_cur)
-            {
-                DonnaTreeView *sw = NULL;
-
-                s_cur = cfg_get_sync_with (tree, config, &from);
-                if (s_cur)
-                {
-                    if (streq (s_cur, ":active"))
-                        g_object_get (priv->app, "active-list", &sw, NULL);
-                    else
-                        sw = donna_app_get_tree_view (priv->app, s_cur);
-                }
-
-                if (priv->sync_with != sw)
-                {
-                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                            DONNA_TREE_VIEW_ERROR_OTHER,
-                            "TreeView '%s': Cannot set option 'sync_with'; "
-                            "Values not matching: '%s' (config) vs '%s' (memory)",
-                            priv->name, s_cur, (priv->sync_with)
-                            ? donna_tree_view_get_name (priv->sync_with)
-                            : "-");
-                    g_object_unref (sw);
-                    g_free (s_cur);
-                    return FALSE;
-                }
-                g_object_unref (sw);
-                g_free (s_cur);
-
-            }
+            if (need_from)
+                get_from ("sync_with", string);
             else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
             {
                 od.val = &s_val;
@@ -12964,6 +12883,11 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
     return TRUE;
 }
+
+#undef handle_option_string
+#undef handle_option_boolean
+#undef handle_option_int_extra
+#undef get_from
 
 /**
  * donna_tree_view_move_root:
@@ -15462,7 +15386,7 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
     priv = tree->priv;
 
     g_free (priv->key_mode);
-    priv->key_mode = cfg_get_key_mode (tree, donna_app_peek_config (priv->app), NULL);
+    priv->key_mode = cfg_get_key_mode (tree, donna_app_peek_config (priv->app));
 
     /* wrong_key */
     g_free (priv->key_combine_name);
@@ -17336,7 +17260,7 @@ tree_context_get_item_info (const gchar             *item,
                         priv->name,
                         priv->is_tree,
                         NULL,
-                        "title", extra, NULL);
+                        "title", extra);
                 info->free_name = TRUE;
             }
             info->trigger = g_strconcat ("command:tv_toggle_column(%o,",
@@ -21369,7 +21293,7 @@ columntype_refresh_data (DonnaColumnType  *ct,
 
     if (priv->ln_relative != donna_config_get_boolean_column (config, col_name,
                 arr_name, tv_name, is_tree, "column_types/line-numbers",
-                "relative", FALSE, NULL))
+                "relative", FALSE))
     {
         need |= DONNA_COLUMN_TYPE_NEED_REDRAW;
         priv->ln_relative = !priv->ln_relative;
@@ -21377,7 +21301,7 @@ columntype_refresh_data (DonnaColumnType  *ct,
 
     if (priv->ln_relative_focused != donna_config_get_boolean_column (config, col_name,
                 arr_name, tv_name, is_tree, "column_types/line-numbers",
-                "relative_focused", TRUE, NULL))
+                "relative_focused", TRUE))
     {
         if (priv->ln_relative)
             need |= DONNA_COLUMN_TYPE_NEED_REDRAW;

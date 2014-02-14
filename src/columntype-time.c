@@ -423,7 +423,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/time",
-            "property", "mtime", NULL);
+            "property", "mtime");
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -444,7 +444,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "time",
-            "format", "%F %T", NULL);
+            "format", "%F %T");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -456,7 +456,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     sec = (guint) donna_config_get_int_column (config, col_name,
             arr_name, tv_name, is_tree, "time",
-            "age_span_seconds", 7*24*3600, NULL);
+            "age_span_seconds", 7*24*3600);
     if (data->options.age_span_seconds != sec)
     {
         data->options.age_span_seconds = sec;
@@ -465,7 +465,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "time",
-            "age_fallback_format", "%F %T", NULL);
+            "age_fallback_format", "%F %T");
     if (!streq (data->options.age_fallback_format, s))
     {
         g_free ((gchar *) data->options.age_fallback_format);
@@ -477,7 +477,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/time",
-            "property_tooltip", "mtime", NULL);
+            "property_tooltip", "mtime");
     if (!streq (data->property_tooltip, s))
     {
         g_free (data->property_tooltip);
@@ -497,7 +497,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/time",
-            "format_tooltip", "%R", NULL);
+            "format_tooltip", "%R");
     if (!streq (data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -508,7 +508,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     sec = (guint) donna_config_get_int_column (config, col_name,
             arr_name, tv_name, is_tree, NULL,
-            "age_span_seconds_tooltip", 7*24*3600, NULL);
+            "age_span_seconds_tooltip", 7*24*3600);
     if (data->options_tooltip.age_span_seconds != sec)
     {
         data->options_tooltip.age_span_seconds = sec;
@@ -516,7 +516,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, NULL,
-            "age_fallback_format_tooltip", "%F %T", NULL);
+            "age_fallback_format_tooltip", "%F %T");
     if (!streq (data->options_tooltip.age_fallback_format, s))
     {
         g_free ((gchar *) data->options_tooltip.age_fallback_format);

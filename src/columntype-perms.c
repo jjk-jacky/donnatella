@@ -479,7 +479,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "format", "%S", NULL);
+            "format", "%S");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -491,7 +491,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "format_tooltip", "%p %V:%H", NULL);
+            "format_tooltip", "%p %V:%H");
     if (!streq(data->format_tooltip, s))
     {
         g_free (data->format_tooltip);
@@ -504,7 +504,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "color_user", "green", NULL);
+            "color_user", "green");
     if (!streq (data->color_user, s))
     {
         g_free (data->color_user);
@@ -516,7 +516,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "color_group", "blue", NULL);
+            "color_group", "blue");
     if (!streq (data->color_group, s))
     {
         g_free (data->color_group);
@@ -528,7 +528,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "color_mixed", "#00aaaa", NULL);
+            "color_mixed", "#00aaaa");
     if (!streq (data->color_mixed, s))
     {
         g_free (data->color_mixed);
@@ -540,7 +540,7 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     i = donna_config_get_int_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "sort", SORT_MY_PERMS, NULL);
+            "sort", SORT_MY_PERMS);
     if (i != data->sort)
     {
         data->sort = (gint8) i;
@@ -631,7 +631,7 @@ ct_perms_get_default_sort_order (DonnaColumnType *ct,
                     DONNA_COLUMN_TYPE_PERMS (ct)->priv->app),
                 /* no default since it's based on option sort */
                 col_name, arr_name, tv_name, is_tree, NULL, "desc_first",
-                data->sort == SORT_PERMS || data->sort == SORT_MY_PERMS, NULL))
+                data->sort == SORT_PERMS || data->sort == SORT_MY_PERMS))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 }
 

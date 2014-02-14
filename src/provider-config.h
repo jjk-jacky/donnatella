@@ -231,8 +231,7 @@ gboolean    donna_config_get_boolean_column     (DonnaConfig            *config,
                                                  gboolean                is_tree,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gboolean                def_val,
-                                                 guint                  *from);
+                                                 gboolean                def_val);
 gint        donna_config_get_int_column         (DonnaConfig            *config,
                                                  const gchar            *col_name,
                                                  const gchar            *arr_name,
@@ -240,8 +239,7 @@ gint        donna_config_get_int_column         (DonnaConfig            *config,
                                                  gboolean                is_tree,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gint                    def_val,
-                                                 guint                  *from);
+                                                 gint                    def_val);
 gdouble     donna_config_get_double_column      (DonnaConfig            *config,
                                                  const gchar            *col_name,
                                                  const gchar            *arr_name,
@@ -249,8 +247,7 @@ gdouble     donna_config_get_double_column      (DonnaConfig            *config,
                                                  gboolean                is_tree,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 gdouble                 def_val,
-                                                 guint                  *from);
+                                                 gdouble                 def_val);
 gchar *     donna_config_get_string_column      (DonnaConfig            *config,
                                                  const gchar            *col_name,
                                                  const gchar            *arr_name,
@@ -258,8 +255,7 @@ gchar *     donna_config_get_string_column      (DonnaConfig            *config,
                                                  gboolean                is_tree,
                                                  const gchar            *def_cat,
                                                  const gchar            *opt_name,
-                                                 const gchar            *def_val,
-                                                 guint                  *from);
+                                                 const gchar            *def_val);
 gboolean    donna_config_arr_load_columns       (DonnaConfig            *config,
                                                  DonnaArrangement       *arr,
                                                  const gchar            *fmt,

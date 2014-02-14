@@ -69,6 +69,18 @@ _donna_column_type_ask_save_location (DonnaApp     *app,
                                       const gchar  *option,
                                       guint         from);
 
+/* internal; from provider-config.c */
+guint
+_donna_config_get_from_column (DonnaConfig *config,
+                               const gchar *col_name,
+                               const gchar *arr_name,
+                               const gchar *tv_name,
+                               gboolean     is_tree,
+                               const gchar *def_cat,
+                               const gchar *opt_name,
+                               GType        type);
+
+
 static GtkSortType
 default_get_default_sort_order (DonnaColumnType    *ct,
                                 const gchar        *col_name,
@@ -91,7 +103,7 @@ default_get_default_sort_order (DonnaColumnType    *ct,
         strcpy (stpcpy (buf, "column_types/"), type);
 
     order = (donna_config_get_boolean_column (donna_app_peek_config (app),
-                col_name, arr_name, tv_name, is_tree, b, "desc_first", FALSE, NULL))
+                col_name, arr_name, tv_name, is_tree, b, "desc_first", FALSE))
         ? GTK_SORT_DESCENDING : GTK_SORT_ASCENDING;
 
     if (G_UNLIKELY (b != buf))
@@ -554,83 +566,8 @@ helper_set_option (DonnaColumnType    *ct,
     if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_CURRENT
             || save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
     {
-        guint from;
-
-        if (type == G_TYPE_STRING)
-        {
-            gchar *s;
-
-            s = donna_config_get_string_column (config, col_name,
-                    arr_name, tv_name, is_tree, def_cat, option, NULL, &from);
-            if (!streq (* (gchar ** ) current, s))
-            {
-                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                        DONNA_COLUMN_TYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s'; "
-                        "Values not matching: '%s' (config) vs '%s' (memory)",
-                        donna_column_type_get_name (ct), option,
-                        s, * (gchar **) current);
-                g_object_unref (app);
-                g_free (s);
-                return FALSE;
-            }
-            g_free (s);
-        }
-        else if (type == G_TYPE_BOOLEAN)
-        {
-            gboolean b;
-
-            b = donna_config_get_boolean_column (config, col_name,
-                    arr_name, tv_name, is_tree, def_cat, option, FALSE, &from);
-            if (b != * (gboolean *) current)
-            {
-                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                        DONNA_COLUMN_TYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s'; "
-                        "Values not matching: '%s' (config) vs '%s' (memory)",
-                        donna_column_type_get_name (ct), option,
-                        (b) ? "true" : "false",
-                        (* (gboolean *) current) ? "true" : "false");
-                g_object_unref (app);
-                return FALSE;
-            }
-        }
-        else if (type == G_TYPE_INT)
-        {
-            gint i;
-
-            i = donna_config_get_int_column (config, col_name,
-                    arr_name, tv_name, is_tree, def_cat, option, 0, &from);
-            if (i != * (gint *) current)
-            {
-                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                        DONNA_COLUMN_TYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s'; "
-                        "Values not matching: '%d' (config) vs '%d' (memory)",
-                        donna_column_type_get_name (ct), option,
-                        i, * (gint *) current);
-                g_object_unref (app);
-                return FALSE;
-            }
-        }
-        else /* G_TYPE_DOUBLE */
-        {
-            gdouble d;
-
-            d = donna_config_get_double_column (config, col_name,
-                    arr_name, tv_name, is_tree, def_cat, option, 0.0, &from);
-            if (d != * (gdouble *) current)
-            {
-                g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                        DONNA_COLUMN_TYPE_ERROR_OTHER,
-                        "ColumnType '%s': Cannot save option '%s'; "
-                        "Values not matching: '%f' (config) vs '%f' (memory)",
-                        donna_column_type_get_name (ct), option,
-                        d, * (gdouble *) current);
-                g_object_unref (app);
-                return FALSE;
-            }
-        }
+        guint from = _donna_config_get_from_column (config, col_name,
+                arr_name, tv_name, is_tree, def_cat, option, type);
 
         if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
         {

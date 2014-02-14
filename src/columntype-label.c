@@ -317,7 +317,7 @@ ct_label_refresh_data (DonnaColumnType    *ct,
     data = *_data;
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL, "property", "id", NULL);
+            arr_name, tv_name, is_tree, NULL, "property", "id");
     if (!streq (data->property, s))
     {
         g_free (data->property);
@@ -328,7 +328,7 @@ ct_label_refresh_data (DonnaColumnType    *ct,
         g_free (s);
 
     s = donna_config_get_string_column (config, col_name,
-            arr_name, tv_name, is_tree, NULL, "labels", "0=false,1=true", NULL);
+            arr_name, tv_name, is_tree, NULL, "labels", "0=false,1=true");
     if (!streq (data->labels, s))
     {
         g_free (data->labels);
