@@ -2178,6 +2178,7 @@ _get_option_column (DonnaConfig  *config,
     gsize len_opt;
     struct option *option;
 
+    g_return_val_if_fail (DONNA_IS_CONFIG (config), FALSE);
     /* there might not be a tv_name when used e.g. from filter */
     g_return_val_if_fail (col_name != NULL, FALSE);
     g_return_val_if_fail (opt_name != NULL, FALSE);
