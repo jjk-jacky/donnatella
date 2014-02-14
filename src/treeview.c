@@ -14391,6 +14391,39 @@ donna_tree_view_toggle_column (DonnaTreeView      *tree,
     return TRUE;
 }
 
+/**
+ * donna_tree_view_set_columns:
+ * @tree: A #DonnaTreeView
+ * @columns: Comma-separated list of columns
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Sets the columns of @tree to those specified in @columns, in the given order
+ *
+ * Returns: %TRUE
+ */
+gboolean
+donna_tree_view_set_columns (DonnaTreeView      *tree,
+                             const gchar        *columns,
+                             GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaArrangement arr;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (columns != NULL, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!priv->arrangement))
+        memset (&arr, 0, sizeof (DonnaArrangement));
+    else
+        memcpy (&arr, priv->arrangement, sizeof (DonnaArrangement));
+    arr.columns = g_strdup (columns);
+    load_arrangement (tree, &arr, FALSE);
+    g_free (arr.columns);
+
+    return TRUE;
+}
+
 struct refresh_list
 {
     DonnaTreeView *tree;

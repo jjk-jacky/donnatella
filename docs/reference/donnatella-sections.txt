@@ -79,6 +79,7 @@ tv_save_list_file
 tv_save_tree_file
 tv_selection
 tv_selection_nodes
+tv_set_columns
 tv_set_cursor
 tv_set_focus
 tv_set_key_mode
@@ -1101,6 +1102,7 @@ donna_tree_view_set_option
 donna_tree_view_save_tree_file
 donna_tree_view_load_tree_file
 donna_tree_view_toggle_column
+donna_tree_view_set_columns
 donna_tree_view_add_root
 donna_tree_view_set_visual
 donna_tree_view_get_visual

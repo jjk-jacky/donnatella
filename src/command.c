@@ -3815,6 +3815,31 @@ cmd_tv_selection_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_set_columns:
+ * @tree: A treeview
+ * @columns: A comma-separated list of columns
+ *
+ * Sets the columns of @tree
+ *
+ * See donna_tree_view_set_columns() for more
+ */
+static DonnaTaskState
+cmd_tv_set_columns (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *columns = args[1];
+
+    if (!donna_tree_view_set_columns (tree, columns, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_set_cursor:
  * @tree: A treeview
  * @rowid: A #rowid
@@ -4770,6 +4795,12 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     add_command (tv_selection_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tv_set_columns, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;
