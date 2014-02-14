@@ -104,7 +104,7 @@ struct _DonnaColumnTypeInterface
                                              const gchar        *tv_name,
                                              gboolean            is_tree,
                                              const gchar        *def_cat,
-                                             DonnaColumnOptionSaveLocation save_location,
+                                             DonnaColumnOptionSaveLocation *save_location,
                                              const gchar        *option,
                                              GType               type,
                                              gpointer            current,

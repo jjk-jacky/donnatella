@@ -890,7 +890,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -907,7 +907,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -924,7 +924,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = data->is_locale_based;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -949,7 +949,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = data->sort_special_first;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -963,7 +963,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE : TRUE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -980,7 +980,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -997,7 +997,7 @@ ct_name_set_option (DonnaColumnType    *ct,
     {
         c = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "sort", save_location,
+                    col_name, arr_name, tv_name, is_tree, "sort", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 

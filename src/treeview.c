@@ -12354,7 +12354,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     priv->name,
                     priv->is_tree,
                     NULL, /* no default */
-                    save_location,
+                    (DonnaColumnOptionSaveLocation *) &save_location,
                     option,
                     G_TYPE_STRING,
                     &current,
@@ -12381,7 +12381,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     priv->name,
                     priv->is_tree,
                     NULL, /* no default */
-                    save_location,
+                    (DonnaColumnOptionSaveLocation *) &save_location,
                     option,
                     G_TYPE_INT,
                     &current,
@@ -12842,9 +12842,18 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE)
         loc = g_strconcat ("tree_views/", priv->name, "/", option, NULL);
-    else /* DONNA_COLUMN_OPTION_SAVE_IN_MODE */
+    else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MODE)
         loc = g_strconcat ("defaults/",
                 (priv->is_tree) ? "trees/" : "lists/", option, NULL);
+    else /* IN_MEMORY from IN_ASK */
+    {
+        if (type == G_TYPE_STRING)
+            od.val = &s_val;
+        else
+            od.val = &val;
+        real_option_cb (&od);
+        return TRUE;
+    }
 
     if (type == G_TYPE_INT)
     {
@@ -21357,7 +21366,7 @@ columntype_set_option (DonnaColumnType    *ct,
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
                     arr_name, tv_name, is_tree, "column_types/line-numbers",
-                    save_location,
+                    &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -21384,7 +21393,7 @@ columntype_set_option (DonnaColumnType    *ct,
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
                     arr_name, tv_name, is_tree, "column_types/line-numbers",
-                    save_location,
+                    &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 

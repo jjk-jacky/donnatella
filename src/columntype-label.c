@@ -509,7 +509,7 @@ ct_label_set_option (DonnaColumnType    *ct,
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -523,7 +523,7 @@ ct_label_set_option (DonnaColumnType    *ct,
     else if (streq (option, "labels"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->labels, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 

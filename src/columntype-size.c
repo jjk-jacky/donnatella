@@ -785,7 +785,7 @@ ct_size_set_option (DonnaColumnType    *ct,
     if (streq (option, "format"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "size", &save_location,
                     option, G_TYPE_STRING, &data->format, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -799,7 +799,7 @@ ct_size_set_option (DonnaColumnType    *ct,
     else if (streq (option, "format_tooltip"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->format_tooltip, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -825,7 +825,7 @@ ct_size_set_option (DonnaColumnType    *ct,
         c = data->long_unit;
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "size", &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -849,7 +849,7 @@ ct_size_set_option (DonnaColumnType    *ct,
         c = data->digits;
         v = *value - '0';
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, "size", save_location,
+                    col_name, arr_name, tv_name, is_tree, "size", &save_location,
                     option, G_TYPE_INT, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -863,7 +863,7 @@ ct_size_set_option (DonnaColumnType    *ct,
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/size",
-                    save_location,
+                    &save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 

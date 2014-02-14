@@ -629,7 +629,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->property, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -643,7 +643,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_lbl"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->property_lbl, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -657,7 +657,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     else if (streq (option, "property_pulse"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->property_pulse, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -671,7 +671,7 @@ ct_progress_set_option (DonnaColumnType    *ct,
     else if (streq (option, "label"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
-                    col_name, arr_name, tv_name, is_tree, NULL, save_location,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
                     option, G_TYPE_STRING, &data->label, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 

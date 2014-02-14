@@ -466,7 +466,18 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
         }
         g_object_set_data ((GObject *) btn, "_from",
                 GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT));
+        ++row;
     }
+
+    btn = gtk_radio_button_new_from_widget (btn_grp);
+    w = gtk_label_new (NULL);
+    gtk_label_set_markup ((GtkLabel *) w, "Do <b>not</b> save in configuration, "
+            "only apply in memory");
+    gtk_container_add ((GtkContainer *) btn, w);
+    gtk_grid_attach (grid, btn, 0, row, 1, 1);
+    g_object_set_data ((GObject *) btn, "_from",
+            GUINT_TO_POINTER (DONNA_COLUMN_OPTION_SAVE_IN_MEMORY));
+    ++row;
 
     asl.win = win;
     asl.list = gtk_radio_button_get_group ((GtkRadioButton *) btn);
@@ -547,7 +558,7 @@ helper_set_option (DonnaColumnType    *ct,
                    const gchar        *tv_name,
                    gboolean            is_tree,
                    const gchar        *def_cat,
-                   DonnaColumnOptionSaveLocation save_location,
+                   DonnaColumnOptionSaveLocation *save_location,
                    const gchar        *option,
                    GType               type,
                    gpointer            current,
@@ -563,17 +574,17 @@ helper_set_option (DonnaColumnType    *ct,
     g_object_get (ct, "app", &app, NULL);
     config = donna_app_peek_config (app);
 
-    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_CURRENT
-            || save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
+    if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_CURRENT
+            || *save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
     {
         guint from = _donna_config_get_from_column (config, col_name,
                 arr_name, tv_name, is_tree, def_cat, option, type);
 
-        if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
+        if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_ASK)
         {
-            save_location = _donna_column_type_ask_save_location (app,
+            *save_location = _donna_column_type_ask_save_location (app,
                     col_name, arr_name, tv_name, is_tree, def_cat, option, from);
-            if (save_location == (guint) -1)
+            if (*save_location == (guint) -1)
             {
                 g_object_unref (app);
                 return FALSE;
@@ -584,22 +595,22 @@ helper_set_option (DonnaColumnType    *ct,
             switch (from)
             {
                 case _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT:
-                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT;
+                    *save_location = DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT;
                     break;
                 case _DONNA_CONFIG_COLUMN_FROM_TREE:
-                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_TREE;
+                    *save_location = DONNA_COLUMN_OPTION_SAVE_IN_TREE;
                     break;
                 case _DONNA_CONFIG_COLUMN_FROM_MODE:
-                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_MODE;
+                    *save_location = DONNA_COLUMN_OPTION_SAVE_IN_MODE;
                     break;
                 case _DONNA_CONFIG_COLUMN_FROM_DEFAULT:
-                    save_location = DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT;
+                    *save_location = DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT;
                     break;
             }
         }
     }
 
-    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT && !arr_name)
+    if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT && !arr_name)
     {
         g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
                 DONNA_COLUMN_TYPE_ERROR_OTHER,
@@ -609,7 +620,7 @@ helper_set_option (DonnaColumnType    *ct,
         g_object_unref (app);
         return FALSE;
     }
-    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT && !def_cat)
+    else if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT && !def_cat)
     {
         g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
                 DONNA_COLUMN_TYPE_ERROR_OTHER,
@@ -620,22 +631,22 @@ helper_set_option (DonnaColumnType    *ct,
         return FALSE;
     }
 
-    if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT)
+    if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_ARRANGEMENT)
     {
         cfg_set ("arrangement", "%s/columns_options/%s/%s",
                 arr_name, col_name, option);
     }
-    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_TREE)
+    else if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_TREE)
     {
         cfg_set ("treeview", "tree_views/%s/columns/%s/%s",
                 tv_name, col_name, option);
     }
-    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_MODE)
+    else if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_MODE)
     {
         cfg_set ("column", "defaults/%s/columns/%s/%s",
                 (is_tree) ? "trees" : "lists", col_name, option);
     }
-    else if (save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT)
+    else if (*save_location == DONNA_COLUMN_OPTION_SAVE_IN_DEFAULT)
     {
         cfg_set ("defaults", "defaults/%s/%s", def_cat, option);
     }

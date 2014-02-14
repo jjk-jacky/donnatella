@@ -1328,7 +1328,7 @@ ct_value_set_option (DonnaColumnType    *ct,
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/value",
-                    save_location,
+                    &save_location,
                     option, G_TYPE_STRING, &data->prop_value, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -1343,7 +1343,7 @@ ct_value_set_option (DonnaColumnType    *ct,
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/value",
-                    save_location,
+                    &save_location,
                     option, G_TYPE_STRING, &data->prop_extra, &value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
@@ -1373,7 +1373,7 @@ ct_value_set_option (DonnaColumnType    *ct,
         v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/value",
-                    save_location,
+                    &save_location,
                     option, G_TYPE_BOOLEAN, &c, &v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
