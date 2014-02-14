@@ -18655,7 +18655,7 @@ donna_tree_view_go_root (DonnaTreeView      *tree,
  *
  * If @order if %DONNA_SORT_UNKNOWN the default sort order for @column will be
  * used, unless sort order was already there in which case the order is
- * reserved.
+ * reversed.
  *
  * Returns: %TRUE on success, else %FALSE
  */
@@ -18689,7 +18689,7 @@ donna_tree_view_set_sort_order (DonnaTreeView      *tree,
  *
  * If @order if %DONNA_SORT_UNKNOWN the default sort order for @column will be
  * used, unless second sort order was already there in which case the order is
- * reserved.
+ * reversed.
  *
  * Returns: %TRUE on success, else %FALSE
  */
