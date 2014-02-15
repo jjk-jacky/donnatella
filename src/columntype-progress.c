@@ -108,6 +108,9 @@ static void             ct_progress_finalize        (GObject            *object)
 /* ColumnType */
 static const gchar *    ct_progress_get_name        (DonnaColumnType    *ct);
 static const gchar *    ct_progress_get_renderers   (DonnaColumnType    *ct);
+static void             ct_progress_get_options     (DonnaColumnType    *ct,
+                                                     DonnaColumnOptionInfo **options,
+                                                     guint              *nb_options);
 static DonnaColumnTypeNeed ct_progress_refresh_data (DonnaColumnType    *ct,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
@@ -134,7 +137,8 @@ static DonnaColumnTypeNeed ct_progress_set_option   (DonnaColumnType    *ct,
                                                      gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
-                                                     const gchar        *value,
+                                                     gpointer            value,
+                                                     gboolean            toggle,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_progress_get_context_alias (
@@ -166,6 +170,7 @@ ct_progress_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_progress_get_name;
     interface->get_renderers            = ct_progress_get_renderers;
+    interface->get_options              = ct_progress_get_options;
     interface->refresh_data             = ct_progress_refresh_data;
     interface->free_data                = ct_progress_free_data;
     interface->get_props                = ct_progress_get_props;
@@ -252,6 +257,22 @@ ct_progress_get_renderers (DonnaColumnType   *ct)
 {
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PROGRESS (ct), NULL);
     return "P";
+}
+
+static void
+ct_progress_get_options (DonnaColumnType    *ct,
+                         DonnaColumnOptionInfo **options,
+                         guint              *nb_options)
+{
+    static DonnaColumnOptionInfo o[] = {
+        { "property",           G_TYPE_STRING,      NULL },
+        { "label",              G_TYPE_STRING,      NULL },
+        { "property_lbl",       G_TYPE_STRING,      NULL },
+        { "property_pulse",     G_TYPE_STRING,      NULL }
+    };
+
+    *options = o;
+    *nb_options = G_N_ELEMENTS (o);
 }
 
 static DonnaColumnTypeNeed
@@ -620,7 +641,8 @@ ct_progress_set_option (DonnaColumnType    *ct,
                         gboolean            is_tree,
                         gpointer            _data,
                         const gchar        *option,
-                        const gchar        *value,
+                        gpointer            value,
+                        gboolean            toggle,
                         DonnaColumnOptionSaveLocation save_location,
                         GError            **error)
 {
@@ -630,56 +652,56 @@ ct_progress_set_option (DonnaColumnType    *ct,
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property, &value, error))
+                    option, G_TYPE_STRING, &data->property, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property);
-        data->property = g_strdup (value);
+        data->property = g_strdup (* (gchar **) value);
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_lbl"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property_lbl, &value, error))
+                    option, G_TYPE_STRING, &data->property_lbl, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property_lbl);
-        data->property_lbl = g_strdup (value);
+        data->property_lbl = g_strdup (* (gchar **) value);
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_pulse"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property_pulse, &value, error))
+                    option, G_TYPE_STRING, &data->property_pulse, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property_pulse);
-        data->property_pulse = g_strdup (value);
+        data->property_pulse = g_strdup (* (gchar **) value);
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "label"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->label, &value, error))
+                    option, G_TYPE_STRING, &data->label, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->label);
-        data->label = g_strdup (value);
+        data->label = g_strdup (* (gchar **) value);
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 

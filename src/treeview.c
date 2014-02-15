@@ -1520,7 +1520,10 @@ static gboolean status_provider_set_tooltip         (DonnaStatusProvider    *sp,
 /* DonnaColumnType */
 static const gchar * columntype_get_name            (DonnaColumnType    *ct);
 static const gchar * columntype_get_renderers       (DonnaColumnType    *ct);
-static DonnaColumnTypeNeed columntype_refresh_data  (DonnaColumnType  *ct,
+static void         columntype_get_options          (DonnaColumnType    *ct,
+                                                     DonnaColumnOptionInfo **options,
+                                                     guint              *nb_options);
+static DonnaColumnTypeNeed columntype_refresh_data  (DonnaColumnType    *ct,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
                                                      const gchar        *tv_name,
@@ -1537,7 +1540,8 @@ static DonnaColumnTypeNeed columntype_set_option    (DonnaColumnType    *ct,
                                                      gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
-                                                     const gchar        *value,
+                                                     gpointer            value,
+                                                     gboolean            toggle,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *      columntype_get_context_alias    (DonnaColumnType   *ct,
@@ -1676,6 +1680,7 @@ donna_tree_view_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = columntype_get_name;
     interface->get_renderers            = columntype_get_renderers;
+    interface->get_options              = columntype_get_options;
     interface->refresh_data             = columntype_refresh_data;
     interface->free_data                = columntype_free_data;
     interface->get_props                = columntype_get_props;
@@ -12294,6 +12299,115 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
     return TRUE;
 }
 
+static gboolean
+parse_option_value (DonnaConfig             *config,
+                    DonnaColumnOptionInfo   *oi,
+                    const gchar             *value,
+                    const gchar            **s_val,
+                    gint                    *val,
+                    gboolean                *toggle,
+                    GError                 **error)
+{
+    /* now get the value from its string representation (using extra) */
+    if (oi->type == G_TYPE_STRING)
+        *s_val = value;
+    else if (oi->type == G_TYPE_BOOLEAN)
+    {
+        if (streq (value, "1") || streq (value, "true"))
+            *val = TRUE;
+        else if (streq (value, "0") || streq (value, "false"))
+            *val = FALSE;
+        else
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Invalid value '%s' (must be '1', 'true', '0' or 'false')",
+                    value);
+            return FALSE;
+        }
+    }
+    else if (!oi->extra) /* G_TYPE_INT */
+    {
+        *val = (gint) g_ascii_strtoll (value, (gchar **) s_val, 10);
+        if (!*s_val || **s_val != '\0')
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "Invalid integer value: '%s'", value);
+            return FALSE;
+        }
+    }
+
+    if (oi->extra)
+    {
+        const DonnaConfigExtra *extra;
+
+        extra = donna_config_get_extra (config, oi->extra, error);
+        if (!extra)
+        {
+            g_prefix_error (error, "Unable to get definition of extra '%s': ",
+                    oi->extra);
+            return FALSE;
+        }
+
+        /* for FLAGS if it starts with a comma, it means toggle what's specified
+         * from current value. Else it *is* the new value (allows to easily
+         * toggle one flag from menus, etc) */
+        if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS && *value == ',')
+        {
+            *toggle = TRUE;
+            ++value;
+        }
+
+        /* this gets the actual value (e.g. int) from the string representation,
+         * based on the extra. Combines flags for comma-separated lists */
+        if (!_donna_config_get_extra_value ((DonnaConfigExtra *) extra, value,
+                    (oi->type == G_TYPE_STRING) ? (gpointer) s_val : (gpointer) val))
+        {
+            /* were we given the string of an actual number for an INT option? */
+            if (oi->type == G_TYPE_INT && *value >= '0' && *value <= '9')
+            {
+                *val = (gint) g_ascii_strtoll (value, (gchar **) s_val, 10);
+                if (!*s_val || **s_val != '\0')
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "Invalid integer value '%s'", value);
+                    return FALSE;
+                }
+                else
+                {
+                    GValue v = G_VALUE_INIT;
+
+                    /* make sure the value is accepted by the extra */
+                    g_value_init (&v, G_TYPE_INT);
+                    g_value_set_int (&v, *val);
+                    if (!donna_config_is_value_valid_for_extra (config, oi->extra,
+                                &v, error))
+                    {
+                        g_value_unset (&v);
+                        g_prefix_error (error, "Invalid value '%s' "
+                                "(not matching allowed values from extra '%s'",
+                                value, oi->extra);
+                        return FALSE;
+                    }
+                    g_value_unset (&v);
+                }
+            }
+            else
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Invalid value '%s' (not in extra '%s')",
+                        value, oi->extra);
+                return FALSE;
+            }
+        }
+    }
+
+    return TRUE;
+}
+
 /**
  * donna_tree_view_column_set_option:
  * @tree: A #DonnaTreeView
@@ -12311,6 +12425,9 @@ donna_tree_view_column_edit (DonnaTreeView      *tree,
  * first characters as needed to identify it, or a number to get the nth column
  * on @tree.
  *
+ * The same rules apply for @value as for treeview options, refer to
+ * donna_tree_view_set_option() for more.
+ *
  * Returns: %TRUE on success, else %FALSE
  */
 gboolean
@@ -12325,6 +12442,11 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     DonnaTreeViewPrivate *priv;
     struct column *_col;
     DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
+    DonnaColumnOptionInfo *oi;
+    guint nb_options;
+    const gchar *s_val;
+    gint val;
+    gboolean toggle = FALSE;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (column != NULL, FALSE);
@@ -12400,13 +12522,38 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
         return TRUE;
     }
 
+    donna_column_type_get_options (_col->ct, &oi, &nb_options);
+    for ( ; nb_options > 0; --nb_options, ++oi)
+    {
+        if (streq (option, oi->name))
+            break;
+    }
+
+    if (nb_options == 0)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "TreeView '%s': Cannot set option '%s' on column '%s': No such option",
+                priv->name, option, _col->name);
+        return FALSE;
+    }
+
+    if (!parse_option_value (donna_app_peek_config (priv->app), oi, value,
+                &s_val, &val, &toggle, error))
+    {
+        g_prefix_error (error, "TreeView '%s': Cannot set option '%s' on column '%s': ",
+                priv->name, option, _col->name);
+        return FALSE;
+    }
+
     need = donna_column_type_set_option (_col->ct, _col->name,
             priv->arrangement->columns_options,
             priv->name,
             priv->is_tree,
             _col->ct_data,
             option,
-            value,
+            (oi->type == G_TYPE_STRING) ? (gpointer) &s_val : (gpointer) &val,
+            toggle,
             save_location,
             &err);
 
@@ -12647,108 +12794,11 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    /* now get the value from its string representation (using extra) */
-    if (oi->type == G_TYPE_STRING)
-        s_val = value;
-    else if (oi->type == G_TYPE_BOOLEAN)
+    if (!parse_option_value (config, oi, value, &s_val, &val, &toggle, error))
     {
-        if (streq (value, "1") || streq (value, "true"))
-            val = TRUE;
-        else if (streq (value, "0") || streq (value, "false"))
-            val = FALSE;
-        else
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Cannot set option '%s'; "
-                    "Invalid value '%s' (must be '1', 'true', '0' or 'false')",
-                    priv->name, option, value);
-            return FALSE;
-        }
-    }
-    else if (!oi->extra) /* G_TYPE_INT */
-    {
-        val = (gint) g_ascii_strtoll (value, (gchar **) &s_val, 10);
-        if (!s_val || *s_val != '\0')
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Cannot set option '%s' to '%s': invalid integer value",
-                    priv->name, option, value);
-            return FALSE;
-        }
-    }
-
-    if (oi->extra)
-    {
-        const DonnaConfigExtra *extra;
-
-        extra = donna_config_get_extra (config, oi->extra, error);
-        if (!extra)
-        {
-            g_prefix_error (error, "TreeView '%s': Cannot set option '%s': "
-                    "Unable to get definition of extra '%s': ",
-                    priv->name, option, oi->extra);
-            return FALSE;
-        }
-
-        /* for FLAGS if it starts with a comma, it means toggle what's specified
-         * from current value. Else it *is* the new value (allows to easily
-         * toggle one flag from menus, etc) */
-        if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS && *value == ',')
-        {
-            toggle = TRUE;
-            ++value;
-        }
-
-        /* this gets the actual value (e.g. int) from the string representation,
-         * based on the extra. Combines flags for comma-separated lists */
-        if (!_donna_config_get_extra_value ((DonnaConfigExtra *) extra, value,
-                    (oi->type == G_TYPE_STRING) ? (gpointer) &s_val : (gpointer) &val))
-        {
-            /* were we given the string of an actual number for an INT option? */
-            if (oi->type == G_TYPE_INT && *value >= '0' && *value <= '9')
-            {
-                val = (gint) g_ascii_strtoll (value, (gchar **) &s_val, 10);
-                if (!s_val || *s_val != '\0')
-                {
-                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                            DONNA_TREE_VIEW_ERROR_OTHER,
-                            "TreeView '%s': Cannot set option '%s' to '%s': "
-                            "invalid integer value",
-                            priv->name, option, value);
-                    return FALSE;
-                }
-                else
-                {
-                    GValue v = G_VALUE_INIT;
-
-                    /* make sure the value is accepted by the extra */
-                    g_value_init (&v, G_TYPE_INT);
-                    g_value_set_int (&v, val);
-                    if (!donna_config_is_value_valid_for_extra (config, oi->extra,
-                                &v, error))
-                    {
-                        g_value_unset (&v);
-                        g_prefix_error (error, "TreeView '%s': Cannot set option '%s': "
-                                "Invalid value '%s' (not matching allowed values "
-                                "from extra '%s'",
-                                priv->name, option, value, oi->extra);
-                        return FALSE;
-                    }
-                    g_value_unset (&v);
-                }
-            }
-            else
-            {
-                g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                        DONNA_TREE_VIEW_ERROR_OTHER,
-                        "TreeView '%s': Cannot set option '%s': "
-                        "Invalid value '%s' (not in extra '%s')",
-                        priv->name, option, value, oi->extra);
-                return FALSE;
-            }
-        }
+        g_prefix_error (error, "TreeView '%s': Cannot set option '%s': ",
+                priv->name, option);
+        return FALSE;
     }
 
     if (toggle)
@@ -21307,6 +21357,20 @@ columntype_get_renderers (DonnaColumnType    *ct)
     return "t";
 }
 
+static void
+columntype_get_options (DonnaColumnType    *ct,
+                        DonnaColumnOptionInfo **options,
+                        guint              *nb_options)
+{
+    static DonnaColumnOptionInfo o[] = {
+        { "relative",           G_TYPE_BOOLEAN,     NULL },
+        { "relative_focused",   G_TYPE_BOOLEAN,     NULL }
+    };
+
+    *options = o;
+    *nb_options = G_N_ELEMENTS (o);
+}
+
 static DonnaColumnTypeNeed
 columntype_refresh_data (DonnaColumnType  *ct,
                          const gchar        *col_name,
@@ -21363,65 +21427,39 @@ columntype_set_option (DonnaColumnType    *ct,
                        gboolean            is_tree,
                        gpointer            data,
                        const gchar        *option,
-                       const gchar        *value,
+                       gpointer            value,
+                       gboolean            toggle,
                        DonnaColumnOptionSaveLocation save_location,
                        GError            **error)
 {
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) ct)->priv;
-    gboolean c, v;
 
     if (streq (option, "relative"))
     {
-        if (!streq (value, "0") && !streq (value, "1")
-                && !streq (value, "false") && !streq (value, "true"))
-        {
-            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                    DONNA_COLUMN_TYPE_ERROR_OTHER,
-                    "ColumnType 'line-numbers': Invalid value for option '%s': "
-                    "Must be '0', 'false', '1' or 'true'",
-                    option);
-            return DONNA_COLUMN_TYPE_NEED_NOTHING;
-        }
-
-        c = priv->ln_relative;
-        v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
                     arr_name, tv_name, is_tree, "column_types/line-numbers",
                     &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &priv->ln_relative, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        priv->ln_relative = v;
+        priv->ln_relative = * (gboolean *) value;
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "relative_focused"))
     {
-        if (!streq (value, "0") && !streq (value, "1")
-                && !streq (value, "false") && !streq (value, "true"))
-        {
-            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                    DONNA_COLUMN_TYPE_ERROR_OTHER,
-                    "ColumnType 'line-numbers': Invalid value for option '%s': "
-                    "Must be '0', 'false', '1' or 'true'",
-                    option);
-            return DONNA_COLUMN_TYPE_NEED_NOTHING;
-        }
-
-        c = priv->ln_relative_focused;
-        v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
                     arr_name, tv_name, is_tree, "column_types/line-numbers",
                     &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &priv->ln_relative_focused, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        priv->ln_relative_focused = v;
+        priv->ln_relative_focused = * (gboolean *) value;
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 

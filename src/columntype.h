@@ -129,6 +129,9 @@ struct _DonnaColumnTypeInterface
 
     const gchar *       (*get_name)         (DonnaColumnType    *ct);
     const gchar *       (*get_renderers)    (DonnaColumnType    *ct);
+    void                (*get_options)      (DonnaColumnType    *ct,
+                                             DonnaColumnOptionInfo **options,
+                                             guint              *nb_options);
     DonnaColumnTypeNeed (*refresh_data)     (DonnaColumnType    *ct,
                                              const gchar        *col_name,
                                              const gchar        *arr_name,
@@ -165,7 +168,8 @@ struct _DonnaColumnTypeInterface
                                              gboolean            is_tree,
                                              gpointer            data,
                                              const gchar        *option,
-                                             const gchar        *value,
+                                             gpointer            value,
+                                             gboolean            toggle,
                                              DonnaColumnOptionSaveLocation save_location,
                                              GError            **error);
     gboolean            (*set_value)        (DonnaColumnType    *ct,
@@ -223,6 +227,9 @@ struct _DonnaColumnTypeInterface
 
 const gchar *   donna_column_type_get_name      (DonnaColumnType    *ct);
 const gchar *   donna_column_type_get_renderers (DonnaColumnType    *ct);
+void            donna_column_type_get_options   (DonnaColumnType    *ct,
+                                                 DonnaColumnOptionInfo **options,
+                                                 guint              *nb_options);
 DonnaColumnTypeNeed donna_column_type_refresh_data (DonnaColumnType *ct,
                                                  const gchar        *col_name,
                                                  const gchar        *arr_name,
@@ -259,7 +266,8 @@ DonnaColumnTypeNeed donna_column_type_set_option(DonnaColumnType    *ct,
                                                  gboolean            is_tree,
                                                  gpointer            data,
                                                  const gchar        *option,
-                                                 const gchar        *value,
+                                                 gpointer            value,
+                                                 gboolean            toggle,
                                                  DonnaColumnOptionSaveLocation save_location,
                                                  GError            **error);
 gboolean        donna_column_type_set_value     (DonnaColumnType    *ct,

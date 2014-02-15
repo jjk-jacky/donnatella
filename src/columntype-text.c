@@ -102,6 +102,9 @@ static void             ct_text_finalize            (GObject            *object)
 /* ColumnType */
 static const gchar *    ct_text_get_name            (DonnaColumnType    *ct);
 static const gchar *    ct_text_get_renderers       (DonnaColumnType    *ct);
+static void             ct_text_get_options         (DonnaColumnType    *ct,
+                                                     DonnaColumnOptionInfo **options,
+                                                     guint              *nb_options);
 static DonnaColumnTypeNeed ct_text_refresh_data     (DonnaColumnType    *ct,
                                                      const gchar        *col_name,
                                                      const gchar        *arr_name,
@@ -155,7 +158,8 @@ static DonnaColumnTypeNeed ct_text_set_option       (DonnaColumnType    *ct,
                                                      gboolean            is_tree,
                                                      gpointer            data,
                                                      const gchar        *option,
-                                                     const gchar        *value,
+                                                     gpointer            value,
+                                                     gboolean            toggle,
                                                      DonnaColumnOptionSaveLocation save_location,
                                                      GError            **error);
 static gchar *          ct_text_get_context_alias   (DonnaColumnType   *ct,
@@ -185,6 +189,7 @@ ct_text_column_type_init (DonnaColumnTypeInterface *interface)
 {
     interface->get_name                 = ct_text_get_name;
     interface->get_renderers            = ct_text_get_renderers;
+    interface->get_options              = ct_text_get_options;
     interface->refresh_data             = ct_text_refresh_data;
     interface->free_data                = ct_text_free_data;
     interface->get_props                = ct_text_get_props;
@@ -276,6 +281,24 @@ ct_text_get_renderers (DonnaColumnType   *ct)
 {
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TEXT (ct), NULL);
     return "t";
+}
+
+static void
+ct_text_get_options (DonnaColumnType    *ct,
+                     DonnaColumnOptionInfo **options,
+                     guint              *nb_options)
+{
+    static DonnaColumnOptionInfo o[] = {
+        { "property",           G_TYPE_STRING,      NULL },
+        { "natural_order",      G_TYPE_BOOLEAN,     NULL },
+        { "dot_first",          G_TYPE_BOOLEAN,     NULL },
+        { "dot_mixed",          G_TYPE_BOOLEAN,     NULL },
+        { "case_sensitive",     G_TYPE_BOOLEAN,     NULL },
+        { "ignore_spunct",      G_TYPE_BOOLEAN,     NULL }
+    };
+
+    *options = o;
+    *nb_options = G_N_ELEMENTS (o);
 }
 
 #define check_option(opt_name_lower, opt_name_upper, value, def_val)          \
@@ -684,53 +707,41 @@ ct_text_set_option (DonnaColumnType    *ct,
                     gboolean            is_tree,
                     gpointer            _data,
                     const gchar        *option,
-                    const gchar        *value,
+                    gpointer            value,
+                    gboolean            toggle,
                     DonnaColumnOptionSaveLocation save_location,
                     GError            **error)
 {
     struct tv_col_data *data = _data;
     gboolean c;
-    gboolean v;
 
     if (streq (option, "property"))
     {
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property, &value, error))
+                    option, G_TYPE_STRING, &data->property, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         g_free (data->property);
-        data->property = g_strdup (value);
+        data->property = g_strdup (* (gchar **) value);
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
-
-    if (!streq (value, "0") && !streq (value, "1")
-            && !streq (value, "false") && !streq (value, "true"))
-    {
-        g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
-                DONNA_COLUMN_TYPE_ERROR_OTHER,
-                "ColumnType 'text': Invalid value for option '%s': "
-                "Must be '0', 'false', '1' or 'true'",
-                option);
-        return DONNA_COLUMN_TYPE_NEED_NOTHING;
-    }
-    v = (*value == '1' || streq (value, "true")) ? TRUE : FALSE;
 
     if (streq (option, "natural_order"))
     {
         c = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &c, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (v)
+        if (* (gboolean *) value)
             data->options |= DONNA_SORT_NATURAL_ORDER;
         else
             data->options &= (DonnaSortOptions) ~DONNA_SORT_NATURAL_ORDER;
@@ -741,13 +752,13 @@ ct_text_set_option (DonnaColumnType    *ct,
         c = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &c, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (v)
+        if (* (gboolean *) value)
             data->options |= DONNA_SORT_DOT_FIRST;
         else
             data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_FIRST;
@@ -758,13 +769,13 @@ ct_text_set_option (DonnaColumnType    *ct,
         c = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE : TRUE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &c, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (v)
+        if (* (gboolean *) value)
             data->options &= (DonnaSortOptions) ~DONNA_SORT_CASE_INSENSITIVE;
         else
             data->options |= DONNA_SORT_CASE_INSENSITIVE;
@@ -775,13 +786,13 @@ ct_text_set_option (DonnaColumnType    *ct,
         c = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &c, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (v)
+        if (* (gboolean *) value)
             data->options |= DONNA_SORT_DOT_MIXED;
         else
             data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_MIXED;
@@ -792,13 +803,13 @@ ct_text_set_option (DonnaColumnType    *ct,
         c = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, &v, error))
+                    option, G_TYPE_BOOLEAN, &c, value, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (v)
+        if (* (gboolean *) value)
             data->options |= DONNA_SORT_IGNORE_SPUNCT;
         else
             data->options &= (DonnaSortOptions) ~DONNA_SORT_IGNORE_SPUNCT;

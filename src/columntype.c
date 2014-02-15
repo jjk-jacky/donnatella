@@ -882,6 +882,25 @@ donna_column_type_edit (DonnaColumnType   *ct,
             renderer_edit, re_data, treeview, error);
 }
 
+void
+donna_column_type_get_options (DonnaColumnType    *ct,
+                               DonnaColumnOptionInfo **options,
+                               guint              *nb_options)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_if_fail (DONNA_IS_COLUMN_TYPE (ct));
+    g_return_if_fail (options != NULL);
+    g_return_if_fail (nb_options != NULL);
+
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->get_options != NULL, FALSE);
+
+    (*interface->get_options) (ct, options, nb_options);
+}
+
 DonnaColumnTypeNeed
 donna_column_type_set_option (DonnaColumnType   *ct,
                               const gchar       *col_name,
@@ -890,7 +909,8 @@ donna_column_type_set_option (DonnaColumnType   *ct,
                               gboolean           is_tree,
                               gpointer           data,
                               const gchar       *option,
-                              const gchar       *value,
+                              gpointer           value,
+                              gboolean           toggle,
                               DonnaColumnOptionSaveLocation save_location,
                               GError           **error)
 {
@@ -916,7 +936,7 @@ donna_column_type_set_option (DonnaColumnType   *ct,
     }
 
     return (*interface->set_option) (ct, col_name, arr_name, tv_name, is_tree,
-            data, option, value, save_location, error);
+            data, option, value, toggle, save_location, error);
 }
 
 gboolean
