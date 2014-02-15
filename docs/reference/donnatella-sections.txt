@@ -669,6 +669,7 @@ donna_config_add_extra
 donna_config_load_config
 donna_config_export_config
 donna_config_get_extra
+donna_config_is_value_valid_for_extra
 donna_config_has_boolean
 donna_config_has_int
 donna_config_has_double

@@ -172,6 +172,11 @@ const DonnaConfigExtra *
             donna_config_get_extra              (DonnaConfig            *config,
                                                  const gchar            *extra,
                                                  GError                **error);
+gboolean    donna_config_is_value_valid_for_extra (
+                                                 DonnaConfig            *config,
+                                                 const gchar            *extra,
+                                                 GValue                 *value,
+                                                 GError                **error);
 gboolean    donna_config_has_boolean            (DonnaConfig            *config,
                                                  GError                **error,
                                                  const gchar            *fmt,

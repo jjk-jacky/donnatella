@@ -2881,6 +2881,27 @@ is_value_valid_for_extra (DonnaConfig   *config,
     return TRUE;
 }
 
+gboolean
+donna_config_is_value_valid_for_extra (DonnaConfig            *config,
+                                       const gchar            *extra,
+                                       GValue                 *value,
+                                       GError                **error)
+{
+    DonnaProviderConfigPrivate *priv;
+    gboolean ret;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_CONFIG (config), FALSE);
+    g_return_val_if_fail (extra != NULL, FALSE);
+    g_return_val_if_fail (G_IS_VALUE (value), FALSE);
+    priv = config->priv;
+
+    g_rw_lock_reader_lock (&priv->lock);
+    ret = is_value_valid_for_extra (config, extra, value, error);
+    g_rw_lock_reader_unlock (&priv->lock);
+
+    return ret;
+}
+
 static void
 move_numbered_category (GNode *root, GNode *node)
 {
