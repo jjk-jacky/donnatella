@@ -2381,11 +2381,12 @@ context_parsing:
     /* context */
     if (context)
         donna_context_parse (context, 0, app, fl, &str, intrefs);
+    else if (str)
+        g_string_append (str, fl);
 
     if (!str)
         return (must_free_fl) ? _fl : g_strdup (_fl);
 
-    g_string_append (str, fl);
     if (must_free_fl)
         g_free (_fl);
     return g_string_free (str, FALSE);
