@@ -154,7 +154,7 @@ donna_context_parse (DonnaContext       *context,
             moved = TRUE;
             g_string_append_len (str, fmt, s - fmt);
 
-            if (e)
+            if (e != s)
                 /* adjust for extra */
                 s = e;
             else
