@@ -51,6 +51,7 @@ typedef enum
     DONNA_COLUMN_TYPE_ERROR_OTHER,
 } DonnaColumnTypeError;
 
+typedef struct _DonnaColumnOptionInfo       DonnaColumnOptionInfo;
 
 typedef DonnaColumnType *   (*new_ct)       (DonnaConfig        *config);
 
@@ -67,6 +68,13 @@ typedef enum
     DONNA_COLUMN_TYPE_NEED_REDRAW   = (1 << 0),
     DONNA_COLUMN_TYPE_NEED_RESORT   = (1 << 1)
 } DonnaColumnTypeNeed;
+
+struct _DonnaColumnOptionInfo
+{
+    const gchar *name;
+    GType type;
+    const gchar *extra;
+};
 
 /* keep DonnaTreeviewOptionSaveLocation in sync */
 typedef enum

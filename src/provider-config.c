@@ -216,6 +216,9 @@ _donna_config_get_from_column (DonnaConfig *config,
                                const gchar *def_cat,
                                const gchar *opt_name,
                                GType        type);
+/* internal */
+gboolean
+_donna_config_get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value);
 
 
 #define option_is_category(opt, root)    \
@@ -1086,8 +1089,8 @@ add_flag_value (DonnaConfigExtra *extra, const gchar *str, gsize len, gint *val)
     return FALSE;
 }
 
-static gboolean
-get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value)
+gboolean
+_donna_config_get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value)
 {
     gint i;
 
@@ -1227,7 +1230,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 {
                     gchar *v;
 
-                    if (!get_extra_value (extra, parsed->value, &v))
+                    if (!_donna_config_get_extra_value (extra, parsed->value, &v))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
@@ -1242,7 +1245,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 {
                     gint v;
 
-                    if (!get_extra_value (extra, parsed->value, &v))
+                    if (!_donna_config_get_extra_value (extra, parsed->value, &v))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
@@ -1258,7 +1261,7 @@ donna_config_load_config (DonnaConfig *config, gchar *data)
                 {
                     gint v;
 
-                    if (!get_extra_value (extra, parsed->value, &v))
+                    if (!_donna_config_get_extra_value (extra, parsed->value, &v))
                     {
                         g_warning ("Value for option '%s' isn't valid for extra '%s', skipped",
                                 parsed->name, s);
@@ -4108,7 +4111,7 @@ donna_config_set_option (DonnaConfig            *config,
             else
                 ptr = &i;
 
-            if (!get_extra_value (_e, value, ptr))
+            if (!_donna_config_get_extra_value (_e, value, ptr))
             {
                 g_rw_lock_reader_unlock (&priv->lock);
                 g_set_error (error, DONNA_CONFIG_ERROR,

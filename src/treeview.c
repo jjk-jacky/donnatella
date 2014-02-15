@@ -1352,6 +1352,10 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
                                       const gchar *option,
                                       guint        from);
 
+/* internal for provider-config.c */
+gboolean
+_donna_config_get_extra_value (DonnaConfigExtra *extra, const gchar *str, gpointer value);
+
 /* internal; used by app.c */
 gboolean _donna_tree_view_register_extras (DonnaConfig *config, GError **error);
 
@@ -12517,187 +12521,6 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
     return ret;
 }
 
-static gboolean
-_convert_value (DonnaTreeView           *tree,
-                const gchar             *option,
-                const gchar             *value,
-                const gchar             *name,
-                DonnaConfigExtraType     type,
-                gpointer                 val,
-                GError                 **error)
-{
-    DonnaTreeViewPrivate *priv = tree->priv;
-    const DonnaConfigExtra *extra;
-    gint i;
-
-    extra = donna_config_get_extra (donna_app_peek_config (priv->app),
-            name, error);
-    if (!extra)
-    {
-        g_prefix_error (error, "TreeView '%s': Failed to set option '%s': "
-                "Unable to get definition of extra '%s': ",
-                priv->name, option, name);
-        return FALSE;
-    }
-    else if (extra->any.type != type)
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_OTHER,
-                "TreeView '%s': Failed to set option '%s': "
-                "Extra '%s' not of expected type",
-                priv->name, option, name);
-        return FALSE;
-    }
-
-    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
-    {
-        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
-
-        for (i = 0; i < e->nb_items; ++i)
-        {
-            if (streq (e->items[i].in_file, value))
-            {
-                * (gint *) val = e->items[i].value;
-                break;
-            }
-        }
-        if (i >= e->nb_items)
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Failed to set option '%s': "
-                    "Invalid value '%s' (not in extra '%s')",
-                    priv->name, option, value, name);
-            return FALSE;
-        }
-    }
-    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
-    {
-        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
-
-        for (i = 0; i < e->nb_items; ++i)
-        {
-            if (streq (e->items[i].in_file, value))
-            {
-                * (gint *) val |= e->items[i].value;
-                break;
-            }
-        }
-        if (i >= e->nb_items)
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Failed to set option '%s': "
-                    "Invalid value '%s' (not in extra '%s')",
-                    priv->name, option, value, name);
-            return FALSE;
-        }
-    }
-    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
-    {
-        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
-
-        for (i = 0; i < e->nb_items; ++i)
-        {
-            if (streq (e->items[i].value, value))
-            {
-                * (gchar **) val = g_strdup (e->items[i].value);
-                break;
-            }
-        }
-        if (i >= e->nb_items)
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Failed to set option '%s': "
-                    "Invalid value '%s' (not in extra '%s')",
-                    priv->name, option, value, name);
-            return FALSE;
-        }
-    }
-
-    return TRUE;
-}
-
-
-#define get_from(option_name, type)  do {                           \
-    if (donna_config_has_string (config, NULL, "tree_views/%s/%s",  \
-                priv->name, option_name))                           \
-        from = _DONNA_CONFIG_COLUMN_FROM_TREE;                      \
-    else                                                            \
-        from = _DONNA_CONFIG_COLUMN_FROM_MODE;                      \
-} while (0)
-
-#define handle_option_int_extra(option_name, extra_name, extra_type, lower) \
-    else if (streq (option, option_name))                                   \
-    {                                                                       \
-        type = G_TYPE_INT;                                                  \
-                                                                            \
-        if (!_convert_value (tree, option, value,                           \
-                    extra_name, DONNA_CONFIG_EXTRA_TYPE_LIST_##extra_type,  \
-                    &val, error))                                           \
-            return FALSE;                                                   \
-                                                                            \
-        if (DONNA_CONFIG_EXTRA_TYPE_LIST_##extra_type                       \
-                == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)                      \
-            val = (gint) (priv->lower ^ (guint) val);                       \
-                                                                            \
-        if (need_from)                                                      \
-            get_from (option_name, int);                                    \
-        else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
-        {                                                                   \
-            od.val = &val;                                                  \
-            real_option_cb (&od);                                           \
-            return TRUE;                                                    \
-        }                                                                   \
-    }
-
-#define handle_option_boolean(option_name, lower)                           \
-    else if (streq (option, option_name))                                   \
-    {                                                                       \
-        type = G_TYPE_BOOLEAN;                                              \
-                                                                            \
-        if (streq (value, "1") || streq (value, "true"))                    \
-            val = TRUE;                                                     \
-        else if (streq (value, "0") || streq (value, "false"))              \
-            val = FALSE;                                                    \
-        else                                                                \
-        {                                                                   \
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,                      \
-                    DONNA_TREE_VIEW_ERROR_OTHER,                            \
-                    "TreeView '%s': Cannot set option '%s'; "               \
-                    "Invalid value '%s' (must be '1', 'true', '0' or 'false')", \
-                    priv->name, option, value);                             \
-            return FALSE;                                                   \
-        }                                                                   \
-                                                                            \
-        if (need_from)                                                      \
-            get_from (option_name, boolean);                                \
-        else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
-        {                                                                   \
-            od.val = &val;                                                  \
-            real_option_cb (&od);                                           \
-            return TRUE;                                                    \
-        }                                                                   \
-    }
-
-#define handle_option_string(option_name, lower)                            \
-    else if (streq (option, option_name))                                   \
-    {                                                                       \
-        type = G_TYPE_STRING;                                               \
-                                                                            \
-        s_val = value;                                                      \
-                                                                            \
-        if (need_from)                                                      \
-            get_from (option_name, string);                                 \
-        else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)    \
-        {                                                                   \
-            od.val = &s_val;                                                \
-            real_option_cb (&od);                                           \
-            return TRUE;                                                    \
-        }                                                                   \
-    }
-
 /**
  * donna_tree_view_set_option:
  * @tree: A #DonnaTreeView
@@ -12710,6 +12533,21 @@ _convert_value (DonnaTreeView           *tree,
  * saving it in the location indicated by @save_location.
  * See #option-paths for more.
  *
+ * For boolean options, accepted values are "0" or "false" for %FALSE, and "1"
+ * or "true" for %TRUE.
+ *
+ * For interger options, a string of a number (e.g. "42") can be used. When the
+ * option is of an extra type, it is also possible to use the infile values
+ * (i.e. same as in the conf file).
+ * Additionally, for FLAGS one can specify a comma-separated list of flags,
+ * again as in in the conf file. It is also possible to prefix it with a comma,
+ * to indicate to toggle the specified flags from the current value.
+ *
+ * So for example, using "icon,box" for option "node_visuals" would set it to
+ * "icon,box" whereas using ",icon,box" would toggle those from the current
+ * value. E.g. if current value was "box,highlight" it would then be set to
+ * "icon,highlight"
+ *
  * Returns: %TRUE on success, else %FALSE
  */
 gboolean
@@ -12721,12 +12559,36 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 {
     DonnaTreeViewPrivate *priv;
     DonnaConfig *config;
+    DonnaColumnOptionInfo tv_options[] = {
+        { "is_tree",            G_TYPE_BOOLEAN,     NULL },
+        { "show_hidden",        G_TYPE_BOOLEAN,     NULL },
+        { "node_types",         G_TYPE_INT,         "node-type" },
+        { "sort_groups",        G_TYPE_INT,         "sg" },
+        { "select_highlight",   G_TYPE_INT,         "highlight" },
+        { "key_mode",           G_TYPE_STRING,      NULL },
+        { "click_mode",         G_TYPE_STRING,      NULL },
+        { "default_save_location", G_TYPE_INT,      "save-location" }
+    };
+    DonnaColumnOptionInfo tree_options[] = {
+        { "node_visuals",       G_TYPE_INT,         "visuals" },
+        { "is_minitree",        G_TYPE_BOOLEAN,     NULL },
+        { "sync_mode",          G_TYPE_INT,         "sync" },
+        { "sync_with",          G_TYPE_STRING,      NULL },
+        { "sync_scroll",        G_TYPE_BOOLEAN,     NULL },
+        { "auto_focus_sync",    G_TYPE_BOOLEAN,     NULL }
+    };
+    DonnaColumnOptionInfo list_options[] = {
+        { "focusing_click",     G_TYPE_BOOLEAN,     NULL },
+        { "goto_item_set",      G_TYPE_INT,         "tree-set" },
+        { "history_max",        G_TYPE_INT,         NULL }
+    };
+    DonnaColumnOptionInfo *oi;
+    guint i;
+    gboolean toggle = FALSE;
     struct option_data od;
-    GType type;
     guint from = 0;
     gint val;
     const gchar *s_val;
-    gboolean need_from;
     gchar *loc;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
@@ -12741,6 +12603,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION, FALSE);
     priv = tree->priv;
+    config = donna_app_peek_config (priv->app);
 
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_DEFAULT)
@@ -12752,7 +12615,160 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    config = donna_app_peek_config (priv->app);
+    /* first make sure this is a known option. It will also give us its type &
+     * extra (if any) */
+    i = G_N_ELEMENTS (tv_options);
+    for (oi = tv_options; i > 0; --i, ++oi)
+        if (streq (option, oi->name))
+            break;
+    if (i == 0)
+    {
+        if (priv->is_tree)
+        {
+            i = G_N_ELEMENTS (tree_options);
+            oi = tree_options;
+        }
+        else
+        {
+            i = G_N_ELEMENTS (list_options);
+            oi = list_options;
+        }
+
+        for ( ; i > 0; --i, ++oi)
+            if (streq (option, oi->name))
+                break;
+    }
+    if (i == 0)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                "TreeView '%s': Cannot set option '%s': No such option",
+                priv->name, option);
+        return FALSE;
+    }
+
+    /* now get the value from its string representation (using extra) */
+    if (oi->type == G_TYPE_STRING)
+        s_val = value;
+    else if (oi->type == G_TYPE_BOOLEAN)
+    {
+        if (streq (value, "1") || streq (value, "true"))
+            val = TRUE;
+        else if (streq (value, "0") || streq (value, "false"))
+            val = FALSE;
+        else
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Cannot set option '%s'; "
+                    "Invalid value '%s' (must be '1', 'true', '0' or 'false')",
+                    priv->name, option, value);
+            return FALSE;
+        }
+    }
+    else if (!oi->extra) /* G_TYPE_INT */
+    {
+        val = (gint) g_ascii_strtoll (value, (gchar **) &s_val, 10);
+        if (!s_val || *s_val != '\0')
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Cannot set option '%s' to '%s': invalid integer value",
+                    priv->name, option, value);
+            return FALSE;
+        }
+    }
+
+    if (oi->extra)
+    {
+        const DonnaConfigExtra *extra;
+
+        extra = donna_config_get_extra (config, oi->extra, error);
+        if (!extra)
+        {
+            g_prefix_error (error, "TreeView '%s': Cannot set option '%s': "
+                    "Unable to get definition of extra '%s': ",
+                    priv->name, option, oi->extra);
+            return FALSE;
+        }
+
+        /* for FLAGS if it starts with a comma, it means toggle what's specified
+         * from current value. Else it *is* the new value (allows to easily
+         * toggle one flag from menus, etc) */
+        if (extra->any.type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS && *value == ',')
+        {
+            toggle = TRUE;
+            ++value;
+        }
+
+        /* this gets the actual value (e.g. int) from the string representation,
+         * based on the extra. Combines flags for comma-separated lists */
+        if (!_donna_config_get_extra_value ((DonnaConfigExtra *) extra, value,
+                    (oi->type == G_TYPE_STRING) ? (gpointer) &s_val : (gpointer) &val))
+        {
+            /* were we given the string of an actual number for an INT option? */
+            if (oi->type == G_TYPE_INT && *value >= '0' && *value <= '9')
+            {
+                val = (gint) g_ascii_strtoll (value, (gchar **) &s_val, 10);
+                if (!s_val || *s_val != '\0')
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_OTHER,
+                            "TreeView '%s': Cannot set option '%s' to '%s': "
+                            "invalid integer value",
+                            priv->name, option, value);
+                    return FALSE;
+                }
+                else
+                {
+                    GValue v = G_VALUE_INIT;
+
+                    /* make sure the value is accepted by the extra */
+                    g_value_init (&v, G_TYPE_INT);
+                    g_value_set_int (&v, val);
+                    if (!donna_config_is_value_valid_for_extra (config, oi->extra,
+                                &v, error))
+                    {
+                        g_value_unset (&v);
+                        g_prefix_error (error, "TreeView '%s': Cannot set option '%s': "
+                                "Invalid value '%s' (not matching allowed values "
+                                "from extra '%s'",
+                                priv->name, option, value, oi->extra);
+                        return FALSE;
+                    }
+                    g_value_unset (&v);
+                }
+            }
+            else
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "TreeView '%s': Cannot set option '%s': "
+                        "Invalid value '%s' (not in extra '%s')",
+                        priv->name, option, value, oi->extra);
+                return FALSE;
+            }
+        }
+    }
+
+    if (toggle)
+    {
+        if (streq (option, "node_visuals"))
+            val = (gint) (priv->node_visuals ^ (guint) val);
+        else if (streq (option, "goto_item_set"))
+            val = (gint) (priv->goto_item_set ^ (guint) val);
+        else
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Cannot set option '%s': "
+                    "Internal error, toggle mode used for extra '%s' "
+                    "on unknown LIST-FLAGS option",
+                    priv->name, option, oi->extra);
+            return FALSE;
+        }
+    }
+
     od.tree = tree;
     od.option = (gchar *) option;
     od.opt = OPT_IN_MEMORY;
@@ -12761,65 +12777,42 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION)
         save_location = priv->default_save_location;
 
-    need_from = save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
-        || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK;
-
-    if (0)
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK)
     {
-        /* void */
+        if (oi->type == G_TYPE_INT)
+        {
+            if (donna_config_has_int (config, NULL, "tree_views/%s/%s",
+                        priv->name, option))
+                from = _DONNA_CONFIG_COLUMN_FROM_TREE;
+            else
+                from = _DONNA_CONFIG_COLUMN_FROM_MODE;
+        }
+        else if (oi->type == G_TYPE_BOOLEAN)
+        {
+            if (donna_config_has_boolean (config, NULL, "tree_views/%s/%s",
+                        priv->name, option))
+                from = _DONNA_CONFIG_COLUMN_FROM_TREE;
+            else
+                from = _DONNA_CONFIG_COLUMN_FROM_MODE;
+        }
+        else /* G_TYPE_STRING */
+        {
+            if (donna_config_has_string (config, NULL, "tree_views/%s/%s",
+                        priv->name, option))
+                from = _DONNA_CONFIG_COLUMN_FROM_TREE;
+            else
+                from = _DONNA_CONFIG_COLUMN_FROM_MODE;
+        }
     }
-    handle_option_int_extra ("node_types", "node-type", INT, node_types)
-    handle_option_boolean ("show_hidden", show_hidden)
-    handle_option_int_extra ("sort_groups", "sg", INT, sort_groups)
-    handle_option_int_extra ("select_highlight", "highlight", INT, select_highlight)
-    handle_option_string ("key_mode", key_mode)
-    handle_option_string ("click_mode", click_mode)
-    handle_option_int_extra ("default_save_location", "save-location",
-            INT, default_save_location)
-    else if (priv->is_tree)
+    else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
     {
-        if (0)
-        {
-            /* void */
-        }
-        handle_option_boolean ("is_minitree", is_minitree)
-        handle_option_int_extra ("sync_mode", "sync", INT, sync_mode)
-        handle_option_boolean ("sync_scroll", sync_scroll)
-        handle_option_int_extra ("node_visuals", "visuals", FLAGS, node_visuals)
-        handle_option_boolean ("auto_focus_sync", auto_focus_sync)
-        else if (streq (option, "sync_with"))
-        {
-            type = G_TYPE_STRING;
-
-            s_val = value;
-
-            if (need_from)
-                get_from ("sync_with", string);
-            else if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
-            {
-                od.val = &s_val;
-                real_option_cb (&od);
-                return TRUE;
-            }
-        }
+        if (oi->type == G_TYPE_STRING)
+            od.val = &s_val;
         else
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                    "TreeView '%s': Cannot set option '%s': No such option",
-                    priv->name, option);
-            return FALSE;
-        }
-    }
-    handle_option_boolean ("focusing_click", focusing_click)
-    handle_option_int_extra ("goto_item_set", "tree-set", FLAGS, goto_item_set)
-    else
-    {
-        g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                DONNA_TREE_VIEW_ERROR_NOT_FOUND,
-                "TreeView '%s': Cannot set option '%s': No such option",
-                priv->name, option);
-        return FALSE;
+            od.val = &val;
+        real_option_cb (&od);
+        return TRUE;
     }
 
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT)
@@ -12847,7 +12840,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
                 (priv->is_tree) ? "trees/" : "lists/", option, NULL);
     else /* IN_MEMORY from IN_ASK */
     {
-        if (type == G_TYPE_STRING)
+        if (oi->type == G_TYPE_STRING)
             od.val = &s_val;
         else
             od.val = &val;
@@ -12855,7 +12848,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         return TRUE;
     }
 
-    if (type == G_TYPE_INT)
+    if (oi->type == G_TYPE_INT)
     {
         if (!donna_config_set_int (config, error, val, loc))
         {
@@ -12865,7 +12858,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
             return FALSE;
         }
     }
-    else if (type == G_TYPE_BOOLEAN)
+    else if (oi->type == G_TYPE_BOOLEAN)
     {
         if (!donna_config_set_boolean (config, error, val, loc))
         {
@@ -12875,7 +12868,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
             return FALSE;
         }
     }
-    else if (type == G_TYPE_STRING)
+    else if (oi->type == G_TYPE_STRING)
     {
         if (!donna_config_set_string (config, error, s_val, loc))
         {
@@ -12892,11 +12885,6 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
     return TRUE;
 }
-
-#undef handle_option_string
-#undef handle_option_boolean
-#undef handle_option_int_extra
-#undef get_from
 
 /**
  * donna_tree_view_move_root:
@@ -17069,7 +17057,7 @@ _set_item_from_extra (DonnaTreeView         *tree,
                 info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
                 info->trigger = g_strconcat (
                         "command:tv_set_option (%o,", parent, ",",
-                        e->items[i].in_file, ",",
+                        "\",", e->items[i].in_file, "\",",
                         (save_location) ? save_location : "", ")", NULL);
                 info->free_trigger = TRUE;
                 if (current & e->items[i].value)
