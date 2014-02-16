@@ -12672,7 +12672,7 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
  * donna_tree_view_set_option:
  * @tree: A #DonnaTreeView
  * @option: Name of the option
- * @value: String representation of the value to set
+ * @value: (allow-none): String representation of the value to set, or %NULL
  * @save_location: Where to save the option
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
@@ -12694,6 +12694,8 @@ donna_tree_view_column_set_value (DonnaTreeView      *tree,
  * "icon,box" whereas using ",icon,box" would toggle those from the current
  * value. E.g. if current value was "box,highlight" it would then be set to
  * "icon,highlight"
+ *
+ * If @value is %NULL then the current (i.e. in memory) value will be used.
  *
  * Returns: %TRUE on success, else %FALSE
  */
@@ -12736,11 +12738,21 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     guint from = 0;
     gint val;
     const gchar *s_val;
+    /* there's a special case for string options when no value was given.
+     * Because we'll set s_val to the current value, if then we use a save
+     * location IN_MEMORY (direct or from IN_ASK) we would be usng our current
+     * value as new value to set; And because it goes something like this:
+     * g_free (current);
+     * current = g_strdup (new);
+     * Knowing that new == current; obviously we're using/dupping some free-d
+     * memory...
+     * So, to avoid this when using current value of a string option, we dup it
+     * and use free_me to free it when done */
+    gchar *free_me = NULL;
     gchar *loc;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (option != NULL, FALSE);
-    g_return_val_if_fail (value != NULL, FALSE);
     g_return_val_if_fail (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT
@@ -12767,7 +12779,39 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     i = G_N_ELEMENTS (tv_options);
     for (oi = tv_options; i > 0; --i, ++oi)
         if (streq (option, oi->name))
+        {
+            if (!value)
+            {
+                switch (i)
+                {
+                    case 1:
+                        val = priv->default_save_location;
+                        break;
+                    case 2:
+                        s_val = free_me = g_strdup (priv->click_mode);
+                        break;
+                    case 3:
+                        s_val = free_me = g_strdup (priv->key_mode);
+                        break;
+                    case 4:
+                        val = priv->select_highlight;
+                        break;
+                    case 5:
+                        val = priv->sort_groups;
+                        break;
+                    case 6:
+                        val = priv->node_types;
+                        break;
+                    case 7:
+                        val = priv->show_hidden;
+                        break;
+                    case 8:
+                        val = priv->is_tree;
+                        break;
+                }
+            }
             break;
+        }
     if (i == 0)
     {
         if (priv->is_tree)
@@ -12783,7 +12827,61 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
         for ( ; i > 0; --i, ++oi)
             if (streq (option, oi->name))
+            {
+                if (!value)
+                {
+                    if (priv->is_tree)
+                    {
+                        switch (i)
+                        {
+                            case 1:
+                                val = priv->auto_focus_sync;
+                                break;
+                            case 2:
+                                val = priv->sync_scroll;
+                                break;
+                            case 3:
+                                if (priv->sync_with)
+                                {
+                                    /* those aren't affected since we don't own
+                                     * them, hence no free_me required here */
+                                    if (priv->sid_active_list_changed)
+                                        s_val = ":active";
+                                    else
+                                        s_val = priv->sync_with->priv->name;
+                                }
+                                else
+                                    s_val = NULL;
+                                break;
+                            case 4:
+                                val = priv->sync_mode;
+                                break;
+                            case 5:
+                                val = priv->is_minitree;
+                                break;
+                            case 6:
+                                val = priv->node_visuals;
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        switch (i)
+                        {
+                            case 1:
+                                val = (gint) donna_history_get_max (priv->history);
+                                break;
+                            case 2:
+                                val = priv->goto_item_set;
+                                break;
+                            case 3:
+                                val = priv->focusing_click;
+                                break;
+                        }
+                    }
+                }
                 break;
+            }
     }
     if (i == 0)
     {
@@ -12794,28 +12892,31 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    if (!parse_option_value (config, oi, value, &s_val, &val, &toggle, error))
+    if (value)
     {
-        g_prefix_error (error, "TreeView '%s': Cannot set option '%s': ",
-                priv->name, option);
-        return FALSE;
-    }
-
-    if (toggle)
-    {
-        if (streq (option, "node_visuals"))
-            val = (gint) (priv->node_visuals ^ (guint) val);
-        else if (streq (option, "goto_item_set"))
-            val = (gint) (priv->goto_item_set ^ (guint) val);
-        else
+        if (!parse_option_value (config, oi, value, &s_val, &val, &toggle, error))
         {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Cannot set option '%s': "
-                    "Internal error, toggle mode used for extra '%s' "
-                    "on unknown LIST-FLAGS option",
-                    priv->name, option, oi->extra);
+            g_prefix_error (error, "TreeView '%s': Cannot set option '%s': ",
+                    priv->name, option);
             return FALSE;
+        }
+
+        if (toggle)
+        {
+            if (streq (option, "node_visuals"))
+                val = (gint) (priv->node_visuals ^ (guint) val);
+            else if (streq (option, "goto_item_set"))
+                val = (gint) (priv->goto_item_set ^ (guint) val);
+            else
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "TreeView '%s': Cannot set option '%s': "
+                        "Internal error, toggle mode used for extra '%s' "
+                        "on unknown LIST-FLAGS option",
+                        priv->name, option, oi->extra);
+                return FALSE;
+            }
         }
     }
 
@@ -12862,6 +12963,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         else
             od.val = &val;
         real_option_cb (&od);
+        g_free (free_me);
         return TRUE;
     }
 
@@ -12879,8 +12981,11 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
                 (priv->is_tree) ? "trees" : "lists",
                 option, from);
         if (save_location == (guint) -1)
+        {
             /* user cancelled, not an error */
+            g_free (free_me);
             return TRUE;
+        }
     }
 
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_TREE)
@@ -12895,6 +13000,7 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
         else
             od.val = &val;
         real_option_cb (&od);
+        g_free (free_me);
         return TRUE;
     }
 
@@ -12925,8 +13031,10 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
             g_prefix_error (error, "TreeView '%s': Failed to save option '%s'",
                     priv->name, option);
             g_free (loc);
+            g_free (free_me);
             return FALSE;
         }
+        g_free (free_me);
     }
     g_free (loc);
 

@@ -3939,7 +3939,7 @@ cmd_tv_set_location (DonnaTask *task, DonnaApp *app, gpointer *args)
  * tv_set_option:
  * @tree: A treeview
  * @option: The option name
- * @value: The new value to set
+ * @value: (allow-none): The new value to set
  * @location: (allow-none): The location to save the value to
  *
  * Sets @value as new value of @tree's option @option
@@ -3955,7 +3955,7 @@ cmd_tv_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     const gchar *option = args[1];
-    const gchar *value  = args[2];
+    const gchar *value  = args[2]; /* opt */
     const gchar *s_l    = args[3]; /* opt */
 
     const gchar *c_s_l[] = { "memory", "current", "ask", "tree", "mode",
@@ -4831,7 +4831,7 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tv_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
