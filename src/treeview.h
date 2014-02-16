@@ -97,11 +97,14 @@ struct _DonnaArrangement
     DonnaArrangementFlags        flags;
     gchar                       *columns;
     gchar                       *main_column;
+    gchar                       *columns_source;
     gchar                       *sort_column;
     DonnaSortOrder               sort_order;
+    gchar                       *sort_source;
     gchar                       *second_sort_column;
     DonnaSortOrder               second_sort_order;
     DonnaSecondSortSticky        second_sort_sticky;
+    gchar                       *second_sort_source;
     gchar                       *columns_options;
     GSList                      *color_filters;
 };
@@ -333,6 +336,9 @@ gboolean        donna_tree_view_set_columns     (DonnaTreeView      *tree,
                                                  GError            **error);
 void            donna_tree_view_start_interactive_search (
                                                  DonnaTreeView      *tree);
+gboolean        donna_tree_view_save_to_config  (DonnaTreeView      *tree,
+                                                 const gchar        *elements,
+                                                 GError            **error);
 /* mode Tree */
 gboolean        donna_tree_view_save_tree_file  (DonnaTreeView      *tree,
                                                  const gchar        *filename,

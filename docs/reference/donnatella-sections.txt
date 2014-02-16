@@ -76,6 +76,7 @@ tv_refresh
 tv_remove_row
 tv_reset_keys
 tv_save_list_file
+tv_save_to_config
 tv_save_tree_file
 tv_selection
 tv_selection_nodes
@@ -1118,6 +1119,7 @@ donna_tree_view_maxi_expand
 donna_tree_view_maxi_collapse
 donna_tree_view_save_list_file
 donna_tree_view_start_interactive_search
+donna_tree_view_save_to_config
 donna_tree_view_load_list_file
 donna_tree_view_selection_nodes
 donna_tree_view_get_selected_nodes

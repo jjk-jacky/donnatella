@@ -3702,6 +3702,31 @@ cmd_tv_save_list_file (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_save_to_config:
+ * @tree: A treeview
+ * @elements: (allow-none): Which element to save
+ *
+ * Save current values of @elements to configuration
+ *
+ * See donna_tree_view_save_to_config() for more
+ */
+static DonnaTaskState
+cmd_tv_save_to_config (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *elements = args[1]; /* opt */
+
+    if (!donna_tree_view_save_to_config (tree, elements, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_save_tree_file:
  * @tree: A treeview
  * @file: Name of the file
@@ -4810,6 +4835,12 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tv_save_list_file, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tv_save_to_config, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

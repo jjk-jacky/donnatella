@@ -2431,6 +2431,8 @@ donna_config_arr_load_columns (DonnaConfig            *config,
     get_child ("columns", 7, STRING, TRUE);
     ret = TRUE;
     arr->flags |= DONNA_ARRANGEMENT_HAS_COLUMNS;
+    arr->columns_source = name;
+    name = NULL;
     arr->columns = g_value_dup_string (value);
 
     get_child ("main_column", 11, STRING, FALSE);
@@ -2476,6 +2478,8 @@ donna_config_arr_load_sort (DonnaConfig            *config,
     get_child ("sort_column", 11, STRING, TRUE);
     ret = TRUE;
     arr->flags |= DONNA_ARRANGEMENT_HAS_SORT;
+    arr->sort_source = name;
+    name = NULL;
     arr->sort_column = g_value_dup_string (value);
 
     get_child ("sort_order", 10, INT, FALSE);
@@ -2521,6 +2525,8 @@ donna_config_arr_load_second_sort (DonnaConfig            *config,
     get_child ("second_sort_column", 18, STRING, TRUE);
     ret = TRUE;
     arr->flags |= DONNA_ARRANGEMENT_HAS_SECOND_SORT;
+    arr->second_sort_source = name;
+    name = NULL;
     arr->second_sort_column = g_value_dup_string (value);
 
     get_child ("second_sort_order", 17, INT, FALSE);

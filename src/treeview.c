@@ -1265,6 +1265,9 @@ struct _DonnaTreeViewPrivate
     GArray              *statuses;
     guint                last_status_id;
 
+    /* See donna_tree_view_save_to_config() for more */
+    gboolean             saving_config;
+
     /* "cached" options */
 
     /* tree + list */
@@ -2872,6 +2875,30 @@ config_get_string (DonnaTreeView   *tree,
     return g_strdup (def);
 }
 
+static DonnaColumnOptionInfo _tv_options[] = {
+    { "is_tree",            G_TYPE_BOOLEAN,     NULL },
+    { "show_hidden",        G_TYPE_BOOLEAN,     NULL },
+    { "node_types",         G_TYPE_INT,         "node-type" },
+    { "sort_groups",        G_TYPE_INT,         "sg" },
+    { "select_highlight",   G_TYPE_INT,         "highlight" },
+    { "key_mode",           G_TYPE_STRING,      NULL },
+    { "click_mode",         G_TYPE_STRING,      NULL },
+    { "default_save_location", G_TYPE_INT,      "save-location" }
+};
+static DonnaColumnOptionInfo _tree_options[] = {
+    { "node_visuals",       G_TYPE_INT,         "visuals" },
+    { "is_minitree",        G_TYPE_BOOLEAN,     NULL },
+    { "sync_mode",          G_TYPE_INT,         "sync" },
+    { "sync_with",          G_TYPE_STRING,      NULL },
+    { "sync_scroll",        G_TYPE_BOOLEAN,     NULL },
+    { "auto_focus_sync",    G_TYPE_BOOLEAN,     NULL }
+};
+static DonnaColumnOptionInfo _list_options[] = {
+    { "focusing_click",     G_TYPE_BOOLEAN,     NULL },
+    { "goto_item_set",      G_TYPE_INT,         "tree-set" },
+    { "history_max",        G_TYPE_INT,         NULL }
+};
+
 #define cfg_get_is_tree(t,c) \
     config_get_boolean (t, c, "is_tree", FALSE)
 #define cfg_get_show_hidden(t,c) \
@@ -3348,6 +3375,10 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
     gchar buf[255], *b = buf;
     gssize len;
     guint opt = OPT_NONE;
+
+    /* see donna_tree_view_save_to_config() */
+    if (tree->priv->saving_config)
+        return;
 
     /* options we care about are ones for the tree (in "tree_views/<NAME>" or
      * "defaults/<MODE>s") or for one of our columns:
@@ -7361,8 +7392,11 @@ free_arrangement (DonnaArrangement *arr)
         return;
     g_free (arr->columns);
     g_free (arr->main_column);
+    g_free (arr->columns_source);
     g_free (arr->sort_column);
+    g_free (arr->sort_source);
     g_free (arr->second_sort_column);
+    g_free (arr->second_sort_source);
     g_free (arr->columns_options);
     if (arr->color_filters)
         g_slist_free_full (arr->color_filters, g_object_unref);
@@ -12717,29 +12751,6 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 {
     DonnaTreeViewPrivate *priv;
     DonnaConfig *config;
-    DonnaColumnOptionInfo tv_options[] = {
-        { "is_tree",            G_TYPE_BOOLEAN,     NULL },
-        { "show_hidden",        G_TYPE_BOOLEAN,     NULL },
-        { "node_types",         G_TYPE_INT,         "node-type" },
-        { "sort_groups",        G_TYPE_INT,         "sg" },
-        { "select_highlight",   G_TYPE_INT,         "highlight" },
-        { "key_mode",           G_TYPE_STRING,      NULL },
-        { "click_mode",         G_TYPE_STRING,      NULL },
-        { "default_save_location", G_TYPE_INT,      "save-location" }
-    };
-    DonnaColumnOptionInfo tree_options[] = {
-        { "node_visuals",       G_TYPE_INT,         "visuals" },
-        { "is_minitree",        G_TYPE_BOOLEAN,     NULL },
-        { "sync_mode",          G_TYPE_INT,         "sync" },
-        { "sync_with",          G_TYPE_STRING,      NULL },
-        { "sync_scroll",        G_TYPE_BOOLEAN,     NULL },
-        { "auto_focus_sync",    G_TYPE_BOOLEAN,     NULL }
-    };
-    DonnaColumnOptionInfo list_options[] = {
-        { "focusing_click",     G_TYPE_BOOLEAN,     NULL },
-        { "goto_item_set",      G_TYPE_INT,         "tree-set" },
-        { "history_max",        G_TYPE_INT,         NULL }
-    };
     DonnaColumnOptionInfo *oi;
     guint i;
     gboolean toggle = FALSE;
@@ -12785,8 +12796,8 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
 
     /* first make sure this is a known option. It will also give us its type &
      * extra (if any) */
-    i = G_N_ELEMENTS (tv_options);
-    for (oi = tv_options; i > 0; --i, ++oi)
+    i = G_N_ELEMENTS (_tv_options);
+    for (oi = _tv_options; i > 0; --i, ++oi)
         if (streq (option, oi->name))
         {
             if (!value)
@@ -12825,13 +12836,13 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     {
         if (priv->is_tree)
         {
-            i = G_N_ELEMENTS (tree_options);
-            oi = tree_options;
+            i = G_N_ELEMENTS (_tree_options);
+            oi = _tree_options;
         }
         else
         {
-            i = G_N_ELEMENTS (list_options);
-            oi = list_options;
+            i = G_N_ELEMENTS (_list_options);
+            oi = _list_options;
         }
 
         for ( ; i > 0; --i, ++oi)
@@ -18976,6 +18987,597 @@ donna_tree_view_start_interactive_search (DonnaTreeView      *tree)
     gboolean r;
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
     g_signal_emit_by_name (tree, "start-interactive-search", &r);
+}
+
+enum save
+{
+    SAVE_OPTIONS        = (1 << 0),
+    SAVE_COLUMNS        = (1 << 1),
+    SAVE_SORT           = (1 << 2),
+    SAVE_SECOND_SORT    = (1 << 3),
+    SAVE_COLUMN_OPTIONS = (1 << 4) /* i.e. options of all columns */
+};
+
+struct save_data
+{
+    GtkWidget *window;
+    GtkContainer *c_box;
+    GtkWidget *save_btn;
+    enum save *save;
+    GPtrArray **arr;
+};
+
+static void
+save_cb (GtkButton *btn, struct save_data *data)
+{
+    GList *list, *l;
+
+    list = gtk_container_get_children (data->c_box);
+    for (l = list; l; l = l->next)
+    {
+        enum save save;
+
+        if (!gtk_toggle_button_get_active ((GtkToggleButton *) l->data))
+            continue;
+
+        save = GPOINTER_TO_UINT (g_object_get_data (l->data, "_save"));
+        if (save)
+            *data->save |= save;
+        else
+        {
+            struct column *_col;
+
+            _col = g_object_get_data (l->data, "_save_column");
+            if (!*data->arr)
+                *data->arr = g_ptr_array_new ();
+            g_ptr_array_add (*data->arr, _col);
+        }
+    }
+    g_list_free (list);
+
+    gtk_widget_destroy (data->window);
+}
+
+static void
+save_toggled (GtkToggleButton *btn, struct save_data *data)
+{
+    GList *list, *l;
+    gboolean active = FALSE;
+
+    list = gtk_container_get_children (data->c_box);
+    for (l = list; l; l = l->next)
+    {
+        if (!gtk_toggle_button_get_active ((GtkToggleButton *) l->data))
+            continue;
+
+        active = TRUE;
+        break;
+    }
+    g_list_free (list);
+
+    gtk_widget_set_sensitive (data->save_btn, active);
+}
+
+/**
+ * donna_tree_view_save_to_config:
+ * @tree: A #DonnaTreeView
+ * @elements: (allow-none): What to save to configuration, or %NULL
+ * @error: (allow-none): Return location of a #GError; or %NULL
+ *
+ * Saves to configuration the elements indicated in @elements
+ *
+ * For each element, the current value (i.e. in memory) will be saved to the
+ * configuration, at the same place values would be loaded from. For treeview
+ * and column options, this is the same as calling donna_tree_view_set_option()
+ * and donna_tree_view_column_set_option() for each supported options, %NULL as
+ * value and %DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT as save location.
+ *
+ * @elements can be a string, comma-separated list of one or more of the
+ * following:
+ *
+ * - <systemitem>:options</systemitem> : treeview options
+ * - <systemitem>:columns</systemitem> : columns (layout); i.e. which columns
+ *   are visible, and the order
+ * - <systemitem>:sort</systemitem> : (main) sort order
+ * - <systemitem>:second_sort</systemitem> : second sort order
+ * - <systemitem>:column_options</systemitem> : all column options of all
+ *   columns
+ * - or the name of a column, to save all of its options
+ *
+ * @elements can also be %NULL to ask which elements to save.
+ *
+ * Returns: %TRUE if everything was saved without error, else %FALSE
+ */
+gboolean
+donna_tree_view_save_to_config (DonnaTreeView      *tree,
+                                const gchar        *elements,
+                                GError            **error)
+{
+    GError *err = NULL;
+    DonnaTreeViewPrivate *priv;
+    DonnaConfig *config;
+    DonnaColumnOptionInfo *oi;
+    guint i;
+    GString *str = NULL;
+    enum save save = 0;
+    GPtrArray *arr = NULL;
+    gchar buf[32], *b = buf;
+    const gchar *s;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+
+    /* first, determine what needs to be saved */
+    if (!elements)
+    {
+        /* ask user */
+        GMainLoop *loop;
+        struct save_data data = { NULL, NULL, NULL, &save, &arr };
+        GtkWindow *win;
+        GtkBox *main_box;
+        GtkBox *box;
+        GtkWidget *w;
+        GSList *l;
+
+        data.window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+        gtk_widget_set_name (data.window, "save-to-config");
+        win = (GtkWindow *) data.window;
+        donna_app_add_window (priv->app, win, TRUE);
+        /* modal to prevent user for possibly doing things that would "mess
+         * things up" such as toggling columns or changing location/arrangement.
+         * Because otherwise we'd be referencing columns that don't exist
+         * anymore and likely segfault...
+         * XXX with socket, we'll have to figure out how to handle this */
+        gtk_window_set_modal (win, TRUE);
+        gtk_window_set_decorated (win, FALSE);
+        gtk_window_set_position (win, GTK_WIN_POS_CENTER_ON_PARENT);
+        gtk_window_set_resizable (win, FALSE);
+        g_object_set (win, "border-width", 6, NULL);
+        g_object_ref_sink (win);
+
+        main_box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+        gtk_container_add ((GtkContainer *) win, (GtkWidget *) main_box);
+        w = gtk_label_new ("Select the elements to save to configuration:");
+        gtk_box_pack_start (main_box, w, FALSE, FALSE, 4);
+
+        box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+        data.c_box = (GtkContainer *) box;
+        gtk_box_pack_start (main_box, (GtkWidget *) box, FALSE, FALSE, 0);
+
+        w = gtk_check_button_new_with_label ("TreeView Options");
+        g_object_set_data ((GObject *) w, "_save",
+                GUINT_TO_POINTER (SAVE_OPTIONS));
+        g_object_set (w, "active", TRUE, NULL);
+        g_signal_connect (w, "toggled", (GCallback) save_toggled, &data);
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+
+        w = gtk_check_button_new_with_label ("Columns (Layout)");
+        g_object_set_data ((GObject *) w, "_save",
+                GUINT_TO_POINTER (SAVE_COLUMNS));
+        g_object_set (w, "active", TRUE, NULL);
+        g_signal_connect (w, "toggled", (GCallback) save_toggled, &data);
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+
+        w = gtk_check_button_new_with_label ("Sort");
+        g_object_set_data ((GObject *) w, "_save",
+                GUINT_TO_POINTER (SAVE_SORT));
+        g_object_set (w, "active", TRUE, NULL);
+        g_signal_connect (w, "toggled", (GCallback) save_toggled, &data);
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+
+        w = gtk_check_button_new_with_label ("Second Sort");
+        g_object_set_data ((GObject *) w, "_save",
+                GUINT_TO_POINTER (SAVE_SECOND_SORT));
+        g_object_set (w, "active", TRUE, NULL);
+        g_signal_connect (w, "toggled", (GCallback) save_toggled, &data);
+        gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+
+        for (l = priv->columns; l; l = l->next)
+        {
+            struct column *_col = l->data;
+            gchar *lbl;
+
+            lbl = g_strdup_printf ("Column '%s' Options",
+                    gtk_tree_view_column_get_title (_col->column));
+            w = gtk_check_button_new_with_label (lbl);
+            g_free (lbl);
+            g_object_set_data ((GObject *) w, "_save_column", _col);
+            g_object_set (w, "active", TRUE, NULL);
+            g_signal_connect (w, "toggled", (GCallback) save_toggled, &data);
+            gtk_box_pack_start (box, w, FALSE, FALSE, 0);
+        }
+
+        w = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+        g_object_set (w, "margin-top", 10, NULL);
+        gtk_box_pack_start (main_box, w, FALSE, FALSE, 0);
+        box = (GtkBox *) w;
+
+        w = data.save_btn = gtk_button_new_with_label ("Save to Configuration");
+        gtk_button_set_image ((GtkButton *) w,
+                gtk_image_new_from_icon_name ("gtk-apply", GTK_ICON_SIZE_MENU));
+        g_signal_connect (w, "clicked", (GCallback) save_cb, &data);
+        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+        w = gtk_button_new_with_label ("Cancel");
+        gtk_button_set_image ((GtkButton *) w,
+                gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
+        g_signal_connect_swapped (w, "clicked",
+                (GCallback) gtk_widget_destroy, win);
+        gtk_box_pack_end (box, w, FALSE, FALSE, 3);
+
+        loop = g_main_loop_new (NULL, TRUE);
+        g_signal_connect_swapped (win, "destroy", (GCallback) g_main_loop_quit, loop);
+        gtk_widget_show_all ((GtkWidget *) win);
+        g_main_loop_run (loop);
+
+        if (save == 0 && !arr)
+            /* user cancel */
+            return TRUE;
+    }
+    else
+        for (;;)
+        {
+            skip_blank (elements);
+            s = elements;
+            for ( ; !(isblank (*s) || *s == ',' || *s == '\0'); ++s)
+                ;
+            if (s - elements >= 32)
+                b = g_strndup (elements, (gsize) (s - elements));
+            else
+            {
+                memcpy (buf, elements, (gsize) (s - elements) * sizeof (gchar));
+                buf[s - elements] = '\0';
+            }
+
+            if (streq (b, ":options"))
+                save |= SAVE_OPTIONS;
+            else if (streq (b, ":columns"))
+                save |= SAVE_COLUMNS;
+            else if (streq (b, ":sort"))
+                save |= SAVE_SORT;
+            else if (streq (b, ":second_sort"))
+                save |= SAVE_SECOND_SORT;
+            else if (streq (b, ":column_options"))
+                save |= SAVE_COLUMN_OPTIONS;
+            else
+            {
+                struct column *_col;
+
+                _col = get_column_by_name (tree, b);
+                if (!_col)
+                {
+                    g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                            DONNA_TREE_VIEW_ERROR_NOT_FOUND,
+                            "TreeView '%s': Cannot save to config, unknown column '%s'",
+                            priv->name, b);
+                    if (arr)
+                        g_ptr_array_unref (arr);
+                    if (b != buf)
+                        g_free (b);
+                    return FALSE;
+                }
+
+                if (!arr)
+                    arr = g_ptr_array_new ();
+                g_ptr_array_add (arr, _col);
+            }
+
+            if (b != buf)
+            {
+                g_free (b);
+                b = buf;
+            }
+
+            skip_blank (s);
+            if (*s == '\0')
+                break;
+        }
+
+    /* now we can actually save things */
+    config = donna_app_peek_config (priv->app);
+    /* now we're gonna save some options to the config. Set a flag so we ignore
+     * any signal from the config, otherwise we would trigger refresh of ct-data
+     * and lose the very in-memory settings we're supposed to save...
+     * Yes, we could also miss some legit signals, if another thread happens to
+     * also change relevant config options at the same time. Very unlikely
+     * though, and wouldn't cause that much issue. Too much trouble addressing
+     * it, so we don't. */
+    priv->saving_config = TRUE;
+
+    if (save & SAVE_OPTIONS)
+    {
+        gboolean go_again = TRUE;
+
+        i = G_N_ELEMENTS (_tv_options);
+        oi = _tv_options;
+
+again:
+        for ( ; i > 0; --i, ++oi)
+        {
+            if (!donna_tree_view_set_option (tree, oi->name, NULL,
+                        DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT, &err))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Failed to set treeview option '%s': %s",
+                        oi->name, (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+        }
+
+        if (go_again)
+        {
+            if (priv->is_tree)
+            {
+                i = G_N_ELEMENTS (_tree_options);
+                oi = _tree_options;
+            }
+            else
+            {
+                i = G_N_ELEMENTS (_list_options);
+                oi = _list_options;
+            }
+            go_again = FALSE;
+            goto again;
+        }
+    }
+
+    if (save & SAVE_COLUMNS)
+    {
+        if (G_UNLIKELY (!priv->arrangement))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save columns: "
+                    "No arrangement loaded");
+        }
+        else if (G_UNLIKELY (!priv->arrangement->columns_source))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save columns: "
+                    "No columns source in arrangement");
+        }
+        else if (!donna_config_set_string (config, &err, priv->arrangement->columns,
+                "%s/columns", priv->arrangement->columns_source))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save columns: %s",
+                    (err) ? err->message : "(no error message)");
+            g_clear_error (&err);
+        }
+    }
+
+    if (save & SAVE_SORT)
+    {
+        if (G_UNLIKELY (!priv->arrangement))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save sort: "
+                    "No arrangement loaded");
+        }
+        else if (G_UNLIKELY (!priv->arrangement->sort_source))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save sort: "
+                    "No sort source in arrangement");
+        }
+        else if (G_UNLIKELY (!priv->sort_column))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save sort: "
+                    "No sort defined");
+        }
+        else
+        {
+            if (!donna_config_set_string (config, &err,
+                        get_column_by_column (tree, priv->sort_column)->name,
+                        "%s/sort_column", priv->arrangement->sort_source))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Failed to save sort column: %s",
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            else if (priv->arrangement->sort_order != DONNA_SORT_UNKNOWN)
+            {
+                GtkSortType order;
+                gint id;
+
+                gtk_tree_sortable_get_sort_column_id ((GtkTreeSortable *) priv->store,
+                        &id, &order);
+                if (!donna_config_set_int (config, &err,
+                            (order == GTK_SORT_ASCENDING) ? DONNA_SORT_ASC : DONNA_SORT_DESC,
+                            "%s/sort_order", priv->arrangement->sort_source))
+                {
+                    if (!str)
+                        str = g_string_new (NULL);
+                    g_string_append_printf (str, "\n- Failed to save sort order: %s",
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+            }
+        }
+    }
+
+    if (save & SAVE_SECOND_SORT)
+    {
+        if (G_UNLIKELY (!priv->arrangement))
+        {
+            if (!str)
+                str = g_string_new (NULL);
+            g_string_append_printf (str, "\n- Failed to save second sort: "
+                    "No arrangement loaded");
+        }
+
+        if (priv->second_sort_column)
+        {
+            gchar *source;
+
+            if (priv->arrangement->second_sort_source)
+                source = priv->arrangement->second_sort_source;
+            else
+                source = priv->arrangement->sort_source;
+
+            if (G_UNLIKELY (!source))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Failed to save second sort: "
+                        "No sort source in arrangement");
+            }
+            else if (!donna_config_set_string (config, &err,
+                        get_column_by_column (tree, priv->second_sort_column)->name,
+                        "%s/second_sort_column", source))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Failed to save second sort column: %s",
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            else if (priv->arrangement->second_sort_order != DONNA_SORT_UNKNOWN)
+            {
+                if (!donna_config_set_int (config, &err,
+                            (priv->second_sort_order == GTK_SORT_ASCENDING)
+                            ? DONNA_SORT_ASC : DONNA_SORT_DESC,
+                            "%s/second_sort_order", source))
+                {
+                    if (!str)
+                        str = g_string_new (NULL);
+                    g_string_append_printf (str, "\n- Failed to save second sort order: %s",
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+            }
+        }
+        else if (priv->arrangement->second_sort_column
+                && priv->arrangement->second_sort_source)
+        {
+            if (!donna_config_remove_option (config, &err, "%s/second_sort_column",
+                        priv->arrangement->second_sort_source))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str, "\n- Failed to remove second sort: %s",
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+        }
+    }
+
+    if (save & SAVE_COLUMN_OPTIONS || arr)
+    {
+        GSList *l = NULL;
+
+        if (arr)
+            i = 0;
+        else
+            l = priv->columns;
+
+        for (;;)
+        {
+            struct column *_col;
+            guint nb_options;
+
+            if (arr)
+            {
+                if (i >= arr->len)
+                    break;
+                _col = arr->pdata[i];
+            }
+            else
+            {
+                if (!l)
+                    break;
+                _col= l->data;
+            }
+
+            if (!donna_tree_view_column_set_option (tree, _col->name, "title",
+                        NULL, DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT, &err))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str,
+                        "\n- Failed to set option '%s' for column '%s': %s",
+                        "title",
+                        _col->name,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            if (!donna_tree_view_column_set_option (tree, _col->name, "width",
+                        NULL, DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT, &err))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str,
+                        "\n- Failed to set option '%s' for column '%s': %s",
+                        "width",
+                        _col->name,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
+            donna_column_type_get_options (_col->ct, &oi, &nb_options);
+            for ( ; nb_options > 0; --nb_options, ++oi)
+            {
+                if (!donna_tree_view_column_set_option (tree, _col->name, oi->name,
+                            NULL, DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT, &err))
+                {
+                    if (!str)
+                        str = g_string_new (NULL);
+                    g_string_append_printf (str,
+                            "\n- Failed to set option '%s' for column '%s': %s",
+                            oi->name,
+                            _col->name,
+                            (err) ? err->message : "(no error message)");
+                    g_clear_error (&err);
+                }
+            }
+
+            if (arr)
+                ++i;
+            else
+                l = l->next;
+        }
+        if (arr)
+            g_ptr_array_unref (arr);
+    }
+
+    priv->saving_config = FALSE;
+
+    if (str)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "TreeView '%s': Failed to save the following to configuration:\n%s",
+                priv->name, str->str);
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+
+    str = g_string_new (NULL);
+    g_string_append_printf (str, "TreeView '%s': ", priv->name);
+    if (save & SAVE_OPTIONS)
+        g_string_append (str, "treeview options, ");
+    if (save & SAVE_COLUMNS)
+        g_string_append (str, "columns, ");
+    if (save & SAVE_SORT)
+        g_string_append (str, "sort, ");
+    if (save & SAVE_SECOND_SORT)
+        g_string_append (str, "second sort, ");
+    if (save & SAVE_COLUMN_OPTIONS || arr)
+        g_string_append (str, "columns options, ");
+    g_string_truncate (str, str->len - 2);
+    g_string_append (str, " saved to config");
+    donna_app_emit_info (priv->app, NULL, str->str);
+    g_string_free (str, TRUE);
+
+    return TRUE;
 }
 
 
