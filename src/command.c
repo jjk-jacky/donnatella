@@ -2366,7 +2366,7 @@ cmd_tv_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
  * @tree: A treeview
  * @column: The name of a column
  * @option: The name of the column option to set
- * @value: The value to set
+ * @value: (allow-none): The value to set
  * @location: (allow-none): Save location for the option
  *
  * Sets the column option @option for @column in @tree to @value
@@ -2383,7 +2383,7 @@ cmd_tv_column_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
     const gchar *column = args[1];
     const gchar *option = args[2];
-    const gchar *value  = args[3];
+    const gchar *value  = args[3]; /* opt */
     const gchar *s_l    = args[4]; /* opt */
 
     const gchar *c_s_l[] = { "memory", "current", "ask", "arrangement", "tree",
@@ -4574,7 +4574,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (tv_column_set_option, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);

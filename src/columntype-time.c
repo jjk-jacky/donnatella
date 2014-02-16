@@ -2054,44 +2054,53 @@ ct_time_set_option (DonnaColumnType    *ct,
                     GError            **error)
 {
     struct tv_col_data *data = _data;
+    gpointer v;
 
     if (streq (option, "property"))
     {
+        v = (value) ? value : &data->property;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/time",
                     &save_location,
-                    option, G_TYPE_STRING, &data->property, value, error))
+                    option, G_TYPE_STRING, &data->property, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property);
-        data->property = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property);
+            data->property = g_strdup (* (gchar **) value);
 
-        if (streq (data->property, "mtime"))
-            data->which = WHICH_MTIME;
-        else if (streq (data->property, "atime"))
-            data->which = WHICH_ATIME;
-        else if (streq (data->property, "ctime"))
-            data->which = WHICH_CTIME;
-        else
-            data->which = WHICH_OTHER;
+            if (streq (data->property, "mtime"))
+                data->which = WHICH_MTIME;
+            else if (streq (data->property, "atime"))
+                data->which = WHICH_ATIME;
+            else if (streq (data->property, "ctime"))
+                data->which = WHICH_CTIME;
+            else
+                data->which = WHICH_OTHER;
+        }
 
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "format"))
     {
+        v = (value) ? value : &data->format;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "time", &save_location,
-                    option, G_TYPE_STRING, &data->format, value, error))
+                    option, G_TYPE_STRING, &data->format, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->format);
-        data->format = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->format);
+            data->format = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "age_span_seconds"))
@@ -2099,15 +2108,17 @@ ct_time_set_option (DonnaColumnType    *ct,
         gint c;
 
         c = (gint) data->options.age_span_seconds;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "time", &save_location,
-                    option, G_TYPE_INT, &c, value, error))
+                    option, G_TYPE_INT, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        data->options.age_span_seconds = (guint) * (gint *) value;
+        if (value)
+            data->options.age_span_seconds = (guint) * (gint *) value;
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "age_fallback_format"))
@@ -2115,56 +2126,68 @@ ct_time_set_option (DonnaColumnType    *ct,
         gchar *c;
 
         c = (gchar *) data->options.age_fallback_format;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "time", &save_location,
-                    option, G_TYPE_STRING, &c, value, error))
+                    option, G_TYPE_STRING, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (c);
-        data->options.age_fallback_format = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (c);
+            data->options.age_fallback_format = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_tooltip"))
     {
+        v = (value) ? value : &data->property_tooltip;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/time",
                     &save_location,
-                    option, G_TYPE_STRING, &data->property_tooltip, value, error))
+                    option, G_TYPE_STRING, &data->property_tooltip, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property_tooltip);
-        data->property_tooltip = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property_tooltip);
+            data->property_tooltip = g_strdup (* (gchar **) value);
 
-        if (streq (data->property_tooltip, "mtime"))
-            data->which_tooltip = WHICH_MTIME;
-        else if (streq (data->property_tooltip, "atime"))
-            data->which_tooltip = WHICH_ATIME;
-        else if (streq (data->property_tooltip, "ctime"))
-            data->which_tooltip = WHICH_CTIME;
-        else
-            data->which_tooltip = WHICH_OTHER;
+            if (streq (data->property_tooltip, "mtime"))
+                data->which_tooltip = WHICH_MTIME;
+            else if (streq (data->property_tooltip, "atime"))
+                data->which_tooltip = WHICH_ATIME;
+            else if (streq (data->property_tooltip, "ctime"))
+                data->which_tooltip = WHICH_CTIME;
+            else
+                data->which_tooltip = WHICH_OTHER;
+        }
 
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
     else if (streq (option, "format_tooltip"))
     {
+        v = (value) ? value : &data->format_tooltip;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/time",
                     &save_location,
-                    option, G_TYPE_STRING, &data->format_tooltip, value, error))
+                    option, G_TYPE_STRING, &data->format_tooltip, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->format_tooltip);
-        data->format_tooltip = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->format_tooltip);
+            data->format_tooltip = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
     else if (streq (option, "age_span_seconds_tooltip"))
@@ -2172,15 +2195,17 @@ ct_time_set_option (DonnaColumnType    *ct,
         gint c;
 
         c = (gint) data->options_tooltip.age_span_seconds;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_INT, &c, value, error))
+                    option, G_TYPE_INT, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        data->options_tooltip.age_span_seconds = (guint) * (gint *) value;
+        if (value)
+            data->options_tooltip.age_span_seconds = (guint) * (gint *) value;
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
     else if (streq (option, "age_fallback_format_tooltip"))
@@ -2188,16 +2213,20 @@ ct_time_set_option (DonnaColumnType    *ct,
         gchar *c;
 
         c = (gchar *) data->options_tooltip.age_fallback_format;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &c, value, error))
+                    option, G_TYPE_STRING, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (c);
-        data->options_tooltip.age_fallback_format = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (c);
+            data->options_tooltip.age_fallback_format = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
 

@@ -647,61 +647,78 @@ ct_progress_set_option (DonnaColumnType    *ct,
                         GError            **error)
 {
     struct tv_col_data *data = _data;
+    gpointer v;
 
     if (streq (option, "property"))
     {
+        v = (value) ? value : &data->property;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property, value, error))
+                    option, G_TYPE_STRING, &data->property, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property);
-        data->property = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property);
+            data->property = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_lbl"))
     {
+        v = (value) ? value : &data->property_lbl;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property_lbl, value, error))
+                    option, G_TYPE_STRING, &data->property_lbl, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property_lbl);
-        data->property_lbl = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property_lbl);
+            data->property_lbl = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_pulse"))
     {
+        v = (value) ? value : &data->property_pulse;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property_pulse, value, error))
+                    option, G_TYPE_STRING, &data->property_pulse, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property_pulse);
-        data->property_pulse = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property_pulse);
+            data->property_pulse = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "label"))
     {
+        v = (value) ? value : &data->label;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->label, value, error))
+                    option, G_TYPE_STRING, &data->label, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->label);
-        data->label = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->label);
+            data->label = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 

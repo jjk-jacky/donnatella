@@ -2689,101 +2689,131 @@ ct_perms_set_option (DonnaColumnType    *ct,
                      GError            **error)
 {
     struct tv_col_data *data = _data;
+    gpointer v;
 
     if (streq (option, "format"))
     {
+        v = (value) ? value : &data->format;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_STRING, &data->format, value, error))
+                    option, G_TYPE_STRING, &data->format, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->format);
-        data->format = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->format);
+            data->format = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "format_tooltip"))
     {
-        if (** (gchar **) value == '\0')
-            value = NULL;
+        if (value)
+        {
+            if (** (gchar **) value == '\0')
+                v = NULL;
+            else
+                v = value;
+        }
+        else
+            v = &data->format_tooltip;
+
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_STRING, &data->format_tooltip, value, error))
+                    option, G_TYPE_STRING, &data->format_tooltip, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->format_tooltip);
         if (value)
-            data->format_tooltip = g_strdup (* (gchar **) value);
-        else
-            data->format_tooltip = NULL;
+        {
+            g_free (data->format_tooltip);
+            if (v)
+                data->format_tooltip = g_strdup (* (gchar **) value);
+            else
+                data->format_tooltip = NULL;
+        }
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
     else if (streq (option, "color_user"))
     {
+        v = (value) ? value : &data->color_user;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_STRING, &data->color_user, value, error))
+                    option, G_TYPE_STRING, &data->color_user, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->color_user);
-        data->color_user = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->color_user);
+            data->color_user = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "color_group"))
     {
+        v = (value) ? value : &data->color_group;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_STRING, &data->color_group, value, error))
+                    option, G_TYPE_STRING, &data->color_group, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->color_group);
-        data->color_group = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->color_group);
+            data->color_group = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "color_mixed"))
     {
+        v = (value) ? value : &data->color_mixed;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_STRING, &data->color_mixed, value, error))
+                    option, G_TYPE_STRING, &data->color_mixed, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->color_mixed);
-        data->color_mixed = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->color_mixed);
+            data->color_mixed = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "sort"))
     {
         gint c = data->sort;
+        v = (value) ? value : &c;
 
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_INT, &c, value, error))
+                    option, G_TYPE_INT, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        data->sort = (gint8) * (gint *) value;
+        if (value)
+            data->sort = (gint8) * (gint *) value;
         return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
 

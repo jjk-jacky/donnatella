@@ -920,7 +920,6 @@ donna_column_type_set_option (DonnaColumnType   *ct,
     g_return_val_if_fail (tv_name != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
     g_return_val_if_fail (col_name != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
     g_return_val_if_fail (option != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
-    g_return_val_if_fail (value != NULL, DONNA_COLUMN_TYPE_NEED_NOTHING);
 
     interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 

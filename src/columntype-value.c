@@ -1344,49 +1344,60 @@ ct_value_set_option (DonnaColumnType    *ct,
                      GError            **error)
 {
     struct tv_col_data *data = _data;
+    gpointer v;
 
     if (streq (option, "property_value"))
     {
+        v = (value) ? value : &data->prop_value;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/value",
                     &save_location,
-                    option, G_TYPE_STRING, &data->prop_value, value, error))
+                    option, G_TYPE_STRING, &data->prop_value, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->prop_value);
-        data->prop_value = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->prop_value);
+            data->prop_value = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "property_extra"))
     {
+        v = (value) ? value : &data->prop_extra;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/value",
                     &save_location,
-                    option, G_TYPE_STRING, &data->prop_extra, value, error))
+                    option, G_TYPE_STRING, &data->prop_extra, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->prop_extra);
-        data->prop_extra = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->prop_extra);
+            data->prop_extra = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "show_type"))
     {
+        v = (value) ? value : &data->show_type;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/value",
                     &save_location,
-                    option, G_TYPE_BOOLEAN, &data->show_type, value, error))
+                    option, G_TYPE_BOOLEAN, &data->show_type, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        data->show_type = * (gboolean *) value;
+        if (value)
+            data->show_type = * (gboolean *) value;
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 

@@ -12413,7 +12413,7 @@ parse_option_value (DonnaConfig             *config,
  * @tree: A #DonnaTreeView
  * @column: Name of the column
  * @option: Name of the option
- * @value: String representation of the value to set
+ * @value: (allow-none): String representation of the value to set, or %NULL
  * @save_location: Where to save the option
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
@@ -12451,7 +12451,6 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
     g_return_val_if_fail (column != NULL, FALSE);
     g_return_val_if_fail (option != NULL, FALSE);
-    g_return_val_if_fail (value != NULL, FALSE);
     g_return_val_if_fail (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT
             || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ARRANGEMENT
@@ -12484,21 +12483,29 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     option,
                     G_TYPE_STRING,
                     &current,
-                    (gpointer) &value,
+                    (value) ? (gpointer) &value : &current,
                     &err))
             goto done;
 
         if (save_location != DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
             return TRUE;
 
-        gtk_tree_view_column_set_title (_col->column, value);
-        gtk_label_set_text ((GtkLabel *) _col->label, value);
+        if (value)
+        {
+            gtk_tree_view_column_set_title (_col->column, value);
+            gtk_label_set_text ((GtkLabel *) _col->label, value);
+        }
         return TRUE;
     }
     else if (streq (option, "width"))
     {
         gint current = gtk_tree_view_column_get_fixed_width (_col->column);
-        gint new = (gint) g_ascii_strtoll (value, NULL, 10);
+        gint new;
+
+        if (value)
+            new = (gint) g_ascii_strtoll (value, NULL, 10);
+        else
+            new = current;
 
         /* we "abuse" the fact that we are a columntype as well */
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (tree)->helper_set_option (_col->ct,
@@ -12538,8 +12545,8 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
         return FALSE;
     }
 
-    if (!parse_option_value (donna_app_peek_config (priv->app), oi, value,
-                &s_val, &val, &toggle, error))
+    if (value && !parse_option_value (donna_app_peek_config (priv->app), oi,
+                value, &s_val, &val, &toggle, error))
     {
         g_prefix_error (error, "TreeView '%s': Cannot set option '%s' on column '%s': ",
                 priv->name, option, _col->name);
@@ -12552,7 +12559,9 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
             priv->is_tree,
             _col->ct_data,
             option,
-            (oi->type == G_TYPE_STRING) ? (gpointer) &s_val : (gpointer) &val,
+            (value)
+            ? (oi->type == G_TYPE_STRING) ? (gpointer) &s_val : (gpointer) &val
+            : NULL,
             toggle,
             save_location,
             &err);
@@ -21541,33 +21550,38 @@ columntype_set_option (DonnaColumnType    *ct,
                        GError            **error)
 {
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) ct)->priv;
+    gpointer v;
 
     if (streq (option, "relative"))
     {
+        v = (value) ? value : &priv->ln_relative;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
                     arr_name, tv_name, is_tree, "column_types/line-numbers",
                     &save_location,
-                    option, G_TYPE_BOOLEAN, &priv->ln_relative, value, error))
+                    option, G_TYPE_BOOLEAN, &priv->ln_relative, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        priv->ln_relative = * (gboolean *) value;
+        if (value)
+            priv->ln_relative = * (gboolean *) value;
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else if (streq (option, "relative_focused"))
     {
+        v = (value) ? value : &priv->ln_relative_focused;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct, col_name,
                     arr_name, tv_name, is_tree, "column_types/line-numbers",
                     &save_location,
-                    option, G_TYPE_BOOLEAN, &priv->ln_relative_focused, value, error))
+                    option, G_TYPE_BOOLEAN, &priv->ln_relative_focused, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        priv->ln_relative_focused = * (gboolean *) value;
+        if (value)
+            priv->ln_relative_focused = * (gboolean *) value;
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 

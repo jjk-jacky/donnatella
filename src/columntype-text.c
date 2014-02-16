@@ -714,105 +714,130 @@ ct_text_set_option (DonnaColumnType    *ct,
 {
     struct tv_col_data *data = _data;
     gboolean c;
+    gpointer v;
 
     if (streq (option, "property"))
     {
+        v = (value) ? value : &data->property;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property, value, error))
+                    option, G_TYPE_STRING, &data->property, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property);
-        data->property = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property);
+            data->property = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
     if (streq (option, "natural_order"))
     {
         c = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, value, error))
+                    option, G_TYPE_BOOLEAN, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (* (gboolean *) value)
-            data->options |= DONNA_SORT_NATURAL_ORDER;
-        else
-            data->options &= (DonnaSortOptions) ~DONNA_SORT_NATURAL_ORDER;
+        if (value)
+        {
+            if (* (gboolean *) value)
+                data->options |= DONNA_SORT_NATURAL_ORDER;
+            else
+                data->options &= (DonnaSortOptions) ~DONNA_SORT_NATURAL_ORDER;
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else if (streq (option, "dot_first"))
     {
         c = (data->options & DONNA_SORT_DOT_FIRST) ? TRUE : FALSE;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, value, error))
+                    option, G_TYPE_BOOLEAN, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (* (gboolean *) value)
-            data->options |= DONNA_SORT_DOT_FIRST;
-        else
-            data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_FIRST;
+        if (value)
+        {
+            if (* (gboolean *) value)
+                data->options |= DONNA_SORT_DOT_FIRST;
+            else
+                data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_FIRST;
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else if (streq (option, "case_sensitive"))
     {
         c = (data->options & DONNA_SORT_CASE_INSENSITIVE) ? FALSE : TRUE;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, value, error))
+                    option, G_TYPE_BOOLEAN, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (* (gboolean *) value)
-            data->options &= (DonnaSortOptions) ~DONNA_SORT_CASE_INSENSITIVE;
-        else
-            data->options |= DONNA_SORT_CASE_INSENSITIVE;
+        if (value)
+        {
+            if (* (gboolean *) value)
+                data->options &= (DonnaSortOptions) ~DONNA_SORT_CASE_INSENSITIVE;
+            else
+                data->options |= DONNA_SORT_CASE_INSENSITIVE;
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else if (streq (option, "dot_mixed"))
     {
         c = (data->options & DONNA_SORT_DOT_MIXED) ? TRUE : FALSE;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, value, error))
+                    option, G_TYPE_BOOLEAN, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (* (gboolean *) value)
-            data->options |= DONNA_SORT_DOT_MIXED;
-        else
-            data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_MIXED;
+        if (value)
+        {
+            if (* (gboolean *) value)
+                data->options |= DONNA_SORT_DOT_MIXED;
+            else
+                data->options &= (DonnaSortOptions) ~DONNA_SORT_DOT_MIXED;
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else if (streq (option, "ignore_spunct"))
     {
         c = (data->options & DONNA_SORT_IGNORE_SPUNCT) ? TRUE : FALSE;
+        v = (value) ? value : &c;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "sort", &save_location,
-                    option, G_TYPE_BOOLEAN, &c, value, error))
+                    option, G_TYPE_BOOLEAN, &c, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        if (* (gboolean *) value)
-            data->options |= DONNA_SORT_IGNORE_SPUNCT;
-        else
-            data->options &= (DonnaSortOptions) ~DONNA_SORT_IGNORE_SPUNCT;
+        if (value)
+        {
+            if (* (gboolean *) value)
+                data->options |= DONNA_SORT_IGNORE_SPUNCT;
+            else
+                data->options &= (DonnaSortOptions) ~DONNA_SORT_IGNORE_SPUNCT;
+        }
         return DONNA_COLUMN_TYPE_NEED_RESORT;
     }
 

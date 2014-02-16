@@ -526,34 +526,43 @@ ct_label_set_option (DonnaColumnType    *ct,
                      GError            **error)
 {
     struct tv_col_data *data = _data;
+    gpointer v;
 
     if (streq (option, "property"))
     {
+        v = (value) ? value : &data->property;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->property, value, error))
+                    option, G_TYPE_STRING, &data->property, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->property);
-        data->property = g_strdup (* (gchar **) value);
+        if (value)
+        {
+            g_free (data->property);
+            data->property = g_strdup (* (gchar **) value);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW | DONNA_COLUMN_TYPE_NEED_RESORT;
     }
     else if (streq (option, "labels"))
     {
+        v = (value) ? value : &data->labels;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, NULL, &save_location,
-                    option, G_TYPE_STRING, &data->labels, value, error))
+                    option, G_TYPE_STRING, &data->labels, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-        g_free (data->labels);
-        data->labels = g_strdup (* (gchar **) value);
-        set_data_labels (data);
+        if (value)
+        {
+            g_free (data->labels);
+            data->labels = g_strdup (* (gchar **) value);
+            set_data_labels (data);
+        }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
 
