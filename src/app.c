@@ -4581,7 +4581,7 @@ status_conv (const gchar             c,
 
                 status_parse_fmt (sc->app, sc->sd, ss, sc->str, FALSE);
                 g_free (ss);
-                return TRUE;
+                return FALSE;
             }
 
         case 'd':
@@ -4601,7 +4601,7 @@ status_conv (const gchar             c,
 
                 status_parse_fmt (sc->app, sc->sd, ss, sc->str, FALSE);
                 g_free (ss);
-                return TRUE;
+                return FALSE;
             }
     }
     return FALSE;
