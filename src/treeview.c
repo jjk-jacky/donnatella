@@ -12484,7 +12484,7 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
                     option,
                     G_TYPE_STRING,
                     &current,
-                    (gpointer) value,
+                    (gpointer) &value,
                     &err))
             goto done;
 
