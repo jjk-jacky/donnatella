@@ -580,7 +580,6 @@ struct _DonnaAppPrivate
     DonnaTreeView   *focused_tree;
     gulong           sid_active_location;
     GSList          *statuses;
-    GArray          *status_donna;
     gchar           *config_dir;
     gchar           *cur_dirname;
     /* visuals are under a RW lock so everyone can read them at the same time
@@ -604,6 +603,7 @@ struct _DonnaAppPrivate
     GHashTable      *filters;
     GHashTable      *intrefs;
     guint            intrefs_timeout;
+    GArray          *status_donna;
 };
 
 struct argmt
@@ -4332,6 +4332,7 @@ status_clear (struct status_clear *sc)
     struct status_donna *sd;
     guint i;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -4340,13 +4341,14 @@ status_clear (struct status_clear *sc)
     }
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         return G_SOURCE_REMOVE;
+    }
 
     g_free (sd->info);
     g_free (sd->details);
     sd->info = sd->details = NULL;
-
-    donna_status_provider_status_changed ((DonnaStatusProvider *) sc->app, sc->id);
 
     if (sd->sce_timeout > 0)
     {
@@ -4354,6 +4356,9 @@ status_clear (struct status_clear *sc)
         sd->sce_timeout = 0;
     }
 
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    donna_status_provider_status_changed ((DonnaStatusProvider *) sc->app, sc->id);
     return G_SOURCE_REMOVE;
 }
 
@@ -4372,6 +4377,7 @@ static void status_info (DonnaApp       *app,
     gchar *s;
     gint timeout;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -4380,7 +4386,10 @@ static void status_info (DonnaApp       *app,
     }
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         return;
+    }
 
     g_free (sd->info);
     g_free (sd->details);
@@ -4426,8 +4435,6 @@ static void status_info (DonnaApp       *app,
             destroy (s);
     }
 
-    donna_status_provider_status_changed ((DonnaStatusProvider *) app, id);
-
     if (sd->sce_timeout > 0)
     {
         g_source_remove (sd->sce_timeout);
@@ -4450,6 +4457,10 @@ static void status_info (DonnaApp       *app,
                     (GSourceFunc) status_clear, sc, (GDestroyNotify) free_status_clear);
         }
     }
+
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    donna_status_provider_status_changed ((DonnaStatusProvider *) app, id);
 }
 
 static guint
@@ -4470,6 +4481,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
         return 0;
     }
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     if (!priv->status_donna)
         priv->status_donna = g_array_sized_new (FALSE, FALSE,
                 sizeof (struct status_donna), 1);
@@ -4489,6 +4501,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
     g_free (fmt);
 
     g_array_append_val (priv->status_donna, sd);
+    g_rec_mutex_unlock (&priv->rec_mutex);
     return sd.id;
 }
 
@@ -4499,6 +4512,7 @@ status_provider_free_status (DonnaStatusProvider    *sp,
     DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
     guint i;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         struct status_donna *sd = &g_array_index (priv->status_donna,
@@ -4515,6 +4529,7 @@ status_provider_free_status (DonnaStatusProvider    *sp,
             break;
         }
     }
+    g_rec_mutex_unlock (&priv->rec_mutex);
 }
 
 static const gchar *
@@ -4524,14 +4539,19 @@ status_provider_get_renderers (DonnaStatusProvider    *sp,
     DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
     guint i;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         struct status_donna *sd = &g_array_index (priv->status_donna,
                 struct status_donna, i);
 
         if (sd->id == id)
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
             return "t";
+        }
     }
+    g_rec_mutex_unlock (&priv->rec_mutex);
     return NULL;
 }
 
@@ -4631,6 +4651,7 @@ status_provider_render (DonnaStatusProvider    *sp,
     gchar *fmt;
     guint i;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -4640,6 +4661,7 @@ status_provider_render (DonnaStatusProvider    *sp,
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
     {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         g_object_set (renderer, "visible", FALSE, NULL);
         return;
     }
@@ -4647,11 +4669,13 @@ status_provider_render (DonnaStatusProvider    *sp,
     if (!donna_config_get_string (priv->config, NULL, &fmt,
                 "statusbar/%s/format", sd->name))
     {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         g_object_set (renderer, "visible", FALSE, NULL);
         return;
     }
 
     status_parse_fmt ((DonnaApp *) sp, sd, fmt, &str, TRUE);
+    g_rec_mutex_unlock (&priv->rec_mutex);
     g_free (fmt);
 
     if (str && str->len > 0)
@@ -4681,6 +4705,7 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
     guint i;
     gboolean show;
 
+    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -4689,13 +4714,17 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
     }
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         return FALSE;
+    }
 
     if (!donna_config_get_string (priv->config, NULL, &fmt,
                 "statusbar/%s/format_tooltip", sd->name))
         return FALSE;
 
     status_parse_fmt ((DonnaApp *) sp, sd, fmt, &str, TRUE);
+    g_rec_mutex_unlock (&priv->rec_mutex);
     g_free (fmt);
 
     show = str && str->len > 0;
