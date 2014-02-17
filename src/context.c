@@ -161,8 +161,9 @@ donna_context_parse (DonnaContext       *context,
                 /* adjust for dereference operator, if any */
                 s += pos;
 
-            if (G_UNLIKELY (!context->conv (s[1], extra, &type, &ptr, &destroy,
-                            context->data)))
+            /* it can be FALSE when the variable doesn't actually resolve to
+             * anything, e.g. it's for a current location and there are none */
+            if (!context->conv (s[1], extra, &type, &ptr, &destroy, context->data))
             {
                 s += 2;
                 fmt = s;
