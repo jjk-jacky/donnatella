@@ -1191,11 +1191,50 @@ editing_started_cb (GtkCellRenderer     *renderer,
                     gchar               *path,
                     struct editing_data *ed)
 {
+    struct tv_col_data *data = ed->data;
+    GValue value = G_VALUE_INIT;
+    DonnaNodeHasValue has;
+    guint64 time;
+    gchar *s;
+
     g_signal_handler_disconnect (renderer, ed->sid);
     ed->entry = (GtkEntry *) editable;
     set_entry_icon (ed->entry);
     ed->sid = g_signal_connect (editable, "editing-done",
             (GCallback) editing_done_cb, ed);
+
+    if (data->which == WHICH_MTIME)
+        has = donna_node_get_mtime (ed->node, FALSE, &time);
+    else if (data->which == WHICH_ATIME)
+        has = donna_node_get_atime (ed->node, FALSE, &time);
+    else if (data->which == WHICH_CTIME)
+        has = donna_node_get_ctime (ed->node, FALSE, &time);
+    else
+        donna_node_get (ed->node, FALSE, data->property, &has, &value, NULL);
+
+    if (has != DONNA_NODE_VALUE_SET)
+    {
+        g_warning ("ColumnType 'time': Failed to get property value "
+                "in order to set initial editing value");
+        return;
+    }
+    else if (data->which == WHICH_OTHER)
+    {
+        if (G_VALUE_TYPE (&value) != G_TYPE_UINT64)
+        {
+            warn_not_uint64 (ed->node);
+            g_value_unset (&value);
+            g_warning ("ColumnType 'time': Failed to get property value "
+                    "in order to set initial editing value");
+            return;
+        }
+        time = g_value_get_uint64 (&value);
+        g_value_unset (&value);
+    }
+
+    s = donna_print_time (time, "%Y-%m-%d %H:%M:%S", &data->options);
+    gtk_entry_set_text (ed->entry, s);
+    g_free (s);
 }
 
 static gboolean
