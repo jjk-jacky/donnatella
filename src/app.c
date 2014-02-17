@@ -5054,123 +5054,103 @@ load_widget (DonnaApp    *app,
     return NULL;
 }
 
-static gchar *
-parse_string (DonnaApp *app, gchar *fmt)
+static gboolean
+conv_app (const gchar        c,
+          gchar             *extra,
+          DonnaArgType      *type,
+          gpointer          *ptr,
+          GDestroyNotify    *destroy,
+          DonnaApp          *app)
 {
     DonnaAppPrivate *priv = app->priv;
-    GString *str = NULL;
-    gchar *s = fmt;
     DonnaNode *node;
-    gchar *ss;
 
-    while ((s = strchr (s, '%')))
+    switch (c)
     {
-        switch (s[1])
-        {
-            case 'a':
-                if (!str)
-                    str = g_string_new (NULL);
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append (str, donna_tree_view_get_name (priv->active_list));
-                s += 2;
-                fmt = s;
-                break;
+        case 'a':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = (gpointer) donna_tree_view_get_name (priv->active_list);
+            return TRUE;
 
-            case 'd':
-                if (!str)
-                    str = g_string_new (NULL);
-                g_string_append_len (str, fmt, s - fmt);
-                if (priv->cur_dirname)
-                    g_string_append (str, priv->cur_dirname);
-                s += 2;
-                fmt = s;
-                break;
+        case 'd':
+            if (!priv->cur_dirname)
+                return FALSE;
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = priv->cur_dirname;
+            return TRUE;
 
-            case 'L':
-                if (!str)
-                    str = g_string_new (NULL);
-                g_string_append_len (str, fmt, s - fmt);
-                node = donna_tree_view_get_location (priv->active_list);
-                if (G_LIKELY (node))
-                {
-                    const gchar *domain;
-                    gint type;
+        case 'L':
+            node = donna_tree_view_get_location (priv->active_list);
+            if (G_LIKELY (node))
+            {
+                const gchar *domain;
+                gint t;
 
-                    domain = donna_node_get_domain (node);
-                    if (!donna_config_get_int (priv->config, NULL, &type,
-                                "donna/domain_%s", domain))
-                        type = (streq ("fs", domain))
-                            ? TITLE_DOMAIN_LOCATION : TITLE_DOMAIN_FULL_LOCATION;
+                domain = donna_node_get_domain (node);
+                if (!donna_config_get_int (priv->config, NULL, &t,
+                            "donna/domain_%s", domain))
+                    t = (streq ("fs", domain))
+                        ? TITLE_DOMAIN_LOCATION : TITLE_DOMAIN_FULL_LOCATION;
 
-                    if (type == TITLE_DOMAIN_LOCATION)
-                        ss = donna_node_get_location (node);
-                    else if (type == TITLE_DOMAIN_FULL_LOCATION)
-                        ss = donna_node_get_full_location (node);
-                    else if (type == TITLE_DOMAIN_CUSTOM)
-                        if (!donna_config_get_string (priv->config, NULL, &ss,
-                                    "donna/custom_%s", domain))
-                            ss = donna_node_get_name (node);
+                if (t == TITLE_DOMAIN_LOCATION)
+                    *ptr = donna_node_get_location (node);
+                else if (t == TITLE_DOMAIN_FULL_LOCATION)
+                    *ptr = donna_node_get_full_location (node);
+                else if (t == TITLE_DOMAIN_CUSTOM)
+                    if (!donna_config_get_string (priv->config, NULL, (gchar **) ptr,
+                                "donna/custom_%s", domain))
+                        *ptr = donna_node_get_name (node);
 
-                    g_string_append (str, ss);
-                    g_free (ss);
-                    g_object_unref (node);
-                }
-                s += 2;
-                fmt = s;
-                break;
+                *type = DONNA_ARG_TYPE_STRING;
+                *destroy = g_free;
+                g_object_unref (node);
+                return TRUE;
+            }
+            return FALSE;
 
-            case 'l':
-                if (!str)
-                    str = g_string_new (NULL);
-                g_string_append_len (str, fmt, s - fmt);
-                node = donna_tree_view_get_location (priv->active_list);
-                if (G_LIKELY (node))
-                {
-                    ss = donna_node_get_full_location (node);
-                    g_string_append (str, ss);
-                    g_free (ss);
-                    g_object_unref (node);
-                }
-                s += 2;
-                fmt = s;
-                break;
+        case 'l':
+            node = donna_tree_view_get_location (priv->active_list);
+            if (G_LIKELY (node))
+            {
+                *type = DONNA_ARG_TYPE_STRING;
+                *ptr = donna_node_get_full_location (node);
+                *destroy = g_free;
+                g_object_unref (node);
+                return TRUE;
+            }
+            return FALSE;
 
-            case 'v':
-                if (!str)
-                    str = g_string_new (NULL);
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append (str, PACKAGE_VERSION);
-                s += 2;
-                fmt = s;
-                break;
-
-            default:
-                s += 2;
-                break;
-        }
+        case 'v':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = (gpointer) PACKAGE_VERSION;
+            return TRUE;
     }
 
-    if (!str)
-        return NULL;
+    return FALSE;
+}
 
-    g_string_append (str, fmt);
-    return g_string_free (str, FALSE);
+static inline void
+parse_app (DonnaApp *app, const gchar *fmt, GString **str)
+{
+    DonnaContext context = { "adlLv", FALSE, (conv_flag_fn) conv_app, app };
+    donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, app, fmt, str, NULL);
 }
 
 static void
 refresh_window_title (DonnaApp *app)
 {
     DonnaAppPrivate *priv = app->priv;
+    GString *str = NULL;
     gchar *def = (gchar *) "%L - Donnatella";
     gchar *fmt;
-    gchar *str;
 
     if (!donna_config_get_string (priv->config, NULL, &fmt, "donna/title"))
         fmt = def;
 
-    str = parse_string (app, fmt);
-    gtk_window_set_title (priv->window, (str) ? str : fmt);
-    g_free (str);
+    parse_app (app, fmt, &str);
+    gtk_window_set_title (priv->window, (str) ? str->str : fmt);
+    if (str)
+        g_string_free (str, TRUE);
     if (fmt != def)
         g_free (fmt);
 }
