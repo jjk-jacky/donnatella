@@ -134,10 +134,6 @@ gboolean            donna_app_emit_event            (DonnaApp       *app,
                                                      DonnaContext   *context,
                                                      const gchar    *fmt_source,
                                                      ...);
-void                donna_app_emit_info             (DonnaApp       *app,
-                                                     const gchar    *details,
-                                                     const gchar    *fmt_msg,
-                                                     ...);
 gboolean            donna_app_show_menu             (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *menu,

@@ -346,27 +346,18 @@
  * Other options that can be used in the section depend on its source. For
  * treeviews, refer to #treeview-status.
  *
- * For donna (:app), the following options are available:
+ * For donna (:app), when a log message (level MESSAGE, INFO, WARNING or
+ * CRITICAL) occurs it will be shown. Option <systemitem>timeout</systemitem>
+ * determines for how long. When it goes away (or before any log message occurs)
+ * what is displayed is based on option <systemitem>format</systemitem>.
  *
  * - <systemitem>format</systemitem> (string): format to display
  * - <systemitem>format_tooltip</systemitem> (string): format for the tooltip
- * - <systemitem>format_i</systemitem> (string): format to use for \%i when
- *   there's no info to show
- * - <systemitem>format_d</systemitem> (string): format to use for \%d when
- *   there's no details to show
  * - <systemitem>timeout</systemitem> (integer): numberof seconds an info will
  *   remain; 0 for unlimited
  *
- * The following variables are available in the different formats:
- *
- * - <systemitem>\%i</systemitem> : the message from last event info
- * - <systemitem>\%d</systemitem> : the details from last event info
- * - <systemitem>\%v</systemitem> : version number
- *
- * As indicated, when using \%i or \%d in <systemitem>format</systemitem> or
- * <systemitem>format_tooltip</systemitem>, the formats specified in
- * <systemitem>format_i</systemitem> and <systemitem>format_d</systemitem>
- * will be used if specified, else it resolves to nothing (empty string).
+ * The same variables are available as for the window title, see #window for
+ * more.
  *
  * </para></refsect3>
  *
@@ -542,12 +533,12 @@ enum
 
 struct status_donna
 {
-    guint    id;
-    gchar   *name;
-    gulong   sid_info;
-    guint    sce_timeout;
-    gchar   *info;
-    gchar   *details;
+    guint            id;
+    gchar           *name;
+    gulong           sid_log;
+    guint            sce_timeout;
+    GLogLevelFlags   level;
+    gchar           *message;
 };
 
 struct provider
@@ -646,11 +637,14 @@ _donna_app_filter_nodes (DonnaApp        *app,
                          gpointer         data,
                          GError         **error);
 
+static inline void      parse_app                   (DonnaApp       *app,
+                                                     const gchar    *fmt,
+                                                     GString       **str);
 
 static void             donna_app_log_handler       (const gchar    *domain,
                                                      GLogLevelFlags  log_level,
                                                      const gchar    *message,
-                                                     gpointer        data);
+                                                     DonnaApp       *app);
 static void             donna_app_set_property      (GObject        *object,
                                                      guint           prop_id,
                                                      const GValue   *value,
@@ -907,7 +901,7 @@ donna_app_init (DonnaApp *app)
     DonnaAppPrivate *priv;
 
     main_thread = g_thread_self ();
-    g_log_set_default_handler (donna_app_log_handler, NULL);
+    g_log_set_default_handler ((GLogFunc) donna_app_log_handler, app);
 
     priv = app->priv = G_TYPE_INSTANCE_GET_PRIVATE (app, DONNA_TYPE_APP, DonnaAppPrivate);
 
@@ -957,11 +951,52 @@ donna_app_init (DonnaApp *app)
             g_free, (GDestroyNotify) free_intref);
 }
 
+struct log_msg
+{
+    DonnaApp *app;
+    DonnaContext context;
+    GLogLevelFlags level;
+    gchar *message;
+};
+
+static gboolean
+conv_log_msg (const gchar     c,
+              gchar          *extra,
+              DonnaArgType   *type,
+              gpointer       *ptr,
+              GDestroyNotify *destroy,
+              struct log_msg *lm)
+{
+    if (c == 'm')
+    {
+        *type = DONNA_ARG_TYPE_STRING;
+        *ptr = lm->message;
+        return TRUE;
+    }
+    else if (c == 'l')
+    {
+        *type = DONNA_ARG_TYPE_INT;
+        *ptr = &lm->level;
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
+emit_log (struct log_msg *lm)
+{
+    donna_app_emit_event (lm->app, "log", FALSE, &lm->context, NULL);
+    g_free (lm->message);
+    g_slice_free (struct log_msg, lm);
+    return G_SOURCE_REMOVE;
+}
+
 static void
 donna_app_log_handler (const gchar    *domain,
                        GLogLevelFlags  log_level,
                        const gchar    *message,
-                       gpointer        data)
+                       DonnaApp       *app)
 {
     GThread *thread = g_thread_self ();
     time_t now;
@@ -971,7 +1006,7 @@ donna_app_log_handler (const gchar    *domain,
     GString *str;
 
     if (log_level > show_log)
-        return;
+        goto event;
 
     colors = isatty (fileno (stdout));
 
@@ -1060,6 +1095,36 @@ donna_app_log_handler (const gchar    *domain,
             GDB (1);
     }
 #endif
+
+event:
+    if (log_level & (G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING
+                | G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE))
+    {
+        struct log_msg *lm;
+
+        lm = g_slice_new0 (struct log_msg);
+        lm->app = app;
+        lm->context.flags = "ml";
+        lm->context.conv = (conv_flag_fn) conv_log_msg;
+        lm->context.data = lm;
+
+        if (log_level & G_LOG_LEVEL_CRITICAL)
+            lm->level = G_LOG_LEVEL_CRITICAL;
+        else if (log_level & G_LOG_LEVEL_WARNING)
+            lm->level = G_LOG_LEVEL_WARNING;
+        else if (log_level & G_LOG_LEVEL_INFO)
+            lm->level = G_LOG_LEVEL_INFO;
+        else /* G_LOG_LEVEL_MESSAGE */
+            lm->level = G_LOG_LEVEL_MESSAGE;
+
+        lm->message = g_strdup (message);
+
+        /* we use an idle source to avoid deadlock. Specifically, this log
+         * message could come from the config, while a (writer) lock is held.
+         * And since emit_event() makes use of the config, therefore takes a
+         * reader lock, this would lead to a deadlock situation. */
+        g_idle_add ((GSourceFunc) emit_log, lm);
+    }
 }
 
 
@@ -2677,68 +2742,6 @@ donna_app_emit_event (DonnaApp       *app,
     return ret;
 }
 
-struct context
-{
-    gchar *message;
-    const gchar *details;
-};
-
-static gboolean
-conv_event_info (const gchar     c,
-                 gchar          *extra,
-                 DonnaArgType   *type,
-                 gpointer       *ptr,
-                 GDestroyNotify *destroy,
-                 struct context *context)
-{
-    if (c == 'm')
-    {
-        *type = DONNA_ARG_TYPE_STRING;
-        *ptr = context->message;
-        return TRUE;
-    }
-    else if (c == 'd')
-    {
-        *type = DONNA_ARG_TYPE_STRING;
-        *ptr = (context->details) ? (gpointer) context->details : (gpointer) "";
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-/**
- * donna_app_emit_info:
- * @app: The #DonnaApp
- * @details: (allow-none): Details if @message wasn't complete
- * @fmt_msg: printf-like format for the message of the event (should be short)
- * @...: printf-like arguments
- *
- * Helper to emit event "info" with the appropriate context, that is
- * <systemitem>\%m</systemitem> for the message and <systemitem>\%d</systemitem>
- * for the details (empty string if none specified).
- */
-void
-donna_app_emit_info (DonnaApp       *app,
-                     const gchar    *details,
-                     const gchar    *fmt_msg,
-                     ...)
-{
-    struct context data = { NULL, details };
-    DonnaContext context = { "tm", FALSE, (conv_flag_fn) conv_event_info, &data };
-    va_list va_args;
-
-    g_return_if_fail (DONNA_IS_APP (app));
-    g_return_if_fail (fmt_msg != NULL);
-
-    va_start (va_args, fmt_msg);
-    data.message = g_strdup_vprintf (fmt_msg, va_args);
-    va_end (va_args);
-
-    donna_app_emit_event (app, "info", FALSE, &context, NULL);
-    g_free (data.message);
-}
-
 struct menu_click
 {
     DonnaApp            *app;
@@ -4346,9 +4349,8 @@ status_clear (struct status_clear *sc)
         return G_SOURCE_REMOVE;
     }
 
-    g_free (sd->info);
-    g_free (sd->details);
-    sd->info = sd->details = NULL;
+    g_free (sd->message);
+    sd->message = NULL;
 
     if (sd->sce_timeout > 0)
     {
@@ -4362,11 +4364,11 @@ status_clear (struct status_clear *sc)
     return G_SOURCE_REMOVE;
 }
 
-static void status_info (DonnaApp       *app,
-                         const gchar    *event,
-                         const gchar    *source,
-                         DonnaContext   *context,
-                         gpointer        _id)
+static void status_log (DonnaApp       *app,
+                        const gchar    *event,
+                        const gchar    *source,
+                        DonnaContext   *context,
+                        gpointer        _id)
 {
     DonnaAppPrivate *priv = app->priv;
     DonnaArgType type;
@@ -4375,6 +4377,7 @@ static void status_info (DonnaApp       *app,
     guint id = GPOINTER_TO_UINT (_id);
     guint i;
     gchar *s;
+    gint *lvl;
     gint timeout;
 
     g_rec_mutex_lock (&priv->rec_mutex);
@@ -4391,15 +4394,14 @@ static void status_info (DonnaApp       *app,
         return;
     }
 
-    g_free (sd->info);
-    g_free (sd->details);
-    sd->info = sd->details = NULL;
+    g_free (sd->message);
+    sd->message = NULL;
 
     destroy = NULL;
     if (context->conv ('m', NULL, &type, (gpointer *) &s, &destroy, context->data))
     {
         if (G_LIKELY (type == DONNA_ARG_TYPE_STRING))
-            sd->info = g_strdup (s);
+            sd->message = g_strdup (s);
         else if (type == _DONNA_ARG_TYPE_CUSTOM)
         {
             GString *str = g_string_new (NULL);
@@ -4411,28 +4413,24 @@ static void status_info (DonnaApp       *app,
     }
 
     destroy = NULL;
-    if (context->conv ('d', NULL, &type, (gpointer *) &s, &destroy, context->data))
+    if (context->conv ('l', NULL, &type, (gpointer *) &lvl, &destroy, context->data))
     {
-        /* when no details, this will be an empty string */
-        if (G_LIKELY (type == DONNA_ARG_TYPE_STRING))
-        {
-            if (*s != '\0')
-                sd->details = g_strdup (s);
-        }
+        if (G_LIKELY (type == DONNA_ARG_TYPE_INT))
+            sd->level = *lvl;
         else if (type == _DONNA_ARG_TYPE_CUSTOM)
         {
             GString *str = g_string_new (NULL);
-            ((conv_custom_fn) s) ('m', NULL, 0, str, context->data);
+            ((conv_custom_fn) s) ('l', NULL, 0, str, context->data);
             if (str->len > 0)
-                s = g_string_free (str, FALSE);
+                sd->level = g_ascii_strtoll (str->str, NULL, 10);
             else
             {
-                s = NULL;
+                sd->level = G_LOG_LEVEL_MESSAGE;
                 g_string_free (str, TRUE);
             }
         }
         if (destroy)
-            destroy (s);
+            destroy (lvl);
     }
 
     if (sd->sce_timeout > 0)
@@ -4441,7 +4439,7 @@ static void status_info (DonnaApp       *app,
         sd->sce_timeout = 0;
     }
 
-    if (sd->info && donna_config_get_int (priv->config, NULL, &timeout,
+    if (sd->message && donna_config_get_int (priv->config, NULL, &timeout,
                 "statusbar/%s/timeout", sd->name))
     {
         if (timeout > 0)
@@ -4470,38 +4468,19 @@ status_provider_create_status (DonnaStatusProvider    *sp,
 {
     DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
     struct status_donna sd = { 0, };
-    gchar *fmt;
-    gchar *s;
 
     sd.name = g_strdup (_name);
-    if (!donna_config_get_string (priv->config, error, &fmt,
-                "statusbar/%s/format", sd.name))
-    {
-        g_prefix_error (error, "App: Status '%s': No format: ", sd.name);
-        return 0;
-    }
 
     g_rec_mutex_lock (&priv->rec_mutex);
     if (!priv->status_donna)
         priv->status_donna = g_array_sized_new (FALSE, FALSE,
                 sizeof (struct status_donna), 1);
     sd.id = priv->status_donna->len + 1;
-
-    s = fmt;
-    while ((s = strchr (s, '%')))
-    {
-        if (s[1] == 'i')
-        {
-            sd.sid_info = g_signal_connect (sp, "event::info",
-                    (GCallback) status_info, GINT_TO_POINTER (sd.id));
-            break;
-        }
-        ++s;
-    }
-    g_free (fmt);
-
+    sd.sid_log = g_signal_connect (sp, "event::log",
+            (GCallback) status_log, GINT_TO_POINTER (sd.id));
     g_array_append_val (priv->status_donna, sd);
     g_rec_mutex_unlock (&priv->rec_mutex);
+
     return sd.id;
 }
 
@@ -4521,8 +4500,8 @@ status_provider_free_status (DonnaStatusProvider    *sp,
         if (sd->id == id)
         {
             g_free (sd->name);
-            if (sd->sid_info > 0)
-                g_signal_handler_disconnect (sp, sd->sid_info);
+            if (sd->sid_log > 0)
+                g_signal_handler_disconnect (sp, sd->sid_log);
             if (sd->sce_timeout > 0)
                 g_source_remove (sd->sce_timeout);
             g_array_remove_index_fast (priv->status_donna, i);
@@ -4548,95 +4527,11 @@ status_provider_get_renderers (DonnaStatusProvider    *sp,
         if (sd->id == id)
         {
             g_rec_mutex_unlock (&priv->rec_mutex);
-            return "t";
+            return "pt";
         }
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
     return NULL;
-}
-
-struct status_context
-{
-    DonnaApp *app;
-    struct status_donna *sd;
-    GString **str;
-    gboolean is_main;
-};
-
-static inline void status_parse_fmt (DonnaApp              *app,
-                                     struct status_donna   *sd,
-                                     gchar                 *fmt,
-                                     GString              **str,
-                                     gboolean               is_main);
-
-static gboolean
-status_conv (const gchar             c,
-             gchar                  *extra,
-             DonnaArgType           *type,
-             gpointer               *ptr,
-             GDestroyNotify         *destroy,
-             struct status_context  *sc)
-{
-    switch (c)
-    {
-        case 'v':
-            *type = DONNA_ARG_TYPE_STRING;
-            *ptr = (gpointer) PACKAGE_VERSION;
-            return TRUE;
-
-        case 'i':
-            *type = DONNA_ARG_TYPE_STRING;
-            if (sc->sd->info)
-            {
-                *ptr = sc->sd->info;
-                return TRUE;
-            }
-            else if (sc->is_main)
-            {
-                gchar *ss;
-
-                if (!donna_config_get_string (sc->app->priv->config, NULL, &ss,
-                            "statusbar/%s/format_i", sc->sd->name))
-                    return FALSE;
-
-                status_parse_fmt (sc->app, sc->sd, ss, sc->str, FALSE);
-                g_free (ss);
-                return FALSE;
-            }
-
-        case 'd':
-            *type = DONNA_ARG_TYPE_STRING;
-            if (sc->sd->details)
-            {
-                *ptr = sc->sd->details;
-                return TRUE;
-            }
-            else if (sc->is_main)
-            {
-                gchar *ss;
-
-                if (!donna_config_get_string (sc->app->priv->config, NULL, &ss,
-                            "statusbar/%s/format_d", sc->sd->name))
-                    return FALSE;
-
-                status_parse_fmt (sc->app, sc->sd, ss, sc->str, FALSE);
-                g_free (ss);
-                return FALSE;
-            }
-    }
-    return FALSE;
-}
-
-static inline void
-status_parse_fmt (DonnaApp              *app,
-                  struct status_donna   *sd,
-                  gchar                 *fmt,
-                  GString              **str,
-                  gboolean               is_main)
-{
-    struct status_context sc = { app, sd, str, is_main };
-    DonnaContext context = { "vid", FALSE, (conv_flag_fn) status_conv, &sc };
-    donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, app, fmt, str, NULL);
 }
 
 static void
@@ -4647,8 +4542,6 @@ status_provider_render (DonnaStatusProvider    *sp,
 {
     DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
     struct status_donna *sd;
-    GString *str = NULL;
-    gchar *fmt;
     guint i;
 
     g_rec_mutex_lock (&priv->rec_mutex);
@@ -4666,30 +4559,61 @@ status_provider_render (DonnaStatusProvider    *sp,
         return;
     }
 
-    if (!donna_config_get_string (priv->config, NULL, &fmt,
-                "statusbar/%s/format", sd->name))
+    if (sd->message)
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
-        g_object_set (renderer, "visible", FALSE, NULL);
-        return;
+        if (index == 1)
+        {
+            if (sd->level == G_LOG_LEVEL_INFO)
+                g_object_set (renderer,
+                        "icon-name",    "dialog-information",
+                        "visible",      TRUE,
+                        NULL);
+            else if (sd->level == G_LOG_LEVEL_WARNING)
+                g_object_set (renderer,
+                        "icon-name",    "dialog-warning",
+                        "visible",      TRUE,
+                        NULL);
+            else if (sd->level == G_LOG_LEVEL_CRITICAL)
+                g_object_set (renderer,
+                        "icon-name",    "dialog-error",
+                        "visible",      TRUE,
+                        NULL);
+            else if (sd->level == G_LOG_LEVEL_MESSAGE)
+                g_object_set (renderer,
+                        "visible",      TRUE,
+                        NULL);
+            else
+                g_object_set (renderer, "visible", FALSE, NULL);
+        }
+        else
+            g_object_set (renderer, "visible", TRUE, "text", sd->message, NULL);
     }
+    else if (index == 1)
+        g_object_set (renderer, "visible", FALSE, NULL);
+    else
+    {
+        GString *str = NULL;
+        gchar *fmt;
 
-    status_parse_fmt ((DonnaApp *) sp, sd, fmt, &str, TRUE);
-    g_rec_mutex_unlock (&priv->rec_mutex);
-    g_free (fmt);
+        if (!donna_config_get_string (priv->config, NULL, &fmt,
+                    "statusbar/%s/format", sd->name))
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            g_object_set (renderer, "visible", FALSE, NULL);
+            return;
+        }
 
-    if (str && str->len > 0)
+        parse_app ((DonnaApp *) sp, fmt, &str);
+
         g_object_set (renderer,
                 "visible",  TRUE,
-                "text",     str->str,
+                "text",     (str) ? str->str : fmt,
                 NULL);
-    else
-        g_object_set (renderer,
-                "visible",  FALSE,
-                NULL);
-
-    if (str)
-        g_string_free (str, TRUE);
+        if (str)
+            g_string_free (str, TRUE);
+        g_free (fmt);
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
 }
 
 static gboolean
@@ -4703,7 +4627,6 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
     GString *str = NULL;
     gchar *fmt;
     guint i;
-    gboolean show;
 
     g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < priv->status_donna->len; ++i)
@@ -4719,20 +4642,28 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
         return FALSE;
     }
 
+    if (sd->message)
+    {
+        gtk_tooltip_set_text (tooltip, sd->message);
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return TRUE;
+    }
+
     if (!donna_config_get_string (priv->config, NULL, &fmt,
                 "statusbar/%s/format_tooltip", sd->name))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
         return FALSE;
-
-    status_parse_fmt ((DonnaApp *) sp, sd, fmt, &str, TRUE);
+    }
     g_rec_mutex_unlock (&priv->rec_mutex);
-    g_free (fmt);
 
-    show = str && str->len > 0;
-    if (show)
-        gtk_tooltip_set_text (tooltip, str->str);
+    parse_app ((DonnaApp *) sp, fmt, &str);
+    gtk_tooltip_set_text (tooltip, (str) ? str->str : fmt);
+
     if (str)
         g_string_free (str, TRUE);
-    return show;
+    g_free (fmt);
+    return TRUE;
 }
 
 
@@ -5303,10 +5234,42 @@ update_cur_dirname (DonnaApp *app)
 }
 
 static void
+refresh_status_donna (DonnaApp *app)
+{
+    DonnaAppPrivate *priv = app->priv;
+    struct status_donna *sd;
+    guint _ids[8], *ids = _ids;
+    gint i;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    if (!priv->status_donna)
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return;
+    }
+
+    if (G_UNLIKELY (priv->status_donna->len > 8))
+        ids = g_new (guint, priv->status_donna->len);
+    for (i = 0; (guint) i < priv->status_donna->len; ++i)
+    {
+        sd = &g_array_index (priv->status_donna, struct status_donna, i);
+        ids[i] = sd->id;
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    for (--i; i >= 0; --i)
+        donna_status_provider_status_changed ((DonnaStatusProvider *) app, ids[i]);
+
+    if (G_UNLIKELY (ids != _ids))
+        g_free (ids);
+}
+
+static void
 active_location_changed (GObject *object, GParamSpec *spec, DonnaApp *app)
 {
     update_cur_dirname (app);
     refresh_window_title (app);
+    refresh_status_donna (app);
 }
 
 static inline void
@@ -5324,6 +5287,7 @@ set_active_list (DonnaApp *app, DonnaTreeView *list)
     priv->active_list = g_object_ref (list);
     update_cur_dirname (app);
     refresh_window_title (app);
+    refresh_status_donna (app);
     g_object_notify ((GObject *) app, "active-list");
 }
 

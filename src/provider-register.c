@@ -310,8 +310,7 @@ drop_register (DonnaProviderRegister *pr, const gchar *name, DonnaNode **node)
     else if (node)
         *node = NULL;
 
-    donna_app_emit_info (((DonnaProviderBase *) pr)->app, NULL,
-            "Dropped register '%s'", name);
+    g_info ("Dropped register '%s'", name);
 
     return ret;
 }
@@ -436,8 +435,7 @@ task_take_clipboard_ownership (DonnaTask *task, gpointer _data)
     if (ret && data->clear)
     {
         gtk_clipboard_clear (clipboard);
-        donna_app_emit_info (((DonnaProviderBase *) data->pr)->app, NULL,
-                "Dropped register '+'");
+        g_info ("Dropped register '+'");
     }
 
     gtk_target_table_free (entries, nb);
@@ -876,8 +874,7 @@ register_set (DonnaProviderRegister *pr,
         donna_provider_node_children ((DonnaProvider *) pr, node,
                 DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, arr);
     }
-    donna_app_emit_info (((DonnaProviderBase *) pr)->app, NULL,
-            "Set %d nodes in register '%s'", arr->len, name);
+    g_info ("Set %d nodes in register '%s'", arr->len, name);
     g_ptr_array_unref (arr);
 
     update_special_nodes (pr, name, nodes->len > 0);
@@ -962,8 +959,7 @@ register_add_nodes (DonnaProviderRegister   *pr,
         for (i = 0; i < arr->len; ++i)
             donna_provider_node_new_child ((DonnaProvider *) pr, node, arr->pdata[i]);
     }
-    donna_app_emit_info (app, NULL, "Added %d nodes to register '%s'",
-            arr->len, name);
+    g_info ("Added %d nodes to register '%s'", arr->len, name);
     g_ptr_array_unref (arr);
 
     update_special_nodes (pr, name, has_items || nodes->len > 0);

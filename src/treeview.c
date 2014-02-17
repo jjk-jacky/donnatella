@@ -13210,8 +13210,7 @@ save_to_file (DonnaTreeView *tree,
     if (file != filename)
         g_free (file);
 
-    donna_app_emit_info (tree->priv->app, NULL, "TreeView '%s': Save to file '%s'",
-            tree->priv->name, filename);
+    g_info ("TreeView '%s': Saved to file '%s'", tree->priv->name, filename);
 
     return TRUE;
 }
@@ -13743,8 +13742,7 @@ donna_tree_view_load_list_file (DonnaTreeView      *tree,
     g_object_unref (node);
 
     if (ret)
-        donna_app_emit_info (priv->app, NULL, "TreeView '%s': Loaded from file '%s'",
-                priv->name, filename);
+        g_info ("TreeView '%s': Loaded from file '%s'", priv->name, filename);
     return ret;
 }
 
@@ -14468,8 +14466,7 @@ next:
     g_array_free (array, TRUE);
     g_free (data);
 
-    donna_app_emit_info (priv->app, NULL, "TreeView '%s': Loaded from file '%s'",
-            priv->name, filename);
+    g_info ("TreeView '%s': Loaded from file '%s'", priv->name, filename);
 
     return TRUE;
 }
@@ -19574,7 +19571,7 @@ again:
         g_string_append (str, "columns options, ");
     g_string_truncate (str, str->len - 2);
     g_string_append (str, " saved to config");
-    donna_app_emit_info (priv->app, NULL, str->str);
+    g_info ("%s", str->str);
     g_string_free (str, TRUE);
 
     return TRUE;

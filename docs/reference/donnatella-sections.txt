@@ -143,7 +143,6 @@ donna_app_free_int_ref
 donna_app_parse_fl
 donna_app_trigger_fl
 donna_app_emit_event
-donna_app_emit_info
 donna_app_show_menu
 donna_app_show_error
 donna_app_get_ct_data
