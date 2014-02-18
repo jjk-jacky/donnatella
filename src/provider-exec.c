@@ -125,6 +125,8 @@ struct children
 static void
 free_children (struct children *data)
 {
+    if (!data)
+        return;
     /* the first free can only come from worker being done, which means we want
      * to keep everything we need to duplicate, but the children we don't need
      * */
