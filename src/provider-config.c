@@ -3213,12 +3213,16 @@ _set_option (DonnaConfig    *config,
     {                                                   \
         g_value_init (&gvalue, gtype);                  \
         set_fn (&gvalue, value);                        \
+        g_rw_lock_reader_lock (&config->priv->lock);    \
         if (extra && !is_value_valid_for_extra (config, \
                     extra, &gvalue, error))             \
         {                                               \
+            g_rw_lock_reader_unlock (                   \
+                    &config->priv->lock);               \
             g_value_unset (&gvalue);                    \
             return FALSE;                               \
         }                                               \
+        g_rw_lock_reader_unlock (&config->priv->lock);  \
     }                                                   \
     va_start (va_arg, fmt);                             \
     ret = _set_option_va (config, error, node, gtype,   \
