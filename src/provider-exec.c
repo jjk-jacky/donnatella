@@ -32,6 +32,27 @@
 #include "macros.h"
 
 
+enum mode
+{
+    MODE_EXEC = 1,
+    MODE_EXEC_AND_WAIT,
+    MODE_TERMINAL,
+    MODE_PARSE_OUTPUT,
+    MODE_DESKTOP_FILE
+};
+
+struct exec
+{
+    enum mode mode;
+    guint extra;
+    gchar *terminal;
+};
+
+
+/* internal, used by app.c */
+gboolean
+_donna_provider_exec_register_extras (DonnaConfig *config, GError **error);
+
 /* DonnaProvider */
 static const gchar *    provider_exec_get_domain    (DonnaProvider      *provider);
 static DonnaProviderFlags provider_exec_get_flags   (DonnaProvider      *provider);
@@ -45,6 +66,8 @@ static DonnaTask *      provider_exec_trigger_node_task (
                                                      DonnaNode          *node,
                                                      GError            **error);
 /* DonnaProviderBase */
+static void             provider_exec_unref_node    (DonnaProviderBase  *provider,
+                                                     DonnaNode          *node);
 static DonnaTaskState   provider_exec_new_node      (DonnaProviderBase  *provider,
                                                      DonnaTask          *task,
                                                      const gchar        *location);
@@ -76,6 +99,7 @@ donna_provider_exec_class_init (DonnaProviderExecClass *klass)
 
     pb_class->task_visibility.new_node      = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
 
+    pb_class->unref_node    = provider_exec_unref_node;
     pb_class->new_node      = provider_exec_new_node;
     pb_class->has_children  = provider_exec_has_children;
 }
@@ -98,6 +122,42 @@ provider_exec_get_domain (DonnaProvider *provider)
 {
     g_return_val_if_fail (DONNA_IS_PROVIDER_EXEC (provider), NULL);
     return "exec";
+}
+
+gboolean
+_donna_provider_exec_register_extras (DonnaConfig *config, GError **error)
+{
+    DonnaConfigItemExtraListInt it[6];
+    gint i;
+
+    i = 0;
+    it[i].value     = MODE_EXEC;
+    it[i].in_file   = "exec";
+    it[i].label     = "Execute";
+    ++i;
+    it[i].value     = MODE_EXEC_AND_WAIT;
+    it[i].in_file   = "exec_and_wait";
+    it[i].label     = "Execute and Wait (Capture output)";
+    ++i;
+    it[i].value     = MODE_TERMINAL;
+    it[i].in_file   = "terminal";
+    it[i].label     = "Run in Terminal";
+    ++i;
+    it[i].value     = MODE_PARSE_OUTPUT;
+    it[i].in_file   = "parse_output";
+    it[i].label     = "Execute & Parse Output (e.g. search reults)";
+    ++i;
+    it[i].value     = MODE_DESKTOP_FILE;
+    it[i].in_file   = "desktop_file";
+    it[i].label     = "Execute .desktop file";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "exec-mode",
+                    "Mode of Execution",
+                    i, it, error)))
+        return FALSE;
+
+    return TRUE;
 }
 
 struct children
@@ -335,8 +395,23 @@ static DonnaTask *
 duplicate_get_children_task (struct children *dup_data, GError **error)
 {
     DonnaTask *task;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+    struct exec *ex;
     struct children *data;
     gchar *location;
+
+    donna_node_get (dup_data->node, FALSE, "_exec", &has, &v, NULL);
+    if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'exec': Invalid node (%d), missing internal exec property",
+                has);
+        return NULL;
+    }
+    ex = g_value_get_pointer (&v);
+    g_value_unset (&v);
 
     location = donna_node_get_location (dup_data->node);
 
@@ -350,7 +425,7 @@ duplicate_get_children_task (struct children *dup_data, GError **error)
     data->pfs = g_object_ref (dup_data->pfs);
     data->children = g_ptr_array_new_full (0, g_object_unref);
 
-    task = donna_task_process_new (data->workdir, location + 1, TRUE,
+    task = donna_task_process_new (data->workdir, location + ex->extra, TRUE,
             (task_closer_fn) children_closer, data, (GDestroyNotify) free_children);
     g_free (location);
 
@@ -387,100 +462,68 @@ get_node_children_task (DonnaProvider      *provider,
                         DonnaNodeType       node_types,
                         GError            **error)
 {
-    DonnaApp *app = NULL;
+    DonnaApp *app;
     DonnaTask *task;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+    struct exec *ex;
     gchar *location;
     gchar *cmdline;
-    gboolean wait;
+    gboolean wait = FALSE;
     task_closer_fn closer = NULL;
     struct children *data = NULL;
 
+    donna_node_get (node, FALSE, "_exec", &has, &v, NULL);
+    if (G_UNLIKELY (has != DONNA_NODE_VALUE_SET))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'exec': Invalid node (%d), missing internal exec property",
+                has);
+        return NULL;
+    }
+    ex = g_value_get_pointer (&v);
+    g_value_unset (&v);
+
     location = donna_node_get_location (node);
+    cmdline = location + ex->extra;
 
-    if (*location == '!')
+    if (ex->mode == MODE_EXEC || ex->mode == MODE_EXEC_AND_WAIT)
+        wait = ex->mode == MODE_EXEC_AND_WAIT;
+    else if (ex->mode == MODE_TERMINAL)
     {
-        cmdline = location + 1;
-        wait = TRUE;
-    }
-    else if (*location == '&')
-    {
-        cmdline = location + 1;
-        wait = FALSE;
-    }
-    else if (*location == '>')
-    {
-        gchar *terminal = NULL;
-
-        g_object_get (provider, "app", &app, NULL);
-
-        donna_config_get_string (donna_app_peek_config (app), NULL, &terminal,
-                    "providers/exec/terminal");
-        if (terminal)
-            cmdline = g_strdup_printf ("%s %s", terminal, location + 1);
-        else
-        {
-            /* try to default to common terminal emulator */
-            terminal = g_find_program_in_path ("urxvt");
-            if (!terminal)
-                terminal = g_find_program_in_path ("rxvt");
-            if (!terminal)
-                terminal = g_find_program_in_path ("xterm");
-            if (!terminal)
-                terminal = g_find_program_in_path ("konsole");
-
-            if (terminal)
-                cmdline = g_strdup_printf ("%s -e %s", terminal, location + 1);
-            else
-            {
-                /* those should be using -x instead of -e */
-                terminal = g_find_program_in_path ("xfce4-terminal");
-                if (!terminal)
-                    terminal = g_find_program_in_path ("gnome-terminal");
-                if (terminal)
-                    cmdline = g_strdup_printf ("%s -x %s", terminal, location + 1);
-                else
-                {
-                    g_set_error (error, DONNA_PROVIDER_ERROR,
-                            DONNA_PROVIDER_ERROR_OTHER,
-                            "Provider 'exec': Unable to find a terminal, you can define the prefix in /providers/exec/terminal");
-                    g_object_unref (app);
-                    g_free (location);
-                    return NULL;
-                }
-            }
-        }
-
-        g_free (terminal);
+        cmdline = g_strconcat (ex->terminal, " ", location + ex->extra, NULL);
         g_free (location);
         location = cmdline;
-        wait = FALSE;
     }
-    else if (*location == '<')
+    else if (ex->mode == MODE_PARSE_OUTPUT)
     {
+        wait = TRUE;
+
         data = g_new0 (struct children, 1);
         data->ref_count = 2; /* one for task, one for duplicator */
         data->provider = provider;
         data->node = g_object_ref (node);
         data->node_types = node_types;
         data->children = g_ptr_array_new_full (0, g_object_unref);
-        cmdline = location + 1;
-        wait = TRUE;
         closer = (task_closer_fn) children_closer;
     }
-    else /* .desktop file */
+    else if (ex->mode == MODE_DESKTOP_FILE)
     {
         GAppInfo *appinfo;
 
-        if (*location == '/')
+        if (location[ex->extra] == '/')
             appinfo = (GAppInfo *) g_desktop_app_info_new_from_filename (location);
         else
         {
-            gsize len = strlen (location);
+            gsize len;
+
+            len = strlen (location + ex->extra);
             /* 9 = 8 + 1; 8 = strlen (".desktop") */
-            if (len < 9 || !streq (location + len - 8, ".desktop"))
-                cmdline = g_strdup_printf ("%s.desktop", location);
+            if (len < 9 || !streq (location + ex->extra + len - 8, ".desktop"))
+                cmdline = g_strconcat (location + ex->extra, ".desktop", NULL);
             else
-                cmdline = location;
+                cmdline = location + ex->extra;
             appinfo = (GAppInfo *) g_desktop_app_info_new (cmdline);
             if (cmdline != location)
                 g_free (cmdline);
@@ -505,8 +548,7 @@ get_node_children_task (DonnaProvider      *provider,
             closer, data, (GDestroyNotify) free_children);
     g_free (location);
 
-    if (!app)
-        g_object_get (provider, "app", &app, NULL);
+    g_object_get (provider, "app", &app, NULL);
     if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task, app))
     {
         g_object_unref (app);
@@ -556,12 +598,23 @@ provider_exec_trigger_node_task (DonnaProvider      *provider,
     return get_node_children_task (provider, node, 0, error);
 }
 
-static gboolean
-refresher (DonnaTask    *task,
-           DonnaNode    *node,
-           const gchar  *name)
+static void
+provider_exec_unref_node (DonnaProviderBase  *provider,
+                          DonnaNode          *node)
 {
-    return TRUE;
+    GValue v = G_VALUE_INIT;
+    DonnaNodeHasValue has;
+
+    donna_node_get (node, FALSE, "_exec", &has, &v, NULL);
+    if (has == DONNA_NODE_VALUE_SET)
+    {
+        struct exec *ex = g_value_get_pointer (&v);
+        g_value_unset (&v);
+        g_free (ex->terminal);
+        g_slice_free (struct exec, ex);
+        /* after that, the node is either finalized (as it should) or marked
+         * invalid, so there's no risk of "_exec" being used again */
+    }
 }
 
 static DonnaTaskState
@@ -569,25 +622,196 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                         DonnaTask          *task,
                         const gchar        *location)
 {
+    GError *err = NULL;
     DonnaProviderBaseClass *klass;
+    DonnaApp *app;
+    DonnaConfig *config;
     DonnaNode *node;
     DonnaNode *n;
+    struct exec exec = { 0, };
+    struct exec *ex;
+    struct prefix
+    {
+        const gchar *name;
+        enum mode mode;
+    } prefixes[] = {
+        { "exec",               MODE_EXEC },
+        { "exec_and_wait",      MODE_EXEC_AND_WAIT },
+        { "terminal",           MODE_TERMINAL },
+        { "parse_output",       MODE_PARSE_OUTPUT },
+        { "desktop_file",       MODE_DESKTOP_FILE },
+    };
+    guint nb_prefixes = G_N_ELEMENTS (prefixes);
+    guint i;
     GValue *value;
     GValue v = G_VALUE_INIT;
+    gchar *s;
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
 
+    g_object_get (_provider, "app", &app, NULL);
+    config = donna_app_peek_config (app);
+    g_object_unref (app);
+
+    for (i = 0; i < nb_prefixes; ++i)
+    {
+        if (donna_config_get_string (config, NULL, &s, "providers/exec/prefix_%s",
+                    prefixes[i].name))
+        {
+            if (*s == '\0' || s[1] != '\0')
+            {
+                donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'exec': Cannot create new node: "
+                        "Invalid value (%s) for option 'prefix_%s'; "
+                        "Must be a single character",
+                        s, prefixes[i].name);
+                g_free (s);
+                return DONNA_TASK_FAILED;
+            }
+            if (*location == *s)
+            {
+                exec.extra = 1;
+                exec.mode = prefixes[i].mode;
+            }
+            g_free (s);
+        }
+        if (exec.mode > 0)
+            break;
+    }
+    if (exec.mode == 0)
+    {
+        if (!donna_config_get_int (config, NULL, (gint *) &exec.mode,
+                    "providers/exec/default_mode"))
+        {
+            g_warning ("Provider 'exec': No default mode set, using EXEC");
+            exec.mode = MODE_EXEC;
+        }
+        else
+        {
+            for (i = 0; i < nb_prefixes; ++i)
+                if (exec.mode == prefixes[i].mode)
+                    break;
+            if (i >= nb_prefixes)
+            {
+                donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'exec': Cannot create new node, "
+                        "invalid default mode (%d)",
+                        exec.mode);
+                return DONNA_TASK_FAILED;
+            }
+        }
+    }
+
+    if (exec.mode == MODE_TERMINAL)
+    {
+        GPtrArray *arr = NULL;
+
+        if (donna_config_list_options (config, &arr, DONNA_CONFIG_OPTION_TYPE_NUMBERED,
+                    "providers/exec/terminal"))
+        {
+            for (i = 0; i < arr->len; ++i)
+            {
+                if (donna_config_get_string (config, NULL, &s,
+                            "providers/exec/terminal/%s/prefix", arr->pdata[i]))
+                {
+                    if (streqn (location + exec.extra, s, strlen (s)))
+                    {
+                        if (!donna_config_get_string (config, &err, &exec.terminal,
+                                    "providers/exec/terminal/%s/cmdline",
+                                    arr->pdata[i]))
+                        {
+                            g_prefix_error (&err,
+                                    "Provider 'exec': Cannot create new node: "
+                                    "Failed to get option terminal cmdline: ");
+                            donna_task_take_error (task, err);
+                            g_free (s);
+                            g_ptr_array_unref (arr);
+                            return DONNA_TASK_FAILED;
+                        }
+                        exec.extra += (guint) strlen (s);
+                        g_free (s);
+                        break;
+                    }
+                    g_free (s);
+                }
+            }
+            g_ptr_array_unref (arr);
+        }
+
+        if (!exec.terminal)
+        {
+            donna_config_get_string (config, NULL, &exec.terminal,
+                    "providers/exec/terminal/cmdline");
+            if (!exec.terminal)
+            {
+                gchar *terminal;
+
+                /* try to default to common terminal emulator */
+                terminal = g_find_program_in_path ("urxvt");
+                if (!terminal)
+                    terminal = g_find_program_in_path ("rxvt");
+                if (!terminal)
+                    terminal = g_find_program_in_path ("xterm");
+                if (!terminal)
+                    terminal = g_find_program_in_path ("konsole");
+
+                if (terminal)
+                    exec.terminal = g_strconcat (terminal, " -e", NULL);
+                else
+                {
+                    /* those should be using -x instead of -e */
+                    terminal = g_find_program_in_path ("xfce4-terminal");
+                    if (!terminal)
+                        terminal = g_find_program_in_path ("gnome-terminal");
+                    if (terminal)
+                        exec.terminal = g_strconcat (terminal, " -x", NULL);
+                    else
+                    {
+                        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                                DONNA_PROVIDER_ERROR_OTHER,
+                                "Provider 'exec': Unable to find a terminal, "
+                                "you can define the command line in option "
+                                "'providers/exec/terminal/cmdline'");
+                        return DONNA_TASK_FAILED;
+                    }
+                }
+
+                g_free (terminal);
+            }
+        }
+    }
+
     node = donna_node_new ((DonnaProvider *) _provider, location,
-            (*location == '<') ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
-            NULL, refresher, NULL, location,
+            exec.mode == MODE_PARSE_OUTPUT ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+            NULL, (refresher_fn) gtk_true, NULL, location,
             DONNA_NODE_ICON_EXISTS);
     if (!node)
     {
         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_OTHER,
-                "Provider 'exec': Unable to create a new node");
+                "Provider 'exec': Failed to create a new node");
+        g_free (exec.terminal);
         return DONNA_TASK_FAILED;
     }
+
+    ex = g_slice_new (struct exec);
+    memcpy (ex, &exec, sizeof (struct exec));
+    g_value_init (&v, G_TYPE_POINTER);
+    g_value_set_pointer (&v, ex);
+    if (!donna_node_add_property (node, "_exec", G_TYPE_POINTER, &v,
+            (refresher_fn) gtk_true, NULL, &err))
+    {
+        g_prefix_error (&err, "Provider 'exec': Failed to create a new node: "
+                "Couldn't set internal exec property: ");
+        donna_task_take_error (task, err);
+        g_free (ex->terminal);
+        g_slice_free (struct exec, ex);
+        g_value_unset (&v);
+        return DONNA_TASK_FAILED;
+    }
+    g_value_unset (&v);
 
     g_value_init (&v, G_TYPE_ICON);
     g_value_take_object (&v, g_themed_icon_new ("application-x-executable"));
@@ -601,13 +825,16 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
         /* already one added while we were busy */
         g_object_unref (node);
         node = n;
+        /* since we didn't add it to cache, unref_node() isn't called */
+        g_free (ex->terminal);
+        g_slice_free (struct exec, ex);
     }
     else
         klass->add_node_to_cache (_provider, node);
     klass->unlock_nodes (_provider);
 
     value = donna_task_grab_return_value (task);
-    g_value_init (value, G_TYPE_OBJECT);
+    g_value_init (value, DONNA_TYPE_NODE);
     /* take_object to not increment the ref count, as it was already done for
      * this task in add_node_to_cache() */
     g_value_take_object (value, node);

@@ -621,6 +621,9 @@ _donna_context_register_extras (DonnaConfig *config, GError **error);
 /* internal from columntype-perms.c */
 gboolean
 _donna_column_type_perms_register_extras (DonnaConfig *config, GError **error);
+/* internal, from provider-exec.c */
+gboolean
+_donna_provider_exec_register_extras (DonnaConfig *config, GError **error);
 
 
 static gboolean event_accumulator (GSignalInvocationHint    *ihint,
@@ -6064,6 +6067,10 @@ prepare_app (DonnaApp *app, GError **error)
 
     /* have ct-perms register its extras */
     if (G_UNLIKELY (!_donna_column_type_perms_register_extras (config, error)))
+        return FALSE;
+
+    /* have provider-exec register its extras */
+    if (G_UNLIKELY (!_donna_provider_exec_register_extras (config, error)))
         return FALSE;
 
     /* "preload" mark & register so they can add their own extras/commands. We
