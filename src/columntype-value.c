@@ -752,8 +752,8 @@ ct_value_edit (DonnaColumnType    *ct,
                     (GCallback) gtk_widget_destroy, win);
             gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
-            gtk_widget_show_all (ed->window);
             donna_app_set_floating_window (ed->ctv->priv->app, win);
+            gtk_widget_show_all (ed->window);
             return TRUE;
         }
         else

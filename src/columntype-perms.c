@@ -1391,8 +1391,8 @@ ct_perms_edit (DonnaColumnType    *ct,
     g_signal_connect_swapped (ed->window, "key-press-event",
             (GCallback) key_pressed, ed);
 
-    gtk_widget_show_all (ed->window);
     donna_app_set_floating_window (((DonnaColumnTypePerms *) ct)->priv->app, win);
+    gtk_widget_show_all (ed->window);
     return TRUE;
 }
 

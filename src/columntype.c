@@ -1158,15 +1158,12 @@ donna_column_type_get_context_item_info (DonnaColumnType   *ct,
  * Helper function to create a little window that can be used to perform some
  * property editing on a given node (or selection of nodes).
  * This will create the window, attach it to @tree, remove decorations, set
- * %GDK_WINDOW_TYPE_HINT_UTILITY, set position to mouse pointer, set a border of
- * 6 pixels, make it non-resizable, and make it destroyed on location change on
- * @tree, as well as selection change if @destroy_on_sel_changed is %TRUE.
+ * %GDK_WINDOW_TYPE_HINT_UTILITY, set position to center of parent, set a border
+ * of 6 pixels, make it non-resizable, and make it destroyed on location change
+ * on @tree, as well as selection change if @destroy_on_sel_changed is %TRUE.
  *
- * You should call donna_app_set_floating_window() on the returned window after
- * having made it visible, otherwise this could lead to an instant destruction
- * on the window (as this call can destroy a previous floating window, thus
- * giving the focus back to app, thus leading to destruction of the new floating
- * window).
+ * Make sure to call donna_app_set_floating_window() on the returned window
+ * (before making it visible) else the placement might not be correct.
  *
  * Return: (transfer full): A new g_object_ref_sink()ed #GtkWindow
  */
@@ -1180,7 +1177,7 @@ donna_column_type_new_floating_window (DonnaTreeView *tree,
     gtk_window_set_decorated (win, FALSE);
     gtk_window_set_type_hint (win, GDK_WINDOW_TYPE_HINT_UTILITY);
     gtk_window_set_attached_to (win, (GtkWidget *) tree);
-    gtk_window_set_position (win, GTK_WIN_POS_MOUSE);
+    gtk_window_set_position (win, GTK_WIN_POS_CENTER_ON_PARENT);
     gtk_window_set_resizable (win, FALSE);
     g_object_set (win, "border-width", 6, NULL);
     g_object_ref_sink (win);

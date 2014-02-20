@@ -1404,9 +1404,9 @@ ct_time_edit (DonnaColumnType    *ct,
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
 
+    donna_app_set_floating_window (((DonnaColumnTypeTime *) ct)->priv->app, win);
     gtk_widget_show_all (ed->window);
     gtk_widget_grab_focus ((GtkWidget *) ed->entry);
-    donna_app_set_floating_window (((DonnaColumnTypeTime *) ct)->priv->app, win);
     return TRUE;
 }
 
