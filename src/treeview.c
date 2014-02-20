@@ -15428,7 +15428,7 @@ move:
 
 /**
  * donna_tree_view_get_node_at_row:
- * @tree: A #DonnaTreeview
+ * @tree: A #DonnaTreeView
  * @rowid: Identifier of a row; See #rowid for more
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
