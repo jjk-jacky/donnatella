@@ -722,6 +722,7 @@ struct editing_data
     GtkComboBox     *box_u;
     GtkComboBox     *box_g;
     GtkButton       *btn_set;
+    GtkButton       *btn_cancel;
     GtkToggleButton *set_perms;
     gulong           sid_spn_u;
     gulong           sid_spn_g;
@@ -950,6 +951,18 @@ apply_cb (struct editing_data *data)
 }
 
 static gboolean
+key_pressed (struct editing_data *ed, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_activate ((GtkWidget *) ed->btn_cancel);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
 ct_perms_can_edit (DonnaColumnType    *ct,
                    gpointer            _data,
                    DonnaNode          *node,
@@ -1163,6 +1176,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     w = gtk_label_new ("Permission");
     gtk_grid_attach (grid, w, 0, row, 1, 1);
     w = gtk_spin_button_new_with_range (0, 7, 1);
+    gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
     g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
     gtk_entry_set_width_chars ((GtkEntry *) w, 1);
     c = 0;
@@ -1176,6 +1190,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     gtk_grid_attach (grid, w, 1, row, 1, 1);
     ed->spn_u = (GtkSpinButton *) w;
     w = gtk_spin_button_new_with_range (0, 7, 1);
+    gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
     g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
     gtk_entry_set_width_chars ((GtkEntry *) w, 1);
     c = 0;
@@ -1189,6 +1204,7 @@ ct_perms_edit (DonnaColumnType    *ct,
     gtk_grid_attach (grid, w, 2, row, 1, 1);
     ed->spn_g = (GtkSpinButton *) w;
     w = gtk_spin_button_new_with_range (0, 7, 1);
+    gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
     g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
     gtk_entry_set_width_chars ((GtkEntry *) w, 1);
     c = 0;
@@ -1300,11 +1316,14 @@ ct_perms_edit (DonnaColumnType    *ct,
 
     w = gtk_button_new_with_label (NULL);
     ed->btn_set = (GtkButton *) w;
+    gtk_widget_set_can_default (w, TRUE);
+    gtk_window_set_default ((GtkWindow *) ed->window, w);
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
     g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
     w = gtk_button_new_with_label ("Cancel");
+    ed->btn_cancel = (GtkButton *) w;
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
     g_signal_connect_swapped (w, "clicked",
@@ -1368,6 +1387,9 @@ ct_perms_edit (DonnaColumnType    *ct,
 
     /* set the button label/sensitivity */
     toggle_set (ed);
+
+    g_signal_connect_swapped (ed->window, "key-press-event",
+            (GCallback) key_pressed, ed);
 
     gtk_widget_show_all (ed->window);
     donna_app_set_floating_window (((DonnaColumnTypePerms *) ct)->priv->app, win);
