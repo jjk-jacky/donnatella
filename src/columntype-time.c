@@ -604,6 +604,7 @@ struct editing_data
     GtkToggleButton *rad_sel;
     GtkToggleButton *rad_ref;
     GtkEntry        *entry;
+    GtkWidget       *btn_cancel;
 };
 
 static void
@@ -1141,6 +1142,19 @@ apply_cb (struct editing_data *ed)
         gtk_widget_destroy (ed->window);
 }
 
+static gboolean
+key_pressed (struct editing_data *ed, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_activate (ed->btn_cancel);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+
 static void
 editing_done_cb (GtkCellEditable *editable, struct editing_data *ed)
 {
@@ -1315,6 +1329,8 @@ ct_time_edit (DonnaColumnType    *ct,
 
     win = donna_column_type_new_floating_window (treeview, !!arr);
     ed->window = w = (GtkWidget *) win;
+    g_signal_connect_swapped (ed->window, "key-press-event",
+            (GCallback) key_pressed, ed);
     g_signal_connect_swapped (win, "destroy",
             (GCallback) window_destroy_cb, ed);
 
@@ -1378,6 +1394,7 @@ ct_time_edit (DonnaColumnType    *ct,
     ++row;
     w = gtk_entry_new ();
     ed->entry = (GtkEntry *) w;
+    gtk_entry_set_activates_default (ed->entry, TRUE);
     set_entry_icon (ed->entry);
     g_signal_connect (w, "key-press-event", (GCallback) key_press_event_cb, ed);
     g_signal_connect_swapped (w, "activate", (GCallback) apply_cb, ed);
@@ -1390,11 +1407,13 @@ ct_time_edit (DonnaColumnType    *ct,
     gtk_grid_attach (grid, w, 0, row, 4, 1);
 
     w = gtk_button_new_with_label ("Set time");
+    gtk_widget_set_can_default (w, TRUE);
+    gtk_window_set_default ((GtkWindow *) ed->window, w);
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
     g_signal_connect_swapped (w, "clicked", (GCallback) apply_cb, ed);
     gtk_box_pack_end (box, w, FALSE, FALSE, 3);
-    w = gtk_button_new_with_label ("Cancel");
+    w = ed->btn_cancel = gtk_button_new_with_label ("Cancel");
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
     g_object_set (gtk_button_get_image ((GtkButton *) w),
