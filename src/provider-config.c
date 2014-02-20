@@ -3565,6 +3565,7 @@ enum
 struct set_option
 {
     GtkWidget *win;
+    GtkWidget *btn_cancel;
     GtkInfoBar *infobar;
     GtkLabel *lblerr;
     GtkGrid *grid;
@@ -3757,6 +3758,18 @@ btn_clicked (struct set_option *so)
 }
 
 static gboolean
+key_pressed (struct set_option *so, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_activate (so->btn_cancel);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
 combo_is_row_sep (GtkTreeModel *model, GtkTreeIter *iter, gpointer data)
 {
     gchar *s;
@@ -3787,6 +3800,7 @@ combo_changed (struct set_option *so)
     else if (streq (type, ":string"))
     {
         w = gtk_entry_new ();
+        gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
         if (so->state == SO_INIT_WITH_DEFAULT_VALUE
                 && G_VALUE_HOLDS (so->value, G_TYPE_STRING)
                 && g_value_get_string (so->value))
@@ -3795,6 +3809,7 @@ combo_changed (struct set_option *so)
     else if (streq (type, ":int"))
     {
         w = gtk_entry_new ();
+        gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
         if (so->state == SO_INIT_WITH_DEFAULT_VALUE
                 && G_VALUE_HOLDS (so->value, G_TYPE_INT))
         {
@@ -4170,6 +4185,7 @@ donna_config_set_option (DonnaConfig            *config,
         GtkWidget *btn_box;
         GtkBox *box;
         GtkWidget *w;
+        GtkWidget *w_focus;
         struct set_option so;
         struct extra so_extra;
         GHashTableIter iter;
@@ -4189,6 +4205,8 @@ donna_config_set_option (DonnaConfig            *config,
         g_rw_lock_reader_unlock (&priv->lock);
 
         so.win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+        g_signal_connect_swapped (so.win, "key-press-event",
+                (GCallback) key_pressed, &so);
         gtk_widget_set_name (so.win, "config-set-option");
         donna_app_add_window (priv->app, (GtkWindow *) so.win, TRUE);
         gtk_window_set_default_size ((GtkWindow *) so.win, 230, -1);
@@ -4252,8 +4270,9 @@ donna_config_set_option (DonnaConfig            *config,
         w = gtk_label_new ("Name:");
         gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
         gtk_grid_attach (so.grid, w, 0, i, 1, 1);
-        w = gtk_entry_new ();
+        w = w_focus = gtk_entry_new ();
         so.entry = (GtkEntry *) w;
+        gtk_entry_set_activates_default (so.entry, TRUE);
         if (name)
             gtk_entry_set_text ((GtkEntry *) w, name);
         gtk_grid_attach (so.grid, w, 1, i, 1, 1);
@@ -4270,12 +4289,14 @@ donna_config_set_option (DonnaConfig            *config,
         gtk_box_pack_start (box, btn_box, FALSE, FALSE, 4);
 
         w = gtk_button_new_with_label ("Ok");
+        gtk_widget_set_can_default (w, TRUE);
+        gtk_window_set_default ((GtkWindow *) so.win, w);
         gtk_button_set_image ((GtkButton *) w,
                 gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
         g_signal_connect_swapped (w, "clicked", (GCallback) btn_clicked, &so);
         gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
 
-        w = gtk_button_new_with_label ("Cancel");
+        w = so.btn_cancel = gtk_button_new_with_label ("Cancel");
         gtk_button_set_image ((GtkButton *) w,
                 gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
         g_signal_connect_swapped (w, "clicked", (GCallback) gtk_widget_destroy, so.win);
@@ -4289,6 +4310,7 @@ donna_config_set_option (DonnaConfig            *config,
         g_signal_connect_swapped (so.win, "destroy", (GCallback) g_main_loop_quit, loop);
 
         gtk_widget_show_all (so.win);
+        gtk_window_set_focus ((GtkWindow *) so.win, w_focus);
         g_main_loop_run (loop);
         g_array_free (so.extras, TRUE);
 
