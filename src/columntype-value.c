@@ -391,6 +391,7 @@ struct editing_data
     gulong                   key_press_event_sid;
     /* custom window for flags */
     GtkWidget               *window;
+    GtkWidget               *btn_cancel;
 };
 
 static void
@@ -599,6 +600,18 @@ apply_cb (GtkButton *button, struct editing_data *ed)
 }
 
 static gboolean
+key_pressed (struct editing_data *ed, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_activate (ed->btn_cancel);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
 ct_value_can_edit (DonnaColumnType    *ct,
                    gpointer            _data,
                    DonnaNode          *node,
@@ -719,6 +732,8 @@ ct_value_edit (DonnaColumnType    *ct,
 
             win = donna_column_type_new_floating_window (treeview, FALSE);
             ed->window = w = (GtkWidget *) win;
+            g_signal_connect_swapped (ed->window, "key-press-event",
+                    (GCallback) key_pressed, ed);
             g_signal_connect_swapped (win, "destroy", (GCallback) g_free, ed);
 
             box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
@@ -740,12 +755,14 @@ ct_value_edit (DonnaColumnType    *ct,
             box = (GtkBox *) w;
 
             w = gtk_button_new_with_label ("Apply");
+            gtk_widget_set_can_default (w, TRUE);
+            gtk_window_set_default (win, w);
             gtk_button_set_image ((GtkButton *) w,
                     gtk_image_new_from_icon_name ("gtk-apply", GTK_ICON_SIZE_MENU));
             g_signal_connect (w, "clicked", (GCallback) apply_cb, ed);
             gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
-            w = gtk_button_new_with_label ("Cancel");
+            w = ed->btn_cancel = gtk_button_new_with_label ("Cancel");
             gtk_button_set_image ((GtkButton *) w,
                     gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
             g_signal_connect_swapped (w, "clicked",
