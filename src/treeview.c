@@ -20973,8 +20973,6 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     conv.key_m = priv->key_m;
     fl = donna_app_parse_fl (priv->app, fl, TRUE, &context, &intrefs);
     g_free (conv.row);
-    donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
-    g_free (fl);
 
     g_free (from);
     g_free (alias);
@@ -20988,6 +20986,14 @@ trigger_key (DonnaTreeView *tree, gchar spec)
     priv->key_motion_m = 0;
     priv->key_motion = 0;
     check_statuses (tree, STATUS_CHANGED_ON_KEYS);
+
+    /* we need to trigger *after* we reset the keys, because trigger_fl() could
+     * start a new main loop (for its get_node()) or even have e.g. the command
+     * processed right away (e.g. if INTERNAL_GUI) and that could process
+     * events, e.g. if using set_floating_window() as can be the case in
+     * column_edit() */
+    donna_app_trigger_fl (priv->app, fl, intrefs, FALSE, NULL);
+    g_free (fl);
     return FALSE;
 }
 
