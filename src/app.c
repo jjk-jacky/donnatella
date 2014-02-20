@@ -1332,6 +1332,7 @@ donna_app_set_floating_window (DonnaApp       *app,
     priv->floating_window = (GtkWidget *) window;
     g_signal_connect (window, "destroy",
             (GCallback) floating_window_destroy_cb, app);
+    donna_app_add_window (app, window, TRUE);
 }
 
 /**
