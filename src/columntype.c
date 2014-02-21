@@ -257,6 +257,7 @@ helper_get_save_location (DonnaColumnType    *ct,
 struct asl
 {
     GtkWidget *win;
+    GtkWidget *btn_cancel;
     GSList *list;
     DonnaColumnOptionSaveLocation save_location;
     DonnaTreeView *tree;
@@ -279,6 +280,18 @@ btn_clicked (struct asl *asl)
         }
     }
     g_warn_if_reached ();
+}
+
+static gboolean
+key_pressed (struct asl *asl, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_activate (asl->btn_cancel);
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 static void
@@ -316,6 +329,8 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
     gboolean is_tree_option = col_name == NULL;
 
     win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    g_signal_connect_swapped (win, "key-press-event",
+            (GCallback) key_pressed, &asl);
     if (!is_tree_option)
         gtk_widget_set_name (win, "columnoption-save-location");
     else
@@ -487,12 +502,14 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
     gtk_box_pack_end ((GtkBox *) hbox, btn_box, FALSE, FALSE, 4);
 
     w = gtk_button_new_with_label ("Save option");
+    gtk_widget_set_can_default (w, TRUE);
+    gtk_window_set_default ((GtkWindow *) win, w);
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-ok", GTK_ICON_SIZE_MENU));
     g_signal_connect_swapped (w, "clicked", (GCallback) btn_clicked, &asl);
     gtk_box_pack_end ((GtkBox *) btn_box, w, FALSE, FALSE, 2);
 
-    w = gtk_button_new_with_label ("Cancel");
+    w = asl.btn_cancel = gtk_button_new_with_label ("Cancel");
     gtk_button_set_image ((GtkButton *) w,
             gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
     g_signal_connect_swapped (w, "clicked", (GCallback) gtk_widget_destroy, win);
