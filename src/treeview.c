@@ -19003,6 +19003,7 @@ struct save_data
     GtkWidget *window;
     GtkContainer *c_box;
     GtkWidget *save_btn;
+    GtkWidget *cancel_btn;
     enum save *save;
     GPtrArray **arr;
 };
@@ -19036,6 +19037,18 @@ save_cb (GtkButton *btn, struct save_data *data)
     g_list_free (list);
 
     gtk_widget_destroy (data->window);
+}
+
+static gboolean
+key_pressed (struct save_data *data, GdkEventKey *event)
+{
+    if (event->keyval == GDK_KEY_Escape)
+    {
+        gtk_widget_activate (data->cancel_btn);
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 static void
@@ -19112,7 +19125,7 @@ donna_tree_view_save_to_config (DonnaTreeView      *tree,
     {
         /* ask user */
         GMainLoop *loop;
-        struct save_data data = { NULL, NULL, NULL, &save, &arr };
+        struct save_data data = { NULL, NULL, NULL, NULL, &save, &arr };
         GtkWindow *win;
         GtkBox *main_box;
         GtkBox *box;
@@ -19120,6 +19133,8 @@ donna_tree_view_save_to_config (DonnaTreeView      *tree,
         GSList *l;
 
         data.window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+        g_signal_connect_swapped (data.window, "key-press-event",
+                (GCallback) key_pressed, &data);
         gtk_widget_set_name (data.window, "save-to-config");
         win = (GtkWindow *) data.window;
         donna_app_add_window (priv->app, win, TRUE);
@@ -19193,12 +19208,14 @@ donna_tree_view_save_to_config (DonnaTreeView      *tree,
         box = (GtkBox *) w;
 
         w = data.save_btn = gtk_button_new_with_label ("Save to Configuration");
+        gtk_widget_set_can_default (w, TRUE);
+        gtk_window_set_default ((GtkWindow *) data.window, w);
         gtk_button_set_image ((GtkButton *) w,
                 gtk_image_new_from_icon_name ("gtk-apply", GTK_ICON_SIZE_MENU));
         g_signal_connect (w, "clicked", (GCallback) save_cb, &data);
         gtk_box_pack_end (box, w, FALSE, FALSE, 3);
 
-        w = gtk_button_new_with_label ("Cancel");
+        w = data.cancel_btn = gtk_button_new_with_label ("Cancel");
         gtk_button_set_image ((GtkButton *) w,
                 gtk_image_new_from_icon_name ("gtk-cancel", GTK_ICON_SIZE_MENU));
         g_signal_connect_swapped (w, "clicked",
