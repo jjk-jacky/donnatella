@@ -99,6 +99,9 @@
  *   the treeview. See #key-modes for more.
  * - <systemitem>click_mode</systemitem> &lpar;string&rpar; : Click mode for the
  *   treeview.  See #click-modes for more.
+ * - <systemitem>default_save_location</systemitem>
+ *   &lpar;integer:save-location&rpar; : Default location to save options to
+ *   (See commands tv_set_option() and tv_column_set_option())
  *
  * </para></refsect2>
  *
