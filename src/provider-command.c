@@ -26,6 +26,7 @@
 #include "provider-command.h"
 #include "command.h"
 #include "provider.h"
+#include "treeview.h"
 #include "node.h"
 #include "task.h"
 #include "macros.h"
