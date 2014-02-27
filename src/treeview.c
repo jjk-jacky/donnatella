@@ -1940,6 +1940,7 @@ donna_tree_view_finalize (GObject *object)
     g_array_free (priv->statuses, TRUE);
     g_free (priv->click_mode);
     g_free (priv->key_mode);
+    g_free (priv->name);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
