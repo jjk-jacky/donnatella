@@ -1001,6 +1001,7 @@ donna_task_process_new
 donna_task_process_new_full
 donna_task_process_set_pauser
 donna_task_process_set_stdin
+donna_task_process_import_environ
 donna_task_process_setenv
 donna_task_process_unsetenv
 donna_task_process_set_default_closer

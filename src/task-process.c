@@ -890,6 +890,19 @@ donna_task_process_set_stdin (DonnaTaskProcess   *taskp,
 }
 
 void
+donna_task_process_import_environ (DonnaTaskProcess *taskp)
+{
+    DonnaTaskProcessPrivate *priv;
+
+    g_return_if_fail (DONNA_IS_TASK_PROCESS (taskp));
+    priv = taskp->priv;
+
+    if (priv->envp)
+        g_strfreev (priv->envp);
+    priv->envp = g_get_environ ();
+}
+
+void
 donna_task_process_setenv (DonnaTaskProcess   *taskp,
                            const gchar        *variable,
                            const gchar        *value,

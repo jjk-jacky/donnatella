@@ -127,6 +127,7 @@ gboolean            donna_task_process_set_stdin    (DonnaTaskProcess   *taskp,
                                                      task_stdin_fn       fn,
                                                      gpointer            data,
                                                      GDestroyNotify      destroy);
+void                donna_task_process_import_environ (DonnaTaskProcess *taskp);
 void                donna_task_process_setenv       (DonnaTaskProcess   *taskp,
                                                      const gchar        *variable,
                                                      const gchar        *value,
