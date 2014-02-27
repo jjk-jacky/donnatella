@@ -45,10 +45,10 @@ typedef enum
 #ifdef DONNA_DEBUG_ENABLED
 
 #define DONNA_DEBUG(type, name, action) do {                        \
-    const gchar *n = name;                                          \
+    const gchar *_n = name;                                         \
     if ((donna_debug_flags & DONNA_DEBUG_##type)                    \
-            && (n == NULL                                           \
-                || _donna_debug_is_valid (DONNA_DEBUG_##type, n)))  \
+            && (_n == NULL                                          \
+                || _donna_debug_is_valid (DONNA_DEBUG_##type, _n))) \
     {                                                               \
         action;                                                     \
     }                                                               \
