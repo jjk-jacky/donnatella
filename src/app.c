@@ -1249,6 +1249,7 @@ donna_app_set_focus (DonnaApp       *app,
     }
 
     gtk_widget_grab_focus (w);
+    g_object_unref (w);
     return TRUE;
 }
 
