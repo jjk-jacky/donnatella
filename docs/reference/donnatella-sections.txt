@@ -117,6 +117,7 @@ register_set_type
 DONNA_APP_ERROR
 DonnaAppError
 DonnaApp
+DonnaAppClass
 donna_app_run
 donna_app_ensure_focused
 donna_app_move_focus
@@ -181,7 +182,7 @@ donna_cell_renderer_text_get_type
 <SECTION>
 <FILE>closures</FILE>
 g_cclosure_user_marshal_VOID__OBJECT_STRING
-g_cclosure_user_marshal_VOID__OBJECT_UINT_BOXED
+g_cclosure_user_marshal_VOID__OBJECT_UINT_OBJECT
 g_cclosure_user_marshal_VOID__OBJECT_OBJECT
 g_cclosure_user_marshal_VOID__BOXED_BOXED
 g_cclosure_user_marshal_VOID__BOOLEAN_INT_BOOLEAN_STRING
@@ -222,12 +223,14 @@ DONNA_COLUMN_TYPE_RENDERER_COMBO
 DONNA_COLUMN_TYPE_RENDERER_TOGGLE
 DONNA_COLUMN_TYPE_RENDERER_SPINNER
 DonnaColumnTypeNeed
+DonnaColumnOptionInfo
 DonnaColumnOptionSaveLocation
 renderer_edit_fn
 DonnaColumnTypeInterface
 DonnaColumnType
 donna_column_type_get_name
 donna_column_type_get_renderers
+donna_column_type_get_options
 donna_column_type_refresh_data
 donna_column_type_free_data
 donna_column_type_get_props
@@ -382,6 +385,7 @@ donna_column_type_value_get_type
 
 <SECTION>
 <FILE>common</FILE>
+PACKAGE_VERSION
 DonnaEnabledTypes
 DonnaIoType
 DonnaClick
@@ -1069,7 +1073,7 @@ DonnaTreeVisual
 DonnaTreeVisualSource
 DonnaTreeViewSet
 DonnaTreeViewGoto
-DonnaTreeviewOptionSaveLocation
+DonnaTreeViewOptionSaveLocation
 DonnaListFileElements
 DonnaTreeView
 DonnaTreeViewClass
