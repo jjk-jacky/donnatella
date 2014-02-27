@@ -29,6 +29,7 @@
 #include "task-process.h"
 #include "treeview.h"
 #include "node.h"
+#include "util.h"
 #include "macros.h"
 
 
@@ -37,6 +38,7 @@ enum mode
     MODE_EXEC = 1,
     MODE_EXEC_AND_WAIT,
     MODE_TERMINAL,
+    MODE_EMBEDDED_TERMINAL,
     MODE_PARSE_OUTPUT,
     MODE_DESKTOP_FILE
 };
@@ -46,6 +48,7 @@ struct exec
     enum mode mode;
     guint extra;
     gchar *terminal;
+    gchar *terminal_cmdline; /* in MODE_EMBEDDED_TERMINAL */
 };
 
 
@@ -142,6 +145,10 @@ _donna_provider_exec_register_extras (DonnaConfig *config, GError **error)
     it[i].value     = MODE_TERMINAL;
     it[i].in_file   = "terminal";
     it[i].label     = "Run in Terminal";
+    ++i;
+    it[i].value     = MODE_EMBEDDED_TERMINAL;
+    it[i].in_file   = "embedded_terminal";
+    it[i].label     = "Run in Embedded Terminal";
     ++i;
     it[i].value     = MODE_PARSE_OUTPUT;
     it[i].in_file   = "parse_output";
@@ -496,6 +503,38 @@ get_node_children_task (DonnaProvider      *provider,
         g_free (location);
         location = cmdline;
     }
+    else if (ex->mode == MODE_EMBEDDED_TERMINAL)
+    {
+        DonnaNode *n;
+        GString *str;
+
+        str = g_string_new ("command:terminal_add_tab(");
+        donna_g_string_append_quoted (str, ex->terminal, FALSE);
+        g_string_append_c (str, ',');
+        donna_g_string_append_quoted (str, cmdline, FALSE);
+        if (ex->terminal_cmdline)
+        {
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, ex->terminal_cmdline, FALSE);
+        }
+        g_string_append_c (str, ')');
+
+        g_object_get (provider, "app", &app, NULL);
+        n = donna_app_get_node (app, str->str, FALSE, error);
+        g_string_free (str, TRUE);
+        if (G_UNLIKELY (!n))
+        {
+            g_prefix_error (error, "Provider 'exec': Failed to get node for command "
+                    " to use embedded terminal: ");
+            g_object_unref (app);
+            g_free (location);
+            return NULL;
+        }
+
+        task = donna_node_trigger_task (n, error);
+        g_object_unref (n);
+        return task;
+    }
     else if (ex->mode == MODE_PARSE_OUTPUT)
     {
         wait = TRUE;
@@ -611,6 +650,7 @@ provider_exec_unref_node (DonnaProviderBase  *provider,
         struct exec *ex = g_value_get_pointer (&v);
         g_value_unset (&v);
         g_free (ex->terminal);
+        g_free (ex->terminal_cmdline);
         g_slice_free (struct exec, ex);
         /* after that, the node is either finalized (as it should) or marked
          * invalid, so there's no risk of "_exec" being used again */
@@ -638,6 +678,7 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
         { "exec",               MODE_EXEC },
         { "exec_and_wait",      MODE_EXEC_AND_WAIT },
         { "terminal",           MODE_TERMINAL },
+        { "embedded_terminal",  MODE_EMBEDDED_TERMINAL },
         { "parse_output",       MODE_PARSE_OUTPUT },
         { "desktop_file",       MODE_DESKTOP_FILE },
     };
@@ -724,7 +765,7 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                         {
                             g_prefix_error (&err,
                                     "Provider 'exec': Cannot create new node: "
-                                    "Failed to get option terminal cmdline: ");
+                                    "Failed to get option 'cmdline': ");
                             donna_task_take_error (task, err);
                             g_free (s);
                             g_ptr_array_unref (arr);
@@ -771,7 +812,7 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                     {
                         donna_task_set_error (task, DONNA_PROVIDER_ERROR,
                                 DONNA_PROVIDER_ERROR_OTHER,
-                                "Provider 'exec': Unable to find a terminal, "
+                                "Provider 'exec': Unable to find a terminal emulator, "
                                 "you can define the command line in option "
                                 "'providers/exec/terminal/cmdline'");
                         return DONNA_TASK_FAILED;
@@ -780,6 +821,63 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
 
                 g_free (terminal);
             }
+        }
+    }
+    else if (exec.mode == MODE_EMBEDDED_TERMINAL)
+    {
+        GPtrArray *arr = NULL;
+
+        if (donna_config_list_options (config, &arr, DONNA_CONFIG_OPTION_TYPE_NUMBERED,
+                    "providers/exec/embedded_terminal"))
+        {
+            for (i = 0; i < arr->len; ++i)
+            {
+                if (donna_config_get_string (config, NULL, &s,
+                            "providers/exec/embedded_terminal/%s/prefix", arr->pdata[i]))
+                {
+                    if (streqn (location + exec.extra, s, strlen (s)))
+                    {
+                        if (!donna_config_get_string (config, &err, &exec.terminal,
+                                    "providers/exec/embedded_terminal/%s/terminal",
+                                    arr->pdata[i]))
+                        {
+                            g_prefix_error (&err,
+                                    "Provider 'exec': Cannot create new node: "
+                                    "Failed to get option 'terminal': ");
+                            donna_task_take_error (task, err);
+                            g_free (s);
+                            g_ptr_array_unref (arr);
+                            return DONNA_TASK_FAILED;
+                        }
+                        exec.extra += (guint) strlen (s);
+                        g_free (s);
+
+                        donna_config_get_string (config, NULL, &exec.terminal_cmdline,
+                                "providers/exec/embedded_terminal/%s/terminal_cmdline",
+                                arr->pdata[i]);
+                        break;
+                    }
+                    g_free (s);
+                }
+            }
+            g_ptr_array_unref (arr);
+        }
+
+        if (!exec.terminal)
+        {
+            donna_config_get_string (config, NULL, &exec.terminal,
+                    "providers/exec/embedded_terminal/terminal");
+            if (!exec.terminal)
+            {
+                donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'exec': Unable to find an embedded terminal, "
+                        "you can define the terminal to use in option "
+                        "'providers/exec/embedded_terminal/terminal'");
+                return DONNA_TASK_FAILED;
+            }
+            donna_config_get_string (config, NULL, &exec.terminal_cmdline,
+                    "providers/exec/embedded_terminal/terminal_cmdline");
         }
     }
 
