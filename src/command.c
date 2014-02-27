@@ -182,6 +182,18 @@ _donna_get_flags_from_list (guint            nb,
     return ret;
 }
 
+#define ensure_uint(cmd_name, arg_nb, arg_name, arg_val) do {                \
+    if (arg_val < 0)                                                         \
+    {                                                                        \
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,                     \
+                DONNA_COMMAND_ERROR_OTHER,                                   \
+                "Command '%s': Argument #%d (%s) must be positive (was %d)", \
+                cmd_name, arg_nb, arg_name, arg_val);                        \
+        return DONNA_TASK_FAILED;                                            \
+    }                                                                        \
+} while (0)
+
+
 /* commands */
 
 static void
@@ -3068,7 +3080,7 @@ cmd_tv_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
     gchar *s_set = args[1];
     DonnaRowId *rid = args[2];
-    guint nb = GPOINTER_TO_UINT (args[3]); /* opt */
+    gint nb = GPOINTER_TO_INT (args[3]); /* opt */
     gchar *nb_type = args[4]; /* opt */
     gchar *action = args[5]; /* opt */
     gboolean to_focused = GPOINTER_TO_INT (args[6]); /* opt */
@@ -3130,7 +3142,9 @@ cmd_tv_goto_line (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         c_a = -1;
 
-    if (!donna_tree_view_goto_line (tree, set, rid, nb, nb_types[c_n],
+    ensure_uint ("tv_goto_line", 4, "nb", nb);
+
+    if (!donna_tree_view_goto_line (tree, set, rid, (guint) nb, nb_types[c_n],
                 (c_a < 0) ? 0 : actions[c_a], to_focused, &err))
     {
         donna_task_take_error (task, err);
@@ -3210,7 +3224,7 @@ cmd_tv_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     gchar *direction = args[1]; /* opt */
-    guint nb = GPOINTER_TO_UINT (args[2]); /* opt */
+    gint nb = GPOINTER_TO_INT (args[2]); /* opt */
 
     const gchar *s_directions[] = { "backward", "forward" };
     DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
@@ -3236,7 +3250,9 @@ cmd_tv_history_get (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         dir = DONNA_HISTORY_BOTH;
 
-    arr = donna_tree_view_history_get (tree, dir, nb, &err);
+    ensure_uint ("tv_history_get", 3, "nb", nb);
+
+    arr = donna_tree_view_history_get (tree, dir, (guint) nb, &err);
     if (!arr)
     {
         donna_task_take_error (task, err);
@@ -3274,7 +3290,7 @@ cmd_tv_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     gchar *direction = args[1]; /* opt */
-    guint nb = GPOINTER_TO_UINT (args[2]); /* opt */
+    gint nb = GPOINTER_TO_INT (args[2]); /* opt */
 
     const gchar *s_directions[] = { "backward", "forward" };
     DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
@@ -3300,10 +3316,11 @@ cmd_tv_history_get_node (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         dir = 0;
 
+    ensure_uint ("tv_history_get_node", 3, "nb", nb);
     if (nb == 0)
         nb = 1;
 
-    node = donna_tree_view_history_get_node (tree, directions[dir], nb, &err);
+    node = donna_tree_view_history_get_node (tree, directions[dir], (guint) nb, &err);
     if (!node)
     {
         donna_task_take_error (task, err);
@@ -3339,7 +3356,7 @@ cmd_tv_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
     gchar *direction = args[1]; /* opt */
-    guint nb = GPOINTER_TO_UINT (args[2]); /* opt */
+    gint nb = GPOINTER_TO_INT (args[2]); /* opt */
 
     const gchar *s_directions[] = { "backward", "forward" };
     DonnaHistoryDirection directions[] = { DONNA_HISTORY_BACKWARD,
@@ -3362,12 +3379,13 @@ cmd_tv_history_move (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         dir = DONNA_HISTORY_BACKWARD;
 
+    ensure_uint ("tv_history_move", 3, "nb", nb);
     /* since 0 has no sense here, we'll just assume this was not specified, and
      * default to 1 */
     if (nb == 0)
         nb = 1;
 
-    if (!donna_tree_view_history_move (tree, dir, nb, &err))
+    if (!donna_tree_view_history_move (tree, dir, (guint) nb, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
