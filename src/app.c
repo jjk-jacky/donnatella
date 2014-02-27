@@ -4835,18 +4835,18 @@ load_tree_view (DonnaApp *app, const gchar *name)
     DonnaTreeView *tree;
 
     tree = donna_app_get_tree_view (app, name);
-    if (!tree)
+    if (G_UNLIKELY (tree))
+        return NULL;
+
+    /* shall we load it indeed */
+    tree = (DonnaTreeView *) donna_tree_view_new (app, name);
+    if (G_LIKELY (tree))
     {
-        /* shall we load it indeed */
-        tree = (DonnaTreeView *) donna_tree_view_new (app, name);
-        if (tree)
-        {
-            g_signal_connect (tree, "select-arrangement",
-                    G_CALLBACK (tree_select_arrangement), app);
-            app->priv->tree_views = g_slist_prepend (app->priv->tree_views,
-                    g_object_ref (tree));
-            g_signal_emit (app, donna_app_signals[TREE_VIEW_LOADED], 0, tree);
-        }
+        g_signal_connect (tree, "select-arrangement",
+                G_CALLBACK (tree_select_arrangement), app);
+        app->priv->tree_views = g_slist_prepend (app->priv->tree_views,
+                g_object_ref (tree));
+        g_signal_emit (app, donna_app_signals[TREE_VIEW_LOADED], 0, tree);
     }
     return tree;
 }
@@ -4989,6 +4989,11 @@ load_widget (DonnaApp    *app,
 
                 w = gtk_scrolled_window_new (NULL, NULL);
                 tree = load_tree_view (app, *def);
+                if (G_UNLIKELY (!tree))
+                {
+                    g_debug ("Failed to get treeview '%s'", *def);
+                    return NULL;
+                }
                 if (!donna_tree_view_is_tree (tree) && !priv->active_list)
                 {
                     gboolean skip;
