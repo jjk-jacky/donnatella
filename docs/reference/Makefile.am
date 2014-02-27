@@ -70,7 +70,7 @@ expand_content_files=
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
 GTKDOC_CFLAGS=$(GTK_CFLAGS)
-GTKDOC_LIBS=$(GTK_LIBS) $(top_srcdir)/libdonnatella.la
+GTKDOC_LIBS=$(GTK_LIBS) $(top_srcdir)/libdonnatella.la -lX11
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/gtk-doc.make

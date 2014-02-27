@@ -28,7 +28,7 @@ endif
 
 noinst_LTLIBRARIES = libdonnatella.la
 libdonnatella_la_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
-libdonnatella_la_LIBADD = @GTK_LIBS@
+libdonnatella_la_LIBADD = @GTK_LIBS@ -lX11
 libdonnatella_la_SOURCES = \
 					 src/app.c \
 					 src/app.h \
@@ -119,13 +119,15 @@ libdonnatella_la_SOURCES = \
 					 src/taskui.h \
 					 src/taskui-messages.c \
 					 src/taskui-messages.h \
+					 src/terminal.c \
+					 src/terminal.h \
 					 src/treeview.c \
 					 src/treeview.h \
 					 src/util.c \
 					 src/util.h
 
 donnatella_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
-donnatella_LDADD = libdonnatella.la @GTK_LIBS@
+donnatella_LDADD = libdonnatella.la @GTK_LIBS@ -lX11
 donnatella_SOURCES = src/donnatella.c
 
 if DONNA_DEBUG_ENABLED

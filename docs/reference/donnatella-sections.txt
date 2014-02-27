@@ -42,6 +42,15 @@ tasks_cancel
 tasks_cancel_all
 tasks_pre_exit
 tasks_switch
+terminal_add_tab
+terminal_get_active_page
+terminal_get_active_tab
+terminal_get_page
+terminal_get_tab
+terminal_remove_page
+terminal_remove_tab
+terminal_set_active_page
+terminal_set_active_tab
 tv_abort
 tv_activate_row
 tv_add_root
@@ -135,6 +144,7 @@ donna_app_run_task
 donna_app_run_task_and_wait
 donna_app_peek_task_manager
 donna_app_get_tree_view
+donna_app_get_terminal
 donna_app_get_current_location
 donna_app_get_current_dirname
 donna_app_get_conf_filename
@@ -190,6 +200,8 @@ g_cclosure_user_marshal_POINTER__STRING_OBJECT
 g_cclosure_user_marshal_VOID__INT_LONG_STRING
 g_cclosure_user_marshal_VOID__INT_STRING
 g_cclosure_user_marshal_BOOLEAN__POINTER_POINTER_POINTER
+g_cclosure_user_marshal_VOID__UINT_BOOLEAN
+g_cclosure_user_marshal_VOID__UINT_STRING
 </SECTION>
 
 <SECTION>
@@ -1053,6 +1065,36 @@ DONNA_TASKUI_MESSAGES_GET_CLASS
 DONNA_TYPE_TASKUI_MESSAGES
 DonnaTaskUiMessagesPrivate
 donna_task_ui_messages_get_type
+</SECTION>
+
+<SECTION>
+<FILE>terminal</FILE>
+<TITLE>DonnaTerminal</TITLE>
+DONNA_TERMINAL_ERROR
+DonnaTerminalError
+DonnaTerminalAddTab
+DonnaTerminal
+DonnaTerminalClass
+donna_terminal_new
+donna_terminal_get_name
+donna_terminal_get_active_tab
+donna_terminal_get_active_page
+donna_terminal_set_active_tab
+donna_terminal_set_active_page
+donna_terminal_get_tab
+donna_terminal_get_page
+donna_terminal_add_tab
+donna_terminal_remove_tab
+donna_terminal_remove_page
+<SUBSECTION Standard>
+DONNA_IS_TERMINAL
+DONNA_IS_TERMINAL_CLASS
+DONNA_TERMINAL
+DONNA_TERMINAL_CLASS
+DONNA_TERMINAL_GET_CLASS
+DONNA_TYPE_TERMINAL
+DonnaTerminalPrivate
+donna_terminal_get_type
 </SECTION>
 
 <SECTION>

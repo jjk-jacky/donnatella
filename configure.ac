@@ -103,6 +103,7 @@ fi
 PKG_CHECK_MODULES(GTK, [gtk+-3.0], , AC_MSG_ERROR([GTK+3 is required]))
 
 # Checks for header files.
+AC_PATH_X
 AC_CHECK_HEADERS([fcntl.h locale.h stdlib.h string.h strings.h unistd.h utime.h])
 
 # Checks for typedefs, structures, and compiler characteristics.

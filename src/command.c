@@ -2318,6 +2318,321 @@ cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * terminal_add_tab:
+ * @terminal: A terminal
+ * @cmdline: The command line to execute inside the embedded terminal
+ * @term_cmdline: (allow-none): The command line to start the embedded terminal
+ * @add_tab: (allow-none): Extra action to perform on the newly created tab
+ *
+ * Starts a new embedded terminal in @terminal, launching @cmdline
+ *
+ * See donna_terminal_add_tab() for more
+ *
+ * Returns: The ID of the newly created tab
+ */
+static DonnaTaskState
+cmd_terminal_add_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    const gchar *cmdline = args[1];
+    const gchar *term_cmdline = args[2]; /* opt */
+    gchar *s_add_tab = args[3]; /* opt */
+
+    const gchar *c_add_tab[] = { "nothing", "active", "focus" };
+    DonnaTerminalAddTab add_tab[] = { DONNA_TERMINAL_NOTHING,
+        DONNA_TERMINAL_MAKE_ACTIVE, DONNA_TERMINAL_FOCUS };
+    gint c;
+
+    GValue *value;
+    guint id;
+
+    if (s_add_tab)
+    {
+        c = _get_choice (c_add_tab, s_add_tab);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command 'terminal_add_tab': Invalid add_tab argument '%s': "
+                    "Must be one of 'nothing', 'active' or 'focus'",
+                    s_add_tab);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* default: FOCUS */
+        c = 2;
+
+    id = donna_terminal_add_tab (terminal, cmdline, term_cmdline, add_tab[c], &err);
+    if (id == (guint) -1)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, (gint) id);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_get_active_page:
+ * @terminal: A terminal
+ *
+ * Returns the page number of the active/current tab in @terminal
+ *
+ * See donna_terminal_get_active_page() for more
+ *
+ * Returns: The page number of the active tab
+ */
+static DonnaTaskState
+cmd_terminal_get_active_page (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    DonnaTerminal *terminal = args[0];
+
+    GValue *value;
+    gint page;
+
+    page = donna_terminal_get_active_page (terminal);
+    if (page == -1)
+    {
+        donna_task_set_error (task, DONNA_TERMINAL_ERROR,
+                DONNA_TERMINAL_ERROR_NOT_FOUND,
+                "Command 'terminal_get_active_page': "
+                "No active page in terminal '%s'",
+                donna_terminal_get_name (terminal));
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, page);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_get_active_tab:
+ * @terminal: A terminal
+ *
+ * Returns the tab ID of the active/current tab in @terminal
+ *
+ * See donna_terminal_get_active_tab() for more
+ *
+ * Returns: The tab ID of the active tab
+ */
+static DonnaTaskState
+cmd_terminal_get_active_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    DonnaTerminal *terminal = args[0];
+
+    GValue *value;
+    guint id;
+
+    id = donna_terminal_get_active_tab (terminal);
+    if (id == (guint) -1)
+    {
+        donna_task_set_error (task, DONNA_TERMINAL_ERROR,
+                DONNA_TERMINAL_ERROR_NOT_FOUND,
+                "Command 'terminal_get_active_tab': "
+                "No active tab in terminal '%s'",
+                donna_terminal_get_name (terminal));
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, (gint) id);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_get_page:
+ * @terminal: A terminal
+ * @id: A tab ID
+ *
+ * Get the current page number for tab @id
+ *
+ * See donna_terminal_get_page() for more
+ *
+ * Returns: The page number of tab @id
+ */
+static DonnaTaskState
+cmd_terminal_get_page (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    gint id = GPOINTER_TO_INT (args[1]);
+
+    GValue *value;
+    gint page;
+
+    ensure_uint ("terminal_get_page", 2, "id", id);
+    page = donna_terminal_get_page (terminal, (guint) id, &err);
+    if (page == -1)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, page);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_get_tab:
+ * @terminal: A terminal
+ * @page: A page number
+ *
+ * Get the tab ID of page @page
+ *
+ * See donna_terminal_get_tab() for more
+ *
+ * Returns: The tab ID of page @page
+ */
+static DonnaTaskState
+cmd_terminal_get_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    gint page = GPOINTER_TO_INT (args[1]);
+
+    GValue *value;
+    guint id;
+
+    id = donna_terminal_get_tab (terminal, page, &err);
+    if (id == (guint) -1)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, (gint) id);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_remove_page:
+ * @terminal: A terminal
+ * @page: The page to remove
+ *
+ * Remove page @page from @terminal
+ *
+ * See donna_terminal_remove_page() for more
+ */
+static DonnaTaskState
+cmd_terminal_remove_page (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    gint page = GPOINTER_TO_INT (args[1]);
+
+    if (!donna_terminal_remove_page (terminal, page, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_remove_tab:
+ * @terminal: A terminal
+ * @id: The tab ID
+ *
+ * Remove tab @id from @terminal
+ *
+ * See donna_terminal_remove_tab() for more
+ */
+static DonnaTaskState
+cmd_terminal_remove_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    gint id = GPOINTER_TO_INT (args[1]);
+
+    ensure_uint ("terminal_remove_tab", 2, "id", id);
+    if (!donna_terminal_remove_tab (terminal, (guint) id, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_set_active_page:
+ * @terminal: A terminal
+ * @page: A page number; or -1 for last one
+ * @no_focus: (allow-none): 1 not to set the focus to the embedded terminal
+ *
+ * Sets the active tab of @terminal to page @page
+ *
+ * See donna_terminal_set_active_page() for more
+ */
+static DonnaTaskState
+cmd_terminal_set_active_page (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    gint page = GPOINTER_TO_INT (args[1]);
+    gboolean no_focus = GPOINTER_TO_INT (args[2]); /* opt */
+
+    if (!donna_terminal_set_active_page (terminal, page, no_focus, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * terminal_set_active_tab:
+ * @terminal: A terminal
+ * @id: A tab ID
+ * @no_focus: (allow-none): 1 not to set the focus to the embedded terminal
+ *
+ * Sets the active tab of @terminal to tab @id
+ *
+ * See donna_terminal_set_active_tab for more
+ */
+static DonnaTaskState
+cmd_terminal_set_active_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTerminal *terminal = args[0];
+    gint id = GPOINTER_TO_INT (args[1]);
+    gboolean no_focus = GPOINTER_TO_INT (args[2]); /* opt */
+
+    ensure_uint ("terminal_set_active_tab", 2, "id", id);
+    if (!donna_terminal_set_active_tab (terminal, (guint) id, no_focus, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_abort:
  * @tree: A treeview
  *
@@ -4624,6 +4939,62 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tasks_switch, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (terminal_add_tab, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    add_command (terminal_get_active_page, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    add_command (terminal_get_active_tab, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (terminal_get_page, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (terminal_get_tab, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (terminal_remove_page, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (terminal_remove_tab, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (terminal_set_active_page, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (terminal_set_active_tab, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

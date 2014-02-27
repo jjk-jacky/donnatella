@@ -80,6 +80,7 @@
           <xi:include href="xml/task-process.xml"/>
           <xi:include href="xml/taskui.xml"/>
           <xi:include href="xml/taskui-messages.xml"/>
+          <xi:include href="xml/terminal.xml"/>
           <xi:include href="xml/util.xml"/>
       </chapter>
       <chapter id="object-tree">

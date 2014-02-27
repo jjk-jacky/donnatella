@@ -93,6 +93,8 @@ donna_debug_set_valid (gchar *def, GError **error)
             valid.flag = DONNA_DEBUG_TASK;
         else if (streq (def, "treeview"))
             valid.flag = DONNA_DEBUG_TREE_VIEW;
+        else if (streq (def, "terminal"))
+            valid.flag = DONNA_DEBUG_TERMINAL;
         else if (streq (def, "task-manager"))
             valid.flag = DONNA_DEBUG_TASK_MANAGER;
         else if (streq (def, "provider"))

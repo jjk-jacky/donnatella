@@ -28,6 +28,7 @@
 #include "provider.h"
 #include "treeview.h"
 #include "node.h"
+#include "terminal.h"
 #include "task.h"
 #include "macros.h"
 #include "debug.h"
@@ -386,7 +387,8 @@ free_command_args (struct command *command, GPtrArray *args)
             continue;
         else if (command->arg_type[i] & DONNA_ARG_IS_ARRAY)
             g_ptr_array_unref (args->pdata[i]);
-        else if (command->arg_type[i] & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE))
+        else if (command->arg_type[i] & (DONNA_ARG_TYPE_TREE_VIEW
+                    | DONNA_ARG_TYPE_NODE | DONNA_ARG_TYPE_TERMINAL))
             g_object_unref (args->pdata[i]);
         else if (command->arg_type[i] & (DONNA_ARG_TYPE_STRING
                     | DONNA_ARG_TYPE_ROW | DONNA_ARG_TYPE_PATH))
@@ -740,6 +742,13 @@ parse_arg (struct run_command    *rc,
             else
                 s = g_strdup (donna_tree_view_get_name (g_value_get_object (v)));
         }
+        else if (_rc.command->return_type & DONNA_ARG_TYPE_TERMINAL)
+        {
+            if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TERMINAL)
+                g_ptr_array_add (rc->args, g_value_dup_object (v));
+            else
+                s = g_strdup (donna_terminal_get_name (g_value_get_object (v)));
+        }
         else if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_NODE)
@@ -872,6 +881,42 @@ convert:
             {
                 g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
                         "Command '%s', argument %d: TreeView '%s' not found",
+                        rc->command->name, rc->i + 1, s);
+                goto error;
+            }
+        }
+        g_ptr_array_add (rc->args, ptr);
+    }
+    else if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TERMINAL)
+    {
+        gpointer ptr;
+
+        if (*s == '<')
+        {
+            gsize len = strlen (s) - 1;
+            if (s[len] != '>')
+            {
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
+                        "Command '%s', argument %d: Invalid tree view name/reference: '%s'",
+                        rc->command->name, rc->i + 1, s);
+                goto error;
+            }
+            ptr = donna_app_get_int_ref (app, s, DONNA_ARG_TYPE_TERMINAL);
+            if (!ptr)
+            {
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
+                        "Command '%s', argument %d: Invalid internal reference '%s'",
+                        rc->command->name, rc->i + 1, s);
+                goto error;
+            }
+        }
+        else
+        {
+            ptr = donna_app_get_terminal (app, s);
+            if (!ptr)
+            {
+                g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_NOT_FOUND,
+                        "Command '%s', argument %d: Terminal '%s' not found",
                         rc->command->name, rc->i + 1, s);
                 goto error;
             }

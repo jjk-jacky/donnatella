@@ -30,4 +30,5 @@ donna_task_get_type
 donna_task_process_get_type
 donna_task_ui_messages_get_type
 donna_taskui_get_type
+donna_terminal_get_type
 donna_tree_view_get_type

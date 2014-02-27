@@ -72,6 +72,7 @@ typedef enum
     DONNA_ARG_TYPE_ROW          = (1 << 4),
     DONNA_ARG_TYPE_PATH         = (1 << 5),
     DONNA_ARG_TYPE_ROW_ID       = (1 << 6),
+    DONNA_ARG_TYPE_TERMINAL     = (1 << 7),
 
     /*< private >*/
     _DONNA_ARG_TYPE_CUSTOM      = (1 << 14),

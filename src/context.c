@@ -26,6 +26,7 @@
 #include "util.h"
 #include "treeview.h"
 #include "node.h"
+#include "terminal.h"
 #include "app.h"
 #include "macros.h"
 
@@ -325,6 +326,8 @@ donna_context_parse (DonnaContext       *context,
                         g_free (ir);
                 }
             }
+            else if (type & DONNA_ARG_TYPE_TERMINAL)
+                g_string_append (str, donna_terminal_get_name ((DonnaTerminal *) ptr));
             else if (type & DONNA_ARG_TYPE_STRING)
             {
                 if (options & DONNA_CONTEXT_NO_QUOTES)

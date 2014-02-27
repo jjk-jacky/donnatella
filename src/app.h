@@ -28,6 +28,7 @@
 #include "conf.h"
 #include "task-manager.h"
 #include "treeview.h"
+#include "terminal.h"
 #include "columntype.h"
 #include "filter.h"
 #include "context.h"
@@ -103,6 +104,8 @@ gboolean            donna_app_run_task_and_wait     (DonnaApp       *app,
                                                      GError        **error);
 DonnaTaskManager *  donna_app_peek_task_manager     (DonnaApp       *app);
 DonnaTreeView *     donna_app_get_tree_view         (DonnaApp       *app,
+                                                     const gchar    *name);
+DonnaTerminal *     donna_app_get_terminal          (DonnaApp       *app,
                                                      const gchar    *name);
 DonnaNode *         donna_app_get_current_location  (DonnaApp       *app,
                                                      GError        **error);

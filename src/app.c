@@ -27,6 +27,8 @@
 #include <ctype.h>      /* isblank() */
 #include <string.h>
 #include <errno.h>
+#include <gtk/gtkx.h>
+#include <X11/Xlib.h>
 #ifdef DONNA_DEBUG_AUTOBREAK
 #include <unistd.h>
 #include <stdio.h>
@@ -207,7 +209,11 @@
  *
  * - <systemitem>treeview</systemitem> : this is the main component in
  *   donnatella. A treeview will either be a list (by default) or a tree, using
- *   its boolean option <systemitem>is_tree</systemitem>.
+ *   its boolean option <systemitem>is_tree</systemitem>. See #DonnaTreeView for
+ *   more.
+ * - <systemitem>terminal</systemitem> : A terminal will feature one (or more,
+ *   via tabs) embedded terminal emulator within donna. See #DonnaTerminal for
+ *   more.
  *
  * You can now create the layout you want for donna. For example, to make a
  * dual-pane with one tree on the left, and two lists on the right, you could
@@ -565,6 +571,7 @@ struct _DonnaAppPrivate
     DonnaTaskManager*task_manager;
     DonnaStatusBar  *sb;
     GSList          *tree_views;
+    GSList          *terminals;
     GSList          *arrangements;
     GThreadPool     *pool;
     DonnaTreeView   *active_list;
@@ -1218,6 +1225,8 @@ donna_app_move_focus (DonnaApp          *app,
  *
  * Set the focus to the GUI element @name of type @type
  *
+ * @name must be one of "treeview" or "terminal"
+ *
  * If @type is "treeview" you can use ":active" for @name to refer to the
  * active-list.
  *
@@ -1240,6 +1249,8 @@ donna_app_set_focus (DonnaApp       *app,
         else
             w = (GtkWidget *) donna_app_get_tree_view (app, name);
     }
+    else if (streq (type, "terminal"))
+        w = (GtkWidget *) donna_app_get_terminal (app, name);
     else
     {
         g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_UNKNOWN_TYPE,
@@ -1251,8 +1262,8 @@ donna_app_set_focus (DonnaApp       *app,
     if (!w)
     {
         g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_NOT_FOUND,
-                "Cannot set focus to TreeView '%s': not found",
-                name);
+                "Cannot set focus to %s '%s': not found",
+                type, name);
         return FALSE;
     }
 
@@ -1936,6 +1947,38 @@ donna_app_get_tree_view (DonnaApp    *app,
 }
 
 /**
+ * donna_app_get_terminal:
+ * @app: The #DonnaApp
+ * @name: The name of the wanted terminal
+ *
+ * Returns the terminal @name
+ *
+ * Returns: (transfer full): The #DonnaTerminal @name, or %NULL
+ */
+DonnaTerminal *
+donna_app_get_terminal (DonnaApp       *app,
+                        const gchar    *name)
+{
+    DonnaAppPrivate *priv;
+    DonnaTerminal *term = NULL;
+    GSList *l;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (name != NULL, NULL);
+    priv = app->priv;
+
+    for (l = priv->terminals; l; l = l->next)
+    {
+        if (streq (name, donna_terminal_get_name (l->data)))
+        {
+            term = g_object_ref (l->data);
+            break;
+        }
+    }
+    return term;
+}
+
+/**
  * donna_app_get_current_location:
  * @app: The #DonnaApp
  * @error: Return location of a #GError, or %NULL
@@ -2103,6 +2146,7 @@ donna_app_new_int_ref (DonnaApp       *app,
     g_return_val_if_fail (ptr != NULL, NULL);
     g_return_val_if_fail (type == DONNA_ARG_TYPE_TREE_VIEW
             || type == DONNA_ARG_TYPE_NODE
+            || type == DONNA_ARG_TYPE_TERMINAL
             || (type & DONNA_ARG_IS_ARRAY), NULL);
     priv = app->priv;
 
@@ -2110,7 +2154,8 @@ donna_app_new_int_ref (DonnaApp       *app,
     ir->type = type;
     if (type & DONNA_ARG_IS_ARRAY)
         ir->ptr = g_ptr_array_ref (ptr);
-    else if (type & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE))
+    else if (type & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE
+                | DONNA_ARG_TYPE_TERMINAL))
         ir->ptr = g_object_ref (ptr);
     else
         ir->ptr = ptr;
@@ -2164,7 +2209,8 @@ donna_app_get_int_ref (DonnaApp       *app,
         ptr = ir->ptr;
         if (ir->type & DONNA_ARG_IS_ARRAY)
             ptr = g_ptr_array_ref (ptr);
-        else if (ir->type & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE))
+        else if (ir->type & (DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_TYPE_NODE
+                    | DONNA_ARG_TYPE_TERMINAL))
             ptr = g_object_ref (ptr);
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
@@ -4852,6 +4898,22 @@ load_tree_view (DonnaApp *app, const gchar *name)
 }
 
 static GtkWidget *
+load_terminal (DonnaApp *app, const gchar *name)
+{
+    GtkWidget *term;
+
+    term = (GtkWidget *) donna_app_get_terminal (app, name);
+    if (G_UNLIKELY (term))
+        return NULL;
+
+    term = donna_terminal_new (app, name);
+    if (G_LIKELY (term))
+        app->priv->terminals = g_slist_prepend (app->priv->terminals,
+                g_object_ref (term));
+    return term;
+}
+
+static GtkWidget *
 load_widget (DonnaApp    *app,
              gchar      **def,
              gchar      **active_list_name,
@@ -5013,6 +5075,18 @@ load_widget (DonnaApp    *app,
                     }
                 }
                 gtk_container_add ((GtkContainer *) w, (GtkWidget *) tree);
+                *end = e;
+            }
+            else if (streq (*def, "terminal"))
+            {
+                *def = sep +1;
+                *end = '\0';
+                w = load_terminal (app, *def);
+                if (G_UNLIKELY (!w))
+                {
+                    g_debug ("Failed to get terminal '%s'", *def);
+                    return NULL;
+                }
                 *end = e;
             }
             else if (streq (*def, "toolbar"))
