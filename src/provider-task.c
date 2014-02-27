@@ -1804,7 +1804,7 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
                 }
             }
         }
-        else if (devices->len == 1 && !devices->pdata[0])
+        else if (devices->len == 0)
         {
             if (!(state & DONNA_TASK_IN_RUN))
                 g_thread_pool_push (priv->pool, t->task, NULL);
