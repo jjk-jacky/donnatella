@@ -1218,6 +1218,9 @@ donna_app_move_focus (DonnaApp          *app,
  *
  * Set the focus to the GUI element @name of type @type
  *
+ * If @type is "treeview" you can use ":active" for @name to refer to the
+ * active-list.
+ *
  * Returns: %TRUE on success, else %FALSE
  */
 gboolean
@@ -1231,7 +1234,12 @@ donna_app_set_focus (DonnaApp       *app,
     g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
 
     if (streq (type, "treeview"))
-        w = (GtkWidget *) donna_app_get_tree_view (app, name);
+    {
+        if (streq (name, ":active"))
+            w = (GtkWidget *) g_object_ref (app->priv->active_list);
+        else
+            w = (GtkWidget *) donna_app_get_tree_view (app, name);
+    }
     else
     {
         g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_UNKNOWN_TYPE,
