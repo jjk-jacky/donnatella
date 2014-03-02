@@ -66,6 +66,7 @@
           <xi:include href="xml/context.xml"/>
           <xi:include href="xml/contextmenu.xml"/>
           <xi:include href="xml/debug.xml"/>
+          <xi:include href="xml/embedder.xml"/>
           <xi:include href="xml/filter.xml"/>
           <xi:include href="xml/history.xml"/>
           <xi:include href="xml/imagemenuitem.xml"/>

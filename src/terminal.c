@@ -26,6 +26,7 @@
 #include <gtk/gtkx.h>
 #include "terminal.h"
 #include "app.h"
+#include "embedder.h"
 #include "context.h"
 #include "task-process.h"
 #include "macros.h"
@@ -47,9 +48,13 @@
  * are at least 2 tabs (false, the default).
  *
  * Double clicking a tab will send the focus to the embedded terminal.
+ * By default, clicking in a terminal should also give it focus. Note that this
+ * is done via #DonnaEmbedder as (most) terminal emulators do not implement a
+ * click-to-focus model.
+ * If this is causing issue with your terminal, you can disable it by setting
+ * boolean option <systemitem>catch_events</systemitem> to false
  *
- * By
- * default, tabs will use the command line (ran inside the terminal, i.e.
+ * By default, tabs will use the command line (ran inside the terminal, i.e.
  * argument @cmdline from donna_terminal_add_tab()) as title. donna will then
  * update the title as a window manager would, relying on the properties
  * <systemitem>_NET_WM_NAME</systemitem> (or <systemitem>WM_NAME</systemitem>)
@@ -706,12 +711,13 @@ plugged (GtkSocket *socket, struct term *term)
         return;
 
     term->is_plugged = TRUE;
+    gdk_window_add_filter (win, (GdkFilterFunc) term_filter, term);
+
     if (term->focus_on_plug)
     {
         gtk_widget_set_can_focus ((GtkWidget *) socket, TRUE);
         gtk_widget_grab_focus ((GtkWidget *) socket);
     }
-    gdk_window_add_filter (win, (GdkFilterFunc) term_filter, term);
 }
 
 static gboolean
@@ -725,6 +731,17 @@ unplugged (GtkSocket *socket, struct term *term)
 
     /* destroy the widget */
     return FALSE;
+}
+
+static gboolean
+button_pressed (GtkSocket *socket, GdkEventButton *event, struct term *term)
+{
+    if (event->button == 1)
+    {
+        gtk_widget_set_can_focus ((GtkWidget *) socket, TRUE);
+        gtk_widget_grab_focus ((GtkWidget *) socket);
+    }
+    return GDK_EVENT_PROPAGATE;
 }
 
 /* from task.c */
@@ -825,10 +842,12 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
                         GError            **error)
 {
     DonnaTerminalPrivate *priv;
+    DonnaConfig *config;
     GtkNotebook *nb = (GtkNotebook *) terminal;
     struct term *term;
     GtkSocket *socket;
     Window wid;
+    gboolean catch_events;
     DonnaContext context = { "w", FALSE, (conv_flag_fn) terminal_conv, &wid };
     gint num;
     GString *str = NULL;
@@ -839,6 +858,7 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     g_return_val_if_fail (DONNA_IS_TERMINAL (terminal), (guint) -1);
     g_return_val_if_fail (cmdline != NULL, (guint) -1);
     priv = terminal->priv;
+    config = donna_app_peek_config (priv->app);
 
     DONNA_DEBUG (TERMINAL, priv->name,
             g_debug2 ("Terminal '%s': Adding tab for '%s' using '%s'",
@@ -846,8 +866,6 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
 
     if (!term_cmdline)
     {
-        DonnaConfig *config = donna_app_peek_config (priv->app);
-
         if (!donna_config_get_string (config, error, &cl, "terminals/%s/cmdline",
                     priv->name))
         {
@@ -859,8 +877,6 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     }
     else if (*term_cmdline == ':')
     {
-        DonnaConfig *config = donna_app_peek_config (priv->app);
-
         if (!donna_config_get_string (config, error, &cl, "terminals/%s/cmdline_%s",
                     priv->name, term_cmdline + 1))
         {
@@ -871,7 +887,11 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
         }
     }
 
-    socket = (GtkSocket *) gtk_socket_new ();
+    if (!donna_config_get_boolean (config, NULL, &catch_events,
+                "terminals/%s/catch_events", priv->name))
+        catch_events = TRUE;
+
+    socket = (GtkSocket *) donna_embedder_new (catch_events);
     gtk_notebook_append_page (nb, (GtkWidget *) socket, NULL);
     gtk_notebook_set_tab_reorderable (nb, (GtkWidget *) socket, TRUE);
     gtk_widget_show ((GtkWidget *) socket);
@@ -952,6 +972,7 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
 
     g_signal_connect (socket, "plug-added", (GCallback) plugged, term);
     g_signal_connect (socket, "plug-removed", (GCallback) unplugged, term);
+    g_signal_connect (socket, "button-press-event", (GCallback) button_pressed, term);
 
     DONNA_DEBUG (TERMINAL, priv->name,
             g_debug ("Terminal '%s': Added tab %u (window %lu) for '%s' using '%s'",

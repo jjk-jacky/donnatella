@@ -437,6 +437,25 @@ donna_debug_flags
 </SECTION>
 
 <SECTION>
+<FILE>embedder</FILE>
+<TITLE>DonnaEmbedder</TITLE>
+DonnaEmbedder
+DonnaEmbedderClass
+donna_embedder_new
+donna_embedder_set_catch_events
+donna_embedder_get_catch_events
+<SUBSECTION Standard>
+DONNA_EMBEDDER
+DONNA_EMBEDDER_CLASS
+DONNA_EMBEDDER_GET_CLASS
+DONNA_IS_EMBEDDER
+DONNA_IS_EMBEDDER_CLASS
+DONNA_TYPE_EMBEDDER
+DonnaEmbedderPrivate
+donna_embedder_get_type
+</SECTION>
+
+<SECTION>
 <FILE>filter</FILE>
 <TITLE>DonnaFilter</TITLE>
 DONNA_FILTER_ERROR

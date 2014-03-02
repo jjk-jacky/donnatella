@@ -103,6 +103,8 @@ donna_debug_set_valid (gchar *def, GError **error)
             valid.flag = DONNA_DEBUG_CONFIG;
         else if (streq (def, "app"))
             valid.flag = DONNA_DEBUG_APP;
+        else if (streq (def, "embedder"))
+            valid.flag = DONNA_DEBUG_EMBEDDER;
         else if (streq (def, "all"))
             valid.flag = DONNA_DEBUG_ALL;
         else

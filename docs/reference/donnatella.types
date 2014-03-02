@@ -10,6 +10,7 @@ donna_column_type_text_get_type
 donna_column_type_time_get_type
 donna_column_type_value_get_type
 donna_column_type_get_type
+donna_embedder_get_type
 donna_filter_get_type
 donna_image_menu_item_get_type
 donna_node_get_type
