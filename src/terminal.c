@@ -54,6 +54,12 @@
  * If this is causing issue with your terminal, you can disable it by setting
  * boolean option <systemitem>catch_events</systemitem> to false
  *
+ * Option <systemitem>focusing_click</systemitem> makes it that a left click on
+ * the terminal will only focus it, but the click (button press) won't be sent
+ * to the terminal. This can be disabled by setting it to false. Also note that
+ * this obviously only works when option <systemitem>catch_events</systemitem>
+ * is true.
+ *
  * As usual, options can be set under
  * <systemitem>terminals/&lt;TERMINAL&gt;/</systemitem> for terminal-specific
  * options, or under <systemitem>defaults/terminals</systemitem> for options
@@ -356,6 +362,8 @@ _config_get_string (DonnaTerminal   *terminal,
     _config_get_boolean (t, c, "always_show_tabs", FALSE)
 #define cfg_get_catch_events(t,c) \
     _config_get_boolean (t, c, "catch_events", TRUE)
+#define cfg_get_focusing_click(t,c) \
+    _config_get_boolean (t, c, "focusing_click", TRUE)
 #define cfg_get_cmdline(t,c) \
     _config_get_string (t, c, "cmdline", "")
 #define cfg_get_cmdline_extra(t,c,e) \
@@ -790,10 +798,12 @@ unplugged (GtkSocket *socket, struct term *term)
 static gboolean
 button_pressed (GtkSocket *socket, GdkEventButton *event, struct term *term)
 {
-    if (event->button == 1)
+    if (event->button == 1 && !gtk_widget_has_focus ((GtkWidget *) socket))
     {
         gtk_widget_set_can_focus ((GtkWidget *) socket, TRUE);
         gtk_widget_grab_focus ((GtkWidget *) socket);
+        if (cfg_get_focusing_click ((DonnaTerminal *) term->terminal, NULL))
+            return GDK_EVENT_STOP;
     }
     return GDK_EVENT_PROPAGATE;
 }
