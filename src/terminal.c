@@ -54,6 +54,11 @@
  * If this is causing issue with your terminal, you can disable it by setting
  * boolean option <systemitem>catch_events</systemitem> to false
  *
+ * As usual, options can be set under
+ * <systemitem>terminals/&lt;TERMINAL&gt;/</systemitem> for terminal-specific
+ * options, or under <systemitem>defaults/terminals</systemitem> for options
+ * common to all terminals.
+ *
  * By default, tabs will use the command line (ran inside the terminal, i.e.
  * argument @cmdline from donna_terminal_add_tab()) as title. donna will then
  * update the title as a window manager would, relying on the properties
@@ -301,6 +306,61 @@ donna_terminal_button_press_event (GtkWidget      *widget,
         ->button_press_event (widget, event);
 }
 
+static gboolean
+_config_get_boolean (DonnaTerminal  *terminal,
+                     DonnaConfig    *config,
+                     const gchar    *option,
+                     gboolean        def)
+{
+    DonnaTerminalPrivate *priv = terminal->priv;
+    gboolean val;
+
+    if (!config)
+        config = donna_app_peek_config (priv->app);
+
+    if (!donna_config_get_boolean (config, NULL, &val,
+                "terminals/%s/%s", priv->name, option))
+        if (!donna_config_get_boolean (config, NULL, &val,
+                    "defaults/terminals/%s", option))
+        {
+            donna_config_set_boolean (config, NULL, def,
+                    "defaults/terminals/%s", option);
+            val = def;
+        }
+
+    return val;
+}
+
+static gchar *
+_config_get_string (DonnaTerminal   *terminal,
+                    DonnaConfig     *config,
+                    const gchar     *option,
+                    const gchar     *extra)
+{
+    DonnaTerminalPrivate *priv = terminal->priv;
+    gchar *val;
+
+    if (!config)
+        config = donna_app_peek_config (priv->app);
+
+    if (!donna_config_get_string (config, NULL, &val,
+                "terminals/%s/%s%s", priv->name, option, extra)
+            && !donna_config_get_string (config, NULL, &val,
+                "defaults/terminals/%s", option))
+        val = NULL;
+
+    return val;
+}
+
+#define cfg_get_always_show_tabs(t,c) \
+    _config_get_boolean (t, c, "always_show_tabs", FALSE)
+#define cfg_get_catch_events(t,c) \
+    _config_get_boolean (t, c, "catch_events", TRUE)
+#define cfg_get_cmdline(t,c) \
+    _config_get_string (t, c, "cmdline", "")
+#define cfg_get_cmdline_extra(t,c,e) \
+    _config_get_string (t, c, "cmdline_", e)
+
 static void
 free_term (struct term *term)
 {
@@ -341,14 +401,8 @@ donna_terminal_page_removed (GtkNotebook    *nb,
         priv->last_id = 0;
     }
     else if (num == 1)
-    {
-        gboolean is_set;
-
-        if (!donna_config_get_boolean (donna_app_peek_config (priv->app), NULL,
-                    &is_set, "terminals/%s/always_show_tabs", priv->name)
-                || !is_set)
+        if (!cfg_get_always_show_tabs ((DonnaTerminal *) nb, NULL))
             gtk_notebook_set_show_tabs (nb, FALSE);
-    }
 
     if (priv->last_id == term->id)
         --priv->last_id;
@@ -847,11 +901,10 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     struct term *term;
     GtkSocket *socket;
     Window wid;
-    gboolean catch_events;
     DonnaContext context = { "w", FALSE, (conv_flag_fn) terminal_conv, &wid };
     gint num;
     GString *str = NULL;
-    gchar *cl = NULL;
+    gchar *cl;
     DonnaTaskProcess *tp;
     GPtrArray *arr;
 
@@ -865,33 +918,20 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
                 priv->name, cmdline, term_cmdline));
 
     if (!term_cmdline)
-    {
-        if (!donna_config_get_string (config, error, &cl, "terminals/%s/cmdline",
-                    priv->name))
-        {
-            g_prefix_error (error, "Terminal '%s': Failed to get command line "
-                    "to launch embedded terminal: ",
-                    priv->name);
-            return (guint) -1;
-        }
-    }
+        cl = cfg_get_cmdline (terminal, config);
     else if (*term_cmdline == ':')
+        cl = cfg_get_cmdline_extra (terminal, config, term_cmdline + 1);
+    else
+        cl = (gchar *) term_cmdline;
+    if (!cl)
     {
-        if (!donna_config_get_string (config, error, &cl, "terminals/%s/cmdline_%s",
-                    priv->name, term_cmdline + 1))
-        {
-            g_prefix_error (error, "Terminal '%s': Failed to get command line "
-                    "to launch embedded terminal: ",
-                    priv->name);
-            return (guint) -1;
-        }
+        g_prefix_error (error, "Terminal '%s': Failed to get command line "
+                "to launch embedded terminal: ",
+                priv->name);
+        return (guint) -1;
     }
 
-    if (!donna_config_get_boolean (config, NULL, &catch_events,
-                "terminals/%s/catch_events", priv->name))
-        catch_events = TRUE;
-
-    socket = (GtkSocket *) donna_embedder_new (catch_events);
+    socket = (GtkSocket *) donna_embedder_new (cfg_get_catch_events (terminal, config));
     gtk_notebook_append_page (nb, (GtkWidget *) socket, NULL);
     gtk_notebook_set_tab_reorderable (nb, (GtkWidget *) socket, TRUE);
     gtk_widget_show ((GtkWidget *) socket);
@@ -900,8 +940,9 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     DONNA_DEBUG (TERMINAL, priv->name,
             g_debug2 ("Terminal '%s': Created socket; window %lu",
                 priv->name, wid));
-    donna_context_parse (&context, 0, priv->app, (cl) ? cl : term_cmdline, &str, NULL);
-    g_free (cl);
+    donna_context_parse (&context, 0, priv->app, cl, &str, NULL);
+    if (cl != term_cmdline)
+        g_free (cl);
     if (!str)
     {
         gtk_notebook_remove_page (nb, -1);
@@ -1065,22 +1106,45 @@ donna_terminal_get_name (DonnaTerminal      *terminal)
     return terminal->priv->name;
 }
 
-static gboolean
-config_refresh_real (DonnaTerminal *terminal)
+enum
 {
-    DonnaTerminalPrivate *priv = terminal->priv;
+    OPTION_ALWAYS_SHOW_TABS,
+    OPTION_CATCH_EVENTS
+};
 
-    if (gtk_notebook_get_n_pages ((GtkNotebook *) terminal) <= 1)
+struct config_refresh
+{
+    DonnaTerminal *terminal;
+    guint option;
+};
+
+static gboolean
+config_refresh_real (struct config_refresh *cr)
+{
+    if (cr->option == OPTION_ALWAYS_SHOW_TABS)
     {
-        DonnaConfig *config;
-        gboolean is_set;
-
-        config = donna_app_peek_config (priv->app);
-        if (donna_config_get_boolean (config, NULL, &is_set,
-                    "terminals/%s/always_show_tabs",
-                    priv->name))
-            gtk_notebook_set_show_tabs ((GtkNotebook *) terminal, is_set);
+        if (gtk_notebook_get_n_pages ((GtkNotebook *) cr->terminal) <= 1)
+            gtk_notebook_set_show_tabs ((GtkNotebook *) cr->terminal,
+                    cfg_get_always_show_tabs (cr->terminal, NULL));
     }
+    else /* OPTION_CATCH_EVENTS */
+    {
+        gboolean catch_events;
+        gint i;
+
+        catch_events = cfg_get_catch_events (cr->terminal, NULL);
+
+        i = gtk_notebook_get_n_pages ((GtkNotebook *) cr->terminal);
+        for (--i ; i >= 0; --i)
+        {
+            GtkWidget *w;
+
+            w = gtk_notebook_get_nth_page ((GtkNotebook *) cr->terminal, i);
+            g_object_set (w, "catch-events", catch_events, NULL);
+        }
+    }
+
+    g_free (cr);
     return G_SOURCE_REMOVE;
 }
 
@@ -1092,14 +1156,31 @@ config_refresh (DonnaConfig *config, const gchar *name, DonnaTerminal *terminal)
 
     /* might not be in thread UI, but our priv->name isn't going anywhere */
 
-    if (!streqn (name, "terminals/", 10))
+    if (streqn (name, "terminals/", 10))
+    {
+        len = strlen (priv->name);
+        if (!streqn (name + 10, priv->name, len) || name[10 + len] != '/')
+            return;
+        len += 11;
+    }
+    else if (streqn (name, "defaults/terminals/", 19))
+        len = 19;
+    else
         return;
-    len = strlen (priv->name);
-    if (!streqn (name + 10, priv->name, len) || name[10 + len] != '/')
-        return;
-    len += 11;
-    if (streq (name + len, "always_show_tabs"))
-        g_main_context_invoke (NULL, (GSourceFunc) config_refresh_real, terminal);
+
+    if (streq (name + len, "always_show_tabs")
+            || streq (name + len, "catch_events"))
+    {
+        struct config_refresh *cr;
+
+        cr = g_new (struct config_refresh, 1);
+        cr->terminal = terminal;
+        if (streq (name + len, "catch_events"))
+            cr->option = OPTION_CATCH_EVENTS;
+        else
+            cr->option = OPTION_ALWAYS_SHOW_TABS;
+        g_main_context_invoke (NULL, (GSourceFunc) config_refresh_real, cr);
+    }
 }
 
 /**
@@ -1119,7 +1200,6 @@ donna_terminal_new (DonnaApp           *app,
     DonnaTerminalPrivate *priv;
     DonnaConfig *config;
     GtkNotebook *nb;
-    gboolean is_set;
 
     nb = (GtkNotebook *) g_object_new (DONNA_TYPE_TERMINAL, NULL);
     priv = ((DonnaTerminal *) nb)->priv;
@@ -1131,10 +1211,8 @@ donna_terminal_new (DonnaApp           *app,
     /* don't show anything if there's no tab */
     gtk_widget_set_no_show_all ((GtkWidget *) nb, TRUE);
     gtk_notebook_popup_enable (nb);
-    if (!donna_config_get_boolean (config, NULL, &is_set,
-                "terminals/%s/always_show_tabs", name))
-        is_set = FALSE;
-    gtk_notebook_set_show_tabs (nb, is_set);
+    gtk_notebook_set_show_tabs (nb,
+            cfg_get_always_show_tabs ((DonnaTerminal *) nb, config));
 
     g_signal_connect (config, "option-set", (GCallback) config_refresh, nb);
     g_signal_connect (config, "option-deleted", (GCallback) config_refresh, nb);
