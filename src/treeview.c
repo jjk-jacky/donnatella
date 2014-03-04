@@ -171,8 +171,9 @@
  * - <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/arrangement</systemitem>
  *
  * For lists however, there's a little more to it. First off, donna allows
- * "dynamic arrangements" which must contain an option "mask" a #pattern that,
- * when matched against the list's current location, will be loaded.
+ * "dynamic arrangements" which must contain an option "mask" a #DonnaPattern
+ * that, when matched against the list's current location, will be loaded. See
+ * donna_pattern_new() for more.
  *
  * Those dynamic arrangements will be looked for using typical option path:
  * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/arrangements</systemitem> (Note

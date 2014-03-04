@@ -65,7 +65,8 @@
  * <refsect2 id="ct-text-filtering">
  * <title>Filtering</title>
  * <para>
- * You can use patterns, which will be matched against the property's value.
+ * You can use #DonnaPattern<!-- -->s, which will be matched against the
+ * property's value.  See donna_pattern_new() for more.
  * </para></refsect2>
  */
 
@@ -664,15 +665,22 @@ ct_text_is_match_filter (DonnaColumnType    *ct,
                          GError            **error)
 {
     struct tv_col_data *data = _data;
-    GPatternSpec *pspec;
+    DonnaPattern *pattern;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
     gboolean ret;
 
     if (G_UNLIKELY (!*filter_data))
-        pspec = *filter_data = g_pattern_spec_new (filter);
+    {
+        pattern = donna_app_get_pattern (((DonnaColumnTypeText *) ct)->priv->app,
+                filter, error);
+        if (!pattern)
+            return FALSE;
+
+        *filter_data = pattern;
+    }
     else
-        pspec = *filter_data;
+        pattern = *filter_data;
 
     donna_node_get (node, TRUE, data->property, &has, &value, NULL);
     if (has == DONNA_NODE_VALUE_SET)
@@ -687,7 +695,7 @@ ct_text_is_match_filter (DonnaColumnType    *ct,
     else
         return FALSE;
 
-    ret = g_pattern_match_string (pspec, g_value_get_string (&value));
+    ret = donna_pattern_is_match (pattern, g_value_get_string (&value));
     g_value_unset (&value);
     return ret;
 }
@@ -696,7 +704,7 @@ static void
 ct_text_free_filter_data (DonnaColumnType    *ct,
                           gpointer            filter_data)
 {
-    g_pattern_spec_free (filter_data);
+    donna_pattern_unref ((DonnaPattern *) filter_data);
 }
 
 static DonnaColumnTypeNeed

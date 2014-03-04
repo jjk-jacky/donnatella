@@ -607,7 +607,7 @@ struct _DonnaAppPrivate
 struct argmt
 {
     gchar        *name;
-    GPatternSpec *pspec;
+    DonnaPattern *pattern;
 };
 
 static GThread *main_thread;
@@ -669,7 +669,7 @@ static void             donna_app_finalize          (GObject        *object);
 static void             new_node_cb                 (DonnaProvider  *provider,
                                                      DonnaNode      *node,
                                                      DonnaApp       *app);
-static GSList *         load_arrangements           (DonnaConfig    *config,
+static GSList *         load_arrangements           (DonnaApp       *app,
                                                      const gchar    *sce);
 static inline void      set_active_list             (DonnaApp       *app,
                                                      DonnaTreeView  *list);
@@ -831,7 +831,7 @@ free_arrangements (GSList *list)
         struct argmt *argmt = l->data;
 
         g_free (argmt->name);
-        g_pattern_spec_free (argmt->pspec);
+        donna_pattern_unref (argmt->pattern);
         g_free (argmt);
     }
     g_slist_free (list);
@@ -4888,7 +4888,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
             list = g_object_get_data ((GObject *) tree, "arrangements-masks");
             if (!list)
             {
-                list = load_arrangements (priv->config, sce);
+                list = load_arrangements (app, sce);
                 g_object_set_data_full ((GObject *) tree, "arrangements-masks",
                         list, (GDestroyNotify) free_arrangements);
             }
@@ -4913,7 +4913,7 @@ tree_select_arrangement (DonnaTreeView  *tree,
         {
             struct argmt *argmt = l->data;
 
-            if (g_pattern_match_string (argmt->pspec, b))
+            if (donna_pattern_is_match (argmt->pattern, b))
             {
                 if (!arr)
                 {
@@ -5736,22 +5736,23 @@ next:
 }
 
 static GSList *
-load_arrangements (DonnaConfig *config, const gchar *sce)
+load_arrangements (DonnaApp *app, const gchar *sce)
 {
     GSList      *list   = NULL;
     GPtrArray   *arr    = NULL;
     guint        i;
 
-    if (!donna_config_list_options (config, &arr,
+    if (!donna_config_list_options (app->priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_NUMBERED, sce))
         return NULL;
 
     for (i = 0; i < arr->len; ++i)
     {
+        GError *err = NULL;
         struct argmt *argmt;
         gchar *mask;
 
-        if (!donna_config_get_string (config, NULL, &mask,
+        if (!donna_config_get_string (app->priv->config, NULL, &mask,
                     "%s/%s/mask", sce, arr->pdata[i]))
         {
             g_warning ("Arrangement '%s/%s' has no mask set, skipping",
@@ -5760,9 +5761,20 @@ load_arrangements (DonnaConfig *config, const gchar *sce)
         }
         argmt = g_new0 (struct argmt, 1);
         argmt->name  = g_strdup (arr->pdata[i]);
-        argmt->pspec = g_pattern_spec_new (mask);
-        list = g_slist_prepend (list, argmt);
-        g_free (mask);
+        argmt->pattern = donna_app_get_pattern (app, mask, &err);
+        if (!argmt->pattern)
+        {
+            g_warning ("Arrangement '%s/%s': failed to get pattern from '%s': %s",
+                    sce, (gchar *) arr->pdata[i], mask, err->message);
+            g_clear_error (&err);
+            g_free (mask);
+            g_free (argmt);
+        }
+        else
+        {
+            list = g_slist_prepend (list, argmt);
+            g_free (mask);
+        }
     }
     list = g_slist_reverse (list);
     g_ptr_array_free (arr, TRUE);
@@ -6142,7 +6154,7 @@ init_app (DonnaApp *app)
     load_css (main_dir, TRUE);
 
     /* compile patterns of arrangements' masks */
-    priv->arrangements = load_arrangements (priv->config, "arrangements");
+    priv->arrangements = load_arrangements (app, "arrangements");
 
     if (donna_config_list_options (priv->config, &arr,
                 DONNA_CONFIG_OPTION_TYPE_NUMBERED, "visuals"))

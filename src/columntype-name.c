@@ -78,7 +78,8 @@
  * <refsect2 id="ct-name-filtering">
  * <title>Filtering</title>
  * <para>
- * You can use patterns, which will be matched against the name.
+ * You can use #DonnaPattern<!-- -->s, which will be matched against the name.
+ * See donna_pattern_new() for more.
  * </para></refsect2>
  */
 
@@ -821,56 +822,24 @@ ct_name_is_match_filter (DonnaColumnType    *ct,
                          DonnaNode          *node,
                          GError            **error)
 {
-    GPtrArray *arr;
-    guint i;
+    DonnaPattern *pattern;
     gchar *name;
-    gboolean ret = FALSE;
+    gboolean ret;
 
     if (G_UNLIKELY (!*filter_data))
     {
-        gchar *s;
+        pattern = donna_app_get_pattern (((DonnaColumnTypeName *) ct)->priv->app,
+                filter, error);
+        if (!pattern)
+            return FALSE;
 
-        s = strchrnul (filter, '|');
-        arr = *filter_data = g_ptr_array_new_full ((*s == '|') ? 2 : 1,
-                (GDestroyNotify) g_pattern_spec_free);
-        for (;;)
-        {
-            if (*s == '|')
-            {
-                if (s - filter < 255)
-                {
-                    gchar buf[255];
-                    strncpy (buf, filter, (size_t) (s - filter));
-                    buf[s - filter] = '\0';
-                    g_ptr_array_add (arr, g_pattern_spec_new (buf));
-                }
-                else
-                {
-                    gchar *b;
-                    b = g_strndup (filter, (gsize) (s - filter));
-                    g_ptr_array_add (arr, g_pattern_spec_new (b));
-                    g_free (b);
-                }
-                filter = s + 1;
-                s = strchrnul (filter, '|');
-            }
-            else
-            {
-                g_ptr_array_add (arr, g_pattern_spec_new (filter));
-                break;
-            }
-        }
+        *filter_data = pattern;
     }
     else
-        arr = *filter_data;
+        pattern = *filter_data;
 
     name = donna_node_get_name (node);
-    for (i = 0; i < arr->len; ++i)
-    {
-        ret = g_pattern_match_string (arr->pdata[i], name);
-        if (ret)
-            break;
-    }
+    ret = donna_pattern_is_match (pattern, name);
     g_free (name);
     return ret;
 }
@@ -879,7 +848,7 @@ static void
 ct_name_free_filter_data (DonnaColumnType    *ct,
                           gpointer            filter_data)
 {
-    g_ptr_array_free (filter_data, TRUE);
+    donna_pattern_unref ((DonnaPattern *) filter_data);
 }
 
 static DonnaColumnTypeNeed
