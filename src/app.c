@@ -598,6 +598,7 @@ struct _DonnaAppPrivate
     } column_types[NB_COL_TYPES];
     GSList          *providers;
     GHashTable      *filters;
+    GHashTable      *patterns;
     GHashTable      *intrefs;
     guint            intrefs_timeout;
     GArray          *status_donna;
@@ -850,6 +851,7 @@ donna_app_finalize (GObject *object)
     g_object_unref (priv->config);
     free_arrangements (priv->arrangements);
     g_hash_table_destroy (priv->filters);
+    g_hash_table_destroy (priv->patterns);
     g_hash_table_destroy (priv->visuals);
     g_hash_table_destroy (priv->intrefs);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
@@ -952,6 +954,9 @@ donna_app_init (DonnaApp *app)
 
     priv->filters = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_filter);
+
+    priv->patterns = g_hash_table_new_full (g_str_hash, g_str_equal,
+            g_free, (GDestroyNotify) donna_pattern_unref);
 
     priv->visuals = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_visuals);
@@ -1809,6 +1814,96 @@ donna_app_get_filter (DonnaApp       *app,
     g_rec_mutex_unlock (&priv->rec_mutex);
 
     return f->filter;
+}
+
+static gboolean
+pattern_find (const gchar *key, DonnaPattern *value, gpointer _data)
+{
+    struct {
+        const gchar *key;
+        DonnaPattern *value;
+    } *data = _data;
+
+    if (value == data->value)
+    {
+        data->key = key;
+        return TRUE;
+    }
+    else
+        return FALSE;
+}
+
+static void
+pattern_toggle_ref (DonnaPattern   *pattern,
+                    gboolean        is_last,
+                    DonnaApp       *app)
+{
+    DonnaAppPrivate *priv = app->priv;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    if (is_last)
+    {
+        struct {
+            const gchar *key;
+            DonnaPattern *value;
+        } data;
+
+        if (donna_pattern_get_ref_count (pattern) != 1)
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            return;
+        }
+
+        data.value = pattern;
+        g_hash_table_find (priv->patterns, (GHRFunc) pattern_find, &data);
+        /* will free key & value */
+        g_hash_table_remove (priv->patterns, data.key);
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
+}
+
+/**
+ * donna_app_get_pattern:
+ * @app: The #DonnaApp
+ * @pattern: The string of the pattern
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Get the #DonnaPattern corresponding for @pattern.
+ *
+ * If it already existed, a new reference is added, else it'll be created;
+ * Either way, use donna_pattern_unref() when you're done with it.
+ *
+ * Returns: The #DonnaPattern corresponding to @pattern, or %NULL
+ */
+DonnaPattern *
+donna_app_get_pattern (DonnaApp       *app,
+                       const gchar    *pattern,
+                       GError        **error)
+{
+    DonnaAppPrivate *priv;
+    DonnaPattern *p;
+
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    g_return_val_if_fail (pattern != NULL, NULL);
+    priv = app->priv;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    p = g_hash_table_lookup (priv->patterns, pattern);
+    if (!p)
+    {
+        p = donna_pattern_new (pattern, (toggle_ref_cb) pattern_toggle_ref,
+                app, NULL, error);
+        if (!p)
+        {
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            return NULL;
+        }
+        g_hash_table_insert (priv->patterns, g_strdup (pattern), p);
+    }
+    donna_pattern_ref (p);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return p;
 }
 
 /**

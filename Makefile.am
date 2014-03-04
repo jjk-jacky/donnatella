@@ -81,6 +81,8 @@ libdonnatella_la_SOURCES = \
 					 src/misc.h \
 					 src/node.c \
 					 src/node.h \
+					 src/pattern.c \
+					 src/pattern.h \
 					 src/provider.c \
 					 src/provider.h \
 					 src/provider-base.c \

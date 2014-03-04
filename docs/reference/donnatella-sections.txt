@@ -140,6 +140,7 @@ donna_app_get_node
 donna_app_trigger_node
 donna_app_get_column_type
 donna_app_get_filter
+donna_app_get_pattern
 donna_app_run_task
 donna_app_run_task_and_wait
 donna_app_peek_task_manager
@@ -610,6 +611,19 @@ DONNA_NODE_CLASS
 DONNA_NODE_GET_CLASS
 DONNA_TYPE_NODE
 donna_node_get_type
+</SECTION>
+
+<SECTION>
+<FILE>pattern</FILE>
+DONNA_PATTERN_ERROR
+DonnaPatternError
+toggle_ref_cb
+donna_pattern_new
+donna_pattern_ref
+donna_pattern_unref
+donna_pattern_get_ref_count
+donna_pattern_is_match
+DonnaPattern
 </SECTION>
 
 <SECTION>

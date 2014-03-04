@@ -31,6 +31,7 @@
 #include "terminal.h"
 #include "columntype.h"
 #include "filter.h"
+#include "pattern.h"
 #include "context.h"
 
 G_BEGIN_DECLS
@@ -96,6 +97,9 @@ DonnaColumnType *   donna_app_get_column_type       (DonnaApp       *app,
                                                      const gchar    *type);
 DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
                                                      const gchar    *filter);
+DonnaPattern *      donna_app_get_pattern           (DonnaApp       *app,
+                                                     const gchar    *pattern,
+                                                     GError        **error);
 void                donna_app_run_task              (DonnaApp       *app,
                                                      DonnaTask      *task);
 gboolean            donna_app_run_task_and_wait     (DonnaApp       *app,
