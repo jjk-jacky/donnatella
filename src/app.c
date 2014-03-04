@@ -518,7 +518,6 @@ struct visuals
 struct filter
 {
     DonnaFilter *filter;
-    guint        toggle_count;
     guint        timeout;
 };
 
@@ -1721,16 +1720,16 @@ filter_remove (struct filter_toggle *t)
 
     g_rec_mutex_lock (&priv->rec_mutex);
     f = g_hash_table_lookup (priv->filters, t->filter_str);
-    if (f->toggle_count > 0)
+    if (((GObject *) f->filter)->ref_count > 1)
     {
         g_rec_mutex_unlock (&priv->rec_mutex);
-        return FALSE;
+        return G_SOURCE_REMOVE;
     }
 
     /* will also unref filter */
     g_hash_table_remove (priv->filters, t->filter_str);
     g_rec_mutex_unlock (&priv->rec_mutex);
-    return FALSE;
+    return G_SOURCE_REMOVE;
 }
 
 /* see node_toggle_ref_cb() in provider-base.c for more. Here we only add a
@@ -1753,9 +1752,7 @@ filter_toggle_ref_cb (DonnaApp *app, DonnaFilter *filter, gboolean is_last)
     {
         struct filter_toggle *t;
 
-        if (f->timeout)
-            g_source_remove (f->timeout);
-        if (--f->toggle_count > 0)
+        if (((GObject *) f->filter)->ref_count > 1)
         {
             g_rec_mutex_unlock (&priv->rec_mutex);
             g_free (filter_str);
@@ -1771,7 +1768,6 @@ filter_toggle_ref_cb (DonnaApp *app, DonnaFilter *filter, gboolean is_last)
     }
     else
     {
-        ++f->toggle_count;
         if (f->timeout)
         {
             g_source_remove (f->timeout);
@@ -1802,7 +1798,6 @@ donna_app_get_filter (DonnaApp       *app,
                 "app",      app,
                 "filter",   filter,
                 NULL);
-        f->toggle_count = 1;
         f->timeout = 0;
         /* add a toggle ref, which adds a strong ref to filter */
         g_object_add_toggle_ref ((GObject *) f->filter,
