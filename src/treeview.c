@@ -9536,14 +9536,15 @@ node_get_children_list_cb (DonnaTask                            *task,
     {
         if (priv->future_location == data->node)
         {
-            const GError *error;
-            gchar *fl = donna_node_get_full_location (data->node);
+            if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+            {
+                gchar *fl = donna_node_get_full_location (data->node);
 
-            error = donna_task_get_error (task);
-            donna_app_show_error (priv->app, error,
-                    "TreeView '%s': Failed to get children for node '%s'",
-                    priv->name, fl);
-            g_free (fl);
+                donna_app_show_error (priv->app, donna_task_get_error (task),
+                        "TreeView '%s': Failed to get children for node '%s'",
+                        priv->name, fl);
+                g_free (fl);
+            }
 
             if (priv->cl == CHANGING_LOCATION_GOT_CHILD)
             {
@@ -9566,6 +9567,7 @@ node_get_children_list_cb (DonnaTask                            *task,
             else
             {
                 GError *err = NULL;
+                gchar *fl;
 
                 /* go back -- this is needed to maybe switch back providers,
                  * also we might have gone SLOW/DRAW_WAIT and need to
@@ -14626,8 +14628,9 @@ node_get_children_refresh_list_cb (DonnaTask            *task,
 
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
-        donna_app_show_error (priv->app, donna_task_get_error (task),
-                "TreeView '%s': Failed to refresh", priv->name);
+        if (donna_task_get_state (task) == DONNA_TASK_FAILED)
+            donna_app_show_error (priv->app, donna_task_get_error (task),
+                    "TreeView '%s': Failed to refresh", priv->name);
         return;
     }
 
