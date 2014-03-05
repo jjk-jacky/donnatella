@@ -2547,11 +2547,19 @@ set_get_children_task (DonnaTreeView *tree, DonnaTask *task)
 {
     if (tree->priv->get_children_task)
     {
-        if (!(donna_task_get_state (tree->priv->get_children_task) & DONNA_TASK_POST_RUN))
-            donna_task_cancel (tree->priv->get_children_task);
-        g_object_unref (tree->priv->get_children_task);
+        DonnaTask *t = tree->priv->get_children_task;
+
+        /* we need to set it to NULL *before* we cancel it, in case the task was
+         * e.g. not yet started (WAITING), as it would then be set to CANCELLED
+         * right away and therefore had its callback called (right now, since we
+         * are in the main/UI thread), and we don't want said callback to do
+         * anything obviously */
+        tree->priv->get_children_task = NULL;
+        if (!(donna_task_get_state (t) & DONNA_TASK_POST_RUN))
+            donna_task_cancel (t);
+        g_object_unref (t);
     }
-    tree->priv->get_children_task = g_object_ref (task);
+    tree->priv->get_children_task = (task) ? g_object_ref (task): NULL;
 }
 
 enum
@@ -15624,18 +15632,8 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
 void
 donna_tree_view_abort (DonnaTreeView *tree)
 {
-    DonnaTreeViewPrivate *priv;
-
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
-    priv = tree->priv;
-
-    if (priv->get_children_task)
-    {
-        if (!(donna_task_get_state (priv->get_children_task) & DONNA_TASK_POST_RUN))
-            donna_task_cancel (priv->get_children_task);
-        g_object_unref (priv->get_children_task);
-        priv->get_children_task = NULL;
-    }
+    set_get_children_task (tree, NULL);
 }
 
 /**
