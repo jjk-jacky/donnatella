@@ -1810,6 +1810,10 @@ donna_task_cancel (DonnaTask *task)
         if (priv->fd_block >= 0)
             unblock_fd (priv->fd_block);
 
+        /* set the flag so we don't free callback_data, since we're going to
+         * call the callback (even though the task didn't actually ran) */
+        priv->task_ran = 1;
+
         UNLOCK_TASK (task);
 
         /* notify change of state (in main thread) */
