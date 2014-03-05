@@ -15021,6 +15021,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
                     (task_callback_fn) node_get_children_list_cb,
                     data,
                     (GDestroyNotify) free_node_get_children_list_data);
+            donna_app_run_task (priv->app, task);
         }
         else
             return change_location (tree, CHANGING_LOCATION_ASKED, priv->location,
