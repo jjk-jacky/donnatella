@@ -258,19 +258,40 @@ element_need_recompile (struct element *element, const gchar *option)
     return FALSE;
 }
 
-static void
-option_cb (DonnaConfig *config, const gchar *option, DonnaFilter *filter)
+struct option_data
 {
-    DonnaFilterPrivate *priv = filter->priv;
+    DonnaFilter *filter;
+    gchar *option;
+};
 
-    if (!streqn (option, "/columns/", 9))
-        return;
+static gboolean
+real_option_cb (struct option_data *od)
+{
+    DonnaFilterPrivate *priv = od->filter->priv;
 
-    if (element_need_recompile (priv->element, option))
+    if (element_need_recompile (priv->element, od->option))
     {
         free_element (priv->element);
         priv->element = NULL;
     }
+
+    g_free (od);
+    return G_SOURCE_REMOVE;
+}
+
+static void
+option_cb (DonnaConfig *config, const gchar *option, DonnaFilter *filter)
+{
+    struct option_data *od;
+
+    if (!streqn (option, "/columns/", 9))
+        return;
+
+    od = g_new (struct option_data, 1);
+    od->filter = filter;
+    od->option = g_strdup (option);
+
+    g_main_context_invoke (NULL, (GSourceFunc) real_option_cb, od);
 }
 
 static inline DonnaColumnType *
