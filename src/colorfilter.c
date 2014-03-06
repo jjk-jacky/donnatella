@@ -289,11 +289,24 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
         return FALSE;
 
     if (!priv->filter_obj)
+    {
         priv->filter_obj = donna_app_get_filter (priv->app, priv->filter);
+        if (G_UNLIKELY (!priv->filter_obj))
+        {
+            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                    "Color filter failed: cannot get filter object for '%s'",
+                    priv->filter);
+            return FALSE;
+        }
+
+        if (!donna_filter_is_compiled (priv->filter_obj)
+                && !donna_filter_compile (priv->filter_obj, error))
+            return FALSE;
+    }
 
     if (!donna_filter_is_match (priv->filter_obj, node,
                 (priv->via_treeview) ? get_ct_data : NULL,
-                data, error))
+                data))
         return FALSE;
 
     for (l = priv->props; l; l = l->next)

@@ -64,11 +64,13 @@ struct _DonnaFilterClass
 };
 
 gchar *             donna_filter_get_filter         (DonnaFilter    *filter);
+gboolean            donna_filter_compile            (DonnaFilter    *filter,
+                                                     GError        **error);
+gboolean            donna_filter_is_compiled        (DonnaFilter    *filter);
 gboolean            donna_filter_is_match           (DonnaFilter    *filter,
                                                      DonnaNode      *node,
                                                      get_ct_data_fn  get_ct_data,
-                                                     gpointer        data,
-                                                     GError        **error);
+                                                     gpointer        data);
 
 G_END_DECLS
 

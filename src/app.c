@@ -4007,7 +4007,6 @@ _donna_app_filter_nodes (DonnaApp        *app,
                          gpointer         data,
                          GError         **error)
 {
-    GError *err = NULL;
     DonnaFilter *filter;
     guint i;
 
@@ -4027,19 +4026,16 @@ _donna_app_filter_nodes (DonnaApp        *app,
         return FALSE;
     }
 
+    /* make sure it is compiled, if not do it so we can report any error */
+    if (!donna_filter_is_compiled (filter)
+            && !donna_filter_compile (filter, error))
+        return FALSE;
+
     for (i = 0; i < nodes->len; )
         if (!donna_filter_is_match (filter, nodes->pdata[i],
-                    get_ct_data, data, &err))
-        {
-            if (err)
-            {
-                g_propagate_error (error, err);
-                g_object_unref (filter);
-                return FALSE;
-            }
+                    get_ct_data, data))
             /* last element comes here, hence no need to increment i */
             g_ptr_array_remove_index_fast (nodes, i);
-        }
         else
             ++i;
 

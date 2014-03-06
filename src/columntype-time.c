@@ -263,12 +263,14 @@ static gboolean         ct_time_set_tooltip         (DonnaColumnType    *ct,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkTooltip         *tooltip);
-static gboolean         ct_time_is_match_filter     (DonnaColumnType    *ct,
+static gboolean         ct_time_refresh_filter_data (DonnaColumnType    *ct,
                                                      const gchar        *filter,
                                                      gpointer           *filter_data,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
                                                      GError            **error);
+static gboolean         ct_time_is_filter_match     (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     gpointer            filter_data,
+                                                     DonnaNode          *node);
 static void             ct_time_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_time_set_option       (DonnaColumnType    *ct,
@@ -319,7 +321,8 @@ ct_time_column_type_init (DonnaColumnTypeInterface *interface)
     interface->render                   = ct_time_render;
     interface->set_tooltip              = ct_time_set_tooltip;
     interface->node_cmp                 = ct_time_node_cmp;
-    interface->is_match_filter          = ct_time_is_match_filter;
+    interface->refresh_filter_data      = ct_time_refresh_filter_data;
+    interface->is_filter_match          = ct_time_is_filter_match;
     interface->free_filter_data         = ct_time_free_filter_data;
     interface->set_option               = ct_time_set_option;
     interface->get_context_alias        = ct_time_get_context_alias;
@@ -1674,32 +1677,164 @@ ct_time_node_cmp (DonnaColumnType    *ct,
 } while (0)
 
 static gboolean
-ct_time_is_match_filter (DonnaColumnType    *ct,
-                         const gchar        *filter,
-                         gpointer           *filter_data,
-                         gpointer            _data,
-                         DonnaNode          *node,
-                         GError            **error)
+ct_time_refresh_filter_data (DonnaColumnType    *ct,
+                             const gchar        *filter,
+                             gpointer           *filter_data,
+                             GError            **error)
 {
-    struct tv_col_data *data = _data;
     struct filter_data *fd;
-    DonnaNodeHasValue has;
-    guint64 time;
     GDateTime *dt;
     guint64 r = 0;
+    guint i;
+    gchar *s;
 
-    if (G_UNLIKELY (!*filter_data))
-    {
-        guint i;
-        gchar *s;
-
+    if (*filter_data)
+        fd = *filter_data;
+    else
         fd = *filter_data = g_new0 (struct filter_data, 1);
-        fd->comp = COMP_EQUAL;
+
+    fd->comp = COMP_EQUAL;
+
+    while (isblank (*filter))
+        ++filter;
+
+    /* get unit */
+    switch (*filter)
+    {
+        case UNIT_YEAR:
+        case UNIT_MONTH:
+        case UNIT_WEEK:
+        case UNIT_DAY:
+        case UNIT_HOUR:
+        case UNIT_MINUTE:
+        case UNIT_SECOND:
+        case UNIT_DATE:
+        case UNIT_DAY_OF_YEAR:
+        case UNIT_DAY_OF_WEEK:
+        case UNIT_DAY_OF_WEEK_2:
+        case UNIT_AGE:
+            fd->unit = *filter++;
+    }
+    if (fd->unit == 0)
+        fd->unit = UNIT_DATE;
+
+    while (isblank (*filter))
+        ++filter;
+
+    /* get comp */
+    if (*filter == '<')
+    {
+        ++filter;
+        if (*filter == '=')
+        {
+            ++filter;
+            fd->comp = COMP_LESSER_EQUAL;
+        }
+        else
+            fd->comp = COMP_LESSER;
+    }
+    else if (*filter == '>')
+    {
+        ++filter;
+        if (*filter == '=')
+        {
+            ++filter;
+            fd->comp = COMP_GREATER_EQUAL;
+        }
+        else
+            fd->comp = COMP_GREATER;
+    }
+    else if (*filter == '=')
+        ++filter;
+
+    while (isblank (*filter))
+        ++filter;
+
+    /* get ref */
+    if (fd->unit == UNIT_DATE)
+    {
+        gint year, month, day, hour, minute;
+        gdouble seconds;
+        gboolean again = FALSE;
+
+get_date:
+        /* must be formatted as such: YYYY-MM-DD[ HH:MM[:SS]] */
+        get_date_bit (year, 4);
+        if (*filter != '-')
+            error_out (DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                    "Invalid date format (must be YYYY-MM-DD[ HH:MM[:SS]]): %s",
+                    filter);
+        get_date_bit (month, 2);
+        if (*filter != '-')
+            error_out (DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                    "Invalid date format (must be YYYY-MM-DD[ HH:MM[:SS]]): %s",
+                    filter);
+        get_date_bit (day, 2);
 
         while (isblank (*filter))
             ++filter;
 
-        /* get unit */
+        /* what we can have here is nothing, '-' before another date (RANGE)
+         * or, ofc, a time */
+        if (*filter >= '0' && *filter <= '9')
+        {
+            get_date_bit (hour, 2);
+            if (*filter != ':')
+                error_out (DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                        "Invalid date format (must be YYYY-MM-DD[ HH:MM[:SS]]): %s",
+                        filter);
+            get_date_bit (minute, 2);
+            if (*filter == ':')
+            {
+                ++filter;
+                get_date_bit (seconds, 2);
+            }
+        }
+        else
+        {
+            hour = minute = 0;
+            seconds = 0.0;
+        }
+
+        dt = g_date_time_new_local (year, month, day, hour, minute, seconds);
+        if (again)
+        {
+            r = (guint64) g_date_time_to_unix (dt);
+            if (r > fd->ref)
+                fd->ref2 = r;
+            else
+            {
+                fd->ref2 = fd->ref;
+                fd->ref  = r;
+            }
+        }
+        else
+            fd->ref = (guint64) g_date_time_to_unix (dt);
+        g_date_time_unref (dt);
+
+        if (!again && fd->comp == COMP_EQUAL && *filter == '-')
+        {
+            fd->comp = COMP_IN_RANGE;
+            again = TRUE;
+            ++filter;
+            while (isblank (*filter))
+                ++filter;
+            goto get_date;
+        }
+
+        return TRUE;
+    }
+
+    /* just a number */
+    fd->ref = g_ascii_strtoull (filter, &s, 10);
+    filter = (const gchar *) s;
+
+    while (isblank (*filter))
+        ++filter;
+
+    /* AGE requires another unit (unit_age) */
+    if (fd->unit == UNIT_AGE)
+    {
         switch (*filter)
         {
             case UNIT_YEAR:
@@ -1709,170 +1844,45 @@ ct_time_is_match_filter (DonnaColumnType    *ct,
             case UNIT_HOUR:
             case UNIT_MINUTE:
             case UNIT_SECOND:
-            case UNIT_DATE:
-            case UNIT_DAY_OF_YEAR:
-            case UNIT_DAY_OF_WEEK:
-            case UNIT_DAY_OF_WEEK_2:
-            case UNIT_AGE:
-                fd->unit = *filter++;
+                fd->unit_age = *filter++;
         }
-        if (fd->unit == 0)
-            fd->unit = UNIT_DATE;
-
-        while (isblank (*filter))
-            ++filter;
-
-        /* get comp */
-        if (*filter == '<')
-        {
-            ++filter;
-            if (*filter == '=')
-            {
-                ++filter;
-                fd->comp = COMP_LESSER_EQUAL;
-            }
-            else
-                fd->comp = COMP_LESSER;
-        }
-        else if (*filter == '>')
-        {
-            ++filter;
-            if (*filter == '=')
-            {
-                ++filter;
-                fd->comp = COMP_GREATER_EQUAL;
-            }
-            else
-                fd->comp = COMP_GREATER;
-        }
-        else if (*filter == '=')
-            ++filter;
-
-        while (isblank (*filter))
-            ++filter;
-
-        /* get ref */
-        if (fd->unit == UNIT_DATE)
-        {
-            gint year, month, day, hour, minute;
-            gdouble seconds;
-            gboolean again = FALSE;
-
-get_date:
-            /* must be formatted as such: YYYY-MM-DD[ HH:MM[:SS]] */
-            get_date_bit (year, 4);
-            if (*filter != '-')
-                error_out (DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                        "Invalid date format (must be YYYY-MM-DD[ HH:MM[:SS]]): %s",
-                        filter);
-            get_date_bit (month, 2);
-            if (*filter != '-')
-                error_out (DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                        "Invalid date format (must be YYYY-MM-DD[ HH:MM[:SS]]): %s",
-                        filter);
-            get_date_bit (day, 2);
-
-            while (isblank (*filter))
-                ++filter;
-
-            /* what we can have here is nothing, '-' before another date (RANGE)
-             * or, ofc, a time */
-            if (*filter >= '0' && *filter <= '9')
-            {
-                get_date_bit (hour, 2);
-                if (*filter != ':')
-                    error_out (DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                            "Invalid date format (must be YYYY-MM-DD[ HH:MM[:SS]]): %s",
-                            filter);
-                get_date_bit (minute, 2);
-                if (*filter == ':')
-                {
-                    ++filter;
-                    get_date_bit (seconds, 2);
-                }
-            }
-            else
-            {
-                hour = minute = 0;
-                seconds = 0.0;
-            }
-
-            dt = g_date_time_new_local (year, month, day, hour, minute, seconds);
-            if (again)
-            {
-                r = (guint64) g_date_time_to_unix (dt);
-                if (r > fd->ref)
-                    fd->ref2 = r;
-                else
-                {
-                    fd->ref2 = fd->ref;
-                    fd->ref  = r;
-                }
-            }
-            else
-                fd->ref = (guint64) g_date_time_to_unix (dt);
-            g_date_time_unref (dt);
-
-            if (!again && fd->comp == COMP_EQUAL && *filter == '-')
-            {
-                fd->comp = COMP_IN_RANGE;
-                again = TRUE;
-                ++filter;
-                while (isblank (*filter))
-                    ++filter;
-                goto get_date;
-            }
-
-            goto compile_done;
-        }
-
-        /* just a number */
-        fd->ref = g_ascii_strtoull (filter, &s, 10);
+        if (fd->unit_age == 0)
+            fd->unit_age = UNIT_DAY;
+    }
+    else if (fd->comp == COMP_EQUAL && *filter == '-')
+    {
+        fd->comp = COMP_IN_RANGE;
+        ++filter;
+        r = g_ascii_strtoull (filter, &s, 10);
         filter = (const gchar *) s;
 
-        while (isblank (*filter))
-            ++filter;
-
-        /* AGE requires another unit (unit_age) */
-        if (fd->unit == UNIT_AGE)
+        /* we keep them in the specified order for day of week-s, so we
+         * support e.g. 6-1 to say from Sat to Mon (Sat, Sun, Mon) */
+        if (fd->unit == UNIT_DAY_OF_WEEK || fd->unit == UNIT_DAY_OF_WEEK_2
+                || r > fd->ref)
+            fd->ref2 = r;
+        else
         {
-            switch (*filter)
-            {
-                case UNIT_YEAR:
-                case UNIT_MONTH:
-                case UNIT_WEEK:
-                case UNIT_DAY:
-                case UNIT_HOUR:
-                case UNIT_MINUTE:
-                case UNIT_SECOND:
-                    fd->unit_age = *filter++;
-            }
-            if (fd->unit_age == 0)
-                fd->unit_age = UNIT_DAY;
-        }
-        else if (fd->comp == COMP_EQUAL && *filter == '-')
-        {
-            fd->comp = COMP_IN_RANGE;
-            ++filter;
-            r = g_ascii_strtoull (filter, &s, 10);
-            filter = (const gchar *) s;
-
-            /* we keep them in the specified order for day of week-s, so we
-             * support e.g. 6-1 to say from Sat to Mon (Sat, Sun, Mon) */
-            if (fd->unit == UNIT_DAY_OF_WEEK || fd->unit == UNIT_DAY_OF_WEEK_2
-                    || r > fd->ref)
-                fd->ref2 = r;
-            else
-            {
-                fd->ref2 = fd->ref;
-                fd->ref  = r;
-            }
+            fd->ref2 = fd->ref;
+            fd->ref  = r;
         }
     }
-    else
-        fd = *filter_data;
 
-compile_done:
+    return TRUE;
+}
+
+static gboolean
+ct_time_is_filter_match (DonnaColumnType    *ct,
+                         gpointer            _data,
+                         gpointer            filter_data,
+                         DonnaNode          *node)
+{
+    struct tv_col_data *data = _data;
+    struct filter_data *fd = filter_data;
+    DonnaNodeHasValue has;
+    guint64 time;
+    GDateTime *dt;
+    guint64 r = 0;
 
     if (data->which == WHICH_MTIME)
         has = donna_node_get_mtime (node, TRUE, &time);

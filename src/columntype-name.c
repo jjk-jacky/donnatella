@@ -167,12 +167,14 @@ static gint             ct_name_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
-static gboolean         ct_name_is_match_filter     (DonnaColumnType    *ct,
+static gboolean         ct_name_refresh_filter_data (DonnaColumnType    *ct,
                                                      const gchar        *filter,
                                                      gpointer           *filter_data,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
                                                      GError            **error);
+static gboolean         ct_name_is_filter_match     (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     gpointer            filter_data,
+                                                     DonnaNode          *node);
 static void             ct_name_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_name_set_option       (DonnaColumnType    *ct,
@@ -223,7 +225,8 @@ ct_name_column_type_init (DonnaColumnTypeInterface *interface)
     interface->render                   = ct_name_render;
     interface->set_tooltip              = ct_name_set_tooltip;
     interface->node_cmp                 = ct_name_node_cmp;
-    interface->is_match_filter          = ct_name_is_match_filter;
+    interface->refresh_filter_data      = ct_name_refresh_filter_data;
+    interface->is_filter_match          = ct_name_is_filter_match;
     interface->free_filter_data         = ct_name_free_filter_data;
     interface->set_option               = ct_name_set_option;
     interface->get_context_alias        = ct_name_get_context_alias;
@@ -815,31 +818,30 @@ ct_name_node_cmp (DonnaColumnType    *ct,
 }
 
 static gboolean
-ct_name_is_match_filter (DonnaColumnType    *ct,
-                         const gchar        *filter,
-                         gpointer           *filter_data,
-                         gpointer            data,
-                         DonnaNode          *node,
-                         GError            **error)
+ct_name_refresh_filter_data (DonnaColumnType    *ct,
+                             const gchar        *filter,
+                             gpointer           *filter_data,
+                             GError            **error)
 {
-    DonnaPattern *pattern;
+    if (*filter_data)
+        ct_name_free_filter_data (ct, *filter_data);
+
+    *filter_data = donna_app_get_pattern (((DonnaColumnTypeName *) ct)->priv->app,
+            filter, error);
+    return *filter_data != NULL;
+}
+
+static gboolean
+ct_name_is_filter_match (DonnaColumnType    *ct,
+                         gpointer            data,
+                         gpointer            filter_data,
+                         DonnaNode          *node)
+{
     gchar *name;
     gboolean ret;
 
-    if (G_UNLIKELY (!*filter_data))
-    {
-        pattern = donna_app_get_pattern (((DonnaColumnTypeName *) ct)->priv->app,
-                filter, error);
-        if (!pattern)
-            return FALSE;
-
-        *filter_data = pattern;
-    }
-    else
-        pattern = *filter_data;
-
     name = donna_node_get_name (node);
-    ret = donna_pattern_is_match (pattern, name);
+    ret = donna_pattern_is_match ((DonnaPattern *) filter_data, name);
     g_free (name);
     return ret;
 }

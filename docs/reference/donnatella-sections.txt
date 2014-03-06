@@ -255,7 +255,8 @@ donna_column_type_set_value
 donna_column_type_render
 donna_column_type_set_tooltip
 donna_column_type_node_cmp
-donna_column_type_is_match_filter
+donna_column_type_refresh_filter_data
+donna_column_type_is_filter_match
 donna_column_type_free_filter_data
 donna_column_type_get_context_alias
 donna_column_type_get_context_item_info
@@ -465,6 +466,8 @@ get_ct_data_fn
 DonnaFilter
 DonnaFilterClass
 donna_filter_get_filter
+donna_filter_compile
+donna_filter_is_compiled
 donna_filter_is_match
 <SUBSECTION Standard>
 DONNA_FILTER

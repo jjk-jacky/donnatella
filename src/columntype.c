@@ -1041,24 +1041,21 @@ donna_column_type_node_cmp (DonnaColumnType   *ct,
 }
 
 gboolean
-donna_column_type_is_match_filter (DonnaColumnType   *ct,
-                                   const gchar       *filter,
-                                   gpointer          *filter_data,
-                                   gpointer           data,
-                                   DonnaNode         *node,
-                                   GError           **error)
+donna_column_type_refresh_filter_data (DonnaColumnType    *ct,
+                                       const gchar        *filter,
+                                       gpointer           *filter_data,
+                                       GError            **error)
 {
     DonnaColumnTypeInterface *interface;
 
-    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), 0);
-    g_return_val_if_fail (filter != NULL, 0);
-    g_return_val_if_fail (filter_data != NULL, 0);
-    g_return_val_if_fail (DONNA_IS_NODE (node), 0);
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
+    g_return_val_if_fail (filter != NULL, FALSE);
+    g_return_val_if_fail (filter_data != NULL, FALSE);
 
     interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
 
-    g_return_val_if_fail (interface != NULL, 0);
-    if (!interface->is_match_filter)
+    g_return_val_if_fail (interface != NULL, FALSE);
+    if (!interface->refresh_filter_data)
     {
         g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
                 DONNA_COLUMN_TYPE_ERROR_OTHER,
@@ -1067,8 +1064,27 @@ donna_column_type_is_match_filter (DonnaColumnType   *ct,
         return FALSE;
     }
 
-    return (*interface->is_match_filter) (ct, filter, filter_data, data,
-            node, error);
+    return (*interface->refresh_filter_data) (ct, filter, filter_data, error);
+}
+
+gboolean
+donna_column_type_is_filter_match (DonnaColumnType   *ct,
+                                   gpointer           data,
+                                   gpointer           filter_data,
+                                   DonnaNode         *node)
+{
+    DonnaColumnTypeInterface *interface;
+
+    g_return_val_if_fail (DONNA_IS_COLUMN_TYPE (ct), FALSE);
+    g_return_val_if_fail (filter_data != NULL, FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+
+    interface = DONNA_COLUMN_TYPE_GET_INTERFACE (ct);
+
+    g_return_val_if_fail (interface != NULL, FALSE);
+    g_return_val_if_fail (interface->is_filter_match != NULL, FALSE);
+
+    return (*interface->is_filter_match) (ct, data, filter_data, node);
 }
 
 void

@@ -294,12 +294,14 @@ static gboolean         ct_perms_set_tooltip        (DonnaColumnType    *ct,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkTooltip         *tooltip);
-static gboolean         ct_perms_is_match_filter    (DonnaColumnType    *ct,
+static gboolean         ct_perms_refresh_filter_data(DonnaColumnType    *ct,
                                                      const gchar        *filter,
                                                      gpointer           *filter_data,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
                                                      GError            **error);
+static gboolean         ct_perms_is_filter_match    (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     gpointer            filter_data,
+                                                     DonnaNode          *node);
 static void             ct_perms_free_filter_data   (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_perms_set_option      (DonnaColumnType    *ct,
@@ -351,7 +353,8 @@ ct_perms_column_type_init (DonnaColumnTypeInterface *interface)
     interface->render                   = ct_perms_render;
     interface->set_tooltip              = ct_perms_set_tooltip;
     interface->node_cmp                 = ct_perms_node_cmp;
-    interface->is_match_filter          = ct_perms_is_match_filter;
+    interface->refresh_filter_data      = ct_perms_refresh_filter_data;
+    interface->is_filter_match          = ct_perms_is_filter_match;
     interface->free_filter_data         = ct_perms_free_filter_data;
     interface->set_option               = ct_perms_set_option;
     interface->get_context_alias        = ct_perms_get_context_alias;
@@ -2406,220 +2409,226 @@ ct_perms_node_cmp (DonnaColumnType    *ct,
 }
 
 static gboolean
-ct_perms_is_match_filter (DonnaColumnType    *ct,
-                          const gchar        *filter,
-                          gpointer           *filter_data,
-                          gpointer            _data,
-                          DonnaNode          *node,
-                          GError            **error)
+ct_perms_refresh_filter_data (DonnaColumnType    *ct,
+                              const gchar        *filter,
+                              gpointer           *filter_data,
+                              GError            **error)
 {
     DonnaColumnTypePermsPrivate *priv = ((DonnaColumnTypePerms *) ct)->priv;
     struct filter_data *fd;
-    DonnaNodeHasValue has;
-    guint val = 0;
-    mode_t mode;
-    uid_t uid;
-    gid_t gid;
 
-    if (G_UNLIKELY (!*filter_data))
-    {
+    if (*filter_data)
+        fd = *filter_data;
+    else
         fd = *filter_data = g_new0 (struct filter_data, 1);
 
-        while (isblank (*filter))
-            ++filter;
+    while (isblank (*filter))
+        ++filter;
 
-        switch (*filter)
-        {
-            case UNIT_UID:
-            case UNIT_USER:
-            case UNIT_GID:
-            case UNIT_GROUP:
-            case UNIT_PERMS:
-            case UNIT_SELF:
-                fd->unit = *filter++;
-                break;
-        }
-        if (fd->unit == 0)
-            fd->unit = UNIT_PERMS;
+    switch (*filter)
+    {
+        case UNIT_UID:
+        case UNIT_USER:
+        case UNIT_GID:
+        case UNIT_GROUP:
+        case UNIT_PERMS:
+        case UNIT_SELF:
+            fd->unit = *filter++;
+            break;
+    }
+    if (fd->unit == 0)
+        fd->unit = UNIT_PERMS;
 
-        while (isblank (*filter))
-            ++filter;
+    while (isblank (*filter))
+        ++filter;
 
-        switch (fd->unit)
-        {
-            case UNIT_UID:
-            case UNIT_GID:
-                fd->ref = (guint) g_ascii_strtoull (filter, NULL, 10);
-                goto compile_done;
+    switch (fd->unit)
+    {
+        case UNIT_UID:
+        case UNIT_GID:
+            fd->ref = (guint) g_ascii_strtoull (filter, NULL, 10);
+            return TRUE;
 
-            case UNIT_USER:
-                {
-                    struct _user *u;
-
-                    u = get_user_from_name (priv, filter);
-                    if (!u)
-                    {
-                        g_set_error (error, DONNA_FILTER_ERROR,
-                                DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                                "Unable to find user '%s'", filter);
-                        g_free (fd);
-                        *filter_data = NULL;
-                        return FALSE;
-                    }
-                    fd->unit = UNIT_UID;
-                    fd->ref = u->id;
-                goto compile_done;
-                }
-
-            case UNIT_GROUP:
-                {
-                    struct _group *g;
-
-                    g = get_group_from_name (priv, filter);
-                    if (!g)
-                    {
-                        g_set_error (error, DONNA_FILTER_ERROR,
-                                DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                                "Unable to find group '%s'", filter);
-                        g_free (fd);
-                        *filter_data = NULL;
-                        return FALSE;
-                    }
-                    fd->unit = UNIT_GID;
-                    fd->ref = g->id;
-                    goto compile_done;
-                }
-
-            case UNIT_PERMS:
-            case UNIT_SELF:
-                /* silence warnings */
-                break;
-        }
-
-        /* PERMS || SELF */
-
-        switch (*filter)
-        {
-            case COMP_EQUAL:
-            case COMP_REQ:
-            case COMP_ANY:
-                fd->comp = *filter++;
-                break;
-        }
-        if (fd->comp == 0)
-            fd->comp = COMP_EQUAL;
-
-        while (isblank (*filter))
-            ++filter;
-
-        if (fd->unit == UNIT_PERMS)
-        {
-            if (*filter >= '0' && *filter <= '9')
+        case UNIT_USER:
             {
-                fd->ref = (guint) g_ascii_strtoull (filter, NULL, 8);
-                goto compile_done;
+                struct _user *u;
+
+                u = get_user_from_name (priv, filter);
+                if (!u)
+                {
+                    g_set_error (error, DONNA_FILTER_ERROR,
+                            DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                            "Unable to find user '%s'", filter);
+                    g_free (fd);
+                    *filter_data = NULL;
+                    return FALSE;
+                }
+                fd->unit = UNIT_UID;
+                fd->ref = u->id;
+                return TRUE;
             }
 
+        case UNIT_GROUP:
+            {
+                struct _group *g;
+
+                g = get_group_from_name (priv, filter);
+                if (!g)
+                {
+                    g_set_error (error, DONNA_FILTER_ERROR,
+                            DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                            "Unable to find group '%s'", filter);
+                    g_free (fd);
+                    *filter_data = NULL;
+                    return FALSE;
+                }
+                fd->unit = UNIT_GID;
+                fd->ref = g->id;
+                return TRUE;
+            }
+
+        case UNIT_PERMS:
+        case UNIT_SELF:
+            /* silence warnings */
+            break;
+    }
+
+    /* PERMS || SELF */
+
+    switch (*filter)
+    {
+        case COMP_EQUAL:
+        case COMP_REQ:
+        case COMP_ANY:
+            fd->comp = *filter++;
+            break;
+    }
+    if (fd->comp == 0)
+        fd->comp = COMP_EQUAL;
+
+    while (isblank (*filter))
+        ++filter;
+
+    if (fd->unit == UNIT_PERMS)
+    {
+        if (*filter >= '0' && *filter <= '9')
+        {
+            fd->ref = (guint) g_ascii_strtoull (filter, NULL, 8);
+            return TRUE;
+        }
+
+        for (;;)
+        {
+            guint m = 0;
+
+            if (*filter == 'u')
+                m = 0100;
+            else if (*filter == 'g')
+                m = 010;
+            else if (*filter == 'o')
+                m = 01;
+            else if (*filter == 'a')
+                m = 0111;
+            else if (*filter == '\0')
+                break;
+            else
+            {
+                g_set_error (error, DONNA_FILTER_ERROR,
+                        DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                        "Invalid syntax, expected 'u', 'g', 'o', 'a' or EOL: %s",
+                        filter);
+                g_free (fd);
+                *filter_data = NULL;
+                return FALSE;
+            }
+            ++filter;
+            if (*filter != '=' && *filter != '+')
+            {
+                g_set_error (error, DONNA_FILTER_ERROR,
+                        DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                        "Invalid syntax, expected '=' or '+': %s'",
+                        filter);
+                g_free (fd);
+                *filter_data = NULL;
+                return FALSE;
+            }
+            ++filter;
             for (;;)
             {
-                guint m = 0;
-
-                if (*filter == 'u')
-                    m = 0100;
-                else if (*filter == 'g')
-                    m = 010;
-                else if (*filter == 'o')
-                    m = 01;
-                else if (*filter == 'a')
-                    m = 0111;
+                if (*filter == 'r')
+                    fd->ref += 04 * m;
+                else if (*filter == 'w')
+                    fd->ref += 02 * m;
+                else if (*filter == 'x')
+                    fd->ref += 01 * m;
+                else if (*filter == ',')
+                {
+                    ++filter;
+                    break;
+                }
                 else if (*filter == '\0')
                     break;
                 else
                 {
                     g_set_error (error, DONNA_FILTER_ERROR,
                             DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                            "Invalid syntax, expected 'u', 'g', 'o', 'a' or EOL: %s",
+                            "Invalid syntax, expected 'r', 'w', 'x', ',' or EOL: %s",
                             filter);
                     g_free (fd);
                     *filter_data = NULL;
                     return FALSE;
                 }
                 ++filter;
-                if (*filter != '=' && *filter != '+')
-                {
-                    g_set_error (error, DONNA_FILTER_ERROR,
-                            DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                            "Invalid syntax, expected '=' or '+': %s'",
-                            filter);
-                    g_free (fd);
-                    *filter_data = NULL;
-                    return FALSE;
-                }
-                ++filter;
-                for (;;)
-                {
-                    if (*filter == 'r')
-                        fd->ref += 04 * m;
-                    else if (*filter == 'w')
-                        fd->ref += 02 * m;
-                    else if (*filter == 'x')
-                        fd->ref += 01 * m;
-                    else if (*filter == ',')
-                    {
-                        ++filter;
-                        break;
-                    }
-                    else if (*filter == '\0')
-                        break;
-                    else
-                    {
-                        g_set_error (error, DONNA_FILTER_ERROR,
-                                DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                                "Invalid syntax, expected 'r', 'w', 'x', ',' or EOL: %s",
-                                filter);
-                        g_free (fd);
-                        *filter_data = NULL;
-                        return FALSE;
-                    }
-                    ++filter;
-                }
-            }
-        }
-        else /* UNIT_SELF */
-        {
-            if (*filter >= '0' && *filter <= '9')
-                fd->ref = (guint) (*filter - '0');
-            else
-            {
-                for (;;)
-                {
-                    if (*filter == 'r')
-                        fd->ref += 04;
-                    else if (*filter == 'w')
-                        fd->ref += 02;
-                    else if (*filter == 'x')
-                        fd->ref += 01;
-                    else if (*filter == '\0')
-                        break;
-                    else
-                    {
-                        g_set_error (error, DONNA_FILTER_ERROR,
-                                DONNA_FILTER_ERROR_INVALID_SYNTAX,
-                                "Invalid syntax, expected 'r', 'w', 'x' or EOL: %s",
-                                filter);
-                        g_free (fd);
-                        *filter_data = NULL;
-                        return FALSE;
-                    }
-                    ++filter;
-                }
             }
         }
     }
-    else
-        fd = *filter_data;
+    else /* UNIT_SELF */
+    {
+        if (*filter >= '0' && *filter <= '9')
+            fd->ref = (guint) (*filter - '0');
+        else
+        {
+            for (;;)
+            {
+                if (*filter == 'r')
+                    fd->ref += 04;
+                else if (*filter == 'w')
+                    fd->ref += 02;
+                else if (*filter == 'x')
+                    fd->ref += 01;
+                else if (*filter == '\0')
+                    break;
+                else
+                {
+                    g_set_error (error, DONNA_FILTER_ERROR,
+                            DONNA_FILTER_ERROR_INVALID_SYNTAX,
+                            "Invalid syntax, expected 'r', 'w', 'x' or EOL: %s",
+                            filter);
+                    g_free (fd);
+                    *filter_data = NULL;
+                    return FALSE;
+                }
+                ++filter;
+            }
+        }
+    }
 
-compile_done:
+    return TRUE;
+}
+
+static gboolean
+ct_perms_is_filter_match (DonnaColumnType    *ct,
+                          gpointer            _data,
+                          gpointer            filter_data,
+                          DonnaNode          *node)
+{
+    DonnaColumnTypePermsPrivate *priv = ((DonnaColumnTypePerms *) ct)->priv;
+    struct filter_data *fd = filter_data;
+    DonnaNodeHasValue has;
+    guint val = 0;
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
 
     if (fd->unit == UNIT_UID || fd->unit == UNIT_GID)
     {

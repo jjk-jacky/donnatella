@@ -36,6 +36,7 @@ enum
 
     PROP_APP,
     PROP_FILTER,
+    PROP_COMPILED,
 
     NB_PROPS
 };
@@ -115,6 +116,10 @@ donna_filter_class_init (DonnaFilterClass *klass)
                 NULL,   /* default */
                 G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
 
+    donna_filter_props[PROP_COMPILED] =
+        g_param_spec_boolean ("compiled", "compiled", "Whether filter is compiled or not",
+                FALSE, G_PARAM_READABLE);
+
     g_object_class_install_properties (o_class, NB_PROPS, donna_filter_props);
 
     g_type_class_add_private (klass, sizeof (DonnaFilterPrivate));
@@ -167,6 +172,9 @@ donna_filter_get_property (GObject            *object,
             break;
         case PROP_FILTER:
             g_value_set_string (value, priv->filter);
+            break;
+        case PROP_COMPILED:
+            g_value_set_boolean (value, priv->element != NULL);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -561,13 +569,67 @@ undo:
 }
 
 static gboolean
+compile_element (struct element *element, GError **error)
+{
+    for ( ; element; element = element->next)
+    {
+        if (element->is_block)
+        {
+            struct block *block = element->data;
+
+            if (!donna_column_type_refresh_filter_data (block->ct,
+                        block->filter, &block->data, error))
+                return FALSE;
+        }
+        else if (!compile_element (element->data, error))
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+gboolean
+donna_filter_compile (DonnaFilter    *filter,
+                      GError        **error)
+{
+    DonnaFilterPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
+    priv = filter->priv;
+
+    /* if needed, compile the filter into elements */
+    if (!priv->element)
+    {
+        gchar *f = priv->filter;
+        priv->element = parse_element (filter, &f, error);
+        if (!priv->element)
+            return FALSE;
+    }
+
+    if (!compile_element (priv->element, error))
+    {
+        free_element (priv->element);
+        priv->element = NULL;
+        g_prefix_error (error, "Failed to compile filter: ");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+gboolean
+donna_filter_is_compiled (DonnaFilter    *filter)
+{
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
+    return filter->priv->element != NULL;
+}
+
+static gboolean
 is_match_element (struct element    *element,
                   DonnaNode         *node,
                   get_ct_data_fn     get_ct_data,
-                  gpointer           data,
-                  GError           **error)
+                  gpointer           data)
 {
-    GError *err = NULL;
     gboolean match = TRUE;
 
     for ( ; element; element = element->next)
@@ -581,21 +643,13 @@ is_match_element (struct element    *element,
         {
             struct block *block = element->data;
 
-            match = donna_column_type_is_match_filter (block->ct,
-                    block->filter, &block->data,
-                    get_ct_data (block->col_name, data), node, &err);
+            match = donna_column_type_is_filter_match (block->ct,
+                    get_ct_data (block->col_name, data),
+                    block->data,
+                    node);
         }
         else
-            match = is_match_element (element->data, node, get_ct_data, data, &err);
-
-        if (err)
-        {
-            if (error)
-                g_propagate_error (error, err);
-            else
-                g_clear_error (&err);
-            return FALSE;
-        }
+            match = is_match_element (element->data, node, get_ct_data, data);
 
         if (element->is_not)
             match = !match;
@@ -607,30 +661,32 @@ gboolean
 donna_filter_is_match (DonnaFilter    *filter,
                        DonnaNode      *node,
                        get_ct_data_fn  get_ct_data,
-                       gpointer        data,
-                       GError       **error)
+                       gpointer        data)
 {
     DonnaFilterPrivate *priv;
 
     g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
-
     priv = filter->priv;
 
     /* if needed, compile the filter into elements */
     if (!priv->element)
     {
-        gchar *f = priv->filter;
-        priv->element = parse_element (filter, &f, error);
-        if (!priv->element)
+        GError *err = NULL;
+
+        if (!donna_filter_compile (filter, &err))
+        {
+            g_warning ("Filter wasn't compiled, and compilation failed: %s",
+                    err->message);
+            g_clear_error (&err);
             return FALSE;
+        }
     }
 
     /* see if node matches the filter */
     return is_match_element (priv->element, node,
             (get_ct_data) ? get_ct_data : (get_ct_data_fn) donna_app_get_ct_data,
-            (get_ct_data) ? data : priv->app,
-            error);
+            (get_ct_data) ? data : priv->app);
 }
 
 /* this is needed for filter_toggle_ref_cb() in app.c where we need to get the

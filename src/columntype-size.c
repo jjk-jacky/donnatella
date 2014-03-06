@@ -172,12 +172,14 @@ static gboolean         ct_size_set_tooltip         (DonnaColumnType    *ct,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkTooltip         *tooltip);
-static gboolean         ct_size_is_match_filter     (DonnaColumnType    *ct,
+static gboolean         ct_size_refresh_filter_data (DonnaColumnType    *ct,
                                                      const gchar        *filter,
                                                      gpointer           *filter_data,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
                                                      GError            **error);
+static gboolean         ct_size_is_filter_match     (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     gpointer            filter_data,
+                                                     DonnaNode          *node);
 static void             ct_size_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_size_set_option       (DonnaColumnType    *ct,
@@ -225,7 +227,8 @@ ct_size_column_type_init (DonnaColumnTypeInterface *interface)
     interface->render                   = ct_size_render;
     interface->set_tooltip              = ct_size_set_tooltip;
     interface->node_cmp                 = ct_size_node_cmp;
-    interface->is_match_filter          = ct_size_is_match_filter;
+    interface->refresh_filter_data      = ct_size_refresh_filter_data;
+    interface->is_filter_match          = ct_size_is_filter_match;
     interface->free_filter_data         = ct_size_free_filter_data;
     interface->set_option               = ct_size_set_option;
     interface->get_context_alias        = ct_size_get_context_alias;
@@ -638,102 +641,108 @@ ct_size_node_cmp (DonnaColumnType    *ct,
 }
 
 static gboolean
-ct_size_is_match_filter (DonnaColumnType    *ct,
-                         const gchar        *filter,
-                         gpointer           *filter_data,
-                         gpointer            _data,
-                         DonnaNode          *node,
-                         GError            **error)
+ct_size_refresh_filter_data (DonnaColumnType    *ct,
+                             const gchar        *filter,
+                             gpointer           *filter_data,
+                             GError            **error)
 {
-    struct tv_col_data *data = _data;
     struct filter_data *fd;
     const gchar unit[] = { 'B', 'K', 'M', 'G', 'T' };
     guint nb_units = sizeof (unit) / sizeof (unit[0]);
-    DonnaNodeHasValue has;
-    guint64 size;
+    gchar *s;
+    guint i;
 
-    if (G_UNLIKELY (!*filter_data))
-    {
-        gchar *s;
-        guint i;
-
+    if (*filter_data)
+        fd = *filter_data;
+    else
         fd = *filter_data = g_new0 (struct filter_data, 1);
-        fd->comp = COMP_EQUAL;
 
-        while (isblank (*filter))
-            ++filter;
-        if (*filter == '<')
+    fd->comp = COMP_EQUAL;
+
+    while (isblank (*filter))
+        ++filter;
+    if (*filter == '<')
+    {
+        ++filter;
+        if (*filter == '=')
         {
             ++filter;
-            if (*filter == '=')
-            {
-                ++filter;
-                fd->comp = COMP_LESSER_EQUAL;
-            }
-            else
-                fd->comp = COMP_LESSER;
+            fd->comp = COMP_LESSER_EQUAL;
         }
-        else if (*filter == '>')
+        else
+            fd->comp = COMP_LESSER;
+    }
+    else if (*filter == '>')
+    {
+        ++filter;
+        if (*filter == '=')
         {
             ++filter;
-            if (*filter == '=')
-            {
-                ++filter;
-                fd->comp = COMP_GREATER_EQUAL;
-            }
-            else
-                fd->comp = COMP_GREATER;
+            fd->comp = COMP_GREATER_EQUAL;
         }
-        else if (*filter == '=')
-            ++filter;
+        else
+            fd->comp = COMP_GREATER;
+    }
+    else if (*filter == '=')
+        ++filter;
 
-        fd->ref = g_ascii_strtoull (filter, &s, 10);
+    fd->ref = g_ascii_strtoull (filter, &s, 10);
+    for (i = 0; i < nb_units; ++i)
+    {
+        if (*s == unit[i])
+        {
+            ++s;
+            for ( ; i > 0; --i)
+                fd->ref *= 1024;
+            break;
+        }
+    }
+
+    while (isblank (*s))
+        ++s;
+    if (*s == '\0')
+        return TRUE;
+
+    if (fd->comp == COMP_EQUAL && *s == '-')
+    {
+        guint64 r;
+
+        fd->comp = COMP_IN_RANGE;
+        r = g_ascii_strtoull (s + 1, &s, 10);
         for (i = 0; i < nb_units; ++i)
         {
             if (*s == unit[i])
             {
                 ++s;
                 for ( ; i > 0; --i)
-                    fd->ref *= 1024;
+                    r *= 1024;
                 break;
             }
         }
 
-        while (isblank (*s))
-            ++s;
-        if (*s == '\0')
-            goto compile_done;
-
-        if (fd->comp == COMP_EQUAL && *s == '-')
+        if (r > fd->ref)
+            fd->ref2 = r;
+        else
         {
-            guint64 r;
-
-            fd->comp = COMP_IN_RANGE;
-            r = g_ascii_strtoull (s + 1, &s, 10);
-            for (i = 0; i < nb_units; ++i)
-            {
-                if (*s == unit[i])
-                {
-                    ++s;
-                    for ( ; i > 0; --i)
-                        r *= 1024;
-                    break;
-                }
-            }
-
-            if (r > fd->ref)
-                fd->ref2 = r;
-            else
-            {
-                fd->ref2 = fd->ref;
-                fd->ref = r;
-            }
+            fd->ref2 = fd->ref;
+            fd->ref = r;
         }
     }
-    else
-        fd = *filter_data;
 
-compile_done:
+    return TRUE;
+}
+
+static gboolean
+ct_size_is_filter_match (DonnaColumnType    *ct,
+                         gpointer            _data,
+                         gpointer            filter_data,
+                         DonnaNode          *node)
+{
+    struct tv_col_data *data = _data;
+    struct filter_data *fd = filter_data;
+    DonnaNodeHasValue has;
+    guint64 size;
+
     if (data->is_size)
         has = donna_node_get_size (node, TRUE, &size);
     else

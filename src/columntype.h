@@ -193,12 +193,15 @@ struct _DonnaColumnTypeInterface
                                              gpointer            data,
                                              DonnaNode          *node1,
                                              DonnaNode          *node2);
-    gboolean            (*is_match_filter)  (DonnaColumnType    *ct,
+    gboolean            (*refresh_filter_data)
+                                            (DonnaColumnType    *ct,
                                              const gchar        *filter,
                                              gpointer           *filter_data,
-                                             gpointer            data,
-                                             DonnaNode          *node,
                                              GError            **error);
+    gboolean            (*is_filter_match)  (DonnaColumnType    *ct,
+                                             gpointer            data,
+                                             gpointer            filter_data,
+                                             DonnaNode          *node);
     void                (*free_filter_data) (DonnaColumnType    *ct,
                                              gpointer            filter_data);
     /* context related */
@@ -291,13 +294,16 @@ gint            donna_column_type_node_cmp      (DonnaColumnType    *ct,
                                                  gpointer            data,
                                                  DonnaNode          *node1,
                                                  DonnaNode          *node2);
-gboolean        donna_column_type_is_match_filter
+gboolean        donna_column_type_refresh_filter_data
                                                 (DonnaColumnType    *ct,
                                                  const gchar        *filter,
                                                  gpointer           *filter_data,
-                                                 gpointer            data,
-                                                 DonnaNode          *node,
                                                  GError            **error);
+gboolean        donna_column_type_is_filter_match
+                                                (DonnaColumnType    *ct,
+                                                 gpointer            data,
+                                                 gpointer            filter_data,
+                                                 DonnaNode          *node);
 void            donna_column_type_free_filter_data
                                                 (DonnaColumnType    *ct,
                                                  gpointer            filter_data);

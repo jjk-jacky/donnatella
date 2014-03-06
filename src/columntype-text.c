@@ -144,12 +144,14 @@ static gint             ct_text_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
                                                      DonnaNode          *node2);
-static gboolean         ct_text_is_match_filter     (DonnaColumnType    *ct,
+static gboolean         ct_text_refresh_filter_data (DonnaColumnType    *ct,
                                                      const gchar        *filter,
                                                      gpointer           *filter_data,
-                                                     gpointer            data,
-                                                     DonnaNode          *node,
                                                      GError            **error);
+static gboolean         ct_text_is_filter_match     (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     gpointer            filter_data,
+                                                     DonnaNode          *node);
 static void             ct_text_free_filter_data    (DonnaColumnType    *ct,
                                                      gpointer            filter_data);
 static DonnaColumnTypeNeed ct_text_set_option       (DonnaColumnType    *ct,
@@ -199,7 +201,8 @@ ct_text_column_type_init (DonnaColumnTypeInterface *interface)
     interface->set_value                = ct_text_set_value;
     interface->render                   = ct_text_render;
     interface->node_cmp                 = ct_text_node_cmp;
-    interface->is_match_filter          = ct_text_is_match_filter;
+    interface->refresh_filter_data      = ct_text_refresh_filter_data;
+    interface->is_filter_match          = ct_text_is_filter_match;
     interface->free_filter_data         = ct_text_free_filter_data;
     interface->set_option               = ct_text_set_option;
     interface->get_context_alias        = ct_text_get_context_alias;
@@ -657,30 +660,29 @@ done:
 }
 
 static gboolean
-ct_text_is_match_filter (DonnaColumnType    *ct,
-                         const gchar        *filter,
-                         gpointer           *filter_data,
+ct_text_refresh_filter_data (DonnaColumnType    *ct,
+                             const gchar        *filter,
+                             gpointer           *filter_data,
+                             GError            **error)
+{
+    if (*filter_data)
+        ct_text_free_filter_data (ct, *filter_data);
+
+    *filter_data = donna_app_get_pattern (((DonnaColumnTypeText *) ct)->priv->app,
+            filter, error);
+    return *filter_data != NULL;
+}
+
+static gboolean
+ct_text_is_filter_match (DonnaColumnType    *ct,
                          gpointer            _data,
-                         DonnaNode          *node,
-                         GError            **error)
+                         gpointer            filter_data,
+                         DonnaNode          *node)
 {
     struct tv_col_data *data = _data;
-    DonnaPattern *pattern;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
     gboolean ret;
-
-    if (G_UNLIKELY (!*filter_data))
-    {
-        pattern = donna_app_get_pattern (((DonnaColumnTypeText *) ct)->priv->app,
-                filter, error);
-        if (!pattern)
-            return FALSE;
-
-        *filter_data = pattern;
-    }
-    else
-        pattern = *filter_data;
 
     donna_node_get (node, TRUE, data->property, &has, &value, NULL);
     if (has == DONNA_NODE_VALUE_SET)
@@ -695,7 +697,8 @@ ct_text_is_match_filter (DonnaColumnType    *ct,
     else
         return FALSE;
 
-    ret = donna_pattern_is_match (pattern, g_value_get_string (&value));
+    ret = donna_pattern_is_match ((DonnaPattern *) filter_data,
+            g_value_get_string (&value));
     g_value_unset (&value);
     return ret;
 }
