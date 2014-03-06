@@ -797,6 +797,7 @@
  *   (-) if no current location is set
  * - <systemitem>\%L</systemitem> : location of current location if in "fs",
  *   else full location; a dash (-) if no current location is set
+ * - <systemitem>\%f</systemitem> : name of focused row
  * - <systemitem>\%K</systemitem> : current key mode
  * - <systemitem>\%k</systemitem> : current key status; that is the current
  *   combine if any, the current combine spec if any, the current multiplier if
@@ -21812,6 +21813,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
 
             case 'l':
             case 'L':
+            case 'f':
             case 's':
             case 'S':
             case 'v':
@@ -22019,6 +22021,34 @@ status_provider_conv (const gchar     c,
                 *ptr = (gpointer) "-";
             return TRUE;
 
+        case 'f':
+            {
+                GtkTreePath *path;
+                GtkTreeIter iter;
+                DonnaNode *node;
+
+                gtk_tree_view_get_cursor ((GtkTreeView *) sp_conv->tree, &path, NULL);
+                if (G_UNLIKELY (!path))
+                    return FALSE;
+                if (!gtk_tree_model_get_iter ((GtkTreeModel *) priv->store,
+                            &iter, path))
+                {
+                    gtk_tree_path_free (path);
+                    return FALSE;
+                }
+                gtk_tree_path_free (path);
+                gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+                        TREE_VIEW_COL_NODE, &node,
+                        -1);
+                if (G_UNLIKELY (!node))
+                    return FALSE;
+                *type = DONNA_ARG_TYPE_STRING;
+                *ptr = donna_node_get_name (node);
+                *destroy = g_free;
+                g_object_unref (node);
+                return TRUE;
+            }
+
         case 'K':
             *type = DONNA_ARG_TYPE_STRING;
             *ptr = priv->key_mode;
@@ -22146,7 +22176,7 @@ status_provider_render (DonnaStatusProvider    *sp,
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
     struct status *status;
     struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, 0 };
-    DonnaContext context = { "olLkKaAvVsSnN", TRUE,
+    DonnaContext context = { "olLfkKaAvVsSnN", TRUE,
         (conv_flag_fn) status_provider_conv, &sp_conv };
     GString *str = NULL;
     guint i;
