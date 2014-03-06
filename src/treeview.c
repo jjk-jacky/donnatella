@@ -1202,6 +1202,8 @@ struct _DonnaTreeViewPrivate
      * - list: can be NULL (not visible/in model) or an iter
      * - tree: always a GSList of iters (at least one) */
     GHashTable          *hashtable;
+    /* list: current visual filter */
+    DonnaFilter         *filter;
 
     /* list of iters to be used by callbacks. Because we use iters in cb's data,
      * we need to ensure they stay valid. We only use iters from the store, and
@@ -1382,6 +1384,8 @@ static void refilter_list                               (DonnaTreeView  *tree);
 static inline void set_draw_state                       (DonnaTreeView  *tree,
                                                          enum draw       draw);
 static void refresh_draw_state                          (DonnaTreeView  *tree);
+static gpointer get_ct_data                             (const gchar    *col_name,
+                                                         DonnaTreeView  *tree);
 static inline GtkTreeIter * get_child_iter_for_node     (DonnaTreeView  *tree,
                                                          GtkTreeIter    *parent,
                                                          DonnaNode      *node);
@@ -1940,6 +1944,7 @@ donna_tree_view_finalize (GObject *object)
     if (priv->tree_visuals)
         g_hash_table_foreach_remove (priv->tree_visuals,
                 (GHRFunc) free_tree_visuals, NULL);
+    donna_g_object_unref (priv->filter);
     g_array_free (priv->statuses, TRUE);
     g_free (priv->click_mode);
     g_free (priv->key_mode);
@@ -4320,6 +4325,10 @@ refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
         is_visible = (name && *name != '.');
         g_free (name);
     }
+
+    if (is_visible && priv->filter)
+        is_visible = donna_filter_is_match (priv->filter, node,
+                (get_ct_data_fn) get_ct_data, tree);
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = donna_node_get_full_location (node);
@@ -9720,7 +9729,10 @@ no_task:
          * was no cursor, and so relative number couldn't be calculated (so it
          * fell back to "regular" line number), we need to queue a redraw if
          * ln_relative is used, but this will (always) queue one */
-        set_draw_state (data->tree, DRAW_NOTHING);
+        set_draw_state (data->tree,
+                /* could be that everything got filtered out */
+                (_gtk_tree_model_get_count ((GtkTreeModel *) priv->store) > 0)
+                ? DRAW_NOTHING : DRAW_NO_VISIBLE);
     }
     else
     {
@@ -19643,6 +19655,111 @@ again:
     g_string_free (str, TRUE);
 
     return TRUE;
+}
+
+/* mode list only */
+/**
+ * donna_tree_view_set_visual_filter:
+ * @tree: A #DonnaTreeView
+ * @filter: (allow-none): The filter to use as visual filter, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Sets @filter as current visual filter on @tree. If @filter is %NULL then
+ * unsets any currently applied VF.
+ *
+ * This only applies to lists (VF aren't supported on trees).
+ *
+ * See #DonnaFilter for more about filters.
+ *
+ * Returns: %TRUE if the filter was set, else %FALSE
+ */
+gboolean
+donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
+                                   const gchar        *filter,
+                                   GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    DonnaFilter *f = NULL;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    priv = tree->priv;
+
+    if (priv->is_tree)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "TreeView '%s': Cannot set visual filter on tree",
+                priv->name);
+        return FALSE;
+    }
+
+    if (!filter && !priv->filter)
+        return TRUE;
+
+    if (filter)
+    {
+        f = donna_app_get_filter (priv->app, filter);
+        if (!f)
+        {
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Failed to get visual filter for '%s'",
+                    priv->name, filter);
+            return FALSE;
+        }
+
+        if (!donna_filter_is_compiled (f) && !donna_filter_compile (f, error))
+        {
+            g_prefix_error (error, "TreeView '%s': Failed to set current visual filter: ",
+                    priv->name);
+            g_object_unref (f);
+            return FALSE;
+        }
+    }
+
+    donna_g_object_unref (priv->filter);
+    priv->filter = f;
+    refilter_list (tree);
+    return TRUE;
+}
+
+/**
+ * donna_tree_view_get_visual_filter:
+ * @tree: A #DonnaTreeView
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Returns the string representation of the current visual filter, or %NULL
+ *
+ * Note that you need to use @error to determine if there's no filter, or an
+ * error occured. Also note that the only possible error is a
+ * %DONNA_TREE_VIEW_ERROR_INVALID_MODE is used on a tree, as VF are only
+ * supported on lists.
+ *
+ * Returns: A newly allocated string of the current VF (use g_free() when done),
+ * or %NULL on error or if there's no VF.
+ */
+gchar *
+donna_tree_view_get_visual_filter (DonnaTreeView      *tree,
+                                   GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    priv = tree->priv;
+
+    if (priv->is_tree)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "TreeView '%s': Cannot set visual filter on tree",
+                priv->name);
+        return NULL;
+    }
+
+    if (!priv->filter)
+        return NULL;
+
+    return donna_filter_get_filter (priv->filter);
 }
 
 

@@ -66,6 +66,7 @@ tv_get_node_at_row
 tv_get_nodes
 tv_get_visual
 tv_get_node_down
+tv_get_visual_filter
 tv_go_down
 tv_get_node_root
 tv_go_root
@@ -98,6 +99,7 @@ tv_set_option
 tv_set_second_sort
 tv_set_sort
 tv_set_visual
+tv_set_visual_filter
 tv_start_interactive_search
 tv_toggle_column
 tv_toggle_row
@@ -1213,6 +1215,8 @@ donna_tree_view_history_move
 donna_tree_view_history_clear
 donna_tree_view_get_node_down
 donna_tree_view_go_down
+donna_tree_view_set_visual_filter
+donna_tree_view_get_visual_filter
 <SUBSECTION Standard>
 DONNA_IS_TREE_VIEW
 DONNA_IS_TREE_VIEW_CLASS

@@ -3176,6 +3176,43 @@ cmd_tv_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_get_visual_filter:
+ * @tree: A treeview
+ *
+ * Returns the current visual filter of @tree (Empty string if there's none)
+ *
+ * See donna_tree_view_get_visual_filter() for more
+ *
+ * Returns: The current visual filter on @tree
+ */
+static DonnaTaskState
+cmd_tv_get_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+
+    GValue *value;
+    gchar *vf;
+
+    vf = donna_tree_view_get_visual_filter (tree, &err);
+    if (!vf && err)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_STRING);
+    if (vf)
+        g_value_take_string (value, vf);
+    else
+        g_value_take_string (value, g_strdup (""));
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_go_down:
  * @tree: A treeview
  * @level: (allow-none): Level wanted (Defaults to 1)
@@ -4545,6 +4582,32 @@ cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_set_visual_filter:
+ * @tree: A treeview
+ * @filter: (allow-none): A filter to set as VF (or nothing to unset any current
+ * VF)
+ *
+ * Sets the current visual filter
+ *
+ * See donna_tree_view_set_visual_filter() for more
+ */
+static DonnaTaskState
+cmd_tv_set_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    const gchar *filter = args[1];
+
+    if (!donna_tree_view_set_visual_filter (tree, filter, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_start_interactive_search:
  * @tree: A treeview
  *
@@ -5104,6 +5167,11 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    add_command (tv_get_visual_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tv_go_down, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
@@ -5313,6 +5381,12 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (tv_set_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (tv_set_visual_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

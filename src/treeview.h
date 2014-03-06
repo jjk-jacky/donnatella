@@ -430,6 +430,13 @@ DonnaNode *     donna_tree_view_get_node_down   (DonnaTreeView      *tree,
 gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
                                                  gint                level,
                                                  GError            **error);
+gboolean        donna_tree_view_set_visual_filter (
+                                                 DonnaTreeView      *tree,
+                                                 const gchar        *filter,
+                                                 GError            **error);
+gchar *         donna_tree_view_get_visual_filter (
+                                                 DonnaTreeView      *tree,
+                                                 GError            **error);
 
 G_END_DECLS
 
