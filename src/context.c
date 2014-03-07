@@ -74,6 +74,12 @@
  * #DONNA_CONTEXT_DEREFERENCE_NONE. If none are specified,
  * #DONNA_CONTEXT_DEREFERENCE_NONE is used.
  *
+ * If @context allows extra, between the percent sign and the variable there can
+ * be a quote in between braquet, e.g: \%{foo}v
+ * This would resolve as variable 'v' with "foo" as extra. Note that inside an
+ * extra it is required to escape with a backslash any backslashe or closing
+ * braquets, e.g. to use "foo}bar" as extra, use: \%{foo\}bar}v
+ *
  * @str can point either to an existing #GString, or %NULL. In the former case,
  * it will be used as is, adding to it. If nothing needed to be done (e.g. no
  * variable used in @fmt) then @fmt will be added to the #GString.
@@ -134,9 +140,43 @@ donna_context_parse (DonnaContext       *context,
 
         if (pos == 0 && context->allow_extra && s[1] == '{')
         {
-            e = strchr (s, '}');
+            gboolean need_escaping = FALSE;
+
+            for (e = s + 2; *e; ++e)
+            {
+                if (*e == '\\')
+                {
+                    need_escaping = TRUE;
+                    ++e;
+                    continue;
+                }
+                else if (*e == '}')
+                    break;
+            }
+            if (*e != '}')
+                e = NULL;
+
             if (e)
+            {
                 extra = g_strndup (s + 2, (gsize) (e - s - 2));
+                if (need_escaping)
+                {
+                    gchar *_e;
+                    guint i = 0;
+
+                    for (_e = extra; _e[i] != '\0'; ++_e)
+                    {
+                        if (_e[i] == '\\')
+                        {
+                            *_e = _e[++i];
+                            continue;
+                        }
+                        else if (i > 0)
+                            *_e = _e[i];
+                    }
+                    *_e = '\0';
+                }
+            }
             else
                 e = s;
         }
