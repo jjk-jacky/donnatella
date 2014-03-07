@@ -807,20 +807,22 @@
  * - <systemitem>\%a</systemitem> : number of all rows (i.e. including hidden
  *   ones for lists)
  * - <systemitem>\%v</systemitem> : number of visible rows
+ * - <systemitem>\%h</systemitem> : number of hidden rows
  * - <systemitem>\%s</systemitem> : number of selected rows
  * - <systemitem>\%A</systemitem> : total size of all rows
  * - <systemitem>\%V</systemitem> : total size of visible rows
+ * - <systemitem>\%H</systemitem> : total size of hidden rows
  * - <systemitem>\%S</systemitem> : total size of selected rows
  * - <systemitem>\%n</systemitem> : name of focused row, if any
  * - <systemitem>\%N</systemitem> : name of selected item if there's only one,
  *   string "n items selected" (with n the number of selected items) if more
  *   than one, else nothing
  *
- * Note that <systemitem>\%A</systemitem>, <systemitem>\%V</systemitem> and
- * <systemitem>\%S</systemitem> will use the format as specified in option
- * <systemitem>size_format</systemitem> (defaulting to that of
- * <systemitem>defaults/size/format</systemitem> to format the size, alongside
- * options <systemitem>digits</systemitem> and
+ * Note that <systemitem>\%A</systemitem>, <systemitem>\%V</systemitem>,
+ * <systemitem>H</systemitem> and <systemitem>\%S</systemitem> will use the
+ * format as specified in option <systemitem>size_format</systemitem>
+ * (defaulting to that of <systemitem>defaults/size/format</systemitem> to
+ * format the size, alongside options <systemitem>digits</systemitem> and
  * <systemitem>long_unit</systemitem> (defaulting to whatever is set under
  * <systemitem>defaults/size</systemitem>).
  * You can however specify the format to use, by putting it in between brackets
@@ -21863,6 +21865,8 @@ status_provider_create_status (DonnaStatusProvider    *sp,
             case 'f':
             case 's':
             case 'S':
+            case 'h':
+            case 'H':
             case 'v':
             case 'V':
             case 'a':
@@ -21915,9 +21919,16 @@ status_provider_get_renderers (DonnaStatusProvider    *sp,
     return NULL;
 }
 
+enum cs
+{
+    CS_VISIBLE  = (1 << 0),
+    CS_HIDDEN   = (1 << 1),
+    CS_ALL      = CS_VISIBLE | CS_HIDDEN
+};
+
 struct calc_size
 {
-    gboolean only_visible;
+    enum cs cs;
     guint64 size;
 };
 
@@ -21926,7 +21937,12 @@ calculate_size (DonnaNode *node, gpointer value, struct calc_size *cs)
 {
     guint64 size;
 
-    if (cs->only_visible && !value)
+    if (value)
+    {
+        if (!(cs->cs & CS_VISIBLE))
+            return;
+    }
+    else if (!(cs->cs & CS_HIDDEN))
         return;
 
     if (donna_node_get_node_type (node) == DONNA_NODE_ITEM
@@ -21958,7 +21974,10 @@ struct sp_conv
     DonnaTreeView *tree;
     struct status *status;
     GtkTreeSelection *sel;
-    gint nb;
+    gint nb_a;
+    gint nb_v;
+    gint nb_h;
+    gint nb_s;
 };
 
 static void
@@ -21970,7 +21989,7 @@ sp_custom_conv (const gchar          c,
 {
     DonnaTreeViewPrivate *priv = sp_conv->tree->priv;
     gchar *fmt = extra;
-    struct calc_size cs = { FALSE, 0 };
+    struct calc_size cs = { CS_ALL, 0 };
     gchar buf[20], *b = buf;
     gsize len;
 
@@ -22006,7 +22025,12 @@ sp_custom_conv (const gchar          c,
             break;
 
         case 'V':
-            cs.only_visible = TRUE;
+            cs.cs = CS_VISIBLE;
+            g_hash_table_foreach (priv->hashtable, (GHFunc) calculate_size, &cs);
+            break;
+
+        case 'H':
+            cs.cs = CS_HIDDEN;
             g_hash_table_foreach (priv->hashtable, (GHFunc) calculate_size, &cs);
             break;
 
@@ -22122,26 +22146,41 @@ status_provider_conv (const gchar     c,
 
         case 'a':
             *type = DONNA_ARG_TYPE_INT;
-            sp_conv->nb = (gint) g_hash_table_size (priv->hashtable);
-            *ptr = &sp_conv->nb;
+            if (sp_conv->nb_a == -1)
+                sp_conv->nb_a = (gint) g_hash_table_size (priv->hashtable);
+            *ptr = &sp_conv->nb_a;
             return TRUE;
 
         case 'v':
             *type = DONNA_ARG_TYPE_INT;
-            sp_conv->nb = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
-            *ptr = &sp_conv->nb;
+            if (sp_conv->nb_v == -1)
+                sp_conv->nb_v = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
+            *ptr = &sp_conv->nb_v;
+            return TRUE;
+
+        case 'h':
+            *type = DONNA_ARG_TYPE_INT;
+            if (sp_conv->nb_a == -1)
+                sp_conv->nb_a = (gint) g_hash_table_size (priv->hashtable);
+            if (sp_conv->nb_v == -1)
+                sp_conv->nb_v = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
+            if (sp_conv->nb_h == -1)
+                sp_conv->nb_h = sp_conv->nb_a - sp_conv->nb_v;
+            *ptr = &sp_conv->nb_h;
             return TRUE;
 
         case 's':
             *type = DONNA_ARG_TYPE_INT;
             if (!sp_conv->sel)
                 sp_conv->sel = gtk_tree_view_get_selection ((GtkTreeView *) sp_conv->tree);
-            sp_conv->nb = gtk_tree_selection_count_selected_rows (sp_conv->sel);
-            *ptr = &sp_conv->nb;
+            if (sp_conv->nb_s == -1)
+                sp_conv->nb_s = gtk_tree_selection_count_selected_rows (sp_conv->sel);
+            *ptr = &sp_conv->nb_s;
             return TRUE;
 
         case 'A':
         case 'V':
+        case 'H':
         case 'S':
             *type = _DONNA_ARG_TYPE_CUSTOM;
             *ptr = sp_custom_conv;
@@ -22236,8 +22275,8 @@ status_provider_render (DonnaStatusProvider    *sp,
 {
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
     struct status *status;
-    struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, 0 };
-    DonnaContext context = { "olLfFkKaAvVsSnN", TRUE,
+    struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, -1, -1, -1, -1 };
+    DonnaContext context = { "olLfFkKaAvVhHsSnN", TRUE,
         (conv_flag_fn) status_provider_conv, &sp_conv };
     GString *str = NULL;
     guint i;
