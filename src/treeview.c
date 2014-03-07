@@ -798,6 +798,7 @@
  * - <systemitem>\%L</systemitem> : location of current location if in "fs",
  *   else full location; a dash (-) if no current location is set
  * - <systemitem>\%f</systemitem> : name of focused row
+ * - <systemitem>\%F</systemitem> : current visual filter (if any)
  * - <systemitem>\%K</systemitem> : current key mode
  * - <systemitem>\%k</systemitem> : current key status; that is the current
  *   combine if any, the current combine spec if any, the current multiplier if
@@ -825,15 +826,25 @@
  * You can however specify the format to use, by putting it in between brackets
  * right after the percent sign, e.g. <systemitem>\%{\%b}S</systemitem>
  *
- * Additionally, you can use option <systemitem>key_modes_colors</systemitem> to
- * enable using colors based on the current key mode. When set to true, if
- * string option <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground</systemitem>
- * is set, it will be used as foreground color. If not, string option
+ * <systemitem>\%F</systemitem> also supports an extra (in between brackets),
+ * which is specified will be used instead of the filter (when one is set).
+ *
+ * Additionally, you can use option <systemitem>colors</systemitem>
+ * (integer:tree-set-colors) to enable the use of (background/foreground) colors.
+ *
+ * When set to <systemitem>keys</systemitem> color will be based on the current
+ * key mode: if string option
+ * <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground</systemitem> is set, it will
+ * be used as foreground color. If not, string option
  * <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground-rgba</systemitem> is tried,
  * which can be a string as per gdk_rgba_parse()
  * Similarly named options for the background color are also used in the same
  * way.
- * </para></refsect2>
+ *
+ * When set to <systemitem>vf</systemitem> options
+ * <systemitem>foreground</systemitem> or
+ * <systemitem>foreground-rgba</systemitem> (and similarly for background) are
+ * then used when a VF is applied.</para></refsect2>
  */
 
 enum
@@ -961,6 +972,13 @@ enum removal
     RR_NOT_REMOVAL_STAY_MAXI
 };
 
+/* colors in statusprovider */
+enum st_colors
+{
+    ST_COLORS_OFF = 0,
+    ST_COLORS_KEYS,     /* key_mode based */
+    ST_COLORS_VF        /* when there's a VF */
+};
 
 enum spec_type
 {
@@ -1000,6 +1018,7 @@ enum changed_on
     STATUS_CHANGED_ON_KEY_MODE  = (1 << 0),
     STATUS_CHANGED_ON_KEYS      = (1 << 1),
     STATUS_CHANGED_ON_CONTENT   = (1 << 2),
+    STATUS_CHANGED_ON_VF        = (1 << 3),
 };
 
 /* because changing location for List is a multi-step process */
@@ -1105,8 +1124,8 @@ struct status
      * "preload" them because we don't know which key modes exists, so it's
      * simpler that way */
     gchar           *name;
-    /* key modes color options */
-    gboolean         key_modes_colors;
+    /* color options */
+    enum st_colors   colors;
     /* size options */
     gint             digits;
     gboolean         long_unit;
@@ -2174,6 +2193,25 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
     ++i;
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "save-location", "Save Location",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = ST_COLORS_OFF;
+    it_int[i].in_file   = "off";
+    it_int[i].label     = "Off";
+    ++i;
+    it_int[i].value     = ST_COLORS_KEYS;
+    it_int[i].in_file   = "keys";
+    it_int[i].label     = "Based on current key mode";
+    ++i;
+    it_int[i].value     = ST_COLORS_VF;
+    it_int[i].in_file   = "vf";
+    it_int[i].label     = "When a visual filter is applied";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "tree-st-colors",
+                    "Change colors (treeview status)",
                     i, it_int, error)))
         return FALSE;
 
@@ -19721,6 +19759,7 @@ donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
     donna_g_object_unref (priv->filter);
     priv->filter = f;
     refilter_list (tree);
+    check_statuses (tree, STATUS_CHANGED_ON_VF);
     return TRUE;
 }
 
@@ -21793,11 +21832,15 @@ status_provider_create_status (DonnaStatusProvider    *sp,
                     "defaults/size/long_unit"))
             status.long_unit = FALSE;
 
-    if (!donna_config_get_boolean (config, NULL, &status.key_modes_colors,
-                "statusbar/%s/key_modes_colors", name))
-        status.key_modes_colors = FALSE;
-    if (status.key_modes_colors)
+    if (!donna_config_get_int (config, NULL, (gint *) &status.colors,
+                "statusbar/%s/colors", name)
+            || (status.colors != ST_COLORS_OFF && status.colors != ST_COLORS_KEYS
+                && status.colors != ST_COLORS_VF))
+        status.colors = ST_COLORS_OFF;
+    if (status.colors == ST_COLORS_KEYS)
         status.changed_on |= STATUS_CHANGED_ON_KEY_MODE;
+    else if (status.colors == ST_COLORS_VF)
+        status.changed_on |= STATUS_CHANGED_ON_VF;
 
     while ((s = strchr (s, '%')))
     {
@@ -21809,6 +21852,10 @@ status_provider_create_status (DonnaStatusProvider    *sp,
 
             case 'k':
                 status.changed_on |= STATUS_CHANGED_ON_KEYS;
+                break;
+
+            case 'F':
+                status.changed_on |= STATUS_CHANGED_ON_VF;
                 break;
 
             case 'l':
@@ -22049,6 +22096,20 @@ status_provider_conv (const gchar     c,
                 return TRUE;
             }
 
+        case 'F':
+            if (priv->filter)
+            {
+                *type = DONNA_ARG_TYPE_STRING;
+                if (extra)
+                    *ptr = g_strdup (extra);
+                else
+                    *ptr = donna_filter_get_filter (priv->filter);
+                *destroy = g_free;
+                return TRUE;
+            }
+            else
+                return FALSE;
+
         case 'K':
             *type = DONNA_ARG_TYPE_STRING;
             *ptr = priv->key_mode;
@@ -22176,7 +22237,7 @@ status_provider_render (DonnaStatusProvider    *sp,
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
     struct status *status;
     struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, 0 };
-    DonnaContext context = { "olLfkKaAvVsSnN", TRUE,
+    DonnaContext context = { "olLfFkKaAvVsSnN", TRUE,
         (conv_flag_fn) status_provider_conv, &sp_conv };
     GString *str = NULL;
     guint i;
@@ -22198,70 +22259,78 @@ status_provider_render (DonnaStatusProvider    *sp,
     donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, priv->app,
             status->fmt, &str, NULL);
 
-    if (status->key_modes_colors)
+    if ((status->colors == ST_COLORS_KEYS && priv->key_mode)
+            || (status->colors == ST_COLORS_VF && priv->filter))
     {
         DonnaConfig *config;
+        gchar *prefix;
         gchar *s;
 
+        if (status->colors == ST_COLORS_KEYS)
+            prefix = g_strconcat ("key_mode_", priv->key_mode, "_", NULL);
+        else
+            prefix = (gchar *) "";
+
         config = donna_app_peek_config (priv->app);
-        if (priv->key_mode)
+
+        if (donna_config_get_string (config, NULL, &s,
+                    "statusbar/%s/%sbackground",
+                    status->name, prefix))
         {
-            if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/key_mode_%s_background",
-                        status->name, priv->key_mode))
+            g_object_set (renderer,
+                    "background-set",   TRUE,
+                    "background",       s,
+                    NULL);
+            donna_renderer_set (renderer, "background-set", NULL);
+            g_free (s);
+        }
+        else if (donna_config_get_string (config, NULL, &s,
+                    "statusbar/%s/%sbackground-rgba",
+                    status->name, prefix))
+        {
+            GdkRGBA rgba;
+
+            if (gdk_rgba_parse (&rgba, s))
             {
                 g_object_set (renderer,
                         "background-set",   TRUE,
-                        "background",       s,
+                        "background-rgba",  &rgba,
                         NULL);
                 donna_renderer_set (renderer, "background-set", NULL);
-                g_free (s);
             }
-            else if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/key_mode_%s_background-rgba",
-                        status->name, priv->key_mode))
-            {
-                GdkRGBA rgba;
+            g_free (s);
+        }
 
-                if (gdk_rgba_parse (&rgba, s))
-                {
-                    g_object_set (renderer,
-                            "background-set",   TRUE,
-                            "background-rgba",  &rgba,
-                            NULL);
-                    donna_renderer_set (renderer, "background-set", NULL);
-                }
-                g_free (s);
-            }
+        if (donna_config_get_string (config, NULL, &s,
+                    "statusbar/%s/%sforeground",
+                    status->name, prefix))
+        {
+            g_object_set (renderer,
+                    "foreground-set",   TRUE,
+                    "foreground",       s,
+                    NULL);
+            donna_renderer_set (renderer, "foreground-set", NULL);
+            g_free (s);
+        }
+        else if (donna_config_get_string (config, NULL, &s,
+                    "statusbar/%s/%sforeground-rgba",
+                    status->name, prefix))
+        {
+            GdkRGBA rgba;
 
-            if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/key_mode_%s_foreground",
-                        status->name, priv->key_mode))
+            if (gdk_rgba_parse (&rgba, s))
             {
                 g_object_set (renderer,
                         "foreground-set",   TRUE,
-                        "foreground",       s,
+                        "foreground-rgba",  &rgba,
                         NULL);
                 donna_renderer_set (renderer, "foreground-set", NULL);
-                g_free (s);
             }
-            else if (donna_config_get_string (config, NULL, &s,
-                        "statusbar/%s/key_mode_%s_foreground-rgba",
-                        status->name, priv->key_mode))
-            {
-                GdkRGBA rgba;
-
-                if (gdk_rgba_parse (&rgba, s))
-                {
-                    g_object_set (renderer,
-                            "foreground-set",   TRUE,
-                            "foreground-rgba",  &rgba,
-                            NULL);
-                    donna_renderer_set (renderer, "foreground-set", NULL);
-                }
-                g_free (s);
-            }
+            g_free (s);
         }
+
+        if (status->colors == ST_COLORS_KEYS)
+            g_free (prefix);
     }
     g_object_set (renderer,
             "visible",  TRUE,
