@@ -828,8 +828,35 @@
  * You can however specify the format to use, by putting it in between brackets
  * right after the percent sign, e.g. <systemitem>\%{\%b}S</systemitem>
  *
+ * <systemitem>\%a</systemitem>, <systemitem>\%v</systemitem>,
+ * <systemitem>\%h</systemitem>, <systemitem>\%s</systemitem> and
  * <systemitem>\%F</systemitem> also supports an extra (in between brackets),
- * which is specified will be used instead of the filter (when one is set).
+ * which is itself a string parsed the same way and supporting the same
+ * variables (If you need recursion, any backslash or closing braquet must be
+ * escaped via backslash).
+ *
+ * The parsed string will then be shown instead of what the variable usually
+ * resolves to. However, there's a twist:
+ *
+ * - for <systemitem>\%F</systemitem> it will only be shown when a VF is set
+ *   (else resolves to nothing/empty string)
+ * - for the others, the string will also be splitted using comma as separator
+ *   (if you need to use commas, you then need to use
+ *   <systemitem>\%,</systemitem>), so you can specify up to 3 strings.
+ *
+ * With only 1 string, it will be shown unless the reference (i.e. the number
+ * of items the variable refers to) is zero.
+ * With 2 strings, nothing is shown if the reference is zero, the first one is
+ * shown if it is one, else the second one is shown.
+ * Lastly, with 3 strings, the first one is shown is reference is zero, the
+ * second one if it's one, else the last one is shown.
+ *
+ * <systemitem>\%a</systemitem> behaves a little differently, in that instead of
+ * not showing anything (or the first of the 3 specified strings) when the
+ * reference (i.e. number of all rows) is zero, it does so when it is the same
+ * as the number of visible rows.
+ * This is to make it easy to show e.g. "23 rows" when all are visible, and
+ * "23/42 rows" when some are hidden, using: \%{\%v/}a\%a rows
  *
  * Additionally, you can use option <systemitem>colors</systemitem>
  * (integer:tree-set-colors) to enable the use of (background/foreground) colors.
@@ -911,6 +938,8 @@ enum tree_expand
 #define CONTEXT_FLAGS               "olrnfsS"
 #define CONTEXT_COLUMN_FLAGS        "R"
 #define CONTEXT_KEYS_FLAGS          "kcm"
+
+#define ST_CONTEXT_FLAGS            "olLfFkKaAvVhHsSnN"
 
 enum tree_sync
 {
@@ -21980,6 +22009,13 @@ struct sp_conv
     gint nb_s;
 };
 
+static gboolean status_provider_conv (const gchar     c,
+                                      gchar          *extra,
+                                      DonnaArgType   *type,
+                                      gpointer       *ptr,
+                                      GDestroyNotify *destroy,
+                                      struct sp_conv *sp_conv);
+
 static void
 sp_custom_conv (const gchar          c,
                 gchar               *extra,
@@ -22010,6 +22046,105 @@ sp_custom_conv (const gchar          c,
         if (priv->key_motion_m)
             g_string_append_printf (str, "%d", priv->key_motion_m);
 
+        return;
+    }
+
+    /* only gets here if there was an extra */
+    if (c == 'a' || c == 'v' || c == 'h' || c == 's' || c == 'F')
+    {
+        DonnaContext context = { ST_CONTEXT_FLAGS ",", TRUE,
+            (conv_flag_fn) status_provider_conv, sp_conv };
+        gint nb;
+        gint ref = 0;
+        gchar *_fmt;
+        gchar *sep[2];
+        gchar *s;
+        gint n = 0;
+
+        if (c == 'a')
+        {
+            nb = sp_conv->nb_a;
+            /* 'a' is a special case: where all others use 0 as reference, i.e.
+             * we don't show anything (or first one when 2 seps/3 strings are
+             * specified), with 'a' it is when everything is visible that we
+             * don't. Allows to do "2 items" and "2/3 items" easily */
+            if (sp_conv->nb_v == -1)
+                sp_conv->nb_v = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
+            ref = sp_conv->nb_v;
+        }
+        else if (c == 'v')
+            nb = sp_conv->nb_v;
+        else if (c == 'h' || c == 'F')
+            nb = sp_conv->nb_h;
+        else /* c == 's' */
+            nb = sp_conv->nb_s;
+
+        if (c != 'F')
+            for (s = fmt; *s; ++s)
+            {
+                /* skip variables, specifically allows to skip "%," */
+                if (*s == '%')
+                {
+                    ++s;
+                    continue;
+                }
+                else if (n < 2 && *s == ',')
+                    sep[n++] = s;
+            }
+
+        /* VF-based, so always show, there's no separator or nothing */
+        if (c == 'F')
+        {
+            context.flags = ST_CONTEXT_FLAGS; /* no added ',' */
+            _fmt = fmt;
+        }
+        /* 0 sep: show extra unless nb == ref */
+        else if (n == 0)
+        {
+            if (nb == ref)
+                return;
+            _fmt = fmt;
+        }
+        /* 1 sep: show nothing if nb == ref; first if nb == 1; second if nb > 1 */
+        else if (n == 1)
+        {
+
+            if (nb == ref)
+                return;
+            else if (nb == 1)
+            {
+                _fmt = fmt;
+                *sep[0] = '\0';
+            }
+            else /* nb > 1 */
+                _fmt = sep[0] + 1;
+        }
+        /* 2 sep: show first if nb == ref; second if nb == 1; third if nb > 1 */
+        else /* n == 2 */
+        {
+            if (nb == ref)
+            {
+                _fmt = fmt;
+                *sep[0] = '\0';
+            }
+            else if (nb == 1)
+            {
+                _fmt = sep[0] + 1;
+                *sep[1] = '\0';
+            }
+            else /* nb > 1 */
+                _fmt = sep[1] + 1;
+        }
+
+        /* direct "recursive" parsing, with an added ',' so one can use commas
+         * by using "%," */
+        donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, priv->app,
+                _fmt, &str, NULL);
+        return;
+    }
+    else if (c == ',')
+    {
+        g_string_append_c (str, ',');
         return;
     }
 
@@ -22123,12 +22258,17 @@ status_provider_conv (const gchar     c,
         case 'F':
             if (priv->filter)
             {
-                *type = DONNA_ARG_TYPE_STRING;
                 if (extra)
-                    *ptr = g_strdup (extra);
+                {
+                    *type = _DONNA_ARG_TYPE_CUSTOM;
+                    *ptr = sp_custom_conv;
+                }
                 else
+                {
+                    *type = DONNA_ARG_TYPE_STRING;
                     *ptr = donna_filter_get_filter (priv->filter);
-                *destroy = g_free;
+                    *destroy = g_free;
+                }
                 return TRUE;
             }
             else
@@ -22148,14 +22288,32 @@ status_provider_conv (const gchar     c,
             *type = DONNA_ARG_TYPE_INT;
             if (sp_conv->nb_a == -1)
                 sp_conv->nb_a = (gint) g_hash_table_size (priv->hashtable);
-            *ptr = &sp_conv->nb_a;
+            if (extra)
+            {
+                *type = _DONNA_ARG_TYPE_CUSTOM;
+                *ptr = sp_custom_conv;
+            }
+            else
+            {
+                *type = DONNA_ARG_TYPE_INT;
+                *ptr = &sp_conv->nb_a;
+            }
             return TRUE;
 
         case 'v':
             *type = DONNA_ARG_TYPE_INT;
             if (sp_conv->nb_v == -1)
                 sp_conv->nb_v = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
-            *ptr = &sp_conv->nb_v;
+            if (extra)
+            {
+                *type = _DONNA_ARG_TYPE_CUSTOM;
+                *ptr = sp_custom_conv;
+            }
+            else
+            {
+                *type = DONNA_ARG_TYPE_INT;
+                *ptr = &sp_conv->nb_v;
+            }
             return TRUE;
 
         case 'h':
@@ -22166,16 +22324,39 @@ status_provider_conv (const gchar     c,
                 sp_conv->nb_v = _gtk_tree_model_get_count ((GtkTreeModel *) priv->store);
             if (sp_conv->nb_h == -1)
                 sp_conv->nb_h = sp_conv->nb_a - sp_conv->nb_v;
-            *ptr = &sp_conv->nb_h;
+            if (extra)
+            {
+                *type = _DONNA_ARG_TYPE_CUSTOM;
+                *ptr = sp_custom_conv;
+            }
+            else
+            {
+                *type = DONNA_ARG_TYPE_INT;
+                *ptr = &sp_conv->nb_h;
+            }
             return TRUE;
 
         case 's':
-            *type = DONNA_ARG_TYPE_INT;
             if (!sp_conv->sel)
                 sp_conv->sel = gtk_tree_view_get_selection ((GtkTreeView *) sp_conv->tree);
             if (sp_conv->nb_s == -1)
                 sp_conv->nb_s = gtk_tree_selection_count_selected_rows (sp_conv->sel);
-            *ptr = &sp_conv->nb_s;
+            if (extra)
+            {
+                *type = _DONNA_ARG_TYPE_CUSTOM;
+                *ptr = sp_custom_conv;
+            }
+            else
+            {
+                *type = DONNA_ARG_TYPE_INT;
+                *ptr = &sp_conv->nb_s;
+            }
+            return TRUE;
+
+        /* see sp_custom_conv for "avhs" */
+        case ',':
+            *type = _DONNA_ARG_TYPE_CUSTOM;
+            *ptr = sp_custom_conv;
             return TRUE;
 
         case 'A':
@@ -22276,7 +22457,7 @@ status_provider_render (DonnaStatusProvider    *sp,
     DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
     struct status *status;
     struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, -1, -1, -1, -1 };
-    DonnaContext context = { "olLfFkKaAvVhHsSnN", TRUE,
+    DonnaContext context = { ST_CONTEXT_FLAGS, TRUE,
         (conv_flag_fn) status_provider_conv, &sp_conv };
     GString *str = NULL;
     guint i;
