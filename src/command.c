@@ -1051,6 +1051,132 @@ cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * config_try_get_boolean:
+ * @name: Name of the option
+ * @default: Value to return if option doesn't exist
+ *
+ * Returns the value of a boolean option. If the option doesn't exist, @default
+ * is returned (command fails on other errors, e.g. option exists but is of
+ * different type)
+ *
+ * See donna_config_get_boolean()
+ *
+ * Returns: The value of the option, or @default
+ */
+static DonnaTaskState
+cmd_config_try_get_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    gboolean def = GPOINTER_TO_INT (args[1]);
+
+    GValue *v;
+    gboolean val;
+
+    if (!donna_config_get_boolean (donna_app_peek_config (app), &err,
+                &val, "%s", name))
+    {
+        if (g_error_matches (err, DONNA_CONFIG_ERROR, DONNA_CONFIG_ERROR_NOT_FOUND))
+            val = def;
+        else
+        {
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_BOOLEAN);
+    g_value_set_boolean (v, val);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * config_try_get_int:
+ * @name: Name of the option
+ * @default: Value to return if option doesn't exist
+ *
+ * Returns the value of an integer option. If the option doesn't exist, @default
+ * is returned (command fails on other errors, e.g. option exists but is of
+ * different type)
+ *
+ * See donna_config_get_int()
+ *
+ * Returns: The value of the option, or @default
+ */
+static DonnaTaskState
+cmd_config_try_get_int (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    gint def = GPOINTER_TO_INT (args[1]);
+
+    GValue *v;
+    gint val;
+
+    if (!donna_config_get_int (donna_app_peek_config (app), &err,
+                &val, "%s", name))
+    {
+        if (g_error_matches (err, DONNA_CONFIG_ERROR, DONNA_CONFIG_ERROR_NOT_FOUND))
+            val = def;
+        else
+        {
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_INT);
+    g_value_set_int (v, val);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * config_try_get_string:
+ * @name: Name of the option
+ * @default: Value to return if option doesn't exist
+ *
+ * Returns the value of a string option. If the option doesn't exist, @default
+ * is returned (command fails on other errors, e.g. option exists but is of
+ * different type)
+ *
+ * See donna_config_get_string()
+ *
+ * Returns: The value of the option, or @default
+ */
+static DonnaTaskState
+cmd_config_try_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    gchar *name = args[0];
+    gchar *def = args[1];
+
+    GValue *v;
+    gchar *val;
+
+    if (!donna_config_get_string (donna_app_peek_config (app), &err,
+                &val, "%s", name))
+    {
+        if (g_error_matches (err, DONNA_CONFIG_ERROR, DONNA_CONFIG_ERROR_NOT_FOUND))
+            val = g_strdup (def);
+        else
+        {
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+    }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_STRING);
+    g_value_take_string (v, val);
+    donna_task_release_return_value (task);
+    return DONNA_TASK_DONE;
+}
+
+/**
  * focus_move:
  * @move: (allow-none): How to move focus
  *
@@ -4930,6 +5056,24 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_set_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (config_try_get_boolean, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (config_try_get_int, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (config_try_get_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_STRING);
 
     i = -1;
