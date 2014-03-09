@@ -4591,6 +4591,9 @@ cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
  *
  * Sets the current visual filter
  *
+ * Note that if @filter is an empty string, it will work as if none was
+ * specified, i.e. unset any current VF.
+ *
  * See donna_tree_view_set_visual_filter() for more
  */
 static DonnaTaskState
@@ -4600,6 +4603,12 @@ cmd_tv_set_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
     const gchar *filter = args[1]; /* opt */
     gboolean toggle = GPOINTER_TO_INT (args[2]); /* opt */
+
+    /* special: if filter is an empty string, we treat it as NULL, so that user
+     * can use an empty string (which is an invalid filter) to mean turn it off;
+     * which can be useful when said filter is e.g. a command's return value */
+    if (streq (filter, ""))
+        filter = NULL;
 
     if (!donna_tree_view_set_visual_filter (tree, filter, toggle, &err))
     {
