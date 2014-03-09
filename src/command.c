@@ -4586,6 +4586,8 @@ cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
  * @tree: A treeview
  * @filter: (allow-none): A filter to set as VF (or nothing to unset any current
  * VF)
+ * @toggle: (allow-none): 1 to toggle, i.e. remove the VF is already set to
+ * @filter
  *
  * Sets the current visual filter
  *
@@ -4596,9 +4598,10 @@ cmd_tv_set_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    const gchar *filter = args[1];
+    const gchar *filter = args[1]; /* opt */
+    gboolean toggle = GPOINTER_TO_INT (args[2]); /* opt */
 
-    if (!donna_tree_view_set_visual_filter (tree, filter, &err))
+    if (!donna_tree_view_set_visual_filter (tree, filter, toggle, &err))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
@@ -5386,6 +5389,7 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tv_set_visual_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 

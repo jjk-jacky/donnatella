@@ -433,6 +433,7 @@ gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
 gboolean        donna_tree_view_set_visual_filter (
                                                  DonnaTreeView      *tree,
                                                  const gchar        *filter,
+                                                 gboolean            toggle,
                                                  GError            **error);
 gchar *         donna_tree_view_get_visual_filter (
                                                  DonnaTreeView      *tree,

@@ -19732,6 +19732,7 @@ again:
  * donna_tree_view_set_visual_filter:
  * @tree: A #DonnaTreeView
  * @filter: (allow-none): The filter to use as visual filter, or %NULL
+ * @toggle: If %TRUE and @filter is the same as current VF, then unsets VF
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Sets @filter as current visual filter on @tree. If @filter is %NULL then
@@ -19746,6 +19747,7 @@ again:
 gboolean
 donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
                                    const gchar        *filter,
+                                   gboolean            toggle,
                                    GError            **error)
 {
     DonnaTreeViewPrivate *priv;
@@ -19778,7 +19780,21 @@ donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
             return FALSE;
         }
 
-        if (!donna_filter_is_compiled (f) && !donna_filter_compile (f, error))
+        if (priv->filter && toggle)
+        {
+            gchar *s1, *s2;
+
+            s1 = donna_filter_get_filter (f);
+            s2 = donna_filter_get_filter (priv->filter);
+
+            if (streq (s1, s2))
+                f = NULL;
+
+            g_free (s1);
+            g_free (s2);
+        }
+
+        if (f && !donna_filter_is_compiled (f) && !donna_filter_compile (f, error))
         {
             g_prefix_error (error, "TreeView '%s': Failed to set current visual filter: ",
                     priv->name);
