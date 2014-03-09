@@ -903,6 +903,8 @@ cmd_config_save (DonnaTask *task, DonnaApp *app, gpointer *args)
  * Sets boolean option @name to @value, creating it if needed
  *
  * See donna_config_set_boolean()
+ *
+ * Returns: The @value just set
  */
 static DonnaTaskState
 cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
@@ -911,12 +913,19 @@ cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *name = args[0];
     gint value = GPOINTER_TO_INT (args[1]);
 
+    GValue *v;
+
     if (!donna_config_set_boolean (donna_app_peek_config (app), &err,
                 value, "%s", name))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_INT);
+    g_value_set_int (v, (value) ? 1 : 0);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -929,6 +938,8 @@ cmd_config_set_boolean (DonnaTask *task, DonnaApp *app, gpointer *args)
  * Sets integer option @name to @value, creating it if needed
  *
  * See donna_config_set_int()
+ *
+ * Returns: The @value just set
  */
 static DonnaTaskState
 cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
@@ -937,12 +948,19 @@ cmd_config_set_int (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *name = args[0];
     gint value = GPOINTER_TO_INT (args[1]);
 
+    GValue *v;
+
     if (!donna_config_set_int (donna_app_peek_config (app), &err,
                 value, "%s", name))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_INT);
+    g_value_set_int (v, value);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -1005,6 +1023,8 @@ cmd_config_set_option (DonnaTask *task, DonnaApp *app, gpointer *args)
  * Sets string option @name to @value, creating it if needed
  *
  * See donna_config_set_string()
+ *
+ * Returns: The @value just set
  */
 static DonnaTaskState
 cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
@@ -1013,12 +1033,19 @@ cmd_config_set_string (DonnaTask *task, DonnaApp *app, gpointer *args)
     gchar *name  = args[0];
     gchar *value = args[1];
 
+    GValue *v;
+
     if (!donna_config_set_string (donna_app_peek_config (app), &err,
                 value, "%s", name))
     {
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
+
+    v = donna_task_grab_return_value (task);
+    g_value_init (v, G_TYPE_STRING);
+    g_value_set_string (v, value);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -4881,13 +4908,13 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_INT;
     add_command (config_set_boolean, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_INT);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_INT;
     add_command (config_set_int, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_INT);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
@@ -4903,7 +4930,7 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_set_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            DONNA_ARG_TYPE_NOTHING);
+            DONNA_ARG_TYPE_STRING);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
