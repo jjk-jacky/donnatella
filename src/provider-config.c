@@ -3522,7 +3522,7 @@ donna_config_set_string (DonnaConfig         *config,
 }
 
 /**
- * donna_config_set_string:
+ * donna_config_take_string:
  * @config: The #DonnaConfig
  * @error: (allow-none): Return location of a #GError, or %NULL
  * @value: Value for the new option
