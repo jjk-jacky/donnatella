@@ -9803,6 +9803,9 @@ no_task:
                 /* could be that everything got filtered out */
                 (_gtk_tree_model_get_count ((GtkTreeModel *) priv->store) > 0)
                 ? DRAW_NOTHING : DRAW_NO_VISIBLE);
+        /* we need to trigger it again, because the focused item might have
+         * changed/been set */
+        check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
     }
     else
     {
