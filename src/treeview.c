@@ -874,6 +874,10 @@
  * <systemitem>foreground</systemitem> or
  * <systemitem>foreground-rgba</systemitem> (and similarly for background) are
  * then used when a VF is applied.</para></refsect2>
+ *
+ * Finally, the same variables are supported in option
+ * <systemitem>format_tooltip</systemitem>, used for the tooltip of the
+ * statusbar area (no color support there).
  */
 
 enum
@@ -22585,7 +22589,49 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
                              guint                   index,
                              GtkTooltip             *tooltip)
 {
-    return FALSE;
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) sp)->priv;
+    struct status *status;
+    struct sp_conv sp_conv = { (DonnaTreeView *) sp, NULL, NULL, -1, -1, -1, -1 };
+    DonnaContext context = { ST_CONTEXT_FLAGS, TRUE,
+        (conv_flag_fn) status_provider_conv, &sp_conv };
+    GString *str = NULL;
+    gchar *fmt;
+    guint i;
+
+    for (i = 0; i < priv->statuses->len; ++i)
+    {
+        status = &g_array_index (priv->statuses, struct status, i);
+        if (status->id == id)
+            break;
+    }
+    if (G_UNLIKELY (i >= priv->statuses->len))
+    {
+        g_warning ("TreeView '%s': Asked for tooltip of unknown status #%d",
+                priv->name, id);
+        return FALSE;
+    }
+
+    if (!donna_config_get_string (donna_app_peek_config (priv->app), NULL,
+                &fmt, "statusbar/%s/format_tooltip", status->name))
+        return FALSE;
+
+    sp_conv.status = status;
+    donna_context_parse (&context, DONNA_CONTEXT_NO_QUOTES, priv->app,
+            fmt, &str, NULL);
+
+    if ((str && str->len == 0) || *fmt == '\0')
+    {
+        if (str)
+            g_string_free (str, TRUE);
+        g_free (fmt);
+        return FALSE;
+    }
+
+    gtk_tooltip_set_text (tooltip, (str) ? str->str : fmt);
+    if (str)
+        g_string_free (str, TRUE);
+    g_free (fmt);
+    return TRUE;
 }
 
 /* DonnaColumnType */
