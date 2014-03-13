@@ -78,8 +78,12 @@
  * <refsect2 id="ct-name-filtering">
  * <title>Filtering</title>
  * <para>
- * You can use #DonnaPattern<!-- -->s, which will be matched against the name.
- * See donna_pattern_new() for more.
+ * If the filter starts with either the plus or minus sign, it must then be
+ * followed by either 'c' or 'i' to only match containers or items,
+ * respectively.  You can also use 'd' (directory) or 'f' (file) as well.
+ *
+ * Else, it must be a #DonnaPattern<!-- -->s, which will be matched against the
+ * name. See donna_pattern_new() for more.
  * </para></refsect2>
  */
 
@@ -817,18 +821,61 @@ ct_name_node_cmp (DonnaColumnType    *ct,
     return ret;
 }
 
+struct filter_data
+{
+    gboolean is_pattern;
+    union {
+        DonnaPattern *pattern;
+        gboolean match_containers;
+    };
+};
+
 static gboolean
 ct_name_refresh_filter_data (DonnaColumnType    *ct,
                              const gchar        *filter,
                              gpointer           *filter_data,
                              GError            **error)
 {
-    if (*filter_data)
-        ct_name_free_filter_data (ct, *filter_data);
+    struct filter_data *fd = *filter_data;
 
-    *filter_data = donna_app_get_pattern (((DonnaColumnTypeName *) ct)->priv->app,
-            filter, error);
-    return *filter_data != NULL;
+    if (!fd)
+        fd = *filter_data = g_new (struct filter_data, 1);
+    else if (fd && fd->is_pattern)
+        donna_pattern_unref (fd->pattern);
+
+    fd->is_pattern = !(*filter == '+' || *filter == '-');
+    if (fd->is_pattern)
+    {
+        fd->pattern = donna_app_get_pattern (((DonnaColumnTypeName *) ct)->priv->app,
+                filter, error);
+        if (!fd->pattern)
+        {
+            g_free (fd);
+            *filter_data = NULL;
+            return FALSE;
+        }
+    }
+    else
+    {
+        if (streq (filter + 1, "c") || streq (filter + 1, "d"))
+            fd->match_containers = TRUE;
+        else if (streq (filter + 1, "i") || streq (filter + 1, "f"))
+            fd->match_containers = FALSE;
+        else
+        {
+            g_free (fd);
+            g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
+                    DONNA_COLUMN_TYPE_ERROR_INVALID_SYNTAX,
+                    "ColumnType 'name': Invalid filter syntax: "
+                    "'%c' must be followed by 'c' (or 'd') to match containers (directory) "
+                    "or 'i' (or 'f') to match items (files), given: %s",
+                    *filter, filter + 1);
+            *filter_data = NULL;
+            return FALSE;
+        }
+    }
+
+    return TRUE;
 }
 
 static gboolean
@@ -837,12 +884,28 @@ ct_name_is_filter_match (DonnaColumnType    *ct,
                          gpointer            filter_data,
                          DonnaNode          *node)
 {
-    gchar *name;
+    struct filter_data *fd = filter_data;
     gboolean ret;
 
-    name = donna_node_get_name (node);
-    ret = donna_pattern_is_match ((DonnaPattern *) filter_data, name);
-    g_free (name);
+    if (fd->is_pattern)
+    {
+        gchar *name;
+
+        name = donna_node_get_name (node);
+        ret = donna_pattern_is_match (fd->pattern, name);
+        g_free (name);
+    }
+    else
+    {
+        DonnaNodeType type;
+
+        type = donna_node_get_node_type (node);
+        if (fd->match_containers)
+            ret = type == DONNA_NODE_CONTAINER;
+        else
+            ret = type == DONNA_NODE_ITEM;
+    }
+
     return ret;
 }
 
@@ -850,7 +913,11 @@ static void
 ct_name_free_filter_data (DonnaColumnType    *ct,
                           gpointer            filter_data)
 {
-    donna_pattern_unref ((DonnaPattern *) filter_data);
+    struct filter_data *fd = filter_data;
+
+    if (fd->is_pattern)
+        donna_pattern_unref (fd->pattern);
+    g_free (fd);
 }
 
 static DonnaColumnTypeNeed
