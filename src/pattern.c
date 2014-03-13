@@ -36,6 +36,16 @@
  * See donna_pattern_new() for more
  */
 
+/* patterns cannot start with one of those. Maybe some could be used later for
+ * new modes, others simply cannot be used:
+ * - '!' : isn't used for NOT in boolean (filters) but might added be later on
+ * - '@' : could be confusing in commands (i.e. require quoting to not be
+ *   processed as a "subcommand")
+ * - '(' : would mix up w/ boolean parsing on filters
+ * - '<' : could be confusing in commands (intrefs use <XXXX> format)
+ */
+#define FORBIDDEN_FIRST_CHARS       "!@()[]{}-+:%<"
+
 enum type
 {
     TYPE_PATTERN,
@@ -171,6 +181,9 @@ init_new_pattern (const gchar       *string,
  * If @string doesn't start with any of those, search mode will be used unless
  * there is at least one wildchars, then pattern mode is used.
  *
+ * Note that @string cannot start with one of
+ * <systemitem>!@()[]{}-+:%<</systemitem>
+ *
  * Additionally, if @string first starts with a pipe character
  * (<systemitem>|</systemitem>) then any other pipe character will be used as a
  * separator (i.e. it cannot be used in any pattern definition), allowing you to
@@ -202,6 +215,14 @@ donna_pattern_new (const gchar    *string,
     {
         g_set_error (error, DONNA_PATTERN_ERROR, DONNA_PATTERN_ERROR_EMPTY,
                 "Cannot create pattern for empty string");
+        return NULL;
+    }
+    else if (strchr (FORBIDDEN_FIRST_CHARS, *string))
+    {
+        g_set_error (error, DONNA_PATTERN_ERROR,
+                DONNA_PATTERN_ERROR_INVALID_FIRST_CHAR,
+                "Patterns cannot start with one of the following: %s",
+                FORBIDDEN_FIRST_CHARS);
         return NULL;
     }
 

@@ -30,12 +30,14 @@ G_BEGIN_DECLS
 #define DONNA_PATTERN_ERROR             g_quark_from_static_string ("DonnaPattern-Error")
 /**
  * DonnaPatternError:
+ * @DONNA_PATTERN_ERROR_INVALID_FIRST_CHAR: First character not allowed
  * @DONNA_PATTERN_ERROR_EMPTY: No pattern was given
  *
  * Other than that, possible errors are from #GRegexError
  */
 typedef enum
 {
+    DONNA_PATTERN_ERROR_INVALID_FIRST_CHAR,
     DONNA_PATTERN_ERROR_EMPTY
 } DonnaPatternError;
 
