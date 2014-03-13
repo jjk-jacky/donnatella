@@ -579,7 +579,10 @@ compile_element (struct element *element, GError **error)
 
             if (!donna_column_type_refresh_filter_data (block->ct,
                         block->filter, &block->data, error))
+            {
+                block->data = NULL;
                 return FALSE;
+            }
         }
         else if (!compile_element (element->data, error))
             return FALSE;
