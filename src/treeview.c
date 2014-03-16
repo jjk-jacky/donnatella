@@ -268,6 +268,9 @@
  *   anything with "cursor" makes little sense. The default is "focus,scroll"
  * - <systemitem>history_max</systemitem> (integer) : Defines the maximum number
  *   of items stored in the history; Defaults to 100.
+ * - <systemitem>vf_items_only</systemitem> (boolean) : When true any visual
+ *   filter will only be applied to items (e.g. files), i.e. containers (e.g.
+ *   folders) will remain visible regardless of the VF. Defaults to false
  *
  * </para></refsect2>
  *
@@ -1348,6 +1351,7 @@ struct _DonnaTreeViewPrivate
     /* mode List */
     gboolean                 focusing_click;
     DonnaTreeViewSet         goto_item_set;
+    gboolean                 vf_items_only;
     /* DonnaColumnType (line number) */
     gboolean                 ln_relative; /* relative number */
     gboolean                 ln_relative_focused; /* relative only when focused */
@@ -2988,6 +2992,7 @@ static DonnaColumnOptionInfo _tree_options[] = {
     { "auto_focus_sync",    G_TYPE_BOOLEAN,     NULL }
 };
 static DonnaColumnOptionInfo _list_options[] = {
+    { "vf_items_only",      G_TYPE_BOOLEAN,     NULL },
     { "focusing_click",     G_TYPE_BOOLEAN,     NULL },
     { "goto_item_set",      G_TYPE_INT,         "tree-set" },
     { "history_max",        G_TYPE_INT,         NULL }
@@ -3029,6 +3034,8 @@ static DonnaColumnOptionInfo _list_options[] = {
 #define cfg_get_goto_item_set(t,c) \
     CLAMP (config_get_int (t, c, "goto_item_set", \
             DONNA_TREE_VIEW_SET_SCROLL | DONNA_TREE_VIEW_SET_FOCUS), 0, 7)
+#define cfg_get_vf_items_only(t,c) \
+    config_get_boolean (t, c, "vf_items_only", FALSE)
 #define cfg_get_history_max(t,c) \
     config_get_int (t, c, "history_max", 100)
 #define cfg_get_key_mode(t,c) \
@@ -3380,6 +3387,19 @@ real_option_cb (struct option_data *data)
                 if (data->opt == OPT_IN_MEMORY || priv->goto_item_set != (guint) val)
                     priv->goto_item_set = val;
             }
+            if (streq (opt, "vf_items_only"))
+            {
+                if (data->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                else
+                    val = cfg_get_vf_items_only (tree, config);
+
+                if (data->opt == OPT_IN_MEMORY || priv->vf_items_only != val)
+                {
+                    priv->vf_items_only = val;
+                    refilter_list (tree);
+                }
+            }
             else if (streq (opt, "history_max"))
             {
                 if (data->opt == OPT_IN_MEMORY)
@@ -3618,6 +3638,7 @@ load_config (DonnaTreeView *tree)
 
         priv->focusing_click = cfg_get_focusing_click (tree, config);
         priv->goto_item_set = cfg_get_goto_item_set (tree, config);
+        priv->vf_items_only = cfg_get_vf_items_only (tree, config);
 
         max = (guint) cfg_get_history_max (tree, config);
         priv->history = donna_history_new (max);
@@ -4400,7 +4421,8 @@ refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
         g_free (name);
     }
 
-    if (is_visible && priv->filter)
+    if (is_visible && priv->filter
+            && (!priv->vf_items_only || donna_node_get_node_type (node) == DONNA_NODE_ITEM))
         is_visible = donna_filter_is_match (priv->filter, node,
                 (get_ct_data_fn) get_ct_data, tree);
 
@@ -13030,6 +13052,9 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
                             case 3:
                                 val = priv->focusing_click;
                                 break;
+                            case 4:
+                                val = priv->vf_items_only;
+                                break;
                         }
                     }
                 }
@@ -17226,6 +17251,7 @@ tree_context_get_alias (const gchar             *alias,
         }
         else
             donna_g_string_append_concat (str, ",-,"
+                    ":tv_options.vf_items_only:@", extra, ",",
                     ":tv_options.focusing_click:@", extra, ",",
                     ":tv_options.goto_item_set<"
                         ":tv_options.goto_item_set.scroll:@", extra, ",",
@@ -18528,6 +18554,20 @@ tree_context_get_item_info (const gchar             *item,
                     info->is_visible = info->is_sensitive = TRUE;
                     return TRUE;
                 }
+            }
+            else if (streq (item, "vf_items_only"))
+            {
+                info->is_visible = info->is_sensitive = TRUE;
+                info->name = "Apply Visual Filter to Items Only";
+                info->desc = "Containers (e.g. folders) will always be visible regardless of the VF";
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                if (priv->vf_items_only)
+                    info->is_active = TRUE;
+                if (info->is_active)
+                    set_trigger ("vf_items_only", "0");
+                else
+                    set_trigger ("vf_items_only", "1");
+                return TRUE;
             }
         }
 
