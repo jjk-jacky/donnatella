@@ -533,7 +533,10 @@ parse_element (DonnaFilter *filter, gchar **str, GError **error)
             *f = '\0';
             element->data = parse_element (filter, &s, error);
             *f = ')';
-            f = s + 1;
+            if (s)
+                f = s + 1;
+            else
+                ++f;
         }
         else
         {
