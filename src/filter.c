@@ -411,8 +411,8 @@ parse_block (DonnaFilter *filter, gchar **str, GError **error)
         f = s + 1;
     }
 
-    /* get filter */
-    if (f[0] == '"')
+    /* get filter (can only be quoted if column name was specified) */
+    if (s && f[0] == '"')
     {
         block->filter = get_quoted_string (&f, TRUE);
         if (!block->filter)
