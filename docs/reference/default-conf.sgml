@@ -215,10 +215,18 @@
     <para>Using key <systemitem>e</systemitem> followed by a similar "column
     identification" as for sort orders above, you can enable column editing - if
     supported. This allows you to e.g. rename (<systemitem>en</systemitem> for
-    name) or change modified date (<systemitem>et</systemitem> for time).</para>
+    name) or change modified date (<systemitem>et</systemitem> for time).
+    Note that you can also press <systemitem>F2</systemitem> to trigger a
+    rename.</para>
     <para><systemitem>F6</systemitem> can be used to edit the focused file via
-    vim in a terminal; <systemitem>F9</systemitem> can be used to view it via
-    less in a terminal.</para>
+    vim in an embedded terminal; <systemitem>F9</systemitem> can be used to view
+    it via less in an embedded terminal.</para>
+    </listitem>
+
+    <listitem><para>Terminals</para>
+    <para>Speaking of which, you can use <systemitem>t</systemitem> to open an
+    embedded terminal in the current directory, or press <systemitem>T</systemitem>
+    to open a new (external) terminal in the current directory.</para>
     </listitem>
 
     <listitem><para>Registers (clipboard)</para>
@@ -243,6 +251,31 @@
     <para>Of course, all of those can be prefixed with
     <systemitem>quotedbl</systemitem> (<systemitem>"</systemitem>) and the name
     of the register.</para>
+    </listitem>
+
+    <listitem><para>Visual Filters</para>
+    <para>A few filters are defined by default, and can be applied using
+    <systemitem>f</systemitem> followed by the filter name, e.g. to only show
+    images, you can use filter "i" by pressing <systemitem>fi</systemitem>
+    Filters are simply options defined under category <systemitem>filters</systemitem>
+    in configuration. You can also use <systemitem>F</systemitem> to edit said
+    filter first, e.g. pressing <systemitem>Fi</systemitem> will allow you to
+    view/edit the filter before it is applied. You can of course create new filters
+    that way. (Leaving filter "f" undefined allows to use
+    <systemitem>ff</systemitem> to unset any current VF.)</para>
+    <para>You can also filter by age (via column time) using
+    <systemitem>q</systemitem>. Alone, it will filter nodes modified today. You
+    can of course use a modifier, e.g. <systemitem>1q</systemitem> for nodes
+    modified yesterday, etc You can also change the unit used by prefixing with
+    <systemitem>ampersand</systemitem> (<systemitem>&amp;</systemitem>), for
+    example to show nodes modified during the current week, use
+    <systemitem>&amp;Vq</systemitem>; from last week, use
+    <systemitem>&amp;V1q</systemitem>, etc</para>
+    <para>Lastly, you can filter by size: type the size (as modifier), in MiB,
+    then <systemitem>less</systemitem> (<systemitem>&lt;</systemitem>) or
+    <systemitem>greater</systemitem> (<systemitem>&gt;</systemitem>) to filter
+    nodes smaller/larger than the specified size. E.g. to only show files more
+    than 230 MiB, press <systemitem>230&gt;</systemitem></para>
     </listitem>
 
     <listitem><para>Selection</para>
