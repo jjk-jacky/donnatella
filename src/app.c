@@ -2515,7 +2515,7 @@ prefix_done:
     {
         gint len = (gint) (s - fl);
 
-        if (*s == ' ' && donna_config_get_string (config, NULL, &s,
+        if (*s == '\0' && donna_config_get_string (config, NULL, &s,
                     "donna/aliases/%.*s/replacement_no_args", len, fl))
         {
             str = g_string_new (s);
