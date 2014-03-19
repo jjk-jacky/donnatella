@@ -2403,11 +2403,13 @@ enum
  * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
  *
  * When "arguments" were specified after the alias, i.e. option
- * <systemitem>replacement</systemitem> is used, an extra option is
+ * <systemitem>replacement</systemitem> is used, then a couple more options are
  * available:
  * - <systemitem>include_space</systemitem> (boolean) : If true (default) the
  *   space between the alias (its replacement) and the following "arguments" is
  *   preserved. Set this option to false not to include the space.
+ * - <systemitem>suffix</systemitem> (string) : Will be added as suffix, after
+ *   the replacement of the alias and context parsing (if any).
  *
  * See donna_context_parse() for more on contextual parsing, and @intrefs.
  *
@@ -2429,6 +2431,7 @@ donna_app_parse_fl (DonnaApp       *app,
     DonnaConfig *config = donna_app_peek_config (app);
     GPtrArray *arr;
     GString *str = NULL;
+    gchar *alias_suffix = NULL;
     gchar *fl = _fl;
     gchar *s;
     guint i;
@@ -2544,6 +2547,9 @@ prefix_done:
 
             donna_config_get_boolean (config, NULL, &inc_space,
                     "donna/aliases/%.*s/include_space", len, fl);
+            /* load the suffix, if any */
+            donna_config_get_string (config, NULL, &alias_suffix,
+                    "donna/aliases/%.*s/suffix", len, fl);
 
             str = g_string_new (s);
             g_free (s);
@@ -2614,6 +2620,13 @@ context_parsing:
         donna_context_parse (context, 0, app, fl, &str, intrefs);
     else if (str)
         g_string_append (str, fl);
+
+    if (alias_suffix)
+    {
+        /* can only happen if str does indeed exist */
+        g_string_append (str, alias_suffix);
+        g_free (alias_suffix);
+    }
 
     if (!str)
         return (must_free_fl) ? _fl : g_strdup (_fl);
