@@ -2402,6 +2402,13 @@ enum
  * then the replacement will first be looked for in
  * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
  *
+ * When "arguments" were specified after the alias, i.e. option
+ * <systemitem>replacement</systemitem> is used, an extra option is
+ * available:
+ * - <systemitem>include_space</systemitem> (boolean) : If true (default) the
+ *   space between the alias (its replacement) and the following "arguments" is
+ *   preserved. Set this option to false not to include the space.
+ *
  * See donna_context_parse() for more on contextual parsing, and @intrefs.
  *
  * If no parsing/changes was done, @fl will be returned unless @must_free_fl
@@ -2533,9 +2540,16 @@ prefix_done:
         }
         else
         {
+            gboolean inc_space = TRUE;
+
+            donna_config_get_boolean (config, NULL, &inc_space,
+                    "donna/aliases/%.*s/include_space", len, fl);
+
             str = g_string_new (s);
             g_free (s);
             fl += len;
+            if (!inc_space)
+                ++fl;
         }
     }
     /* slash: special handling of relative path (non-flat domains only) */
