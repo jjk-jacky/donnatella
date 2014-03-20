@@ -1308,15 +1308,20 @@ run_command (DonnaTask *task, struct run_command *rc)
         return DONNA_TASK_FAILED;
     }
 
-    /* ready to run the command's function. If the command has a visibility GUI
-     * and the current task isn't, we need a new task. Else, we can call it
-     * directly (since we're either INTERNAL or FAST, and so is the command) */
-    if (rc->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI)
+    /* are we in the main/UI thread? */
+    if (g_main_context_is_owner (g_main_context_default ()))
     {
-        DonnaTaskVisibility visibility;
-
-        g_object_get (task, "visibility", &visibility, NULL);
-        need_task = visibility != DONNA_TASK_VISIBILITY_INTERNAL_GUI;
+        /* unless the command is GUI or FAST, a new task is needed, to start a
+         * new main loop meanwhile in order not to block the UI */
+        if (rc->command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_GUI
+                && rc->command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST)
+            need_task = TRUE;
+    }
+    else
+    {
+        /* if the command is GUI a new task is needed */
+        if (rc->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI)
+            need_task = TRUE;
     }
 
     if (need_task)
@@ -1325,7 +1330,7 @@ run_command (DonnaTask *task, struct run_command *rc)
 
         /* this will allow to call to the command's function with this "main"
          * task, so that's where error/return value will be set. Since this new
-         * task (cmd_task) is only there to "get to thread UI" */
+         * task (cmd_task) is only there to run in the right thread */
         rc->task = task;
 
         cmd_task = donna_task_new ((task_fn) task_run_command, rc, NULL);
