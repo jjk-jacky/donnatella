@@ -27,6 +27,7 @@ config_set_string
 config_try_get_boolean
 config_try_get_int
 config_try_get_string
+exec
 focus_move
 focus_set
 menu_popup

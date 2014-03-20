@@ -28,6 +28,7 @@
 #include "treeview.h"
 #include "task-manager.h"
 #include "provider.h"
+#include "task-process.h"   /* for command exec() */
 #include "util.h"
 #include "macros.h"
 #include "debug.h"
@@ -1175,6 +1176,233 @@ cmd_config_try_get_string (DonnaTask *task, DonnaApp *app, gpointer *args)
     donna_task_release_return_value (task);
     return DONNA_TASK_DONE;
 }
+
+enum exec_mode
+{
+    EXEC_STANDARD = 0,
+    EXEC_ERROR,
+    EXEC_NOFAIL,
+    EXEC_DONE,
+    EXEC_FAILED
+};
+
+struct exec
+{
+    DonnaTask *task;
+    enum exec_mode mode;
+    gint rc;
+    gboolean mixed;
+    GString *str_out;
+    GString *str_err;
+};
+
+static void
+free_exec (struct exec *exec)
+{
+    if (exec->str_out)
+        g_string_free (exec->str_out, TRUE);
+    if (exec->str_err)
+        g_string_free (exec->str_err, TRUE);
+}
+
+static DonnaTaskState
+exec_closer (DonnaTask      *task,
+             gint            rc,
+             DonnaTaskState  state,
+             struct exec    *exec)
+{
+    if (state != DONNA_TASK_DONE)
+        goto free;
+
+    switch (exec->mode)
+    {
+        case EXEC_STANDARD:
+            state = (rc == 0) ? DONNA_TASK_DONE : DONNA_TASK_FAILED;
+            break;
+
+        case EXEC_ERROR:
+            state = (exec->str_err) ? DONNA_TASK_FAILED : DONNA_TASK_DONE;
+            break;
+
+        case EXEC_NOFAIL:
+            state = DONNA_TASK_DONE;
+            break;
+
+        case EXEC_DONE:
+            state = (rc == exec->rc) ? DONNA_TASK_DONE : DONNA_TASK_FAILED;
+            break;
+
+        case EXEC_FAILED:
+            state = (rc == exec->rc) ? DONNA_TASK_FAILED : DONNA_TASK_DONE;
+            break;
+    }
+
+    if (state == DONNA_TASK_DONE)
+    {
+        GValue *v;
+        gchar *s;
+
+        if (exec->str_out)
+            s = g_string_free (exec->str_out, FALSE);
+        else
+            s = g_strdup ("");
+
+        v = donna_task_grab_return_value (exec->task);
+        g_value_init (v, G_TYPE_STRING);
+        g_value_take_string (v, s);
+        donna_task_release_return_value (exec->task);
+        exec->str_out = NULL;
+    }
+    else
+    {
+        gchar *s;
+
+        if (exec->mixed && exec->str_out)
+            s = exec->str_out->str;
+        else if (!exec->mixed && exec->str_err)
+            s = exec->str_err->str;
+        else
+            s = (gchar *) "(No error message)";
+
+        donna_task_set_error (exec->task, DONNA_TASK_PROCESS_ERROR,
+                DONNA_TASK_PROCESS_ERROR_OTHER,
+                "%s", s);
+    }
+
+free:
+    free_exec (exec);
+    return state;
+}
+
+static void
+exec_pipe_new_line (DonnaTaskProcess *taskp,
+                    DonnaPipe         pipe,
+                    const gchar      *line,
+                    struct exec      *exec)
+{
+    GString **str;
+
+    if (!line)
+        /* EOF */
+        return;
+
+    if (exec->mixed || pipe == DONNA_PIPE_OUTPUT)
+        str = &exec->str_out;
+    else
+        str = &exec->str_err;
+
+    if (!*str)
+        *str = g_string_new (NULL);
+    else
+        g_string_append_c (*str, '\n');
+    g_string_append (*str, line);
+}
+
+/**
+ * exec:
+ * @cmdline: Command line to execute
+ * @workdir: (allow-none): Working directory for @cmdline, or %NULL to use the
+ * current directory
+ * @mode: (allow-none): Mode to determine whether it failed or not
+ * @rc: (allow-none); Return code used with @mode "done" and "failed"
+ * @mixed: (allow-none): Set to 1 to use mixed stdout and stderr (as return
+ * value or error message)
+ *
+ * Executes @cmdline and returns its output (or mixed stdout and stderr if
+ * @mixed is 1)
+ *
+ * @mode must be one of:
+ * - standard : Success when process returned zero, else failure
+ * - error : Failed when something was sent to stderr, else success
+ * - nofail : Always a success
+ * - done : Success when process returned @rc, else failure
+ * - failed : Failure when process returned @rc, else success
+ *
+ * On success the return value will be the content of stdout, and on error the
+ * error message will be the content of stderr (or the mixed of the two (in
+ * either case) with @mixed was 1).
+ *
+ * Returns: Output of the process (stdout, miwed with stderr if @mixed is 1)
+ */
+static DonnaTaskState
+cmd_exec (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    const gchar *cmdline = args[0];
+    const gchar *workdir = args[1]; /* opt */
+    const gchar *mode_s = args[2]; /* opt */
+    gint rc = GPOINTER_TO_INT (args[3]); /* opt */
+    gboolean mixed = GPOINTER_TO_INT (args[4]); /* opt */
+
+    const gchar *c_mode[] = { "standard", "error", "nofail", "done", "failed" };
+    enum exec_mode mode[] = { EXEC_STANDARD, EXEC_ERROR, EXEC_NOFAIL, EXEC_DONE,
+        EXEC_FAILED };
+    gint c;
+
+    DonnaTask *t;
+    DonnaTaskState state;
+    struct exec exec = { NULL, };
+    GPtrArray *arr;
+
+    if (mode_s)
+    {
+        c = _get_choice (c_mode, mode_s);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
+                    "Command 'exec': Invalid mode: '%s'; "
+                    "Must be one of 'standard', 'error', 'nofail', 'done' or 'failed'",
+                    mode_s);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* STANDARD */
+        c = 0;
+
+    /* so the return value/error message can be set directly on the command's
+     * task, and not the task-process */
+    exec.task = task;
+    exec.mode = mode[c];
+    exec.rc = rc;
+    exec.mixed = mixed;
+
+    t = donna_task_process_new (workdir, cmdline, TRUE,
+            (task_closer_fn) exec_closer, &exec, NULL);
+    g_object_ref (t);
+    if (!workdir
+            && !donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) t, app))
+    {
+        g_object_unref (t);
+        donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
+                "Failed to set task-process's workdir to curdir");
+        return DONNA_TASK_FAILED;
+    }
+
+    /* set taskui messages */
+    donna_task_process_set_ui_msg ((DonnaTaskProcess *) t);
+    g_signal_connect (t, "pipe-new-line", (GCallback) exec_pipe_new_line, &exec);
+    /* let's assume it's a RAM-only command, or make it run in parallel to any
+     * other operation */
+    arr = g_ptr_array_new ();
+    donna_task_set_devices (t, arr);
+    g_ptr_array_unref (arr);
+
+    donna_app_run_task (app, t);
+    if (!donna_task_wait_for_it (t, task, &err))
+    {
+        g_prefix_error (&err, "Command 'exec': Failed to run and wait for task-process: ");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
+
+    state = donna_task_get_state (t);
+    g_object_unref (t);
+    return state;
+}
+
 
 /**
  * focus_move:
@@ -5081,6 +5309,15 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (config_try_get_string, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (exec, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_STRING);
 
     i = -1;
