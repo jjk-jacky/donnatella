@@ -394,7 +394,14 @@ donna_task_process_pipe_data_received (DonnaTaskProcess   *taskp,
     }
 }
 
-static gboolean
+enum rd
+{
+    RD_NONE,
+    RD_READ,
+    RD_FAIL
+};
+
+static guint
 read_data (DonnaTask *task, DonnaPipe pipe, gint *fd)
 {
     gssize len;
@@ -422,10 +429,10 @@ again:
                 "Failed to read data from %s of child process: %s",
                 (pipe == DONNA_PIPE_OUTPUT) ? "stdout" : "stderr",
                 g_strerror (_errno));
-        return FALSE;
+        return RD_FAIL;
     }
 
-    return TRUE;
+    return (len > 0) ? RD_READ : RD_NONE;
 }
 
 static DonnaTaskState
@@ -652,15 +659,18 @@ task_worker (DonnaTask *task, gpointer data)
 
         if (fd_out >= 0)
         {
+            guint rd = RD_NONE;
+
             if (pfd[n].revents & POLLIN)
             {
-                if (!read_data (task, DONNA_PIPE_OUTPUT, &fd_out))
+                rd = read_data (task, DONNA_PIPE_OUTPUT, &fd_out);
+                if (rd == RD_FAIL)
                 {
                     failed = FAILED_ERROR;
                     break;
                 }
             }
-            if (pfd[n].revents & (POLLERR | POLLHUP))
+            if (rd == RD_NONE && pfd[n].revents & (POLLERR | POLLHUP))
             {
                 close_fd (task, DONNA_PIPE_OUTPUT, &fd_out);
                 ++closed;
@@ -670,15 +680,18 @@ task_worker (DonnaTask *task, gpointer data)
 
         if (fd_err >= 0)
         {
+            guint rd = RD_NONE;
+
             if (pfd[n].revents & POLLIN)
             {
-                if (!read_data (task, DONNA_PIPE_ERROR, &fd_err))
+                rd = read_data (task, DONNA_PIPE_ERROR, &fd_err);
+                if (rd == RD_FAIL)
                 {
                     failed = FAILED_ERROR;
                     break;
                 }
             }
-            if (pfd[n].revents & (POLLERR | POLLHUP))
+            if (rd == RD_NONE && pfd[n].revents & (POLLERR | POLLHUP))
             {
                 close_fd (task, DONNA_PIPE_ERROR, &fd_err);
                 ++closed;
