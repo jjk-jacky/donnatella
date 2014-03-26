@@ -6473,6 +6473,7 @@ struct node_children_cb_data
     GPtrArray       *children;
 };
 
+/* mode tree only */
 static gboolean
 real_node_children_cb (struct node_children_cb_data *data)
 {
@@ -6485,21 +6486,16 @@ real_node_children_cb (struct node_children_cb_data *data)
     if (!(data->node_types & priv->node_types))
         goto free;
 
-    if (!priv->is_tree)
-        set_children (data->tree, NULL, data->node_types, data->children, FALSE, FALSE);
-    else
+    gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &priv->location_iter,
+            TREE_COL_EXPAND_STATE,  &es,
+            -1);
+    if (es == TREE_EXPAND_MAXI)
     {
-        gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &priv->location_iter,
-                TREE_COL_EXPAND_STATE,  &es,
-                -1);
-        if (es == TREE_EXPAND_MAXI)
-        {
-            DONNA_DEBUG (TREE_VIEW, priv->name,
-                    g_debug ("TreeView '%s': updating children for current location",
+        DONNA_DEBUG (TREE_VIEW, priv->name,
+                g_debug ("TreeView '%s': updating children for current location",
                     priv->name));
-            set_children (data->tree, &priv->location_iter,
-                    data->node_types, data->children, FALSE, FALSE);
-        }
+        set_children (data->tree, &priv->location_iter,
+                data->node_types, data->children, FALSE, FALSE);
     }
 
 free:
@@ -6511,6 +6507,7 @@ free:
     return FALSE;
 }
 
+/* mode tree only */
 static void
 node_children_cb (DonnaProvider  *provider,
                   DonnaNode      *node,
@@ -9928,9 +9925,6 @@ switch_provider (DonnaTreeView *tree,
                     g_signal_handler_disconnect (ps->provider,
                             ps->sid_node_new_child);
                     ps->sid_node_new_child = 0;
-                    g_signal_handler_disconnect (ps->provider,
-                            ps->sid_node_children);
-                    ps->sid_node_children = 0;
                 }
                 ++done;
             }
@@ -9958,8 +9952,6 @@ switch_provider (DonnaTreeView *tree,
          * it's only useful for current location */
         ps->sid_node_new_child = g_signal_connect (provider_future,
                 "node-new-child", G_CALLBACK (node_new_child_cb), tree);
-        ps->sid_node_children = g_signal_connect (provider_future,
-                "node-children", (GCallback) node_children_cb, tree);
     }
 }
 
