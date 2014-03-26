@@ -498,7 +498,7 @@ donna_provider_get_node (DonnaProvider    *provider,
      * */
 
     g_object_get (provider, "app", &app, NULL);
-    task = (DonnaTask *) g_object_ref (ret);
+    task = (DonnaTask *) g_object_ref_sink (ret);
 
     if (g_main_context_is_owner (g_main_context_default ()))
     {
