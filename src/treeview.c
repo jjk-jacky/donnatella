@@ -4749,6 +4749,10 @@ set_children (DonnaTreeView *tree,
     }
     else
     {
+        GtkTreeSortable *sortable = (GtkTreeSortable *) priv->store;
+        gint sort_col_id;
+        GtkSortType order;
+
         struct refresh_data *rd;
         GHashTableIter ht_it;
         GSList *list = NULL;
@@ -4774,6 +4778,14 @@ set_children (DonnaTreeView *tree,
             priv->refresh_on_hold = TRUE;
             nb_real = 0;
         }
+
+        /* adding items to a sorted store is quite slow; we get much better
+         * performance by adding all items to an unsorted store, and then
+         * sorting it */
+        gtk_tree_sortable_get_sort_column_id (sortable, &sort_col_id, &order);
+        gtk_tree_sortable_set_sort_column_id (sortable,
+                GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, order);
+        priv->filling_list = TRUE;
 
         for (i = 0; i < children->len; ++i)
         {
@@ -4835,6 +4847,12 @@ set_children (DonnaTreeView *tree,
             list = l->next;
             g_slist_free_1 (l);
         }
+
+        /* restore sort */
+        gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
+        priv->filling_list = FALSE;
+        /* do it ourself because we prevented it w/ priv->filling_list */
+        check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
 
         if (refresh)
         {
