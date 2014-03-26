@@ -641,16 +641,25 @@ _notify_prop (struct notify_prop_data *data)
     return FALSE;
 }
 
+/* this is only used from donna_task_is_cancelling() because we have a lock on
+ * the task then, and would like to avoid deadlocks.
+ * Any task running in the main/UI thread should never be pausable, since such
+ * request come from the main thread (and those tasks are meant to be very fast
+ * anyways), so anything else (INTERNAL/PUBLIC) will have its thread waiting,
+ * while the main one can process the state change and then cancel/resume. */
 static inline void
-notify_prop (DonnaTask *task, gint prop_id)
+idle_notify_prop (DonnaTask *task, gint prop_id)
 {
     struct notify_prop_data *data;
 
     data = g_new (struct notify_prop_data, 1);
     data->obj = g_object_ref (G_OBJECT (task));
     data->prop_id = prop_id;
-    g_main_context_invoke (NULL, (GSourceFunc) _notify_prop, data);
+    g_idle_add ((GSourceFunc) _notify_prop, data);
 }
+
+#define notify_prop(task, prop_id) \
+    g_object_notify_by_pspec ((GObject *) task, donna_task_props[prop_id])
 
 /**
  * donna_task_new:
@@ -1572,8 +1581,6 @@ donna_task_run (DonnaTask *task)
     priv->state = DONNA_TASK_RUNNING;
     UNLOCK_TASK (task);
 
-    /* notify change of state (in main thread, to avoiding blocking/delaying
-     * the task function) */
     notify_prop (task, PROP_STATE);
 
     /* do the work & get new state */
@@ -1614,7 +1621,6 @@ donna_task_run (DonnaTask *task)
     /* we're done with the lock */
     UNLOCK_TASK (task);
 
-    /* notify change of state (in main thread) */
     notify_prop (task, PROP_STATE);
 
     DONNA_DEBUG (TASK, NULL,
@@ -1686,7 +1692,7 @@ donna_task_set_autostart (DonnaTask          *task,
 
     UNLOCK_TASK (task);
 
-    /* notify change of state (in main thread) */
+    /* notify change of state */
     if (ret == 2)
         notify_prop (task, PROP_STATE);
 
@@ -1771,7 +1777,7 @@ donna_task_resume (DonnaTask *task)
 
     UNLOCK_TASK (task);
 
-    /* notify change of state (in main thread) */
+    /* notify change of state */
     notify_prop (task, PROP_STATE);
 }
 
@@ -1816,7 +1822,7 @@ donna_task_cancel (DonnaTask *task)
 
         UNLOCK_TASK (task);
 
-        /* notify change of state (in main thread) */
+        /* notify change of state */
         notify_prop (task, PROP_STATE);
 
         if (priv->callback_fn)
@@ -1930,8 +1936,10 @@ donna_task_is_cancelling (DonnaTask *task)
                 DONNA_DEBUG (TASK, NULL,
                         g_debug ("Paused task %p: %s",
                             task, (priv->desc) ? priv->desc : "(no desc)"));
-                /* notify change of state (in main thread) */
-                notify_prop (task, PROP_STATE);
+                /* notify change of state; we add this one in the main thread to
+                 * avoid deadlock, since we currently own a lock on the task
+                 * right now */
+                idle_notify_prop (task, PROP_STATE);
                 /* wait for a change of state */
                 while (priv->state == DONNA_TASK_PAUSED)
                     g_cond_wait (&priv->cond, &priv->mutex);
