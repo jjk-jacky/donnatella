@@ -4443,8 +4443,10 @@ refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
         if (!iter)
         {
             GtkTreeIter it;
-            gboolean was_empty = !priv->filling_list
-                && _gtk_tree_model_get_count (model) == 0;
+            gboolean was_empty = FALSE;
+
+            if (!priv->filling_list)
+                was_empty = !gtk_tree_model_iter_children (model, &it, NULL);
 
             DONNA_DEBUG (TREE_VIEW, priv->name,
                     gchar *fl = donna_node_get_full_location (node);
