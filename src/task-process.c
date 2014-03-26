@@ -550,6 +550,9 @@ task_worker (DonnaTask *task, gpointer data)
     else
         sid = 0;
 
+    if (!priv->stdin_fn)
+        ++closed;
+
     fd_task = donna_task_get_fd (task);
     while (failed == FAILED_NOT && (fd_out >= 0 || fd_err >= 0))
     {
