@@ -554,13 +554,16 @@ task_worker (DonnaTask *task, gpointer data)
         ++closed;
 
     fd_task = donna_task_get_fd (task);
-    while (failed == FAILED_NOT && (fd_out >= 0 || fd_err >= 0))
+    while (fd_out >= 0 || fd_err >= 0)
     {
         nfds_t n = 0;
 
-        pfd[n].fd = fd_task;
-        pfd[n].events = POLLIN;
-        ++n;
+        if (failed == FAILED_NOT)
+        {
+            pfd[n].fd = fd_task;
+            pfd[n].events = POLLIN;
+            ++n;
+        }
 
         if (fd_in >= 0)
         {
@@ -604,6 +607,9 @@ task_worker (DonnaTask *task, gpointer data)
             ++n;
         }
 
+        if (n == 0)
+            break;
+
         ret = poll (pfd, n, -1);
         if (ret < 0)
         {
@@ -622,28 +628,30 @@ task_worker (DonnaTask *task, gpointer data)
 
         n = 0;
 
-        if (pfd[n].revents & POLLIN)
+        if (failed == FAILED_NOT)
         {
-            gboolean is_cancelling;
-
-            if (sid)
-                g_source_remove (sid);
-
-            if (priv->pauser_fn)
-                is_cancelling = priv->pauser_fn (task, pid, priv->pauser_data);
-            else
-                is_cancelling = default_pauser (task, pid);
-
-            if (is_cancelling)
+            if (pfd[n].revents & POLLIN)
             {
-                sid = 0;
-                failed = FAILED_CANCELLED;
-                break;
+                gboolean is_cancelling;
+
+                if (sid)
+                    g_source_remove (sid);
+
+                if (priv->pauser_fn)
+                    is_cancelling = priv->pauser_fn (task, pid, priv->pauser_data);
+                else
+                    is_cancelling = default_pauser (task, pid);
+
+                if (is_cancelling)
+                {
+                    sid = 0;
+                    failed = FAILED_CANCELLED;
+                }
+                else if (sid)
+                    sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
             }
-            else if (sid)
-                sid = g_timeout_add (100, (GSourceFunc) pulse_cb, task);
+            ++n;
         }
-        ++n;
 
         /* we just close the fd in case of POLLERR|POLLHUP because this might
          * just be the process ending its execution normally. If there was an
