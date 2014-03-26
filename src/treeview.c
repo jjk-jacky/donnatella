@@ -4583,9 +4583,12 @@ set_children (DonnaTreeView *tree,
 
             if (is_match)
             {
+                DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":last" };
                 /* clear the list (see selection_changed_cb() for why
                  * filling_list) */
                 priv->filling_list = TRUE;
+                /* speed up -- see change_location() for why */
+                donna_tree_view_set_focus (tree, &rid, NULL);
                 gtk_tree_store_clear (priv->store);
                 priv->filling_list = FALSE;
                 /* also the hashtable. First we need to free the iters & unref
@@ -10180,6 +10183,7 @@ change_location (DonnaTreeView *tree,
     }
     else if (cl == CHANGING_LOCATION_SLOW)
     {
+        DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":last" };
         struct node_get_children_list_data *data = _data;
         GHashTableIter ht_it;
         GtkTreeIter *iter;
@@ -10232,6 +10236,8 @@ change_location (DonnaTreeView *tree,
 #endif
         /* clear the list (see selection_changed_cb() for why filling_list) */
         priv->filling_list = TRUE;
+        /* speed up -- see below for why */
+        donna_tree_view_set_focus (tree, &rid, NULL);
         gtk_tree_store_clear (priv->store);
         priv->filling_list = FALSE;
         /* also the hashtable. First we need to free the iters & unref the
@@ -10256,6 +10262,7 @@ change_location (DonnaTreeView *tree,
 
         if (priv->cl < CHANGING_LOCATION_GOT_CHILD)
         {
+            DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":last" };
             GHashTableIter ht_it;
             GtkTreeIter *iter;
             DonnaNode *n;
@@ -10269,6 +10276,12 @@ change_location (DonnaTreeView *tree,
 #endif
             /* clear the list (see selection_changed_cb() for why filling_list) */
             priv->filling_list = TRUE;
+            /* set focus to last row, to speed things up. Because when clearing
+             * the store the treeview will react to each and every signal
+             * row-deleted, and figure out where to and move the focus, which
+             * when there's thousands of rows and the focus was on the first,
+             * slows thigns down quite a bit */
+            donna_tree_view_set_focus (tree, &rid, NULL);
             gtk_tree_store_clear (priv->store);
             priv->filling_list = FALSE;
             /* also the hashtable. First we need to free the iters & unref the
