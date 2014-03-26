@@ -333,6 +333,7 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
                   gchar             *line,
                   struct children   *data)
 {
+    GError *err = NULL;
     DonnaNode *n;
     GValue value = G_VALUE_INIT;
     gchar *location;
@@ -359,9 +360,12 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
             return;
     }
 
-    n = donna_provider_get_node (data->pfs, path, NULL);
+    n = donna_provider_get_node (data->pfs, path, &err);
     if (!n)
     {
+        g_warning ("Provider 'exec': Failed to get node for 'fs:%s': %s",
+                path, err->message);
+        g_clear_error (&err);
         if (path != line)
             g_free (path);
         return;
