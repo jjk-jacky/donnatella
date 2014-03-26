@@ -4461,7 +4461,14 @@ refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
             g_hash_table_insert (priv->hashtable, node, gtk_tree_iter_copy (&it));
 
             if (was_empty)
+            {
+                GtkTreePath *path;
+
                 set_draw_state (tree, DRAW_NOTHING);
+                path = gtk_tree_path_new_from_indices (0, -1);
+                gtk_tree_view_set_focused_row ((GtkTreeView *) tree, path);
+                gtk_tree_path_free (path);
+            }
             if (!priv->filling_list)
                 check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
         }
