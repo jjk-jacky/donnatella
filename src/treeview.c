@@ -8027,6 +8027,8 @@ load_arrangement (DonnaTreeView     *tree,
 
             /* sort -- (see column_button_release_event_cb() for more) */
             _col->sort_id = sort_id;
+            /* FIXME this causes a re-sort of the treeview when toggling a
+             * column. With lots of rows, it's useless slowness... */
             gtk_tree_sortable_set_sort_func (sortable, sort_id,
                     (GtkTreeIterCompareFunc) sort_func, column, NULL);
             if (sort_column && streq (sort_column, col))
