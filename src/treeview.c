@@ -4454,7 +4454,7 @@ refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
                         priv->name, fl);
                     g_free (fl));
 
-            gtk_tree_store_insert_with_values (priv->store, &it, NULL, -1,
+            gtk_tree_store_insert_with_values (priv->store, &it, NULL, 0,
                     LIST_COL_NODE,  node,
                     -1);
             /* update hashtable */
