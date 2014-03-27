@@ -1263,6 +1263,12 @@ struct _DonnaTreeViewPrivate
     /* list: current visual filter */
     DonnaFilter         *filter;
 
+    /* list: nodes to be added. To avoid being "spammed" with node-new-child
+     * signals (e.g. during a search) we only add a few, then add them to this
+     * array, which is added to the list every few seconds */
+    GPtrArray           *nodes_to_add;
+    gint                 nodes_to_add_level;
+
     /* list of iters to be used by callbacks. Because we use iters in cb's data,
      * we need to ensure they stay valid. We only use iters from the store, and
      * they are persistent. However, the row could be removed, thus the iter
@@ -2357,25 +2363,48 @@ _gtk_tree_model_iter_last (GtkTreeModel *model,
     return iter->stamp != 0;
 }
 
+struct count
+{
+    gint count;
+    gint max;
+};
+
 static gboolean
 _get_count (GtkTreeModel    *model,
             GtkTreePath     *path,
             GtkTreeIter     *iter,
-            gpointer         data)
+            struct count    *count)
 {
-    ++(* (gint *) data);
-    return FALSE; /* keep iterating */
+    ++count->count;
+    if (count->max > 0 && count->count >= count->max)
+        /* done */
+        return TRUE;
+    else
+        /* keep iterating */
+        return FALSE;
 }
 
 static gint
 _gtk_tree_model_get_count (GtkTreeModel *model)
 {
-    gint count = 0;
+    struct count count = { 0, 0 };
 
     g_return_val_if_fail (GTK_IS_TREE_MODEL (model), -1);
 
-    gtk_tree_model_foreach (model, _get_count, &count);
-    return count;
+    gtk_tree_model_foreach (model, (GtkTreeModelForeachFunc) _get_count, &count);
+    return count.count;
+}
+
+static gboolean
+has_model_at_least_n_rows (GtkTreeModel *model, gint max)
+{
+    struct count count = { 0, max };
+
+    g_return_val_if_fail (GTK_IS_TREE_MODEL (model), -1);
+    g_return_val_if_fail (max > 0, -1);
+
+    gtk_tree_model_foreach (model, (GtkTreeModelForeachFunc) _get_count, &count);
+    return count.count >= count.max;
 }
 
 
@@ -6526,6 +6555,86 @@ node_children_cb (DonnaProvider  *provider,
     g_main_context_invoke (NULL, (GSourceFunc) real_node_children_cb, data);
 }
 
+/* mode list only */
+static gboolean
+add_pending_nodes (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GtkTreeSortable *sortable = (GtkTreeSortable *) priv->store;
+    gint sort_col_id;
+    GtkSortType order;
+    gint64 t;
+    guint max;
+    guint i;
+
+    if (G_UNLIKELY (!priv->nodes_to_add))
+        return G_SOURCE_REMOVE;
+
+    /* the level determines how many rows to add at the most. This was set by
+     * the last iteration, based on how long it took to add rows and then sort
+     * the model. */
+    if (priv->nodes_to_add_level == 0)
+        max = 100;
+    else if (priv->nodes_to_add_level == 1)
+        max = 1000;
+    else
+        /* add all rows */
+        max = 0;
+
+    t = g_get_monotonic_time ();
+    /* adding items to a sorted store is quite slow; we get much better
+     * performance by adding all items to an unsorted store, and then
+     * sorting it */
+    gtk_tree_sortable_get_sort_column_id (sortable, &sort_col_id, &order);
+    gtk_tree_sortable_set_sort_column_id (sortable,
+            GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, order);
+    priv->filling_list = TRUE;
+
+    i = 0;
+    while (priv->nodes_to_add->len > 0)
+    {
+        add_node_to_list (tree, priv->nodes_to_add->pdata[0], FALSE);
+        g_ptr_array_remove_index (priv->nodes_to_add, 0);
+        if (++i == max)
+            break;
+    }
+    if (priv->nodes_to_add->len == 0)
+    {
+        g_ptr_array_unref (priv->nodes_to_add);
+        priv->nodes_to_add = NULL;
+        priv->nodes_to_add_level = 0;
+    }
+    else
+        /* we've stopped before processing all rows, so we'll come back to it
+         * after all other events have been processed, including idle sources
+         * (hence a slightly lower priority) */
+        g_idle_add_full (G_PRIORITY_DEFAULT_IDLE + 10,
+                (GSourceFunc) add_pending_nodes, tree, NULL);
+
+    /* restore sort */
+    gtk_tree_sortable_set_sort_column_id (sortable, sort_col_id, order);
+    /* for next iteration: see how long it took to add those rows & resort the
+     * model, and based on that determine how many rows we should add max next,
+     * to try and not block the UI too much */
+    /* TODO: later on, we might want to make our own list store, with special
+     * support so that the sorting can be done in another thread, and in the UI
+     * (task's callback) we just "apply it."
+     * That way, the UI would never block and we'll always add all rows as fast
+     * as possible. */
+    t = g_get_monotonic_time () - t;
+    if (t <= G_USEC_PER_SEC)
+        priv->nodes_to_add_level = 0;
+    else if (t <= 2 * G_USEC_PER_SEC)
+        priv->nodes_to_add_level = 1;
+    else
+        priv->nodes_to_add_level = 2;
+    /* do it ourself because we prevented it w/ priv->filling_list */
+    priv->filling_list = FALSE;
+    check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+
+    return G_SOURCE_REMOVE;
+}
+
 struct new_child_data
 {
     DonnaTreeView   *tree;
@@ -6540,6 +6649,17 @@ real_new_child_cb (struct new_child_data *data)
 
     if (!priv->is_tree)
     {
+        /* nodes_to_add_level is at -1 when processing events from the callback
+         * of a get_children task. We then want to ignore any pending
+         * node-new-child since we've just filled the list with all children.
+         * IOW, while there could be possibility of such an event being a
+         * legitimate signal generated right after the get_children task, most
+         * likely this is - from exec/search results - some signals that were
+         * emitted but haven't yet been processed while the task is done, since
+         * the callback is being processed */
+        if (priv->nodes_to_add_level == -1)
+            goto free;
+
         if (priv->cl == CHANGING_LOCATION_ASKED
                 || priv->cl == CHANGING_LOCATION_SLOW)
         {
@@ -6559,7 +6679,26 @@ real_new_child_cb (struct new_child_data *data)
         else if (priv->location != data->node)
             goto free;
 
-        add_node_to_list (data->tree, data->child, FALSE);
+        /* until we have 100 rows, we just add right away */
+        if (!has_model_at_least_n_rows ((GtkTreeModel *) priv->store, 100))
+            add_node_to_list (data->tree, data->child, FALSE);
+        else
+        {
+            /* then, we'll store them in an array, and wait one second
+             * (literally) in case we're getting a bunch of signals (e.g. a few
+             * search results coming in at once), so we can add them all and
+             * sort the model once, instead of once per new row */
+            if (!priv->nodes_to_add)
+            {
+                priv->nodes_to_add_level = 0;
+                priv->nodes_to_add = g_ptr_array_new_with_free_func (g_object_unref);
+                /* keep it as idle priority, as timeout are usually much higher,
+                 * namely G_PRIORITY_DEFAULT (same as GDK events) */
+                g_timeout_add_full (G_PRIORITY_DEFAULT_IDLE, 1000,
+                        (GSourceFunc) add_pending_nodes, data->tree, NULL);
+            }
+            g_ptr_array_add (priv->nodes_to_add, g_object_ref (data->child));
+        }
         goto free;
     }
     else
@@ -9669,6 +9808,12 @@ node_get_children_list_cb (DonnaTask                            *task,
     g_object_unref (priv->get_children_task);
     priv->get_children_task = NULL;
 
+    if (priv->nodes_to_add)
+    {
+        g_ptr_array_unref (priv->nodes_to_add);
+        priv->nodes_to_add = NULL;
+    }
+
     if (donna_task_get_state (task) != DONNA_TASK_DONE)
     {
         if (donna_task_get_state (task) == DONNA_TASK_FAILED)
@@ -9805,8 +9950,10 @@ no_task:
          * Note: here this should be fine, as there shouldn't be any pending
          * events updating the list. See sync_with_location_changed_cb for more
          * about this. */
+        priv->nodes_to_add_level = -1; /* see real_new_child_cb() */
         while (gtk_events_pending ())
             gtk_main_iteration ();
+        priv->nodes_to_add_level = 0;
 
         /* do we have a child to focus/scroll to? */
         if (data->child)
