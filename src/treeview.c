@@ -3934,7 +3934,7 @@ handle_removing_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean is_focus)
             gtk_tree_selection_select_iter (sel, &it);
         else
         {
-            if (_gtk_tree_model_get_count (model) == 0)
+            if (!gtk_tree_model_iter_children (model, &it, NULL))
             {
                 /* if there's no more rows on tree, let's make sure we don't
                  * have an old (invalid) current location */
@@ -3947,10 +3947,8 @@ handle_removing_row (DonnaTreeView *tree, GtkTreeIter *iter, gboolean is_focus)
                 return;
             }
 
-            /* then move to the first root */
-            gtk_tree_model_iter_children (model, &it, NULL);
-            /* but make sure this isn't the row we're moving away from
-             * (might be a row about to be removed) */
+            /* then move to the first root, but make sure this isn't the row
+             * we're moving away from (might be a row about to be removed) */
             while (itereq (&it, iter))
             {
                 if (!gtk_tree_model_iter_next (model, &it))
@@ -4146,7 +4144,7 @@ remove_row_from_tree (DonnaTreeView *tree,
 
     /* removing the row with the focus will have GTK do a set_cursor(), this
      * isn't the best of behaviors, so let's see if we can do "better" */
-    if (_gtk_tree_model_get_count (model) > 1)
+    if (has_model_at_least_n_rows (model, 2))
     {
         GtkTreePath *path_cursor;
 
@@ -4369,7 +4367,7 @@ remove_row_from_tree (DonnaTreeView *tree,
         }
     }
     else if (!priv->is_tree
-            && (_gtk_tree_model_get_count ((GtkTreeModel *) priv->store) == 0))
+            && (!has_model_at_least_n_rows ((GtkTreeModel *) priv->store, 1)))
         set_draw_state (tree, (g_hash_table_size (priv->hashtable) == 0)
             ? DRAW_EMPTY : DRAW_NO_VISIBLE);
 
@@ -6002,7 +6000,7 @@ resort_tree (DonnaTreeView *tree)
             g_debug ("TreeView '%s': Resort tree", priv->name));
 
     /* if there is no sorting needed (less than 2 rows) simply redraw */
-    if (_gtk_tree_model_get_count ((GtkTreeModel *) priv->store) > 1)
+    if (has_model_at_least_n_rows ((GtkTreeModel *) priv->store, 2))
     {
         GtkTreeSortable *sortable = (GtkTreeSortable *) priv->store;
         gint cur_sort_id;
@@ -10003,7 +10001,7 @@ no_task:
          * ln_relative is used, but this will (always) queue one */
         set_draw_state (data->tree,
                 /* could be that everything got filtered out */
-                (_gtk_tree_model_get_count ((GtkTreeModel *) priv->store) > 0)
+                (has_model_at_least_n_rows ((GtkTreeModel *) priv->store, 1))
                 ? DRAW_NOTHING : DRAW_NO_VISIBLE);
         /* we need to trigger it again, because the focused item might have
          * changed/been set */
@@ -15141,7 +15139,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         GtkTreeIter  it;
         guint nb_org, nb_real;
 
-        if (_gtk_tree_model_get_count (model) == 0)
+        if (!has_model_at_least_n_rows (model, 1))
             return TRUE;
 
         if (mode == DONNA_TREE_VIEW_REFRESH_VISIBLE)
@@ -15236,7 +15234,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             GtkTreeIter it;
             gboolean (*next_fn) (GtkTreeModel *model, GtkTreeIter *iter);
 
-            if (_gtk_tree_model_get_count (model) == 0)
+            if (!has_model_at_least_n_rows (model, 1))
                 return TRUE;
 
             if (!gtk_tree_model_iter_children (model, &it, NULL))
@@ -21884,7 +21882,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
         gtk_tree_view_get_cursor ((GtkTreeView *) tree, &path, NULL);
         if (!path)
         {
-            if (_gtk_tree_model_get_count ((GtkTreeModel *) priv->store) == 0)
+            if (!has_model_at_least_n_rows ((GtkTreeModel *) priv->store, 1))
             {
                 /* if there's no more rows on tree, let's make sure we don't
                  * have an old (invalid) current location */
