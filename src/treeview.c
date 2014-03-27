@@ -41,6 +41,14 @@
 #include "closures.h"
 #include "debug.h"
 
+#ifdef GTK_IS_JJK
+#define GTK_TREEVIEW_REMOVE_COLUMN_FIXED
+#endif
+
+#if GTK_CHECK_VERSION (3, 12, 0)
+#define GTK_TREEVIEW_REMOVE_COLUMN_FIXED
+#endif
+
 /**
  * SECTION:treeview
  * @Short_description: The TreeView componement for trees and lists
@@ -8303,7 +8311,7 @@ next:
         g_free (_col->name);
         donna_column_type_free_data (_col->ct, _col->ct_data);
         g_object_unref (_col->ct);
-#ifndef GTK_IS_JJK
+#ifndef GTK_TREEVIEW_REMOVE_COLUMN_FIXED
         /* "Fix" a bug in GTK that doesn't take care of the button properly.
          * This is a memory leak (button doesn't get unref-d/finalized), but
          * could also cause a few issues for us:
@@ -8319,7 +8327,7 @@ next:
 #endif
         gtk_tree_view_remove_column (treev, _col->column);
         g_ptr_array_unref (_col->renderers);
-#ifndef GTK_IS_JJK
+#ifndef GTK_TREEVIEW_REMOVE_COLUMN_FIXED
         gtk_widget_unparent (btn);
 #endif
         g_slice_free (struct column, _col);
