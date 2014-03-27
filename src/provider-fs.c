@@ -1030,10 +1030,23 @@ provider_fs_new_node (DonnaProviderBase  *_provider,
     node = new_node (_provider, (s) ? s : location, NULL);
     if (!node)
     {
-        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_OTHER,
-                "Cannot create node, file doesn't exist: %s",
-                (s) ? s : location);
+        struct stat st;
+        /* use stat to try and get an appropriate error message */
+        if (stat ((s) ? s : location, &st) == -1)
+        {
+            gint _errno = errno;
+
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Cannot create node: %s: %s",
+                    g_strerror (_errno),
+                    (s) ? s : location);
+        }
+        else
+            donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Cannot create node: %s",
+                    (s) ? s : location);
         g_free (s);
         return DONNA_TASK_FAILED;
     }
