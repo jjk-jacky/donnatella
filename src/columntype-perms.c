@@ -1182,6 +1182,9 @@ ct_perms_edit (DonnaColumnType    *ct,
     gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
     g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
     gtk_entry_set_width_chars ((GtkEntry *) w, 1);
+#if GTK_CHECK_VERSION (3, 12, 0)
+    gtk_entry_set_max_width_chars ((GtkEntry *) w, 1);
+#endif
     c = 0;
     if (mode & S_IRUSR)
         c += 4;
@@ -1196,6 +1199,9 @@ ct_perms_edit (DonnaColumnType    *ct,
     gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
     g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
     gtk_entry_set_width_chars ((GtkEntry *) w, 1);
+#if GTK_CHECK_VERSION (3, 12, 0)
+    gtk_entry_set_max_width_chars ((GtkEntry *) w, 1);
+#endif
     c = 0;
     if (mode & S_IRGRP)
         c += 4;
@@ -1210,6 +1216,9 @@ ct_perms_edit (DonnaColumnType    *ct,
     gtk_entry_set_activates_default ((GtkEntry *) w, TRUE);
     g_object_set (w, "halign", GTK_ALIGN_CENTER, NULL);
     gtk_entry_set_width_chars ((GtkEntry *) w, 1);
+#if GTK_CHECK_VERSION (3, 12, 0)
+    gtk_entry_set_max_width_chars ((GtkEntry *) w, 1);
+#endif
     c = 0;
     if (mode & S_IROTH)
         c += 4;
