@@ -1,14 +1,71 @@
 
+# 2014-04-03, v0.2.0
+
+ +  New event "log" to process some log events in donna; Messages are sent on
+    different occasions, e.g. loading/saving a treeview from/to a file, adding
+    nodes to a register, dropping a register, etc See [1] for more
+ +  New source ":app" for statusbar, supporting messages from event "log"
+ !  Command tv_column_set_option(): Fix setting "width" not working
+ +  treeview: Add option default_save_location
+ +  Add command tv_set_columns() to change which columns are visible
+ +  Command tv_set_option() & tv_column_set_option(): Allow no value to set
+    in-memory values to configuration
+ !  Command tv_set_option(): Fix setting "title" not always working
+ +  Add command tv_save_to_config() to save group of options (treeview options,
+    columns (layout), column options, main/second sort order) to configuration
+    at once. See [1] for more
+ !  ColumnType time: Fix getting "42m ago" on inline editing
+ !  Fix Enter/Esc not working to set/cancel on a few windows
+ +  Provider exec: Add options for prefixes: you can define which prefixes to
+    use for each supported modes, as well as the default mode. See [2] for more
+ !  treeview: Fix handling key before last key has been fully processed
+ !  ColumnTypes: Place floating windows on center of parent
+ +  Command focus_set(): Allow ":active" as treeview name
++++ Add embedded terminal support (via XEMBED); See [2] for more
+ +  Provider exec: Add mode for embedded terminal
++++ Patterns: Add support of different modes: pattern, search, begin, end, case
+    sensitive & case insensitive matches, and Perl-compatible regex. See [3] for
+    more
+ !  list: Fix reload possibly not doing anything
++++ list: Add visual filters (commands tv_{g,s}et_visual_filter); See [3] for
+    more
+ +  treeview: status: Add %f for name of focused row
+ +  treeview: status: Add %F (current VF) and colors
+ +  treeview: status: Add %h/%H for nb/size of hidden rows
+ +  treeview: status: "avhsF" now support an extra w/ recursion; See [3] for more
+ +  Command tv_set_visual_filter(): Add parameter toggle; and treat empty filter
+    as if unspecified
+ +  Commands config_set_{boolean,int,string}: Return set value
+ +  Add commands config_try_get_{boolean,int,string}: Doesn't fail if option
+    doesn't exist, but returns specified default
+ !  list: Fix status not refreshed after change of location
+ +  treeview: status: Add tooltip support (format_tooltip)
+ +  ColumnType name: Add filtering by node type (See [3] for more)
+ +  list: Add option vf_items_only
+ !  Alias: Fix option replacement_no_args not working
+ +  Alias: Add options include_space & suffix
+ !  Provider exec: Fix output possibly truncated
+ +  Command terminal_add_tab(): Add param workdir
+ +  Provider exec: Add setting working directory on command line
+ +  Add "Open Terminal Here/...in new window" in tree context menu
+ *  Many other fixes & optimizations; see git log for details
+
+Additional information:
+[1] http://jjacky.com/2014-02-22-coming-next-to-donnatella/
+[2] http://jjacky.com/2014-03-09-donnatella-adds-embedded-terminals/
+[3] http://jjacky.com/2014-03-23-visual-filters-extended-patterns-and-more-in-donnatella/
+
+
 # 2014-02-09, v0.1.1
 
-! Fix clicks not working by default when not patched (due to using a
-  non-existing click_mode)
-! Fix possible segfault using clipboard (register '+')
-+ When putting files in clipboard (register '+'), it is now possible to paste
-  the list of full filenames as text (e.g. in terminal/text editor)
-! A few other fixes
+ !  Fix clicks not working by default when not patched (due to using a
+    non-existing click_mode)
+ !  Fix possible segfault using clipboard (register '+')
+ +  When putting files in clipboard (register '+'), it is now possible to paste
+    the list of full filenames as text (e.g. in terminal/text editor)
+ !  A few other fixes
 
 
 # 2014-02-08, v0.1.0
 
-* first pre-alpha release
+ *  first pre-alpha release
