@@ -503,7 +503,7 @@ get_node_children_task (DonnaProvider      *provider,
         wait = ex->mode == MODE_EXEC_AND_WAIT;
     else if (ex->mode == MODE_TERMINAL)
     {
-        cmdline = g_strconcat (ex->terminal, " ", location + ex->extra, NULL);
+        cmdline = g_strconcat (ex->terminal, " ", cmdline, NULL);
         g_free (location);
         location = cmdline;
     }
