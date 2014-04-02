@@ -32,6 +32,77 @@
 #include "util.h"
 #include "macros.h"
 
+/**
+ * SECTION:provider-exec
+ * @Short_description: Execution of command line/applications
+ *
+ * The provider exec offers a way to execute command line/applications in donna.
+ * Any location in domain "exec" must define which command line/application to
+ * execute and how.
+ *
+ * The first character of the location can be a prefix, determining which mode
+ * of execution is to be used. If it is not then the default mode will be used.
+ * All prefixes are configurable as string options (which must only consist of
+ * one single character) under <systemitem>providers/exec</systemitem> :
+ * - <systemitem>prefix_exec</systemitem> : Prefix for mode "exec" where a
+ *   command line is given, to be executed. Output isn't grabbed and donna
+ *   doesn't wait for the execution to end.
+ * - <systemitem>prefix_exec_and_wait</systemitem> : Prefix for mode "exec and
+ *   wait" much like "exec" except that donna will wait for the execution to be
+ *   over. Therefore, this will appear as a task in donna's task manager, where
+ *   the output of the process can be viewed.
+ * - <systemitem>prefix_terminal</systemitem> : Prefix for mode "terminal" where
+ *   the specified command line is actually ran inside a terminal (see below for
+ *   more)
+ * - <systemitem>prefix_embedded_terminal</systemitem> : Prefix for mode
+ *   "embedded terminal", much like "terminal" but with, you guessed it, an
+ *   embedded terminal (instead of a new/external window)
+ * - <systemitem>prefix_parse_output</systemitem> : Prefix for mode "parse
+ *   output" or "search results" where the corresponding node will not be an
+ *   item (as in every other mode) but a container, so it can be used as
+ *   location for a treeview. The output will be parsed, expecting to get the
+ *   path to a file (absolute, or relative to working directory) per line.
+ *   Corresponding nodes (in domain "fs") will be created and used as children.
+ *   This allows to use e.g. "find" or your package manager to search for files,
+ *   and list results in donna.
+ * - <systemitem>prefix_desktop_file</systemitem> : Prefix for mode "desktop
+ *   file" where instead of a command line, what follows must be either the name
+ *   of a .desktop file to use to start the associated application (with or
+ *   without the .desktop suffix/extension), or a full path to a .desktop file
+ *   to be used, if it isn't in one of the usual locations.
+ *
+ * Option <systemitem>default_mode</systemitem> (integer:exec-mode) allows to
+ * set the default mode, to be used when no prefix was specified.
+ *
+ * When specifying a command line, you can prefix it (after the mode prefix of
+ * course) by either <systemitem>WORKDIR=</systemitem> or simply
+ * <systemitem>WD=</systemitem> followed by the directory to be used as working
+ * directory (quoted if needed, i.e. contains spaces). If not specified, the
+ * current directory (as returned by donna_app_get_current_dirname()) is used.
+ *
+ * In mode "terminal", string option <systemitem>cmdline</systemitem> under
+ * <systemitem>providers/exec/terminal</systemitem> can be used to define the
+ * command line to be used as prefix, to start a new terminal emulator.
+ *
+ * You can also define "secondary prefixes" to specify which terminal to use.
+ * This might be of interest if you'd like to use different terminal emulators
+ * from time to time, or to use different options (e.g. whether or not the
+ * terminal should automatically close its window after the process ended or
+ * not, often an option <systemitem>-hold</systemitem> or similar).
+ *
+ * To do so, create a subcategory with string options
+ * <systemitem>prefix</systemitem> and <systemitem>cmdline</systemitem>, noting
+ * that such "subprefixes" can be more than one character long (unlike mode
+ * prefixes).
+ *
+ * Mode "embedded terminal" works in a very similar way, except that instead of
+ * an option <systemitem>cmdline</systemitem> it's an option
+ * <systemitem>terminal</systemitem> that is used to set the name of the
+ * (embedded) terminal to use, as well as an optional option
+ * <systemitem>terminal_cmdline</systemitem> to override the command line to be
+ * used to start the terminal emulator. Specifically, it will be used directly
+ * as argument term_cmdline for the command terminal_add_tab()
+ */
 
 enum mode
 {
