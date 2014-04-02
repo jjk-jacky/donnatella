@@ -2119,14 +2119,25 @@ donna_app_get_current_location (DonnaApp       *app,
  * This is therefore useful to always get a valid path (in "fs"), e.g. when
  * running external scripts/applications needing a working directory.
  *
+ * Note that if there's hasn't yet been an active location in "fs" the current
+ * working directory for donna will be returned.
+ *
  * Returns: (transfer full): A newly allocated string of the path of the current
- * directory (free it with g_free() when done), or %NULL
+ * directory (free it with g_free() when done)
  */
 gchar *
 donna_app_get_current_dirname (DonnaApp       *app)
 {
+    gchar *curdir;
+
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-    return g_strdup (app->priv->cur_dirname);
+
+    curdir = g_strdup (app->priv->cur_dirname);
+    if (G_UNLIKELY (!curdir))
+        /* in case there hasn't yet been any no active location set (in fs) */
+        curdir = g_get_current_dir ();
+
+    return curdir;
 }
 
 /**
@@ -5238,10 +5249,14 @@ conv_app (const gchar        c,
             return TRUE;
 
         case 'd':
-            if (!priv->cur_dirname)
-                return FALSE;
             *type = DONNA_ARG_TYPE_STRING;
-            *ptr = priv->cur_dirname;
+            if (G_UNLIKELY (!priv->cur_dirname))
+            {
+                *ptr = donna_app_get_current_dirname (app);
+                *destroy = g_free;
+            }
+            else
+                *ptr = priv->cur_dirname;
             return TRUE;
 
         case 'L':
