@@ -473,13 +473,15 @@ get_node_children_task (DonnaProvider      *provider,
                         DonnaNodeType       node_types,
                         GError            **error)
 {
-    DonnaApp *app;
+    DonnaApp *app = NULL;
     DonnaTask *task;
     DonnaNodeHasValue has;
     GValue v = G_VALUE_INIT;
     struct exec *ex;
     gchar *location;
     gchar *cmdline;
+    gchar *workdir = NULL;
+    gchar *free_me = NULL;
     gboolean wait = FALSE;
     task_closer_fn closer = NULL;
     struct children *data = NULL;
@@ -499,13 +501,58 @@ get_node_children_task (DonnaProvider      *provider,
     location = donna_node_get_location (node);
     cmdline = location + ex->extra;
 
+    /* was a workdir specified? (not supported with .desktop files) */
+    if (ex->mode != MODE_DESKTOP_FILE
+            && (streqn (cmdline, "WD=", 3) || streqn (cmdline, "WORKDIR=", 8)))
+    {
+        workdir = cmdline + ((cmdline[2] == '=') ? 3 : 8);
+        if (*workdir == '"')
+        {
+            cmdline = workdir;
+            if (!donna_unquote_string (&cmdline))
+            {
+                g_set_error (error, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'exec': Syntax error: "
+                        "Missing ending quote in working directory definition");
+                g_free (location);
+                return NULL;
+            }
+            ++workdir;
+        }
+        else
+        {
+            cmdline = strchr (workdir, ' ');
+            if (!cmdline)
+            {
+                g_set_error (error, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_OTHER,
+                        "Provider 'exec': Syntax error: "
+                        "Missing command line after working directory definition");
+                g_free (location);
+                return NULL;
+            }
+            *cmdline = '\0';
+            ++cmdline;
+        }
+
+        /* if an empty string, treat as non-specified */
+        if (*workdir == '\0')
+            workdir = NULL;
+    }
+
     if (ex->mode == MODE_EXEC || ex->mode == MODE_EXEC_AND_WAIT)
         wait = ex->mode == MODE_EXEC_AND_WAIT;
     else if (ex->mode == MODE_TERMINAL)
     {
         cmdline = g_strconcat (ex->terminal, " ", cmdline, NULL);
-        g_free (location);
-        location = cmdline;
+        if (workdir)
+            free_me = cmdline;
+        else
+        {
+            g_free (location);
+            location = cmdline;
+        }
     }
     else if (ex->mode == MODE_EMBEDDED_TERMINAL)
     {
@@ -520,6 +567,13 @@ get_node_children_task (DonnaProvider      *provider,
         {
             g_string_append_c (str, ',');
             donna_g_string_append_quoted (str, ex->terminal_cmdline, FALSE);
+        }
+        if (workdir)
+        {
+            if (!ex->terminal_cmdline)
+                g_string_append_c (str, ',');
+            g_string_append_c (str, ',');
+            donna_g_string_append_quoted (str, workdir, FALSE);
         }
         g_string_append_c (str, ')');
 
@@ -587,21 +641,26 @@ get_node_children_task (DonnaProvider      *provider,
         return task;
     }
 
-    task = donna_task_process_new (NULL, cmdline, wait,
+    task = donna_task_process_new (workdir, cmdline, wait,
             closer, data, (GDestroyNotify) free_children);
     g_free (location);
+    g_free (free_me);
 
-    g_object_get (provider, "app", &app, NULL);
-    if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task, app))
+    if (!workdir)
     {
-        g_set_error (error, DONNA_PROVIDER_ERROR,
-                DONNA_PROVIDER_ERROR_OTHER,
-                "Provider 'exec': Failed to set working directory to "
-                "current directory on task-process");
-        g_object_unref (app);
-        g_object_ref_sink (task);
-        g_object_unref (task);
-        return NULL;
+        if (!app)
+            g_object_get (provider, "app", &app, NULL);
+        if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task, app))
+        {
+            g_set_error (error, DONNA_PROVIDER_ERROR,
+                    DONNA_PROVIDER_ERROR_OTHER,
+                    "Provider 'exec': Failed to set working directory to "
+                    "current directory on task-process");
+            g_object_unref (app);
+            g_object_ref_sink (task);
+            g_object_unref (task);
+            return NULL;
+        }
     }
 
     if (wait)
@@ -609,8 +668,12 @@ get_node_children_task (DonnaProvider      *provider,
         donna_task_process_set_ui_msg ((DonnaTaskProcess *) task);
         if (closer)
         {
-            data->app = app;
-            data->pfs = donna_app_get_provider (app, "fs");
+            if (app)
+                data->app = g_object_ref (app);
+            else
+                g_object_get (provider, "app", &data->app, NULL);
+
+            data->pfs = donna_app_get_provider (data->app, "fs");
             g_object_get (task, "workdir", &data->workdir, NULL);
             g_signal_connect (task, "pipe-new-line",
                     (GCallback) pipe_new_line_cb, data);
@@ -623,7 +686,7 @@ get_node_children_task (DonnaProvider      *provider,
             donna_task_process_set_default_closer ((DonnaTaskProcess *) task);
     }
 
-    if (!data)
+    if (app)
         g_object_unref (app);
     return task;
 }
