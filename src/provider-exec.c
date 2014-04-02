@@ -594,6 +594,10 @@ get_node_children_task (DonnaProvider      *provider,
     g_object_get (provider, "app", &app, NULL);
     if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task, app))
     {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_OTHER,
+                "Provider 'exec': Failed to set working directory to "
+                "current directory on task-process");
         g_object_unref (app);
         g_object_ref_sink (task);
         g_object_unref (task);
