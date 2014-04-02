@@ -1806,8 +1806,16 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
         }
         else if (devices->len == 0)
         {
-            if (!(state & DONNA_TASK_IN_RUN))
+            if (t->in_pool && state == DONNA_TASK_PAUSED)
+            {
+                donna_task_resume (t->task);
+                t->own_pause = FALSE;
+            }
+            else if (!(state & DONNA_TASK_IN_RUN))
+            {
                 g_thread_pool_push (priv->pool, t->task, NULL);
+                t->in_pool = TRUE;
+            }
             g_ptr_array_unref (devices);
             continue;
         }
