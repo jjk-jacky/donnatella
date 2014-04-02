@@ -526,12 +526,12 @@ get_node_children_task (DonnaProvider      *provider,
         g_object_get (provider, "app", &app, NULL);
         n = donna_app_get_node (app, str->str, FALSE, error);
         g_string_free (str, TRUE);
+        g_object_unref (app);
+        g_free (location);
         if (G_UNLIKELY (!n))
         {
             g_prefix_error (error, "Provider 'exec': Failed to get node for command "
                     " to use embedded terminal: ");
-            g_object_unref (app);
-            g_free (location);
             return NULL;
         }
 
