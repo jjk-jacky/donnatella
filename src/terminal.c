@@ -666,7 +666,9 @@ donna_terminal_get_page (DonnaTerminal      *terminal,
 static GdkFilterReturn
 term_filter (GdkXEvent *gdk_xevent, GdkEvent *event, struct term *term)
 {
+#ifdef DONNA_DEBUG_ENABLED
     DonnaTerminalPrivate *priv = term->terminal->priv;
+#endif
     XEvent *xevent = (XEvent *) gdk_xevent;
     Window window;
 
@@ -762,7 +764,9 @@ term_filter (GdkXEvent *gdk_xevent, GdkEvent *event, struct term *term)
 static void
 plugged (GtkSocket *socket, struct term *term)
 {
+#ifdef DONNA_DEBUG_ENABLED
     DonnaTerminalPrivate *priv = term->terminal->priv;
+#endif
     GdkWindow *win;
 
     win = gtk_socket_get_plug_window (socket);
@@ -785,7 +789,9 @@ plugged (GtkSocket *socket, struct term *term)
 static gboolean
 unplugged (GtkSocket *socket, struct term *term)
 {
+#ifdef DONNA_DEBUG_ENABLED
     DonnaTerminalPrivate *priv = term->terminal->priv;
+#endif
 
     DONNA_DEBUG (TERMINAL, priv->name,
             g_debug ("Terminal '%s': Tab %u: Socket unplugged",

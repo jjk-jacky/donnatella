@@ -119,7 +119,7 @@ donna_context_parse (DonnaContext       *context,
         guint dereference;
         gint pos;
         gboolean match;
-        gchar *extra;
+        gchar *extra = NULL;
         const gchar *e = s;
 
         if (s[1] == '*')
@@ -180,8 +180,6 @@ donna_context_parse (DonnaContext       *context,
             else
                 e = s;
         }
-        else
-            extra = NULL;
 
         match = e[1 + pos] != '\0' && strchr (context->flags, e[1 + pos]) != NULL;
         if (match)
