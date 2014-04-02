@@ -876,6 +876,8 @@ terminal_conv (const gchar       c,
  * @cmdline: The command line to execute in a new emebedded terminal
  * @term_cmdline: (allow-none): The command line for the terminal emulator to
  * embed
+ * @workdir: (allow-none): Working directory for the terminal, or %NULL to use
+ * the current directory (i.e. what donna_app_get_current_dirname() returns)
  * @add_tab: How to handle the addition of the new tab
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
@@ -896,12 +898,13 @@ terminal_conv (const gchar       c,
  * focused, or not. Note that when @DONNA_TERMINAL_FOCUS is used, it won't
  * happen until the terminal emulator has actually been embedded.
  *
- * Returns: The ID of thje newly created tab, or -1 on error
+ * Returns: The ID of the newly created tab, or -1 on error
  */
 guint
 donna_terminal_add_tab (DonnaTerminal      *terminal,
                         const gchar        *cmdline,
                         const gchar        *term_cmdline,
+                        const gchar        *workdir,
                         DonnaTerminalAddTab add_tab,
                         GError            **error)
 {
@@ -968,7 +971,7 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     g_string_append (str, cmdline);
     DONNA_DEBUG (TERMINAL, priv->name,
             g_debug2 ("Terminal '%s': Creating task: %s", priv->name, str->str));
-    tp = (DonnaTaskProcess *) donna_task_process_new (NULL, str->str, TRUE,
+    tp = (DonnaTaskProcess *) donna_task_process_new (workdir, str->str, TRUE,
             NULL, NULL, NULL);
     g_string_free (str, TRUE);
     if (G_UNLIKELY (!tp))
@@ -982,7 +985,7 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
         return (guint) -1;
     }
 
-    if (!donna_task_process_set_workdir_to_curdir (tp, priv->app))
+    if (!workdir && !donna_task_process_set_workdir_to_curdir (tp, priv->app))
     {
         gtk_notebook_remove_page (nb, -1);
         g_object_unref (g_object_ref_sink (tp));

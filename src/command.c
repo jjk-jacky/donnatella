@@ -2475,6 +2475,8 @@ cmd_tasks_switch (DonnaTask *task, DonnaApp *app, gpointer *args)
  * @terminal: A terminal
  * @cmdline: The command line to execute inside the embedded terminal
  * @term_cmdline: (allow-none): The command line to start the embedded terminal
+ * @workdir: (allow-none): Working directory for the terminal; Else (or if
+ * @workdir is an empty string) the current directory will be used
  * @add_tab: (allow-none): Extra action to perform on the newly created tab
  *
  * Starts a new embedded terminal in @terminal, launching @cmdline
@@ -2490,7 +2492,8 @@ cmd_terminal_add_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTerminal *terminal = args[0];
     const gchar *cmdline = args[1];
     const gchar *term_cmdline = args[2]; /* opt */
-    gchar *s_add_tab = args[3]; /* opt */
+    const gchar *workdir = args[3]; /* opt */
+    gchar *s_add_tab = args[4]; /* opt */
 
     const gchar *c_add_tab[] = { "nothing", "active", "focus" };
     DonnaTerminalAddTab add_tab[] = { DONNA_TERMINAL_NOTHING,
@@ -2517,7 +2520,11 @@ cmd_terminal_add_tab (DonnaTask *task, DonnaApp *app, gpointer *args)
         /* default: FOCUS */
         c = 2;
 
-    id = donna_terminal_add_tab (terminal, cmdline, term_cmdline, add_tab[c], &err);
+    if (workdir && *workdir == '\0')
+        workdir = NULL;
+
+    id = donna_terminal_add_tab (terminal, cmdline, term_cmdline, workdir,
+            add_tab[c], &err);
     if (id == (guint) -1)
     {
         donna_task_take_error (task, err);
@@ -5190,6 +5197,7 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TERMINAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (terminal_add_tab, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,

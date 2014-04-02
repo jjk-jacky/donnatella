@@ -119,6 +119,7 @@ gint            donna_terminal_get_page     (DonnaTerminal      *terminal,
 guint           donna_terminal_add_tab      (DonnaTerminal      *terminal,
                                              const gchar        *cmdline,
                                              const gchar        *term_cmdline,
+                                             const gchar        *workdir,
                                              DonnaTerminalAddTab add_tab,
                                              GError            **error);
 gboolean        donna_terminal_remove_tab   (DonnaTerminal      *terminal,
