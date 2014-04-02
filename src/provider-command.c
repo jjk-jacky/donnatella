@@ -30,6 +30,7 @@
 #include "node.h"
 #include "terminal.h"
 #include "task.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -467,45 +468,24 @@ init_parse (DonnaProviderCommand    *pc,
 /* If *start is a quoted string, unquotes it; else return FALSE. Unquoting means
  * moving *start after the opening quote, taking care of unescaping any escaped
  * character and puttin a NUL at the end, which will eiher be the ending quote,
- * or before in case some unescaping was done. *end will always point to the
- * position of the ending quote (which may or may not have been turned into a
- * NUL).
+ * or before in case some unescaping was done. *end will always point after
+ * the ending quote (which may or may not have been turned into a NUL).
  * Returns TRUE was on sucessfull unquoting, FALSE on error (no ending quote) or
  * if the string wasn't quoted. Either check first, or use error to tell. */
 static gboolean
-unquote_string (gchar **start, gchar **_end, GError **error)
+unquote_string (gchar **start, gchar **end, GError **error)
 {
-    gchar *end;
-    guint i = 0;
-
     if (**start != '"')
         return FALSE;
 
-    for (end = ++*start; ; ++end)
+    *end = *start;
+    ++*start;
+    if (!donna_unquote_string (end))
     {
-        if (end[i] == '\\')
-        {
-            *end = end[++i];
-            continue;
-        }
-        *end = end[i];
-        if (*end == '"')
-            break;
-        else if (*end == '\0')
-        {
-            g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
-                    "Missing ending quote");
-            return FALSE;
-        }
+        g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
+                "Missing ending quote");
+        return FALSE;
     }
-    /* turn the ending quote in to NUL, or put it somewhat before if we
-     * did some unescaping */
-    *end = '\0';
-    /* move end to the original ending quote */
-    end += i;
-
-    if (_end)
-        *_end = end;
 
     return TRUE;
 }
@@ -530,8 +510,6 @@ parse_arg (struct run_command    *rc,
 
     if (unquote_string (&rc->start, &end, &err))
     {
-        /* move to next relevant char */
-        ++end;
         skip_blank (end);
     }
     else if (err)
@@ -1047,6 +1025,7 @@ convert:
                     {
                         *_end = '\0';
                         e = _end - 1;
+                        ++_end;
                     }
                     else
                         e = start + strlen (start) - 1;
@@ -1071,7 +1050,7 @@ convert:
                 if (!_end)
                     break;
 
-                start = _end + 1;
+                start = _end;
                 skip_blank (start);
                 if (*start == '\0')
                     break;
@@ -1165,6 +1144,7 @@ convert:
                         {
                             *_end = '\0';
                             e = _end - 1;
+                            ++_end;
                         }
                         else
                             e = start + strlen (start) - 1;
@@ -1178,7 +1158,7 @@ convert:
                             break;
                     }
 
-                    start = _end + 1;
+                    start = _end;
                     skip_blank (start);
                     if (*start == '\0')
                         break;

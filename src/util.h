@@ -53,6 +53,7 @@ void            donna_g_string_append_quoted    (GString            *str,
 void            donna_g_string_append_concat    (GString            *str,
                                                  const gchar        *string,
                                                  ...);
+gboolean        donna_unquote_string            (gchar             **str);
 void            donna_g_object_unref            (gpointer            object);
 GSource *       donna_fd_source_new             (gint                fd,
                                                  GSourceFunc         callback,

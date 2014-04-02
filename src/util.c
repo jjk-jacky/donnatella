@@ -468,6 +468,56 @@ donna_g_string_append_concat (GString            *str,
     va_end (va_args);
 }
 
+/**
+ * donna_unquote_string:
+ * @string: String to unquote
+ *
+ * Unquotes @string
+ *
+ * Unquoting means taking care of unescaping any escaped character and putting a
+ * NUL at the end, which will either be the ending quote, or before in case some
+ * unescaping was done.
+ *
+ * @str will be moved to right after the original ending quote (which may or may
+ * not have been turned into a NUL).
+ *
+ * Note that in case of error (i.e. no ending quote) the string might be in a
+ * modified state, as some unescaping might have been done.
+ *
+ * Returns: %TRUE was on sucessfull unquoting, %FALSE on error (no ending quote)
+ * or if the string wasn't quoted
+ */
+gboolean
+donna_unquote_string (gchar **str)
+{
+    gchar *end;
+    guint i = 0;
+
+    if (G_UNLIKELY (**str != '"'))
+        return FALSE;
+
+    for (end = ++*str; ; ++end)
+    {
+        if (end[i] == '\\')
+        {
+            *end = end[++i];
+            continue;
+        }
+        *end = end[i];
+        if (*end == '"')
+            break;
+        else if (*end == '\0')
+            return FALSE;
+    }
+    /* turn the ending quote in to NUL, or put it somewhat before if we did some
+     * unescaping */
+    *end = '\0';
+    /* move str past the original ending quote */
+    *str = end + i + 1;
+
+    return TRUE;
+}
+
 void
 donna_g_object_unref (gpointer object)
 {
