@@ -58,7 +58,7 @@
  *   (&percnt;V) and in &percnt;S
  * - <systemitem>color_group</systemitem> (string) : Color used on group name
  *   (&percnt;H) and in &percnt;S
- * - <systemitem>color_mixed</systemitem> (string) : Color used in &percnt;S
+ * - <systemitem>color_none</systemitem> (string) : Color used in &percnt;S
  * - <systemitem>sort</systemitem> (integer:perms) : Which criteria to sort by
  *   when sorting on the column.
  *   Can be one of "perms", "self", "uid", "user", "gid", and "group"
@@ -69,29 +69,31 @@
  * - &percnt;p: Permissions, as classic "rwxrwxrwx" string
  * - &percnt;s: Permissions owned ("self"), as "rwx" string. A letter indicates
  *   you have the permission (e.g. to read, regardless of where from), a dash
- *   that you don't.
+ *   that you don't. To know "where" those permissions come from (user, group or
+ *   other), you can use colored user/group names (i.e. \%V and \%H) as hints.
  * - &percnt;S: Similar as above, but with colors. There will always be the
  *   three letters, lowercase when you don't have the permission, uppercase when
- *   you do. In addition, the color indicates why you have the permission, or
- *   what would be needed to have it (that is, the first/lower requirement) :
+ *   you do. In addition, the color gives an indication about the permission and
+ *   who has it:
  *
- *   In <systemitem>color_user</systemitem> if you have the permission because
- *   you're the owner (and), or if only owner has the permission.
+ *   In <systemitem>color_none</systemitem> if it isn't available to anyone; in
+ *   regular color if "other" has it; if <systemitem>color_group</systemitem> if
+ *   "user" has it; and in <systemitem>color_user</systemitem> if "user" (owner)
+ *   has it.
  *
- *   In <systemitem>color_group</systemitem> if you have the permission because
- *   you're member of the group, or if you'd need to be in the group to have it
- *   (Note that owner might also have it).
- *
- *   In <systemitem>color_mixed</systemitem> if you have the permission as
- *   owner, but the group also has it (i.e. you're not a member).
+ *   Permissions are checked in that order, meaning that while with
+ *   <systemitem>color_user</systemitem> only user (owner) has said permission,
+ *   with regular color the permission is available to "other" but might also be
+ *   available to "user" and/or "group".
  * - &percnt;u : User ID
  * - &percnt;U : User name
  * - &percnt;V : Same as &percnt;U but with colors. It will be in
- *   <systemitem>color_user</systemitem> when it is you.
+ *   <systemitem>color_user</systemitem> when you are owner.
  * - &percnt;g : Group ID
  * - &percnt;G : Group name
  * - &percnt;H : Same as &percnt;G but with colors. It will be in
- *   <systemitem>color_group</systemitem> when you are in the group.
+ *   <systemitem>color_group</systemitem> when you are in the group, unless you
+ *   are the owner.
  * - &percnt;o : Permissions as octal number
  *
  * </para></refsect2>
@@ -164,7 +166,7 @@ struct tv_col_data
     gchar *format_tooltip;
     gchar *color_user;
     gchar *color_group;
-    gchar *color_mixed;
+    gchar *color_none;
     gint8  sort;
 };
 
@@ -518,7 +520,7 @@ ct_perms_get_options (DonnaColumnType    *ct,
         { "format_tooltip",     G_TYPE_STRING,      NULL },
         { "color_user",         G_TYPE_STRING,      NULL },
         { "color_group",        G_TYPE_STRING,      NULL },
-        { "color_mixed",        G_TYPE_STRING,      NULL },
+        { "color_none",         G_TYPE_STRING,      NULL },
         { "sort",               G_TYPE_INT,         "sort-perms" }
     };
 
@@ -598,11 +600,11 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
-            "color_mixed", "#00aaaa");
-    if (!streq (data->color_mixed, s))
+            "color_none", "gray");
+    if (!streq (data->color_none, s))
     {
-        g_free (data->color_mixed);
-        data->color_mixed = s;
+        g_free (data->color_none);
+        data->color_none = s;
         need = DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
     else
@@ -1566,7 +1568,7 @@ ct_perms_set_value (DonnaColumnType    *ct,
         goto ready;
     }
 
-    ref_add = 0;
+    ref = ref_add = 0;
     for (;;)
     {
         guint m = 0;
@@ -1857,8 +1859,9 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
                   gboolean                       in_color)
 {
     gchar u_perm = (in_color) ? (gchar) (perm + 'A' - 'a') : perm;
+    struct _group *g;
     mode_t S_OTH, S_GRP, S_USR;
-    int group_has_perm = 0;
+    gchar *color = NULL;
     gssize need;
 
     switch (perm)
@@ -1882,67 +1885,67 @@ add_colored_perm (DonnaColumnTypePermsPrivate   *priv,
             g_return_if_reached ();
     }
 
-    if (mode & S_OTH)
-    {
-        need = snprintf (*str, *max, "%c", u_perm);
-        goto done;
-    }
-
-    if (mode & S_GRP)
-    {
-        struct _group *g;
-
-        g = get_group (priv, gid);
-        if (!g)
-        {
-            need = snprintf (*str, *max, "?");
-            goto done;
-        }
-        if (g->is_member)
-        {
-            if (in_color)
-                need = snprintf (*str, *max,
-                        "<span color=\"%s\">%c</span>", data->color_group, u_perm);
-            else
-                need = snprintf (*str, *max, "%c", perm);
-            goto done;
-        }
-        group_has_perm = 1;
-    }
-
-    if (mode & S_USR)
-    {
-        if (uid == priv->user_id)
-        {
-            if (in_color)
-                need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
-                        (group_has_perm == 1) ? data->color_mixed : data->color_user,
-                        u_perm);
-            else
-                need = snprintf (*str, *max, "%c", perm);
-        }
-        else
-        {
-            if (in_color)
-                need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
-                        (group_has_perm == 1) ? data->color_group : data->color_user,
-                        perm);
-            else
-                need = snprintf (*str, *max, "-");
-        }
-        goto done;
-    }
-
     if (in_color)
     {
-        if (group_has_perm == 1)
-            need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
-                    data->color_group, perm);
-        else
-            need = snprintf (*str, *max, "%c", perm);
+        if (!(mode & (S_USR | S_GRP | S_OTH)))
+            color = data->color_none;
+        else if (mode & S_OTH)
+            color = NULL;
+        else if (mode & S_GRP)
+            color = data->color_group;
+        else /* mode & S_USR */
+            color = data->color_user;
     }
+
+    /* user? */
+    if (uid == priv->user_id)
+    {
+        if (color)
+            need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
+                    color,
+                    (mode & S_USR) ? u_perm : perm);
+        else if (in_color)
+            need = snprintf (*str, *max, "%c",
+                    (mode & S_USR) ? u_perm : perm);
+        else
+            need = snprintf (*str, *max, "%c",
+                    (mode & S_USR) ? perm : '-');
+        goto done;
+    }
+
+    /* group? */
+    g = get_group (priv, gid);
+    if (!g)
+    {
+        need = snprintf (*str, *max, "?");
+        goto done;
+    }
+    if (g->is_member)
+    {
+        if (color)
+            need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
+                    color,
+                    (mode & S_GRP) ? u_perm : perm);
+        else if (in_color)
+            need = snprintf (*str, *max, "%c",
+                    (mode & S_GRP) ? u_perm : perm);
+        else
+            need = snprintf (*str, *max, "%c",
+                    (mode & S_GRP) ? perm : '-');
+        goto done;
+    }
+
+    /* other */
+    if (color)
+        need = snprintf (*str, *max, "<span color=\"%s\">%c</span>",
+                color,
+                (mode & S_OTH) ? u_perm : perm);
+    else if (in_color)
+        need = snprintf (*str, *max, "%c",
+                (mode & S_OTH) ? u_perm : perm);
     else
-        need = snprintf (*str,*max, "-");
+        need = snprintf (*str, *max, "%c",
+                (mode & S_OTH) ? perm : '-');
 
 done:
     if (need >= 0)
@@ -2051,7 +2054,8 @@ print_perms (DonnaColumnTypePerms   *ctperms,
                         else
                             s = g->name;
 
-                        if (fmt[1] == 'G' || (g && !g->is_member))
+                        if (fmt[1] == 'G' || uid == priv->user_id || !g
+                                || !g->is_member)
                             need = snprintf (str, max, "%s", s);
                         else
                         {
@@ -2635,7 +2639,6 @@ ct_perms_is_filter_match (DonnaColumnType    *ct,
     struct filter_data *fd = filter_data;
     DonnaNodeHasValue has;
     guint val = 0;
-    mode_t mode;
     uid_t uid;
     gid_t gid;
 
@@ -2652,60 +2655,41 @@ ct_perms_is_filter_match (DonnaColumnType    *ct,
     has = donna_node_get_mode (node, TRUE, (mode_t *) &val);
     if (has != DONNA_NODE_VALUE_SET)
         return FALSE;
-
     val = val & (S_IRWXU | S_IRWXG | S_IRWXO);
-    if (fd->unit == UNIT_PERMS)
+
+    if (fd->unit == UNIT_SELF)
     {
-        if (fd->comp == COMP_EQUAL)
-            return val == fd->ref;
-        else if (fd->ref == 0)
-            /* as with find, "-000" and "/000" should match everything. The
-             * former would (at least no perms), the later not so much, but
-             * since it does (now) in find, it's probably expected behavior */
-            return TRUE;
-        else if (fd->comp == COMP_REQ)
-            return (val & fd->ref) == fd->ref;
-        else /* COMP_ANY */
-            return (val & fd->ref) != 0;
-    }
-    /* UNIT_SELF */
-
-    mode = (mode_t) fd->ref;
-
-    /* remove permissions that are in OTH */
-    mode &= ~((val & S_IRWXO) & mode);
-    if (mode == 0)
-        return TRUE;
-
-    /* check USR first (quicker than GRP) */
-    has = donna_node_get_uid (node, TRUE, &uid);
-    if (has != DONNA_NODE_VALUE_SET)
-        return FALSE;
-    if (priv->user_id == uid)
-    {
-        /* remove permissions that are in USR */
-        mode &= ~(((val & S_IRWXU) / 0100) & mode);
-        if (mode == 0)
-            return TRUE;
-    }
-
-    /* check GRP */
-    has = donna_node_get_gid (node, TRUE, &gid);
-    if (has != DONNA_NODE_VALUE_SET)
-        return FALSE;
-    {
-        struct _group *g;
-
-        g = get_group (priv, gid);
-        if (g && g->is_member)
+        has = donna_node_get_uid (node, TRUE, &uid);
+        if (has != DONNA_NODE_VALUE_SET)
+            return FALSE;
+        if (uid == priv->user_id)
+            val = (val & S_IRWXU) / 0100;
+        else
         {
-            /* remove permissions that are in GRP */
-            mode &= ~(((val & S_IRWXG) / 010) & mode);
-            return mode == 0;
+            struct _group *g;
+
+            has = donna_node_get_gid (node, TRUE, &gid);
+            if (has != DONNA_NODE_VALUE_SET)
+                return FALSE;
+            g = get_group (priv, gid);
+            if (g && g->is_member)
+                val = (val & S_IRWXG) / 010;
+            else
+                val = val & S_IRWXO;
         }
     }
 
-    return FALSE;
+    if (fd->comp == COMP_EQUAL)
+        return val == fd->ref;
+    else if (fd->ref == 0)
+        /* as with find, "-000" and "/000" should match everything. The
+         * former would (at least no perms), the later not so much, but
+         * since it does (now) in find, it's probably expected behavior */
+        return TRUE;
+    else if (fd->comp == COMP_REQ)
+        return (val & fd->ref) == fd->ref;
+    else /* COMP_ANY */
+        return (val & fd->ref) != 0;
 }
 
 static void
@@ -2819,13 +2803,13 @@ ct_perms_set_option (DonnaColumnType    *ct,
         }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
-    else if (streq (option, "color_mixed"))
+    else if (streq (option, "color_none"))
     {
-        v = (value) ? value : &data->color_mixed;
+        v = (value) ? value : &data->color_none;
         if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
                     col_name, arr_name, tv_name, is_tree, "column_types/perms",
                     &save_location,
-                    option, G_TYPE_STRING, &data->color_mixed, v, error))
+                    option, G_TYPE_STRING, &data->color_none, v, error))
             return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
         if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
@@ -2833,8 +2817,8 @@ ct_perms_set_option (DonnaColumnType    *ct,
 
         if (value)
         {
-            g_free (data->color_mixed);
-            data->color_mixed = g_strdup (* (gchar **) value);
+            g_free (data->color_none);
+            data->color_none = g_strdup (* (gchar **) value);
         }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
@@ -2939,10 +2923,10 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
                 prefix, "color_group:@", save_location, ":green,",
                 prefix, "color_group:@", save_location, ":red,-,",
                 prefix, "color_group:@", save_location, ":=>,",
-            prefix, "color_mixed:@", save_location, "<",
-                prefix, "color_mixed:@", save_location, ":#00aaaa,",
-                prefix, "color_mixed:@", save_location, ":orange,-,",
-                prefix, "color_mixed:@", save_location, ":=>,-,",
+            prefix, "color_none:@", save_location, "<",
+                prefix, "color_none:@", save_location, ":gray,",
+                prefix, "color_none:@", save_location, ":orange,-,",
+                prefix, "color_none:@", save_location, ":=>,-,",
             prefix, "sort:@", save_location, "<",
                 prefix, "sort:@", save_location, ":perms,",
                 prefix, "sort:@", save_location, ":myperms,",
@@ -3128,13 +3112,13 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
         info->is_sensitive = TRUE;
         if (!extra)
         {
-            info->name = g_markup_printf_escaped ("User Color: "
+            info->name = g_markup_printf_escaped ("Color User: "
                     "<span color=\"%s\">%s</span>",
                     data->color_user, data->color_user);
             info->free_name = TRUE;
             info->new_node_fn = (context_new_node_fn) node_add_prop;
             value = NULL;
-            ask_title = "Enter the color for the current user";
+            ask_title = "Enter the color for user (owner) permissions";
             ask_current = data->color_user;
         }
         else if (*extra == '=')
@@ -3149,7 +3133,7 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->desc = g_strconcat ("Current color: ", data->color_user, NULL);
             info->free_desc = TRUE;
             value = NULL;
-            ask_title = "Enter the color for the current user";
+            ask_title = "Enter the color for user (owner) permissions";
             ask_current = data->color_user;
         }
         else
@@ -3171,13 +3155,13 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
         info->is_sensitive = TRUE;
         if (!extra)
         {
-            info->name = g_markup_printf_escaped ("Group Color: "
+            info->name = g_markup_printf_escaped ("Color Group: "
                     "<span color=\"%s\">%s</span>",
                     data->color_group, data->color_group);
             info->free_name = TRUE;
             info->new_node_fn = (context_new_node_fn) node_add_prop;
             value = NULL;
-            ask_title = "Enter the color for a current group";
+            ask_title = "Enter the color for group permissions";
             ask_current = data->color_group;
         }
         else if (*extra == '=')
@@ -3192,7 +3176,7 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->desc = g_strconcat ("Current color: ", data->color_group, NULL);
             info->free_desc = TRUE;
             value = NULL;
-            ask_title = "Enter the color for a current group";
+            ask_title = "Enter the color for group permissions";
             ask_current = data->color_group;
         }
         else
@@ -3208,20 +3192,20 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             value = extra;
         }
     }
-    else if (streq (item, "color_mixed"))
+    else if (streq (item, "color_none"))
     {
         info->is_visible = TRUE;
         info->is_sensitive = TRUE;
         if (!extra)
         {
-            info->name = g_markup_printf_escaped ("Mixed Color: "
+            info->name = g_markup_printf_escaped ("Color None: "
                     "<span color=\"%s\">%s</span>",
-                    data->color_mixed, data->color_mixed);
+                    data->color_none, data->color_none);
             info->free_name = TRUE;
             info->new_node_fn = (context_new_node_fn) node_add_prop;
             value = NULL;
-            ask_title = "Enter the color for mixed user & group";
-            ask_current = data->color_mixed;
+            ask_title = "Enter the color for unavailable permissions";
+            ask_current = data->color_none;
         }
         else if (*extra == '=')
         {
@@ -3232,18 +3216,18 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
                 info->name = g_strdup (extra + 1);
                 info->free_name = TRUE;
             }
-            info->desc = g_strconcat ("Current color: ", data->color_mixed, NULL);
+            info->desc = g_strconcat ("Current color: ", data->color_none, NULL);
             info->free_desc = TRUE;
             value = NULL;
-            ask_title = "Enter the color for mixed user & group";
-            ask_current = data->color_mixed;
+            ask_title = "Enter the color for unavailable permissions";
+            ask_current = data->color_none;
         }
         else
         {
             if (*extra == ':')
                 ++extra;
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = streq (extra, data->color_mixed);
+            info->is_active = streq (extra, data->color_none);
             info->name = g_markup_printf_escaped ("<span color=\"%s\">%s</span>",
                     extra, extra);
             info->free_name = TRUE;
