@@ -2210,7 +2210,7 @@ _get_option_column (DonnaConfig  *config,
 
 treeview:
     if (!tv_name)
-        goto def;
+        goto mode;
     node = priv->root;
     get_child_cat ("tree_views", 10, mode);
     get_child_cat (tv_name, len_tv, mode);
