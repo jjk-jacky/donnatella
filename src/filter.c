@@ -81,6 +81,7 @@ struct _DonnaFilterPrivate
     gulong           option_set_sid;
     gulong           option_deleted_sid;
     struct element  *element;
+    GSList          *col_ct_datas;
 };
 
 static GParamSpec *donna_filter_props[NB_PROPS] = { NULL, };
@@ -632,6 +633,26 @@ donna_filter_is_compiled (DonnaFilter    *filter)
     return filter->priv->element != NULL;
 }
 
+static gpointer
+_get_ct_data (const gchar *col_name, DonnaFilter *filter)
+{
+    DonnaFilterPrivate *priv = filter->priv;
+    struct col_ct_data *ccd;
+    GSList *l;
+
+    /* we might already have the col_ct_data for this column */
+    for (l = priv->col_ct_datas; l; l = l->next)
+    {
+        ccd = l->data;
+        if (streq (ccd->col_name, col_name))
+            return ccd->ct_data;
+    }
+
+    ccd = _donna_app_get_col_ct_data (priv->app, col_name);
+    priv->col_ct_datas = g_slist_append (priv->col_ct_datas, ccd);
+    return ccd->ct_data;
+}
+
 static gboolean
 is_match_element (struct element    *element,
                   DonnaNode         *node,
@@ -673,6 +694,7 @@ donna_filter_is_match (DonnaFilter    *filter,
     DonnaFilterPrivate *priv;
     get_ct_data_fn get_ct_data;
     gpointer data;
+    gboolean match;
 
     g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
@@ -700,12 +722,25 @@ donna_filter_is_match (DonnaFilter    *filter,
     }
     else
     {
-        get_ct_data = (get_ct_data_fn) _donna_app_get_ct_data;
-        data = priv->app;
+        get_ct_data = (get_ct_data_fn) _get_ct_data;
+        data = filter;
     }
 
     /* see if node matches the filter */
-    return is_match_element (priv->element, node, get_ct_data, data);
+    match = is_match_element (priv->element, node, get_ct_data, data);
+
+    /* if not going through a treeview, we might have col_ct_data to unref */
+    if (priv->col_ct_datas)
+    {
+        GSList *l;
+
+        for (l = priv->col_ct_datas; l; l = l ->next)
+            _donna_app_unref_col_ct_data (priv->app, l->data);
+        g_slist_free (priv->col_ct_datas);
+        priv->col_ct_datas = NULL;
+    }
+
+    return match;
 }
 
 /* this is needed for filter_toggle_ref_cb() in app.c where we need to get the

@@ -26,12 +26,24 @@
 G_BEGIN_DECLS
 
 typedef gpointer (*get_ct_data_fn) (const gchar *col_name, gpointer data);
+
+struct col_ct_data
+{
+    gchar   *col_name;
+    gpointer ct_data;
+    /*< private >*/
+    guint    index;
+    guint    ref_count;
+};
+
 /* from treeview.c */
-gpointer    _donna_tree_view_get_ct_data    (const gchar    *col_name,
-                                             DonnaTreeView  *treeview);
+gpointer                _donna_tree_view_get_ct_data    (const gchar    *col_name,
+                                                         DonnaTreeView  *treeview);
 /* from app.c */
-gpointer    _donna_app_get_ct_data          (const gchar    *col_name,
-                                             DonnaApp       *app);
+struct col_ct_data *    _donna_app_get_col_ct_data      (DonnaApp       *app,
+                                                         const gchar    *col_name);
+void                    _donna_app_unref_col_ct_data    (DonnaApp       *app,
+                                                         struct col_ct_data *col_ct_data);
 
 G_END_DECLS
 

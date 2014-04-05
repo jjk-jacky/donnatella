@@ -595,8 +595,8 @@ struct _DonnaAppPrivate
         const gchar     *desc; /* i.e. config extra label */
         GType            type;
         DonnaColumnType *ct;
-        gpointer         ct_data;
     } column_types[NB_COL_TYPES];
+    GSList          *col_ct_datas;
     GSList          *providers;
     GHashTable      *filters;
     GHashTable      *patterns;
@@ -834,6 +834,7 @@ static void
 donna_app_finalize (GObject *object)
 {
     DonnaAppPrivate *priv;
+    GSList *l;
     guint i;
 
     priv = DONNA_APP (object)->priv;
@@ -849,14 +850,22 @@ donna_app_finalize (GObject *object)
     g_hash_table_destroy (priv->intrefs);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
 
-    for (i = 0; i < NB_COL_TYPES; ++i)
+    for (l = priv->col_ct_datas; l; l = l->next)
     {
-        if (priv->column_types[i].ct_data)
-            donna_column_type_free_data (priv->column_types[i].ct,
-                    priv->column_types[i].ct_data);
+        struct col_ct_data *ccd = l->data;
+
+        /* anyone with a ref on a col_ct_data must have a ref on app as well,
+         * IOW all ccd should have ref_count==0 */
+        g_free (ccd->col_name);
+        donna_column_type_free_data (priv->column_types[ccd->index].ct,
+                ccd->ct_data);
+        g_free (ccd);
+    }
+    g_slist_free (priv->col_ct_datas);
+
+    for (i = 0; i < NB_COL_TYPES; ++i)
         if (priv->column_types[i].ct)
             g_object_unref (priv->column_types[i].ct);
-    }
 
     G_OBJECT_CLASS (donna_app_parent_class)->finalize (object);
 }
@@ -900,6 +909,54 @@ free_intref (struct intref *ir)
 }
 
 static void
+option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
+{
+    DonnaAppPrivate *priv = app->priv;
+    gsize len_cat = strlen ("defaults/lists/columns/");
+
+    /* options in defaults/lists/columns/XXXX might trigger refresh of
+     * col_ct_datas */
+    if (priv->col_ct_datas && streqn (option, "defaults/lists/columns/", len_cat))
+    {
+        GSList *l;
+
+        g_rec_mutex_lock (&priv->rec_mutex);
+        for (l = priv->col_ct_datas; l; l = l->next)
+        {
+            struct col_ct_data *ccd = l->data;
+            gsize len = strlen (ccd->col_name);
+
+            if (streqn (option + len_cat, ccd->col_name, len)
+                    && (option[len_cat + len] == '/' || option[len_cat + len] == '\0'))
+            {
+                if (ccd->ref_count == 0)
+                    donna_column_type_refresh_data (priv->column_types[ccd->index].ct,
+                            ccd->col_name, NULL, NULL, FALSE, &ccd->ct_data);
+                else
+                {
+                    struct col_ct_data *new_ccd;
+
+                    /* create a new col_ct_data for this column, the "old" one
+                     * will get free when unref by the filter "owning" it */
+                    new_ccd = g_new0 (struct col_ct_data, 1);
+                    new_ccd->col_name = ccd->col_name;
+                    new_ccd->index = ccd->index;
+                    donna_column_type_refresh_data (priv->column_types[new_ccd->index].ct,
+                            new_ccd->col_name, NULL, NULL, FALSE, &new_ccd->ct_data);
+                    new_ccd->ref_count = 0;
+
+                    l->data = new_ccd;
+                }
+
+                g_rec_mutex_unlock (&priv->rec_mutex);
+                return;
+            }
+        }
+        g_rec_mutex_unlock (&priv->rec_mutex);
+    }
+}
+
+static void
 donna_app_init (DonnaApp *app)
 {
     DonnaAppPrivate *priv;
@@ -914,6 +971,8 @@ donna_app_init (DonnaApp *app)
 
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", app, NULL);
     g_signal_connect (priv->config, "new-node", (GCallback) new_node_cb, app);
+    g_signal_connect (priv->config, "option-set", (GCallback) option_cb, app);
+    g_signal_connect (priv->config, "option-deleted", (GCallback) option_cb, app);
     priv->column_types[COL_TYPE_NAME].name = "name";
     priv->column_types[COL_TYPE_NAME].desc = "Name (and Icon)";
     priv->column_types[COL_TYPE_NAME].type = DONNA_TYPE_COLUMN_TYPE_NAME;
@@ -3978,24 +4037,33 @@ donna_app_show_error (DonnaApp       *app,
         gtk_dialog_run ((GtkDialog *) w);
 }
 
-gpointer
-_donna_app_get_ct_data (const gchar    *col_name,
-                        DonnaApp       *app)
+struct col_ct_data *
+_donna_app_get_col_ct_data (DonnaApp       *app,
+                            const gchar    *col_name)
 {
-    DonnaAppPrivate *priv;
+    DonnaAppPrivate *priv = app->priv;
+    struct col_ct_data *ccd;
     gchar *type = NULL;
+    GSList *l;
     guint i;
 
-    g_return_val_if_fail (col_name != NULL, NULL);
-    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-    priv = app->priv;
+    g_rec_mutex_lock (&priv->rec_mutex);
+    for (l = priv->col_ct_datas; l; l = l->next)
+    {
+        ccd = l->data;
+        if (streq (ccd->col_name, col_name))
+        {
+            ccd->ref_count++;
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            return ccd;
+        }
+    }
 
     if (!donna_config_get_string (priv->config, NULL, &type,
             "defaults/lists/columns/%s/type", col_name))
         /* fallback to its name */
         type = g_strdup (col_name);
 
-    g_rec_mutex_lock (&priv->rec_mutex);
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
         if (streq (type, priv->column_types[i].name))
@@ -4004,18 +4072,46 @@ _donna_app_get_ct_data (const gchar    *col_name,
             if (G_UNLIKELY (!priv->column_types[i].ct))
                 priv->column_types[i].ct = g_object_new (
                         priv->column_types[i].type, "app", app, NULL);
-            if (!priv->column_types[i].ct_data)
-                donna_column_type_refresh_data (priv->column_types[i].ct,
-                        col_name, NULL, NULL, FALSE, &priv->column_types[i].ct_data);
-            g_rec_mutex_unlock (&priv->rec_mutex);
-            g_free (type);
-            return priv->column_types[i].ct_data;
+            break;
         }
     }
-    /* Again: this cannot happen, since the filter has the ct */
-    g_rec_mutex_unlock (&priv->rec_mutex);
     g_free (type);
-    return NULL;
+
+    if (G_UNLIKELY (i >= NB_COL_TYPES))
+    {
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return NULL;
+    }
+
+    ccd = g_new0 (struct col_ct_data, 1);
+    ccd->col_name = g_strdup (col_name);
+    ccd->index = i;
+    donna_column_type_refresh_data (priv->column_types[ccd->index].ct,
+            col_name, NULL, NULL, FALSE, &ccd->ct_data);
+    ccd->ref_count = 1;
+
+    priv->col_ct_datas = g_slist_append (priv->col_ct_datas, ccd);
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return ccd;
+}
+
+void
+_donna_app_unref_col_ct_data (DonnaApp              *app,
+                              struct col_ct_data    *ccd)
+{
+    DonnaAppPrivate *priv = app->priv;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    if (--ccd->ref_count == 0 && !g_slist_find (priv->col_ct_datas, ccd))
+    {
+        /* don't free ccd->col_name, since it's now owned by the new ccd for
+         * that column */
+        donna_column_type_free_data (priv->column_types[ccd->index].ct,
+                ccd->ct_data);
+        g_free (ccd);
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
 }
 
 /**
