@@ -1865,12 +1865,8 @@ popup_children (DonnaTask *task, struct popup_children_data *data)
     {
         gboolean rc;
 
-        if (data->tree)
-            rc = donna_tree_view_filter_nodes (data->tree, data->nodes,
-                    data->filter, &err);
-        else
-            rc = donna_app_filter_nodes (data->app, data->nodes,
-                    data->filter, &err);
+        rc = donna_app_filter_nodes (data->app, data->nodes, data->filter,
+                data->tree, &err);
         if (!rc)
         {
             g_prefix_error (&err, "Command 'node_popup_children': Failed to filter children: ");
@@ -2242,7 +2238,6 @@ cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
     gboolean dup_arr = GPOINTER_TO_INT (args[3]); /* opt */
 
     GPtrArray *arr;
-    gboolean done;
     GValue *value;
 
     if (dup_arr)
@@ -2256,12 +2251,7 @@ cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         arr = nodes;
 
-    if (tree)
-        done = donna_tree_view_filter_nodes (tree, arr, filter, &err);
-    else
-        done = donna_app_filter_nodes (app, arr, filter, &err);
-
-    if (!done)
+    if (!donna_app_filter_nodes (app, arr, filter, tree, &err))
     {
         g_prefix_error (&err, "Command 'nodes_filter': ");
         donna_task_take_error (task, err);

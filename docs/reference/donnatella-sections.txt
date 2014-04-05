@@ -163,7 +163,6 @@ donna_app_trigger_fl
 donna_app_emit_event
 donna_app_show_menu
 donna_app_show_error
-donna_app_get_ct_data
 donna_app_filter_nodes
 donna_app_nodes_io_task
 donna_app_ask
@@ -468,7 +467,6 @@ donna_embedder_get_type
 <TITLE>DonnaFilter</TITLE>
 DONNA_FILTER_ERROR
 DonnaFilterError
-get_ct_data_fn
 DonnaFilter
 DonnaFilterClass
 donna_filter_get_filter
@@ -1176,7 +1174,6 @@ donna_tree_view_column_edit
 donna_tree_view_column_set_option
 donna_tree_view_column_set_value
 donna_tree_view_refresh
-donna_tree_view_filter_nodes
 donna_tree_view_goto_line
 donna_tree_view_get_node_at_row
 donna_tree_view_set_key_mode

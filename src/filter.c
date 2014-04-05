@@ -25,6 +25,7 @@
 #include <string.h>
 #include <ctype.h>      /* isblank() */
 #include "filter.h"
+#include "filter-private.h"
 #include "app.h"
 #include "columntype.h"
 #include "macros.h"
@@ -666,13 +667,15 @@ is_match_element (struct element    *element,
 gboolean
 donna_filter_is_match (DonnaFilter    *filter,
                        DonnaNode      *node,
-                       get_ct_data_fn  get_ct_data,
-                       gpointer        data)
+                       DonnaTreeView  *treeview)
 {
     DonnaFilterPrivate *priv;
+    get_ct_data_fn get_ct_data;
+    gpointer data;
 
     g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
     g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    g_return_val_if_fail (!treeview || DONNA_IS_TREE_VIEW (treeview), FALSE);
     priv = filter->priv;
 
     /* if needed, compile the filter into elements */
@@ -689,10 +692,19 @@ donna_filter_is_match (DonnaFilter    *filter,
         }
     }
 
+    if (treeview)
+    {
+        get_ct_data = (get_ct_data_fn) _donna_tree_view_get_ct_data;
+        data = treeview;
+    }
+    else
+    {
+        get_ct_data = (get_ct_data_fn) _donna_app_get_ct_data;
+        data = priv->app;
+    }
+
     /* see if node matches the filter */
-    return is_match_element (priv->element, node,
-            (get_ct_data) ? get_ct_data : (get_ct_data_fn) donna_app_get_ct_data,
-            (get_ct_data) ? data : priv->app);
+    return is_match_element (priv->element, node, get_ct_data, data);
 }
 
 /* this is needed for filter_toggle_ref_cb() in app.c where we need to get the

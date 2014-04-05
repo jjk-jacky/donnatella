@@ -56,6 +56,7 @@
 #include "columntype-value.h"
 #include "node.h"
 #include "filter.h"
+#include "filter-private.h"
 #include "sort.h"
 #include "command.h"
 #include "statusbar.h"
@@ -638,14 +639,6 @@ static gboolean event_accumulator (GSignalInvocationHint    *ihint,
                                    const GValue             *value_handler,
                                    gpointer                  data);
 
-/* internal; used from treeview.c with its own get_ct_data */
-gboolean
-_donna_app_filter_nodes (DonnaApp        *app,
-                         GPtrArray       *nodes,
-                         const gchar     *filter_str,
-                         get_ct_data_fn   get_ct_data,
-                         gpointer         data,
-                         GError         **error);
 
 static inline void      parse_app                   (DonnaApp       *app,
                                                      const gchar    *fmt,
@@ -3985,21 +3978,9 @@ donna_app_show_error (DonnaApp       *app,
         gtk_dialog_run ((GtkDialog *) w);
 }
 
-/**
- * donna_app_get_ct_data:
- * @col_name: Name of the column
- * @app: The #DonnaApp
- *
- * Returns the columntype data for @column
- *
- * <note><para>Note that the order of arguments is unlike other functions, so
- * this function can be used as #get_ct_data_fn</para></note>
- *
- * Returns: The columntype data (to be used e.g. by filters)
- */
 gpointer
-donna_app_get_ct_data (const gchar    *col_name,
-                       DonnaApp       *app)
+_donna_app_get_ct_data (const gchar    *col_name,
+                        DonnaApp       *app)
 {
     DonnaAppPrivate *priv;
     gchar *type = NULL;
@@ -4010,7 +3991,7 @@ donna_app_get_ct_data (const gchar    *col_name,
     priv = app->priv;
 
     if (!donna_config_get_string (priv->config, NULL, &type,
-            "columns/%s/type", col_name))
+            "defaults/lists/columns/%s/type", col_name))
         /* fallback to its name */
         type = g_strdup (col_name);
 
@@ -4037,20 +4018,42 @@ donna_app_get_ct_data (const gchar    *col_name,
     return NULL;
 }
 
+/**
+ * donna_app_filter_nodes:
+ * @app: The #DonnaApp
+ * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s to filter
+ * @filter: The actual filter to apply
+ * @tree: (allow-none): A #DonnaTreeView to filter through, or %NULL
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Filter @nodes using @filter
+ *
+ * Filters references columns, and might therefore be linked to a treeview (in
+ * order to use treeview-specific column options). If @treeview is specified, it
+ * will be used; else "generic" options will be used, as the filtering happens
+ * via donna/app and not any treeview.
+ *
+ * <note><para>Every node that doesn't match the filter will be removed from
+ * @nodes. Make sure to own the array, since it will be changed (i.e. don't use
+ * an array returned from a get-children task, as it could also be
+ * referenced/used elsewhere)</para></note>
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
 gboolean
-_donna_app_filter_nodes (DonnaApp        *app,
-                         GPtrArray       *nodes,
-                         const gchar     *filter_str,
-                         get_ct_data_fn   get_ct_data,
-                         gpointer         data,
-                         GError         **error)
+donna_app_filter_nodes (DonnaApp       *app,
+                        GPtrArray      *nodes,
+                        const gchar    *filter_str,
+                        DonnaTreeView  *tree,
+                        GError       **error)
 {
     DonnaFilter *filter;
     guint i;
 
-    g_return_val_if_fail (get_ct_data != NULL, FALSE);
+    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
     g_return_val_if_fail (nodes != NULL, FALSE);
     g_return_val_if_fail (filter_str != NULL, FALSE);
+    g_return_val_if_fail (!tree || DONNA_IS_TREE_VIEW (tree), FALSE);
 
     if (G_UNLIKELY (nodes->len == 0))
         return FALSE;
@@ -4070,8 +4073,7 @@ _donna_app_filter_nodes (DonnaApp        *app,
         return FALSE;
 
     for (i = 0; i < nodes->len; )
-        if (!donna_filter_is_match (filter, nodes->pdata[i],
-                    get_ct_data, data))
+        if (!donna_filter_is_match (filter, nodes->pdata[i], tree))
             /* last element comes here, hence no need to increment i */
             g_ptr_array_remove_index_fast (nodes, i);
         else
@@ -4079,41 +4081,6 @@ _donna_app_filter_nodes (DonnaApp        *app,
 
     g_object_unref (filter);
     return TRUE;
-}
-
-/**
- * donna_app_filter_nodes:
- * @app: The #DonnaApp
- * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s to filter
- * @filter: The actual filter to apply
- * @error: (allow-none): Return location of a #GError, or %NULL
- *
- * Filter @nodes using @filter
- *
- * Filters references columns, and might therefore be linked to a treeview (in
- * order to use treeview-specific column options). This will instead use
- * "generic" options, as the filtering happens via donna/app and not any
- * treeview (i.e. it uses donna_app_get_ct_data()).
- *
- * To filter nodes via a treeview, see donna_tree_view_filter_nodes()
- *
- * <note><para>Every node that doesn't match the filter will be removed from
- * @nodes. Make sure to own the array, since it will be changed (i.e. don't use
- * an array returned from a get-children task, as it could also be
- * referenced/used elsewhere)</para></note>
- *
- * Returns: %TRUE on success, else %FALSE
- */
-gboolean
-donna_app_filter_nodes (DonnaApp       *app,
-                        GPtrArray      *nodes,
-                        const gchar    *filter,
-                        GError       **error)
-{
-    g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
-
-    return _donna_app_filter_nodes (app, nodes, filter,
-            (get_ct_data_fn) donna_app_get_ct_data, app, error);
 }
 
 /**

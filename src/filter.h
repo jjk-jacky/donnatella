@@ -25,7 +25,7 @@
 
 #include <glib.h>
 #include <glib-object.h>
-#include "node.h"
+#include "common.h"
 
 G_BEGIN_DECLS
 
@@ -49,8 +49,6 @@ typedef struct _DonnaFilterClass    DonnaFilterClass;
 
 GType   donna_filter_get_type       (void) G_GNUC_CONST;
 
-typedef gpointer (*get_ct_data_fn)  (const gchar *col_name, gpointer data);
-
 struct _DonnaFilter
 {
     /*< private >*/
@@ -69,8 +67,7 @@ gboolean            donna_filter_compile            (DonnaFilter    *filter,
 gboolean            donna_filter_is_compiled        (DonnaFilter    *filter);
 gboolean            donna_filter_is_match           (DonnaFilter    *filter,
                                                      DonnaNode      *node,
-                                                     get_ct_data_fn  get_ct_data,
-                                                     gpointer        data);
+                                                     DonnaTreeView  *treeview);
 
 G_END_DECLS
 

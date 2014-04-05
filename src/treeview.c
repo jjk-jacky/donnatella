@@ -35,6 +35,7 @@
 #include "columntype-name.h"    /* DONNA_TYPE_COLUMN_TYPE_NAME */
 #include "cellrenderertext.h"
 #include "colorfilter.h"
+#include "filter-private.h"
 #include "provider-internal.h"
 #include "contextmenu.h"
 #include "util.h"
@@ -1417,14 +1418,6 @@ static GtkCellRenderer *int_renderers[NB_INTERNAL_RENDERERS] = { NULL, };
              ? NULL : ROW_CLASS_MINITREE),              \
             -1)
 
-/* internal from app.c */
-gboolean _donna_app_filter_nodes (DonnaApp        *app,
-                                  GPtrArray       *nodes,
-                                  const gchar     *filter_str,
-                                  get_ct_data_fn   get_ct_data,
-                                  gpointer         data,
-                                  GError         **error);
-
 /* internal from columntype.c */
 DonnaColumnOptionSaveLocation
 _donna_column_type_ask_save_location (DonnaApp    *app,
@@ -1457,8 +1450,6 @@ static void refilter_list                               (DonnaTreeView  *tree);
 static inline void set_draw_state                       (DonnaTreeView  *tree,
                                                          enum draw       draw);
 static void refresh_draw_state                          (DonnaTreeView  *tree);
-static gpointer get_ct_data                             (const gchar    *col_name,
-                                                         DonnaTreeView  *tree);
 static inline GtkTreeIter * get_child_iter_for_node     (DonnaTreeView  *tree,
                                                          GtkTreeIter    *parent,
                                                          DonnaNode      *node);
@@ -4458,8 +4449,7 @@ refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
 
     if (is_visible && priv->filter
             && (!priv->vf_items_only || donna_node_get_node_type (node) == DONNA_NODE_ITEM))
-        is_visible = donna_filter_is_match (priv->filter, node,
-                (get_ct_data_fn) get_ct_data, tree);
+        is_visible = donna_filter_is_match (priv->filter, node, tree);
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
             gchar *fl = donna_node_get_full_location (node);
@@ -5490,8 +5480,8 @@ spinner_fn (DonnaTreeView *tree)
     return TRUE;
 }
 
-static gpointer
-get_ct_data (const gchar *col_name, DonnaTreeView *tree)
+gpointer
+_donna_tree_view_get_ct_data (const gchar *col_name, DonnaTreeView *tree)
 {
     struct column *_col;
     GSList *l;
@@ -5561,7 +5551,7 @@ apply_color_filters (DonnaTreeView      *tree,
 
         if (donna_color_filter_apply_if_match (cf, (GObject *) renderer,
                     get_column_by_column (tree, column)->name,
-                    node, (get_ct_data_fn) get_ct_data, tree, &keep_going, &err))
+                    node, tree, &keep_going, &err))
         {
             if (!keep_going)
                 break;
@@ -15330,37 +15320,6 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     }
 
     return TRUE;
-}
-
-/**
- * donna_tree_view_filter_nodes:
- * @tree: A #DonnaTreeView
- * @nodes: (element-type DonnaNode): Array of #DonnaNode<!-- -->s to filter
- * @filter_str: Filter to use
- * @error: (allow-none): Return location of a #GError, or %NULL
- *
- * Filters @nodes and remove all nodes that don't match @filter_str, using
- * column options from @tree
- *
- * To filter using default column options (i.e. not linked to any treeview), use
- * donna_app_filter_nodes()
- *
- * <note><para>Every node that doesn't match the filter will be removed from
- * @nodes. Make sure to own the array, since it will be changed (i.e. don't use
- * an array returned from a get-children task, as it could also be
- * referenced/used elsewhere)</para></note>
- *
- * Returns: %TRUE if @nodes was filtered, else %FALSE
- */
-gboolean
-donna_tree_view_filter_nodes (DonnaTreeView *tree,
-                              GPtrArray     *nodes,
-                              const gchar   *filter_str,
-                              GError       **error)
-{
-    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
-    return _donna_app_filter_nodes (tree->priv->app, nodes, filter_str,
-            (get_ct_data_fn) get_ct_data, tree, error);
 }
 
 /**

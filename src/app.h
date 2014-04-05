@@ -149,11 +149,10 @@ void                donna_app_show_error            (DonnaApp       *app,
                                                      const GError   *error,
                                                      const gchar    *fmt,
                                                      ...);
-gpointer            donna_app_get_ct_data           (const gchar    *col_name,
-                                                     DonnaApp       *app);
 gboolean            donna_app_filter_nodes          (DonnaApp       *app,
                                                      GPtrArray      *nodes,
                                                      const gchar    *filter,
+                                                     DonnaTreeView  *tree,
                                                      GError       **error);
 DonnaTask *         donna_app_nodes_io_task         (DonnaApp       *app,
                                                      GPtrArray      *nodes,

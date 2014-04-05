@@ -268,8 +268,7 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
                                    GObject          *renderer,
                                    const gchar      *col_name,
                                    DonnaNode        *node,
-                                   get_ct_data_fn    get_ct_data,
-                                   gpointer          data,
+                                   DonnaTreeView    *tree,
                                    gboolean         *keep_going,
                                    GError          **error)
 {
@@ -283,7 +282,7 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
     priv = cf->priv;
 
     if (priv->via_treeview)
-        g_return_val_if_fail (get_ct_data != NULL, FALSE);
+        g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
 
     if (priv->column && !streq (priv->column, col_name))
         return FALSE;
@@ -304,9 +303,7 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
             return FALSE;
     }
 
-    if (!donna_filter_is_match (priv->filter_obj, node,
-                (priv->via_treeview) ? get_ct_data : NULL,
-                data))
+    if (!donna_filter_is_match (priv->filter_obj, node, tree))
         return FALSE;
 
     for (l = priv->props; l; l = l->next)

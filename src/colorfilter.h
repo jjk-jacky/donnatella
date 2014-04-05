@@ -64,8 +64,7 @@ gboolean            donna_color_filter_apply_if_match (DonnaColorFilter *cf,
                                                      GObject            *renderer,
                                                      const gchar        *col_name,
                                                      DonnaNode          *node,
-                                                     get_ct_data_fn      get_ct_data,
-                                                     gpointer            data,
+                                                     DonnaTreeView      *tree,
                                                      gboolean           *keep_going,
                                                      GError            **error);
 

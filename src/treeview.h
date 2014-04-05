@@ -272,10 +272,6 @@ gboolean        donna_tree_view_column_set_value(DonnaTreeView      *tree,
 gboolean        donna_tree_view_refresh         (DonnaTreeView      *tree,
                                                  DonnaTreeViewRefreshMode mode,
                                                  GError             **error);
-gboolean        donna_tree_view_filter_nodes    (DonnaTreeView      *tree,
-                                                 GPtrArray          *nodes,
-                                                 const gchar        *filter_str,
-                                                 GError            **error);
 gboolean        donna_tree_view_goto_line       (DonnaTreeView      *tree,
                                                  DonnaTreeViewSet    set,
                                                  DonnaRowId         *rowid,
