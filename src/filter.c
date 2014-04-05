@@ -251,8 +251,8 @@ element_need_recompile (struct element *element, const gchar *option)
             struct block *block = element->data;
             gchar buf[255], *b = buf;
 
-            if (snprintf (buf, 255, "/columns/%s/type", block->col_name) >= 255)
-                b = g_strdup_printf ("/columns/%s/type", block->col_name);
+            if (snprintf (buf, 255, "defaults/lists/columns/%s/type", block->col_name) >= 255)
+                b = g_strdup_printf ("defaults/lists/columns/%s/type", block->col_name);
             ret = streq (option, b);
             if (b != buf)
                 g_free (b);
@@ -293,7 +293,8 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaFilter *filter)
 {
     struct option_data *od;
 
-    if (!streqn (option, "/columns/", 9))
+    if (!streqn (option, "defaults/lists/columns/",
+                strlen ("defaults/lists/columns/")))
         return;
 
     od = g_new (struct option_data, 1);
