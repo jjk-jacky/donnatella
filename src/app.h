@@ -117,6 +117,7 @@ gchar *             donna_app_get_current_dirname   (DonnaApp       *app);
 gchar *             donna_app_get_conf_filename     (DonnaApp       *app,
                                                      const gchar    *fmt,
                                                      ...);
+gchar **            donna_app_get_environ           (DonnaApp       *app);
 gchar *             donna_app_new_int_ref           (DonnaApp       *app,
                                                      DonnaArgType    type,
                                                      gpointer        ptr);

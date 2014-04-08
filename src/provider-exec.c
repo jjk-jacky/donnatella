@@ -842,10 +842,9 @@ provider_exec_unref_node (DonnaProviderBase  *provider,
     (is_valid_first_char (c) || ((c) >= '0' && (c) <= '9'))
 
 static gchar *
-parse_environment_variables (const gchar *sce)
+parse_environment_variables (const gchar *sce, gchar **environ)
 {
     GString *str = NULL;
-    gchar **environ = NULL;
     gchar *s;
 
     while ((s = strchr (sce, '$')))
@@ -889,9 +888,6 @@ parse_environment_variables (const gchar *sce)
         else
             b = g_strndup (s, (gsize) (e - s));
 
-        if (!environ)
-            environ = g_get_environ ();
-
         var = g_environ_getenv (environ, b);
         if (var)
         {
@@ -916,8 +912,6 @@ parse_environment_variables (const gchar *sce)
     if (str)
         g_string_append (str, sce);
 
-    if (environ)
-        g_strfreev (environ);
     return (str) ? g_string_free (str, FALSE) : NULL;
 }
 
@@ -955,12 +949,11 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
 
-    location = parse_environment_variables (_location);
-    if (!location)
-        location = (gchar *) _location;
-
     g_object_get (_provider, "app", &app, NULL);
     config = donna_app_peek_config (app);
+    location = parse_environment_variables (_location, donna_app_get_environ (app));
+    if (!location)
+        location = (gchar *) _location;
     g_object_unref (app);
 
     for (i = 0; i < nb_prefixes; ++i)

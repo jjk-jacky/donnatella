@@ -580,6 +580,7 @@ struct _DonnaAppPrivate
     GSList          *statuses;
     gchar           *config_dir;
     gchar           *cur_dirname;
+    gchar          **environ;
     /* visuals are under a RW lock so everyone can read them at the same time
      * (e.g. creating nodes, get_children() & the likes). The write operation
      * should be quite rare. */
@@ -840,6 +841,8 @@ donna_app_finalize (GObject *object)
     priv = DONNA_APP (object)->priv;
 
     g_free (priv->config_dir);
+    g_free (priv->cur_dirname);
+    g_strfreev (priv->environ);
     g_rw_lock_clear (&priv->lock);
     g_rec_mutex_clear (&priv->rec_mutex);
     g_object_unref (priv->config);
@@ -2233,6 +2236,26 @@ donna_app_get_conf_filename (DonnaApp       *app,
     }
 
     return g_string_free (str, FALSE);
+}
+
+/**
+ * donna_app_get_environ:
+ * @app: The #DonnaApp
+ *
+ * Returns the list of environment variables for donnatella. The list is %NULL
+ * terminated, and each item of the form NAME=VALUE
+ *
+ * This is what g_get_environ() returned on process start. This list is owned by
+ * @app and shouldn't be free-d or modified.
+ * Use g_environ_getenv() to get a variable's value.
+ *
+ * Returns: List of environment variables
+ */
+gchar **
+donna_app_get_environ (DonnaApp       *app)
+{
+    g_return_val_if_fail (DONNA_IS_APP (app), NULL);
+    return app->priv->environ;
 }
 
 static gboolean
@@ -6227,6 +6250,9 @@ init_app (DonnaApp *app)
     const gchar * const *extra_dirs;
     const gchar * const *dir;
     const gchar * const *first;
+
+    /* load environ */
+    priv->environ = g_get_environ ();
 
     /* get config dirs */
     main_dir = priv->config_dir;

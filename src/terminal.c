@@ -1006,7 +1006,7 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     g_ptr_array_unref (arr);
     donna_task_process_set_ui_msg (tp);
     donna_task_process_set_default_closer (tp);
-    donna_task_process_import_environ (tp);
+    donna_task_process_import_environ (tp, priv->app);
     donna_task_process_setenv (tp, "DONNATELLA_EMBEDDED", "1", TRUE);
 
     num = gtk_notebook_get_n_pages (nb);

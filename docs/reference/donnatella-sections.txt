@@ -155,6 +155,7 @@ donna_app_get_terminal
 donna_app_get_current_location
 donna_app_get_current_dirname
 donna_app_get_conf_filename
+donna_app_get_environ
 donna_app_new_int_ref
 donna_app_get_int_ref
 donna_app_free_int_ref
