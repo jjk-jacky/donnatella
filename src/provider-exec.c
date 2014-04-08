@@ -102,6 +102,43 @@
  * <systemitem>terminal_cmdline</systemitem> to override the command line to be
  * used to start the terminal emulator. Specifically, it will be used directly
  * as argument term_cmdline for the command terminal_add_tab()
+ *
+ *
+ * A location in exec, even as a command line, isn't a shell-like command line.
+ * You cannot use any shell construct, no redirection, etc. However, any
+ * location will be originally treated upon node creation, and environment
+ * variables will be parsed, i.e. replaced with their values.
+ *
+ * It is important to know this isn't done as a shell parsing, nor as the
+ * parsing of the command line, but as a simple string replacement. This process
+ * is, in a way, similar as to how locations in "fs" are also processed, e.g.
+ * consecutives slashes are removed (so "fs:/tmp///foo" becomes "fs:/tmp/foo").
+ *
+ * As such, there might be issues with regard to quoting. By default, a variable
+ * will be replaced by its value, placed within quotes. So
+ * <systemitem>exec:>$SHELL</systemitem> would become
+ * <systemitem>exec:>"/bin/bash"</systemitem> (assuming the variable $SHELL
+ * resolves to <systemitem>/bin/bash</systemitem> of course). (Any backslash or
+ * quote contained within the value will of course be escaped.)
+ *
+ * This should make things work as expected most of the time. Should you need to
+ * use the variable as-in, you can then use <systemitem>$"SHELL</systemitem>
+ *
+ * Only environment variables will be replaced with their values; if the
+ * variable doesn't exist, it will be replaced with an empty string.
+ * Valid/supported variables must start with an ASCII letter, and be made of
+ * ASCII letters, digits and uppercases. Any other character will be treated as
+ * end of variable name. (Note that shell-like ${VARIABLE} isn't supported.)
+ *
+ * As a special case, some variables have an hardcoded default, so if $SHELL
+ * isn't defined, it will resolve to <systemitem>sh</systemitem>; $EDITOR will
+ * then resolve to <systemitem>vi</systemitem>; and $LESS to
+ * <systemitem>less</systemitem>
+ *
+ * There is therefore no support for $0, etc and, since this is a string
+ * processing, whether the variable appears within (single) quote or not is
+ * irrelevant. In order to include a literal dollar sign, use
+ * <systemitem>$$</systemitem>
  */
 
 enum mode
@@ -799,10 +836,95 @@ provider_exec_unref_node (DonnaProviderBase  *provider,
     }
 }
 
+#define is_valid_first_char(c)    \
+    (((c) >= 'A' && (c) <= 'Z') || ((c) >= 'a' && (c) <= 'z') || (c) == '_')
+#define is_valid_char(c)    \
+    (is_valid_first_char (c) || ((c) >= '0' && (c) <= '9'))
+
+static gchar *
+parse_environment_variables (const gchar *sce)
+{
+    GString *str = NULL;
+    gchar **environ = NULL;
+    gchar *s;
+
+    while ((s = strchr (sce, '$')))
+    {
+        gchar buf[255], *b = buf;
+        gchar *e;
+        const gchar *var;
+        gboolean no_quote = FALSE;
+
+        if (!str)
+            str = g_string_sized_new (strlen (sce) * 2);
+        g_string_append_len (str, sce, s - sce);
+
+        if (s[1] == '$')
+        {
+            g_string_append_c (str, '$');
+            sce = s + 2;
+            continue;
+        }
+
+        e = ++s;
+        if (*s == '"')
+        {
+            no_quote = TRUE;
+            e = ++s;
+        }
+        if (!is_valid_first_char (*e))
+        {
+            sce = e;
+            continue;
+        }
+
+        while (is_valid_char (*e))
+            ++e;
+
+        if (G_LIKELY (e - s < 255))
+        {
+            strncpy (buf, s, (size_t) (e - s));
+            buf[e - s] = '\0';
+        }
+        else
+            b = g_strndup (s, (gsize) (e - s));
+
+        if (!environ)
+            environ = g_get_environ ();
+
+        var = g_environ_getenv (environ, b);
+        if (var)
+        {
+            if (no_quote)
+                g_string_append (str, var);
+            else
+                donna_g_string_append_quoted (str, var, FALSE);
+        }
+        /* some hardcoded defaults, just in case */
+        else if (streq (b, "SHELL"))
+            g_string_append (str, "sh");
+        else if (streq (b, "EDITOR"))
+            g_string_append (str, "vi");
+        else if (streq (b, "LESS"))
+            g_string_append (str, "less");
+
+        if (b != buf)
+            g_free (b);
+
+        sce = e;
+    }
+    if (str)
+        g_string_append (str, sce);
+
+    if (environ)
+        g_strfreev (environ);
+    return (str) ? g_string_free (str, FALSE) : NULL;
+}
+
 static DonnaTaskState
 provider_exec_new_node (DonnaProviderBase  *_provider,
                         DonnaTask          *task,
-                        const gchar        *location)
+                        const gchar        *_location)
 {
     GError *err = NULL;
     DonnaProviderBaseClass *klass;
@@ -810,6 +932,7 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
     DonnaConfig *config;
     DonnaNode *node;
     DonnaNode *n;
+    gchar *location;
     struct exec exec = { 0, };
     struct exec *ex;
     struct prefix
@@ -832,6 +955,10 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
 
+    location = parse_environment_variables (_location);
+    if (!location)
+        location = (gchar *) _location;
+
     g_object_get (_provider, "app", &app, NULL);
     config = donna_app_peek_config (app);
     g_object_unref (app);
@@ -850,6 +977,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                         "Must be a single character",
                         s, prefixes[i].name);
                 g_free (s);
+                if (location != _location)
+                    g_free (location);
                 return DONNA_TASK_FAILED;
             }
             if (*location == *s)
@@ -882,6 +1011,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                         "Provider 'exec': Cannot create new node, "
                         "invalid default mode (%d)",
                         exec.mode);
+                if (location != _location)
+                    g_free (location);
                 return DONNA_TASK_FAILED;
             }
         }
@@ -911,6 +1042,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                             donna_task_take_error (task, err);
                             g_free (s);
                             g_ptr_array_unref (arr);
+                            if (location != _location)
+                                g_free (location);
                             return DONNA_TASK_FAILED;
                         }
                         exec.extra += (guint) strlen (s);
@@ -957,6 +1090,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                                 "Provider 'exec': Unable to find a terminal emulator, "
                                 "you can define the command line in option "
                                 "'providers/exec/terminal/cmdline'");
+                        if (location != _location)
+                            g_free (location);
                         return DONNA_TASK_FAILED;
                     }
                 }
@@ -989,6 +1124,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                             donna_task_take_error (task, err);
                             g_free (s);
                             g_ptr_array_unref (arr);
+                            if (location != _location)
+                                g_free (location);
                             return DONNA_TASK_FAILED;
                         }
                         exec.extra += (guint) strlen (s);
@@ -1016,6 +1153,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                         "Provider 'exec': Unable to find an embedded terminal, "
                         "you can define the terminal to use in option "
                         "'providers/exec/embedded_terminal/terminal'");
+                if (location != _location)
+                    g_free (location);
                 return DONNA_TASK_FAILED;
             }
             donna_config_get_string (config, NULL, &exec.terminal_cmdline,
@@ -1033,6 +1172,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
                 DONNA_PROVIDER_ERROR_OTHER,
                 "Provider 'exec': Failed to create a new node");
         g_free (exec.terminal);
+        if (location != _location)
+            g_free (location);
         return DONNA_TASK_FAILED;
     }
 
@@ -1049,6 +1190,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
         g_free (ex->terminal);
         g_slice_free (struct exec, ex);
         g_value_unset (&v);
+        if (location != _location)
+            g_free (location);
         return DONNA_TASK_FAILED;
     }
     g_value_unset (&v);
@@ -1080,6 +1223,8 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
     g_value_take_object (value, node);
     donna_task_release_return_value (task);
 
+    if (location != _location)
+        g_free (location);
     return DONNA_TASK_DONE;
 }
 
