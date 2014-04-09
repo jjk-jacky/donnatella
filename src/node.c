@@ -1527,6 +1527,58 @@ free_refresh_data (struct refresh_data *data)
     g_slice_free (struct refresh_data, data);
 }
 
+/* assumes reader lock on props_lock */
+static void
+add_prop_to_arr (DonnaNode *node, const gchar *name, GPtrArray *arr)
+{
+    DonnaNodePrivate *priv = node->priv;
+    enum {
+        _PROP_NOT_FOUND,
+        _PROP_FOUND,
+        _PROP_ADD
+    } st = _PROP_NOT_FOUND;
+    const gchar **s;
+    guint i;
+
+    if (streq (name, "name"))
+        st = _PROP_ADD;
+    else
+    {
+        for (s = node_basic_properties + FIRST_BASIC_PROP, i = 0; *s; ++s, ++i)
+            if (streq (name, *s))
+            {
+                if (priv->basic_props[i].has_value != DONNA_NODE_VALUE_NONE)
+                    st = _PROP_ADD;
+                else
+                    st = _PROP_FOUND;
+                break;
+            }
+    }
+
+    if (st == _PROP_NOT_FOUND)
+    {
+        if (g_hash_table_contains (priv->props, name))
+            st = _PROP_ADD;
+    }
+
+    if (st == _PROP_ADD)
+    {
+        /* we can't have dupes */
+        for (i = 0; i < arr->len; ++i)
+            if (streq (name, arr->pdata[i]))
+                break;
+        if (i >= arr->len)
+            g_ptr_array_add (arr, g_strdup (name));
+    }
+    else
+    {
+        gchar *location = donna_node_get_full_location (node);
+        g_warning ("Cannot refresh property '%s' on node '%s': No such property",
+                name, location);
+        g_free (location);
+    }
+}
+
 /**
  * donna_node_refresh_task:
  * @node: Node to refresh properties of
@@ -1604,14 +1656,26 @@ donna_node_refresh_task (DonnaNode   *node,
 
         va_start (va_args, first_name);
         name = (gpointer) first_name;
+        g_rw_lock_reader_lock (&priv->props_lock);
         while (name)
         {
-            /* TODO: check property exists on node, else g_warning ? */
-            name = (gpointer) g_strdup (name);
-            g_ptr_array_add (names, name);
+            add_prop_to_arr (node, name, names);
             name = va_arg (va_args, gpointer);
         }
+        g_rw_lock_reader_unlock (&priv->props_lock);
         va_end (va_args);
+    }
+
+    if (G_UNLIKELY (names->len == 0))
+    {
+        gchar *fl = donna_node_get_full_location (node);
+
+        g_ptr_array_unref (names);
+        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_OTHER,
+                "Cannot get refresh_task() on node '%s': no properties to refresh",
+                fl);
+        g_free (fl);
+        return NULL;
     }
 
     data = g_slice_new0 (struct refresh_data);
@@ -1658,9 +1722,23 @@ donna_node_refresh_arr_task (DonnaNode *node,
 
     /* because the task will change the array, we need to copy it */
     names = g_ptr_array_new_full (props->len, g_free);
+    g_rw_lock_reader_lock (&node->priv->props_lock);
     for (i = 0; i < props->len; ++i)
-        g_ptr_array_add (names, g_strdup (props->pdata[i]));
+        add_prop_to_arr (node, props->pdata[i], names);
+    g_rw_lock_reader_unlock (&node->priv->props_lock);
     g_ptr_array_unref (props);
+
+    if (G_UNLIKELY (names->len == 0))
+    {
+        gchar *fl = donna_node_get_full_location (node);
+
+        g_ptr_array_unref (names);
+        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_OTHER,
+                "Cannot get refresh_arr_task() on node '%s': no properties to refresh",
+                fl);
+        g_free (fl);
+        return NULL;
+    }
 
     data = g_slice_new0 (struct refresh_data);
     data->node  = g_object_ref (node);
