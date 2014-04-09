@@ -1675,7 +1675,7 @@ new_node_for_reg (DonnaProvider *provider, struct reg *reg, GError **error)
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, reg->type);
     if (G_UNLIKELY (!donna_node_add_property (node, "register-type",
-                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
+                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
     {
         g_prefix_error (error, "Provider 'register': Cannot create new node, "
                 "failed to add property 'register-type': ");
@@ -1852,7 +1852,7 @@ new_action_node (DonnaProviderRegister  *pr,
     g_value_init (&v, G_TYPE_BOOLEAN);
     g_value_set_boolean (&v, sensitive == SENSITIVE_YES);
     if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
-                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, error)))
+                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
     {
         g_prefix_error (error, "Provider 'register': Cannot create new node, "
                 "failed to add property 'menu-is-sensitive': ");

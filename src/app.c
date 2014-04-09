@@ -1447,7 +1447,7 @@ donna_app_peek_config (DonnaApp *app)
 }
 
 static gboolean
-visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name)
+visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name, gpointer data)
 {
     /* FIXME: should we do something here? */
     return TRUE;
@@ -1471,7 +1471,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_init (&value, G_TYPE_STRING);
             g_value_set_string (&value, visuals->name);
             donna_node_add_property (node, "visual-name", G_TYPE_STRING, &value,
-                    visual_refresher, NULL, NULL);
+                    visual_refresher, NULL, NULL, NULL, NULL);
             g_value_unset (&value);
         }
 
@@ -1495,7 +1495,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
                 g_value_init (&value, G_TYPE_ICON);
                 g_value_take_object (&value, icon);
                 donna_node_add_property (node, "visual-icon", G_TYPE_ICON, &value,
-                        visual_refresher, NULL, NULL);
+                        visual_refresher, NULL, NULL, NULL, NULL);
                 g_value_unset (&value);
             }
         }
@@ -1505,7 +1505,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_init (&value, G_TYPE_STRING);
             g_value_set_string (&value, visuals->box);
             donna_node_add_property (node, "visual-box", G_TYPE_STRING, &value,
-                    visual_refresher, NULL, NULL);
+                    visual_refresher, NULL, NULL, NULL, NULL);
             g_value_unset (&value);
         }
 
@@ -1514,7 +1514,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_init (&value, G_TYPE_STRING);
             g_value_set_string (&value, visuals->highlight);
             donna_node_add_property (node, "visual-highlight", G_TYPE_STRING, &value,
-                    visual_refresher, NULL, NULL);
+                    visual_refresher, NULL, NULL, NULL, NULL);
             g_value_unset (&value);
         }
     }

@@ -976,8 +976,8 @@ new_node (DonnaProviderBase *_provider,
             location,
             type,
             (filename == location) ? NULL : filename,
-            refresher,
-            setter,
+            (refresher_fn) refresher,
+            (setter_fn) setter,
             name,
             flags);
 

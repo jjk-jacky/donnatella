@@ -5212,8 +5212,8 @@ ensure_option_has_node (DonnaProviderConfig *config,
                 location,
                 (option->extra == priv->root) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
                 NULL, /* filename */
-                node_prop_refresher,
-                node_prop_setter,
+                (refresher_fn) node_prop_refresher,
+                (setter_fn) node_prop_setter,
                 option->name,
                 DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_NAME_WRITABLE);
 
@@ -5229,8 +5229,9 @@ ensure_option_has_node (DonnaProviderConfig *config,
                         "option-extra",
                         G_TYPE_STRING,
                         &v,
-                        node_prop_refresher,
+                        (refresher_fn) node_prop_refresher,
                         NULL /* no setter */,
+                        NULL, NULL,
                         NULL);
                 g_value_unset (&v);
             }
@@ -5240,8 +5241,9 @@ ensure_option_has_node (DonnaProviderConfig *config,
                     "option-value",
                     G_VALUE_TYPE (&option->value),
                     &option->value,
-                    node_prop_refresher,
-                    node_prop_setter,
+                    (refresher_fn) node_prop_refresher,
+                    (setter_fn) node_prop_setter,
+                    NULL, NULL,
                     NULL);
         }
 

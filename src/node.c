@@ -227,11 +227,13 @@ struct _DonnaNodePrivate
 
 typedef struct
 {
-    const gchar *name; /* this pointer is also used as key in the hash table */
-    refresher_fn refresher;
-    setter_fn    setter;
-    gboolean     has_value; /* is value set, or do we need to call refresher? */
-    GValue       value;
+    const gchar     *name; /* this pointer is also used as key in the hash table */
+    refresher_fn     refresher;
+    setter_fn        setter;
+    gpointer         data;
+    GDestroyNotify   destroy;
+    gboolean         has_value; /* is value set, or do we need to call refresher? */
+    GValue           value;
 } DonnaNodeProp;
 
 static void donna_node_finalize (GObject *object);
@@ -307,6 +309,8 @@ free_node_prop (DonnaNodeProp *prop)
     /* prop->name will be free-d through g_hash_table_destroy, since it is also
      * used as key in there */
     g_value_unset (&prop->value);
+    if (prop->destroy && prop->data)
+        prop->destroy (prop->data);
     g_slice_free (DonnaNodeProp, prop);
 }
 
@@ -402,6 +406,9 @@ donna_node_new (DonnaProvider       *provider,
  * @value: (allow-none): Initial value of the property
  * @refresher: function to be called to refresh the property's value
  * @setter: (allow-none): Function to be called to change the property's value
+ * @data: (allow-none): Data to given to @refresher and @setter
+ * @destroy: (allow-none): Function to call to free @data when @node is
+ * finalized
  * @error: (allow-none): Return location of error (or %NULL)
  *
  * Adds a new additional property of the given node.
@@ -415,6 +422,8 @@ donna_node_add_property (DonnaNode       *node,
                          const GValue    *value,
                          refresher_fn     refresher,
                          setter_fn        setter,
+                         gpointer         data,
+                         GDestroyNotify   destroy,
                          GError         **error)
 {
     DonnaNodePrivate    *priv;
@@ -654,7 +663,7 @@ grab_basic_value:
                          * should call set_property_value, hence need a writer
                          * lock */
                         g_rw_lock_reader_unlock (&priv->props_lock);
-                        if (priv->refresher (NULL /* no task */, node, name))
+                        if (priv->refresher (NULL /* no task */, node, name, NULL))
                         {
                             g_rw_lock_reader_lock (&priv->props_lock);
                             /* check if the value has actually been set */
@@ -686,7 +695,7 @@ grab_basic_value:
                             name));
                 /* release the lock for refresher */
                 g_rw_lock_reader_unlock (&priv->props_lock);
-                if (prop->refresher (NULL /* no task */, node, name))
+                if (prop->refresher (NULL /* no task */, node, name, prop->data))
                 {
                     g_rw_lock_reader_lock (&priv->props_lock);
                     /* check if the value has actually been set. We can still
@@ -962,7 +971,7 @@ grab_basic_value:
          * lock */
         g_rw_lock_reader_unlock (&priv->props_lock);
         if (priv->refresher (NULL /* no task */, node,
-                    node_basic_properties[FIRST_BASIC_PROP + basic_id]))
+                    node_basic_properties[FIRST_BASIC_PROP + basic_id], NULL))
         {
             g_rw_lock_reader_lock (&priv->props_lock);
             /* check if the value has actually been set */
@@ -1376,6 +1385,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
     {
         DonnaNodeProp   *prop;
         refresher_fn     refresher;
+        gpointer         refresher_data;
         guint            j;
         gboolean         done;
         gchar          **s;
@@ -1387,6 +1397,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
         }
 
         refresher = NULL;
+        refresher_data = NULL;
 
         /* basic properties. We skip internal ones (provider, domain, location,
          * node-type) since they can't be refreshed (should never be needed
@@ -1408,7 +1419,10 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
             prop = g_hash_table_lookup (props, names->pdata[i]);
             g_rw_lock_reader_unlock (&priv->props_lock);
             if (prop)
+            {
                 refresher = prop->refresher;
+                refresher_data = prop->data;
+            }
         }
 
         if (!refresher)
@@ -1433,7 +1447,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
                     donna_provider_get_domain (priv->provider),
                     priv->location,
                     (gchar *) names->pdata[i]));
-        if (!refresher (task, data->node, names->pdata[i]))
+        if (!refresher (task, data->node, names->pdata[i], refresher_data))
             ret = DONNA_TASK_FAILED;
     }
 
@@ -1712,7 +1726,7 @@ set_property (DonnaTask *task, struct set_property *data)
                 donna_provider_get_domain (data->node->priv->provider),
                 data->node->priv->location));
     ret = data->prop->setter (task, data->node, data->prop->name,
-            (const GValue *) data->value);
+            (const GValue *) data->value, data->prop->data);
 
     /* set the return value */
     g_value_init (&value, G_TYPE_BOOLEAN);

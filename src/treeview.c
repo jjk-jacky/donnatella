@@ -16149,7 +16149,7 @@ get_node_for_history (DonnaTreeView         *tree,
     g_value_set_object (&v, tree);
     if (G_UNLIKELY (!donna_node_add_property (node, "history-tree",
                     DONNA_TYPE_TREE_VIEW, &v,
-                    (refresher_fn) gtk_true, NULL, error)))
+                    (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
     {
         g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't add property 'history-tree': ",
@@ -16166,13 +16166,13 @@ get_node_for_history (DonnaTreeView         *tree,
         g_value_init (&v, G_TYPE_ICON);
         g_value_take_object (&v, g_themed_icon_new ("view-refresh"));
         donna_node_add_property (node, "menu-image-selected",
-                G_TYPE_ICON, &v, (refresher_fn) gtk_true, NULL, NULL);
+                G_TYPE_ICON, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, NULL);
         g_value_unset (&v);
 
         g_value_init (&v, G_TYPE_BOOLEAN);
         g_value_set_boolean (&v, TRUE);
         donna_node_add_property (node, "menu-is-label-bold",
-                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL);
+                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, NULL);
         g_value_unset (&v);
 
         return node;
@@ -16181,7 +16181,7 @@ get_node_for_history (DonnaTreeView         *tree,
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, direction);
     if (G_UNLIKELY (!donna_node_add_property (node, "history-direction",
-                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
+                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
     {
         g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't add property 'history-direction': ",
@@ -16193,7 +16193,7 @@ get_node_for_history (DonnaTreeView         *tree,
 
     g_value_set_uint (&v, nb);
     if (G_UNLIKELY (!donna_node_add_property (node, "history-pos",
-                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, error)))
+                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
     {
         g_prefix_error (error, "TreeView '%s': Failed to get history; "
                 "couldn't add property 'history-pos': ",
@@ -16208,7 +16208,7 @@ get_node_for_history (DonnaTreeView         *tree,
     g_value_take_object (&v, g_themed_icon_new ((direction == DONNA_HISTORY_BACKWARD)
                 ? "go-previous" : "go-next"));
     donna_node_add_property (node, "menu-image-selected",
-            G_TYPE_ICON, &v, (refresher_fn) gtk_true, NULL, NULL);
+            G_TYPE_ICON, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, NULL);
     g_value_unset (&v);
 
     return node;

@@ -370,7 +370,8 @@ new_node_for_mark (DonnaProviderMark *pm,
     }
 
     node = donna_node_new ((DonnaProvider *) pm, mark->location,
-            DONNA_NODE_ITEM, NULL, refresher, setter, mark->name,
+            DONNA_NODE_ITEM, NULL, (refresher_fn) refresher, (setter_fn) setter,
+            mark->name,
             DONNA_NODE_NAME_WRITABLE | DONNA_NODE_DESC_EXISTS);
     if (G_UNLIKELY (!node))
     {
@@ -392,7 +393,9 @@ new_node_for_mark (DonnaProviderMark *pm,
     g_value_init (&v, G_TYPE_INT);
     g_value_set_int (&v, mark->type);
     if (G_UNLIKELY (!donna_node_add_property (node, "mark-type",
-                    G_TYPE_INT, &v, refresher, setter, error)))
+                    G_TYPE_INT, &v,
+                    (refresher_fn) refresher, (setter_fn) setter, NULL, NULL,
+                    error)))
     {
         if (!data_is_mark)
             g_mutex_unlock (&priv->mutex);
@@ -407,7 +410,9 @@ new_node_for_mark (DonnaProviderMark *pm,
     g_value_init (&v, G_TYPE_STRING);
     g_value_set_string (&v, "mark-type");
     if (G_UNLIKELY (!donna_node_add_property (node, "mark-type-extra",
-                    G_TYPE_STRING, &v, refresher, NULL, error)))
+                    G_TYPE_STRING, &v,
+                    (refresher_fn) refresher, NULL, NULL, NULL,
+                    error)))
     {
         if (!data_is_mark)
             g_mutex_unlock (&priv->mutex);
@@ -422,7 +427,9 @@ new_node_for_mark (DonnaProviderMark *pm,
     g_value_init (&v, G_TYPE_STRING);
     g_value_set_string (&v, mark->value);
     if (G_UNLIKELY (!donna_node_add_property (node, "value",
-                    G_TYPE_STRING, &v, refresher, setter, error)))
+                    G_TYPE_STRING, &v,
+                    (refresher_fn) refresher, (setter_fn) setter, NULL, NULL,
+                    error)))
     {
         if (!data_is_mark)
             g_mutex_unlock (&priv->mutex);

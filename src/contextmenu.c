@@ -1088,6 +1088,8 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
                             &v,
                             (refresher_fn) gtk_true,
                             NULL,
+                            NULL,
+                            NULL,
                             &err)))
             {
                 g_warning ("Context-menu: Failed to set image selected "
@@ -1107,7 +1109,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-image-special",
                         G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                        NULL, &err)))
+                        NULL, NULL, NULL, &err)))
         {
             g_warning ("Context-menu: Failed to set image-special "
                     "for item '%s': %s",
@@ -1124,7 +1126,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
             if (G_UNLIKELY (!donna_node_add_property (node,
                             "menu-is-active",
                             G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                            NULL, &err)))
+                            NULL, NULL, NULL, &err)))
             {
                 g_warning ("Context-menu: Failed to set is-active "
                         "for item '%s': %s",
@@ -1142,7 +1144,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
             if (G_UNLIKELY (!donna_node_add_property (node,
                             "menu-is-active",
                             G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                            NULL, &err)))
+                            NULL, NULL, NULL, &err)))
             {
                 g_warning ("Context-menu: Failed to set is-inconsistent "
                         "for item '%s': %s",
@@ -1161,7 +1163,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-is-label-bold",
                         G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                        NULL, &err)))
+                        NULL, NULL, NULL, &err)))
         {
             g_warning ("Context-menu: Failed to set label bold "
                     "for item '%s': %s",
@@ -1179,7 +1181,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-submenus",
                         G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                        NULL, &err)))
+                        NULL, NULL, NULL, &err)))
         {
             g_warning ("Context-menu: Failed to set submenus type "
                     "for item '%s': %s",
@@ -1203,7 +1205,7 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-menu",
                         G_TYPE_STRING, &v, (refresher_fn) gtk_true,
-                        NULL, &err)))
+                        NULL, NULL, NULL, &err)))
         {
             g_warning ("Context-menu: Failed to set menu definition "
                     "for item '%s': %s",
@@ -1540,7 +1542,7 @@ parse_items (DonnaApp               *app,
                 if (G_UNLIKELY (!donna_node_add_property (node,
                                 "menu-is-combined-sensitive",
                                 G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                                NULL, &err)))
+                                NULL, NULL, NULL, &err)))
                 {
                     g_warning ("Context-menu: Failed to set item sensitivity "
                             "for item '%s': %s",
@@ -1578,6 +1580,8 @@ parse_items (DonnaApp               *app,
                                     &v,
                                     (refresher_fn) gtk_true,
                                     NULL,
+                                    NULL,
+                                    NULL,
                                     error)))
                     {
                         g_prefix_error (error, "Error for item '%s': "
@@ -1600,6 +1604,8 @@ parse_items (DonnaApp               *app,
                                     DONNA_TYPE_NODE,
                                     &v,
                                     (refresher_fn) gtk_true,
+                                    NULL,
+                                    NULL,
                                     NULL,
                                     error)))
                     {

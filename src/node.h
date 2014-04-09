@@ -207,6 +207,7 @@ typedef enum
  * @task: (allow-none): The #DonnaTask in which the refresher is ran, or %NULL
  * @node: The #DonnaNode for which the property must be refreshed
  * @name: The name of the property to refresh
+ * @data: Data given on donna_node_add_property() (%NULL for basic properties)
  *
  * The function called when a node was asked to refresh a property. This
  * refresher must call donna_node_set_property_value() to set the new value, and
@@ -226,13 +227,15 @@ typedef enum
  */
 typedef gboolean    (*refresher_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
-                                     const gchar    *name);
+                                     const gchar    *name,
+                                     gpointer        data);
 /**
  * setter_fn:
  * @task: The #DonnaTask under which the setter is run
  * @node: The #DonnaNode for which to set the property
  * @name: The name of the property to set
  * @value: A #GValue holding the value to set
+ * @data: Data given on donna_node_add_property() (%NULL for basic properties)
  *
  * This setter must (try to) set the specified property to the given value.
  * @value is guaranteed to be of the same type as the property on @node.
@@ -248,7 +251,8 @@ typedef gboolean    (*refresher_fn) (DonnaTask      *task,
 typedef DonnaTaskState (*setter_fn) (DonnaTask      *task,
                                      DonnaNode      *node,
                                      const gchar    *name,
-                                     const GValue   *value);
+                                     const GValue   *value,
+                                     gpointer        data);
 struct _DonnaNode
 {
     /*< private >*/
@@ -277,6 +281,8 @@ gboolean            donna_node_add_property         (DonnaNode          *node,
                                                      const GValue       *value,
                                                      refresher_fn        refresher,
                                                      setter_fn           setter,
+                                                     gpointer            data,
+                                                     GDestroyNotify      destroy,
                                                      GError            **error);
 DonnaNodeHasProp    donna_node_has_property         (DonnaNode          *node,
                                                      const gchar        *name);

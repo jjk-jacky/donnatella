@@ -305,7 +305,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, cmd->visibility);
     if (!donna_node_add_property (node, "trigger-visibility", G_TYPE_UINT, &v,
-            (refresher_fn) gtk_true, NULL, &err))
+            (refresher_fn) gtk_true, NULL, NULL, NULL, &err))
     {
         g_prefix_error (&err, "Provider 'command': Cannot create new node, "
                 "failed to add property 'trigger-visibility': ");
