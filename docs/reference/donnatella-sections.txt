@@ -577,7 +577,6 @@ DonnaNodePrivate
 refresher_fn
 setter_fn
 donna_node_new
-donna_node_new_from_node
 donna_node_add_property
 donna_node_has_property
 donna_node_get

@@ -126,14 +126,11 @@
  *
  * For providers:
  *
- * You create a new node using donna_node_new() or donna_node_new_from_node();
- * The later allows you to create a new node based an existing node (usually
- * from a different provider.
- *
- * The refresher and setter functions will be used for all (existing) basic
- * properties. Additional properties can be added using
- * donna_node_add_property(), which can be done by using the provider's signal
- * #DonnaProvider::new-node, emitted upon node creation for this purpose.
+ * You create a new node using donna_node_new() The refresher and setter
+ * functions will be used for all (existing) basic properties. Additional
+ * properties can be added using donna_node_add_property(), which can be done by
+ * using the provider's signal #DonnaProvider::new-node, emitted upon node
+ * creation for this purpose, by anyone (i.e. not just the node's provider).
  *
  * Only the owner of a property should use donna_node_set_property_value() when
  * such a change has effectively been observed on the item it represents.
@@ -394,105 +391,6 @@ donna_node_new (DonnaProvider       *provider,
             g_debug ("Created new node '%s:%s'",
                 donna_provider_get_domain (priv->provider),
                 priv->location));
-    return node;
-}
-
-/**
- * donna_node_new_from_node:
- * @provider: provider of the node
- * @location: location of the node
- * @source_node: source node upon which the node is based
- * @error: (allow-none): return location for error, or %NULL
- *
- * Creates a new node based upon an existing one (from a different provider).
- *
- * The new node will have the specified provider and location, but keep its type
- * as well as the definition of all (basic & additional) properties.
- *
- * This would be useful to e.g. create nodes based on filesystem items, but with
- * a different location so as to show the same item more than once. For example,
- * results of a `grep` could have the same item listed twice, for different
- * lines matching.
- *
- * Like donna_node_new() this should only be called by the node's provider. If
- * you need a node to use it, see donna_provider_get_node()
- *
- * Returns: (transfer full): The new node
- */
-DonnaNode *
-donna_node_new_from_node (DonnaProvider     *provider,
-                          const gchar       *location,
-                          DonnaNode         *sce,
-                          GError           **error)
-{
-    DonnaNode        *node;
-    DonnaNodePrivate *priv;
-    GHashTable       *props;
-    GHashTableIter    iter;
-    gpointer          key;
-    gpointer          value;
-    gint              i;
-
-    g_return_val_if_fail (DONNA_IS_NODE (sce), NULL);
-
-    /* create a new node, duplicate of sce but w/ different provider & location */
-    g_rw_lock_reader_lock (&sce->priv->props_lock);
-    node = donna_node_new (provider, location, sce->priv->node_type,
-            sce->priv->filename,
-            sce->priv->refresher, sce->priv->setter,
-            sce->priv->name, sce->priv->flags);
-    if (!node)
-    {
-        g_set_error (error, DONNA_NODE_ERROR, DONNA_NODE_ERROR_OTHER,
-                "Failed to create a new node '%s:%s' when trying to make a new node from '%s:%s'",
-                donna_provider_get_domain (provider),
-                location,
-                donna_provider_get_domain (sce->priv->provider),
-                sce->priv->location);
-        g_rw_lock_reader_unlock (&sce->priv->props_lock);
-        return NULL;
-    }
-
-    /* and copy over all the (other) properties */
-    priv = node->priv;
-    props = priv->props;
-    /* basic props */
-    for (i = 0; i < NB_BASIC_PROPS; ++i)
-    {
-        if (sce->priv->basic_props[i].has_value == DONNA_NODE_VALUE_SET)
-        {
-            priv->basic_props[i].has_value = DONNA_NODE_VALUE_SET;
-            g_value_copy (&sce->priv->basic_props[i].value,
-                    &priv->basic_props[i].value);
-        }
-    }
-    /* other props */
-    g_hash_table_iter_init (&iter, sce->priv->props);
-    while (g_hash_table_iter_next (&iter, &key, &value))
-    {
-        DonnaNodeProp *prop;
-        DonnaNodeProp *prop_sce = value;
-
-        prop = g_slice_copy (sizeof (*prop), prop_sce);
-        /* the name must be copied */
-        prop->name = g_strdup (prop_sce->name);
-        /* for the GValue we'll need to reset the memory, i.e. re-init it */
-        memset (&prop->value, 0, sizeof (GValue));
-        g_value_init (&prop->value, G_VALUE_TYPE (&prop_sce->value));
-        /* and if there's a value, re-copy it over */
-        if (prop->has_value)
-            g_value_copy (&prop_sce->value, &prop->value);
-
-        g_hash_table_insert (props, (gpointer) prop->name, prop);
-    }
-    g_rw_lock_reader_unlock (&sce->priv->props_lock);
-
-    DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
-            gchar *fl_sce = donna_node_get_full_location (sce);
-            g_debug ("Created new node '%s:%s' from node '%s'",
-                donna_provider_get_domain (priv->provider),
-                priv->location, fl_sce);
-            g_free (fl_sce));
     return node;
 }
 

@@ -271,10 +271,6 @@ DonnaNode *         donna_node_new                  (DonnaProvider      *provide
                                                      setter_fn           setter,
                                                      const gchar        *name,
                                                      DonnaNodeFlags      flags);
-DonnaNode *         donna_node_new_from_node        (DonnaProvider      *provider,
-                                                     const gchar        *location,
-                                                     DonnaNode          *source_node,
-                                                     GError            **error);
 gboolean            donna_node_add_property         (DonnaNode          *node,
                                                      const gchar        *name,
                                                      GType               type,
