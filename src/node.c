@@ -1547,11 +1547,13 @@ donna_node_refresh_task (DonnaNode   *node,
                          const gchar *first_name,
                          ...)
 {
+    DonnaNodePrivate    *priv;
     DonnaTask           *task;
     GPtrArray           *names;
     struct refresh_data *data;
 
     g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    priv = node->priv;
 
     if (!first_name /* == DONNA_NODE_REFRESH_SET_VALUES */
             || streq (first_name, DONNA_NODE_REFRESH_ALL_VALUES))
@@ -1559,23 +1561,30 @@ donna_node_refresh_task (DonnaNode   *node,
         GHashTableIter iter;
         gpointer key, value;
         const gchar **s;
+        guint i;
 
         /* we'll send the list of all properties, because node_refresh() needs
          * to know which refresher to call, and it can't have a lock on the hash
          * table since the refresher will call set_property_value which needs to
          * take a writer lock... */
 
-        g_rw_lock_reader_lock (&node->priv->props_lock);
+        g_rw_lock_reader_lock (&priv->props_lock);
         names = g_ptr_array_new_full (
                 /* basic props + required props - those that never need to be
                  * refreshed, i.e. provider/domain/location/node-type */
                 NB_BASIC_PROPS + FIRST_BASIC_PROP - 4
-                + g_hash_table_size (node->priv->props),
+                + g_hash_table_size (priv->props),
                 g_free);
-        for (s = node_basic_properties + FIRST_REQUIRED_PROP; *s; ++s)
-            g_ptr_array_add (names, g_strdup (*s));
+        /* always have name, since it's always set */
+        g_ptr_array_add (names, g_strdup ("name"));
+        /* add basic props that exists/are set */
+        for (s = node_basic_properties + FIRST_BASIC_PROP, i = 0; *s; ++s, ++i)
+            if (priv->basic_props[i].has_value == DONNA_NODE_VALUE_SET
+                    || (first_name /* ALL_VALUES */
+                        && priv->basic_props[i].has_value != DONNA_NODE_VALUE_NONE))
+                g_ptr_array_add (names, g_strdup (*s));
 
-        g_hash_table_iter_init (&iter, node->priv->props);
+        g_hash_table_iter_init (&iter, priv->props);
         while (g_hash_table_iter_next (&iter, &key, &value))
         {
             if (first_name || ((DonnaNodeProp *)value)->has_value)
@@ -1584,7 +1593,7 @@ donna_node_refresh_task (DonnaNode   *node,
                 g_ptr_array_add (names, value);
             }
         }
-        g_rw_lock_reader_unlock (&node->priv->props_lock);
+        g_rw_lock_reader_unlock (&priv->props_lock);
     }
     else
     {
