@@ -217,9 +217,10 @@ struct _DonnaNodePrivate
         GValue            value;
     } basic_props[NB_BASIC_PROPS];
     /* properties handler */
-    refresher_fn     refresher;
-    setter_fn        setter;
-    DonnaNodeFlags   flags;
+    DonnaTaskVisibility visibility;
+    refresher_fn        refresher;
+    setter_fn           setter;
+    DonnaNodeFlags      flags;
     /* other properties */
     GHashTable      *props;
     GRWLock          props_lock; /* also applies to basic_props, name & icon */
@@ -227,13 +228,14 @@ struct _DonnaNodePrivate
 
 typedef struct
 {
-    const gchar     *name; /* this pointer is also used as key in the hash table */
-    refresher_fn     refresher;
-    setter_fn        setter;
-    gpointer         data;
-    GDestroyNotify   destroy;
-    gboolean         has_value; /* is value set, or do we need to call refresher? */
-    GValue           value;
+    const gchar         *name; /* this pointer is also used as key in the hash table */
+    DonnaTaskVisibility  visibility;
+    refresher_fn         refresher;
+    setter_fn            setter;
+    gpointer             data;
+    GDestroyNotify       destroy;
+    gboolean             has_value; /* is value set, or do we need to call refresher? */
+    GValue               value;
 } DonnaNodeProp;
 
 static void donna_node_finalize (GObject *object);
@@ -264,6 +266,8 @@ donna_node_init (DonnaNode *node)
     priv->props = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_node_prop);
     g_rw_lock_init (&priv->props_lock);
+
+    priv->visibility = DONNA_TASK_VISIBILITY_INTERNAL;
 
     g_value_init (&priv->basic_props[BASIC_PROP_ICON].value,      G_TYPE_ICON);
     g_value_init (&priv->basic_props[BASIC_PROP_FULL_NAME].value, G_TYPE_STRING);
@@ -321,6 +325,7 @@ free_node_prop (DonnaNodeProp *prop)
  * @node_type: type of node
  * @filename: (allow-none): filename of the node (in GLib filename encoding),
  * or %NULL if we can use @name)
+ * @visibility: Visibility for the refresher
  * @refresher: function called to refresh a basic property
  * @setter: function to change value of a basic property
  * @name: name of the node
@@ -328,6 +333,16 @@ free_node_prop (DonnaNodeProp *prop)
  *
  * Creates a new node, according to the specified parameters. This should only
  * be called by the #DonnaProvider of the node.
+ *
+ * @refresher migh be called without a #DonnaTask when from a blocking call, or
+ * it can be called from a task worker to refresh one or more properties on
+ * @node. In such a case, the node creating the task will use @visibility to
+ * determine the appropriate visibility of the task: If all refreshers are
+ * #DONNA_TASK_VISIBILITY_INTERNAL_FAST so will the task be; else it will be
+ * #DONNA_TASK_VISIBILITY_INTERNAL.
+ *
+ * #DONNA_TASK_VISIBILITY_INTERNAL_GUI and #DONNA_TASK_VISIBILITY_PULIC aren't
+ * allowed, and will be reverted back to #DONNA_TASK_VISIBILITY_INTERNAL.
  *
  * If you need a node to use it, see donna_provider_get_node() or
  * donna_app_get_node()
@@ -339,6 +354,7 @@ donna_node_new (DonnaProvider       *provider,
                 const gchar         *location,
                 DonnaNodeType        node_type,
                 const gchar         *filename,
+                DonnaTaskVisibility  visibility,
                 refresher_fn         refresher,
                 setter_fn            setter,
                 const gchar         *name,
@@ -356,6 +372,10 @@ donna_node_new (DonnaProvider       *provider,
         g_return_val_if_fail (setter != NULL, NULL);
     g_return_val_if_fail (name != NULL, NULL);
 
+    if (visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
+            && visibility != DONNA_TASK_VISIBILITY_INTERNAL)
+        visibility = DONNA_TASK_VISIBILITY_INTERNAL;
+
     node = g_object_new (DONNA_TYPE_NODE, NULL);
     priv = node->priv;
     priv->provider  = g_object_ref (provider);
@@ -367,6 +387,9 @@ donna_node_new (DonnaProvider       *provider,
     priv->refresher = refresher;
     priv->setter    = setter;
     priv->flags     = flags;
+
+    if (visibility != DONNA_TASK_VISIBILITY_INTERNAL)
+        priv->visibility = visibility;
     /* we want to store which basic prop exists in basic_props as well. We'll
      * use that so we can just loop other basic_props and see which ones exists,
      * etc */
@@ -404,6 +427,7 @@ donna_node_new (DonnaProvider       *provider,
  * @name: Name of the property
  * @type: type of the property
  * @value: (allow-none): Initial value of the property
+ * @visibility: Visibility for the refresher
  * @refresher: function to be called to refresh the property's value
  * @setter: (allow-none): Function to be called to change the property's value
  * @data: (allow-none): Data to given to @refresher and @setter
@@ -413,6 +437,8 @@ donna_node_new (DonnaProvider       *provider,
  *
  * Adds a new additional property of the given node.
  *
+ * See donna_node_new() for more about @visibility and @refresher
+ *
  * Returns: %TRUE if the property was added, else %FALSE
  */
 gboolean
@@ -420,6 +446,7 @@ donna_node_add_property (DonnaNode       *node,
                          const gchar     *name,
                          GType            type,
                          const GValue    *value,
+                         DonnaTaskVisibility visibility,
                          refresher_fn     refresher,
                          setter_fn        setter,
                          gpointer         data,
@@ -435,6 +462,10 @@ donna_node_add_property (DonnaNode       *node,
     /* initial value is optional */
     g_return_val_if_fail (refresher != NULL, FALSE);
     /* setter is optional (can be read-only) */
+
+    if (visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
+            && visibility != DONNA_TASK_VISIBILITY_INTERNAL)
+        visibility = DONNA_TASK_VISIBILITY_INTERNAL;
 
     priv = node->priv;
     g_rw_lock_writer_lock (&priv->props_lock);
@@ -459,9 +490,10 @@ donna_node_add_property (DonnaNode       *node,
     }
     /* allocate a new DonnaNodeProp to hold the property value */
     prop = g_slice_new0 (DonnaNodeProp);
-    prop->name      = g_strdup (name);
-    prop->refresher = refresher;
-    prop->setter    = setter;
+    prop->name          = g_strdup (name);
+    prop->visibility    = visibility;
+    prop->refresher     = refresher;
+    prop->setter        = setter;
     /* init the GValue */
     g_value_init (&prop->value, type);
     /* do we have an init value to set? */
@@ -1529,7 +1561,10 @@ free_refresh_data (struct refresh_data *data)
 
 /* assumes reader lock on props_lock */
 static void
-add_prop_to_arr (DonnaNode *node, const gchar *name, GPtrArray *arr)
+add_prop_to_arr (DonnaNode              *node,
+                 const gchar            *name,
+                 GPtrArray              *arr,
+                 DonnaTaskVisibility    *visibility)
 {
     DonnaNodePrivate *priv = node->priv;
     enum {
@@ -1541,14 +1576,22 @@ add_prop_to_arr (DonnaNode *node, const gchar *name, GPtrArray *arr)
     guint i;
 
     if (streq (name, "name"))
+    {
         st = _PROP_ADD;
+        if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+            *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
+    }
     else
     {
         for (s = node_basic_properties + FIRST_BASIC_PROP, i = 0; *s; ++s, ++i)
             if (streq (name, *s))
             {
                 if (priv->basic_props[i].has_value != DONNA_NODE_VALUE_NONE)
+                {
                     st = _PROP_ADD;
+                    if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+                        *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
+                }
                 else
                     st = _PROP_FOUND;
                 break;
@@ -1557,8 +1600,15 @@ add_prop_to_arr (DonnaNode *node, const gchar *name, GPtrArray *arr)
 
     if (st == _PROP_NOT_FOUND)
     {
-        if (g_hash_table_contains (priv->props, name))
+        DonnaNodeProp *prop;
+
+        prop = g_hash_table_lookup (priv->props, name);
+        if (prop)
+        {
             st = _PROP_ADD;
+            if (prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+                *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
+        }
     }
 
     if (st == _PROP_ADD)
@@ -1601,6 +1651,7 @@ donna_node_refresh_task (DonnaNode   *node,
 {
     DonnaNodePrivate    *priv;
     DonnaTask           *task;
+    DonnaTaskVisibility  visibility = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
     GPtrArray           *names;
     struct refresh_data *data;
 
@@ -1634,7 +1685,11 @@ donna_node_refresh_task (DonnaNode   *node,
             if (priv->basic_props[i].has_value == DONNA_NODE_VALUE_SET
                     || (first_name /* ALL_VALUES */
                         && priv->basic_props[i].has_value != DONNA_NODE_VALUE_NONE))
+            {
                 g_ptr_array_add (names, g_strdup (*s));
+                if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+                    visibility = DONNA_TASK_VISIBILITY_INTERNAL;
+            }
 
         g_hash_table_iter_init (&iter, priv->props);
         while (g_hash_table_iter_next (&iter, &key, &value))
@@ -1643,6 +1698,8 @@ donna_node_refresh_task (DonnaNode   *node,
             {
                 value = (gpointer) g_strdup ((gchar *) key);
                 g_ptr_array_add (names, value);
+                if (((DonnaNodeProp *) value)->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
+                    visibility = DONNA_TASK_VISIBILITY_INTERNAL;
             }
         }
         g_rw_lock_reader_unlock (&priv->props_lock);
@@ -1659,7 +1716,7 @@ donna_node_refresh_task (DonnaNode   *node,
         g_rw_lock_reader_lock (&priv->props_lock);
         while (name)
         {
-            add_prop_to_arr (node, name, names);
+            add_prop_to_arr (node, name, names, &visibility);
             name = va_arg (va_args, gpointer);
         }
         g_rw_lock_reader_unlock (&priv->props_lock);
@@ -1684,6 +1741,7 @@ donna_node_refresh_task (DonnaNode   *node,
 
     task = donna_task_new ((task_fn) node_refresh, data,
             (GDestroyNotify) free_refresh_data);
+    donna_task_set_visibility (task, visibility);
 
     DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);
@@ -1712,6 +1770,7 @@ donna_node_refresh_arr_task (DonnaNode *node,
                              GError   **error)
 {
     DonnaTask *task;
+    DonnaTaskVisibility visibility = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
     GPtrArray *names;
     guint i;
     struct refresh_data *data;
@@ -1724,7 +1783,7 @@ donna_node_refresh_arr_task (DonnaNode *node,
     names = g_ptr_array_new_full (props->len, g_free);
     g_rw_lock_reader_lock (&node->priv->props_lock);
     for (i = 0; i < props->len; ++i)
-        add_prop_to_arr (node, props->pdata[i], names);
+        add_prop_to_arr (node, props->pdata[i], names, &visibility);
     g_rw_lock_reader_unlock (&node->priv->props_lock);
     g_ptr_array_unref (props);
 
@@ -1746,6 +1805,7 @@ donna_node_refresh_arr_task (DonnaNode *node,
 
     task = donna_task_new ((task_fn) node_refresh, data,
             (GDestroyNotify) free_refresh_data);
+    donna_task_set_visibility (task, visibility);
 
     DONNA_DEBUG (TASK, NULL,
             gchar *location = donna_node_get_location (node);

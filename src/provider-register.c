@@ -1660,7 +1660,11 @@ new_node_for_reg (DonnaProvider *provider, struct reg *reg, GError **error)
         name = g_strdup_printf ("Register '%s'", reg->name);
 
     node = donna_node_new (provider, reg->name, DONNA_NODE_CONTAINER, NULL,
-            (refresher_fn) gtk_true, NULL, name, 0);
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) gtk_true,
+            NULL,
+            name,
+            0);
 
     if (reg->name != reg_default && reg->name != reg_clipboard)
         g_free (name);
@@ -1675,7 +1679,12 @@ new_node_for_reg (DonnaProvider *provider, struct reg *reg, GError **error)
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, reg->type);
     if (G_UNLIKELY (!donna_node_add_property (node, "register-type",
-                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                    G_TYPE_UINT, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    NULL, NULL,
+                    error)))
     {
         g_prefix_error (error, "Provider 'register': Cannot create new node, "
                 "failed to add property 'register-type': ");
@@ -1831,9 +1840,13 @@ new_action_node (DonnaProviderRegister  *pr,
         }
     }
 
-    node = donna_node_new ((DonnaProvider *) pr, location,
-            DONNA_NODE_ITEM, NULL, (refresher_fn) gtk_true, NULL,
-            b, DONNA_NODE_ICON_EXISTS);
+    node = donna_node_new ((DonnaProvider *) pr, location, DONNA_NODE_ITEM,
+            NULL,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) gtk_true,
+            NULL,
+            b,
+            DONNA_NODE_ICON_EXISTS);
     if (G_UNLIKELY (!node))
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
@@ -1852,7 +1865,12 @@ new_action_node (DonnaProviderRegister  *pr,
     g_value_init (&v, G_TYPE_BOOLEAN);
     g_value_set_boolean (&v, sensitive == SENSITIVE_YES);
     if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
-                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                    G_TYPE_BOOLEAN, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    NULL, NULL,
+                    error)))
     {
         g_prefix_error (error, "Provider 'register': Cannot create new node, "
                 "failed to add property 'menu-is-sensitive': ");
@@ -1887,8 +1905,13 @@ provider_register_new_node (DonnaProviderBase  *_provider,
     if (streq (location, "/"))
     {
         node = donna_node_new ((DonnaProvider *) _provider, location,
-                DONNA_NODE_CONTAINER, NULL, (refresher_fn) gtk_true, NULL,
-                "Registers", 0);
+                DONNA_NODE_CONTAINER,
+                NULL,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) gtk_true,
+                NULL,
+                "Registers",
+                0);
         if (G_UNLIKELY (!node))
         {
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,

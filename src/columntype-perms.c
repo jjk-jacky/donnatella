@@ -2946,7 +2946,9 @@ node_add_prop (DonnaNode *node)
     g_value_init (&v, G_TYPE_BOOLEAN);
     g_value_set_boolean (&v, TRUE);
     if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-name-markup",
-                    G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, &err)))
+                    G_TYPE_BOOLEAN, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true, NULL, NULL, NULL, &err)))
     {
         gchar *fl = donna_node_get_full_location (node);
         g_warning ("ColumnType 'perms': Failed to set is-name-markup "

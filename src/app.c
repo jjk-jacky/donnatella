@@ -1471,6 +1471,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_init (&value, G_TYPE_STRING);
             g_value_set_string (&value, visuals->name);
             donna_node_add_property (node, "visual-name", G_TYPE_STRING, &value,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     visual_refresher, NULL, NULL, NULL, NULL);
             g_value_unset (&value);
         }
@@ -1495,6 +1496,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
                 g_value_init (&value, G_TYPE_ICON);
                 g_value_take_object (&value, icon);
                 donna_node_add_property (node, "visual-icon", G_TYPE_ICON, &value,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                         visual_refresher, NULL, NULL, NULL, NULL);
                 g_value_unset (&value);
             }
@@ -1505,6 +1507,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_init (&value, G_TYPE_STRING);
             g_value_set_string (&value, visuals->box);
             donna_node_add_property (node, "visual-box", G_TYPE_STRING, &value,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     visual_refresher, NULL, NULL, NULL, NULL);
             g_value_unset (&value);
         }
@@ -1514,6 +1517,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_init (&value, G_TYPE_STRING);
             g_value_set_string (&value, visuals->highlight);
             donna_node_add_property (node, "visual-highlight", G_TYPE_STRING, &value,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                     visual_refresher, NULL, NULL, NULL, NULL);
             g_value_unset (&value);
         }

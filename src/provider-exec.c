@@ -499,8 +499,13 @@ pipe_new_line_cb (DonnaTaskProcess  *taskp,
         *++s = '\0';
     g_value_init (&value, G_TYPE_STRING);
     g_value_take_string (&value, location);
-    donna_node_add_property (n, "path", G_TYPE_STRING, &value,
-            (refresher_fn) refresh_path, NULL, NULL, NULL, NULL);
+    donna_node_add_property (n, "path",
+            G_TYPE_STRING, &value,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) refresh_path,
+            NULL,
+            NULL, NULL,
+            NULL);
     g_value_unset (&value);
 
     /* give our ref on n to the array */
@@ -1157,7 +1162,11 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
 
     node = donna_node_new ((DonnaProvider *) _provider, location,
             exec.mode == MODE_PARSE_OUTPUT ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
-            NULL, (refresher_fn) gtk_true, NULL, location,
+            NULL,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) gtk_true,
+            NULL,
+            location,
             DONNA_NODE_ICON_EXISTS);
     if (!node)
     {
@@ -1174,8 +1183,13 @@ provider_exec_new_node (DonnaProviderBase  *_provider,
     memcpy (ex, &exec, sizeof (struct exec));
     g_value_init (&v, G_TYPE_POINTER);
     g_value_set_pointer (&v, ex);
-    if (!donna_node_add_property (node, "_exec", G_TYPE_POINTER, &v,
-            (refresher_fn) gtk_true, NULL, NULL, NULL, &err))
+    if (!donna_node_add_property (node, "_exec",
+                G_TYPE_POINTER, &v,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) gtk_true,
+                NULL,
+                NULL, NULL,
+                &err))
     {
         g_prefix_error (&err, "Provider 'exec': Failed to create a new node: "
                 "Couldn't set internal exec property: ");

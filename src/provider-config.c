@@ -5018,15 +5018,6 @@ provider_config_get_flags (DonnaProvider *provider)
     return 0;
 }
 
-static gboolean
-node_prop_refresher (DonnaTask   *task,
-                     DonnaNode   *node,
-                     const gchar *name)
-{
-    /* config is always up-to-date */
-    return TRUE;
-}
-
 static DonnaTaskState
 node_prop_setter (DonnaTask     *task,
                   DonnaNode     *node,
@@ -5212,7 +5203,8 @@ ensure_option_has_node (DonnaProviderConfig *config,
                 location,
                 (option->extra == priv->root) ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
                 NULL, /* filename */
-                (refresher_fn) node_prop_refresher,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) gtk_true,
                 (setter_fn) node_prop_setter,
                 option->name,
                 DONNA_NODE_FULL_NAME_EXISTS | DONNA_NODE_NAME_WRITABLE);
@@ -5227,9 +5219,9 @@ ensure_option_has_node (DonnaProviderConfig *config,
                 g_value_set_string (&v, option->extra);
                 donna_node_add_property (option->node,
                         "option-extra",
-                        G_TYPE_STRING,
-                        &v,
-                        (refresher_fn) node_prop_refresher,
+                        G_TYPE_STRING, &v,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (refresher_fn) gtk_true,
                         NULL /* no setter */,
                         NULL, NULL,
                         NULL);
@@ -5239,9 +5231,9 @@ ensure_option_has_node (DonnaProviderConfig *config,
             /* add the value of the option */
             donna_node_add_property (option->node,
                     "option-value",
-                    G_VALUE_TYPE (&option->value),
-                    &option->value,
-                    (refresher_fn) node_prop_refresher,
+                    G_VALUE_TYPE (&option->value), &option->value,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
                     (setter_fn) node_prop_setter,
                     NULL, NULL,
                     NULL);

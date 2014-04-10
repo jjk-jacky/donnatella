@@ -978,8 +978,13 @@ new_node (DonnaProviderBase *_provider,
         desc = g_strdup_printf ("<Task %p>", t);
 
     node = donna_node_new ((DonnaProvider *) _provider, location,
-            DONNA_NODE_ITEM, NULL, (refresher_fn) refresher, NULL,
-            desc, DONNA_NODE_ICON_EXISTS);
+            DONNA_NODE_ITEM,
+            NULL,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) refresher,
+            NULL,
+            desc,
+            DONNA_NODE_ICON_EXISTS);
     g_free (desc);
 
     g_value_init (&v, G_TYPE_ICON);
@@ -1039,8 +1044,13 @@ new_node (DonnaProviderBase *_provider,
             /* silence warning */
             break;
     }
-    if (!donna_node_add_property (node, "state", G_TYPE_INT,
-                &v, (refresher_fn) refresher, NULL, NULL, NULL, error))
+    if (!donna_node_add_property (node, "state",
+                G_TYPE_INT, &v,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) refresher,
+                NULL,
+                NULL, NULL,
+                error))
     {
         g_prefix_error (error, "Provider 'task': Cannot create new node, "
                 "failed to add property 'state': ");
@@ -1053,8 +1063,13 @@ new_node (DonnaProviderBase *_provider,
 
     g_value_init (&v, G_TYPE_DOUBLE);
     g_value_set_double (&v, progress);
-    if (!donna_node_add_property (node, "progress", G_TYPE_DOUBLE,
-                &v, (refresher_fn) refresher, NULL, NULL, NULL, error))
+    if (!donna_node_add_property (node, "progress",
+                G_TYPE_DOUBLE, &v,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) refresher,
+                NULL,
+                NULL, NULL,
+                error))
     {
         g_prefix_error (error, "Provider 'task': Cannot create new node, "
                 "failed to add property 'progress': ");
@@ -1067,8 +1082,13 @@ new_node (DonnaProviderBase *_provider,
 
     g_value_init (&v, G_TYPE_INT);
     g_value_set_int (&v, pulse);
-    if (!donna_node_add_property (node, "pulse", G_TYPE_INT,
-                &v, (refresher_fn) refresher, NULL, NULL, NULL, error))
+    if (!donna_node_add_property (node, "pulse",
+                G_TYPE_INT, &v,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) refresher,
+                NULL,
+                NULL, NULL,
+                error))
     {
         g_prefix_error (error, "Provider 'task': Cannot create new node, "
                 "failed to add property 'pulse': ");
@@ -1081,8 +1101,13 @@ new_node (DonnaProviderBase *_provider,
 
     g_value_init (&v, G_TYPE_STRING);
     g_value_take_string (&v, status);
-    if (!donna_node_add_property (node, "status", G_TYPE_STRING,
-                &v, (refresher_fn) refresher, NULL, NULL, NULL, error))
+    if (!donna_node_add_property (node, "status",
+                G_TYPE_STRING, &v,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) refresher,
+                NULL,
+                NULL, NULL,
+                error))
     {
         g_prefix_error (error, "Provider 'task': Cannot create new node, "
                 "failed to add property 'status': ");
@@ -1126,8 +1151,13 @@ provider_task_new_node (DonnaProviderBase  *_provider,
         if (!node)
         {
             node = donna_node_new ((DonnaProvider *) _provider, location,
-                    DONNA_NODE_CONTAINER, NULL, (refresher_fn) gtk_true, NULL,
-                    "Task Manager", 0);
+                    DONNA_NODE_CONTAINER,
+                    NULL,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    "Task Manager",
+                    0);
             if (G_UNLIKELY (!node))
             {
                 klass->unlock_nodes (_provider);

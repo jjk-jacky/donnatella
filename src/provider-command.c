@@ -286,7 +286,10 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     }
 
     node = donna_node_new ((DonnaProvider *) _provider, location,
-            DONNA_NODE_ITEM, NULL, (refresher_fn) gtk_true, NULL, cmd->name,
+            DONNA_NODE_ITEM, NULL,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) gtk_true, NULL,
+            cmd->name,
             DONNA_NODE_ICON_EXISTS);
     if (!node)
     {
@@ -304,8 +307,13 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     /* "preload" the type of visibility neede for the task trigger_node */
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, cmd->visibility);
-    if (!donna_node_add_property (node, "trigger-visibility", G_TYPE_UINT, &v,
-            (refresher_fn) gtk_true, NULL, NULL, NULL, &err))
+    if (!donna_node_add_property (node, "trigger-visibility",
+                G_TYPE_UINT, &v,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) gtk_true,
+                NULL,
+                NULL, NULL,
+                &err))
     {
         g_prefix_error (&err, "Provider 'command': Cannot create new node, "
                 "failed to add property 'trigger-visibility': ");

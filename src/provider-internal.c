@@ -348,7 +348,12 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
     snprintf (location, 64, "%u", (guint) g_atomic_int_add (&pi->priv->last, 1) + 1);
 
     node = donna_node_new ((DonnaProvider *) pi, location, node_type,
-            NULL, (refresher_fn) gtk_true, NULL, name, flags);
+            NULL,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) gtk_true,
+            NULL,
+            name,
+            flags);
     if (G_UNLIKELY (!node))
     {
         g_set_error (error, DONNA_PROVIDER_ERROR, DONNA_PROVIDER_ERROR_OTHER,
@@ -378,7 +383,12 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
     g_value_init (&v, G_TYPE_POINTER);
     g_value_set_pointer (&v, fn);
     if (G_UNLIKELY (!donna_node_add_property (node, "_internal_worker",
-                    G_TYPE_POINTER, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                    G_TYPE_POINTER, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    NULL, NULL,
+                    error)))
     {
         g_prefix_error (error, "Provider 'internal': Cannot create new node, "
                 "failed to add property '_internal_worker': ");
@@ -389,7 +399,12 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
 
     g_value_set_pointer (&v, data);
     if (G_UNLIKELY (!donna_node_add_property (node, "_internal_data",
-                    G_TYPE_POINTER, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                    G_TYPE_POINTER, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    NULL, NULL,
+                    error)))
     {
         g_prefix_error (error, "Provider 'internal': Cannot create new node, "
                 "failed to add property '_internal_data': ");
@@ -400,7 +415,12 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
 
     g_value_set_pointer (&v, destroy);
     if (G_UNLIKELY (!donna_node_add_property (node, "_internal_destroy",
-                    G_TYPE_POINTER, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                    G_TYPE_POINTER, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    NULL, NULL,
+                    error)))
     {
         g_prefix_error (error, "Provider 'internal': Cannot create new node, "
                 "failed to add property '_internal_destroy': ");
@@ -413,7 +433,12 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
     g_value_init (&v, G_TYPE_UINT);
     g_value_set_uint (&v, visibility);
     if (G_UNLIKELY (!donna_node_add_property (node, "_internal_visibility",
-                    G_TYPE_UINT, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                    G_TYPE_UINT, &v,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) gtk_true,
+                    NULL,
+                    NULL, NULL,
+                    error)))
     {
         g_prefix_error (error, "Provider 'internal': Cannot create new node, "
                 "failed to add property '_internal_visibility': ");
@@ -428,7 +453,12 @@ donna_provider_internal_new_node (DonnaProviderInternal  *pi,
         g_value_init (&v, G_TYPE_BOOLEAN);
         g_value_set_boolean (&v, FALSE);
         if (G_UNLIKELY (!donna_node_add_property (node, "menu-is-sensitive",
-                        G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true, NULL, NULL, NULL, error)))
+                        G_TYPE_BOOLEAN, &v,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (refresher_fn) gtk_true,
+                        NULL,
+                        NULL, NULL,
+                        error)))
         {
             g_prefix_error (error, "Provider 'internal': Cannot create new node, "
                     "failed to add property 'menu-is-sensitive': ");

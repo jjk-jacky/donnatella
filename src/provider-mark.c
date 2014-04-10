@@ -370,7 +370,11 @@ new_node_for_mark (DonnaProviderMark *pm,
     }
 
     node = donna_node_new ((DonnaProvider *) pm, mark->location,
-            DONNA_NODE_ITEM, NULL, (refresher_fn) refresher, (setter_fn) setter,
+            DONNA_NODE_ITEM,
+            NULL,
+            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            (refresher_fn) refresher,
+            (setter_fn) setter,
             mark->name,
             DONNA_NODE_NAME_WRITABLE | DONNA_NODE_DESC_EXISTS);
     if (G_UNLIKELY (!node))
@@ -394,7 +398,10 @@ new_node_for_mark (DonnaProviderMark *pm,
     g_value_set_int (&v, mark->type);
     if (G_UNLIKELY (!donna_node_add_property (node, "mark-type",
                     G_TYPE_INT, &v,
-                    (refresher_fn) refresher, (setter_fn) setter, NULL, NULL,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) refresher,
+                    (setter_fn) setter,
+                    NULL, NULL,
                     error)))
     {
         if (!data_is_mark)
@@ -411,7 +418,10 @@ new_node_for_mark (DonnaProviderMark *pm,
     g_value_set_string (&v, "mark-type");
     if (G_UNLIKELY (!donna_node_add_property (node, "mark-type-extra",
                     G_TYPE_STRING, &v,
-                    (refresher_fn) refresher, NULL, NULL, NULL,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) refresher,
+                    NULL,
+                    NULL, NULL,
                     error)))
     {
         if (!data_is_mark)
@@ -428,7 +438,10 @@ new_node_for_mark (DonnaProviderMark *pm,
     g_value_set_string (&v, mark->value);
     if (G_UNLIKELY (!donna_node_add_property (node, "value",
                     G_TYPE_STRING, &v,
-                    (refresher_fn) refresher, (setter_fn) setter, NULL, NULL,
+                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                    (refresher_fn) refresher,
+                    (setter_fn) setter,
+                    NULL, NULL,
                     error)))
     {
         if (!data_is_mark)
@@ -709,8 +722,13 @@ provider_mark_new_node (DonnaProviderBase  *_provider,
         DonnaNode *n;
 
         node = donna_node_new ((DonnaProvider *) _provider, location,
-                DONNA_NODE_CONTAINER, NULL, (refresher_fn) gtk_true, NULL,
-                "Marks", 0);
+                DONNA_NODE_CONTAINER,
+                NULL,
+                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                (refresher_fn) gtk_true,
+                NULL,
+                "Marks",
+                0);
         if (G_UNLIKELY (!node))
         {
             donna_task_set_error (task, DONNA_PROVIDER_ERROR,

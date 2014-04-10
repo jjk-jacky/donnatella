@@ -1086,10 +1086,10 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
                             "menu-image-selected",
                             G_TYPE_ICON,
                             &v,
+                            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                             (refresher_fn) gtk_true,
                             NULL,
-                            NULL,
-                            NULL,
+                            NULL, NULL,
                             &err)))
             {
                 g_warning ("Context-menu: Failed to set image selected "
@@ -1108,8 +1108,12 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         g_value_set_uint (&v, info->icon_special);
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-image-special",
-                        G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                        NULL, NULL, NULL, &err)))
+                        G_TYPE_UINT, &v,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (refresher_fn) gtk_true,
+                        NULL,
+                        NULL, NULL,
+                        &err)))
         {
             g_warning ("Context-menu: Failed to set image-special "
                     "for item '%s': %s",
@@ -1125,8 +1129,12 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
             g_value_set_boolean (&v, info->is_active);
             if (G_UNLIKELY (!donna_node_add_property (node,
                             "menu-is-active",
-                            G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                            NULL, NULL, NULL, &err)))
+                            G_TYPE_BOOLEAN, &v,
+                            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                            (refresher_fn) gtk_true,
+                            NULL,
+                            NULL, NULL,
+                            &err)))
             {
                 g_warning ("Context-menu: Failed to set is-active "
                         "for item '%s': %s",
@@ -1143,8 +1151,12 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
             g_value_set_boolean (&v, info->is_inconsistent);
             if (G_UNLIKELY (!donna_node_add_property (node,
                             "menu-is-active",
-                            G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                            NULL, NULL, NULL, &err)))
+                            G_TYPE_BOOLEAN, &v,
+                            DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                            (refresher_fn) gtk_true,
+                            NULL,
+                            NULL, NULL,
+                            &err)))
             {
                 g_warning ("Context-menu: Failed to set is-inconsistent "
                         "for item '%s': %s",
@@ -1162,8 +1174,12 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         g_value_set_boolean (&v, TRUE);
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-is-label-bold",
-                        G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                        NULL, NULL, NULL, &err)))
+                        G_TYPE_BOOLEAN, &v,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (refresher_fn) gtk_true,
+                        NULL,
+                        NULL, NULL,
+                        &err)))
         {
             g_warning ("Context-menu: Failed to set label bold "
                     "for item '%s': %s",
@@ -1180,8 +1196,12 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
         g_value_set_uint (&v, MIN ((guint) info->submenus, 3));
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-submenus",
-                        G_TYPE_UINT, &v, (refresher_fn) gtk_true,
-                        NULL, NULL, NULL, &err)))
+                        G_TYPE_UINT, &v,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (refresher_fn) gtk_true,
+                        NULL,
+                        NULL, NULL,
+                        &err)))
         {
             g_warning ("Context-menu: Failed to set submenus type "
                     "for item '%s': %s",
@@ -1204,8 +1224,12 @@ load_menu_properties_to_node (DonnaContextInfo  *info,
             g_value_set_static_string (&v, info->menu);
         if (G_UNLIKELY (!donna_node_add_property (node,
                         "menu-menu",
-                        G_TYPE_STRING, &v, (refresher_fn) gtk_true,
-                        NULL, NULL, NULL, &err)))
+                        G_TYPE_STRING, &v,
+                        DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                        (refresher_fn) gtk_true,
+                        NULL,
+                        NULL, NULL,
+                        &err)))
         {
             g_warning ("Context-menu: Failed to set menu definition "
                     "for item '%s': %s",
@@ -1541,8 +1565,12 @@ parse_items (DonnaApp               *app,
                 g_value_set_boolean (&v, FALSE);
                 if (G_UNLIKELY (!donna_node_add_property (node,
                                 "menu-is-combined-sensitive",
-                                G_TYPE_BOOLEAN, &v, (refresher_fn) gtk_true,
-                                NULL, NULL, NULL, &err)))
+                                G_TYPE_BOOLEAN, &v,
+                                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                                (refresher_fn) gtk_true,
+                                NULL,
+                                NULL, NULL,
+                                &err)))
                 {
                     g_warning ("Context-menu: Failed to set item sensitivity "
                             "for item '%s': %s",
@@ -1576,12 +1604,11 @@ parse_items (DonnaApp               *app,
 
                     if (G_UNLIKELY (!donna_node_add_property (node,
                                     "container-trigger",
-                                    G_TYPE_STRING,
-                                    &v,
+                                    G_TYPE_STRING, &v,
+                                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                                     (refresher_fn) gtk_true,
                                     NULL,
-                                    NULL,
-                                    NULL,
+                                    NULL, NULL,
                                     error)))
                     {
                         g_prefix_error (error, "Error for item '%s': "
@@ -1601,12 +1628,11 @@ parse_items (DonnaApp               *app,
                     g_value_set_object (&v, info.node);
                     if (G_UNLIKELY (!donna_node_add_property (node,
                                     "container-trigger",
-                                    DONNA_TYPE_NODE,
-                                    &v,
+                                    DONNA_TYPE_NODE, &v,
+                                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                                     (refresher_fn) gtk_true,
                                     NULL,
-                                    NULL,
-                                    NULL,
+                                    NULL, NULL,
                                     error)))
                     {
                         g_prefix_error (error, "Error for item '%s': "
