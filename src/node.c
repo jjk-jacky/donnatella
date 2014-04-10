@@ -1495,7 +1495,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
     {
         /* we don't set a return value. A lack of return value (or NULL) will
          * mean that no properties was not refreshed */
-        g_free (g_ptr_array_free (refreshed, FALSE));
+        g_ptr_array_free (refreshed, TRUE);
         g_ptr_array_free (names, TRUE);
         /* force the return state to DONE, since all properties were refreshed.
          * In the odd chance that the refresher for prop1 failed (returned
@@ -1532,9 +1532,8 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
                 ++i;
         }
         /* names now only contains the names of non-refreshed properties, it's
-         * our return value. (refreshed isn't needed anymore, and can be freed)
-         * */
-        g_free (g_ptr_array_free (refreshed, FALSE));
+         * our return value. (refreshed isn't needed anymore, and can be freed) */
+        g_ptr_array_free (refreshed, TRUE);
 
         /* set the return value. the task will take ownership of names */
         value = donna_task_grab_return_value (task);
@@ -1555,7 +1554,7 @@ free_refresh_data (struct refresh_data *data)
 {
     g_object_unref (data->node);
     g_ptr_array_free (data->names, TRUE);
-    g_free (g_ptr_array_free (data->refreshed, FALSE));
+    g_ptr_array_free (data->refreshed, TRUE);
     g_slice_free (struct refresh_data, data);
 }
 
