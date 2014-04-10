@@ -1506,30 +1506,27 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
     else
     {
         /* construct the list of non-refreshed properties */
-        for (i = 0; i < names->len; )
+        for (i = 0; i < refreshed->len; )
         {
-            guint    j;
-            gboolean done;
+            guint j;
 
-            done = FALSE;
-            for (j = 0; j < refreshed->len; ++j)
+            for (j = 0; j < names->len; ++j)
             {
-                if (refreshed->pdata[j] == names->pdata[i])
+                if (names->pdata[j] == refreshed->pdata[i])
                 {
-                    done = TRUE;
+                    /* remove from both arrays. Removing from names will free
+                     * the string; Removing will move the last item to the
+                     * current one, effectively replacing it, so next iteration
+                     * we don't need to move inside refreshed/increment i */
+                    g_ptr_array_remove_index_fast (names, j);
+                    g_ptr_array_remove_index_fast (refreshed, i);
                     break;
                 }
             }
-
-            if (done)
-                /* done, so we remove it from names. this will free the string,
-                 * and get the last element moved to the current one,
-                 * effectively replacing it. So next iteration we don't need to
-                 * move inside the array */
-                g_ptr_array_remove_index_fast (names, i);
-            else
-                /* move to the next element */
-                ++i;
+            /* since we only put in refreshed pointers from names, it's
+             * impossible that we failed to find (and remove) it in names, hence
+             * why there can't be an infinite loop: we always removed an item
+             * from refreshed */
         }
         /* names now only contains the names of non-refreshed properties, it's
          * our return value. (refreshed isn't needed anymore, and can be freed) */
