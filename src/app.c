@@ -508,6 +508,13 @@ enum
     TITLE_DOMAIN_CUSTOM
 };
 
+struct provider
+{
+    const gchar *domain;
+    GType type;
+    DonnaProvider *instance;
+};
+
 struct visuals
 {
     gchar *name;
@@ -547,7 +554,7 @@ struct status_donna
     gchar           *message;
 };
 
-struct provider
+struct status_provider
 {
     DonnaStatusProvider *sp;
     guint                id;
@@ -598,7 +605,7 @@ struct _DonnaAppPrivate
         DonnaColumnType *ct;
     } column_types[NB_COL_TYPES];
     GSList          *col_ct_datas;
-    GSList          *providers;
+    GArray          *providers;
     GHashTable      *filters;
     GHashTable      *patterns;
     GHashTable      *intrefs;
@@ -882,6 +889,13 @@ donna_app_task_run (DonnaTask *task)
 }
 
 static void
+free_provider (struct provider *p)
+{
+    if (p->instance)
+        g_object_unref (p->instance);
+}
+
+static void
 free_visuals (struct visuals *visuals)
 {
     g_free (visuals->name);
@@ -963,6 +977,7 @@ static void
 donna_app_init (DonnaApp *app)
 {
     DonnaAppPrivate *priv;
+    struct provider provider;
 
     main_thread = g_thread_self ();
     g_log_set_default_handler ((GLogFunc) donna_app_log_handler, app);
@@ -1006,6 +1021,54 @@ donna_app_init (DonnaApp *app)
 
     priv->pool = g_thread_pool_new ((GFunc) donna_app_task_run, NULL,
             5, FALSE, NULL);
+
+    priv->providers = g_array_sized_new (FALSE, FALSE, sizeof (struct provider), 9);
+    g_array_set_clear_func (priv->providers, (GDestroyNotify) free_provider);
+
+    provider.domain = "fs";
+    provider.type = DONNA_TYPE_PROVIDER_FS;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "config";
+    provider.type = DONNA_TYPE_PROVIDER_CONFIG;
+    provider.instance = g_object_ref (priv->config);
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "command";
+    provider.type = DONNA_TYPE_PROVIDER_COMMAND;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "internal";
+    provider.type = DONNA_TYPE_PROVIDER_INTERNAL;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "mark";
+    provider.type = DONNA_TYPE_PROVIDER_MARK;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "register";
+    provider.type = DONNA_TYPE_PROVIDER_REGISTER;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "exec";
+    provider.type = DONNA_TYPE_PROVIDER_EXEC;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "task";
+    provider.type = DONNA_TYPE_PROVIDER_TASK;
+    provider.instance = g_object_ref (priv->task_manager);
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "invalid";
+    provider.type = DONNA_TYPE_PROVIDER_INVALID;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
 
     priv->filters = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_filter);
@@ -1540,50 +1603,33 @@ donna_app_get_provider (DonnaApp       *app,
                         const gchar    *domain)
 {
     DonnaAppPrivate *priv;
-    DonnaProvider *provider = NULL;
-    GSList *l;
+    guint i;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (domain != NULL, NULL);
     priv = app->priv;
 
-    if (streq (domain, "config"))
-        return g_object_ref (priv->config);
-    else if (streq (domain, "task"))
-        return g_object_ref (priv->task_manager);
-
     g_rec_mutex_lock (&priv->rec_mutex);
-    for (l = priv->providers; l; l = l->next)
-        if (streq (domain, donna_provider_get_domain (l->data)))
-        {
-            g_rec_mutex_unlock (&priv->rec_mutex);
-            return g_object_ref (l->data);
-        }
-
-    if (streq (domain, "fs"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_FS, "app", app, NULL);
-    else if (streq (domain, "command"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_COMMAND, "app", app, NULL);
-    else if (streq (domain, "exec"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_EXEC, "app", app, NULL);
-    else if (streq (domain, "register"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_REGISTER, "app", app, NULL);
-    else if (streq (domain, "internal"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_INTERNAL, "app", app, NULL);
-    else if (streq (domain, "mark"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_MARK, "app", app, NULL);
-    else if (streq (domain, "invalid"))
-        provider = g_object_new (DONNA_TYPE_PROVIDER_INVALID, "app", app, NULL);
-    else
+    for (i = 0; i < priv->providers->len; ++i)
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
-        return NULL;
-    }
+        struct provider *p;
 
-    g_signal_connect (provider, "new-node", (GCallback) new_node_cb, app);
-    priv->providers = g_slist_prepend (priv->providers, provider);
+        p = &g_array_index (priv->providers, struct provider, i);
+        if (streq (domain, p->domain))
+        {
+            if (!p->instance)
+            {
+                p->instance = g_object_new (p->type, "app", app, NULL);
+                g_signal_connect (p->instance, "new-node", (GCallback) new_node_cb, app);
+            }
+            g_rec_mutex_unlock (&priv->rec_mutex);
+            return g_object_ref (p->instance);
+        }
+    }
+    /* reaching here means unknown provider */
+
     g_rec_mutex_unlock (&priv->rec_mutex);
-    return g_object_ref (provider);
+    return NULL;
 }
 
 /**
@@ -5470,19 +5516,19 @@ switch_statuses_source (DonnaApp *app, guint source, DonnaStatusProvider *sp)
         if (status->source == source)
         {
             GError *err = NULL;
-            struct provider *provider;
+            struct status_provider *provider;
             guint i;
 
             for (i = 0; i < status->providers->len; ++i)
             {
-                provider = &g_array_index (status->providers, struct provider, i);
+                provider = &g_array_index (status->providers, struct status_provider, i);
                 if (provider->sp == sp)
                     break;
             }
 
             if (i >= status->providers->len)
             {
-                struct provider p;
+                struct status_provider p;
 
                 p.sp = sp;
                 p.id = donna_status_provider_create_status (p.sp,
@@ -5500,7 +5546,7 @@ switch_statuses_source (DonnaApp *app, guint source, DonnaStatusProvider *sp)
                     continue;
                 }
                 g_array_append_val (status->providers, p);
-                provider = &g_array_index (status->providers, struct provider,
+                provider = &g_array_index (status->providers, struct status_provider,
                         status->providers->len - 1);
             }
 
@@ -5751,7 +5797,7 @@ create_gui (DonnaApp *app, gchar *layout, gboolean maximized)
         for (;;)
         {
             struct status *status;
-            struct provider provider;
+            struct status_provider provider;
             gboolean expand;
             gchar *sce;
             gchar *e;
@@ -5770,7 +5816,7 @@ create_gui (DonnaApp *app, gchar *layout, gboolean maximized)
 
             status = g_new0 (struct status, 1);
             status->name = g_strdup (s);
-            status->providers = g_array_new (FALSE, FALSE, sizeof (struct provider));
+            status->providers = g_array_new (FALSE, FALSE, sizeof (struct status_provider));
             if (streq (sce, ":active"))
             {
                 status->source = ST_SCE_ACTIVE;
