@@ -3921,6 +3921,31 @@ load_menu (struct menu_click *mc)
     return menu;
 }
 
+#ifndef GTK_IS_JJK
+static void
+gtk_menu_popup_and_destroy (GtkMenu             *menu,
+                            GtkMenuPositionFunc  func,
+                            gpointer             data,
+                            guint                button,
+                            guint32              activate_time)
+{
+    /* with vanilla GTK, there's a leak when you just pop up the menu and
+     * destroy it, because the menu was forced floating, and will be ref-ed on
+     * destroy, instead of being ref_sinked, thus adding a new ref and leaking
+     * the menu. To avoid this, we do ref_sink it ourself, and simply unref it
+     * on hide, which will trigger destroy and properly handle things.
+     * The patched GTK has menus returned with a strong ref owned by GTK, so no
+     * more issue, and simply doing a popup and then destroy works fine with no
+     * leak, which is exactly what new helper gtk_menu_popup_and_destroy() does
+     * See https://bugzilla.gnome.org/show_bug.cgi?id=720401 */
+    g_object_ref_sink (menu);
+    g_signal_connect_swapped (menu, "hide", (GCallback) g_object_unref, menu);
+    gtk_menu_popup_for_device (menu, NULL, NULL, NULL,
+            func, data, NULL,
+            button, activate_time);
+}
+#endif
+
 /**
  * donna_app_show_menu:
  * @app: The #DonnaApp
@@ -4040,9 +4065,6 @@ donna_app_show_menu (DonnaApp       *app,
     }
 
     mc = load_mc (app, name, nodes);
-    /* menu will not be packed anywhere, so we need to take ownership and handle
-     * it when done, i.e. on "unmap-event". It will trigger the widget's destroy
-     * which is when we'll free mc */
     menu = (GtkMenu *) load_menu (mc);
     if (G_UNLIKELY (!menu))
     {
@@ -4051,12 +4073,9 @@ donna_app_show_menu (DonnaApp       *app,
         free_menu_click (mc);
         return FALSE;
     }
-    menu = g_object_ref_sink (menu);
-    gtk_widget_add_events ((GtkWidget *) menu, GDK_STRUCTURE_MASK);
-    g_signal_connect (menu, "unmap-event", (GCallback) g_object_unref, NULL);
 
-    gtk_menu_popup (menu, NULL, NULL, NULL, NULL, 0,
-            gtk_get_current_event_time ());
+    /* mc will be free-d when menu is destroyed */
+    gtk_menu_popup_and_destroy (menu, NULL, NULL, 0, gtk_get_current_event_time ());
     return TRUE;
 }
 
