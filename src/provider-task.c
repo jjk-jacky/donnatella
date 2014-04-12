@@ -2003,6 +2003,13 @@ run_task_refresh_tm (DonnaProviderTask *tm)
     DonnaTask *task;
 
     task = donna_task_new ((task_fn) refresh_tm, tm, NULL);
+    /* INTERNAL_FAST because it should be pretty fast (it is 100% in memory) so
+     * there's no need to need/use a(nother) thread just for that.
+     * Also, if all (5) internal threads were to be busy waiting on public
+     * threads (which could happen via e.g. custom properties), then there
+     * wouldn't be a thread to refresh the task manager, so no waiting tasks
+     * would be started, and we've hit a some kind of deadlock situation. */
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
     DONNA_DEBUG (TASK, NULL,
             donna_task_set_desc (task, "Refresh Task Manager"));
     donna_app_run_task (priv->app, task);
