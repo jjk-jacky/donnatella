@@ -5853,24 +5853,68 @@ rend_func (GtkTreeViewColumn  *column,
     if (arr)
     {
         DonnaTask *task;
-        struct refresh_node_props_data *rnpd;
+        GSList *list;
+        gboolean match = FALSE;
 
         /* ct wants some properties refreshed on node. See refresh_node_prop_cb */
-        rnpd = g_new0 (struct refresh_node_props_data, 1);
-        rnpd->tree  = tree;
-        rnpd->node  = g_object_ref (node);
-        rnpd->props = g_ptr_array_ref (arr);
 
         g_mutex_lock (&priv->refresh_node_props_mutex);
-        priv->refresh_node_props = g_slist_append (priv->refresh_node_props, rnpd);
-        g_mutex_unlock (&priv->refresh_node_props_mutex);
+        /* in case we've already a task running for this exact same cell, which
+         * could happen if a second draw operation was triggered before the
+         * refreshing completed, which is possible (esp. w/ custom properties
+         * maybe) */
+        for (list = priv->refresh_node_props; list; list = list->next)
+        {
+            struct refresh_node_props_data *d = list->data;
 
-        task = donna_node_refresh_arr_task (node, arr, NULL);
-        donna_task_set_callback (task,
-                (task_callback_fn) refresh_node_prop_cb,
-                rnpd,
-                (GDestroyNotify) free_refresh_node_props_data);
-        donna_app_run_task (priv->app, task);
+            if (d->node == node)
+            {
+                if (arr->len != d->props->len)
+                    continue;
+                match = TRUE;
+                for (i = 0; i < arr->len; ++i)
+                {
+                    guint j;
+
+                    for (j = 0; j < d->props->len; ++j)
+                    {
+                        if (streq (arr->pdata[i], d->props->pdata[j]))
+                            break;
+                    }
+                    if (j >= d->props->len)
+                    {
+                        match = FALSE;
+                        break;
+                    }
+                }
+                if (match)
+                    break;
+            }
+        }
+        if (match)
+        {
+            g_mutex_unlock (&priv->refresh_node_props_mutex);
+            g_ptr_array_unref (arr);
+        }
+        else
+        {
+            struct refresh_node_props_data *rnpd;
+
+            rnpd = g_new0 (struct refresh_node_props_data, 1);
+            rnpd->tree  = tree;
+            rnpd->node  = g_object_ref (node);
+            rnpd->props = g_ptr_array_ref (arr);
+
+            priv->refresh_node_props = g_slist_append (priv->refresh_node_props, rnpd);
+            g_mutex_unlock (&priv->refresh_node_props_mutex);
+
+            task = donna_node_refresh_arr_task (node, arr, NULL);
+            donna_task_set_callback (task,
+                    (task_callback_fn) refresh_node_prop_cb,
+                    rnpd,
+                    (GDestroyNotify) free_refresh_node_props_data);
+            donna_app_run_task (priv->app, task);
+        }
     }
     else
         apply_color_filters (tree, column, renderer, node);
