@@ -3433,8 +3433,6 @@ no_submenu:
     menu = load_menu (mc);
     if (G_UNLIKELY (!menu))
         goto no_submenu;
-    else
-        g_object_ref (menu);
 
 set_menu:
     /* see if the item is selected (if we're not TYPE_COMBINE then it can't be,
