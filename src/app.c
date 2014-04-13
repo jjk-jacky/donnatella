@@ -61,6 +61,7 @@
 #include "command.h"
 #include "statusbar.h"
 #include "imagemenuitem.h"
+#include "task-process.h"
 #include "misc.h"
 #include "util.h"
 #include "macros.h"
@@ -508,11 +509,25 @@ enum
     TITLE_DOMAIN_CUSTOM
 };
 
+struct property
+{
+    DonnaApp *app;
+    gchar *name;
+    gchar *cmdline;
+};
+
+struct custom_properties
+{
+    DonnaFilter *filter;
+    GArray *properties;
+};
+
 struct provider
 {
     const gchar *domain;
     GType type;
     DonnaProvider *instance;
+    GArray *custom_properties;
 };
 
 struct visuals
@@ -588,12 +603,13 @@ struct _DonnaAppPrivate
     gchar           *config_dir;
     gchar           *cur_dirname;
     gchar          **environ;
-    /* visuals are under a RW lock so everyone can read them at the same time
-     * (e.g. creating nodes, get_children() & the likes). The write operation
-     * should be quite rare. */
+    /* visuals and providers (for custom properties) are under a RW lock so
+     * everyone can read them at the same time (e.g. creating nodes,
+     * get_children() & the likes). The write operation should be quite rare. */
     GRWLock          lock;
     GHashTable      *visuals;
-    /* ct, providers, filters, intrefs, etc are all under the same lock because
+    GArray          *providers;
+    /* ct, filters, patterns, intrefs, etc are all under the same lock because
      * there shouldn't be a need to separate them all. We use a recursive mutex
      * because we need it for filters, to handle correctly the toggle_ref */
     GRecMutex        rec_mutex;
@@ -605,7 +621,6 @@ struct _DonnaAppPrivate
         DonnaColumnType *ct;
     } column_types[NB_COL_TYPES];
     GSList          *col_ct_datas;
-    GArray          *providers;
     GHashTable      *filters;
     GHashTable      *patterns;
     GHashTable      *intrefs;
@@ -889,10 +904,26 @@ donna_app_task_run (DonnaTask *task)
 }
 
 static void
+free_property (struct property *p)
+{
+    g_free (p->name);
+    g_free (p->cmdline);
+}
+
+static void
+free_custom_properties (struct custom_properties *cp)
+{
+    g_object_unref (cp->filter);
+    g_array_unref (cp->properties);
+}
+
+static void
 free_provider (struct provider *p)
 {
     if (p->instance)
         g_object_unref (p->instance);
+    if (p->custom_properties)
+        g_array_unref (p->custom_properties);
 }
 
 static void
@@ -977,7 +1008,7 @@ static void
 donna_app_init (DonnaApp *app)
 {
     DonnaAppPrivate *priv;
-    struct provider provider;
+    struct provider provider = { NULL, };
 
     main_thread = g_thread_self ();
     g_log_set_default_handler ((GLogFunc) donna_app_log_handler, app);
@@ -1517,14 +1548,203 @@ visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name, gpointer 
 }
 
 static void
+cp_pipe_new_line (DonnaTaskProcess  *tp,
+                  DonnaPipe          pipe,
+                  gchar             *line,
+                  struct property   *property)
+{
+    DonnaNode *node;
+    gchar *location;
+    GValue v = G_VALUE_INIT;
+    gchar *s;
+
+    if (!line)
+        /* EOF */
+        return;
+
+    if (pipe == DONNA_PIPE_ERROR)
+        return;
+
+    if (*line != '/')
+        return;
+
+    s = strchr (line, ':');
+    if (!s)
+        return;
+
+    node = g_object_get_data ((GObject *) tp, "donna-cp-node");
+    location = donna_node_get_location (node);
+    *s = '\0';
+    if (!streq (line, location))
+    {
+        *s = ':';
+        g_free (location);
+        return;
+    }
+    *s++ = ':';
+
+    g_value_init (&v, G_TYPE_STRING);
+    g_value_set_string (&v, s);
+    donna_node_set_property_value (node, property->name, &v);
+    g_value_unset (&v);
+    g_object_set_data ((GObject *) tp, "donna-cp-refreshed", GINT_TO_POINTER (TRUE));
+    DONNA_DEBUG (APP, NULL,
+            g_debug3 ("Custom property '%s' on '%s:%s' was refreshed to '%s'",
+                property->name, donna_node_get_domain (node), location, s));
+    g_free (location);
+}
+
+struct cp_refresh {
+    struct property *property;
+    DonnaNode *node;
+};
+
+static gboolean
+conv_cp (const gchar        c,
+         gchar             *extra,
+         DonnaArgType      *type,
+         gpointer          *ptr,
+         GDestroyNotify    *destroy,
+         struct cp_refresh *cpr)
+{
+    switch (c)
+    {
+        case 'n':
+            *type = DONNA_ARG_TYPE_NODE;
+            *ptr  = cpr->node;
+            return TRUE;
+
+        case 'p':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr  = cpr->property->name;
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
+custom_property_refresher (DonnaTask        *task,
+                           DonnaNode        *node,
+                           const gchar      *name,
+                           struct property  *property)
+{
+    DonnaTaskProcess *tp;
+    GPtrArray *arr;
+    GString *str = NULL;
+    struct cp_refresh cpr = { .property = property, .node = node };
+    DonnaContext context = { "np", FALSE, (conv_flag_fn) conv_cp, &cpr };
+    gboolean refreshed;
+
+    donna_context_parse (&context, 0, property->app, property->cmdline, &str, NULL);
+    tp = (DonnaTaskProcess *) donna_task_process_new (NULL,
+            (str) ? str->str : property->cmdline, TRUE, NULL, NULL, NULL);
+    if (G_UNLIKELY (!tp))
+    {
+        if (str)
+            g_string_free (str, TRUE);
+        return FALSE;
+    }
+    if (G_UNLIKELY (!donna_task_process_set_workdir_to_curdir (tp, property->app)))
+    {
+        if (str)
+            g_string_free (str, TRUE);
+        g_object_unref (g_object_ref_sink (tp));
+        return FALSE;
+    }
+
+    arr = g_ptr_array_new ();
+    donna_task_set_devices ((DonnaTask *) tp, arr);
+    g_ptr_array_unref (arr);
+    donna_task_process_set_ui_msg (tp);
+    donna_task_process_set_default_closer (tp);
+    /* no need to ref the node, task (not tp) already has a ref on it */
+    g_object_set_data ((GObject *) tp, "donna-cp-node", node);
+    g_signal_connect (tp, "pipe-new-line", (GCallback) cp_pipe_new_line, property);
+
+    DONNA_DEBUG (APP, NULL,
+            g_debug ("Custom property '%s': running '%s'",
+                property->name,
+                (str) ? str->str : property->cmdline));
+
+    donna_app_run_task_and_wait (property->app,
+            (DonnaTask *) g_object_ref_sink (tp), task, NULL);
+    if (g_object_get_data ((GObject *) tp, "donna-cp-refreshed"))
+        refreshed = TRUE;
+    g_object_unref (tp);
+
+    if (str)
+        g_string_free (str, TRUE);
+    return refreshed;
+}
+
+static void
 new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
 {
+    GError *err = NULL;
+    DonnaAppPrivate *priv = app->priv;
     gchar *fl;
     struct visuals *visuals;
+    const gchar *domain;
+    guint i;
 
+    domain = donna_node_get_domain (node);
     fl = donna_node_get_full_location (node);
-    g_rw_lock_reader_lock (&app->priv->lock);
-    visuals = g_hash_table_lookup (app->priv->visuals, fl);
+    g_rw_lock_reader_lock (&priv->lock);
+
+    /* custom properties */
+    for (i = 0; i < priv->providers->len; ++i)
+    {
+        struct provider *p;
+
+        p = &g_array_index (priv->providers, struct provider, i);
+        if (streq (domain, p->domain))
+        {
+            guint j;
+
+            if (!p->custom_properties)
+                break;
+
+            for (j = 0; j < p->custom_properties->len; ++j)
+            {
+                struct custom_properties *cp;
+                guint k;
+
+                cp = &g_array_index (p->custom_properties, struct custom_properties, j);
+                if (cp->filter && !donna_filter_is_match (cp->filter, node, NULL))
+                    continue;
+                for (k = 0; k < cp->properties->len; ++k)
+                {
+                    struct property *prop;
+
+                    prop = &g_array_index (cp->properties, struct property, k);
+                    if (!donna_node_add_property (node, prop->name,
+                                G_TYPE_STRING, NULL,
+                                DONNA_TASK_VISIBILITY_INTERNAL,
+                                (refresher_fn) custom_property_refresher,
+                                NULL,
+                                prop,
+                                NULL,
+                                &err))
+                    {
+                        g_warning ("Failed to add custom property '%s' to '%s': %s'",
+                                prop->name, fl, err->message);
+                        g_clear_error (&err);
+                    }
+                    else
+                    {
+                        DONNA_DEBUG (APP, NULL,
+                                g_debug2 ("Added custom property '%s' to '%s'",
+                                    prop->name, fl));
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    /* node visuals */
+    visuals = g_hash_table_lookup (priv->visuals, fl);
     if (visuals)
     {
         GValue value = G_VALUE_INIT;
@@ -1585,7 +1805,8 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_unset (&value);
         }
     }
-    g_rw_lock_reader_unlock (&app->priv->lock);
+
+    g_rw_lock_reader_unlock (&priv->lock);
     g_free (fl);
 }
 
@@ -1603,13 +1824,16 @@ donna_app_get_provider (DonnaApp       *app,
                         const gchar    *domain)
 {
     DonnaAppPrivate *priv;
+    DonnaProvider *provider;
+    gboolean writer = FALSE;
     guint i;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
     g_return_val_if_fail (domain != NULL, NULL);
     priv = app->priv;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    g_rw_lock_reader_lock (&priv->lock);
+again:
     for (i = 0; i < priv->providers->len; ++i)
     {
         struct provider *p;
@@ -1619,16 +1843,51 @@ donna_app_get_provider (DonnaApp       *app,
         {
             if (!p->instance)
             {
-                p->instance = g_object_new (p->type, "app", app, NULL);
-                g_signal_connect (p->instance, "new-node", (GCallback) new_node_cb, app);
+                if (!writer)
+                {
+                    g_rw_lock_reader_unlock (&priv->lock);
+                    /* we create it now, because it might (upon creation) call
+                     * this very get_provider() and the writer lock isn't
+                     * recursive, and would therefore deadlock (So would doing
+                     * it under reader lock, since it would prevent is getting a
+                     * writer lock in case we need to). */
+                    provider = g_object_new (p->type, "app", app, NULL);
+                    writer = TRUE;
+                    g_rw_lock_writer_lock (&priv->lock);
+                    goto again;
+                }
+                else
+                {
+                    /* extra ref for caller */
+                    p->instance = g_object_ref (provider);
+                    g_rw_lock_writer_unlock (&priv->lock);
+                    g_signal_connect (p->instance, "new-node",
+                            (GCallback) new_node_cb, app);
+                }
             }
-            g_rec_mutex_unlock (&priv->rec_mutex);
-            return g_object_ref (p->instance);
+            else
+            {
+                g_object_ref (p->instance);
+                if (G_LIKELY (!writer))
+                    g_rw_lock_reader_unlock (&priv->lock);
+                else
+                {
+                    g_rw_lock_writer_unlock (&priv->lock);
+                    /* an instance while we're writer means it got instanciated
+                     * while we were switching locks, so we should unref our
+                     * unneeded provider */
+                    g_object_unref (provider);
+                }
+            }
+            return p->instance;
         }
     }
     /* reaching here means unknown provider */
 
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    if (G_LIKELY (!writer))
+        g_rw_lock_reader_unlock (&priv->lock);
+    else
+        g_rw_lock_writer_unlock (&priv->lock);
     return NULL;
 }
 
@@ -5978,6 +6237,166 @@ load_arrangements (DonnaApp *app, const gchar *sce)
 }
 
 static void
+load_custom_properties (DonnaApp *app)
+{
+    GError *err = NULL;
+    DonnaAppPrivate *priv = app->priv;
+    GPtrArray *arr = NULL;
+    guint i;
+
+    if (!donna_config_list_options (priv->config, &arr,
+                DONNA_CONFIG_OPTION_TYPE_NUMBERED, "custom_properties"))
+        return;
+
+    for (i = 0; i < arr->len; ++i)
+    {
+        GPtrArray *arr_props = NULL;
+        struct custom_properties cp;
+        gchar *domain;
+        gchar *s;
+        guint j;
+
+        /* make sure the domain exists */
+        if (donna_config_get_string (priv->config, &err, &domain,
+                    "custom_properties/%s/domain", (gchar *) arr->pdata[i]))
+        {
+            g_rw_lock_reader_lock (&priv->lock);
+            for (j = 0; j < priv->providers->len; ++j)
+            {
+                struct provider *p;
+
+                p = &g_array_index (priv->providers, struct provider, j);
+                if (streq (domain, p->domain))
+                    break;
+            }
+            j = (j >= priv->providers->len) ? 1 : 0;
+            g_rw_lock_reader_unlock (&priv->lock);
+
+            if (j)
+            {
+                g_warning ("Failed to load custom properties (%s): unknown domain: %s",
+                        (gchar *) arr->pdata[i], s);
+                g_free (domain);
+                continue;
+            }
+        }
+        else
+        {
+            g_warning ("Failed to load custom properties (%s): no domain: %s",
+                    (gchar *) arr->pdata[i], err->message);
+            g_clear_error (&err);
+            continue;
+        }
+
+        /* get & compile filter (if any) */
+        if (donna_config_get_string (priv->config, &err, &s,
+                    "custom_properties/%s/filter", (gchar *) arr->pdata[i]))
+        {
+            cp.filter = donna_app_get_filter (app, s);
+            if (!donna_filter_compile (cp.filter, &err))
+            {
+                g_warning ("Failed to load custom properties (%s), "
+                        "invalid filter (%s): %s",
+                        (gchar *) arr->pdata[i], s, err->message);
+                g_clear_error (&err);
+                g_object_unref (cp.filter);
+                g_free (s);
+                g_free (domain);
+                continue;
+            }
+            g_free (s);
+        }
+        else if (!g_error_matches (err, DONNA_CONFIG_ERROR,
+                    DONNA_CONFIG_ERROR_NOT_FOUND))
+        {
+            g_warning ("Failed to load custom properties (%s): no filter: %s",
+                    (gchar *) arr->pdata[i], err->message);
+            g_clear_error (&err);
+            g_free (domain);
+            continue;
+        }
+        else
+        {
+            /* NOT_FOUND is fine, since filter is optional */
+            cp.filter = NULL;
+            g_clear_error (&err);
+        }
+
+        /* load the actual properties */
+        if (!donna_config_list_options (priv->config, &arr_props,
+                    DONNA_CONFIG_OPTION_TYPE_CATEGORY,
+                    "custom_properties/%s", (gchar *) arr->pdata[i]))
+        {
+            g_warning ("Failed to load custom properties (%s): no properties defined",
+                    (gchar *) arr->pdata[i]);
+            g_object_unref (cp.filter);
+            g_free (domain);
+            continue;
+        }
+
+        cp.properties = g_array_new (FALSE, FALSE, sizeof (struct property));
+        g_array_set_clear_func (cp.properties, (GDestroyNotify) free_property);
+        for (j = 0; j < arr_props->len; ++j)
+        {
+            struct property prop;
+
+            if (!donna_config_get_string (priv->config, NULL, &prop.cmdline,
+                        "custom_properties/%s/%s/cmdline",
+                        (gchar *) arr->pdata[i],
+                        (gchar *) arr_props->pdata[j]))
+            {
+                g_warning ("Failed to load custom property (%s/%s): no command line",
+                        (gchar *) arr->pdata[i],
+                        (gchar *) arr_props->pdata[j]);
+                continue;
+            }
+
+            prop.app  = app;
+            prop.name = g_strdup (arr_props->pdata[j]);
+            g_array_append_val (cp.properties, prop);
+            DONNA_DEBUG (APP, NULL,
+                    g_debug ("New custom property '%s' : '%s'",
+                        prop.name, prop.cmdline));
+        }
+
+        if (cp.properties->len == 0)
+        {
+            g_warning ("Failed to load custom properties (%s): No properties",
+                    (gchar *) arr->pdata[i]);
+            free_custom_properties (&cp);
+            g_free (domain);
+            continue;
+        }
+
+        /* add custom properties to the provider */
+        g_rw_lock_writer_lock (&priv->lock);
+        for (j = 0; j < priv->providers->len; ++j)
+        {
+            struct provider *p;
+
+            p = &g_array_index (priv->providers, struct provider, j);
+            if (streq (domain, p->domain))
+            {
+                if (!p->custom_properties)
+                    p->custom_properties = g_array_new (FALSE, FALSE,
+                            sizeof (struct custom_properties));
+                g_array_append_val (p->custom_properties, cp);
+                DONNA_DEBUG (APP, NULL,
+                        g_debug ("Added %d custom properties to '%s' via '%s'",
+                            cp.properties->len,
+                            domain,
+                            (cp.filter) ? donna_filter_get_filter (cp.filter) : "<all>"));
+                break;
+            }
+        }
+        g_rw_lock_writer_unlock (&priv->lock);
+        g_free (domain);
+    }
+
+    g_ptr_array_unref (arr);
+}
+
+static void
 load_css (const gchar *dir, gboolean is_main)
 {
     GtkCssProvider *css_provider;
@@ -6351,6 +6770,8 @@ init_app (DonnaApp *app)
     }
     load_css (main_dir, TRUE);
 
+    /* load custom properties */
+    load_custom_properties (app);
     /* compile patterns of arrangements' masks */
     priv->arrangements = load_arrangements (app, "arrangements");
 
