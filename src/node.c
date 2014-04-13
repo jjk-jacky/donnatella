@@ -494,6 +494,8 @@ donna_node_add_property (DonnaNode       *node,
     prop->visibility    = visibility;
     prop->refresher     = refresher;
     prop->setter        = setter;
+    prop->data          = data;
+    prop->destroy       = destroy;
     /* init the GValue */
     g_value_init (&prop->value, type);
     /* do we have an init value to set? */
