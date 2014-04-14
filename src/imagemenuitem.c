@@ -766,10 +766,16 @@ popdown_menu (GtkWidget *item)
             break;
     }
 
+    /* When using popup_and_destroy() GTK will destroy the menu on hide, also
+     * removing its ref on it, which happens during popdown(). If that was the
+     * last ref, this will causing issues/warnings during the remaining on
+     * popdown(), as well as later since the menu doesn't exist anymore... so we
+     * ref it in case */
+    g_object_ref (parent);
     /* this will hide all menus */
     gtk_menu_popdown ((GtkMenu *) parent);
-    /* we use this signal to unref the menu when it wasn't packed nowhere */
-    g_signal_emit_by_name (parent, "deactivate");
+    /* we're done with it, if no one else had ref it, it'll now be finalized */
+    g_object_unref (parent);
 }
 
 static gboolean
