@@ -59,6 +59,10 @@ typedef enum
  * @DONNA_TASK_VISIBILITY_INTERNAL_FAST: Internal task that will be fast &
  * cannot block (i.e. 100% in memory), so it can run directly in the current
  * thread (even main/UI one)
+ * @DONNA_TASK_VISIBILITY_INTERNAL_LOOP: Internal task that will run as an idle
+ * source in a main loop on a dedicated thread. The idle source will use
+ * donna_task_pre_run() to trigger the preworker, which can then e.g. install a
+ * new source, which will in time run the task for good.
  * @DONNA_TASK_VISIBILITY_PULIC: Public task, to be handled by
  * #DonnaTaskManager. (Will ran in its own thread.)
  *
@@ -75,6 +79,7 @@ typedef enum
     DONNA_TASK_VISIBILITY_INTERNAL,
     DONNA_TASK_VISIBILITY_INTERNAL_GUI,
     DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+    DONNA_TASK_VISIBILITY_INTERNAL_LOOP,
     DONNA_TASK_VISIBILITY_PULIC
 } DonnaTaskVisibility;
 
@@ -114,13 +119,14 @@ typedef enum
     DONNA_TASK_STATE_UNKNOWN    = (1 << 0),
     DONNA_TASK_STOPPED          = (1 << 1),
     DONNA_TASK_WAITING          = (1 << 2),
-    DONNA_TASK_RUNNING          = (1 << 3),
-    DONNA_TASK_PAUSING          = (1 << 4),
-    DONNA_TASK_PAUSED           = (1 << 5),
-    DONNA_TASK_CANCELLING       = (1 << 6),
-    DONNA_TASK_DONE             = (1 << 7),
-    DONNA_TASK_CANCELLED        = (1 << 8),
-    DONNA_TASK_FAILED           = (1 << 9),
+    DONNA_TASK_PRERUNNING       = (1 << 3),
+    DONNA_TASK_RUNNING          = (1 << 4),
+    DONNA_TASK_PAUSING          = (1 << 5),
+    DONNA_TASK_PAUSED           = (1 << 6),
+    DONNA_TASK_CANCELLING       = (1 << 7),
+    DONNA_TASK_DONE             = (1 << 8),
+    DONNA_TASK_CANCELLED        = (1 << 9),
+    DONNA_TASK_FAILED           = (1 << 10),
 
     DONNA_TASK_PRE_RUN          = (DONNA_TASK_STOPPED | DONNA_TASK_WAITING),
     DONNA_TASK_IN_RUN           = (DONNA_TASK_RUNNING | DONNA_TASK_PAUSING
@@ -148,6 +154,24 @@ typedef enum
     DONNA_TASK_UPDATE_PROGRESS_PULSE    = (1 << 1),
     DONNA_TASK_UPDATE_STATUS            = (1 << 2),
 } DonnaTaskUpdate;
+
+/**
+ * task_pre_fn:
+ * @task: The #DonnaTask the preworker is running for
+ * @data: The data given when creating @task
+ *
+ * A task pre-worker, this is only used for task with
+ * #DONNA_TASK_VISIBILITY_INTERNAL_LOOP, see donna_task_prerun() for more
+ *
+ * It should return %TRUE if the task should be started right away (from
+ * donna_task_prerun()) or %FALSE if not, e.g. because a new source was
+ * attached to the main loop, and will run the task in due time.
+ *
+ * When returning %FALSE take good care of having referenced @task, else it
+ * could get finalized during donna_task_prerun()
+ */
+typedef gboolean        (*task_pre_fn)          (DonnaTask  *task,
+                                                 gpointer    data);
 
 /**
  * task_fn:
@@ -235,6 +259,8 @@ DonnaTask *         donna_task_new_full         (task_fn             func,
                                                  DonnaTaskPriority   priority,
                                                  gboolean            autostart,
                                                  const gchar        *desc);
+gboolean            donna_task_set_pre_worker   (DonnaTask          *task,
+                                                 task_pre_fn         func);
 gboolean            donna_task_set_worker       (DonnaTask          *task,
                                                  task_fn             func,
                                                  gpointer            data,
@@ -279,6 +305,7 @@ gchar *             donna_task_get_desc         (DonnaTask          *task);
 const GError *      donna_task_get_error        (DonnaTask          *task);
 const GValue *      donna_task_get_return_value (DonnaTask          *task);
 void                donna_task_prepare          (DonnaTask          *task);
+void                donna_task_prerun           (DonnaTask          *task);
 void                donna_task_run              (DonnaTask          *task);
 gboolean            donna_task_set_autostart    (DonnaTask          *task,
                                                  gboolean            autostart);

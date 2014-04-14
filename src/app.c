@@ -613,6 +613,9 @@ struct _DonnaAppPrivate
      * there shouldn't be a need to separate them all. We use a recursive mutex
      * because we need it for filters, to handle correctly the toggle_ref */
     GRecMutex        rec_mutex;
+    GMainLoop       *loop;
+    GSource         *source_loop_timeout;
+    gint             tasks_in_loop;
     struct col_type
     {
         const gchar     *name;
@@ -2270,6 +2273,92 @@ donna_app_get_pattern (DonnaApp       *app,
     return p;
 }
 
+struct idle_loop
+{
+    DonnaApp  *app;
+    DonnaTask *task;
+    gulong sid_notify;
+};
+
+static gboolean
+loop_quit (DonnaApp *app)
+{
+    DonnaAppPrivate *priv = app->priv;
+
+    g_rec_mutex_lock (&priv->rec_mutex);
+    if (!g_source_is_destroyed (g_main_current_source ()))
+    {
+        g_source_unref (priv->source_loop_timeout);
+        priv->source_loop_timeout = NULL;
+
+        if (priv->tasks_in_loop == 0 && priv->loop)
+        {
+            DONNA_DEBUG (APP, NULL,
+                    g_debug ("Quitting tasks-loop"));
+            g_main_loop_quit (priv->loop);
+            priv->loop = NULL;
+        }
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    return G_SOURCE_REMOVE;
+}
+
+static void
+loop_task_state (struct idle_loop *il)
+{
+    DonnaAppPrivate *priv = il->app->priv;
+
+    if (!(donna_task_get_state (il->task) & DONNA_TASK_POST_RUN))
+        return;
+
+    g_object_unref (il->task);
+
+    /* update counter, adding a timeout to end the thread if no other tasks is
+     * added by then */
+    g_rec_mutex_lock (&priv->rec_mutex);
+    if (--priv->tasks_in_loop == 0 && priv->loop)
+    {
+        DONNA_DEBUG (APP, NULL,
+                g_debug2 ("Adding timeout to tasks-loop"));
+
+        if (priv->source_loop_timeout)
+        {
+            g_source_destroy (priv->source_loop_timeout);
+            g_source_unref (priv->source_loop_timeout);
+        }
+
+        priv->source_loop_timeout = g_timeout_source_new_seconds (5);
+        g_source_set_callback (priv->source_loop_timeout,
+                (GSourceFunc) loop_quit, il->app, NULL);
+         g_source_attach (priv->source_loop_timeout,
+                 g_main_loop_get_context (priv->loop));
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
+
+    g_slice_free (struct idle_loop, il);
+}
+
+static gboolean
+loop_idle_cb (struct idle_loop *il)
+{
+    /* we will free memory & stuff when it gets to POST_RUN state */
+    il->sid_notify = g_signal_connect_swapped (il->task, "notify::state",
+            (GCallback) loop_task_state, il);
+
+    /* prerun the task */
+    donna_task_prerun (il->task);
+
+    return G_SOURCE_REMOVE;
+}
+
+static void
+loop_run (GMainLoop *loop)
+{
+    g_main_context_push_thread_default (g_main_loop_get_context (loop));
+    g_main_loop_run (loop);
+}
+
 /**
  * donna_app_run_task:
  * @app: The #DonnaApp
@@ -2282,6 +2371,8 @@ donna_app_get_pattern (DonnaApp       *app,
  * - %DONNA_TASK_VISIBILITY_INTERNAL_FAST tasks are run in the current thread
  * - %DONNA_TASK_VISIBILITY_INTERNAL tasks are run in a thread for the internal
  *   thread pool
+ * - %DONNA_TASK_VISIBILITY_INTERNAL_LOOP tasks are run as idle source in a main
+ *   loop in a dedicated thread
  * - %DONNA_TASK_VISIBILITY_PULIC tasks are deferred to the task manager via
  *   donna_task_manager_add_task()
  *
@@ -2294,10 +2385,12 @@ void
 donna_app_run_task (DonnaApp       *app,
                     DonnaTask      *task)
 {
+    DonnaAppPrivate *priv;
     DonnaTaskVisibility visibility;
 
     g_return_if_fail (DONNA_IS_APP (app));
     g_return_if_fail (DONNA_IS_TASK (task));
+    priv = app->priv;
 
     donna_task_prepare (task);
     g_object_get (task, "visibility", &visibility, NULL);
@@ -2306,6 +2399,38 @@ donna_app_run_task (DonnaApp       *app,
                 g_object_ref_sink (task));
     else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
         donna_app_task_run (g_object_ref_sink (task));
+    else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+    {
+        GMainContext *context;
+        GSource *source;
+        struct idle_loop *il;
+
+        g_rec_mutex_lock (&priv->rec_mutex);
+        if (!priv->loop)
+        {
+            context = g_main_context_new ();
+            priv->loop = g_main_loop_new (context, FALSE);
+            g_main_context_unref (context);
+
+            DONNA_DEBUG (APP, NULL,
+                    g_debug ("New tasks-loop created, starting thread"));
+            g_thread_unref (g_thread_new ("tasks-loop",
+                        (GThreadFunc) loop_run, priv->loop));
+        }
+        else
+            context = g_main_loop_get_context (priv->loop);
+
+        il = g_slice_new (struct idle_loop);
+        il->app = app;
+        il->task = g_object_ref_sink (task);
+
+        source = g_idle_source_new ();
+        g_source_set_callback (source, (GSourceFunc) loop_idle_cb, il, NULL);
+        g_source_attach (source, context);
+        g_source_unref (source);
+        ++priv->tasks_in_loop;
+        g_rec_mutex_unlock (&priv->rec_mutex);
+    }
     else if (visibility == DONNA_TASK_VISIBILITY_PULIC)
         donna_task_manager_add_task (app->priv->task_manager, task, NULL);
     else
@@ -7153,6 +7278,14 @@ donna_app_run (DonnaApp       *app,
     priv->exiting = TRUE;
     donna_app_emit_event (app, "exit", FALSE, NULL, NULL, NULL, NULL);
 
+    /* stop the tasks-loop if there's one running */
+    g_rec_mutex_lock (&priv->rec_mutex);
+    if (priv->loop)
+    {
+        g_main_loop_quit (priv->loop);
+        priv->loop = NULL;
+    }
+    g_rec_mutex_unlock (&priv->rec_mutex);
     /* let's make sure all (internal) tasks (e.g. triggered from event "exit")
      * are done before we die */
     g_thread_pool_stop_unused_threads ();

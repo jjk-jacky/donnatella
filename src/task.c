@@ -179,6 +179,7 @@ struct _DonnaTaskPrivate
 
     /* task function */
     task_fn              task_fn;
+    task_pre_fn          task_pre_fn;
     gpointer             task_data;
     GDestroyNotify       task_destroy;
     /* task duplicator */
@@ -746,6 +747,33 @@ donna_task_new_full (task_fn             func,
 }
 
 /**
+ * donna_task_set_pre_worker:
+ * @task: Task to set the pre-worker for
+ * @func: Function to be run as pre-worker for @task
+ *
+ * Sets @func to be the pre-worker for the task, as described in
+ * donna_task_prerun(). This also sets @task::visibility to
+ * #DONNA_TASK_VISIBILITY_INTERNAL_LOOP automatically.
+ *
+ * The user-data used for @func will be the one set for the task worker, when
+ * creating the task (via donna_task_new() or donna_task_new_full())
+ *
+ * Returns: %TRUE if the preworker and visibility of @task has been set
+ */
+gboolean
+donna_task_set_pre_worker (DonnaTask          *task,
+                           task_pre_fn         func)
+{
+    g_return_val_if_fail (DONNA_IS_TASK (task), FALSE);
+    g_return_val_if_fail (func != NULL, FALSE);
+    g_return_val_if_fail (task->priv->task_pre_fn == NULL, FALSE);
+
+    task->priv->task_pre_fn = func;
+    task->priv->visibility = DONNA_TASK_VISIBILITY_INTERNAL_LOOP;
+    return TRUE;
+}
+
+/**
  * donna_task_set_worker:
  * @task: Task to set the worker for
  * @func: Function to be run as the task (aka the "worker")
@@ -840,6 +868,7 @@ donna_task_set_visibility (DonnaTask          *task,
     g_return_val_if_fail (visibility == DONNA_TASK_VISIBILITY_INTERNAL
             || visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST
             || visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI
+            || visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP
             || visibility == DONNA_TASK_VISIBILITY_PULIC, FALSE);
 
     task->priv->visibility = visibility;
@@ -849,8 +878,9 @@ donna_task_set_visibility (DonnaTask          *task,
                 (task->priv->desc) ? task->priv->desc : "(no desc)",
                 (visibility == DONNA_TASK_VISIBILITY_INTERNAL) ? "internal"
                 : ((visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI) ? "internal GUI"
-                    : (((visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
-                            ? "internal fast" : "public")))));
+                    : (((visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST) ? "internal fast"
+                            : ((((visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+                                        ? "internal loop" : "public"))))))));
     return TRUE;
 }
 
@@ -1529,6 +1559,92 @@ donna_task_prepare (DonnaTask *task)
 }
 
 /**
+ * donna_task_prerun:
+ * @task: Task to pre-run
+ *
+ * This is intended to be used by donna_app_run_task() for tasks for a
+ * visibility of #DONNA_TASK_VISIBILITY_INTERNAL_LOOP. Instead of running the
+ * task, an idle source in a main loop (in a dedicated thread) should call this
+ * function, which will trigger @task's preworker.
+ *
+ * If @task has a different visiblity, or the preworker returns %TRUE, then
+ * donna_task_run() is automatically called. Else, it should have e.g. attached
+ * a new source in the main loop, to run the task in due time.
+ *
+ * If no preworker was set, it behaves as if it has simply returned %TRUE, i.e.
+ * running the task immediately.
+ *
+ * Note that, much like donna_task_run(), this only works for tasks in
+ * #DONNA_TASK_PRE_RUN state.
+ * Also note that calling this function more than once will have any further
+ * call simply call donna_task_run() (without calling the preworker anymore).
+ */
+void
+donna_task_prerun (DonnaTask *task)
+{
+    DonnaTaskPrivate *priv;
+    gboolean run_task = TRUE;
+
+    g_return_if_fail (DONNA_IS_TASK (task));
+    priv = task->priv;
+
+    DONNA_DEBUG (TASK, NULL,
+            g_debug ("Prerunning task %p: %s",
+                task, (priv->desc) ? priv->desc : "(no desc)"));
+
+    LOCK_TASK (task);
+
+    /* can only run/start from waiting */
+    if (!(priv->state & DONNA_TASK_PRE_RUN))
+    {
+        UNLOCK_TASK (task);
+        DONNA_DEBUG (TASK, NULL,
+                g_debug ("Ending task %p, not in a pre-run state (%s): %s",
+                    task,
+                    state_name (priv->state),
+                    (priv->desc) ? priv->desc : "(no desc)"));
+        return;
+    }
+
+    if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP
+            && priv->task_pre_fn)
+    {
+        run_task = FALSE;
+        /* to prevent any more calls to prerun/run the task */
+        priv->state = DONNA_TASK_PRERUNNING;
+    }
+
+    /* ref task, in the off chance someone cancels/unrefs it during the
+     * preworker call */
+    g_object_ref (task);
+
+    if (!run_task)
+    {
+        UNLOCK_TASK (task);
+        run_task = priv->task_pre_fn (task, priv->task_data);
+        LOCK_TASK (task);
+        if (priv->state == DONNA_TASK_PRERUNNING)
+            priv->state = DONNA_TASK_WAITING;
+        else
+            /* can only be DONNA_TASK_CANCELLED, so no need to try to run it */
+            run_task = FALSE;
+    }
+
+    priv->task_pre_fn = NULL;
+    UNLOCK_TASK (task);
+    g_object_unref (task);
+
+    if (run_task)
+    {
+        DONNA_DEBUG (TASK, NULL,
+                g_debug ("Running task %p (%s) immediately",
+                    task,
+                    (priv->desc) ? priv->desc : "(no desc)"));
+        donna_task_run (task);
+    }
+}
+
+/**
  * donna_task_run:
  * @task: Task to run
  *
@@ -1807,7 +1923,7 @@ donna_task_cancel (DonnaTask *task)
 
     priv = task->priv;
     state = priv->state;
-    if (state & (DONNA_TASK_STOPPED | DONNA_TASK_WAITING))
+    if (state & (DONNA_TASK_STOPPED | DONNA_TASK_WAITING | DONNA_TASK_PRERUNNING))
     {
         g_object_ref_sink (task);
         priv->state = DONNA_TASK_CANCELLED;

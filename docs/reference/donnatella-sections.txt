@@ -976,6 +976,7 @@ DonnaTaskPriority
 DonnaTaskVisibility
 DonnaTaskState
 DonnaTaskUpdate
+task_pre_fn
 task_fn
 task_timeout_fn
 task_callback_fn
@@ -984,6 +985,7 @@ DonnaTask
 DonnaTaskClass
 donna_task_new
 donna_task_new_full
+donna_task_set_pre_worker
 donna_task_set_worker
 donna_task_set_taskui
 donna_task_set_devices
@@ -1004,6 +1006,7 @@ donna_task_get_desc
 donna_task_get_error
 donna_task_get_return_value
 donna_task_prepare
+donna_task_prerun
 donna_task_run
 donna_task_set_autostart
 donna_task_pause

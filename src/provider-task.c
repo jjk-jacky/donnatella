@@ -2154,6 +2154,7 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
                     g_value_set_int (&v, ST_STOPPED);
                     break;
                 case DONNA_TASK_WAITING:
+                case DONNA_TASK_PRERUNNING: /* silence warning */
                     g_value_set_int (&v, ST_WAITING);
                     break;
                 case DONNA_TASK_RUNNING:
