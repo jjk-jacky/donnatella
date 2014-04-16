@@ -1322,6 +1322,7 @@ struct refresh_data
     DonnaNode   *node;
     GPtrArray   *names;
     GPtrArray   *refreshed;
+    GMutex       mutex;
 };
 
 /**
@@ -1354,6 +1355,7 @@ node_updated_cb (DonnaProvider       *provider,
     refreshed = data->refreshed;
 
     /* is the updated property one we're "watching" */
+    g_mutex_lock (&data->mutex);
     for (i = 0; i < names->len; ++i)
     {
         if (streq (names->pdata[i], name))
@@ -1379,6 +1381,7 @@ node_updated_cb (DonnaProvider       *provider,
             break;
         }
     }
+    g_mutex_unlock (&data->mutex);
 }
 
 /**
@@ -1413,6 +1416,11 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
      * actually refreshed */
     sig = g_signal_connect (priv->provider, "node-updated",
             G_CALLBACK (node_updated_cb), data);
+
+    /* we need to protect refreshed under a lock, because nothing says another
+    thread couldn't refresh one of those properties on this node at the same
+    time */
+    g_mutex_init (&data->mutex);
 
     props = priv->props;
     for (i = 0; i < names->len; ++i)
@@ -1464,6 +1472,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
 
         /* only call the refresher if the prop hasn't already been refreshed */
         done = FALSE;
+        g_mutex_lock (&data->mutex);
         for (j = 0; j < refreshed->len; ++j)
         {
             /* refreshed contains the *same pointers* as names */
@@ -1473,6 +1482,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
                 break;
             }
         }
+        g_mutex_unlock (&data->mutex);
         if (done)
             continue;
 
@@ -1491,6 +1501,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
     /* disconnect our handler -- any signal that we care about would have come
      * from the refresher, so in this thread, so it would have been processed. */
     g_signal_handler_disconnect (priv->provider, sig);
+    g_mutex_clear (&data->mutex);
 
     /* did everything get refreshed? */
     if (names->len == refreshed->len)
