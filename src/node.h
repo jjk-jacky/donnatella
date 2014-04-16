@@ -203,6 +203,41 @@ typedef enum
 } DonnaNodeHasProp;
 
 /**
+ * refresher_task_fn:
+ * @node: The #DonnaNode for which the property must be refreshed
+ * @name: The name of the property to refresh
+ * @data: Data given on donna_node_add_property() (%NULL for basic properties)
+ * @app: (allow-none): (out): Return location for the #DonnaApp object, or %NULL
+ *
+ * When a node a asked to refresh a property in blocking manner, the refresher
+ * gets called. In non-blocking manner, a task is created to perform the
+ * refresh.
+ *
+ * If the refresher was set to a task visibility of
+ * #DONNA_TASK_VISIBILITY_INTERNAL_LOOP and only that property needs to be
+ * refreshed, then this function will be called and the returned task be
+ * returned (by e.g. donna_node_refresh_task())
+ *
+ * If other properties were also asked to be refreshed, the node will create its
+ * own task, which - when run - will call this function and run the returned
+ * task while performing other refreshing.
+ * In such a case, @app will be a pointer that must be set to the #DonnaApp
+ * object (to run the task).
+ *
+ * One can also use donna_node_refresh_tasks() to get an array of tasks to
+ * refresh properties, in which case this function is called and the returned
+ * task included in the returned array (alongside other similar tasks and/or the
+ * node's internal task).
+ *
+ * Returns: (transfer floating): A floating #DonnaTask to refresh property @name
+ * on @node
+ */
+typedef DonnaTask * (*refresher_task_fn)    (DonnaNode      *node,
+                                             const gchar    *name,
+                                             gpointer        data,
+                                             DonnaApp      **app);
+
+/**
  * refresher_fn:
  * @task: (allow-none): The #DonnaTask in which the refresher is ran, or %NULL
  * @node: The #DonnaNode for which the property must be refreshed
@@ -272,6 +307,7 @@ DonnaNode *         donna_node_new                  (DonnaProvider      *provide
                                                      DonnaNodeType       node_type,
                                                      const gchar        *filename,
                                                      DonnaTaskVisibility visibility,
+                                                     refresher_task_fn   refresher_task,
                                                      refresher_fn        refresher,
                                                      setter_fn           setter,
                                                      const gchar        *name,
@@ -281,6 +317,7 @@ gboolean            donna_node_add_property         (DonnaNode          *node,
                                                      GType               type,
                                                      const GValue       *value,
                                                      DonnaTaskVisibility visibility,
+                                                     refresher_task_fn   refresher_task,
                                                      refresher_fn        refresher,
                                                      setter_fn           setter,
                                                      gpointer            data,

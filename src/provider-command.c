@@ -288,7 +288,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     node = donna_node_new ((DonnaProvider *) _provider, location,
             DONNA_NODE_ITEM, NULL,
             DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-            (refresher_fn) gtk_true, NULL,
+            NULL, (refresher_fn) gtk_true, NULL,
             cmd->name,
             DONNA_NODE_ICON_EXISTS);
     if (!node)
@@ -310,7 +310,7 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     if (!donna_node_add_property (node, "trigger-visibility",
                 G_TYPE_UINT, &v,
                 DONNA_TASK_VISIBILITY_INTERNAL_FAST,
-                (refresher_fn) gtk_true,
+                NULL, (refresher_fn) gtk_true,
                 NULL,
                 NULL, NULL,
                 &err))

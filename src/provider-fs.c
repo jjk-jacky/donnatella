@@ -977,7 +977,7 @@ new_node (DonnaProviderBase *_provider,
             type,
             (filename == location) ? NULL : filename,
             DONNA_TASK_VISIBILITY_INTERNAL,
-            (refresher_fn) refresher,
+            NULL, (refresher_fn) refresher,
             (setter_fn) setter,
             name,
             flags);

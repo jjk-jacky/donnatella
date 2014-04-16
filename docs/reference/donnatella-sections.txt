@@ -574,6 +574,7 @@ DONNA_NODE_REFRESH_ALL_VALUES
 DonnaNodeFlags
 DonnaNodeHasProp
 DonnaNodePrivate
+refresher_task_fn
 refresher_fn
 setter_fn
 donna_node_new
