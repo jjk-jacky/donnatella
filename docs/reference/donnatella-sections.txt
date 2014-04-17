@@ -601,7 +601,9 @@ donna_node_get_gid
 donna_node_get_desc
 donna_node_get_parent
 donna_node_refresh_task
+donna_node_refresh_tasks_arr
 donna_node_refresh_arr_task
+donna_node_refresh_arr_tasks_arr
 donna_node_set_property_task
 donna_node_has_children_task
 donna_node_get_children_task

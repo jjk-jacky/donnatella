@@ -373,7 +373,16 @@ DonnaTask *         donna_node_refresh_task         (DonnaNode          *node,
                                                      GError            **error,
                                                      const gchar        *first_name,
                                                      ...);
+GPtrArray *         donna_node_refresh_tasks_arr    (DonnaNode          *node,
+                                                     GError            **error,
+                                                     GPtrArray          *tasks,
+                                                     const gchar        *first_name,
+                                                     ...);
 DonnaTask *         donna_node_refresh_arr_task     (DonnaNode          *node,
+                                                     GPtrArray          *props,
+                                                     GError            **error);
+GPtrArray *         donna_node_refresh_arr_tasks_arr(DonnaNode          *node,
+                                                     GPtrArray          *tasks,
                                                      GPtrArray          *props,
                                                      GError            **error);
 DonnaTask *         donna_node_set_property_task    (DonnaNode          *node,

@@ -4378,7 +4378,8 @@ remove_row_from_tree (DonnaTreeView *tree,
 struct refresh_data
 {
     DonnaTreeView   *tree;
-    guint            count;
+    guint            started;
+    guint            finished;
     gboolean         done;
 };
 
@@ -4408,10 +4409,10 @@ refresh_node_cb (DonnaTask              *task,
                  struct refresh_data    *data)
 {
     if (task)
-        --data->count;
+        ++data->finished;
     else
         data->done = TRUE;
-    if (data->done && data->count == 0)
+    if (data->done && data->finished == data->started)
     {
         data->tree->priv->refresh_on_hold = FALSE;
         resort_tree (data->tree);
@@ -4773,10 +4774,10 @@ set_children (DonnaTreeView *tree,
         GtkSortType order;
 
         struct refresh_data *rd;
+        GPtrArray *tasks = NULL;
         GHashTableIter ht_it;
         GSList *list = NULL;
         DonnaNode *node;
-        guint nb_real;
         guint i;
 
         if (is_match)
@@ -4789,12 +4790,9 @@ set_children (DonnaTreeView *tree,
         if (refresh)
         {
             /* see refresh_node_cb() for more about this */
-            rd = g_new (struct refresh_data, 1);
+            rd = g_new0 (struct refresh_data, 1);
             rd->tree = tree;
-            rd->count = children->len;
-            rd->done = FALSE;
             priv->refresh_on_hold = TRUE;
-            nb_real = 0;
         }
 
         /* adding items to a sorted store is quite slow; we get much better
@@ -4823,15 +4821,29 @@ set_children (DonnaTreeView *tree,
 
                 if (refresh && refilter_node (tree, node, iter))
                 {
-                    DonnaTask *task;
+                    GPtrArray *arr;
 
-                    ++nb_real;
-                    task = donna_node_refresh_task (node,
+                    arr = donna_node_refresh_tasks_arr (node, NULL, tasks,
                             DONNA_NODE_REFRESH_SET_VALUES, NULL);
-                    donna_task_set_callback (task,
-                            (task_callback_fn) refresh_node_cb,
-                            rd, NULL);
-                    donna_app_run_task (priv->app, task);
+                    if (G_LIKELY (arr))
+                    {
+                        guint j;
+
+                        if (!tasks)
+                            /* in case the array was created */
+                            tasks = arr;
+
+                        rd->started += tasks->len;
+                        for (j = 0; j < tasks->len; ++j)
+                        {
+                            DonnaTask *task = tasks->pdata[j];
+                            donna_task_set_callback (task,
+                                    (task_callback_fn) refresh_node_cb, rd, NULL);
+                            donna_app_run_task (priv->app, task);
+                        }
+                        if (tasks->len > 0)
+                            g_ptr_array_remove_range (tasks, 0, tasks->len);
+                    }
                 }
 
                 l = list;
@@ -4874,11 +4886,8 @@ set_children (DonnaTreeView *tree,
 
         if (refresh)
         {
-            /* we might have to adjust the number we set, because children has
-             * nodes of type we don't care for, because some were not visible,
-             * etc */
-            if (nb_real != children->len)
-                rd->count -= children->len - nb_real;
+            if (tasks)
+                g_ptr_array_unref (tasks);
             refresh_node_cb (NULL, FALSE, rd);
         }
 
@@ -15164,11 +15173,11 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             || mode == DONNA_TREE_VIEW_REFRESH_SIMPLE)
     {
         struct refresh_data *data;
+        GPtrArray *tasks;
         GtkTreePath *start = NULL;
         GtkTreePath *end = NULL;
         GtkTreeIter  it_end;
         GtkTreeIter  it;
-        guint nb_org, nb_real;
 
         if (!has_model_at_least_n_rows (model, 1))
             return TRUE;
@@ -15205,18 +15214,16 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         }
 
         /* see refresh_node_cb() for more about this */
-        data = g_new (struct refresh_data, 1);
+        data = g_new0 (struct refresh_data, 1);
         data->tree = tree;
-        data->count = nb_org = (guint) _gtk_tree_model_get_count (model);
-        data->done = FALSE;
         priv->refresh_on_hold = TRUE;
 
-        nb_real = 0;
+        tasks = g_ptr_array_new ();
         do
         {
             GError *err = NULL;
             DonnaNode *node;
-            DonnaTask *task;
+            guint i;
 
             if (!is_row_accessible (tree, &it))
                 continue;
@@ -15224,8 +15231,8 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             gtk_tree_model_get (model, &it,
                     TREE_COL_NODE,  &node,
                     -1);
-            task = donna_node_refresh_task (node, &err, DONNA_NODE_REFRESH_SET_VALUES);
-            if (G_UNLIKELY (!task))
+            if (G_UNLIKELY (!donna_node_refresh_tasks_arr (node, &err, tasks,
+                            DONNA_NODE_REFRESH_SET_VALUES)))
             {
                 gchar *fl = donna_node_get_full_location (node);
                 g_warning ("TreeView '%s': Failed to refresh '%s': %s",
@@ -15234,19 +15241,32 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
                 g_free (fl);
                 continue;
             }
-            donna_task_set_callback (task,
-                    (task_callback_fn) refresh_node_cb,
-                    data, NULL);
-            donna_app_run_task (priv->app, task);
             g_object_unref (node);
-            ++nb_real;
+
+            data->started += tasks->len;
+            for (i = 0; i < tasks->len; ++i)
+            {
+                DonnaTask *task = tasks->pdata[i];
+                donna_task_set_callback (task,
+                        (task_callback_fn) refresh_node_cb, data, NULL);
+                donna_app_run_task (priv->app, task);
+            }
+            if (tasks->len > 0)
+                g_ptr_array_remove_range (tasks, 0, tasks->len);
         } while ((mode == DONNA_TREE_VIEW_REFRESH_SIMPLE || !itereq (&it, &it_end))
                 && _gtk_tree_model_iter_next (model, &it));
+        g_ptr_array_unref (tasks);
 
-        /* we might have to adjust the number we set, either because some task
-         * failed to be created, or just because this is mode VISIBLE */
-        if (nb_real != nb_org)
-            data->count -= nb_org - nb_real;
+        if (G_UNLIKELY (data->started == 0))
+        {
+            g_free (data);
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Failed to get any task to perform refresh",
+                    priv->name);
+            return FALSE;
+        }
+
         /* set flag done to TRUE and handles things in off chance all tasks are
          * already done */
         refresh_node_cb (NULL, FALSE, data);
