@@ -4378,7 +4378,6 @@ remove_row_from_tree (DonnaTreeView *tree,
 struct refresh_data
 {
     DonnaTreeView   *tree;
-    GMutex           mutex;
     guint            count;
     gboolean         done;
 };
@@ -4408,23 +4407,18 @@ refresh_node_cb (DonnaTask              *task,
                  gboolean                timeout_called,
                  struct refresh_data    *data)
 {
-    g_mutex_lock (&data->mutex);
     if (task)
         --data->count;
     else
         data->done = TRUE;
     if (data->done && data->count == 0)
     {
-        g_mutex_unlock (&data->mutex);
-        g_mutex_clear (&data->mutex);
         data->tree->priv->refresh_on_hold = FALSE;
         resort_tree (data->tree);
         /* in case any name or size changed, since it was refresh_on_hold */
         check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
         g_free (data);
     }
-    else
-        g_mutex_unlock (&data->mutex);
 }
 
 /* mode list only -- node *MUST* be in hashtable */
@@ -4797,7 +4791,6 @@ set_children (DonnaTreeView *tree,
             /* see refresh_node_cb() for more about this */
             rd = g_new (struct refresh_data, 1);
             rd->tree = tree;
-            g_mutex_init (&rd->mutex);
             rd->count = children->len;
             rd->done = FALSE;
             priv->refresh_on_hold = TRUE;
@@ -4885,11 +4878,7 @@ set_children (DonnaTreeView *tree,
              * nodes of type we don't care for, because some were not visible,
              * etc */
             if (nb_real != children->len)
-            {
-                g_mutex_lock (&rd->mutex);
                 rd->count -= children->len - nb_real;
-                g_mutex_unlock (&rd->mutex);
-            }
             refresh_node_cb (NULL, FALSE, rd);
         }
 
@@ -15218,7 +15207,6 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         /* see refresh_node_cb() for more about this */
         data = g_new (struct refresh_data, 1);
         data->tree = tree;
-        g_mutex_init (&data->mutex);
         data->count = nb_org = (guint) _gtk_tree_model_get_count (model);
         data->done = FALSE;
         priv->refresh_on_hold = TRUE;
@@ -15258,12 +15246,8 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         /* we might have to adjust the number we set, either because some task
          * failed to be created, or just because this is mode VISIBLE */
         if (nb_real != nb_org)
-        {
-            g_mutex_lock (&data->mutex);
             data->count -= nb_org - nb_real;
-            g_mutex_unlock (&data->mutex);
-        }
-        /* set flag done to TRUE and handles things in odd change all tasks are
+        /* set flag done to TRUE and handles things in off chance all tasks are
          * already done */
         refresh_node_cb (NULL, FALSE, data);
 
