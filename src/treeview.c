@@ -6749,12 +6749,22 @@ real_new_child_cb (struct new_child_data *data)
         {
             enum tree_expand es;
 
-            /* we only add if expand is MAXI or NONE */
             gtk_tree_model_get (model, list->data,
                     TREE_COL_EXPAND_STATE,  &es,
                     -1);
-            if (es == TREE_EXPAND_MAXI || es == TREE_EXPAND_NONE)
+            /* MAXI: add the node */
+            if (es == TREE_EXPAND_MAXI)
                 add_node_to_tree_filtered (data->tree, list->data, data->child, NULL);
+            /* NONE: now there's one, update es but we don't add it */
+            else if (es == TREE_EXPAND_NONE)
+            {
+                /* add fake node */
+                gtk_tree_store_insert_with_values (priv->store, NULL, list->data, 0,
+                        TREE_COL_NODE,  NULL,
+                        -1);
+                set_es (priv, list->data, TREE_EXPAND_NEVER);
+            }
+            /* anything else (PARTIAL, etc) stays as is */
         }
     }
 
