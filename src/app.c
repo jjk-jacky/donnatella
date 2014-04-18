@@ -981,9 +981,38 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
     DonnaAppPrivate *priv = app->priv;
     gsize len_cat = strlen ("defaults/lists/columns/");
 
+    if (streqn (option, "arrangements/", strlen ("arrangements/")))
+    {
+        if (G_LIKELY (priv->arrangements))
+            free_arrangements (priv->arrangements);
+        priv->arrangements = load_arrangements (app, "arrangements");
+    }
+    else if (streqn (option, "tree_views/", strlen ("tree_views/")))
+    {
+        DonnaTreeView *tree;
+        gchar *tv;
+        gchar *s;
+
+        tv = (gchar *) option + strlen ("tree_views/");
+        s = strchr (tv, '/');
+        if (!s)
+            return;
+        if (!streqn (s + 1, "arrangements/", strlen ("arrangements/")))
+            return;
+
+        tv = g_strdup_printf ("%.*s", (gint) (s - tv), tv);
+        tree = donna_app_get_tree_view (app, tv);
+        g_free (tv);
+
+        if (!tree)
+            return;
+
+        g_object_set_data_full ((GObject *) tree, "arrangements-masks",
+                NULL, (GDestroyNotify) free_arrangements);
+    }
     /* options in defaults/lists/columns/XXXX might trigger refresh of
      * col_ct_datas */
-    if (priv->col_ct_datas && streqn (option, "defaults/lists/columns/", len_cat))
+    else if (priv->col_ct_datas && streqn (option, "defaults/lists/columns/", len_cat))
     {
         GSList *l;
 
