@@ -19751,6 +19751,24 @@ again:
 
     if (save & SAVE_COLUMNS)
     {
+        GString *str_col;
+        GList *list, *l;
+
+        str_col = g_string_new (NULL);
+        /* get them from treeview to preserve the current order */
+        list = gtk_tree_view_get_columns ((GtkTreeView *) tree);
+        for (l = list; l; l = l->next)
+        {
+            struct column *_c = get_column_by_column (tree, l->data);
+            if (!_c)
+                /* blankcol */
+                continue;
+            g_string_append (str_col, _c->name);
+            g_string_append_c (str_col, ',');
+        }
+        g_list_free (list);
+        g_string_truncate (str_col, str_col->len - 1);
+
         if (G_UNLIKELY (!priv->arrangement))
         {
             if (!str)
@@ -19765,7 +19783,7 @@ again:
             g_string_append_printf (str, "\n- Failed to save columns: "
                     "No columns source in arrangement");
         }
-        else if (!donna_config_set_string (config, &err, priv->arrangement->columns,
+        else if (!donna_config_set_string (config, &err, str_col->str,
                 "%s/columns", priv->arrangement->columns_source))
         {
             if (!str)
@@ -19774,6 +19792,8 @@ again:
                     (err) ? err->message : "(no error message)");
             g_clear_error (&err);
         }
+
+        g_string_free (str_col, TRUE);
     }
 
     if (save & SAVE_SORT)
