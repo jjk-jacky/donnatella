@@ -509,11 +509,20 @@ enum
     TITLE_DOMAIN_CUSTOM
 };
 
+/* custom properties: when this many tasks LOOP are waiting for the timeout,
+ * we just remove it and set up a PRIORITY_HIGH idle instead. Note that it is
+ * possible that one go (i.e. task process) handles more than this many nodes at
+ * once. This is not to ensure there isn't more than this many nodes per task
+ * really, but that when reached we stop the wait (for the timeout) */
+#define CP_MAX_NODE_WAITING     20
+
 struct property
 {
     DonnaApp *app;
     gchar *name;
     gchar *cmdline;
+    GArray *items;      /* cp_items[] for VISIBILITY_LOOP refresh_tasks */
+    GSource *source;    /* timeout to run the cmdline for tasks */
 };
 
 struct custom_properties
@@ -911,6 +920,13 @@ free_property (struct property *p)
 {
     g_free (p->name);
     g_free (p->cmdline);
+    if (p->items)
+       g_array_unref (p->items);
+    if (p->source)
+    {
+        g_source_destroy (p->source);
+        g_source_unref (p->source);
+    }
 }
 
 static void
@@ -1550,14 +1566,76 @@ visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name, gpointer 
     return TRUE;
 }
 
+static DonnaTaskState
+cp_worker (DonnaTask *task, struct property *property)
+{
+    if (g_object_get_data ((GObject *) task, "donna-cp-refreshed"))
+        return DONNA_TASK_DONE;
+    else if (donna_task_is_cancelling (task))
+        return DONNA_TASK_CANCELLED;
+    else
+    {
+        DonnaNode *node = g_object_get_data ((GObject *) task, "donna-cp-node");
+        gchar *fl = donna_node_get_full_location (node);
+        donna_task_set_error (task, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Custom property '%s' failed to be refreshed on '%s'",
+                property->name, fl);
+        g_free (fl);
+        return DONNA_TASK_FAILED;
+    }
+}
+
+struct cp_refresh {
+    struct property *property;
+    gboolean is_single;
+    union {
+        DonnaNode *node;
+        GPtrArray *nodes;
+    };
+    DonnaTaskProcess *tp;
+    GArray *items;
+};
+
+struct cp_item {
+    DonnaTask *task;
+    gchar *location;
+};
+
+static void
+free_cp_refresh (gpointer data)
+{
+    struct cp_refresh *cpr = data;
+
+    if (G_UNLIKELY (cpr->is_single))
+        /* single is on the stack, node isn't ref-ed (owned by the task calling
+         * the refresher), it has its own handle of task-process & no items */
+        return;
+
+    g_ptr_array_unref (cpr->nodes);
+    if (cpr->tp)
+        g_object_unref (cpr->tp);
+    g_array_unref (cpr->items);
+    g_free (cpr);
+}
+
+static void
+free_cp_item (gpointer data)
+{
+    struct cp_item *cpi = data;
+
+    g_object_unref (cpi->task);
+    g_free (cpi->location);
+}
+
 static void
 cp_pipe_new_line (DonnaTaskProcess  *tp,
                   DonnaPipe          pipe,
                   gchar             *line,
-                  struct property   *property)
+                  struct cp_refresh *cpr)
 {
     DonnaNode *node;
     gchar *location;
+    GObject *obj;
     GValue v = G_VALUE_INIT;
     gchar *s;
 
@@ -1575,32 +1653,56 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
     if (!s)
         return;
 
-    node = g_object_get_data ((GObject *) tp, "donna-cp-node");
-    location = donna_node_get_location (node);
     *s = '\0';
-    if (!streq (line, location))
+    if (cpr->is_single)
     {
-        *s = ':';
-        g_free (location);
-        return;
+        node = cpr->node;
+        location = donna_node_get_location (node);
+        if (!streq (line, location))
+        {
+            *s = ':';
+            g_free (location);
+            return;
+        }
+        *s++ = ':';
+        obj = (GObject *) tp;
     }
-    *s++ = ':';
+    else
+    {
+        guint i;
+
+        for (i = 0; i < cpr->items->len; ++i)
+        {
+            struct cp_item *cpi = &g_array_index (cpr->items, struct cp_item, i);
+
+            if (!cpi->location)
+                continue;
+            if (streq (line, cpi->location))
+            {
+                node = cpr->nodes->pdata[i];
+                location = cpi->location;
+                cpi->location = NULL;
+                obj = (GObject *) cpi->task;
+                break;
+            }
+        }
+        *s++ = ':';
+        if (i >= cpr->nodes->len)
+            return;
+    }
 
     g_value_init (&v, G_TYPE_STRING);
     g_value_set_string (&v, s);
-    donna_node_set_property_value (node, property->name, &v);
+    donna_node_set_property_value (node, cpr->property->name, &v);
     g_value_unset (&v);
-    g_object_set_data ((GObject *) tp, "donna-cp-refreshed", GINT_TO_POINTER (TRUE));
+
+    g_object_set_data (obj, "donna-cp-refreshed", GINT_TO_POINTER (TRUE));
+
     DONNA_DEBUG (APP, NULL,
             g_debug3 ("Custom property '%s' on '%s:%s' was refreshed to '%s'",
-                property->name, donna_node_get_domain (node), location, s));
+                cpr->property->name, donna_node_get_domain (node), location, s));
     g_free (location);
 }
-
-struct cp_refresh {
-    struct property *property;
-    DonnaNode *node;
-};
 
 static gboolean
 conv_cp (const gchar        c,
@@ -1614,7 +1716,13 @@ conv_cp (const gchar        c,
     {
         case 'n':
             *type = DONNA_ARG_TYPE_NODE;
-            *ptr  = cpr->node;
+            if (cpr->is_single)
+                *ptr = cpr->node;
+            else
+            {
+                *type |= DONNA_ARG_IS_ARRAY;
+                *ptr = cpr->nodes;
+            }
             return TRUE;
 
         case 'p':
@@ -1626,34 +1734,30 @@ conv_cp (const gchar        c,
     return FALSE;
 }
 
-static gboolean
-custom_property_refresher (DonnaTask        *task,
-                           DonnaNode        *node,
-                           const gchar      *name,
-                           struct property  *property)
+static DonnaTaskProcess *
+cp_get_task_process (struct cp_refresh *cpr)
 {
     DonnaTaskProcess *tp;
     GPtrArray *arr;
     GString *str = NULL;
-    struct cp_refresh cpr = { .property = property, .node = node };
-    DonnaContext context = { "np", FALSE, (conv_flag_fn) conv_cp, &cpr };
-    gboolean refreshed;
+    DonnaContext context = { "np", FALSE, (conv_flag_fn) conv_cp, cpr };
 
-    donna_context_parse (&context, 0, property->app, property->cmdline, &str, NULL);
+    donna_context_parse (&context, 0, cpr->property->app, cpr->property->cmdline,
+            &str, NULL);
     tp = (DonnaTaskProcess *) donna_task_process_new (NULL,
-            (str) ? str->str : property->cmdline, TRUE, NULL, NULL, NULL);
+            (str) ? str->str : cpr->property->cmdline, TRUE, NULL, NULL, NULL);
     if (G_UNLIKELY (!tp))
     {
         if (str)
             g_string_free (str, TRUE);
-        return FALSE;
+        return NULL;
     }
-    if (G_UNLIKELY (!donna_task_process_set_workdir_to_curdir (tp, property->app)))
+    if (G_UNLIKELY (!donna_task_process_set_workdir_to_curdir (tp, cpr->property->app)))
     {
         if (str)
             g_string_free (str, TRUE);
         g_object_unref (g_object_ref_sink (tp));
-        return FALSE;
+        return NULL;
     }
 
     arr = g_ptr_array_new ();
@@ -1661,23 +1765,172 @@ custom_property_refresher (DonnaTask        *task,
     g_ptr_array_unref (arr);
     donna_task_process_set_ui_msg (tp);
     donna_task_process_set_default_closer (tp);
-    /* no need to ref the node, task (not tp) already has a ref on it */
-    g_object_set_data ((GObject *) tp, "donna-cp-node", node);
-    g_signal_connect (tp, "pipe-new-line", (GCallback) cp_pipe_new_line, property);
+    g_signal_connect (tp, "pipe-new-line", (GCallback) cp_pipe_new_line, cpr);
 
     DONNA_DEBUG (APP, NULL,
             g_debug ("Custom property '%s': running '%s'",
-                property->name,
-                (str) ? str->str : property->cmdline));
-
-    donna_app_run_task_and_wait (property->app,
-            (DonnaTask *) g_object_ref_sink (tp), task, NULL);
-    if (g_object_get_data ((GObject *) tp, "donna-cp-refreshed"))
-        refreshed = TRUE;
-    g_object_unref (tp);
+                cpr->property->name,
+                (str) ? str->str : cpr->property->cmdline));
 
     if (str)
         g_string_free (str, TRUE);
+    return tp;
+}
+
+static void
+cp_tp_done (struct cp_refresh *cpr)
+{
+    guint i;
+
+    for (i = 0; i < cpr->items->len; ++i)
+    {
+        struct cp_item *cpi = &g_array_index (cpr->items, struct cp_item, i);
+        donna_task_run (cpi->task);
+    }
+
+    free_cp_refresh (cpr);
+}
+
+static gboolean
+cp_timeout (struct property *property)
+{
+    struct cp_refresh *cpr;
+    GSource *source;
+    gint fd;
+    guint i;
+
+    if (g_source_is_destroyed (g_main_current_source ()))
+        return G_SOURCE_REMOVE;
+    g_source_unref (property->source);
+    property->source = NULL;
+
+    cpr = g_new0 (struct cp_refresh, 1);
+    cpr->property = property;
+    cpr->is_single = FALSE;
+    cpr->items = property->items;
+    property->items = NULL;
+
+    cpr->nodes = g_ptr_array_new ();
+    for (i = 0; i < cpr->items->len; ++i)
+    {
+        struct cp_item *cpi = &g_array_index (cpr->items, struct cp_item, i);
+        g_ptr_array_add (cpr->nodes, g_object_get_data ((GObject *) cpi->task,
+                    "donna-cp-node"));
+    }
+
+    cpr->tp = cp_get_task_process (cpr);
+    if (G_UNLIKELY (!cpr->tp))
+        goto err;
+    g_object_ref (cpr->tp);
+
+    fd = donna_task_get_wait_fd ((DonnaTask *) cpr->tp);
+    if (G_UNLIKELY (fd == -1))
+        goto err;
+
+    source = donna_fd_source_new (fd, (GSourceFunc) cp_tp_done, cpr, NULL);
+    g_source_attach (source, g_main_context_get_thread_default ());
+    g_source_unref (source);
+
+    donna_app_run_task (cpr->property->app, (DonnaTask *) cpr->tp);
+
+    return G_SOURCE_REMOVE;
+
+err:
+    for (i = 0; i < cpr->nodes->len; ++i)
+        donna_task_run (((struct cp_item *) cpr->nodes->pdata[i])->task);
+    free_cp_refresh (cpr);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean
+cp_preworker (DonnaTask *task, struct property *property)
+{
+    struct cp_item cpi = { NULL, };
+
+    if (!property->items)
+    {
+        property->items = g_array_new (FALSE, FALSE, sizeof (struct cp_item));
+        g_array_set_clear_func (property->items, free_cp_item);
+    }
+
+    cpi.location = donna_node_get_location (
+            g_object_get_data ((GObject *) task, "donna-cp-node"));
+    cpi.task = g_object_ref (task);
+    g_array_append_val (property->items, cpi);
+
+    /* if we've reached the max, we'll set up an idle source (with HIGH
+     * priority) to actually start things up */
+    if (property->items->len >= CP_MAX_NODE_WAITING)
+    {
+        /* destroy the timeout if there's one */
+        if (property->source)
+        {
+            g_source_destroy (property->source);
+            g_source_unref (property->source);
+        }
+
+        property->source = g_idle_source_new ();
+        g_source_set_priority (property->source, G_PRIORITY_HIGH);
+        g_source_set_callback (property->source,
+                (GSourceFunc) cp_timeout, property, NULL);
+        g_source_attach (property->source, g_main_context_get_thread_default ());
+    }
+    else if (!property->source)
+    {
+        property->source = g_timeout_source_new (800);
+        g_source_set_callback (property->source,
+                (GSourceFunc) cp_timeout, property, NULL);
+        g_source_attach (property->source, g_main_context_get_thread_default ());
+    }
+
+    /* do not run task now */
+    return FALSE;
+}
+
+static DonnaTask *
+cp_refresher_task (DonnaNode        *node,
+                   const gchar      *name,
+                   struct property  *property,
+                   DonnaApp        **_app)
+{
+    DonnaTask *task;
+
+    task = donna_task_new ((task_fn) cp_worker, property, NULL);
+    if (G_UNLIKELY (!task))
+        return NULL;
+    donna_task_set_pre_worker (task, (task_pre_fn) cp_preworker);
+    g_object_set_data_full ((GObject *) task, "donna-cp-node",
+            g_object_ref (node), g_object_unref);
+
+    if (_app)
+        *_app = property->app;
+
+    return task;
+}
+
+static gboolean
+custom_property_refresher (DonnaTask        *task,
+                           DonnaNode        *node,
+                           const gchar      *name,
+                           struct property  *property)
+{
+    DonnaTaskProcess *tp;
+    struct cp_refresh cpr = { .property = property, .is_single = TRUE, .node = node };
+    gboolean refreshed = FALSE;
+
+    tp = cp_get_task_process (&cpr);
+    if (G_UNLIKELY (!tp))
+        return FALSE;
+
+    /* do it manually instead of calling donna_app_run_task_and_wait() because
+     * it requires a current task, and for blocking call there might not be one
+     * (plus we know this is a PUBLIC one, so no need to test visiblity) */
+    donna_app_run_task (property->app, (DonnaTask *) g_object_ref_sink (tp));
+    donna_task_wait_for_it ((DonnaTask *) tp, task, NULL);
+    if (g_object_get_data ((GObject *) tp, "donna-cp-refreshed"))
+        refreshed = TRUE;
+
+    g_object_unref (tp);
     return refreshed;
 }
 
@@ -1723,8 +1976,9 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
                     prop = &g_array_index (cp->properties, struct property, k);
                     if (!donna_node_add_property (node, prop->name,
                                 G_TYPE_STRING, NULL,
-                                DONNA_TASK_VISIBILITY_INTERNAL,
-                                NULL, (refresher_fn) custom_property_refresher,
+                                DONNA_TASK_VISIBILITY_INTERNAL_LOOP,
+                                (refresher_task_fn) cp_refresher_task,
+                                (refresher_fn) custom_property_refresher,
                                 NULL,
                                 prop,
                                 NULL,
@@ -6463,7 +6717,7 @@ load_custom_properties (DonnaApp *app)
         g_array_set_clear_func (cp.properties, (GDestroyNotify) free_property);
         for (j = 0; j < arr_props->len; ++j)
         {
-            struct property prop;
+            struct property prop = { NULL, };
 
             if (!donna_config_get_string (priv->config, NULL, &prop.cmdline,
                         "custom_properties/%s/%s/cmdline",
