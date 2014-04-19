@@ -4775,6 +4775,7 @@ set_children (DonnaTreeView *tree,
 
         struct refresh_data *rd;
         GPtrArray *tasks = NULL;
+        GPtrArray *props;
         GHashTableIter ht_it;
         GSList *list = NULL;
         DonnaNode *node;
@@ -4793,6 +4794,15 @@ set_children (DonnaTreeView *tree,
             rd = g_new0 (struct refresh_data, 1);
             rd->tree = tree;
             priv->refresh_on_hold = TRUE;
+
+            props = g_ptr_array_sized_new (priv->col_props->len);
+            for (i = 0; i < priv->col_props->len; ++i)
+            {
+                struct col_prop *cp;
+
+                cp = &g_array_index (priv->col_props, struct col_prop, i);
+                g_ptr_array_add (props, cp->prop);
+            }
         }
 
         /* adding items to a sorted store is quite slow; we get much better
@@ -4823,8 +4833,10 @@ set_children (DonnaTreeView *tree,
                 {
                     GPtrArray *arr;
 
-                    arr = donna_node_refresh_tasks_arr (node, NULL, tasks,
-                            DONNA_NODE_REFRESH_SET_VALUES, NULL);
+                    /* donna_node_refresh_arr_tasks_arr() will unref props, but
+                     * we want to keep it alive */
+                    g_ptr_array_ref (props);
+                    arr = donna_node_refresh_arr_tasks_arr (node, tasks, props, NULL);
                     if (G_LIKELY (arr))
                     {
                         guint j;
@@ -4888,6 +4900,7 @@ set_children (DonnaTreeView *tree,
         {
             if (tasks)
                 g_ptr_array_unref (tasks);
+            g_ptr_array_unref (props);
             refresh_node_cb (NULL, FALSE, rd);
         }
 
