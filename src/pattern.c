@@ -379,7 +379,7 @@ donna_pattern_get_ref_count (DonnaPattern   *pattern)
 /**
  * donna_pattern_is_match:
  * @pattern: A #DonnaPattern
- * @string: The string to match against @pattern
+ * @string: (allow-none): The string to match against @pattern
  *
  * Checks whether @string matches against @pattern
  *
@@ -393,9 +393,8 @@ donna_pattern_is_match (DonnaPattern   *pattern,
     guint i;
 
     g_return_val_if_fail (pattern != NULL, FALSE);
-    g_return_val_if_fail (string != NULL, FALSE);
 
-    if (G_UNLIKELY (*string == '\0'))
+    if (G_UNLIKELY (!string || *string == '\0'))
         return FALSE;
 
     for (i = 0; i < pattern->arr->len; ++i)
