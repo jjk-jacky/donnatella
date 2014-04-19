@@ -5587,6 +5587,7 @@ static void
 update_cur_dirname (DonnaApp *app)
 {
     DonnaAppPrivate *priv = app->priv;
+    DonnaContext context = { "adlLv", FALSE, (conv_flag_fn) conv_app, app };
     DonnaNode *node;
     gchar *s;
 
@@ -5602,6 +5603,9 @@ update_cur_dirname (DonnaApp *app)
 
     s = priv->cur_dirname;
     priv->cur_dirname = donna_node_get_location (node);
+
+    if (!streq (priv->cur_dirname, s))
+        donna_app_emit_event (app, "notify-dirname", FALSE, &context, NULL);
     g_free (s);
     g_object_unref (node);
 }
