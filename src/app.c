@@ -1943,23 +1943,58 @@ custom_property_refresher (DonnaTask        *task,
                            const gchar      *name,
                            struct property  *property)
 {
-    DonnaTaskProcess *tp;
+    DonnaTask *t;
     struct cp_refresh cpr = { .property = property, .is_single = TRUE, .node = node };
     gboolean refreshed = FALSE;
+    fd_set fd_set;
+    gint fd;
 
-    tp = cp_get_task_process (&cpr);
-    if (G_UNLIKELY (!tp))
+    t = (DonnaTask *) cp_get_task_process (&cpr);
+    if (G_UNLIKELY (!t))
         return FALSE;
+    g_object_ref_sink (t);
 
-    /* do it manually instead of calling donna_app_run_task_and_wait() because
-     * it requires a current task, and for blocking call there might not be one
-     * (plus we know this is a PUBLIC one, so no need to test visiblity) */
-    donna_app_run_task (property->app, (DonnaTask *) g_object_ref_sink (tp));
-    donna_task_wait_for_it ((DonnaTask *) tp, task, NULL);
-    if (g_object_get_data ((GObject *) tp, "donna-cp-refreshed"))
+    /* doing it manually instead of calling donna_app_run_task_and_wait()
+     * because it requires a current task, and for blocking call there might not
+     * be one (plus we know this is a PUBLIC one, so no need to test visiblity).
+     * Doing it *really* manually instead of calling donna_task_wait_for_it()
+     * because it would start a main loop if we're in thread UI, but we need
+     * this call to be blocking, and starting a main loop wouldn't really be
+     * (thus could "invalidate" things and cause all kinds of trouble).
+     * We can assume there's no (current) task, since for non-blocking calls
+     * (even from the node's internal task) cp_refresher_task would have been
+     * called and the returned LOOP task started instead. */
+    fd = donna_task_get_wait_fd (t);
+    if (G_UNLIKELY (fd == -1))
+    {
+        g_object_unref (t);
+        return FALSE;
+    }
+
+    donna_app_run_task (property->app, t);
+    for (;;)
+    {
+        gint ret;
+
+        FD_ZERO (&fd_set);
+        FD_SET (fd, &fd_set);
+
+        ret = select (fd + 1, &fd_set, NULL, NULL, 0);
+        if (ret < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+
+        if (FD_ISSET (fd, &fd_set))
+            break;
+    }
+
+    if (g_object_get_data ((GObject *) t, "donna-cp-refreshed"))
         refreshed = TRUE;
 
-    g_object_unref (tp);
+    g_object_unref (t);
     return refreshed;
 }
 
