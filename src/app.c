@@ -521,6 +521,7 @@ struct property
     DonnaApp *app;
     gchar *name;
     gchar *cmdline;
+    gboolean preload;
     GArray *items;      /* cp_items[] for VISIBILITY_LOOP refresh_tasks */
     GSource *source;    /* timeout to run the cmdline for tasks */
 };
@@ -2055,8 +2056,11 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
                     else
                     {
                         DONNA_DEBUG (APP, NULL,
-                                g_debug2 ("Added custom property '%s' to '%s'",
-                                    prop->name, fl));
+                                g_debug2 ("Added custom property '%s' (preload=%d) to '%s'",
+                                    prop->name, prop->preload, fl));
+                        if (prop->preload)
+                            donna_app_run_task (app,
+                                    cp_refresher_task (node, prop->name, prop, NULL));
                     }
                 }
             }
@@ -6793,6 +6797,10 @@ load_custom_properties (DonnaApp *app)
                         (gchar *) arr_props->pdata[j]);
                 continue;
             }
+            donna_config_get_boolean (priv->config, NULL, &prop.preload,
+                    "custom_properties/%s/%s/preload",
+                        (gchar *) arr->pdata[i],
+                        (gchar *) arr_props->pdata[j]);
 
             prop.app  = app;
             prop.name = g_strdup (arr_props->pdata[j]);
