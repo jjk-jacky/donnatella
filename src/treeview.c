@@ -5863,11 +5863,31 @@ rend_func (GtkTreeViewColumn  *column,
 
     if (arr)
     {
+        GdkRectangle rect_visible, rect;
+        GtkTreePath *path;
         DonnaTask *task;
         GSList *list;
         gboolean match = FALSE;
 
         /* ct wants some properties refreshed on node. See refresh_node_prop_cb */
+
+        /* get visible area, so we can determine if the row is visible. if
+         * not, we don't trigger any refresh. This is a small "optimization" for
+         * cases such as: go to a location where nodes have 2 custom props set,
+         * one is preload the other not.
+         * Every node-updated for the preloading CP will have the treeview
+         * redraw the row (even if not visible) which would in turn have us here
+         * trigger a refresh of the other CP. */
+        gtk_tree_view_get_visible_rect ((GtkTreeView *) tree, &rect_visible);
+        path = gtk_tree_model_get_path (model, iter);
+        gtk_tree_view_get_background_area ((GtkTreeView *) tree, path, NULL, &rect);
+        gtk_tree_path_free (path);
+        if (rect.y + rect.height < 0 || rect.y > rect_visible.height)
+        {
+            g_ptr_array_unref (arr);
+            g_object_unref (node);
+            return;
+        }
 
         g_mutex_lock (&priv->refresh_node_props_mutex);
         /* in case we've already a task running for this exact same cell, which
