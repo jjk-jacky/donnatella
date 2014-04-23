@@ -520,6 +520,7 @@ struct property
 {
     DonnaApp *app;
     gchar *name;
+    GType type;
     gchar *cmdline;
     gboolean preload;
     GArray *items;      /* cp_items[] for VISIBILITY_LOOP refresh_tasks */
@@ -1668,6 +1669,7 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
     GObject *obj;
     GValue v = G_VALUE_INIT;
     gchar *s;
+    gboolean ok = TRUE;
 
     if (!line)
         /* EOF */
@@ -1721,16 +1723,31 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
             return;
     }
 
-    g_value_init (&v, G_TYPE_STRING);
-    g_value_set_string (&v, s);
-    donna_node_set_property_value (node, cpr->property->name, &v);
+    g_value_init (&v, cpr->property->type);
+    if (cpr->property->type == G_TYPE_STRING)
+        g_value_set_string (&v, s);
+    else /* G_TYPE_UNIT64 */
+    {
+        guint64 val;
+        gchar *e;
+
+        val = (guint64) g_ascii_strtoll (s, &e, 10);
+        if (e && *e == '\0')
+            g_value_set_uint64 (&v, val);
+        else
+            ok = FALSE;
+    }
+    if (ok)
+    {
+        donna_node_set_property_value (node, cpr->property->name, &v);
+
+        g_object_set_data (obj, "donna-cp-refreshed", GINT_TO_POINTER (TRUE));
+
+        DONNA_DEBUG (APP, NULL,
+                g_debug3 ("Custom property '%s' on '%s:%s' was refreshed to '%s'",
+                    cpr->property->name, donna_node_get_domain (node), location, s));
+    }
     g_value_unset (&v);
-
-    g_object_set_data (obj, "donna-cp-refreshed", GINT_TO_POINTER (TRUE));
-
-    DONNA_DEBUG (APP, NULL,
-            g_debug3 ("Custom property '%s' on '%s:%s' was refreshed to '%s'",
-                cpr->property->name, donna_node_get_domain (node), location, s));
     g_free (location);
 }
 
@@ -2040,7 +2057,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
 
                     prop = &g_array_index (cp->properties, struct property, k);
                     if (!donna_node_add_property (node, prop->name,
-                                G_TYPE_STRING, NULL,
+                                prop->type, NULL,
                                 DONNA_TASK_VISIBILITY_INTERNAL_LOOP,
                                 (refresher_task_fn) cp_refresher_task,
                                 (refresher_fn) custom_property_refresher,
@@ -6801,6 +6818,12 @@ load_custom_properties (DonnaApp *app)
                     "custom_properties/%s/%s/preload",
                         (gchar *) arr->pdata[i],
                         (gchar *) arr_props->pdata[j]);
+            if (!donna_config_get_int (priv->config, NULL, (gint *) &prop.type,
+                        "custom_properties/%s/%s/type",
+                        (gchar *) arr->pdata[i],
+                        (gchar *) arr_props->pdata[j])
+                    || (prop.type != G_TYPE_STRING && prop.type != G_TYPE_UINT64))
+                prop.type = G_TYPE_STRING;
 
             prop.app  = app;
             prop.name = g_strdup (arr_props->pdata[j]);
@@ -7315,6 +7338,21 @@ prepare_app (DonnaApp *app, GError **error)
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "enabled",
                     "Enabled state",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = G_TYPE_STRING;
+    it_int[i].in_file   = "string";
+    it_int[i].label     = "String";
+    ++i;
+    it_int[i].value     = G_TYPE_UINT64;
+    it_int[i].in_file   = "uint";
+    it_int[i].label     = "Unsigned Integer (size, timestamp, etc)";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "cp-type",
+                    "Custom Property Type",
                     i, it_int, error)))
         return FALSE;
 
