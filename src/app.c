@@ -516,21 +516,40 @@ enum
  * really, but that when reached we stop the wait (for the timeout) */
 #define CP_MAX_NODE_WAITING     20
 
+struct cpi_task
+{
+    struct property *property;
+    guint num_prop;
+    DonnaTask *task;
+};
+
+struct cp_item {
+    DonnaNode *node;
+    gchar *location;
+    GPtrArray *tasks;  /* cpi_task[] */
+};
+
+struct prop_def
+{
+    gchar *name;
+    GType type;
+};
+
 struct property
 {
     DonnaApp *app;
-    gchar *name;
-    GType type;
     gchar *cmdline;
     gboolean preload;
-    GArray *items;      /* cp_items[] for VISIBILITY_LOOP refresh_tasks */
+    GArray *items;      /* cp_item[] for VISIBILITY_LOOP refresh_tasks */
     GSource *source;    /* timeout to run the cmdline for tasks */
+    guint nb_props;     /* nb of actual props, i.e. len of properties[] below */
+    struct prop_def properties[];
 };
 
 struct custom_properties
 {
     DonnaFilter *filter;
-    GArray *properties;
+    GPtrArray *properties;
 };
 
 struct provider
@@ -918,9 +937,10 @@ donna_app_task_run (DonnaTask *task)
 }
 
 static void
-free_property (struct property *p)
+free_property (gpointer data)
 {
-    g_free (p->name);
+    struct property *p = data;
+
     g_free (p->cmdline);
     if (p->items)
        g_array_unref (p->items);
@@ -929,13 +949,16 @@ free_property (struct property *p)
         g_source_destroy (p->source);
         g_source_unref (p->source);
     }
+    while (p->nb_props > 0)
+        g_free (p->properties[--p->nb_props].name);
+    g_free (p);
 }
 
 static void
 free_custom_properties (struct custom_properties *cp)
 {
     g_object_unref (cp->filter);
-    g_array_unref (cp->properties);
+    g_ptr_array_unref (cp->properties);
 }
 
 static void
@@ -1598,7 +1621,7 @@ visual_refresher (DonnaTask *task, DonnaNode *node, const gchar *name, gpointer 
 }
 
 static DonnaTaskState
-cp_worker (DonnaTask *task, struct property *property)
+cp_worker (DonnaTask *task, struct cpi_task *cpit)
 {
     if (g_object_get_data ((GObject *) task, "donna-cp-refreshed"))
         return DONNA_TASK_DONE;
@@ -1606,11 +1629,13 @@ cp_worker (DonnaTask *task, struct property *property)
         return DONNA_TASK_CANCELLED;
     else
     {
+        struct prop_def *pd = &cpit->property->properties[cpit->num_prop];
         DonnaNode *node = g_object_get_data ((GObject *) task, "donna-cp-node");
         gchar *fl = donna_node_get_full_location (node);
+
         donna_task_set_error (task, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
                 "Custom property '%s' failed to be refreshed on '%s'",
-                property->name, fl);
+                pd->name, fl);
         g_free (fl);
         return DONNA_TASK_FAILED;
     }
@@ -1619,17 +1644,18 @@ cp_worker (DonnaTask *task, struct property *property)
 struct cp_refresh {
     struct property *property;
     gboolean is_single;
+    guint current;
     union {
-        DonnaNode *node;
-        GPtrArray *nodes;
+        struct {
+            DonnaNode *node;
+            guint num_prop;
+        } single;
+        struct {
+            GPtrArray *nodes;
+            GArray *items;
+            DonnaTaskProcess *tp;
+        } multi;
     };
-    DonnaTaskProcess *tp;
-    GArray *items;
-};
-
-struct cp_item {
-    DonnaTask *task;
-    gchar *location;
 };
 
 static void
@@ -1642,10 +1668,10 @@ free_cp_refresh (gpointer data)
          * the refresher), it has its own handle of task-process & no items */
         return;
 
-    g_ptr_array_unref (cpr->nodes);
-    if (cpr->tp)
-        g_object_unref (cpr->tp);
-    g_array_unref (cpr->items);
+    g_ptr_array_unref (cpr->multi.nodes);
+    if (cpr->multi.tp)
+        g_object_unref (cpr->multi.tp);
+    g_array_unref (cpr->multi.items);
     g_free (cpr);
 }
 
@@ -1654,8 +1680,17 @@ free_cp_item (gpointer data)
 {
     struct cp_item *cpi = data;
 
-    g_object_unref (cpi->task);
     g_free (cpi->location);
+    g_ptr_array_unref (cpi->tasks);
+}
+
+static void
+free_cpi_task (gpointer data)
+{
+    struct cpi_task *cpit = data;
+
+    g_object_unref (cpit->task);
+    g_free (cpit);
 }
 
 static void
@@ -1666,9 +1701,12 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
 {
     DonnaNode *node;
     gchar *location;
-    GObject *obj;
+    struct cp_item *cpi;
+    struct prop_def *pd;
     GValue v = G_VALUE_INIT;
     gchar *s;
+    guint i;
+    guint num_prop;
     gboolean ok = TRUE;
 
     if (!line)
@@ -1678,77 +1716,136 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
     if (pipe == DONNA_PIPE_ERROR)
         return;
 
-    if (*line != '/')
-        return;
-
-    s = strchr (line, ':');
-    if (!s)
-        return;
-
-    *s = '\0';
-    if (cpr->is_single)
+    /* filename */
+    if (*line == '/')
     {
-        node = cpr->node;
-        location = donna_node_get_location (node);
-        if (!streq (line, location))
-        {
-            *s = ':';
-            g_free (location);
+        s = strchr (line, ':');
+        if (!s)
             return;
+
+        *s = '\0';
+        if (cpr->is_single)
+        {
+            node = cpr->single.node;
+            location = donna_node_get_location (node);
+            if (!streq (line, location))
+            {
+                *s = ':';
+                g_free (location);
+                cpr->current = (guint) -1;
+                return;
+            }
+            cpr->current = 1;
+        }
+        else
+        {
+            for (i = 0; i < cpr->multi.items->len; ++i)
+            {
+                cpi = &g_array_index (cpr->multi.items, struct cp_item, i);
+                if (streq (line, cpi->location))
+                {
+                    node = cpi->node;
+                    location = cpi->location;
+                    break;
+                }
+            }
+            if (i >= cpr->multi.items->len)
+            {
+                *s++ = ':';
+                cpr->current = (guint) -1;
+                return;
+            }
+            cpr->current = i;
         }
         *s++ = ':';
-        obj = (GObject *) tp;
+
+        /* filename only on the line */
+        if (*s == '\0')
+            return;
     }
+    else if (*line != ':' || cpr->current == (guint) -1)
+        return;
     else
     {
-        guint i;
-
-        for (i = 0; i < cpr->items->len; ++i)
+        s = line + 1;
+        if (cpr->is_single)
         {
-            struct cp_item *cpi = &g_array_index (cpr->items, struct cp_item, i);
-
-            if (!cpi->location)
-                continue;
-            if (streq (line, cpi->location))
-            {
-                node = cpr->nodes->pdata[i];
-                location = cpi->location;
-                cpi->location = NULL;
-                obj = (GObject *) cpi->task;
-                break;
-            }
+            node = cpr->single.node;
+            location = donna_node_get_location (node);
         }
-        *s++ = ':';
-        if (i >= cpr->nodes->len)
-            return;
+        else
+        {
+            cpi = &g_array_index (cpr->multi.items, struct cp_item, cpr->current);
+            node = cpi->node;
+            location = cpi->location;
+        }
     }
 
-    g_value_init (&v, cpr->property->type);
-    if (cpr->property->type == G_TYPE_STRING)
-        g_value_set_string (&v, s);
+    /* property */
+    line = s;
+    s = strchr (line, ':');
+    if (!s)
+    {
+        cpr->current = (guint) -1;
+        return;
+    }
+
+    *s = '\0';
+    for (num_prop = 0; num_prop < cpr->property->nb_props; ++num_prop)
+    {
+        pd = &cpr->property->properties[num_prop];
+        if (streq (line, pd->name))
+            break;
+    }
+    *s = ':';
+    if (num_prop >= cpr->property->nb_props)
+        /* unknown property, ignore but keep current file (if any) */
+        return;
+    line = s + 1;
+
+    /* value */
+    g_value_init (&v, pd->type);
+    if (pd->type == G_TYPE_STRING)
+        g_value_set_string (&v, line);
     else /* G_TYPE_UNIT64 */
     {
         guint64 val;
-        gchar *e;
 
-        val = (guint64) g_ascii_strtoll (s, &e, 10);
-        if (e && *e == '\0')
+        val = (guint64) g_ascii_strtoll (line, &s, 10);
+        if (s && *s == '\0')
             g_value_set_uint64 (&v, val);
         else
             ok = FALSE;
     }
     if (ok)
     {
-        donna_node_set_property_value (node, cpr->property->name, &v);
-
-        g_object_set_data (obj, "donna-cp-refreshed", GINT_TO_POINTER (TRUE));
-
+        donna_node_set_property_value (node, pd->name, &v);
         DONNA_DEBUG (APP, NULL,
                 g_debug3 ("Custom property '%s' on '%s:%s' was refreshed to '%s'",
-                    cpr->property->name, donna_node_get_domain (node), location, s));
+                    pd->name, donna_node_get_domain (node), location, line));
     }
     g_value_unset (&v);
-    g_free (location);
+    if (cpr->is_single)
+        g_free (location);
+
+    /* flag refreshed */
+    if (cpr->is_single)
+    {
+        if (num_prop == cpr->single.num_prop)
+            g_object_set_data ((GObject *) tp, "donna-cp-refreshed",
+                    GINT_TO_POINTER (TRUE));
+    }
+    else
+    {
+        for (i = 0; i < cpi->tasks->len; ++i)
+        {
+            struct cpi_task *cpit = cpi->tasks->pdata[i];
+
+            if (num_prop == cpit->num_prop)
+                g_object_set_data ((GObject *) cpit->task, "donna-cp-refreshed",
+                        GINT_TO_POINTER (TRUE));
+        }
+    }
 }
 
 static gboolean
@@ -1764,17 +1861,12 @@ conv_cp (const gchar        c,
         case 'n':
             *type = DONNA_ARG_TYPE_NODE;
             if (cpr->is_single)
-                *ptr = cpr->node;
+                *ptr = cpr->single.node;
             else
             {
                 *type |= DONNA_ARG_IS_ARRAY;
-                *ptr = cpr->nodes;
+                *ptr = cpr->multi.nodes;
             }
-            return TRUE;
-
-        case 'p':
-            *type = DONNA_ARG_TYPE_STRING;
-            *ptr  = cpr->property->name;
             return TRUE;
     }
 
@@ -1787,7 +1879,7 @@ cp_get_task_process (struct cp_refresh *cpr)
     DonnaTaskProcess *tp;
     GPtrArray *arr;
     GString *str = NULL;
-    DonnaContext context = { "np", FALSE, (conv_flag_fn) conv_cp, cpr };
+    DonnaContext context = { "n", FALSE, (conv_flag_fn) conv_cp, cpr };
 
     donna_context_parse (&context, 0, cpr->property->app, cpr->property->cmdline,
             &str, NULL);
@@ -1815,8 +1907,9 @@ cp_get_task_process (struct cp_refresh *cpr)
     g_signal_connect (tp, "pipe-new-line", (GCallback) cp_pipe_new_line, cpr);
 
     DONNA_DEBUG (APP, NULL,
-            g_debug ("Custom property '%s': running '%s'",
-                cpr->property->name,
+            g_debug ("Custom property '%s'%s: running '%s'",
+                cpr->property->properties[0].name,
+                (cpr->property->nb_props > 1) ? " (and others from the group)" : "",
                 (str) ? str->str : cpr->property->cmdline));
 
     if (str)
@@ -1829,10 +1922,13 @@ cp_tp_done (struct cp_refresh *cpr)
 {
     guint i;
 
-    for (i = 0; i < cpr->items->len; ++i)
+    for (i = 0; i < cpr->multi.items->len; ++i)
     {
-        struct cp_item *cpi = &g_array_index (cpr->items, struct cp_item, i);
-        donna_task_run (cpi->task);
+        struct cp_item *cpi = &g_array_index (cpr->multi.items, struct cp_item, i);
+        guint j;
+
+        for (j = 0; j < cpi->tasks->len; ++j)
+            donna_task_run (((struct cpi_task *) cpi->tasks->pdata[j])->task);
     }
 
     free_cp_refresh (cpr);
@@ -1854,23 +1950,23 @@ cp_timeout (struct property *property)
     cpr = g_new0 (struct cp_refresh, 1);
     cpr->property = property;
     cpr->is_single = FALSE;
-    cpr->items = property->items;
+    cpr->current = (guint) -1;
+    cpr->multi.items = property->items;
     property->items = NULL;
 
-    cpr->nodes = g_ptr_array_new ();
-    for (i = 0; i < cpr->items->len; ++i)
+    cpr->multi.nodes = g_ptr_array_sized_new (cpr->multi.items->len);
+    for (i = 0; i < cpr->multi.items->len; ++i)
     {
-        struct cp_item *cpi = &g_array_index (cpr->items, struct cp_item, i);
-        g_ptr_array_add (cpr->nodes, g_object_get_data ((GObject *) cpi->task,
-                    "donna-cp-node"));
+        struct cp_item *cpi = &g_array_index (cpr->multi.items, struct cp_item, i);
+        g_ptr_array_add (cpr->multi.nodes, cpi->node);
     }
 
-    cpr->tp = cp_get_task_process (cpr);
-    if (G_UNLIKELY (!cpr->tp))
+    cpr->multi.tp = cp_get_task_process (cpr);
+    if (G_UNLIKELY (!cpr->multi.tp))
         goto err;
-    g_object_ref (cpr->tp);
+    g_object_ref (cpr->multi.tp);
 
-    fd = donna_task_get_wait_fd ((DonnaTask *) cpr->tp);
+    fd = donna_task_get_wait_fd ((DonnaTask *) cpr->multi.tp);
     if (G_UNLIKELY (fd == -1))
         goto err;
 
@@ -1878,21 +1974,30 @@ cp_timeout (struct property *property)
     g_source_attach (source, g_main_context_get_thread_default ());
     g_source_unref (source);
 
-    donna_app_run_task (cpr->property->app, (DonnaTask *) cpr->tp);
+    donna_app_run_task (cpr->property->app, (DonnaTask *) cpr->multi.tp);
 
     return G_SOURCE_REMOVE;
 
 err:
-    for (i = 0; i < cpr->nodes->len; ++i)
-        donna_task_run (((struct cp_item *) cpr->nodes->pdata[i])->task);
+    for (i = 0; i < cpr->multi.items->len; ++i)
+    {
+        struct cp_item *cpi = &g_array_index (cpr->multi.items, struct cp_item, i);
+        guint j;
+
+        for (j = 0; j < cpi->tasks->len; ++j)
+            donna_task_run (((struct cpi_task *) cpi->tasks->pdata[j])->task);
+    }
     free_cp_refresh (cpr);
     return G_SOURCE_REMOVE;
 }
 
 static gboolean
-cp_preworker (DonnaTask *task, struct property *property)
+cp_preworker (DonnaTask *task, struct cpi_task *cpit)
 {
-    struct cp_item cpi = { NULL, };
+    struct property *property = cpit->property;
+    struct cp_item _cpi = { NULL, };
+    struct cp_item *cpi;
+    guint i;
 
     if (!property->items)
     {
@@ -1900,10 +2005,24 @@ cp_preworker (DonnaTask *task, struct property *property)
         g_array_set_clear_func (property->items, free_cp_item);
     }
 
-    cpi.location = donna_node_get_location (
-            g_object_get_data ((GObject *) task, "donna-cp-node"));
-    cpi.task = g_object_ref (task);
-    g_array_append_val (property->items, cpi);
+    _cpi.node = g_object_get_data ((GObject *) task, "donna-cp-node");
+    /* there might already be refreshes for this node waiting */
+    for (i = 0; i < property->items->len; ++i)
+    {
+        cpi = &g_array_index (property->items, struct cp_item, i);
+        if (cpi->node == _cpi.node)
+            break;
+    }
+    if (i >= property->items->len)
+    {
+        _cpi.location = donna_node_get_location (_cpi.node);
+        g_array_append_val (property->items, _cpi);
+        cpi = &g_array_index (property->items, struct cp_item, property->items->len - 1);
+    }
+
+    if (!cpi->tasks)
+        cpi->tasks = g_ptr_array_new_with_free_func (free_cpi_task);
+    g_ptr_array_add (cpi->tasks, cpit);
 
     /* if we've reached the max, we'll set up an idle source (with HIGH
      * priority) to actually start things up */
@@ -1941,10 +2060,34 @@ cp_refresher_task (DonnaNode        *node,
                    DonnaApp        **_app)
 {
     DonnaTask *task;
+    struct cpi_task *cpit;
+    guint i;
 
-    task = donna_task_new ((task_fn) cp_worker, property, NULL);
-    if (G_UNLIKELY (!task))
+    cpit = g_new (struct cpi_task, 1);
+    cpit->property = property;
+    for (i = 0; i < property->nb_props; ++i)
+    {
+        struct prop_def *pd = &property->properties[i];
+        if (streq (pd->name, name))
+        {
+            cpit->num_prop = i;
+            break;
+        }
+    }
+    if (G_UNLIKELY (i >= property->nb_props))
+    {
+        /* should never happen */
+        g_free (cpit);
         return NULL;
+    }
+
+    task = donna_task_new ((task_fn) cp_worker, cpit, g_free);
+    if (G_UNLIKELY (!task))
+    {
+        g_free (cpit);
+        return NULL;
+    }
+    cpit->task = g_object_ref (task);
     donna_task_set_pre_worker (task, (task_pre_fn) cp_preworker);
     g_object_set_data_full ((GObject *) task, "donna-cp-node",
             g_object_ref (node), g_object_unref);
@@ -1962,10 +2105,28 @@ custom_property_refresher (DonnaTask        *task,
                            struct property  *property)
 {
     DonnaTask *t;
-    struct cp_refresh cpr = { .property = property, .is_single = TRUE, .node = node };
+    struct cp_refresh cpr = {
+        .property    = property,
+        .is_single   = TRUE,
+        .current     = (guint) -1,
+        .single      = { .node = node, .num_prop = 0 }
+    };
+    guint i;
     gboolean refreshed = FALSE;
     fd_set fd_set;
     gint fd;
+
+    for (i = 0; i < property->nb_props; ++i)
+    {
+        struct prop_def *pd = &property->properties[i];
+        if (streq (name, pd->name))
+        {
+            cpr.single.num_prop = i;
+            break;
+        }
+    }
+    if (G_UNLIKELY (i >= property->nb_props))
+        return FALSE;
 
     t = (DonnaTask *) cp_get_task_process (&cpr);
     if (G_UNLIKELY (!t))
@@ -2053,31 +2214,36 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
                     continue;
                 for (k = 0; k < cp->properties->len; ++k)
                 {
-                    struct property *prop;
+                    struct property *prop = cp->properties->pdata[k];
+                    guint nb;
 
-                    prop = &g_array_index (cp->properties, struct property, k);
-                    if (!donna_node_add_property (node, prop->name,
-                                prop->type, NULL,
-                                DONNA_TASK_VISIBILITY_INTERNAL_LOOP,
-                                (refresher_task_fn) cp_refresher_task,
-                                (refresher_fn) custom_property_refresher,
-                                NULL,
-                                prop,
-                                NULL,
-                                &err))
+                    for (nb = 0; nb < prop->nb_props; ++nb)
                     {
-                        g_warning ("Failed to add custom property '%s' to '%s': %s'",
-                                prop->name, fl, err->message);
-                        g_clear_error (&err);
-                    }
-                    else
-                    {
-                        DONNA_DEBUG (APP, NULL,
-                                g_debug2 ("Added custom property '%s' (preload=%d) to '%s'",
-                                    prop->name, prop->preload, fl));
-                        if (prop->preload)
-                            donna_app_run_task (app,
-                                    cp_refresher_task (node, prop->name, prop, NULL));
+                        struct prop_def *pd = &prop->properties[nb];
+
+                        if (!donna_node_add_property (node, pd->name,
+                                    pd->type, NULL,
+                                    DONNA_TASK_VISIBILITY_INTERNAL_LOOP,
+                                    (refresher_task_fn) cp_refresher_task,
+                                    (refresher_fn) custom_property_refresher,
+                                    NULL,
+                                    prop,
+                                    NULL,
+                                    &err))
+                        {
+                            g_warning ("Failed to add custom property '%s' to '%s': %s'",
+                                    pd->name, fl, err->message);
+                            g_clear_error (&err);
+                        }
+                        else
+                        {
+                            DONNA_DEBUG (APP, NULL,
+                                    g_debug2 ("Added custom property '%s' (preload=%d) to '%s'",
+                                        pd->name, prop->preload, fl));
+                            if (prop->preload)
+                                donna_app_run_task (app,
+                                        cp_refresher_task (node, pd->name, prop, NULL));
+                        }
                     }
                 }
             }
@@ -6798,13 +6964,17 @@ load_custom_properties (DonnaApp *app)
             continue;
         }
 
-        cp.properties = g_array_new (FALSE, FALSE, sizeof (struct property));
-        g_array_set_clear_func (cp.properties, (GDestroyNotify) free_property);
+        cp.properties = g_ptr_array_new_with_free_func (free_property);
         for (j = 0; j < arr_props->len; ++j)
         {
-            struct property prop = { NULL, };
+            struct property *prop;
+            struct prop_def *pd;
+            gboolean is_group;
 
-            if (!donna_config_get_string (priv->config, NULL, &prop.cmdline,
+            prop = g_malloc0 (sizeof (struct property) + sizeof (struct prop_def));
+            prop->nb_props = 1;
+
+            if (!donna_config_get_string (priv->config, NULL, &prop->cmdline,
                         "custom_properties/%s/%s/cmdline",
                         (gchar *) arr->pdata[i],
                         (gchar *) arr_props->pdata[j]))
@@ -6812,26 +6982,81 @@ load_custom_properties (DonnaApp *app)
                 g_warning ("Failed to load custom property (%s/%s): no command line",
                         (gchar *) arr->pdata[i],
                         (gchar *) arr_props->pdata[j]);
+                free_property (prop);
                 continue;
             }
-            donna_config_get_boolean (priv->config, NULL, &prop.preload,
+            donna_config_get_boolean (priv->config, NULL, &prop->preload,
                     "custom_properties/%s/%s/preload",
-                        (gchar *) arr->pdata[i],
-                        (gchar *) arr_props->pdata[j]);
-            if (!donna_config_get_int (priv->config, NULL, (gint *) &prop.type,
-                        "custom_properties/%s/%s/type",
+                    (gchar *) arr->pdata[i],
+                    (gchar *) arr_props->pdata[j]);
+
+            if (donna_config_get_boolean (priv->config, NULL, &is_group,
+                        "custom_properties/%s/%s/is_group",
                         (gchar *) arr->pdata[i],
                         (gchar *) arr_props->pdata[j])
-                    || (prop.type != G_TYPE_STRING && prop.type != G_TYPE_UINT64))
-                prop.type = G_TYPE_STRING;
+                    && is_group)
+            {
+                GPtrArray *agp = NULL; /* arr_group_props */
+                guint k;
 
-            prop.app  = app;
-            prop.name = g_strdup (arr_props->pdata[j]);
-            g_array_append_val (cp.properties, prop);
+                if (!donna_config_list_options (priv->config, &agp,
+                            DONNA_CONFIG_OPTION_TYPE_CATEGORY,
+                            "custom_properties/%s/%s",
+                            (gchar *) arr->pdata[i],
+                            (gchar *) arr_props->pdata[j]))
+                {
+                    g_warning ("Failed to load custom properties (%s) for group '%s': "
+                            "no properties defined",
+                            (gchar *) arr->pdata[i],
+                            (gchar *) arr_props->pdata[j]);
+                    free_property (prop);
+                    continue;
+                }
+
+                prop = g_realloc (prop, sizeof (struct property)
+                        + agp->len * sizeof (struct prop_def));
+                prop->nb_props = agp->len;
+                for (k = 0; k < agp->len; ++k)
+                {
+                    pd = &prop->properties[k];
+                    pd->name = g_strdup (agp->pdata[k]);
+                    if (!donna_config_get_int (priv->config, NULL, (gint *) &pd->type,
+                                "custom_properties/%s/%s/%s/type",
+                                (gchar *) arr->pdata[i],
+                                (gchar *) arr_props->pdata[j],
+                                (gchar *) agp->pdata[k])
+                            || (pd->type != G_TYPE_STRING && pd->type != G_TYPE_UINT64))
+                        pd->type = G_TYPE_STRING;
+                }
+                g_ptr_array_unref (agp);
+            }
+            else
+            {
+                pd = &prop->properties[0];
+
+                pd->name = g_strdup (arr_props->pdata[j]);
+                if (!donna_config_get_int (priv->config, NULL, (gint *) &pd->type,
+                            "custom_properties/%s/%s/type",
+                            (gchar *) arr->pdata[i],
+                            (gchar *) arr_props->pdata[j])
+                        || (pd->type != G_TYPE_STRING && pd->type != G_TYPE_UINT64))
+                    pd->type = G_TYPE_STRING;
+            }
+
+            prop->app  = app;
+            g_ptr_array_add (cp.properties, prop);
             DONNA_DEBUG (APP, NULL,
-                    g_debug ("New custom property '%s' : '%s'",
-                        prop.name, prop.cmdline));
+                    if (is_group)
+                        g_debug ("%d new custom properties in group '%s' : '%s'",
+                            prop->nb_props,
+                            (gchar *) arr_props->pdata[j],
+                            prop->cmdline);
+                    else
+                        g_debug ("New custom property '%s' : '%s'",
+                            pd->name,
+                            prop->cmdline));
         }
+        g_ptr_array_unref (arr_props);
 
         if (cp.properties->len == 0)
         {
@@ -6856,7 +7081,7 @@ load_custom_properties (DonnaApp *app)
                             sizeof (struct custom_properties));
                 g_array_append_val (p->custom_properties, cp);
                 DONNA_DEBUG (APP, NULL,
-                        g_debug ("Added %d custom properties to '%s' via '%s'",
+                        g_debug ("Added %d custom properties/groups to '%s' via '%s'",
                             cp.properties->len,
                             domain,
                             (cp.filter) ? donna_filter_get_filter (cp.filter) : "<all>"));
