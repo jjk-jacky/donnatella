@@ -25,19 +25,36 @@
 
 G_BEGIN_DECLS
 
-typedef gpointer (*get_ct_data_fn) (const gchar *col_name, gpointer data);
+#include "common.h"
+
+/* refresh_properties */
+enum rp
+{
+    RP_VISIBLE = 0,
+    RP_PRELOAD,
+    RP_ON_DEMAND,
+    _MAX_RP
+};
+
+typedef gboolean (*get_ct_data_fn) (const gchar *col_name,
+                                    DonnaNode   *node,
+                                    gpointer    *ctdata,
+                                    gpointer     data);
 
 struct col_ct_data
 {
-    gchar   *col_name;
-    gpointer ct_data;
+    gchar       *col_name;
+    GPtrArray   *props;
+    gpointer     ct_data;
     /*< private >*/
-    guint    index;
-    guint    ref_count;
+    guint        index;
+    guint        ref_count;
 };
 
 /* from treeview.c */
-gpointer                _donna_tree_view_get_ct_data    (const gchar    *col_name,
+gboolean                _donna_tree_view_get_ct_data    (const gchar    *col_name,
+                                                         DonnaNode      *node,
+                                                         gpointer       *ctdata,
                                                          DonnaTreeView  *treeview);
 /* from app.c */
 struct col_ct_data *    _donna_app_get_col_ct_data      (DonnaApp       *app,

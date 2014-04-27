@@ -957,6 +957,8 @@ enum tree_expand
 
 #define ST_CONTEXT_FLAGS            "olLfFkKaAvVhHsSnN"
 
+#define DATA_PRELOAD_TASK           "donna-preload-props-task"
+
 enum tree_sync
 {
     TREE_SYNC_NONE = 0,
@@ -1151,12 +1153,15 @@ struct column
     gint                 sort_id;
     DonnaColumnType     *ct;
     gpointer             ct_data;
+    /* column option handled by treeview (like title or width) */
+    enum rp              refresh_properties;
 };
 
 /* when filters use columns not loaded/used in tree */
 struct column_filter
 {
     gchar           *name;
+    enum rp          refresh_properties;
     DonnaColumnType *ct;
     gpointer         ct_data;
 };
@@ -1450,6 +1455,7 @@ static void refilter_list                               (DonnaTreeView  *tree);
 static inline void set_draw_state                       (DonnaTreeView  *tree,
                                                          enum draw       draw);
 static void refresh_draw_state                          (DonnaTreeView  *tree);
+static void preload_props_columns                       (DonnaTreeView  *tree);
 static inline GtkTreeIter * get_child_iter_for_node     (DonnaTreeView  *tree,
                                                          GtkTreeIter    *parent,
                                                          DonnaNode      *node);
@@ -2256,6 +2262,26 @@ _donna_tree_view_register_extras (DonnaConfig *config, GError **error)
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "tree-st-colors",
                     "Change colors (treeview status)",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
+    it_int[i].value     = RP_VISIBLE;
+    it_int[i].in_file   = "visible";
+    it_int[i].label     = "When row is visible";
+    it_int[i].label     = "Off";
+    ++i;
+    it_int[i].value     = RP_PRELOAD;
+    it_int[i].in_file   = "preload";
+    it_int[i].label     = "When visible, preloading other rows";
+    ++i;
+    it_int[i].value     = RP_ON_DEMAND;
+    it_int[i].in_file   = "on_demand";
+    it_int[i].label     = "On Demand (e.g. when clicking the refresh icon)";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "col-rp",
+                    "Columns' Properties Refresh Time",
                     i, it_int, error)))
         return FALSE;
 
@@ -3528,6 +3554,29 @@ real_option_cb (struct option_data *data)
                             "width", w);
                     gtk_tree_view_column_set_fixed_width (_col->column, w);
                 }
+                else if (streq (s + 1, "refresh_properties"))
+                {
+                    guint rp;
+                    guint old = _col->refresh_properties;
+
+                    /* we know we will get a value, but it might not be from the
+                     * config changed that occured, since the value might be
+                     * overridden by current arrangement, etc */
+                    rp = (guint) donna_config_get_int_column (config, _col->name,
+                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                            priv->name,
+                            priv->is_tree,
+                            NULL,
+                            "refresh_properties", RP_VISIBLE);
+                    if (rp < _MAX_RP && rp != _col->refresh_properties)
+                    {
+                        _col->refresh_properties = rp;
+                        if (old == RP_ON_DEMAND)
+                            gtk_widget_queue_draw ((GtkWidget *) tree);
+                        if (rp == RP_PRELOAD)
+                            preload_props_columns (tree);
+                    }
+                }
                 else
                 {
                     DonnaColumnTypeNeed need;
@@ -4464,6 +4513,163 @@ refresh_node_cb (DonnaTask              *task,
     }
 }
 
+struct preload_props
+{
+    DonnaTreeView *tree;
+    GPtrArray *props;
+    GPtrArray *nodes;
+};
+
+static void
+free_preload_props (gpointer data)
+{
+    struct preload_props *pp = data;
+
+    g_ptr_array_unref (pp->props);
+    g_ptr_array_unref (pp->nodes);
+    g_free (pp);
+}
+
+static DonnaTaskState
+preload_props_worker (DonnaTask *task, struct preload_props *pp)
+{
+    GPtrArray *tasks = NULL;
+    guint i;
+
+    for (i = 0; i < pp->nodes->len; ++i)
+    {
+        DonnaNode *node = pp->nodes->pdata[i];
+        GPtrArray *props = NULL;
+        guint j;
+
+        if (donna_task_is_cancelling (task))
+            /* XXX should we remember all started/running tasks, and cancel them
+             * as well? */
+            break;
+
+        for (j = 0; j < pp->props->len; ++j)
+        {
+            gchar *prop = pp->props->pdata[j];
+            DonnaNodeHasProp has;
+
+            has = donna_node_has_property (node, prop);
+            if ((has & DONNA_NODE_PROP_EXISTS) && !(has & DONNA_NODE_PROP_HAS_VALUE))
+            {
+                if (!props)
+                    props = g_ptr_array_new ();
+                g_ptr_array_add (props, prop);
+            }
+        }
+
+        if (props)
+        {
+            GPtrArray *arr;
+
+            arr = donna_node_refresh_arr_tasks_arr (node, tasks, props, NULL);
+            if (G_UNLIKELY (!arr))
+                continue;
+            else if (!tasks)
+                tasks = arr;
+
+            for (j = 0; j < tasks->len; ++j)
+                donna_app_run_task (pp->tree->priv->app, (DonnaTask *) tasks->pdata[j]);
+            if (tasks->len > 0)
+                g_ptr_array_remove_range (tasks, 0, tasks->len);
+        }
+    }
+
+    g_object_set_data ((GObject *) pp->tree, DATA_PRELOAD_TASK, NULL);
+    if (tasks)
+        g_ptr_array_unref (tasks);
+    free_preload_props (pp);
+    return DONNA_TASK_DONE;
+}
+
+/* mode list only */
+static void
+preload_props_columns (DonnaTreeView *tree)
+{
+    GError *err = NULL;
+    DonnaTreeViewPrivate *priv = tree->priv;
+    DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":all" };
+    DonnaTask *task;
+    struct preload_props *pp;
+    GPtrArray *props = NULL;
+    GSList *l;
+
+    if (G_UNLIKELY (g_object_get_data ((GObject *) tree, DATA_PRELOAD_TASK)))
+        /* already a preloading task running */
+        return;
+
+    for (l = priv->columns; l; l = l->next)
+    {
+        struct column *_col = l->data;
+
+        if (_col->refresh_properties == RP_PRELOAD)
+        {
+            guint i;
+
+            if (!props)
+                props = g_ptr_array_new_with_free_func (g_free);
+
+            for (i = 0; i < priv->col_props->len; ++i)
+            {
+                struct col_prop *cp;
+
+                cp = &g_array_index (priv->col_props, struct col_prop, i);
+                if (cp->column != _col->column)
+                    continue;
+
+                g_ptr_array_add (props, g_strdup (cp->prop));
+            }
+        }
+    }
+
+    if (!props || props->len == 0)
+    {
+        if (props)
+            g_ptr_array_unref (props);
+        return;
+    }
+
+    pp = g_new (struct preload_props, 1);
+    pp->tree  = tree;
+    pp->props = props;
+    /* this actually returns all nodes (not just non-visible ones), but it's
+     * easier to do that way, and since their properties will be loaded already,
+     * no refreshing will be triggered anyways */
+    pp->nodes = donna_tree_view_get_nodes (tree, &rid, FALSE, &err);
+    if (G_UNLIKELY (!pp->nodes))
+    {
+        g_warning ("TreeView '%s': Failed to preload ON_DEMAND columns, "
+                "couldn't get nodes: %s",
+                priv->name, err->message);
+        g_clear_error (&err);
+        g_ptr_array_unref (pp->props);
+        g_free (pp);
+        return;
+    }
+
+    task = donna_task_new ((task_fn) preload_props_worker, pp, free_preload_props);
+    if (G_UNLIKELY (!task))
+    {
+        g_warning ("TreeView '%s': Failed to create task to preload ON_DEMAND columns",
+                priv->name);
+        free_preload_props (pp);
+        return;
+    }
+    DONNA_DEBUG (TASK, NULL,
+            donna_task_take_desc (task, g_strdup_printf ("TreeView '%s': "
+                    "Preload %d properties for preload columns",
+                    priv->name, pp->props->len)));
+    DONNA_DEBUG (TREE_VIEW, priv->name,
+            g_debug ("TreeView '%s': Starting task to preload %d properties on %d nodes",
+                priv->name, pp->props->len, pp->nodes->len));
+
+    g_object_set_data ((GObject *) tree, DATA_PRELOAD_TASK, task);
+    donna_app_run_task (priv->app, task);
+}
+
 /* mode list only -- node *MUST* be in hashtable */
 static gboolean
 refilter_node (DonnaTreeView *tree, DonnaNode *node, GtkTreeIter *iter)
@@ -4575,6 +4781,7 @@ refilter_list (DonnaTreeView *tree)
 
     refresh_draw_state (tree);
     check_statuses (tree, STATUS_CHANGED_ON_CONTENT);
+    preload_props_columns (tree);
 }
 
 static gboolean may_get_children_refresh (DonnaTreeView *tree, GtkTreeIter *iter);
@@ -4843,7 +5050,10 @@ set_children (DonnaTreeView *tree,
                 struct col_prop *cp;
 
                 cp = &g_array_index (priv->col_props, struct col_prop, i);
-                g_ptr_array_add (props, cp->prop);
+                if (get_column_by_column (tree, cp->column)->refresh_properties
+                        != RP_ON_DEMAND)
+                    /* do not refresh properties for ON_DEMAND columns */
+                    g_ptr_array_add (props, cp->prop);
             }
         }
 
@@ -4947,6 +5157,7 @@ set_children (DonnaTreeView *tree,
         }
 
         refresh_draw_state (tree);
+        preload_props_columns (tree);
     }
 }
 
@@ -5533,35 +5744,76 @@ spinner_fn (DonnaTreeView *tree)
     return TRUE;
 }
 
-gpointer
-_donna_tree_view_get_ct_data (const gchar *col_name, DonnaTreeView *tree)
+static gboolean
+is_col_node_need_refresh (DonnaTreeView *tree,
+                          struct column *_col,
+                          DonnaNode     *node)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    guint i;
+
+    for (i = 0; i < priv->col_props->len; ++i)
+    {
+        struct col_prop *cp;
+
+        cp = &g_array_index (priv->col_props, struct col_prop, i);
+        if (cp->column == _col->column)
+        {
+            DonnaNodeHasProp has;
+
+            has = donna_node_has_property (node, cp->prop);
+            if ((has & DONNA_NODE_PROP_EXISTS) && !(has & DONNA_NODE_PROP_HAS_VALUE))
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+gboolean
+_donna_tree_view_get_ct_data (const gchar   *col_name,
+                              DonnaNode     *node,
+                              gpointer      *ctdata,
+                              DonnaTreeView *tree)
 {
     struct column *_col;
+    struct column_filter *cf;
     GSList *l;
 
     /* since the col_name comes from user input, we could fail to find the
      * column in this case */
     _col = get_column_by_name (tree, col_name);
     if (_col)
-        return _col->ct_data;
+    {
+        if (_col->refresh_properties == RP_ON_DEMAND
+                && is_col_node_need_refresh (tree, _col, node))
+            return FALSE;
+        *ctdata = _col->ct_data;
+        return TRUE;
+    }
     /* this means it's a column not loaded/used in tree. But, we know it does
      * exist (because filter has the ct) so we need to get it & load a ctdata,
      * if we haven't already */
     for (l = tree->priv->columns_filter; l; l = l->next)
-    {
-        struct column_filter *cf = l->data;
+        if (streq (((struct column_filter *) l->data)->name, col_name))
+            break;
 
-        if (streq (cf->name, col_name))
-            return cf->ct_data;
-    }
-
+    if (l)
+        cf = l->data;
+    else
     {
         DonnaTreeViewPrivate *priv = tree->priv;
-        struct column_filter *cf;
+        DonnaConfig *config = donna_app_peek_config (priv->app);
         gchar *col_type = NULL;
 
         cf = g_new0 (struct column_filter, 1);
         cf->name = g_strdup (col_name);
+        cf->refresh_properties = (guint) donna_config_get_int_column (config,
+                col_name,
+                (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                priv->name,
+                priv->is_tree,
+                NULL,
+                "refresh_properties", RP_VISIBLE);
         donna_config_get_string (donna_app_peek_config (priv->app), NULL,
                 &col_type, "defaults/%s/columns/%s/type",
                 (priv->is_tree) ? "trees" : "lists", col_name);
@@ -5572,8 +5824,33 @@ _donna_tree_view_get_ct_data (const gchar *col_name, DonnaTreeView *tree)
                 priv->arrangement->columns_options, priv->name, priv->is_tree,
                 &cf->ct_data);
         priv->columns_filter = g_slist_prepend (priv->columns_filter, cf);
-        return cf->ct_data;
     }
+
+    if (cf->refresh_properties == RP_ON_DEMAND)
+    {
+        GPtrArray *props;
+        guint i;
+
+        props = donna_column_type_get_props (cf->ct, cf->ct_data);
+        if (G_UNLIKELY (!props))
+            return FALSE;
+
+        for (i = 0; i < props->len; ++i)
+        {
+            DonnaNodeHasProp has;
+
+            has = donna_node_has_property (node, (gchar *) props->pdata[i]);
+            if ((has & DONNA_NODE_PROP_EXISTS) && !(has & DONNA_NODE_PROP_HAS_VALUE))
+            {
+                g_ptr_array_unref (props);
+                return FALSE;
+            }
+        }
+        g_ptr_array_unref (props);
+    }
+
+    *ctdata = cf->ct_data;
+    return TRUE;
 }
 
 static void
@@ -5667,6 +5944,48 @@ donna_renderer_set (GtkCellRenderer *renderer,
 }
 
 static void
+rend_on_demand (DonnaTreeView   *tree,
+                GtkTreeModel    *model,
+                GtkTreeIter     *iter,
+                struct column   *_col,
+                GtkCellRenderer *renderer,
+                DonnaNode       *node)
+{
+    gboolean unref_node = FALSE;
+
+    if (_col->refresh_properties != RP_ON_DEMAND)
+        goto bail;
+    if (!node)
+    {
+        gtk_tree_model_get (model, iter, TREE_VIEW_COL_NODE, &node, -1);
+        if (!node)
+            goto bail;
+        unref_node = TRUE;
+    }
+
+    if (is_col_node_need_refresh (tree, _col, node))
+    {
+        g_object_set (renderer,
+                "visible",      TRUE,
+                "icon-name",    "view-refresh",
+                "follow-state", TRUE,
+                "xalign",       0.5,
+                NULL);
+    }
+    else
+        g_object_set (renderer, "visible", FALSE, NULL);
+
+done:
+    if (unref_node)
+        g_object_unref (node);
+    return;
+
+bail:
+    g_object_set (renderer, "visible", FALSE, NULL);
+    goto done;
+}
+
+static void
 rend_func (GtkTreeViewColumn  *column,
            GtkCellRenderer    *renderer,
            GtkTreeModel       *model,
@@ -5691,9 +6010,13 @@ rend_func (GtkTreeViewColumn  *column,
 
         if (!priv->active_spinners->len)
         {
-            g_object_set (renderer,
-                    "visible",  FALSE,
-                    NULL);
+            if (index == INTERNAL_RENDERER_PIXBUF)
+                rend_on_demand (tree, model, iter, get_column_by_column (tree, column),
+                        renderer, NULL);
+            else
+                g_object_set (renderer,
+                        "visible",  FALSE,
+                        NULL);
             return;
         }
 
@@ -5702,7 +6025,6 @@ rend_func (GtkTreeViewColumn  *column,
             return;
 
         as = get_as_for_node (tree, node, NULL, FALSE);
-        g_object_unref (node);
         if (as)
         {
             for (i = 0; i < as->as_cols->len; ++i)
@@ -5722,6 +6044,7 @@ rend_func (GtkTreeViewColumn  *column,
                                 "active",   TRUE,
                                 "pulse",    priv->active_spinners_pulse,
                                 NULL);
+                        g_object_unref (node);
                         return;
                     }
                 }
@@ -5737,7 +6060,9 @@ rend_func (GtkTreeViewColumn  *column,
                                     "visible",      TRUE,
                                     "icon-name",    "dialog-warning",
                                     "follow-state", TRUE,
+                                    "xalign",       0.0,
                                     NULL);
+                            g_object_unref (node);
                             return;
                         }
                     }
@@ -5746,9 +6071,14 @@ rend_func (GtkTreeViewColumn  *column,
             }
         }
 
-        g_object_set (renderer,
-                "visible",  FALSE,
-                NULL);
+        if (index == INTERNAL_RENDERER_PIXBUF)
+            rend_on_demand (tree, model, iter, get_column_by_column (tree, column),
+                    renderer, node);
+        else
+            g_object_set (renderer,
+                    "visible",  FALSE,
+                    NULL);
+        g_object_unref (node);
         return;
     }
 
@@ -5913,8 +6243,17 @@ rend_func (GtkTreeViewColumn  *column,
 
         /* ct wants some properties refreshed on node. See refresh_node_prop_cb */
 
-        /* get visible area, so we can determine if the row is visible. if
-         * not, we don't trigger any refresh. This is a small "optimization" for
+        if (_col->refresh_properties == RP_ON_DEMAND)
+        {
+            /* assume our INTERNAL_RENDERER_PIXBUF was drawn, simply do nothing
+             * (the columntype should have made renderer invisible) */
+            g_ptr_array_unref (arr);
+            g_object_unref (node);
+            return;
+        }
+
+        /* get visible area, so we can determine if the row is visible. if not,
+         * we don't trigger any refresh. This is a small "optimization" for
          * cases such as: go to a location where nodes have 2 custom props set,
          * one is preload the other not.
          * Every node-updated for the preloading CP will have the treeview
@@ -6006,7 +6345,8 @@ sort_func (GtkTreeModel      *model,
     struct column *_col;
     DonnaNode *node1;
     DonnaNode *node2;
-    gint ret;
+#define RET_UNKNOWN     42
+    gint ret = RET_UNKNOWN;
 
     tree = DONNA_TREE_VIEW (gtk_tree_view_column_get_tree_view (column));
     priv = tree->priv;
@@ -6076,7 +6416,35 @@ sort_func (GtkTreeModel      *model,
         }
     }
 
-    ret = donna_column_type_node_cmp (_col->ct, _col->ct_data, node1, node2);
+    if (_col->refresh_properties == RP_ON_DEMAND)
+    {
+        gboolean need_refresh1, need_refresh2;
+
+        need_refresh1 = is_col_node_need_refresh (tree, _col, node1);
+        need_refresh2 = is_col_node_need_refresh (tree, _col, node2);
+        if (need_refresh1)
+        {
+            if (need_refresh2)
+                /* don't goto done to go through secondary sort */
+                ret = 0;
+            else
+            {
+                /* reverse in DESC because the model will then reverse the
+                 * return value of this function, and we want nodes w/ a value
+                 * to always be listed before those w/out */
+                ret = (sort_order == GTK_SORT_ASCENDING) ? 1 : -1;
+                goto done;
+            }
+        }
+        else if (need_refresh2)
+        {
+            ret = (sort_order == GTK_SORT_ASCENDING) ? -1 : 1;
+            goto done;
+        }
+    }
+
+    if (ret == RET_UNKNOWN)
+        ret = donna_column_type_node_cmp (_col->ct, _col->ct_data, node1, node2);
 
     /* second sort order */
     if (ret == 0 && priv->second_sort_column
@@ -6086,7 +6454,29 @@ sort_func (GtkTreeModel      *model,
         column = priv->second_sort_column;
         _col = get_column_by_column (tree, column);
 
-        ret = donna_column_type_node_cmp (_col->ct, _col->ct_data, node1, node2);
+        if (_col->refresh_properties == RP_ON_DEMAND)
+        {
+            gboolean need_refresh1, need_refresh2;
+
+            need_refresh1 = is_col_node_need_refresh (tree, _col, node1);
+            need_refresh2 = is_col_node_need_refresh (tree, _col, node2);
+            if (need_refresh1)
+            {
+                if (need_refresh2)
+                    ret = 0;
+                else
+                    ret = (priv->second_sort_order == GTK_SORT_ASCENDING) ? 1 : -1;
+            }
+            else if (need_refresh2)
+                ret = (priv->second_sort_order == GTK_SORT_ASCENDING) ? -1 : 1;
+            else
+                ret = RET_UNKNOWN;
+        }
+        else
+            ret = RET_UNKNOWN;
+
+        if (ret == RET_UNKNOWN)
+            ret = donna_column_type_node_cmp (_col->ct, _col->ct_data, node1, node2);
         if (ret != 0)
         {
             /* if second order is DESC, we should invert ret. But, if the
@@ -8259,6 +8649,13 @@ load_arrangement (DonnaTreeView     *tree,
             gtk_tree_view_column_set_title (column, title);
             gtk_label_set_text (GTK_LABEL (_col->label), title);
             g_free (title);
+
+            /* refresh_properties */
+            _col->refresh_properties = (guint) donna_config_get_int_column (config, col,
+                    arrangement->columns_options, priv->name, priv->is_tree, NULL,
+                    "refresh_properties", RP_VISIBLE);
+            if (_col->refresh_properties >= _MAX_RP)
+                _col->refresh_properties = RP_VISIBLE;
         }
 
         /* for line-number columns, there's no properties to watch, and this
@@ -8626,6 +9023,7 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 gchar buf[64], *b = buf;
                 gint width;
                 gchar *title;
+                enum rp rp;
 
                 /* ctdata */
                 donna_column_type_refresh_data (_col->ct, _col->name,
@@ -8654,6 +9052,13 @@ donna_tree_view_build_arrangement (DonnaTreeView *tree, gboolean force)
                 gtk_tree_view_column_set_title (_col->column, title);
                 gtk_label_set_text (GTK_LABEL (_col->label), title);
                 g_free (title);
+
+                /* refresh_properties */
+                rp = (guint) donna_config_get_int_column (config, _col->name,
+                        arr->columns_options, priv->name, priv->is_tree, NULL,
+                        "refresh_properties", RP_VISIBLE);
+                if (rp < _MAX_RP)
+                    _col->refresh_properties = rp;
             }
         }
     }
@@ -10113,6 +10518,7 @@ no_task:
         /* we need to trigger it again, because the focused item might have
          * changed/been set */
         check_statuses (data->tree, STATUS_CHANGED_ON_CONTENT);
+        preload_props_columns (data->tree);
     }
     else
     {
@@ -10358,6 +10764,14 @@ change_location (DonnaTreeView *tree,
                 g_object_unref (node);
                 return TRUE;
             }
+        }
+
+        /* abort any preloading of properties */
+        task = g_object_get_data ((GObject *) tree, DATA_PRELOAD_TASK);
+        if (task)
+        {
+            donna_task_cancel (task);
+            g_object_set_data ((GObject *) tree, DATA_PRELOAD_TASK, NULL);
         }
 
         task = donna_node_get_children_task (node, priv->node_types, error);
@@ -13003,6 +13417,47 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
         gtk_tree_view_column_set_fixed_width (_col->column, new);
         return TRUE;
     }
+    else if (streq (option, "refresh_properties"))
+    {
+        enum rp current = _col->refresh_properties;
+        enum rp new;
+
+        if (value)
+        {
+            new = (guint) g_ascii_strtoll (value, NULL, 10);
+            if (new >= _MAX_RP)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "TreeView '%s': Cannot set option '%s' on column '%s': invalid value",
+                        priv->name, option, _col->name);
+                return FALSE;
+            }
+        }
+        else
+            new = current;
+
+        /* we "abuse" the fact that we are a columntype as well */
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (tree)->helper_set_option (_col->ct,
+                    _col->name,
+                    priv->arrangement->columns_options,
+                    priv->name,
+                    priv->is_tree,
+                    NULL, /* no default */
+                    (DonnaColumnOptionSaveLocation *) &save_location,
+                    option,
+                    G_TYPE_INT,
+                    &current,
+                    &new,
+                    &err))
+            goto done;
+
+        if (save_location != DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY)
+            return TRUE;
+
+        _col->refresh_properties = new;
+        return TRUE;
+    }
 
     donna_column_type_get_options (_col->ct, &oi, &nb_options);
     for ( ; nb_options > 0; --nb_options, ++oi)
@@ -15248,10 +15703,12 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
     {
         struct refresh_data *data;
         GPtrArray *tasks;
+        GPtrArray *props;
         GtkTreePath *start = NULL;
         GtkTreePath *end = NULL;
         GtkTreeIter  it_end;
         GtkTreeIter  it;
+        guint i;
 
         if (!has_model_at_least_n_rows (model, 1))
             return TRUE;
@@ -15292,12 +15749,23 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         data->tree = tree;
         priv->refresh_on_hold = TRUE;
 
+        props = g_ptr_array_sized_new (priv->col_props->len);
+        for (i = 0; i < priv->col_props->len; ++i)
+        {
+            struct col_prop *cp;
+
+            cp = &g_array_index (priv->col_props, struct col_prop, i);
+            if (get_column_by_column (tree, cp->column)->refresh_properties
+                    != RP_ON_DEMAND)
+                /* do not refresh properties for ON_DEMAND columns */
+                g_ptr_array_add (props, cp->prop);
+        }
+
         tasks = g_ptr_array_new ();
         do
         {
             GError *err = NULL;
             DonnaNode *node;
-            guint i;
 
             if (!is_row_accessible (tree, &it))
                 continue;
@@ -15305,8 +15773,10 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             gtk_tree_model_get (model, &it,
                     TREE_COL_NODE,  &node,
                     -1);
-            if (G_UNLIKELY (!donna_node_refresh_tasks_arr (node, &err, tasks,
-                            DONNA_NODE_REFRESH_SET_VALUES)))
+            /* donna_node_refresh_arr_tasks_arr() will unref props, but we want
+             * to keep it alive */
+            g_ptr_array_ref (props);
+            if (G_UNLIKELY (!donna_node_refresh_arr_tasks_arr (node, tasks, props, &err)))
             {
                 gchar *fl = donna_node_get_full_location (node);
                 g_warning ("TreeView '%s': Failed to refresh '%s': %s",
@@ -15330,6 +15800,7 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
         } while ((mode == DONNA_TREE_VIEW_REFRESH_SIMPLE || !itereq (&it, &it_end))
                 && _gtk_tree_model_iter_next (model, &it));
         g_ptr_array_unref (tasks);
+        g_ptr_array_unref (props);
 
         if (G_UNLIKELY (data->started == 0))
         {
@@ -16055,15 +16526,25 @@ donna_tree_view_reset_keys (DonnaTreeView *tree)
  * donna_tree_view_abort:
  * @tree: A #DonnaTreeView
  *
- * Abort any running task changing @tree's current location
+ * Abort any running task changing @tree's current location as well as task to
+ * refresh properties (from columns preloading properties)
  *
  * Note that this obviously only works on lists (i.e. is a no-op on trees).
  */
 void
 donna_tree_view_abort (DonnaTreeView *tree)
 {
+    DonnaTask *task;
+
     g_return_if_fail (DONNA_IS_TREE_VIEW (tree));
+
     set_get_children_task (tree, NULL);
+    task = g_object_get_data ((GObject *) tree, DATA_PRELOAD_TASK);
+    if (task)
+    {
+        donna_task_cancel (task);
+        g_object_set_data ((GObject *) tree, DATA_PRELOAD_TASK, NULL);
+    }
 }
 
 /**
@@ -17373,7 +17854,12 @@ tree_context_get_alias (const gchar             *alias,
             g_free (b);
 
         s = g_strconcat (":column.", _col->name, ".title,"
-                ":column.", _col->name, ".width,-,", ret, NULL);
+                ":column.", _col->name, ".width,"
+                ":column.", _col->name, ".refresh_properties<"
+                    ":column.", _col->name, ".refresh_properties:visible,",
+                    ":column.", _col->name, ".refresh_properties:preload,",
+                    ":column.", _col->name, ".refresh_properties:on_demand>",
+                ",-,", ret, NULL);
         g_free (ret);
         return s;
     }
@@ -17823,6 +18309,55 @@ tree_context_get_item_info (const gchar             *item,
                     "%s,width,@ask_text(Enter the new column width,,%d))",
                     _col->name, width);
             info->free_trigger = TRUE;
+            return TRUE;
+        }
+        else if (streq (s + 1, "refresh_properties"))
+        {
+            info->is_visible = info->is_sensitive = TRUE;
+            if (extra)
+            {
+                if (streq (extra, "visible"))
+                {
+                    info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                    info->is_active = _col->refresh_properties == RP_VISIBLE;
+                    info->name = "When row is visible";
+                    info->trigger = g_strdup_printf ("command:tv_column_set_option (%%o,"
+                            "%s,refresh_properties,%d)", _col->name, RP_VISIBLE);
+                    info->free_trigger = TRUE;
+                }
+                else if (streq (extra, "preload"))
+                {
+                    info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                    info->is_active = _col->refresh_properties == RP_PRELOAD;
+                    info->name = "When visible, preloading other rows";
+                    info->trigger = g_strdup_printf ("command:tv_column_set_option (%%o,"
+                            "%s,refresh_properties,%d)", _col->name, RP_PRELOAD);
+                    info->free_trigger = TRUE;
+                }
+                else if (streq (extra, "on_demand"))
+                {
+                    info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                    info->is_active = _col->refresh_properties == RP_ON_DEMAND;
+                    info->name = "On Demand (e.g. when clicking the refresh icon)";
+                    info->trigger = g_strdup_printf ("command:tv_column_set_option (%%o,"
+                            "%s,refresh_properties,%d)", _col->name, RP_ON_DEMAND);
+                    info->free_trigger = TRUE;
+                }
+                else
+                {
+                    g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                            DONNA_CONTEXT_MENU_ERROR_OTHER,
+                            "TreeView '%s': item '%s': invalid value in extra: '%s'",
+                            priv->name, s + 1, extra);
+                    return FALSE;
+                }
+            }
+            else
+            {
+                info->name = "Refresh Needed Properties...";
+                info->desc = "When to refresh unloaded properties needed to render the column";
+                info->submenus = 1;
+            }
             return TRUE;
         }
 
@@ -20033,6 +20568,18 @@ again:
                         (err) ? err->message : "(no error message)");
                 g_clear_error (&err);
             }
+            if (!donna_tree_view_column_set_option (tree, _col->name, "refresh_properties",
+                        NULL, DONNA_TREE_VIEW_OPTION_SAVE_IN_CURRENT, &err))
+            {
+                if (!str)
+                    str = g_string_new (NULL);
+                g_string_append_printf (str,
+                        "\n- Failed to set option '%s' for column '%s': %s",
+                        "refresh_properties",
+                        _col->name,
+                        (err) ? err->message : "(no error message)");
+                g_clear_error (&err);
+            }
             donna_column_type_get_options (_col->ct, &oi, &nb_options);
             for ( ; nb_options > 0; --nb_options, ++oi)
             {
@@ -20301,10 +20848,12 @@ query_tooltip_cb (GtkTreeView   *treev,
                 guint i;
 
                 as = get_as_for_node (tree, node, NULL, FALSE);
-                if (G_UNLIKELY (!as))
+                if (!as)
                 {
+                    /* no as and a visible renderer == RP_ON_DEMAND */
+                    gtk_tooltip_set_text (tooltip, "Click to refresh needed properties");
                     g_object_unref (node);
-                    return FALSE;
+                    return TRUE;
                 }
 
                 for (i = 0; i < as->as_cols->len; ++i)
@@ -20370,9 +20919,22 @@ query_tooltip_cb (GtkTreeView   *treev,
             /* because (only) in vanilla, we could be there for the blank
              * column, which isn't in our internal list of columns */
             if (_col)
+            {
+                if (is_col_node_need_refresh (tree, _col, node))
+                {
+                    gtk_tooltip_set_text (tooltip, "Click to refresh needed properties");
+                    g_object_unref (node);
+                    return TRUE;
+                }
+                else
+                {
 #endif
             ret = donna_column_type_set_tooltip (_col->ct, _col->ct_data,
                     index, node, tooltip);
+#ifndef GTK_IS_JJK
+                }
+            }
+#endif
 
             g_object_unref (node);
         }
@@ -20908,6 +21470,47 @@ skip_focusing_click (DonnaTreeView  *tree,
     return FALSE;
 }
 
+static void
+refresh_props_for_col (DonnaTreeView    *tree,
+                       struct column    *_col,
+                       DonnaNode        *node)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GPtrArray *props = NULL;
+    GPtrArray *tasks;
+    guint i;
+
+    for (i = 0; i < priv->col_props->len; ++i)
+    {
+        struct col_prop *cp;
+
+        cp = &g_array_index (priv->col_props, struct col_prop, i);
+        if (cp->column == _col->column)
+        {
+            DonnaNodeHasProp has;
+
+            has = donna_node_has_property (node, cp->prop);
+            if ((has & DONNA_NODE_PROP_EXISTS) && !(has & DONNA_NODE_PROP_HAS_VALUE))
+            {
+                if (!props)
+                    props = g_ptr_array_new_with_free_func (g_free);
+                g_ptr_array_add (props, g_strdup (cp->prop));
+            }
+        }
+    }
+
+    if (!props)
+        return;
+
+    tasks = donna_node_refresh_arr_tasks_arr (node, NULL, props, NULL);
+    if (G_UNLIKELY (!tasks))
+        return;
+
+    for (i = 0; i < tasks->len;++i)
+        donna_app_run_task (priv->app, (DonnaTask *) tasks->pdata[i]);
+    g_ptr_array_unref (tasks);
+}
+
 static gboolean
 trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 {
@@ -20988,10 +21591,19 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 
             if (!as)
             {
-                if (tree_might_grab_focus)
-                    gtk_widget_grab_focus ((GtkWidget *) tree);
-                handle_click (tree, click, event, &iter, column, renderer,
-                        CLICK_REGULAR);
+#ifdef GTK_IS_JJK
+                if (renderer == int_renderers[INTERNAL_RENDERER_PIXBUF])
+#else
+                if (is_col_node_need_refresh (tree, _col, node))
+#endif
+                    refresh_props_for_col (tree, get_column_by_column (tree, column), node);
+                else
+                {
+                    if (tree_might_grab_focus)
+                        gtk_widget_grab_focus ((GtkWidget *) tree);
+                    handle_click (tree, click, event, &iter, column, renderer,
+                            CLICK_REGULAR);
+                }
                 return TRUE;
             }
 

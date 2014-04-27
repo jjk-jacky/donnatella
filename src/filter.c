@@ -633,8 +633,11 @@ donna_filter_is_compiled (DonnaFilter    *filter)
     return filter->priv->element != NULL;
 }
 
-static gpointer
-_get_ct_data (const gchar *col_name, DonnaFilter *filter)
+static gboolean
+_get_ct_data (const gchar   *col_name,
+              DonnaNode     *node,
+              gpointer      *ctdata,
+              DonnaFilter   *filter)
 {
     DonnaFilterPrivate *priv = filter->priv;
     struct col_ct_data *ccd;
@@ -645,12 +648,33 @@ _get_ct_data (const gchar *col_name, DonnaFilter *filter)
     {
         ccd = l->data;
         if (streq (ccd->col_name, col_name))
-            return ccd->ct_data;
+            break;
     }
 
-    ccd = _donna_app_get_col_ct_data (priv->app, col_name);
-    priv->col_ct_datas = g_slist_append (priv->col_ct_datas, ccd);
-    return ccd->ct_data;
+    if (!l)
+    {
+        ccd = _donna_app_get_col_ct_data (priv->app, col_name);
+        priv->col_ct_datas = g_slist_append (priv->col_ct_datas, ccd);
+    }
+
+    /* we have the list of properties for the column only if said column is
+     * RP_ON_DEMAND, i.e. we need to check if we can filter or not */
+    if (ccd->props)
+    {
+        guint i;
+
+        for (i = 0; i < ccd->props->len; ++i)
+        {
+            DonnaNodeHasProp has;
+
+            has = donna_node_has_property (node, (gchar *) ccd->props->pdata[i]);
+            if ((has & DONNA_NODE_PROP_EXISTS) && !(has & DONNA_NODE_PROP_HAS_VALUE))
+                return FALSE;
+        }
+    }
+
+    *ctdata = ccd->ct_data;
+    return TRUE;
 }
 
 static gboolean
@@ -671,11 +695,13 @@ is_match_element (struct element    *element,
         if (element->is_block)
         {
             struct block *block = element->data;
+            gpointer ctdata;
 
-            match = donna_column_type_is_filter_match (block->ct,
-                    get_ct_data (block->col_name, data),
-                    block->data,
-                    node);
+            if (get_ct_data (block->col_name, node, &ctdata, data))
+                match = donna_column_type_is_filter_match (block->ct,
+                        ctdata, block->data, node);
+            else
+                match = FALSE;
         }
         else
             match = is_match_element (element->data, node, get_ct_data, data);

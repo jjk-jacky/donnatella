@@ -917,6 +917,8 @@ donna_app_finalize (GObject *object)
         g_free (ccd->col_name);
         donna_column_type_free_data (priv->column_types[ccd->index].ct,
                 ccd->ct_data);
+        if (ccd->props)
+            g_ptr_array_unref (ccd->props);
         g_free (ccd);
     }
     g_slist_free (priv->col_ct_datas);
@@ -1064,6 +1066,11 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
                     new_ccd->index = ccd->index;
                     donna_column_type_refresh_data (priv->column_types[new_ccd->index].ct,
                             new_ccd->col_name, NULL, NULL, FALSE, &new_ccd->ct_data);
+                    if (donna_config_get_int_column (priv->config,
+                                new_ccd->col_name, NULL, NULL, FALSE, NULL,
+                                "refresh_properties", RP_VISIBLE) == RP_ON_DEMAND)
+                        new_ccd->props = donna_column_type_get_props (
+                                priv->column_types[new_ccd->index].ct, new_ccd->ct_data);
                     new_ccd->ref_count = 0;
 
                     l->data = new_ccd;
@@ -5067,6 +5074,10 @@ _donna_app_get_col_ct_data (DonnaApp       *app,
     ccd->index = i;
     donna_column_type_refresh_data (priv->column_types[ccd->index].ct,
             col_name, NULL, NULL, FALSE, &ccd->ct_data);
+    if (donna_config_get_int_column (priv->config, col_name, NULL, NULL, FALSE,
+                NULL, "refresh_properties", RP_VISIBLE) == RP_ON_DEMAND)
+        ccd->props = donna_column_type_get_props (priv->column_types[ccd->index].ct,
+                ccd->ct_data);
     ccd->ref_count = 1;
 
     priv->col_ct_datas = g_slist_append (priv->col_ct_datas, ccd);
@@ -5084,10 +5095,12 @@ _donna_app_unref_col_ct_data (DonnaApp              *app,
     g_rec_mutex_lock (&priv->rec_mutex);
     if (--ccd->ref_count == 0 && !g_slist_find (priv->col_ct_datas, ccd))
     {
-        /* don't free ccd->col_name, since it's now owned by the new ccd for
-         * that column */
+        /* don't free ccd->col_name/props, since they're now owned by the new
+         * ccd for that column */
         donna_column_type_free_data (priv->column_types[ccd->index].ct,
                 ccd->ct_data);
+        if (ccd->props)
+            g_ptr_array_unref (ccd->props);
         g_free (ccd);
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
