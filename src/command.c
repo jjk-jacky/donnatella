@@ -3433,8 +3433,8 @@ cmd_tv_get_node_at_row (DonnaTask *task, DonnaApp *app, gpointer *args)
  * tv_get_nodes:
  * @tree: A treeview
  * @rowid: A #rowid
- * @to_focused: (allow-none): When %TRUE rows will be the range from @rowid to
- * the focused row
+ * @to_focused: (allow-none): If 1 then rows affected will be the range from
+ * @rowid to the focused row
  *
  * Returns the nodes behind the row(s) at @rowid
  *
@@ -3818,7 +3818,8 @@ cmd_tv_go_up (DonnaTask *task, DonnaApp *app, gpointer *args)
  * @nb: (allow-none): Number of line/times to repeat the move
  * @nb_type: (allow-none): Define how to interpret @nb
  * @action: (allow-none): Action to perform on the selection
- * @to_focused: (allow-none): When %TRUE rows will be the range from @rowid to
+ * @to_focused: (allow-none): If 1 then rows affected will be the range from
+ * @rowid to the focused row
  *
  * "Goes" to the specified row according to @set, updating selection as per
  * @action
@@ -4566,8 +4567,8 @@ cmd_tv_save_tree_file (DonnaTask *task, DonnaApp *app, gpointer *args)
  * @tree: A treeview
  * @action: Which action to perform on the selection
  * @rowid: A #rowid
- * @to_focused: (allow-none): When %TRUE rows will be the range from @rowid to
- * the focused row
+ * @to_focused: (allow-none): If 1 then rows affected will be the range from
+ * @rowid to the focused row
  *
  * Affects the selection on @tree
  *
