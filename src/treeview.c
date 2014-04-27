@@ -242,6 +242,25 @@
  * - <systemitem>desc_first</systemitem> (boolean) : When sorting on this
  *   column, whether to default to descending (true) or ascending (false).
  *   Default value depends on the columntype
+ * - <systemitem>refresh_properties</systemitem> (integer:col-rp) : How the
+ *   treeview will handle properties whose value hasn't been loaded yet, and
+ *   needs a refresh. This will most likely be the case for #custom-properties
+ *   where executing an external process is required to get the value.
+ *   By default, <systemitem>visible</systemitem>, only properties for visible
+ *   rows will be refreshed. So when e.g. scrolling down, the columns will be
+ *   empty at first, while properties are refreshed and then columns updated.
+ *   With <systemitem>preload</systemitem> visible rows will be handled first,
+ *   but then a background task will be started to refresh properties on all
+ *   rows, thus "preloading" the values.
+ *   Finally, using <systemitem>on_demand</systemitem> no property will be
+ *   loaded automatically, instead a refresh icon will be shown on the column. A
+ *   manual click on said icon is required to trigger the refresh. This can be
+ *   useful for properties that are slow to refreshn, e.g. calculating the hash
+ *   (MD5, SHA1, etc) of a file, especially on large files. When used, sorting
+ *   by this column will sort all rows with a value, groupping all rows without
+ *   one afterwards. Trying to filter via this column will work as usual when
+ *   the value is set, and simply not match when it doesn't. See command
+ *   tv_column_refresh_nodes() to trigger the refresh of multiple/all rows.
  *
  * Other options depend on their column types, each having its own options (or
  * none). See #DonnaColumnType.description

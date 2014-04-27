@@ -324,6 +324,66 @@
  * See donna_app_parse_fl() for more on user parsing.
  * </para></refsect3>
  *
+ * <refsect3 id="custom-properties">
+ * <title>Custom Properties</title>
+ * <para>
+ * Nodes are created by their providers, which handles all the available basic
+ * properties such as name, icon, size, etc However, it is possible to add other
+ * properties to any node, properties which can then be used as any others in
+ * columns, via sorting, filtering...
+ *
+ * donna allows to create such properties, called custom properties, where you
+ * can define the target domain, optionally a filter to match against the node
+ * (to determine whether to add the custom property or not, without filter the
+ * properties are added to all nodes of the domain), and a command line to be
+ * executed; the output of said process with then be parsed to set the value of
+ * properties.
+ *
+ * First things first: in category <systemitem>custom_properties</systemitem>
+ * you can create numbered categories. Each of those should have a string option
+ * <systemitem>domain</systemitem> for the target domain. Optionally, a string
+ * option <systemitem>filter</systemitem> can be set to the filter to be matched
+ * against the node. Note that custom properties are added upon node creation,
+ * so basic properties will be set, others might not be. (Custom properties are
+ * processed in their defined order, so previous matching custom properties will
+ * have been set.)
+ *
+ * To define a custom property, create a subcategory by the name of the
+ * property. Optionally, an integer (cp-type) option
+ * <systemitem>type</systemitem> can be set to define the type of the property:
+ * <systemitem>string</systemitem> for strings, and
+ * <systemitem>uint</systemitem> for e.g. sizes or timestamps. A boolean option
+ * <systemitem>preload</systemitem> can also be set to
+ * <systemitem>true</systemitem> to have the value of the properties preloaded,
+ * i.e. a refresh will be queued right after the property has been added. Note
+ * that this will refresh properties upon creation, a better choice might be to
+ * use column option <systemitem>refresh_properties</systemitem>.
+ *
+ * And of course, string option <systemitem>cmdline</systemitem> defined the
+ * command line to be executed, where specifier
+ * <systemitem>&percnt;n</systemitem> will be replaced with the nodes to refresh
+ * properties for.
+ * You'll likely have noted the plural, because whenever a request to refresh a
+ * custom property is triggered, donna will queue them for a short while
+ * (800ms), so a single process can be executed for multiple nodes.
+ *
+ * The executed process will have its output parsed, where it is expected to
+ * find, on every line, the full location of the node, then a colon, then the
+ * name of the property, another colon, and the value to be set.
+ *
+ * It is possible to simply have a line containing the location (ending with a
+ * colon) and nothing else, and have following lines starting with a colon,
+ * omitting the location, in which case the last/current node/location will be
+ * used. This can be useful when used with groups :
+ *
+ * Sometimes, you might want to have one process used to refresh multiple
+ * properties. This can be handled by setting boolean option
+ * <systemitem>is_group</systemitem> to <systemitem>true</systemitem>, in which
+ * case the name of the category is the name of the group, and subcategories
+ * must be created by the name of the actual properties (option
+ * <systemitem>type</systemitem> must then go into this subcategory, obviously).
+ * </para></refsect3>
+ *
  * <refsect3 id="statusbar">
  * <title>Custom statusbar</title>
  * <para>
