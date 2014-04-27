@@ -2924,6 +2924,47 @@ refresh_tree_show_hidden (DonnaTreeView *tree)
     }
 }
 
+static void
+add_col_props (DonnaTreeView *tree, struct column *_col)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GPtrArray *props;
+
+    props = donna_column_type_get_props (_col->ct, _col->ct_data);
+    if (props)
+    {
+        guint i;
+
+        for (i = 0; i < props->len; ++i)
+        {
+            struct col_prop cp;
+
+            cp.prop = g_strdup (props->pdata[i]);
+            cp.column = _col->column;
+            g_array_append_val (priv->col_props, cp);
+        }
+        g_ptr_array_unref (props);
+    }
+    else
+        g_critical ("TreeView '%s': column '%s' reports no properties to watch for refresh",
+                priv->name, _col->name);
+}
+
+static inline void
+refresh_col_props (DonnaTreeView *tree)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GSList *l;
+
+    if (priv->col_props->len > 0)
+        g_array_set_size (priv->col_props, 0);
+
+    for (l = tree->priv->columns; l; l = l->next)
+        /* ignore treeview as ct (line-number) */
+        if (((struct column *) l->data)->ct != (DonnaColumnType *) tree)
+            add_col_props (tree, (struct column *) l->data);
+}
+
 static gint
 config_get_int (DonnaTreeView   *tree,
                 DonnaConfig     *config,
@@ -3497,6 +3538,7 @@ real_option_cb (struct option_data *data)
                             priv->name,
                             priv->is_tree,
                             &_col->ct_data);
+                    refresh_col_props (tree);
                     if (need & DONNA_COLUMN_TYPE_NEED_RESORT)
                         resort_tree (data->tree);
                     if (need & DONNA_COLUMN_TYPE_NEED_REDRAW)
@@ -7932,7 +7974,6 @@ load_arrangement (DonnaTreeView     *tree,
         GtkCellRenderer   *renderer;
         const gchar       *rend;
         gint               index;
-        GPtrArray         *props;
         gchar              buf[64];
         gchar             *b = buf;
 
@@ -8226,24 +8267,7 @@ load_arrangement (DonnaTreeView     *tree,
         if (ct != (DonnaColumnType *) tree)
         {
             /* props to watch for refresh */
-            props = donna_column_type_get_props (ct, _col->ct_data);
-            if (props)
-            {
-                guint i;
-
-                for (i = 0; i < props->len; ++i)
-                {
-                    struct col_prop cp;
-
-                    cp.prop = g_strdup (props->pdata[i]);
-                    cp.column = column;
-                    g_array_append_val (priv->col_props, cp);
-                }
-                g_ptr_array_unref (props);
-            }
-            else
-                g_critical ("TreeView '%s': column '%s' reports no properties to watch for refresh",
-                        priv->name, col);
+            add_col_props (tree, _col);
 
             /* sort -- (see column_button_release_event_cb() for more) */
             _col->sort_id = sort_id;
@@ -13016,6 +13040,13 @@ donna_tree_view_column_set_option (DonnaTreeView      *tree,
             toggle,
             save_location,
             &err);
+
+    if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_MEMORY
+            || save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_ASK)
+        /* ASK might have not been IN_MEMORY and therefore gone through the
+         * option_cb, but in case it was IN_MEMORY we should trigger the refresh
+         * */
+        refresh_col_props (tree);
 
 done:
     if (err)
