@@ -3104,6 +3104,36 @@ cmd_tv_column_edit (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_column_refresh_nodes:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @to_focused: (allow-none): When 1 rows will be the range from @rowid to the
+ * focused row
+ * @column: Name of a column
+ *
+ * Refreshes all properties used by @column on specified nodes
+ *
+ * See donna_tree_view_column_refresh_nodes() for more
+ */
+static DonnaTaskState
+cmd_tv_column_refresh_nodes (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaRowId *rid = args[1];
+    gboolean to_focused = GPOINTER_TO_INT (args[2]); /* opt */
+    const gchar *column = args[3];
+
+    if (!donna_tree_view_column_refresh_nodes (tree, rid, to_focused, column, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * tv_column_set_option:
  * @tree: A treeview
  * @column: The name of a column
@@ -5500,6 +5530,14 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (tv_column_edit, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tv_column_refresh_nodes, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

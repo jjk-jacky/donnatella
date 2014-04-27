@@ -59,6 +59,7 @@ tv_abort
 tv_activate_row
 tv_add_root
 tv_column_edit
+tv_column_refresh_nodes
 tv_column_set_option
 tv_column_set_value
 tv_context_get_nodes
@@ -1224,6 +1225,7 @@ donna_tree_view_get_node_down
 donna_tree_view_go_down
 donna_tree_view_set_visual_filter
 donna_tree_view_get_visual_filter
+donna_tree_view_column_refresh_nodes
 <SUBSECTION Standard>
 DONNA_IS_TREE_VIEW
 DONNA_IS_TREE_VIEW_CLASS

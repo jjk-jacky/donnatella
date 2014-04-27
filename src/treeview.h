@@ -434,6 +434,12 @@ gboolean        donna_tree_view_set_visual_filter (
 gchar *         donna_tree_view_get_visual_filter (
                                                  DonnaTreeView      *tree,
                                                  GError            **error);
+gboolean        donna_tree_view_column_refresh_nodes (
+                                                 DonnaTreeView      *tree,
+                                                 DonnaRowId         *rowid,
+                                                 gboolean            to_focused,
+                                                 const gchar        *column,
+                                                 GError            **error);
 
 G_END_DECLS
 

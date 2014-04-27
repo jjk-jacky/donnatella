@@ -5052,7 +5052,9 @@ set_children (DonnaTreeView *tree,
                 cp = &g_array_index (priv->col_props, struct col_prop, i);
                 if (get_column_by_column (tree, cp->column)->refresh_properties
                         != RP_ON_DEMAND)
-                    /* do not refresh properties for ON_DEMAND columns */
+                    /* do not refresh properties for ON_DEMAND columns, to
+                     * refresh/load them see
+                     * donna_tree_view_column_refresh_nodes() */
                     g_ptr_array_add (props, cp->prop);
             }
         }
@@ -15757,7 +15759,9 @@ donna_tree_view_refresh (DonnaTreeView          *tree,
             cp = &g_array_index (priv->col_props, struct col_prop, i);
             if (get_column_by_column (tree, cp->column)->refresh_properties
                     != RP_ON_DEMAND)
-                /* do not refresh properties for ON_DEMAND columns */
+                /* do not refresh properties for ON_DEMAND columns, to
+                 * refresh/load them see
+                 * donna_tree_view_column_refresh_nodes() */
                 g_ptr_array_add (props, cp->prop);
         }
 
@@ -20758,6 +20762,96 @@ donna_tree_view_get_visual_filter (DonnaTreeView      *tree,
         return NULL;
 
     return donna_filter_get_filter (priv->filter);
+}
+
+/**
+ * donna_tree_view_column_refresh_nodes:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @to_focused: When %TRUE rows affected will be the range from @rowid to the
+ * focused row
+ * @column: Name of the column
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Refreshes the properties used by @column on the specified rows.
+ *
+ * This is especially useful with #custom-peroperties and columns with option
+ * <systemitem>refresh_properties</systemitem> set to "on_demand" i.e.
+ * properties aren't refreshed automatically.
+ *
+ * Returns: %TRUE on success, else %FALSE. Note that success means refreshing
+ * tasks has been started, regardless of their success or not (as they might
+ * still be running when the function returns)
+ */
+gboolean
+donna_tree_view_column_refresh_nodes (DonnaTreeView      *tree,
+                                      DonnaRowId         *rowid,
+                                      gboolean            to_focused,
+                                      const gchar        *column,
+                                      GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    struct column *_col;
+    GPtrArray *tasks = NULL;
+    GPtrArray *nodes;
+    GPtrArray *props;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (column != NULL, FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    priv = tree->priv;
+
+    if (priv->is_tree)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_MODE,
+                "TreeView '%s': Cannot refresh column properties on tree",
+                priv->name);
+        return FALSE;
+    }
+
+    _col = get_column_from_name (tree, column, error);
+    if (!_col)
+        return FALSE;
+
+    nodes = donna_tree_view_get_nodes (tree, rowid, to_focused, error);
+    if (!nodes)
+        return FALSE;
+
+    props = donna_column_type_get_props (_col->ct, _col->ct_data);
+    if (G_UNLIKELY (!props))
+    {
+        g_ptr_array_unref (nodes);
+        return TRUE;
+    }
+
+    for (i = 0; i < nodes->len; ++i)
+    {
+        DonnaNode *node = nodes->pdata[i];
+        GPtrArray *arr;
+        guint j;
+
+        /* donna_node_refresh_arr_tasks_arr() will unref props, but we want to
+         * keep it alive */
+        g_ptr_array_ref (props);
+        arr = donna_node_refresh_arr_tasks_arr (node, tasks, props, NULL);
+        if (G_UNLIKELY (!arr))
+            continue;
+        else if (!tasks)
+            tasks = arr;
+
+        for (j = 0; j < tasks->len; ++j)
+            donna_app_run_task (priv->app, (DonnaTask *) tasks->pdata[j]);
+        if (tasks->len > 0)
+            g_ptr_array_remove_range (tasks, 0, tasks->len);
+    }
+
+    if (tasks)
+        g_ptr_array_unref (tasks);
+    g_ptr_array_unref (props);
+    g_ptr_array_unref (nodes);
+    return TRUE;
 }
 
 
