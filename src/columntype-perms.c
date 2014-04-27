@@ -638,54 +638,13 @@ ct_perms_get_props (DonnaColumnType  *ct,
                     gpointer          data)
 {
     GPtrArray *props;
-    gchar *s;
-    guint set = 0;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
 
     props = g_ptr_array_new_full (3, g_free);
-
-    s = ((struct tv_col_data *) data)->format;
-    while ((s = strchr (s, '%')))
-    {
-        switch (s[1])
-        {
-            case 'p':
-            case 's':
-            case 'S':
-            case 'o':
-                if (!(set & SET_PERMS))
-                {
-                    set |= SET_PERMS;
-                    g_ptr_array_add (props, g_strdup ("mode"));
-                }
-                break;
-
-            case 'u':
-            case 'U':
-            case 'V':
-                if (!(set & SET_UID))
-                {
-                    set |= SET_UID;
-                    g_ptr_array_add (props, g_strdup ("uid"));
-                }
-                break;
-
-            case 'g':
-            case 'G':
-            case 'H':
-                if (!(set & SET_GID))
-                {
-                    set |= SET_GID;
-                    g_ptr_array_add (props, g_strdup ("gid"));
-                }
-                break;
-        }
-        if ((set & (SET_PERMS | SET_UID | SET_GID)) == (SET_PERMS | SET_UID | SET_GID))
-            break;
-        ++s;
-    }
-
+    g_ptr_array_add (props, g_strdup ("mode"));
+    g_ptr_array_add (props, g_strdup ("uid"));
+    g_ptr_array_add (props, g_strdup ("gid"));
     return props;
 }
 
