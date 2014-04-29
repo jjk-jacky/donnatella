@@ -59,6 +59,9 @@
  * - <systemitem>ignore_spunct</systemitem> (boolean) : Whether to ignore space
  *   and punctuation/symbol characters or not. (Much like
  *   <systemitem>dot_mixed</systemitem> ignores dots.)
+ * - <systemitem>property_tooltip</systemitem> (string) : Name of the property
+ *   to show in the tooltip. Use ":property" (the default) to use the same one
+ *   as <systemitem>property</systemitem>
  *
  * </para></refsect2>
  *
@@ -82,6 +85,7 @@ enum
 struct tv_col_data
 {
     gchar            *property;
+    gchar            *property_tooltip;
     DonnaSortOptions  options;
 };
 
@@ -140,6 +144,11 @@ static GPtrArray *      ct_text_render              (DonnaColumnType    *ct,
                                                      guint               index,
                                                      DonnaNode          *node,
                                                      GtkCellRenderer    *renderer);
+static gboolean         ct_text_set_tooltip         (DonnaColumnType    *ct,
+                                                     gpointer            data,
+                                                     guint               index,
+                                                     DonnaNode          *node,
+                                                     GtkTooltip         *tooltip);
 static gint             ct_text_node_cmp            (DonnaColumnType    *ct,
                                                      gpointer            data,
                                                      DonnaNode          *node1,
@@ -200,6 +209,7 @@ ct_text_column_type_init (DonnaColumnTypeInterface *interface)
     interface->edit                     = ct_text_edit;
     interface->set_value                = ct_text_set_value;
     interface->render                   = ct_text_render;
+    interface->set_tooltip              = ct_text_set_tooltip;
     interface->node_cmp                 = ct_text_node_cmp;
     interface->refresh_filter_data      = ct_text_refresh_filter_data;
     interface->is_filter_match          = ct_text_is_filter_match;
@@ -294,6 +304,7 @@ ct_text_get_options (DonnaColumnType    *ct,
 {
     static DonnaColumnOptionInfo o[] = {
         { "property",           G_TYPE_STRING,      NULL },
+        { "property_tooltip",   G_TYPE_STRING,      NULL },
         { "natural_order",      G_TYPE_BOOLEAN,     NULL },
         { "dot_first",          G_TYPE_BOOLEAN,     NULL },
         { "dot_mixed",          G_TYPE_BOOLEAN,     NULL },
@@ -353,6 +364,21 @@ ct_text_refresh_data (DonnaColumnType    *ct,
     else
         g_free (s);
 
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, NULL, "property_tooltip", ":property");
+    if (streq (s, ":property"))
+    {
+        g_free (data->property_tooltip);
+        data->property_tooltip = NULL;
+    }
+    else if (!streq (data->property_tooltip, s))
+    {
+        g_free (data->property_tooltip);
+        data->property_tooltip = s;
+    }
+    else
+        g_free (s);
+
     check_option ("natural_order",  DONNA_SORT_NATURAL_ORDER,    TRUE,  TRUE);
     check_option ("dot_first",      DONNA_SORT_DOT_FIRST,        TRUE,  TRUE);
     check_option ("dot_mixed",      DONNA_SORT_DOT_MIXED,        TRUE,  FALSE);
@@ -369,19 +395,23 @@ ct_text_free_data (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
 
     g_free (data->property);
+    g_free (data->property_tooltip);
     g_free (data);
 }
 
 static GPtrArray *
 ct_text_get_props (DonnaColumnType  *ct,
-                   gpointer          data)
+                   gpointer          _data)
 {
+    struct tv_col_data *data = _data;
     GPtrArray *props;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TEXT (ct), NULL);
 
-    props = g_ptr_array_new_full (1, g_free);
-    g_ptr_array_add (props, g_strdup (((struct tv_col_data *) data)->property));
+    props = g_ptr_array_new_full ((data->property_tooltip) ? 2 : 1, g_free);
+    g_ptr_array_add (props, g_strdup (data->property));
+    if (data->property_tooltip)
+        g_ptr_array_add (props, g_strdup (data->property_tooltip));
 
     return props;
 }
@@ -602,6 +632,40 @@ ct_text_render (DonnaColumnType    *ct,
     return NULL;
 }
 
+static gboolean
+ct_text_set_tooltip (DonnaColumnType    *ct,
+                     gpointer            _data,
+                     guint               index,
+                     DonnaNode          *node,
+                     GtkTooltip         *tooltip)
+{
+    struct tv_col_data *data = _data;
+    DonnaNodeHasValue has;
+    GValue value = G_VALUE_INIT;
+    const gchar *s;
+
+    donna_node_get (node, FALSE,
+            (data->property_tooltip) ? data->property_tooltip : data->property,
+            &has, &value, NULL);
+    if (has != DONNA_NODE_VALUE_SET)
+        return FALSE;
+    if (G_VALUE_TYPE (&value) != G_TYPE_STRING)
+    {
+        g_value_unset (&value);
+        return FALSE;
+    }
+
+    /* don't show tooltip w/ an empty string */
+    s = g_value_get_string (&value);
+    skip_blank (s);
+    if (*s != '\0')
+        gtk_tooltip_set_text (tooltip, g_value_get_string (&value));
+    else
+        s = NULL;
+    g_value_unset (&value);
+    return !!s;
+}
+
 static gint
 ct_text_node_cmp (DonnaColumnType    *ct,
                   gpointer            _data,
@@ -745,8 +809,29 @@ ct_text_set_option (DonnaColumnType    *ct,
         }
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
+    else if (streq (option, "property_tooltip"))
+    {
+        v = (value) ? value :
+            (data->property_tooltip) ? &data->property_tooltip : &data->property;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, NULL, &save_location,
+                    option, G_TYPE_STRING, &data->property_tooltip, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
 
-    if (streq (option, "natural_order"))
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+        {
+            g_free (data->property_tooltip);
+            if (streq (* (gchar **) value, data->property))
+                data->property_tooltip = NULL;
+            else
+                data->property_tooltip = g_strdup (* (gchar **) value);
+        }
+        return DONNA_COLUMN_TYPE_NEED_NOTHING;
+    }
+    else if (streq (option, "natural_order"))
     {
         c = (data->options & DONNA_SORT_NATURAL_ORDER) ? TRUE : FALSE;
         v = (value) ? value : &c;
@@ -897,7 +982,8 @@ ct_text_get_context_alias (DonnaColumnType   *ct,
     }
 
     return g_strconcat (
-            prefix, "property:@", save_location, ",-,",
+            prefix, "property:@", save_location, ",",
+            prefix, "property_tooltip:@", save_location, ",-,",
             prefix, "natural_order:@", save_location, ",",
             prefix, "dot_first:@", save_location, ",",
             prefix, "case_sensitive:@", save_location, ",",
@@ -937,6 +1023,17 @@ ct_text_get_context_item_info (DonnaColumnType   *ct,
         info->free_name = TRUE;
         ask_title = "Enter the name of the property";
         ask_current = data->property;
+    }
+    else if (streq (item, "property_tooltip"))
+    {
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        info->name = g_strconcat ("Node Property (tooltip): ",
+                (data->property_tooltip) ? data->property_tooltip : ":property", NULL);
+        info->free_name = TRUE;
+        info->desc = "Name of the property shown in tooltip. Use :property to use the same one.";
+        ask_title = "Enter the name of the property to be shown on tooltip";
+        ask_current = (data->property_tooltip) ? data->property_tooltip : ":property";
     }
     else if (streq (item, "natural_order"))
     {
