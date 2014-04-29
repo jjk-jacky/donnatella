@@ -49,7 +49,7 @@
  * - <systemitem>property</systemitem> (string) : Name of the property to use.
  *   Defaults to "mtime"
  * - <systemitem>format</systemitem> (string) : A format string on how to show
- *   the date/time. Defaults to "&percnt;O"
+ *   the date/time. Defaults to "&percnt;F &percnt;T"
  * - <systemitem>age_span_seconds</systemitem> (integer) : Number of seconds for
  *   &percnt;O If the timestamp is within this span, the age will be used, else
  *   <systemitem>age_fallback_format</systemitem> will be used; Defaults to
@@ -63,7 +63,7 @@
  * tooltip:
  *
  * - <systemitem>property_tooltip</systemitem>; Defaults to "mtime"
- * - <systemitem>format_tooltip</systemitem>; Defaults to "&percnt;c"
+ * - <systemitem>format_tooltip</systemitem>; Defaults to "&percnt;R"
  * - <systemitem>age_span_seconds_tooltip</systemitem>; Defaults to 7*24*3600 (7
  *   days)
  * - <systemitem>age_fallback_format_tooltip</systemitem>; Defaults to
