@@ -62,8 +62,10 @@
  * Then another batch of the same options - suffixed with "_tooltip" - for the
  * tooltip:
  *
- * - <systemitem>property_tooltip</systemitem>; Defaults to "mtime"
- * - <systemitem>format_tooltip</systemitem>; Defaults to "&percnt;R"
+ * - <systemitem>property_tooltip</systemitem>; You can use ":property"
+ *   (default) to use the same as <systemitem>property</systemitem>
+ * - <systemitem>format_tooltip</systemitem>; You can use ":format" to use the
+ *   same as <systemitem>format</systemitem>. Defaults to "&percnt;R"
  * - <systemitem>age_span_seconds_tooltip</systemitem>; Defaults to 7*24*3600 (7
  *   days)
  * - <systemitem>age_fallback_format_tooltip</systemitem>; Defaults to
@@ -505,11 +507,18 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/time",
-            "property_tooltip", "mtime");
+            "property_tooltip", ":property");
     if (!streq (data->property_tooltip, s))
     {
         g_free (data->property_tooltip);
         data->property_tooltip = s;
+
+        if (streq (s, ":property"))
+        {
+            g_free (s);
+            data->property_tooltip = NULL;
+            s = data->property;
+        }
 
         if (streq (s, "mtime"))
             data->which_tooltip = WHICH_MTIME;
@@ -530,6 +539,12 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     {
         g_free (data->format_tooltip);
         data->format_tooltip = s;
+
+        if (streq (s, ":format"))
+        {
+            g_free (s);
+            data->format_tooltip = NULL;
+        }
     }
     else
         g_free (s);
@@ -1536,11 +1551,23 @@ ct_time_set_tooltip (DonnaColumnType    *ct,
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
     guint64 time;
+    gchar *property;
+    gchar *format;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TIME (ct), NULL);
 
-    if (data->format_tooltip[0] == '\0')
+    if (!data->property_tooltip)
+        property = data->property;
+    else
+        property = data->property_tooltip;
+
+    if (!data->format_tooltip)
+        format = data->format;
+    else
+        format = data->format_tooltip;
+
+    if (format[0] == '\0')
         return FALSE;
 
     if (data->which_tooltip == WHICH_MTIME)
@@ -1550,7 +1577,7 @@ ct_time_set_tooltip (DonnaColumnType    *ct,
     else if (data->which_tooltip == WHICH_CTIME)
         has = donna_node_get_ctime (node, FALSE, &time);
     else
-        donna_node_get (node, FALSE, data->property_tooltip, &has, &value, NULL);
+        donna_node_get (node, FALSE, property, &has, &value, NULL);
 
     if (has != DONNA_NODE_VALUE_SET)
         return FALSE;
@@ -1566,7 +1593,7 @@ ct_time_set_tooltip (DonnaColumnType    *ct,
         g_value_unset (&value);
     }
 
-    s = donna_print_time (time, data->format_tooltip, &data->options_tooltip);
+    s = donna_print_time (time, format, &data->options_tooltip);
     gtk_tooltip_set_text (tooltip, s);
     g_free (s);
     return TRUE;
@@ -2149,6 +2176,9 @@ ct_time_set_option (DonnaColumnType    *ct,
                 data->which = WHICH_CTIME;
             else
                 data->which = WHICH_OTHER;
+
+            if (!data->property_tooltip)
+                data->which_tooltip = data->which;
         }
 
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
@@ -2224,14 +2254,22 @@ ct_time_set_option (DonnaColumnType    *ct,
 
         if (value)
         {
-            g_free (data->property_tooltip);
-            data->property_tooltip = g_strdup (* (gchar **) value);
+            gchar *s_value = * (gchar **) value;
 
-            if (streq (data->property_tooltip, "mtime"))
+            g_free (data->property_tooltip);
+            if (streq (s_value, ":property"))
+            {
+                data->property_tooltip = NULL;
+                s_value = data->property;
+            }
+            else
+                data->property_tooltip = g_strdup (s_value);
+
+            if (streq (s_value, "mtime"))
                 data->which_tooltip = WHICH_MTIME;
-            else if (streq (data->property_tooltip, "atime"))
+            else if (streq (s_value, "atime"))
                 data->which_tooltip = WHICH_ATIME;
-            else if (streq (data->property_tooltip, "ctime"))
+            else if (streq (s_value, "ctime"))
                 data->which_tooltip = WHICH_CTIME;
             else
                 data->which_tooltip = WHICH_OTHER;
@@ -2253,8 +2291,13 @@ ct_time_set_option (DonnaColumnType    *ct,
 
         if (value)
         {
+            gchar *s_value = * (gchar **) value;
+
             g_free (data->format_tooltip);
-            data->format_tooltip = g_strdup (* (gchar **) value);
+            if (streq (s_value, ":format"))
+                data->format_tooltip = NULL;
+            else
+                data->format_tooltip = g_strdup (s_value);
         }
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
@@ -2377,6 +2420,7 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "property:@", save_location, ":ctime,-,",
                 prefix, "property:@", save_location, ":custom>,-,",
             prefix, "format_tooltip:@", save_location, "<",
+                prefix, "format_tooltip:@", save_location, "::format,-,",
                 prefix, "format_tooltip:@", save_location, ":%O,",
                 prefix, "format_tooltip:@", save_location, ":%x %X,",
                 prefix, "format_tooltip:@", save_location, ":%x,",
@@ -2405,6 +2449,7 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "age_fallback_format_tooltip:@", save_location, ":%d/%m/%Y,-,",
                 prefix, "age_fallback_format_tooltip:@", save_location, ":=>,",
             prefix, "property_tooltip:@", save_location, "<",
+                prefix, "property_tooltip:@", save_location, "::property,-,",
                 prefix, "property_tooltip:@", save_location, ":mtime,",
                 prefix, "property_tooltip:@", save_location, ":atime,",
                 prefix, "property_tooltip:@", save_location, ":ctime,-,",
@@ -2509,17 +2554,28 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
         if (!extra)
         {
             info->name = g_strconcat ("Tooltip: Node Property: ",
-                    data->property_tooltip, NULL);
+                    (data->property_tooltip) ? data->property_tooltip : ":property", NULL);
             value = NULL;
             ask_title = "Enter the name of the property";
-            ask_current = data->property_tooltip;
+            if (data->property_tooltip)
+                ask_current = data->property_tooltip;
+            else
+                ask_current = ":property";
+        }
+        else if (streq (extra, ":property"))
+        {
+            info->name = "Same As Column";
+            info->desc = "i.e. use option 'property'";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = !data->property_tooltip;
+            value = ":property";
         }
         else if (streq (extra, "mtime"))
         {
             info->name = "Modified Time";
             info->desc = "mtime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->which_tooltip == WHICH_MTIME;
+            info->is_active = data->property_tooltip && data->which_tooltip == WHICH_MTIME;
             value = "mtime";
         }
         else if (streq (extra, "atime"))
@@ -2527,7 +2583,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Accessed Time";
             info->desc = "atime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->which_tooltip == WHICH_ATIME;
+            info->is_active = data->property_tooltip && data->which_tooltip == WHICH_ATIME;
             value = "atime";
         }
         else if (streq (extra, "ctime"))
@@ -2535,7 +2591,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Status Change Time";
             info->desc = "ctime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->which_tooltip == WHICH_CTIME;
+            info->is_active = data->property_tooltip && data->which_tooltip == WHICH_CTIME;
             value = "ctime";
         }
         else if (streq (extra, "custom"))
@@ -2548,7 +2604,9 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                 info->name = "Custom: ctime";
             else /* WHICH_OTHER */
             {
-                info->name = g_strconcat ("Custom: ", data->property_tooltip, NULL);
+                info->name = g_strconcat ("Custom: ",
+                        (data->property_tooltip) ? data->property_tooltip : ":property",
+                        NULL);
                 info->free_name = TRUE;
             }
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
@@ -2616,6 +2674,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     }
     else if (streq (item, "format_tooltip"))
     {
+        gchar *cur = (data->format_tooltip) ? data->format_tooltip : (gchar *) ":format";
         gchar *s;
         guint64 now = (guint64) time (NULL);
 
@@ -2623,15 +2682,17 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
         info->is_sensitive = TRUE;
         if (!extra)
         {
-            s = donna_print_time (now, data->format_tooltip, &data->options_tooltip);
+            s = donna_print_time (now,
+                    (data->format_tooltip) ? data->format_tooltip : data->format,
+                    &data->options_tooltip);
             info->name = g_strconcat ("Tooltip: ", s, NULL);
             g_free (s);
             info->free_name = TRUE;
-            info->desc = g_strconcat ("Format: ", data->format_tooltip, NULL);
+            info->desc = g_strconcat ("Format: ", cur, NULL);
             info->free_desc = TRUE;
             value = NULL;
             ask_title = "Enter the format for the tooltip";
-            ask_current = data->format_tooltip;
+            ask_current = cur;
         }
         else if (*extra == '=')
         {
@@ -2642,11 +2703,20 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                 info->name = g_strdup (extra + 1);
                 info->free_name = TRUE;
             }
-            info->desc = g_strconcat ("Current format: ", data->format_tooltip, NULL);
+            info->desc = g_strconcat ("Current format: ", cur, NULL);
             info->free_desc = TRUE;
             value = NULL;
             ask_title = "Enter the format for the tooltip";
-            ask_current = data->format_tooltip;
+            ask_current = cur;
+        }
+        else if (streq (extra, ":format"))
+        {
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = !data->format_tooltip;
+            info->name = "Same as Column";
+            info->desc = "i.e. use option 'format'";
+            value = ":format";
+            quote_value = TRUE;
         }
         else
         {
