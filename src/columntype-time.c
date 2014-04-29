@@ -2519,7 +2519,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Modified Time";
             info->desc = "mtime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->which == WHICH_MTIME;
+            info->is_active = data->which_tooltip == WHICH_MTIME;
             value = "mtime";
         }
         else if (streq (extra, "atime"))
@@ -2527,7 +2527,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Accessed Time";
             info->desc = "atime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->which == WHICH_ATIME;
+            info->is_active = data->which_tooltip == WHICH_ATIME;
             value = "atime";
         }
         else if (streq (extra, "ctime"))
@@ -2535,7 +2535,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->name = "Status Change Time";
             info->desc = "ctime";
             info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->which == WHICH_CTIME;
+            info->is_active = data->which_tooltip == WHICH_CTIME;
             value = "ctime";
         }
         else if (streq (extra, "custom"))
