@@ -2726,8 +2726,8 @@ enum
     OPT_DEFAULT,
     OPT_TREE_VIEW,
     OPT_TREE_VIEW_COLUMN,
-    OPT_COLUMN,
-    OPT_IN_MEMORY   /* from set_option() when value in changed in memory */
+    OPT_IN_MEMORY,  /* from set_option() when value in changed in memory */
+    _OPT_NB
 };
 
 struct option_data
@@ -2735,7 +2735,6 @@ struct option_data
     DonnaTreeView *tree;
     gchar *option;
     guint opt;
-    gsize len;
     gpointer val;
 };
 
@@ -3160,23 +3159,137 @@ static DonnaColumnOptionInfo _list_options[] = {
     config_get_int (t, c, "default_save_location", DONNA_COLUMN_OPTION_SAVE_IN_ASK)
 
 static gboolean
-real_option_cb (struct option_data *data)
+real_option_cb (struct option_data *od)
 {
-    DonnaTreeView *tree = data->tree;
+    DonnaTreeView *tree = od->tree;
     DonnaTreeViewPrivate *priv = tree->priv;
     DonnaConfig *config;
+    gchar buf[255], *b = buf;
     gchar *opt;
+    gsize len = 0;
     gchar *s;
 
+    /* could be OPT_IN_MEMORY from donna_tree_view_set_option() */
+    if (od->opt == OPT_NONE)
+    {
+        /* options we care about are ones for the tree (in "tree_views/<NAME>"
+         * or "defaults/<MODE>s") or for one of our columns:
+         * tree_views/<NAME>/columns/<NAME>
+         * defaults/<MODE>s/columns/<NAME>
+         * We also care about columns_options from current arrangement, and
+         * should refresh all columns' ctdata on changes in defaults that aren't
+         * in either modes.
+         *
+         * We don't follow other sources from arrangement (columns layout, sort
+         * orders...) because (a) they're mostly set in-memory, then maybe saved
+         * somewhere, and because of that it would feel odd than a change
+         * in config "overwrites" your current (possibly non-saved) settings.
+         * And (b), unlike options, which can be set & saved somewhere via one
+         * command, and you'd expect the new value to be applied, there are no
+         * commands to set a column layout/sort order with a save location,
+         * related commands are all in-memory only, so a change in config is
+         * done via changing the config, and then a "reload" of the arrangement
+         * seems normal/right.
+         */
+
+        /* start w/ arrangement, since it can be located anywhere (including
+         * categories we would otherwise wrongly match) */
+        if (G_LIKELY (priv->arrangement) && priv->arrangement->columns_options)
+        {
+            s = priv->arrangement->columns_options;
+            len = strlen (s);
+            if (streqn (od->option, s, len)
+                    && streqn (od->option + len, "/columns_options/", 17))
+            {
+                od->opt = OPT_TREE_VIEW_COLUMN;
+                len += 17;
+                goto process;
+            }
+        }
+
+        len = (gsize) snprintf (buf, 255, "tree_views/%s/", priv->name);
+        if (len >= 255)
+            b = g_strdup_printf ("tree_views/%s/", priv->name);
+
+        if (streqn (od->option, b, len))
+        {
+            od->opt = OPT_TREE_VIEW;
+            if (streqn (od->option + len, "columns/", 8))
+            {
+                od->opt = OPT_TREE_VIEW_COLUMN;
+                len += 8;
+            }
+        }
+
+        if (b != buf)
+            g_free (b);
+
+        if (od->opt == OPT_NONE && streqn (od->option, "defaults/", 9))
+        {
+            len = 9;
+            if (streqn (od->option + len, (priv->is_tree) ? "trees/" : "lists/", 6))
+            {
+                len += 6;
+                if (streqn (od->option + len, "columns/", 8))
+                {
+                    od->opt = OPT_TREE_VIEW_COLUMN;
+                    len += 8;
+                }
+                else
+                    od->opt = OPT_DEFAULT;
+            }
+            else
+            {
+                /* it's not our mode, is it the other one? if not, we'll need to
+                 * refresh all columns (in case they use "generic" defaults) */
+                if (!streqn (od->option + len, (priv->is_tree) ? "lists/" : "trees/", 6))
+                {
+                    GSList *l;
+                    DonnaColumnTypeNeed need = 0;
+
+                    DONNA_DEBUG (TREE_VIEW, priv->name,
+                            g_debug ("TreeView '%s': Config change in defaults (%s)",
+                                priv->name, od->option));
+
+                    for (l = priv->columns; l; l = l->next)
+                    {
+                        struct column *_col = l->data;
+
+                        need |= donna_column_type_refresh_data (_col->ct, _col->name,
+                                (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                                priv->name,
+                                priv->is_tree,
+                                &_col->ct_data);
+                    }
+                    refresh_col_props (tree);
+                    if (need & DONNA_COLUMN_TYPE_NEED_RESORT)
+                        resort_tree (tree);
+                    if (need & DONNA_COLUMN_TYPE_NEED_REDRAW)
+                        gtk_widget_queue_draw ((GtkWidget *) tree);
+                }
+                goto done;
+            }
+        }
+    }
+
+    if (od->opt == OPT_NONE)
+        goto done;
+
+process:
     config = donna_app_peek_config (priv->app);
-    opt = data->option + data->len;
+    opt = od->option + len;
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug ("TreeView '%s': Config change for option '%s' (%s)",
-                priv->name, opt, data->option));
+            const gchar *opt_type[_OPT_NB];
+            opt_type[OPT_DEFAULT] = "treeview (default)";
+            opt_type[OPT_TREE_VIEW] = "treeview";
+            opt_type[OPT_TREE_VIEW_COLUMN] = "column";
+            opt_type[OPT_IN_MEMORY] = "treeview (in-memory)";
+            g_debug ("TreeView '%s': Config change for %s option '%s' (%s)",
+                priv->name, opt_type[od->opt], opt, od->option));
 
-    if (data->opt == OPT_TREE_VIEW || data->opt == OPT_DEFAULT
-            || data->opt == OPT_IN_MEMORY)
+    if (od->opt == OPT_TREE_VIEW || od->opt == OPT_DEFAULT
+            || od->opt == OPT_IN_MEMORY)
     {
         gint val;
 
@@ -3196,12 +3309,12 @@ real_option_cb (struct option_data *data)
         }
         else if (streq (opt, "show_hidden"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                val = (* (gboolean *) data->val) ? TRUE : FALSE;
+            if (od->opt == OPT_IN_MEMORY)
+                val = (* (gboolean *) od->val) ? TRUE : FALSE;
             else
                 val = cfg_get_show_hidden (tree, config);
 
-            if (data->opt == OPT_IN_MEMORY || priv->show_hidden != val)
+            if (od->opt == OPT_IN_MEMORY || priv->show_hidden != val)
             {
                 priv->show_hidden = val;
                 if (priv->is_tree)
@@ -3212,42 +3325,41 @@ real_option_cb (struct option_data *data)
         }
         else if (streq (opt, "node_types"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                val = CLAMP (* (gint *) data->val, 0, 3);
+            if (od->opt == OPT_IN_MEMORY)
+                val = CLAMP (* (gint *) od->val, 0, 3);
             else
                 val = cfg_get_node_types (tree, config);
 
-            if (data->opt == OPT_IN_MEMORY || priv->node_types != (guint) val)
+            if (od->opt == OPT_IN_MEMORY || priv->node_types != (guint) val)
             {
                 priv->node_types = val;
-                donna_tree_view_refresh (data->tree,
-                        DONNA_TREE_VIEW_REFRESH_RELOAD, NULL);
+                donna_tree_view_refresh (tree, DONNA_TREE_VIEW_REFRESH_RELOAD, NULL);
             }
         }
         else if (streq (opt, "sort_groups"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                val = CLAMP (* (gint *) data->val, 0, 2);
+            if (od->opt == OPT_IN_MEMORY)
+                val = CLAMP (* (gint *) od->val, 0, 2);
             else
                 val = cfg_get_sort_groups (tree, config);
 
-            if (data->opt == OPT_IN_MEMORY || priv->sort_groups != (guint) val)
+            if (od->opt == OPT_IN_MEMORY || priv->sort_groups != (guint) val)
             {
                 priv->sort_groups = val;
-                resort_tree (data->tree);
+                resort_tree (od->tree);
             }
         }
         else if (streq (opt, "select_highlight"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                val = CLAMP (* (gint *) data->val, 0, 3);
+            if (od->opt == OPT_IN_MEMORY)
+                val = CLAMP (* (gint *) od->val, 0, 3);
             else
                 val = cfg_get_select_highlight (tree, config);
 
 #ifdef GTK_IS_JJK
-            if (data->opt == OPT_IN_MEMORY || priv->select_highlight != (guint) val)
+            if (od->opt == OPT_IN_MEMORY || priv->select_highlight != (guint) val)
             {
-                GtkTreeView *treev = (GtkTreeView *) data->tree;
+                GtkTreeView *treev = (GtkTreeView *) tree;
 
                 priv->select_highlight = val;
                 if (priv->select_highlight == SELECT_HIGHLIGHT_COLUMN
@@ -3288,100 +3400,100 @@ real_option_cb (struct option_data *data)
         }
         else if (streq (opt, "key_mode"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                s = * (gchar **) data->val;
+            if (od->opt == OPT_IN_MEMORY)
+                s = * (gchar **) od->val;
             else
                 s = cfg_get_key_mode (tree, config);
 
-            if (data->opt == OPT_IN_MEMORY || !streq (priv->key_mode, s))
+            if (od->opt == OPT_IN_MEMORY || !streq (priv->key_mode, s))
                 donna_tree_view_set_key_mode (tree, s);
 
-            if (data->opt != OPT_IN_MEMORY)
+            if (od->opt != OPT_IN_MEMORY)
                 g_free (s);
         }
         else if (streq (opt, "click_mode"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                s = * (gchar **) data->val;
+            if (od->opt == OPT_IN_MEMORY)
+                s = * (gchar **) od->val;
             else
                 s = cfg_get_click_mode (tree, config);
 
-            if (data->opt == OPT_IN_MEMORY || !streq (priv->click_mode, s))
+            if (od->opt == OPT_IN_MEMORY || !streq (priv->click_mode, s))
             {
                 g_free (priv->click_mode);
-                priv->click_mode = (data->opt == OPT_IN_MEMORY)
+                priv->click_mode = (od->opt == OPT_IN_MEMORY)
                     ? g_strdup (s) : s;
             }
-            else if (data->opt != OPT_IN_MEMORY)
+            else if (od->opt != OPT_IN_MEMORY)
                 g_free (s);
         }
         else if (streq (opt, "default_save_location"))
         {
-            if (data->opt == OPT_IN_MEMORY)
-                val = * (gint *) data->val;
+            if (od->opt == OPT_IN_MEMORY)
+                val = * (gint *) od->val;
             else
                 val = cfg_get_default_save_location (tree, config);
 
-            if (data->opt == OPT_IN_MEMORY || priv->default_save_location != (guint) val)
+            if (od->opt == OPT_IN_MEMORY || priv->default_save_location != (guint) val)
                 priv->default_save_location = val;
         }
         else if (priv->is_tree)
         {
             if (streq (opt, "node_visuals"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = CLAMP (* (gint *) data->val, 0, 31);
+                if (od->opt == OPT_IN_MEMORY)
+                    val = CLAMP (* (gint *) od->val, 0, 31);
                 else
                     val = cfg_get_node_visuals (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->node_visuals != (guint) val)
+                if (od->opt == OPT_IN_MEMORY || priv->node_visuals != (guint) val)
                 {
                     priv->node_visuals = (guint) val;
                     gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
                             (GtkTreeModelForeachFunc) reset_node_visuals,
-                            data->tree);
+                            tree);
                 }
             }
             else if (streq (opt, "is_minitree"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) od->val) ? TRUE : FALSE;
                 else
                     val = cfg_get_is_minitree (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->is_minitree != val)
+                if (od->opt == OPT_IN_MEMORY || priv->is_minitree != val)
                 {
                     priv->is_minitree = val;
                     if (!val)
                     {
                         gtk_tree_model_foreach ((GtkTreeModel *) priv->store,
                                 (GtkTreeModelForeachFunc) switch_minitree_off,
-                                data->tree);
-                        g_idle_add ((GSourceFunc) scroll_to_current, data->tree);
+                                tree);
+                        g_idle_add ((GSourceFunc) scroll_to_current, tree);
                     }
                 }
             }
             else if (streq (opt, "sync_mode"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = CLAMP (* (gint *) data->val, 0, 4);
+                if (od->opt == OPT_IN_MEMORY)
+                    val = CLAMP (* (gint *) od->val, 0, 4);
                 else
                     val = cfg_get_sync_mode (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->sync_mode != (guint) val)
+                if (od->opt == OPT_IN_MEMORY || priv->sync_mode != (guint) val)
                 {
                     priv->sync_mode = val;
                     if (priv->sync_with)
                         sync_with_location_changed_cb ((GObject *) priv->sync_with,
-                                NULL, data->tree);
+                                NULL, tree);
                 }
             }
             else if (streq (opt, "sync_with"))
             {
                 DonnaTreeView *sw;
 
-                if (data->opt == OPT_IN_MEMORY)
-                    s = * (gchar **) data->val;
+                if (od->opt == OPT_IN_MEMORY)
+                    s = * (gchar **) od->val;
                 else
                     s = cfg_get_sync_with (tree, config);
 
@@ -3425,7 +3537,7 @@ real_option_cb (struct option_data *data)
                         ? g_signal_connect (priv->sync_with,
                                 "notify::location",
                                 (GCallback) sync_with_location_changed_cb,
-                                data->tree)
+                                tree)
                         : 0;
 
                     if (priv->sid_tree_view_loaded)
@@ -3455,27 +3567,27 @@ real_option_cb (struct option_data *data)
                 else
                     donna_g_object_unref (sw);
 
-                if (data->opt != OPT_IN_MEMORY)
+                if (od->opt != OPT_IN_MEMORY)
                     g_free (s);
             }
             else if (streq (opt, "sync_scroll"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) od->val) ? TRUE : FALSE;
                 else
                     val = cfg_get_sync_scroll (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->sync_scroll != val)
+                if (od->opt == OPT_IN_MEMORY || priv->sync_scroll != val)
                     priv->sync_scroll = val;
             }
             else if (streq (opt, "auto_focus_sync"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) od->val) ? TRUE : FALSE;
                 else
                     val = cfg_get_auto_focus_sync (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->auto_focus_sync != val)
+                if (od->opt == OPT_IN_MEMORY || priv->auto_focus_sync != val)
                     priv->auto_focus_sync = val;
             }
         }
@@ -3483,32 +3595,32 @@ real_option_cb (struct option_data *data)
         {
             if (streq (opt, "focusing_click"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) od->val) ? TRUE : FALSE;
                 else
                     val = cfg_get_focusing_click (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->focusing_click != val)
+                if (od->opt == OPT_IN_MEMORY || priv->focusing_click != val)
                     priv->focusing_click = val;
             }
             else if (streq (opt, "goto_item_set"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = * (gint *) data->val;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = * (gint *) od->val;
                 else
                     val = cfg_get_goto_item_set (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->goto_item_set != (guint) val)
+                if (od->opt == OPT_IN_MEMORY || priv->goto_item_set != (guint) val)
                     priv->goto_item_set = val;
             }
             if (streq (opt, "vf_items_only"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = (* (gboolean *) data->val) ? TRUE : FALSE;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = (* (gboolean *) od->val) ? TRUE : FALSE;
                 else
                     val = cfg_get_vf_items_only (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY || priv->vf_items_only != val)
+                if (od->opt == OPT_IN_MEMORY || priv->vf_items_only != val)
                 {
                     priv->vf_items_only = val;
                     refilter_list (tree);
@@ -3516,12 +3628,12 @@ real_option_cb (struct option_data *data)
             }
             else if (streq (opt, "history_max"))
             {
-                if (data->opt == OPT_IN_MEMORY)
-                    val = * (gint *) data->val;
+                if (od->opt == OPT_IN_MEMORY)
+                    val = * (gint *) od->val;
                 else
                     val = cfg_get_history_max (tree, config);
 
-                if (data->opt == OPT_IN_MEMORY
+                if (od->opt == OPT_IN_MEMORY
                         || donna_history_get_max (priv->history) != (guint) val)
                     donna_history_set_max (priv->history, (guint) val);
             }
@@ -3530,171 +3642,115 @@ real_option_cb (struct option_data *data)
     /* columns option */
     else
     {
+        struct column *_col;
+
         s = strchr (opt, '/');
-        if (s)
+        if (!s)
+            goto done;
+
+        /* is this change about a column we are using right now? */
+        *s = '\0';
+        _col = get_column_by_name (tree, opt);
+        *s = '/';
+        if (!_col)
+            goto done;
+
+        if (streq (s + 1, "title"))
         {
-            struct column *_col;
+            gchar *ss = NULL;
 
-            /* is this change about a column we are using right now? */
-            *s = '\0';
-            _col = get_column_by_name (tree, opt);
-            *s = '/';
-            if (_col)
+            /* we know we will get a value, but it might not be from the
+             * config changed that occured, since the value might be
+             * overridden by current arrangement, etc */
+            ss = donna_config_get_string_column (config, _col->name,
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
+                    NULL,
+                    "title", ss);
+            gtk_tree_view_column_set_title (_col->column, ss);
+            gtk_label_set_text ((GtkLabel *) _col->label, ss);
+            g_free (ss);
+        }
+        else if (streq (s + 1, "width"))
+        {
+            gint w = 0;
+
+            /* we know we will get a value, but it might not be from the
+             * config changed that occured, since the value might be
+             * overridden by current arrangement, etc */
+            w = donna_config_get_int_column (config, _col->name,
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
+                    NULL,
+                    "width", w);
+            gtk_tree_view_column_set_fixed_width (_col->column, w);
+        }
+        else if (streq (s + 1, "refresh_properties"))
+        {
+            guint rp;
+            guint old = _col->refresh_properties;
+
+            /* we know we will get a value, but it might not be from the
+             * config changed that occured, since the value might be
+             * overridden by current arrangement, etc */
+            rp = (guint) donna_config_get_int_column (config, _col->name,
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
+                    NULL,
+                    "refresh_properties", RP_VISIBLE);
+            if (rp < _MAX_RP && rp != _col->refresh_properties)
             {
-                if (streq (s + 1, "title"))
-                {
-                    gchar *ss = NULL;
-
-                    /* we know we will get a value, but it might not be from the
-                     * config changed that occured, since the value might be
-                     * overridden by current arrangement, etc */
-                    ss = donna_config_get_string_column (config, _col->name,
-                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            priv->name,
-                            priv->is_tree,
-                            NULL,
-                            "title", ss);
-                    gtk_tree_view_column_set_title (_col->column, ss);
-                    gtk_label_set_text ((GtkLabel *) _col->label, ss);
-                    g_free (ss);
-                }
-                else if (streq (s + 1, "width"))
-                {
-                    gint w = 0;
-
-                    /* we know we will get a value, but it might not be from the
-                     * config changed that occured, since the value might be
-                     * overridden by current arrangement, etc */
-                    w = donna_config_get_int_column (config, _col->name,
-                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            priv->name,
-                            priv->is_tree,
-                            NULL,
-                            "width", w);
-                    gtk_tree_view_column_set_fixed_width (_col->column, w);
-                }
-                else if (streq (s + 1, "refresh_properties"))
-                {
-                    guint rp;
-                    guint old = _col->refresh_properties;
-
-                    /* we know we will get a value, but it might not be from the
-                     * config changed that occured, since the value might be
-                     * overridden by current arrangement, etc */
-                    rp = (guint) donna_config_get_int_column (config, _col->name,
-                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            priv->name,
-                            priv->is_tree,
-                            NULL,
-                            "refresh_properties", RP_VISIBLE);
-                    if (rp < _MAX_RP && rp != _col->refresh_properties)
-                    {
-                        _col->refresh_properties = rp;
-                        if (old == RP_ON_DEMAND)
-                            gtk_widget_queue_draw ((GtkWidget *) tree);
-                        if (rp == RP_PRELOAD)
-                            preload_props_columns (tree);
-                    }
-                }
-                else
-                {
-                    DonnaColumnTypeNeed need;
-
-                    /* ask the ct if something needs to happen */
-                    need = donna_column_type_refresh_data (_col->ct, _col->name,
-                            (priv->arrangement) ? priv->arrangement->columns_options : NULL,
-                            priv->name,
-                            priv->is_tree,
-                            &_col->ct_data);
-                    refresh_col_props (tree);
-                    if (need & DONNA_COLUMN_TYPE_NEED_RESORT)
-                        resort_tree (data->tree);
-                    if (need & DONNA_COLUMN_TYPE_NEED_REDRAW)
-                        gtk_widget_queue_draw ((GtkWidget *) tree);
-                }
+                _col->refresh_properties = rp;
+                if (old == RP_ON_DEMAND)
+                    gtk_widget_queue_draw ((GtkWidget *) tree);
+                if (rp == RP_PRELOAD)
+                    preload_props_columns (tree);
             }
+        }
+        else
+        {
+            DonnaColumnTypeNeed need;
+
+            /* ask the ct if something needs to happen */
+            need = donna_column_type_refresh_data (_col->ct, _col->name,
+                    (priv->arrangement) ? priv->arrangement->columns_options : NULL,
+                    priv->name,
+                    priv->is_tree,
+                    &_col->ct_data);
+            refresh_col_props (tree);
+            if (need & DONNA_COLUMN_TYPE_NEED_RESORT)
+                resort_tree (tree);
+            if (need & DONNA_COLUMN_TYPE_NEED_REDRAW)
+                gtk_widget_queue_draw ((GtkWidget *) tree);
         }
     }
 
-    if (data->opt != OPT_IN_MEMORY)
-        g_free (data);
-    return FALSE;
+done:
+    if (od->opt != OPT_IN_MEMORY)
+    {
+        g_free (od->option);
+        g_free (od);
+    }
+    return G_SOURCE_REMOVE;
 }
 
 static void
 option_cb (DonnaConfig *config, const gchar *option, DonnaTreeView *tree)
 {
-    gchar buf[255], *b = buf;
-    gssize len;
-    guint opt = OPT_NONE;
+    struct option_data *od;
 
     /* see donna_tree_view_save_to_config() */
     if (tree->priv->saving_config)
         return;
 
-    /* options we care about are ones for the tree (in "tree_views/<NAME>" or
-     * "defaults/<MODE>s") or for one of our columns:
-     * tree_views/<NAME>/columns/<NAME>
-     * defaults/<MODE>s/columns/<NAME>
-     * This excludes options in the current arrangement, but that's
-     * okay/expected: arrangement are loaded/"created" on location change.
-     * Also excludes "generic" default, also to be expected.
-     *
-     * Here we can only check if the option starts with "tree_views/<NAME>",
-     * "defaults/<MODE>s" and that's it, to loop through our columns we
-     * need the GTK lock, i.e. go in main thread */
-
-    len = snprintf (buf, 255, "tree_views/%s/", tree->priv->name);
-    if (len >= 255)
-        b = g_strdup_printf ("tree_views/%s/", tree->priv->name);
-
-    if (streqn (option, b, (size_t) len))
-    {
-        opt = OPT_TREE_VIEW;
-        if (streqn (option + len, "columns/", 8))
-        {
-            opt = OPT_TREE_VIEW_COLUMN;
-            len += 8;
-        }
-    }
-
-    if (b != buf)
-        g_free (b);
-
-    if (opt == OPT_NONE)
-    {
-        len = snprintf (buf, 255, "defaults/%s/",
-                (tree->priv->is_tree) ? "trees" : "lists");
-        if (len >= 255)
-            b = g_strdup_printf ("defaults/%s/",
-                    (tree->priv->is_tree) ? "trees" : "lists");
-        else
-            b = buf;
-        if (streqn (option, b, (size_t) len))
-        {
-            if (streqn (option + len, "columns/", 8))
-            {
-                opt = OPT_TREE_VIEW_COLUMN;
-                len += 8;
-            }
-            else
-                opt = OPT_DEFAULT;
-        }
-        if (b != buf)
-            g_free (b);
-    }
-
-    if (opt != OPT_NONE)
-    {
-        struct option_data *data;
-
-        data = g_new (struct option_data, 1);
-        data->tree = tree;
-        data->option = g_strdup (option);
-        data->opt = opt;
-        data->len = (gsize) len;
-        g_main_context_invoke (NULL, (GSourceFunc) real_option_cb, data);
-    }
+    od = g_new (struct option_data, 1);
+    od->tree = tree;
+    od->option = g_strdup (option);
+    od->opt = OPT_NONE;
+    g_main_context_invoke (NULL, (GSourceFunc) real_option_cb, od);
 }
 
 static void
@@ -13870,7 +13926,6 @@ donna_tree_view_set_option (DonnaTreeView      *tree,
     od.tree = tree;
     od.option = (gchar *) option;
     od.opt = OPT_IN_MEMORY;
-    od.len = 0;
 
     if (save_location == DONNA_TREE_VIEW_OPTION_SAVE_IN_SAVE_LOCATION)
         save_location = priv->default_save_location;
