@@ -22700,6 +22700,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 
     if (gtk_tree_selection_get_selected (selection, NULL, &iter))
     {
+        GtkTreeIter location_iter;
         DonnaNode *node;
 
         /* might have been to SELECTION_SINGLE if there was no selection, due to
@@ -22709,6 +22710,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
             /* trying to change it now causes a segfault in GTK */
             g_idle_add ((GSourceFunc) set_selection_browse, selection);
 
+        location_iter = priv->location_iter;
         priv->location_iter = iter;
 
         gtk_tree_model_get (GTK_TREE_MODEL (priv->store), &iter,
@@ -22716,30 +22718,61 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
                 -1);
         if (priv->location != node)
         {
+            GError *err = NULL;
+            gboolean triggered;
+
             if (priv->location)
                 g_object_unref (priv->location);
             priv->location = node;
 
-            if (priv->sync_with)
+            triggered = (donna_node_get_node_type (node) == DONNA_NODE_ITEM
+                    && (donna_provider_get_flags (donna_node_peek_provider (node))
+                        & DONNA_PROVIDER_FLAG_FLAT));
+            if (triggered)
             {
-                GError *err = NULL;
-                DonnaNode *n;
+                DonnaTask *task;
 
-                /* should we ask the list to change its location? */
-                n = donna_tree_view_get_location (priv->sync_with);
-                if (n)
-                    g_object_unref (n);
-                if (n == node)
-                    return;
-
-                donna_tree_view_set_location (priv->sync_with, node, &err);
-                if (err)
+                task = donna_node_trigger_task (node, &err);
+                if (!task)
                 {
+                    gchar *fl = donna_node_get_full_location (node);
                     donna_app_show_error (priv->app, err,
-                            "TreeView '%s': Failed to set location on '%s'",
-                            priv->name, priv->sync_with->priv->name);
+                            "TreeView '%s': Failed to trigger '%s'",
+                            priv->name, fl);
+                    g_free (fl);
                     g_clear_error (&err);
                 }
+                else
+                    donna_app_run_task (priv->app, task);
+
+                /* restore selection to previous row */
+                if (location_iter.stamp != 0)
+                    gtk_tree_selection_select_iter (selection, &location_iter);
+            }
+
+            if (priv->sync_with)
+            {
+                DonnaNode *n;
+
+                if (!triggered)
+                {
+                    /* should we ask the list to change its location? */
+                    n = donna_tree_view_get_location (priv->sync_with);
+                    if (n)
+                        g_object_unref (n);
+                    if (n == node)
+                        return;
+
+                    donna_tree_view_set_location (priv->sync_with, node, &err);
+                    if (err)
+                    {
+                        donna_app_show_error (priv->app, err,
+                                "TreeView '%s': Failed to set location on '%s'",
+                                priv->name, priv->sync_with->priv->name);
+                        g_clear_error (&err);
+                    }
+                }
+
                 if (priv->auto_focus_sync)
                     /* auto_focus_sync means if we have the focus, we send it to
                      * sync_with. We need to do this in a new idle source
