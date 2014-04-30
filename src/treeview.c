@@ -22722,6 +22722,7 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
 
             if (priv->sync_with)
             {
+                GError *err = NULL;
                 DonnaNode *n;
 
                 /* should we ask the list to change its location? */
@@ -22731,7 +22732,14 @@ selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree)
                 if (n == node)
                     return;
 
-                donna_tree_view_set_location (priv->sync_with, node, NULL);
+                donna_tree_view_set_location (priv->sync_with, node, &err);
+                if (err)
+                {
+                    donna_app_show_error (priv->app, err,
+                            "TreeView '%s': Failed to set location on '%s'",
+                            priv->name, priv->sync_with->priv->name);
+                    g_clear_error (&err);
+                }
                 if (priv->auto_focus_sync)
                     /* auto_focus_sync means if we have the focus, we send it to
                      * sync_with. We need to do this in a new idle source
