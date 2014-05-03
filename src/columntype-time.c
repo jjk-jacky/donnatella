@@ -50,6 +50,8 @@
  *   Defaults to "mtime"
  * - <systemitem>format</systemitem> (string) : A format string on how to show
  *   the date/time. Defaults to "&percnt;f"
+ * - <systemitem>align</systemitem> (integer:align) : Where to align the text in
+ *   the column, can be "left" (default), "center" or "right"
  *
  * And a few alternatives used specifically for the tooltip :
  *
@@ -173,6 +175,7 @@ struct tv_col_data
     gint8             which;
     gchar            *property;
     gchar            *format;
+    DonnaAlign        align;
     DonnaTimeOptions  options;
     gint8             which_tooltip;
     gchar            *property_tooltip;
@@ -434,6 +437,7 @@ ct_time_get_options (DonnaColumnType    *ct,
     static DonnaColumnOptionInfo o[] = {
         { "property",                   G_TYPE_STRING,      NULL },
         { "format",                     G_TYPE_STRING,      NULL },
+        { "align",                      G_TYPE_INT,         "align" },
         { "age_span_seconds",           G_TYPE_INT,         NULL },
         { "age_fallback_format",        G_TYPE_STRING,      NULL },
         { "fluid_time_format",          G_TYPE_STRING,      NULL },
@@ -501,6 +505,15 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     }
     else
         g_free (s);
+
+    sec = (guint) donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, "column_types/time",
+            "align", DONNA_ALIGN_LEFT);
+    if (sec != data->align)
+    {
+        data->align = sec;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
 
     sec = (guint) donna_config_get_int_column (config, col_name,
             arr_name, tv_name, is_tree, "time",
@@ -1518,6 +1531,7 @@ ct_time_render (DonnaColumnType    *ct,
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
     guint64 time;
+    gdouble xalign;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TIME (ct), NULL);
@@ -1560,13 +1574,26 @@ ct_time_render (DonnaColumnType    *ct,
     }
 
     s = donna_print_time (time, data->format, &data->options);
+    switch (data->align)
+    {
+        case DONNA_ALIGN_LEFT:
+            xalign = 0.0;
+            break;
+        case DONNA_ALIGN_CENTER:
+            xalign = 0.5;
+            break;
+        case DONNA_ALIGN_RIGHT:
+            xalign = 1.0;
+            break;
+    }
     g_object_set (renderer,
             "visible",      TRUE,
             "text",         s,
             "ellipsize",    PANGO_ELLIPSIZE_END,
             "ellipsize-set",TRUE,
+            "xalign",       xalign,
             NULL);
-    donna_renderer_set (renderer, "ellipsize-set", NULL);
+    donna_renderer_set (renderer, "ellipsize-set", "xalign", NULL);
     g_free (s);
     return NULL;
 }
@@ -2232,6 +2259,25 @@ ct_time_set_option (DonnaColumnType    *ct,
         }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
+    else if (streq (option, "align"))
+    {
+        gint c;
+
+        c = (gint) data->align;
+        v = (value) ? value : &c;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, "column_types/time",
+                    &save_location,
+                    option, G_TYPE_INT, &c, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+            data->align = (guint) * (gint *) value;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
     else if (streq (option, "age_span_seconds"))
     {
         gint c;
@@ -2454,7 +2500,11 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "property:@", save_location, ":mtime,",
                 prefix, "property:@", save_location, ":atime,",
                 prefix, "property:@", save_location, ":ctime,-,",
-                prefix, "property:@", save_location, ":custom>,-,",
+                prefix, "property:@", save_location, ":custom>,",
+            prefix, "align:@", save_location, "<",
+                prefix, "align:@", save_location, ":left,",
+                prefix, "align:@", save_location, ":center,",
+                prefix, "align:@", save_location, ":right>,-,",
             prefix, "format_tooltip:@", save_location, "<",
                 prefix, "format_tooltip:@", save_location, "::format,-,",
                 prefix, "format_tooltip:@", save_location, ":%O,",
@@ -2779,6 +2829,45 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             info->free_desc = TRUE;
             value = extra;
             quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "align"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            info->name = "Alignment";
+            info->submenus = 1;
+            return TRUE;
+        }
+        else if (streq (extra, "left"))
+        {
+            info->name = "Left";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+            info->is_active = data->align == DONNA_ALIGN_LEFT;
+            value = extra;
+        }
+        else if (streq (extra, "center"))
+        {
+            info->name = "Center";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+            info->is_active = data->align == DONNA_ALIGN_CENTER;
+            value = extra;
+        }
+        else if (streq (extra, "right"))
+        {
+            info->name = "Right";
+            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+            info->is_active = data->align == DONNA_ALIGN_RIGHT;
+            value = extra;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_OTHER,
+                    "ColumnType 'time': Invalid extra '%s' for item '%s'",
+                    extra, item);
+            return FALSE;
         }
     }
     else if (streq (item, "age_fallback_format"))

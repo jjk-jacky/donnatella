@@ -44,6 +44,13 @@ typedef enum
 
 typedef enum
 {
+    DONNA_ALIGN_LEFT = 0,
+    DONNA_ALIGN_CENTER,
+    DONNA_ALIGN_RIGHT
+} DonnaAlign;
+
+typedef enum
+{
     /* so for clipboard operations so can default to cut/copy state */
     DONNA_IO_UNKNOWN = 0,
     DONNA_IO_COPY,

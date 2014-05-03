@@ -7640,6 +7640,25 @@ prepare_app (DonnaApp *app, GError **error)
         return FALSE;
 
     i = 0;
+    it_int[i].value     = DONNA_ALIGN_LEFT;
+    it_int[i].in_file   = "left";
+    it_int[i].label     = "Left";
+    ++i;
+    it_int[i].value     = DONNA_ALIGN_CENTER;
+    it_int[i].in_file   = "center";
+    it_int[i].label     = "Center";
+    ++i;
+    it_int[i].value     = DONNA_ALIGN_RIGHT;
+    it_int[i].in_file   = "right";
+    it_int[i].label     = "Right";
+    ++i;
+    if (G_UNLIKELY (!donna_config_add_extra (config,
+                    DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "align",
+                    "Alignment",
+                    i, it_int, error)))
+        return FALSE;
+
+    i = 0;
     it_int[i].value     = G_TYPE_STRING;
     it_int[i].in_file   = "string";
     it_int[i].label     = "String";
