@@ -1560,6 +1560,22 @@ export_config (DonnaProviderConfigPrivate   *priv,
                 g_string_append (str, option->comments);
                 g_string_append_c (str, '\n');
             }
+            /* make sure empty categories (i.e. w/ not even a subcategory) are
+             * exported. E.g. custom_properties in groups can be:
+             *
+             * [custom_properties/]
+             * domain=fs
+             * [custom_properties//group]
+             * is_group=true
+             * cmdline=foobar
+             * [custom_properties//group/prop1]
+             * [custom_properties//group/prop2]
+             * [custom_properties//group/prop2]
+             *
+             * And obviously we need not to "drop" those prop{1..3} categories
+             */
+            if (!child->children && G_LIKELY (str_loc->len))
+                g_string_append_printf (str, "[%s]\n", str_loc->str);
             export_config (priv, child, str_loc, str, TRUE);
             g_string_erase (str_loc, (gssize) len, -1);
         }
