@@ -890,6 +890,15 @@ cmd_config_save (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
+    if (!g_get_filename_charsets (NULL))
+    {
+        gchar *s = g_filename_to_utf8 (file, -1, NULL, NULL, NULL);
+        g_info ("Configuration saved to file '%s'", s);
+        g_free (s);
+    }
+    else
+        g_info ("Configuration saved to file '%s'", file);
+
     g_free (data);
     if (file != filename)
         g_free (file);
