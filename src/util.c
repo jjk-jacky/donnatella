@@ -172,7 +172,92 @@ donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
     dt = g_date_time_new_from_unix_local ((time_t) ts);
     while ((s = strchr (f, '%')))
     {
-        if (s[1] == 'o' || s[1] == 'O')
+        if (s[1] == 'f')
+        {
+            gint day_dt, day_now;
+            gchar buf[32], *b = buf;
+            const gchar *time_fmt;
+            const gchar *date_fmt;
+
+            if (!now)
+                now = g_date_time_new_now_local ();
+
+            if (options->fluid_time_format)
+                time_fmt = options->fluid_time_format;
+            else
+                time_fmt = "%X";
+
+            if (options->fluid_date_format)
+                date_fmt = options->fluid_date_format;
+            else
+                date_fmt = "%x";
+
+            if (g_date_time_get_year (dt) == g_date_time_get_year (now))
+            {
+                day_dt = g_date_time_get_day_of_year (dt);
+                day_now = g_date_time_get_day_of_year (now);
+
+                if (day_dt == day_now)
+                {
+                    /* same day: just time */
+                    age = g_date_time_format (dt, time_fmt);
+                    l = strlen (age);
+                    goto age_done;
+                }
+            }
+            else if (g_date_time_get_year (dt) == g_date_time_get_year (now) - 1)
+            {
+                gint year;
+
+                /* dt is from the year before, but it might also be e.g. the day
+                 * before */
+
+                day_dt = g_date_time_get_day_of_year (dt);
+                day_now = g_date_time_get_day_of_year (now);
+
+                /* make day_now in the "same year" as day_dt */
+                year = g_date_time_get_year (dt);
+                /* leap year? */
+                if (((year % 4) == 0) && (!(((year % 100) == 0) && ((year % 400) != 0))))
+                    day_now += 366;
+                else
+                    day_now += 365;
+            }
+            else
+                day_now = -1;
+
+            if (day_now > -1 && day_dt == day_now - 1)
+            {
+                /* yesterday */
+                if (G_UNLIKELY (snprintf (buf, 32, "Yesterday %s", time_fmt) >= 32))
+                    b = g_strconcat ("Yesterday ", time_fmt, NULL);
+            }
+            else if (day_now > -1 && day_dt > day_now - 7)
+            {
+                /* weekday */
+                if (G_UNLIKELY (snprintf (buf, 32, "%%%c %s",
+                                (options->fluid_short_weekday) ? 'a' : 'A',
+                                time_fmt) >= 32))
+                    b = g_strconcat (
+                            (options->fluid_short_weekday) ? "%a " : "%A ",
+                            time_fmt,
+                            NULL);
+            }
+            else
+            {
+                /* full date time */
+                if (G_UNLIKELY (snprintf (buf, 32, "%s", date_fmt) >= 32))
+                    b = g_strdup (date_fmt);
+            }
+
+            age = g_date_time_format (dt, b);
+            l = strlen (age);
+
+            if (b != buf)
+                g_free (b);
+            goto age_done;
+        }
+        else if (s[1] == 'o' || s[1] == 'O')
         {
             if (!age)
             {

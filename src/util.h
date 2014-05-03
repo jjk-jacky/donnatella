@@ -32,6 +32,9 @@ typedef struct
 {
     guint        age_span_seconds;
     const gchar *age_fallback_format;
+    const gchar *fluid_time_format;
+    const gchar *fluid_date_format;
+    gboolean     fluid_short_weekday;
 } DonnaTimeOptions;
 
 gsize           donna_print_size                (gchar              *str,

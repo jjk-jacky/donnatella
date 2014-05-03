@@ -49,15 +49,7 @@
  * - <systemitem>property</systemitem> (string) : Name of the property to use.
  *   Defaults to "mtime"
  * - <systemitem>format</systemitem> (string) : A format string on how to show
- *   the date/time. Defaults to "&percnt;F &percnt;T"
- * - <systemitem>age_span_seconds</systemitem> (integer) : Number of seconds for
- *   &percnt;O If the timestamp is within this span, the age will be used, else
- *   <systemitem>age_fallback_format</systemitem> will be used; Defaults to
- *   7*24*3600 (7 days)
- * - <systemitem>age_fallback_format</systemitem> (string) : Format (using
- *   similar syntax as "format" only without &percnt;o/&percnt;O obviously) that
- *   will be used if not in the <systemitem>age_span_seconds</systemitem>;
- *   Defaults to "&percnt;F &percnt;T"
+ *   the date/time. Defaults to "&percnt;f"
  *
  * And a few alternatives used specifically for the tooltip :
  *
@@ -66,16 +58,43 @@
  * - <systemitem>format_tooltip</systemitem>; You can use ":format" to use the
  *   same as <systemitem>format</systemitem>. Defaults to "&percnt;R"
  *
- * Other options (e.g. options related to age) are shared/used for column as
- * well as tooltip.
+ * The following options are shared between column and tooltip :
+ *
+ * - <systemitem>age_span_seconds</systemitem> (integer) : Number of seconds for
+ *   &percnt;O If the timestamp is within this span, the age will be used, else
+ *   <systemitem>age_fallback_format</systemitem> will be used; Defaults to
+ *   7*24*3600 (7 days)
+ * - <systemitem>age_fallback_format</systemitem> (string) : Format (using
+ *   similar syntax as "format" only without &percnt;o/&percnt;O obviously) that
+ *   will be used if not in the <systemitem>age_span_seconds</systemitem>;
+ *   Defaults to "&percnt;F &percnt;T"
+ * - <systemitem>fluid_time_format</systemitem> (string) : The format to use for
+ *   the time when using &percnt;f Note that you cannot use donnatella
+ *   extensions here (e.g. &percnt;o) Defaults to "%R"
+ * - <systemitem>fluid_date_format</systemitem> (string) : The format to use for
+ *   the date when using &percnt;f Note that you cannot use donnatella
+ *   extensions here (e.g. &percnt;o) Defaults to "%F"
+ * - <systemitem>fluid_short_weekday</systemitem> (boolean) : Whether or not to
+ *   use abbreviated version of weekday name when using &percnt;f
+ *   Specifically, whether "&percnt;a" or "&percnt;A" will be used. Defaults to
+ *   false
  *
  * See g_date_time_format() for the supported format specifiers in
  * <systemitem>format</systemitem> and <systemitem>format_tooltip</systemitem>.
- * Additionally, donna adds two extra format specifiers:
+ * Additionally, donnatella adds the following additional format specifiers:
  *
  * - &percnt;o: the "age." It will show how much time has passed since the
  *   timestamp (or is left, should it be in the future). E.g: "1h 23m ago"
  * - &percnt;O: Same as &percnt;o only with a fallback format.
+ * - &percnt;f: aka the "fluid" format. If the timestamp is from today, the time
+ *   format will be used. If it is from yesterday, the time format will be used,
+ *   prefixed with "Yesterday" If it is from one of the last 7 days, the time
+ *   format will be used, prefixed by the weekday name. Else the date format
+ *   will be used. The time and date formats used are defined via options
+ *   <systemitem>fluid_time_format</systemitem> and
+ *   <systemitem>fluid_date_format</systemitem> respectively; And whether the
+ *   weekday names are used in full or abbreviated will be based on option
+ *   <systemitem>fluid_short_weekday</systemitem>
  *
  * </para></refsect2>
  *
@@ -417,6 +436,9 @@ ct_time_get_options (DonnaColumnType    *ct,
         { "format",                     G_TYPE_STRING,      NULL },
         { "age_span_seconds",           G_TYPE_INT,         NULL },
         { "age_fallback_format",        G_TYPE_STRING,      NULL },
+        { "fluid_time_format",          G_TYPE_STRING,      NULL },
+        { "fluid_date_format",          G_TYPE_STRING,      NULL },
+        { "fluid_short_weekday",        G_TYPE_BOOLEAN,     NULL },
         { "property_tooltip",           G_TYPE_STRING,      NULL },
         { "format_tooltip",             G_TYPE_STRING,      NULL }
     };
@@ -438,6 +460,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     gchar *s;
+    gboolean is_set;
     guint sec;
 
     config = donna_app_peek_config (cttime->priv->app);
@@ -469,7 +492,7 @@ ct_time_refresh_data (DonnaColumnType    *ct,
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "time",
-            "format", "%F %T");
+            "format", "%f");
     if (!streq (data->format, s))
     {
         g_free (data->format);
@@ -499,6 +522,39 @@ ct_time_refresh_data (DonnaColumnType    *ct,
     }
     else
         g_free (s);
+
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "time",
+            "fluid_time_format", "%R");
+    if (!streq (data->options.fluid_time_format, s))
+    {
+        g_free ((gchar *) data->options.fluid_time_format);
+        data->options.fluid_time_format = s;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
+    else
+        g_free (s);
+
+    s = donna_config_get_string_column (config, col_name,
+            arr_name, tv_name, is_tree, "time",
+            "fluid_date_format", "%F %R");
+    if (!streq (data->options.fluid_date_format, s))
+    {
+        g_free ((gchar *) data->options.fluid_date_format);
+        data->options.fluid_date_format = s;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
+    else
+        g_free (s);
+
+    is_set = donna_config_get_boolean_column (config, col_name,
+            arr_name, tv_name, is_tree, "time",
+            "fluid_short_weekday", FALSE);
+    if (is_set != data->options.fluid_short_weekday)
+    {
+        data->options.fluid_short_weekday = is_set;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/time",
@@ -2276,6 +2332,66 @@ ct_time_set_option (DonnaColumnType    *ct,
         }
         return DONNA_COLUMN_TYPE_NEED_NOTHING;
     }
+    else if (streq (option, "fluid_time_format"))
+    {
+        gchar *c;
+
+        c = (gchar *) data->options.fluid_time_format;
+        v = (value) ? value : &c;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, "time", &save_location,
+                    option, G_TYPE_STRING, &c, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+        {
+            g_free (c);
+            data->options.fluid_time_format = g_strdup (* (gchar **) value);
+        }
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "fluid_date_format"))
+    {
+        gchar *c;
+
+        c = (gchar *) data->options.fluid_date_format;
+        v = (value) ? value : &c;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, "time", &save_location,
+                    option, G_TYPE_STRING, &c, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+        {
+            g_free (c);
+            data->options.fluid_date_format = g_strdup (* (gchar **) value);
+        }
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
+    else if (streq (option, "fluid_short_weekday"))
+    {
+        gboolean c;
+
+        c = data->options.fluid_short_weekday;
+        v = (value) ? value : &c;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, "time", &save_location,
+                    option, G_TYPE_BOOLEAN, &c, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+            data->options.fluid_short_weekday = * (gboolean *) value;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
 
     g_set_error (error, DONNA_COLUMN_TYPE_ERROR,
             DONNA_COLUMN_TYPE_ERROR_OTHER,
@@ -2323,6 +2439,7 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
 
     return g_strconcat (
             prefix, "format:@", save_location, "<",
+                prefix, "format:@", save_location, ":%f,",
                 prefix, "format:@", save_location, ":%O,",
                 prefix, "format:@", save_location, ":%x %X,",
                 prefix, "format:@", save_location, ":%x,",
@@ -2333,23 +2450,6 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "format:@", save_location, ":%d/%m/%Y %T,",
                 prefix, "format:@", save_location, ":%d/%m/%Y,-,",
                 prefix, "format:@", save_location, ":=>,",
-            prefix, "age_span_seconds:@", save_location, "<",
-                prefix, "age_span_seconds:@", save_location, ":1h,",
-                prefix, "age_span_seconds:@", save_location, ":24h,",
-                prefix, "age_span_seconds:@", save_location, ":48h,",
-                prefix, "age_span_seconds:@", save_location, ":1w,-,",
-                prefix, "age_span_seconds:@", save_location, ":=>,",
-            prefix, "age_fallback_format:@", save_location, "<",
-                prefix, "age_fallback_format:@", save_location, ":%o,",
-                prefix, "age_fallback_format:@", save_location, ":%x %X,",
-                prefix, "age_fallback_format:@", save_location, ":%x,",
-                prefix, "age_fallback_format:@", save_location, ":%X,",
-                prefix, "age_fallback_format:@", save_location, ":%F %T,",
-                prefix, "age_fallback_format:@", save_location, ":%F,",
-                prefix, "age_fallback_format:@", save_location, ":%T,",
-                prefix, "age_fallback_format:@", save_location, ":%d/%m/%Y %T,",
-                prefix, "age_fallback_format:@", save_location, ":%d/%m/%Y,-,",
-                prefix, "age_fallback_format:@", save_location, ":=>,",
             prefix, "property:@", save_location, "<",
                 prefix, "property:@", save_location, ":mtime,",
                 prefix, "property:@", save_location, ":atime,",
@@ -2372,7 +2472,37 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "property_tooltip:@", save_location, ":mtime,",
                 prefix, "property_tooltip:@", save_location, ":atime,",
                 prefix, "property_tooltip:@", save_location, ":ctime,-,",
-                prefix, "property_tooltip:@", save_location, ":custom>",
+                prefix, "property_tooltip:@", save_location, ":custom>,-,",
+            prefix, "age_span_seconds:@", save_location, "<",
+                prefix, "age_span_seconds:@", save_location, ":1h,",
+                prefix, "age_span_seconds:@", save_location, ":24h,",
+                prefix, "age_span_seconds:@", save_location, ":48h,",
+                prefix, "age_span_seconds:@", save_location, ":1w,-,",
+                prefix, "age_span_seconds:@", save_location, ":=>,",
+            prefix, "age_fallback_format:@", save_location, "<",
+                prefix, "age_fallback_format:@", save_location, ":%o,",
+                prefix, "age_fallback_format:@", save_location, ":%x %X,",
+                prefix, "age_fallback_format:@", save_location, ":%x,",
+                prefix, "age_fallback_format:@", save_location, ":%X,",
+                prefix, "age_fallback_format:@", save_location, ":%F %T,",
+                prefix, "age_fallback_format:@", save_location, ":%F,",
+                prefix, "age_fallback_format:@", save_location, ":%T,",
+                prefix, "age_fallback_format:@", save_location, ":%d/%m/%Y %T,",
+                prefix, "age_fallback_format:@", save_location, ":%d/%m/%Y,-,",
+                prefix, "age_fallback_format:@", save_location, ":=>,",
+            prefix, "fluid_time_format:@", save_location, "<",
+                prefix, "fluid_time_format:@", save_location, ":%R,",
+                prefix, "fluid_time_format:@", save_location, ":%T,",
+                prefix, "fluid_time_format:@", save_location, ":%l:%M %p,",
+                prefix, "fluid_time_format:@", save_location, ":%l:%M %P,",
+                prefix, "fluid_time_format:@", save_location, ":%X,-,",
+                prefix, "fluid_time_format:@", save_location, ":=>,",
+            prefix, "fluid_date_format:@", save_location, "<",
+                prefix, "fluid_date_format:@", save_location, ":%F,",
+                prefix, "fluid_date_format:@", save_location, ":%d/%m/%Y,",
+                prefix, "fluid_date_format:@", save_location, ":%x,-,",
+                prefix, "fluid_date_format:@", save_location, ":=>,",
+            prefix, "fluid_short_weekday:@", save_location,
             NULL);
 }
 
@@ -2772,6 +2902,116 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                     extra, item);
             return FALSE;
         }
+    }
+    else if (streq (item, "fluid_time_format"))
+    {
+        gchar *s;
+        guint64 now = (guint64) time (NULL);
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            s = donna_print_time (now, data->options.fluid_time_format,
+                    &data->options);
+            info->name = g_strconcat ("Fluid Time Format: ", s, NULL);
+            g_free (s);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Time format used within %f: ",
+                    data->options.fluid_time_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fluid time format for the column";
+            ask_current = data->options.fluid_time_format;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current format: ",
+                    data->options.fluid_time_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fluid time format for the column";
+            ask_current = data->options.fluid_time_format;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->options.fluid_time_format);
+            info->name = donna_print_time (now, extra, &data->options);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "fluid_date_format"))
+    {
+        gchar *s;
+        guint64 now = (guint64) time (NULL);
+
+        info->is_visible = TRUE;
+        info->is_sensitive = TRUE;
+        if (!extra)
+        {
+            s = donna_print_time (now, data->options.fluid_date_format,
+                    &data->options);
+            info->name = g_strconcat ("Fluid Date Format: ", s, NULL);
+            g_free (s);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Date format used within %f: ",
+                    data->options.fluid_date_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fluid date format for the column";
+            ask_current = data->options.fluid_date_format;
+        }
+        else if (*extra == '=')
+        {
+            if (extra[1] == '\0')
+                info->name = "Custom...";
+            else
+            {
+                info->name = g_strdup (extra + 1);
+                info->free_name = TRUE;
+            }
+            info->desc = g_strconcat ("Current format: ",
+                    data->options.fluid_date_format, NULL);
+            info->free_desc = TRUE;
+            value = NULL;
+            ask_title = "Enter the fluid date format for the column";
+            ask_current = data->options.fluid_date_format;
+        }
+        else
+        {
+            if (*extra == ':')
+                ++extra;
+            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+            info->is_active = streq (extra, data->options.fluid_date_format);
+            info->name = donna_print_time (now, extra, &data->options);
+            info->free_name = TRUE;
+            info->desc = g_strconcat ("Format: ", extra, NULL);
+            info->free_desc = TRUE;
+            value = extra;
+            quote_value = TRUE;
+        }
+    }
+    else if (streq (item, "fluid_short_weekday"))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+        info->is_active = data->options.fluid_short_weekday;
+        info->name = "Use abbreviated weekday name in fluid format (%f)";
+        value = (info->is_active) ? "0" : "1";
     }
     else
     {
