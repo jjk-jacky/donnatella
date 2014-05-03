@@ -156,6 +156,7 @@ get_nb_from_dates (GDateTime **d1,
 gchar *
 donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
 {
+    GDateTime *now = NULL;
     GDateTime *dt;
     gchar *ret;
     const gchar *f = fmt;
@@ -175,19 +176,19 @@ donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
         {
             if (!age)
             {
-                GDateTime *now;
                 GDateTime *d1, *d2;
                 gint count = 0;
                 gint nb[2];
                 const gchar *unit[2];
                 gint cmp;
 
-                now = g_date_time_new_now_local ();
+                if (!now)
+                    now = g_date_time_new_now_local ();
                 cmp = g_date_time_compare (dt, now);
                 if (cmp == 0)
                 {
                     d1 = g_date_time_ref (dt);
-                    d2 = now;
+                    d2 = g_date_time_ref (now);
                 }
                 else
                 {
@@ -199,11 +200,11 @@ donna_print_time (guint64 ts, const gchar *fmt, DonnaTimeOptions *options)
                     if (cmp == -1)
                     {
                         d1 = g_date_time_ref (dt);
-                        d2 = now;
+                        d2 = g_date_time_ref (now);
                     }
                     else
                     {
-                        d1 = now;
+                        d1 = g_date_time_ref (now);
                         d2 = g_date_time_ref (dt);
                     }
 
@@ -366,7 +367,7 @@ age_done:
 
             /* points to s but in tmp */
             t = tmp + extra + (s - fmt);
-            /* move the part after to the right (i.e. maje space for age) */
+            /* move the part after to the right (i.e. make space for age) */
             if (G_LIKELY (l > 2))
                 memmove (t + l, t + 2, strlen (t + 2) + 1 /* include NUL */);
             /* put age in */
@@ -384,6 +385,8 @@ age_done:
     if (age)
         g_free (age);
     g_date_time_unref (dt);
+    if (now)
+        g_date_time_unref (now);
     return ret;
 }
 
