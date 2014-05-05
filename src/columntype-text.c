@@ -30,6 +30,7 @@
 #include "app.h"
 #include "conf.h"
 #include "sort.h"
+#include "util.h"
 #include "macros.h"
 
 /**
@@ -45,6 +46,8 @@
  *
  * - <systemitem>property</systemitem> (string) : Name of the property to show;
  *   Defaults to "name"
+ * - <systemitem>align</systemitem> (integer:align) : Where to align the text in
+ *   the column, can be "left" (default), "center" or "right"
  * - <systemitem>natural_order</systemitem> (boolean) : Whether to use natural
  *   order (1, 2, 11) or not.
  * - <systemitem>dot_first</systemitem> (boolean) : Whether to put "dot files"
@@ -84,6 +87,7 @@ enum
 
 struct tv_col_data
 {
+    DonnaAlign        align;
     gchar            *property;
     gchar            *property_tooltip;
     DonnaSortOptions  options;
@@ -93,6 +97,28 @@ struct _DonnaColumnTypeTextPrivate
 {
     DonnaApp                    *app;
 };
+
+/* internal from columntype.c */
+gboolean
+_donna_context_add_items_for_extra (GString              *str,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   const gchar          *prefix,
+                                   const gchar           *item,
+                                   const gchar          *save_location,
+                                   GError              **error);
+gboolean
+_donna_context_set_item_from_extra (DonnaContextInfo     *info,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   gboolean              is_column_option,
+                                   const gchar          *option,
+                                   const gchar          *item,
+                                   gintptr               current,
+                                   const gchar          *save_location,
+                                   GError              **error);
 
 static void             ct_text_set_property        (GObject            *object,
                                                      guint               prop_id,
@@ -303,6 +329,7 @@ ct_text_get_options (DonnaColumnType    *ct,
                      guint              *nb_options)
 {
     static DonnaColumnOptionInfo o[] = {
+        { "align",              G_TYPE_INT,         "align" },
         { "property",           G_TYPE_STRING,      NULL },
         { "property_tooltip",   G_TYPE_STRING,      NULL },
         { "natural_order",      G_TYPE_BOOLEAN,     NULL },
@@ -346,6 +373,7 @@ ct_text_refresh_data (DonnaColumnType    *ct,
     struct tv_col_data *data;
     DonnaColumnTypeNeed need = DONNA_COLUMN_TYPE_NEED_NOTHING;
     gchar *s;
+    guint align;
 
     config = donna_app_peek_config (cttext->priv->app);
 
@@ -363,6 +391,15 @@ ct_text_refresh_data (DonnaColumnType    *ct,
     }
     else
         g_free (s);
+
+    align = (guint) donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, "column_types/text",
+            "align", DONNA_ALIGN_LEFT);
+    if (align != data->align)
+    {
+        data->align = align;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, NULL, "property_tooltip", ":property");
@@ -594,6 +631,7 @@ ct_text_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
+    gdouble xalign;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TEXT (ct), NULL);
 
@@ -621,13 +659,26 @@ ct_text_render (DonnaColumnType    *ct,
         return NULL;
     }
 
+    switch (data->align)
+    {
+        case DONNA_ALIGN_LEFT:
+            xalign = 0.0;
+            break;
+        case DONNA_ALIGN_CENTER:
+            xalign = 0.5;
+            break;
+        case DONNA_ALIGN_RIGHT:
+            xalign = 1.0;
+            break;
+    }
     g_object_set (renderer,
             "visible",      TRUE,
             "text",         g_value_get_string (&value),
             "ellipsize",    PANGO_ELLIPSIZE_END,
             "ellipsize-set",TRUE,
+            "xalign",       xalign,
             NULL);
-    donna_renderer_set (renderer, "ellipsize-set", NULL);
+    donna_renderer_set (renderer, "ellipsize-set", "xalign", NULL);
     g_value_unset (&value);
     return NULL;
 }
@@ -809,6 +860,25 @@ ct_text_set_option (DonnaColumnType    *ct,
         }
         return DONNA_COLUMN_TYPE_NEED_RESORT | DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
+    else if (streq (option, "align"))
+    {
+        gint i;
+
+        i = (gint) data->align;
+        v = (value) ? value : &i;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
+                    &save_location,
+                    option, G_TYPE_INT, &i, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+            data->align = (guint) * (gint *) value;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
     else if (streq (option, "property_tooltip"))
     {
         v = (value) ? value :
@@ -956,6 +1026,7 @@ ct_text_get_context_alias (DonnaColumnType   *ct,
                            const gchar       *prefix,
                            GError           **error)
 {
+    GString *str;
     const gchar *save_location;
 
     if (!streq (alias, "options"))
@@ -981,8 +1052,21 @@ ct_text_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    return g_strconcat (
+    str = g_string_new (NULL);
+    donna_g_string_append_concat (str,
             prefix, "property:@", save_location, ",",
+            NULL);
+    if (!_donna_context_add_items_for_extra (str,
+                donna_app_peek_config (((DonnaColumnTypeText *) ct)->priv->app),
+                "align", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                prefix, "align", save_location, error))
+    {
+        g_prefix_error (error, "ColumnType '%s': Failed to process item '%s': ",
+                "text", "align");
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+    donna_g_string_append_concat (str, ",-,",
             prefix, "property_tooltip:@", save_location, ",-,",
             prefix, "natural_order:@", save_location, ",",
             prefix, "dot_first:@", save_location, ",",
@@ -990,6 +1074,7 @@ ct_text_get_context_alias (DonnaColumnType   *ct,
             prefix, "dot_mixed:@", save_location, ",",
             prefix, "ignore_spunct:@", save_location,
             NULL);
+    return g_string_free (str, FALSE);
 }
 
 static gboolean
@@ -1023,6 +1108,39 @@ ct_text_get_context_item_info (DonnaColumnType   *ct,
         info->free_name = TRUE;
         ask_title = "Enter the name of the property";
         ask_current = data->property;
+    }
+    else if (streqn (item, "align", 5))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        if (item[5] == '\0')
+        {
+            info->name = "Alignment";
+            info->submenus = 1;
+            return TRUE;
+        }
+        else if (item[5] == '.')
+        {
+            if (!_donna_context_set_item_from_extra (info,
+                        donna_app_peek_config (((DonnaColumnTypeText *) ct)->priv->app),
+                        "align", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                        TRUE, "align",
+                        item + 6, data->align, save_location, error))
+            {
+                g_prefix_error (error,
+                        "ColumnType '%s': Failed to get item '%s': ",
+                        "text", item);
+                return FALSE;
+            }
+            return TRUE;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "ColumnType '%s': No such item: '%s'",
+                    "text", item);
+            return FALSE;
+        }
     }
     else if (streq (item, "property_tooltip"))
     {
