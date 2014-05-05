@@ -225,6 +225,28 @@ struct _DonnaColumnTypeTimePrivate
     DonnaApp *app;
 };
 
+/* internal from columntype.c */
+gboolean
+_donna_context_add_items_for_extra (GString              *str,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   const gchar          *prefix,
+                                   const gchar           *item,
+                                   const gchar          *save_location,
+                                   GError              **error);
+gboolean
+_donna_context_set_item_from_extra (DonnaContextInfo     *info,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   gboolean              is_column_option,
+                                   const gchar          *option,
+                                   const gchar          *item,
+                                   gintptr               current,
+                                   const gchar          *save_location,
+                                   GError              **error);
+
 static void             ct_time_set_property        (GObject            *object,
                                                      guint               prop_id,
                                                      const GValue       *value,
@@ -2458,6 +2480,8 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                            const gchar       *prefix,
                            GError           **error)
 {
+    DonnaConfig *config;
+    GString *str;
     const gchar *save_location;
 
     if (!streq (alias, "options"))
@@ -2483,7 +2507,9 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    return g_strconcat (
+    config = donna_app_peek_config (((DonnaColumnTypeTime *) ct)->priv->app);
+    str = g_string_new (NULL);
+    donna_g_string_append_concat (str,
             prefix, "format:@", save_location, "<",
                 prefix, "format:@", save_location, ":%f,",
                 prefix, "format:@", save_location, ":%O,",
@@ -2501,10 +2527,17 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "property:@", save_location, ":atime,",
                 prefix, "property:@", save_location, ":ctime,-,",
                 prefix, "property:@", save_location, ":custom>,",
-            prefix, "align:@", save_location, "<",
-                prefix, "align:@", save_location, ":left,",
-                prefix, "align:@", save_location, ":center,",
-                prefix, "align:@", save_location, ":right>,-,",
+                NULL);
+    if (!_donna_context_add_items_for_extra (str, config,
+                "align", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                prefix, "align", save_location, error))
+    {
+        g_prefix_error (error, "ColumnType '%s': Failed to process item '%s': ",
+                "time", "align");
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+    donna_g_string_append_concat (str, ",-,",
             prefix, "format_tooltip:@", save_location, "<",
                 prefix, "format_tooltip:@", save_location, "::format,-,",
                 prefix, "format_tooltip:@", save_location, ":%O,",
@@ -2554,6 +2587,7 @@ ct_time_get_context_alias (DonnaColumnType   *ct,
                 prefix, "fluid_date_format:@", save_location, ":=>,",
             prefix, "fluid_short_weekday:@", save_location,
             NULL);
+    return g_string_free (str, FALSE);
 }
 
 static gboolean
@@ -2568,6 +2602,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
                                DonnaContextInfo  *info,
                                GError           **error)
 {
+    DonnaConfig *config;
     struct tv_col_data *data = _data;
     gchar buf[10];
     const gchar *value;
@@ -2581,6 +2616,7 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
     if (!save_location)
         return FALSE;
 
+    config = donna_app_peek_config (((DonnaColumnTypeTime *) ct)->priv->app);
     if (streq (item, "property"))
     {
         info->is_visible = TRUE;
@@ -2831,42 +2867,35 @@ ct_time_get_context_item_info (DonnaColumnType   *ct,
             quote_value = TRUE;
         }
     }
-    else if (streq (item, "align"))
+    else if (streqn (item, "align", 5))
     {
         info->is_visible = info->is_sensitive = TRUE;
-        if (!extra)
+        if (item[5] == '\0')
         {
             info->name = "Alignment";
             info->submenus = 1;
             return TRUE;
         }
-        else if (streq (extra, "left"))
+        else if (item[5] == '.')
         {
-            info->name = "Left";
-            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
-            info->is_active = data->align == DONNA_ALIGN_LEFT;
-            value = extra;
-        }
-        else if (streq (extra, "center"))
-        {
-            info->name = "Center";
-            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
-            info->is_active = data->align == DONNA_ALIGN_CENTER;
-            value = extra;
-        }
-        else if (streq (extra, "right"))
-        {
-            info->name = "Right";
-            info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
-            info->is_active = data->align == DONNA_ALIGN_RIGHT;
-            value = extra;
+            if (!_donna_context_set_item_from_extra (info, config,
+                        "align", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                        TRUE, "align",
+                        item + 6, data->align, save_location, error))
+            {
+                g_prefix_error (error,
+                        "ColumnType '%s': Failed to get item '%s': ",
+                        "time", item);
+                return FALSE;
+            }
+            return TRUE;
         }
         else
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "ColumnType 'time': Invalid extra '%s' for item '%s'",
-                    extra, item);
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "ColumnType '%s': No such item: '%s'",
+                    "time", item);
             return FALSE;
         }
     }
