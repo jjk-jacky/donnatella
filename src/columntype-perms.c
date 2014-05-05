@@ -53,6 +53,8 @@
  *
  * - <systemitem>format</systemitem> (string) : A format string defining what to
  *   show and how. Defaults to "&percnt;S"
+ * - <systemitem>align</systemitem> (integer:align) : Where to align the text in
+ *   the column, can be "left" (default), "center" or "right"
  * - <systemitem>format_tooltip</systemitem> (string) : Same as format only for
  *   the tooltip.
  * - <systemitem>color_user</systemitem> (string) : Color used on user name
@@ -163,6 +165,7 @@ enum
 
 struct tv_col_data
 {
+    DonnaAlign align;
     gchar *format;
     gchar *format_tooltip;
     gchar *color_user;
@@ -538,6 +541,7 @@ ct_perms_get_options (DonnaColumnType    *ct,
                       guint              *nb_options)
 {
     static DonnaColumnOptionInfo o[] = {
+        { "align",              G_TYPE_INT,         "align" },
         { "format",             G_TYPE_STRING,      NULL },
         { "format_tooltip",     G_TYPE_STRING,      NULL },
         { "color_user",         G_TYPE_STRING,      NULL },
@@ -582,6 +586,15 @@ ct_perms_refresh_data (DonnaColumnType    *ct,
     }
     else
         g_free (s);
+
+    i = donna_config_get_int_column (config, col_name,
+            arr_name, tv_name, is_tree, "column_types/perms",
+            "align", DONNA_ALIGN_LEFT);
+    if ((guint) i != data->align)
+    {
+        data->align = (guint) i;
+        need = DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
 
     s = donna_config_get_string_column (config, col_name,
             arr_name, tv_name, is_tree, "column_types/perms",
@@ -2125,6 +2138,7 @@ ct_perms_render (DonnaColumnType    *ct,
     uid_t uid = 0;
     gid_t gid = 0;
     gchar buf[20], *b = buf;
+    gdouble xalign;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
 
@@ -2184,13 +2198,26 @@ ct_perms_render (DonnaColumnType    *ct,
 
     b = format_perms ((DonnaColumnTypePerms *) ct, data, data->format,
             mode, uid, gid, b, 20);
+    switch (data->align)
+    {
+        case DONNA_ALIGN_LEFT:
+            xalign = 0.0;
+            break;
+        case DONNA_ALIGN_CENTER:
+            xalign = 0.5;
+            break;
+        case DONNA_ALIGN_RIGHT:
+            xalign = 1.0;
+            break;
+    }
     g_object_set (renderer,
             "visible",      TRUE,
             "markup",       b,
             "ellipsize",    PANGO_ELLIPSIZE_END,
             "ellipsize-set",TRUE,
+            "xalign",       xalign,
             NULL);
-    donna_renderer_set (renderer, "ellipsize-set", NULL);
+    donna_renderer_set (renderer, "ellipsize-set", "xalign", NULL);
     if (b != buf)
         g_free (b);
     return NULL;
@@ -2715,6 +2742,25 @@ ct_perms_set_option (DonnaColumnType    *ct,
         }
         return DONNA_COLUMN_TYPE_NEED_REDRAW;
     }
+    else if (streq (option, "align"))
+    {
+        gint c;
+
+        c = (gint) data->align;
+        v = (value) ? value : &c;
+        if (!DONNA_COLUMN_TYPE_GET_INTERFACE (ct)->helper_set_option (ct,
+                    col_name, arr_name, tv_name, is_tree, "column_types/perms",
+                    &save_location,
+                    option, G_TYPE_INT, &c, v, error))
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (save_location != DONNA_COLUMN_OPTION_SAVE_IN_MEMORY)
+            return DONNA_COLUMN_TYPE_NEED_NOTHING;
+
+        if (value)
+            data->align = (guint) * (gint *) value;
+        return DONNA_COLUMN_TYPE_NEED_REDRAW;
+    }
     else if (streq (option, "format_tooltip"))
     {
         if (value)
@@ -2885,6 +2931,17 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
                 prefix, "format:@", save_location, ":%G,",
                 prefix, "format:@", save_location, ":%H,-,",
                 prefix, "format:@", save_location, ":=>,",
+                NULL);
+    if (!_donna_context_add_items_for_extra (str, config,
+                "align", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                prefix, "align", save_location, error))
+    {
+        g_prefix_error (error, "ColumnType '%s': Failed to process item '%s': ",
+                "perms", "align");
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+    donna_g_string_append_concat (str, ",-,",
             prefix, "format_tooltip:@", save_location, "<",
                 prefix, "format_tooltip:@", save_location, ":%S %V:%H,",
                 prefix, "format_tooltip:@", save_location, ":%p %V:%H,",
@@ -2897,7 +2954,7 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
                 prefix, "format_tooltip:@", save_location, ":%V,",
                 prefix, "format_tooltip:@", save_location, ":%G,",
                 prefix, "format_tooltip:@", save_location, ":%H,-,",
-                prefix, "format_tooltip:@", save_location, ":=>,",
+                prefix, "format_tooltip:@", save_location, ":=>,-,",
             prefix, "color_user:@", save_location, "<",
                 prefix, "color_user:@", save_location, ":blue,",
                 prefix, "color_user:@", save_location, ":green,",
@@ -3031,6 +3088,39 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             info->free_desc = TRUE;
             value = extra;
             quote_value = TRUE;
+        }
+    }
+    else if (streqn (item, "align", 5))
+    {
+        info->is_visible = info->is_sensitive = TRUE;
+        if (item[5] == '\0')
+        {
+            info->name = "Alignment";
+            info->submenus = 1;
+            return TRUE;
+        }
+        else if (item[5] == '.')
+        {
+            if (!_donna_context_set_item_from_extra (info,
+                        donna_app_peek_config (priv->app),
+                        "align", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                        TRUE, "align",
+                        item + 6, data->align, save_location, error))
+            {
+                g_prefix_error (error,
+                        "ColumnType '%s': Failed to get item '%s': ",
+                        "perms", item);
+                return FALSE;
+            }
+            return TRUE;
+        }
+        else
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "ColumnType '%s': No such item: '%s'",
+                    "perms", item);
+            return FALSE;
         }
     }
     else if (streq (item, "format_tooltip"))
