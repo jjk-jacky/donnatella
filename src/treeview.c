@@ -1452,6 +1452,26 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
                                       const gchar *def_cat,
                                       const gchar *option,
                                       guint        from);
+gboolean
+_donna_context_add_items_for_extra (GString              *str,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   const gchar          *prefix,
+                                   const gchar           *item,
+                                   const gchar          *save_location,
+                                   GError              **error);
+gboolean
+_donna_context_set_item_from_extra (DonnaContextInfo     *info,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   gboolean              is_column_option,
+                                   const gchar          *option,
+                                   const gchar          *item,
+                                   gintptr               current,
+                                   const gchar          *save_location,
+                                   GError              **error);
 
 /* internal for provider-config.c */
 gboolean
@@ -17756,84 +17776,6 @@ context_get_selection (struct conv *conv, GError **error)
     return conv->selection;
 }
 
-static gboolean
-_add_items_for_extra (DonnaTreeView         *tree,
-                      GString               *str,
-                      const gchar           *name,
-                      DonnaConfigExtraType   type,
-                      const gchar           *item,
-                      const gchar           *save_location,
-                      GError               **error)
-{
-    DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaConfig *config = donna_app_peek_config (priv->app);
-    const DonnaConfigExtra *extra;
-    gint i;
-
-    extra = donna_config_get_extra (config, name, error);
-    if (!extra)
-    {
-        g_prefix_error (error, "TreeView '%s': Failed to resolve alias 'tv_options': "
-                "Failed to get extras '%s' from config: ",
-                priv->name, name);
-        return FALSE;
-    }
-
-    if (extra->any.type != type)
-    {
-        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to resolve alias 'tv_options': "
-                "Invalid extra type for '%s' in config",
-                priv->name, name);
-        return FALSE;
-    }
-
-    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
-    {
-        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
-
-        donna_g_string_append_concat (str, ":tv_options.", item, "<", NULL);
-        for (i = 0; i < e->nb_items; ++i)
-            donna_g_string_append_concat (str, ":tv_options.", item, ".",
-                    e->items[i].in_file, ":@", save_location, ",", NULL);
-        g_string_truncate (str, str->len - 1);
-        g_string_append_c (str, '>');
-    }
-    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
-    {
-        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
-
-        donna_g_string_append_concat (str, ":tv_options.", item, "<", NULL);
-        for (i = 0; i < e->nb_items; ++i)
-            donna_g_string_append_concat (str, ":tv_options.", item, ".",
-                    e->items[i].in_file, ":@", save_location, ",", NULL);
-        g_string_truncate (str, str->len - 1);
-        g_string_append_c (str, '>');
-    }
-    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
-    {
-        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
-
-        donna_g_string_append_concat (str, ":tv_options.", item, "<", NULL);
-        for (i = 0; i < e->nb_items; ++i)
-            donna_g_string_append_concat (str, ":tv_options.", item, ".",
-                    e->items[i].value, ":@", save_location, ",", NULL);
-        g_string_truncate (str, str->len - 1);
-        g_string_append_c (str, '>');
-    }
-    else
-    {
-        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to resolve alias 'tv_options': "
-                "Unexpected extra type", priv->name);
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
 static gchar *
 tree_context_get_alias (const gchar             *alias,
                         const gchar             *extra,
@@ -18043,6 +17985,7 @@ tree_context_get_alias (const gchar             *alias,
     }
     else if (streq (alias, "tv_options"))
     {
+        DonnaConfig *config = donna_app_peek_config (priv->app);
         GString *str;
         GPtrArray *arr; /* to get list of key/click modes */
 
@@ -18062,19 +18005,23 @@ tree_context_get_alias (const gchar             *alias,
         str = g_string_new (NULL);
         donna_g_string_append_concat (str,
                 ":tv_options.show_hidden:@", extra, ",", NULL);
-        if (!_add_items_for_extra (tree, str,
+        if (!_donna_context_add_items_for_extra (str, config,
                     "sg", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                    "sort_groups", extra, error))
+                    ":tv_options.", "sort_groups", extra, error))
         {
+            g_prefix_error (error, "TreeView '%s': Failed to process item '%s': ",
+                    priv->name, "tv_options.sort_groups");
             g_string_free (str, TRUE);
             return FALSE;
         }
 #ifdef GTK_IS_JJK
         g_string_append_c (str, ',');
-        if (!_add_items_for_extra (tree, str,
+        if (!_donna_context_add_items_for_extra (str, config,
                     "highlight", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                    "select_highlight", extra, error))
+                    ":tv_options.", "select_highlight", extra, error))
         {
+            g_prefix_error (error, "TreeView '%s': Failed to process item '%s': ",
+                    priv->name, "tv_options.select_highlight");
             g_string_free (str, TRUE);
             return FALSE;
         }
@@ -18089,10 +18036,12 @@ tree_context_get_alias (const gchar             *alias,
                             ":tv_options.sync_with.custom:@", extra, ",-,"
                             ":tv_options.auto_focus_sync:@", extra, ">,",
                             NULL);
-            if (!_add_items_for_extra (tree, str,
+            if (!_donna_context_add_items_for_extra (str, config,
                         "sync", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                        "sync_mode", extra, error))
+                        ":tv_options.", "sync_mode", extra, error))
             {
+                g_prefix_error (error, "TreeView '%s': Failed to process item '%s': ",
+                        priv->name, "tv_options.sync_mode");
                 g_string_free (str, TRUE);
                 return FALSE;
             }
@@ -18102,10 +18051,12 @@ tree_context_get_alias (const gchar             *alias,
                     ":tv_options.sync_scroll:@", extra, ">>", NULL);
 
             g_string_append_c (str, ',');
-            if (!_add_items_for_extra (tree, str,
+            if (!_donna_context_add_items_for_extra (str, config,
                         "visuals", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
-                        "node_visuals", extra, error))
+                        ":tv_options.", "node_visuals", extra, error))
             {
+                g_prefix_error (error, "TreeView '%s': Failed to process item '%s': ",
+                        priv->name, "tv_options.node_visuals");
                 g_string_free (str, TRUE);
                 return FALSE;
             }
@@ -18121,10 +18072,12 @@ tree_context_get_alias (const gchar             *alias,
                         NULL);
 
         g_string_append (str, ",-,");
-        if (!_add_items_for_extra (tree, str,
+        if (!_donna_context_add_items_for_extra (str, config,
                     "node-type", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                    "node_types", extra, error))
+                    ":tv_options.", "node_types", extra, error))
         {
+            g_prefix_error (error, "TreeView '%s': Failed to process item '%s': ",
+                    priv->name, "tv_options.node_types");
             g_string_free (str, TRUE);
             return FALSE;
         }
@@ -18160,10 +18113,12 @@ tree_context_get_alias (const gchar             *alias,
         }
 
         g_string_append (str, ",-,");
-        if (!_add_items_for_extra (tree, str,
+        if (!_donna_context_add_items_for_extra (str, config,
                     "save-location", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                    "default_save_location", extra, error))
+                    ":tv_options.", "default_save_location", extra, error))
         {
+            g_prefix_error (error, "TreeView '%s': Failed to process item '%s': ",
+                    priv->name, "tv_options.default_save_location");
             g_string_free (str, TRUE);
             return FALSE;
         }
@@ -18175,152 +18130,6 @@ tree_context_get_alias (const gchar             *alias,
             DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ALIAS,
             "Unknown internal alias '%s'", alias);
     return NULL;
-}
-
-static gboolean
-_set_item_from_extra (DonnaTreeView         *tree,
-                      DonnaContextInfo      *info,
-                      gintptr                current,
-                      const gchar           *name,
-                      DonnaConfigExtraType   type,
-                      const gchar           *parent,
-                      const gchar           *item,
-                      const gchar           *save_location,
-                      GError               **error)
-{
-    DonnaTreeViewPrivate *priv = tree->priv;
-    DonnaConfig *config = donna_app_peek_config (priv->app);
-    const DonnaConfigExtra *extra;
-    gint i;
-
-    extra = donna_config_get_extra (config, name, error);
-    if (!extra)
-    {
-        g_prefix_error (error, "TreeView '%s': Failed to get item 'tv_options.%s.%s': "
-                "Failed to get extras '%s' from config: ",
-                priv->name, parent, item, name);
-        return FALSE;
-    }
-
-    if (extra->any.type != type)
-    {
-        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to get item 'tv_options.%s.%s': "
-                "Invalid extra type for '%s' in config",
-                priv->name, parent, item, name);
-        return FALSE;
-    }
-
-    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
-    {
-        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
-
-        for (i = 0; i < e->nb_items; ++i)
-        {
-            if (streq (e->items[i].in_file, item))
-            {
-                info->name = g_strdup (
-                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
-                info->free_name = TRUE;
-                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-                info->trigger = g_strconcat (
-                        "command:tv_set_option (%o,", parent, ",",
-                        e->items[i].in_file, ",",
-                        (save_location) ? save_location : "", ")", NULL);
-                info->free_trigger = TRUE;
-                if (current == e->items[i].value)
-                    info->is_active = TRUE;
-                break;
-            }
-        }
-
-        if (i >= e->nb_items)
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "TreeView '%s': No item 'tv_options.%s.%s': "
-                    "No such value in extra '%s'",
-                    priv->name, parent, item, name);
-            return FALSE;
-        }
-    }
-    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
-    {
-        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
-
-        for (i = 0; i < e->nb_items; ++i)
-        {
-            if (streq (e->items[i].in_file, item))
-            {
-                info->name = g_strdup (
-                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
-                info->free_name = TRUE;
-                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
-                info->trigger = g_strconcat (
-                        "command:tv_set_option (%o,", parent, ",",
-                        "\",", e->items[i].in_file, "\",",
-                        (save_location) ? save_location : "", ")", NULL);
-                info->free_trigger = TRUE;
-                if (current & e->items[i].value)
-                    info->is_active = TRUE;
-                break;
-            }
-        }
-
-        if (i >= e->nb_items)
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "TreeView '%s': No item 'tv_options.%s.%s': "
-                    "No such value in extra '%s'",
-                    priv->name, parent, item, name);
-            return FALSE;
-        }
-    }
-    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
-    {
-        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
-
-        for (i = 0; i < e->nb_items; ++i)
-        {
-            if (streq (e->items[i].value, item))
-            {
-                info->name = g_strdup (
-                        (e->items[i].label) ? e->items[i].label : e->items[i].value);
-                info->free_name = TRUE;
-                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-                info->trigger = g_strconcat (
-                        "command:tv_set_option (%o,", parent, ",",
-                        e->items[i].value, ",",
-                        (save_location) ? save_location : "", ")", NULL);
-                info->free_trigger = TRUE;
-                if (streq ((gchar *) current, e->items[i].value))
-                    info->is_active = TRUE;
-                break;
-            }
-        }
-
-        if (i >= e->nb_items)
-        {
-            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
-                    "TreeView '%s': No item 'tv_options.%s.%s': "
-                    "No such value in extra '%s'",
-                    priv->name, parent, item, name);
-            return FALSE;
-        }
-    }
-    else
-    {
-        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                DONNA_CONTEXT_MENU_ERROR_OTHER,
-                "TreeView '%s': Failed to resolve alias 'tv_options': "
-                "Unexpected extra type", priv->name);
-        return FALSE;
-    }
-
-    return TRUE;
 }
 
 static gboolean
@@ -19070,6 +18879,7 @@ tree_context_get_item_info (const gchar             *item,
     }
     else if (streqn (item, "tv_options.", 11))
     {
+        DonnaConfig *config = donna_app_peek_config (priv->app);
         const gchar *save = "";
 
         if (extra && *extra == '@')
@@ -19152,10 +18962,16 @@ tree_context_get_item_info (const gchar             *item,
             }
             else if (item[10] == '.')
             {
-                if (!_set_item_from_extra (tree, info, priv->node_types,
+                if (!_donna_context_set_item_from_extra (info, config,
                             "node-type", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "node_types", item + 11, save, error))
+                            FALSE, "node_types",
+                            item + 11, priv->node_types, save, error))
+                {
+                    g_prefix_error (error,
+                            "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                            priv->name, item);
                     return FALSE;
+                }
 
                 info->is_visible = info->is_sensitive = TRUE;
                 return TRUE;
@@ -19184,10 +19000,16 @@ tree_context_get_item_info (const gchar             *item,
             }
             else if (item[11] == '.')
             {
-                if (!_set_item_from_extra (tree, info, priv->sort_groups,
+                if (!_donna_context_set_item_from_extra (info, config,
                             "sg", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "sort_groups", item + 12, save, error))
+                            FALSE, "sort_groups",
+                            item + 12, priv->sort_groups, save, error))
+                {
+                    g_prefix_error (error,
+                            "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                            priv->name, item);
                     return FALSE;
+                }
 
                 info->is_visible = info->is_sensitive = TRUE;
                 return TRUE;
@@ -19205,10 +19027,16 @@ tree_context_get_item_info (const gchar             *item,
             }
             else if (item[16] == '.')
             {
-                if (!_set_item_from_extra (tree, info, priv->select_highlight,
+                if (!_donna_context_set_item_from_extra (info, config,
                             "highlight", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "select_highlight", item + 17, save, error))
+                            FALSE, "select_highlight",
+                            item + 17, priv->select_highlight, save, error))
+                {
+                    g_prefix_error (error,
+                            "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                            priv->name, item);
                     return FALSE;
+                }
 
                 info->is_visible = info->is_sensitive = TRUE;
                 return TRUE;
@@ -19275,10 +19103,16 @@ tree_context_get_item_info (const gchar             *item,
             }
             else if (item[21] == '.')
             {
-                if (!_set_item_from_extra (tree, info, priv->default_save_location,
+                if (!_donna_context_set_item_from_extra (info, config,
                             "save-location", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                            "default_save_location", item + 22, save, error))
+                            FALSE, "default_save_location",
+                            item + 22, priv->default_save_location, save, error))
+                {
+                    g_prefix_error (error,
+                            "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                            priv->name, item);
                     return FALSE;
+                }
 
                 info->is_visible = info->is_sensitive = TRUE;
                 return TRUE;
@@ -19359,10 +19193,16 @@ tree_context_get_item_info (const gchar             *item,
                 }
                 else if (item[9] == '.')
                 {
-                    if (!_set_item_from_extra (tree, info, priv->sync_mode,
+                    if (!_donna_context_set_item_from_extra (info, config,
                                 "sync", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
-                                "sync_mode", item + 10, save, error))
+                                FALSE, "sync_mode",
+                                item + 10, priv->sync_mode, save, error))
+                    {
+                        g_prefix_error (error,
+                                "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                                priv->name, item);
                         return FALSE;
+                    }
 
                     item += 10;
                     if (streq (item, "nodes"))
@@ -19403,10 +19243,16 @@ tree_context_get_item_info (const gchar             *item,
                 }
                 else if (item[12] == '.')
                 {
-                    if (!_set_item_from_extra (tree, info, priv->node_visuals,
+                    if (!_donna_context_set_item_from_extra (info, config,
                                 "visuals", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
-                                "node_visuals", item + 13, save, error))
+                                FALSE, "node_visuals",
+                                item + 13, priv->node_visuals, save, error))
+                    {
+                        g_prefix_error (error,
+                                "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                                priv->name, item);
                         return FALSE;
+                    }
 
                     info->is_visible = info->is_sensitive = TRUE;
                     return TRUE;
@@ -19456,10 +19302,16 @@ tree_context_get_item_info (const gchar             *item,
                 }
                 else if (item[13] == '.')
                 {
-                    if (!_set_item_from_extra (tree, info, priv->goto_item_set,
+                    if (!_donna_context_set_item_from_extra (info, config,
                                 "tree-set", DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS,
-                                "goto_item_set", item + 14, save, error))
+                                FALSE, "goto_item_set",
+                                item + 14, priv->goto_item_set, save, error))
+                    {
+                        g_prefix_error (error,
+                                "TreeView '%s': Failed to get item 'tv_options.%s': ",
+                                priv->name, item);
                         return FALSE;
+                    }
 
                     info->is_visible = info->is_sensitive = TRUE;
                     return TRUE;

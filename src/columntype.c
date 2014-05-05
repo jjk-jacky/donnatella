@@ -68,6 +68,28 @@ _donna_column_type_ask_save_location (DonnaApp     *app,
                                       const gchar  *def_cat,
                                       const gchar  *option,
                                       guint         from);
+/* internal: used by treeview.c and any columntype implementations with options
+ * using an extra for value */
+gboolean
+_donna_context_add_items_for_extra (GString              *str,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   const gchar          *prefix,
+                                   const gchar           *item,
+                                   const gchar          *save_location,
+                                   GError              **error);
+gboolean
+_donna_context_set_item_from_extra (DonnaContextInfo    *info,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   gboolean              is_column_option,
+                                   const gchar          *option,
+                                   const gchar          *item,
+                                   gintptr               current,
+                                   const gchar          *save_location,
+                                   GError              **error);
 
 /* internal; from provider-config.c */
 guint
@@ -80,6 +102,223 @@ _donna_config_get_from_column (DonnaConfig *config,
                                const gchar *opt_name,
                                GType        type);
 
+
+/* internal helpers to handle aliases/items for treeview/column options whose
+ * values are extras */
+
+gboolean
+_donna_context_add_items_for_extra (GString             *str,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   const gchar          *prefix,
+                                   const gchar          *item,
+                                   const gchar          *save_location,
+                                   GError              **error)
+{
+    const DonnaConfigExtra *extra;
+    gint i;
+
+    extra = donna_config_get_extra (config, name, error);
+    if (!extra)
+    {
+        g_prefix_error (error, "Failed to get extra '%s' from config: ", name);
+        return FALSE;
+    }
+
+    if (extra->any.type != type)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Invalid extra type for '%s' in config", name);
+        return FALSE;
+    }
+
+    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+    {
+        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
+
+        donna_g_string_append_concat (str, prefix, item, "<", NULL);
+        for (i = 0; i < e->nb_items; ++i)
+            donna_g_string_append_concat (str, prefix, item, ".",
+                    e->items[i].in_file, ":@", save_location, ",", NULL);
+        g_string_truncate (str, str->len - 1);
+        g_string_append_c (str, '>');
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
+
+        donna_g_string_append_concat (str, prefix, item, "<", NULL);
+        for (i = 0; i < e->nb_items; ++i)
+            donna_g_string_append_concat (str, prefix, item, ".",
+                    e->items[i].in_file, ":@", save_location, ",", NULL);
+        g_string_truncate (str, str->len - 1);
+        g_string_append_c (str, '>');
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+    {
+        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
+
+        donna_g_string_append_concat (str, prefix, item, "<", NULL);
+        for (i = 0; i < e->nb_items; ++i)
+            donna_g_string_append_concat (str, prefix, item, ".",
+                    e->items[i].value, ":@", save_location, ",", NULL);
+        g_string_truncate (str, str->len - 1);
+        g_string_append_c (str, '>');
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Unexpected extra type");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+gboolean
+_donna_context_set_item_from_extra (DonnaContextInfo    *info,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   gboolean              is_column_option,
+                                   const gchar          *option,
+                                   const gchar          *item,
+                                   gintptr               current,
+                                   const gchar          *save_location,
+                                   GError              **error)
+{
+    const DonnaConfigExtra *extra;
+    const gchar *command;
+    gint i;
+
+    extra = donna_config_get_extra (config, name, error);
+    if (!extra)
+    {
+        g_prefix_error (error, "Failed to get extras '%s' from config: ", name);
+        return FALSE;
+    }
+
+    if (extra->any.type != type)
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Invalid extra type for '%s' in config", name);
+        return FALSE;
+    }
+
+    if (is_column_option)
+        command = "command:tv_column_set_option (%o,%R,";
+    else
+        command = "command:tv_set_option (%o,";
+
+    if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_INT)
+    {
+        DonnaConfigExtraListInt *e = (DonnaConfigExtraListInt *) extra;
+
+        for (i = 0; i < e->nb_items; ++i)
+        {
+            if (streq (e->items[i].in_file, item))
+            {
+                info->name = g_strdup (
+                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
+                info->free_name = TRUE;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->trigger = g_strconcat (command, option, ",",
+                        e->items[i].in_file, ",",
+                        (save_location) ? save_location : "", ")", NULL);
+                info->free_trigger = TRUE;
+                if (current == e->items[i].value)
+                    info->is_active = TRUE;
+                break;
+            }
+        }
+
+        if (i >= e->nb_items)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "No such value (%s) in extra '%s'",
+                    item, name);
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST_FLAGS)
+    {
+        DonnaConfigExtraListFlags *e = (DonnaConfigExtraListFlags *) extra;
+
+        for (i = 0; i < e->nb_items; ++i)
+        {
+            if (streq (e->items[i].in_file, item))
+            {
+                info->name = g_strdup (
+                        (e->items[i].label) ? e->items[i].label : e->items[i].in_file);
+                info->free_name = TRUE;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_CHECK;
+                info->trigger = g_strconcat (command, option, ",",
+                        "\",", e->items[i].in_file, "\",",
+                        (save_location) ? save_location : "", ")", NULL);
+                info->free_trigger = TRUE;
+                if (current & e->items[i].value)
+                    info->is_active = TRUE;
+                break;
+            }
+        }
+
+        if (i >= e->nb_items)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "No such value (%s) in extra '%s'",
+                    item, name);
+            return FALSE;
+        }
+    }
+    else if (type == DONNA_CONFIG_EXTRA_TYPE_LIST)
+    {
+        DonnaConfigExtraList *e = (DonnaConfigExtraList *) extra;
+
+        for (i = 0; i < e->nb_items; ++i)
+        {
+            if (streq (e->items[i].value, item))
+            {
+                info->name = g_strdup (
+                        (e->items[i].label) ? e->items[i].label : e->items[i].value);
+                info->free_name = TRUE;
+                info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
+                info->trigger = g_strconcat (command, option, ",",
+                        e->items[i].value, ",",
+                        (save_location) ? save_location : "", ")", NULL);
+                info->free_trigger = TRUE;
+                if (streq ((gchar *) current, e->items[i].value))
+                    info->is_active = TRUE;
+                break;
+            }
+        }
+
+        if (i >= e->nb_items)
+        {
+            g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "No such value (%s) in extra '%s'",
+                    item, name);
+            return FALSE;
+        }
+    }
+    else
+    {
+        g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
+                DONNA_CONTEXT_MENU_ERROR_OTHER,
+                "Unexpected extra type");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/* *** */
 
 static GtkSortType
 default_get_default_sort_order (DonnaColumnType    *ct,
