@@ -36,6 +36,7 @@
 #include "node.h"
 #include "app.h"
 #include "conf.h"
+#include "util.h"
 #include "macros.h"
 #include "debug.h"
 
@@ -217,6 +218,27 @@ struct filter_data
     guint       ref;
 };
 
+/* internal from columntype.c */
+gboolean
+_donna_context_add_items_for_extra (GString              *str,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   const gchar          *prefix,
+                                   const gchar           *item,
+                                   const gchar          *save_location,
+                                   GError              **error);
+gboolean
+_donna_context_set_item_from_extra (DonnaContextInfo     *info,
+                                   DonnaConfig          *config,
+                                   const gchar          *name,
+                                   DonnaConfigExtraType  type,
+                                   gboolean              is_column_option,
+                                   const gchar          *option,
+                                   const gchar          *item,
+                                   gintptr               current,
+                                   const gchar          *save_location,
+                                   GError              **error);
 /* internal, used by app.c */
 gboolean
 _donna_column_type_perms_register_extras (DonnaConfig *config, GError **error);
@@ -2820,6 +2842,8 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
                             GError           **error)
 
 {
+    DonnaConfig *config;
+    GString *str;
     const gchar *save_location;
 
     if (!streq (alias, "options"))
@@ -2845,7 +2869,9 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
         return NULL;
     }
 
-    return g_strconcat (
+    config = donna_app_peek_config (((DonnaColumnTypePerms *) ct)->priv->app);
+    str = g_string_new (NULL);
+    donna_g_string_append_concat (str,
             prefix, "format:@", save_location, "<",
                 prefix, "format:@", save_location, ":%S %V:%H,",
                 prefix, "format:@", save_location, ":%p %V:%H,",
@@ -2886,14 +2912,17 @@ ct_perms_get_context_alias (DonnaColumnType   *ct,
                 prefix, "color_none:@", save_location, ":gray,",
                 prefix, "color_none:@", save_location, ":orange,-,",
                 prefix, "color_none:@", save_location, ":=>,-,",
-            prefix, "sort:@", save_location, "<",
-                prefix, "sort:@", save_location, ":perms,",
-                prefix, "sort:@", save_location, ":myperms,",
-                prefix, "sort:@", save_location, ":uid,",
-                prefix, "sort:@", save_location, ":user,",
-                prefix, "sort:@", save_location, ":gid,",
-                prefix, "sort:@", save_location, ":group>",
-            NULL);
+                NULL);
+    if (!_donna_context_add_items_for_extra (str, config,
+                "sort-perms", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                prefix, "sort", save_location, error))
+    {
+        g_prefix_error (error, "ColumnType '%s': Failed to process item '%s': ",
+                "perms", "sort");
+        g_string_free (str, TRUE);
+        return FALSE;
+    }
+    return g_string_free (str, FALSE);
 }
 
 static void
@@ -3196,64 +3225,36 @@ ct_perms_get_context_item_info (DonnaColumnType   *ct,
             value = extra;
         }
     }
-    else if (streq (item, "sort"))
+    else if (streqn (item, "sort", 4))
     {
-        info->is_visible = TRUE;
-        info->is_sensitive = TRUE;
-        if (!extra)
+        info->is_visible = info->is_sensitive = TRUE;
+        if (item[4] == '\0')
         {
             info->name = "Sorting Criteria";
             info->submenus = 1;
             return TRUE;
         }
-        else if (streq (extra, "perms"))
+        else if (item[4] == '.')
         {
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->sort == SORT_PERMS;
-            info->name = "Permissions";
-            value = extra;
-        }
-        else if (streq (extra, "myperms"))
-        {
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->sort == SORT_MY_PERMS;
-            info->name = "Own Permissions";
-            value = extra;
-        }
-        else if (streq (extra, "uid"))
-        {
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->sort == SORT_USER_ID;
-            info->name = "User ID";
-            value = extra;
-        }
-        else if (streq (extra, "user"))
-        {
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->sort == SORT_USER_NAME;
-            info->name = "User Name";
-            value = extra;
-        }
-        else if (streq (extra, "gid"))
-        {
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->sort == SORT_GROUP_ID;
-            info->name = "Group ID";
-            value = extra;
-        }
-        else if (streq (extra, "group"))
-        {
-            info->icon_special = DONNA_CONTEXT_ICON_IS_RADIO;
-            info->is_active = data->sort == SORT_GROUP_NAME;
-            info->name = "Group Name";
-            value = extra;
+            if (!_donna_context_set_item_from_extra (info,
+                        donna_app_peek_config (priv->app),
+                        "sort-perms", DONNA_CONFIG_EXTRA_TYPE_LIST_INT,
+                        TRUE, "sort",
+                        item + 5, data->sort, save_location, error))
+            {
+                g_prefix_error (error,
+                        "ColumnType '%s': Failed to get item '%s': ",
+                        "perms", item);
+                return FALSE;
+            }
+            return TRUE;
         }
         else
         {
             g_set_error (error, DONNA_CONTEXT_MENU_ERROR,
-                    DONNA_CONTEXT_MENU_ERROR_OTHER,
-                    "ColumnType 'perms': Invalid extra '%s' for item '%s'",
-                    extra, item);
+                    DONNA_CONTEXT_MENU_ERROR_UNKNOWN_ITEM,
+                    "ColumnType '%s': No such item: '%s'",
+                    "perms", item);
             return FALSE;
         }
     }
