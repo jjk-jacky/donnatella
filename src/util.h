@@ -58,6 +58,7 @@ void            donna_g_string_append_concat    (GString            *str,
                                                  ...);
 gboolean        donna_unquote_string            (gchar             **str);
 void            donna_g_object_unref            (gpointer            object);
+gboolean        donna_main_loop_quit_return_false (GMainLoop        *loop);
 GSource *       donna_fd_source_new             (gint                fd,
                                                  GSourceFunc         callback,
                                                  gpointer            data,

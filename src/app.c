@@ -1984,7 +1984,7 @@ cp_get_task_process (struct cp_refresh *cpr)
     return tp;
 }
 
-static void
+static gboolean
 cp_tp_done (struct cp_refresh *cpr)
 {
     guint i;
@@ -1999,6 +1999,7 @@ cp_tp_done (struct cp_refresh *cpr)
     }
 
     free_cp_refresh (cpr);
+    return G_SOURCE_REMOVE;
 }
 
 static gboolean

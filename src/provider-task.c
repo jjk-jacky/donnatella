@@ -2889,7 +2889,7 @@ struct refresh_exit_waiting
     GMainLoop *loop;
 };
 
-static void refresh_exit_waiting (struct refresh_exit_waiting *rew);
+static gboolean refresh_exit_waiting (struct refresh_exit_waiting *rew);
 
 static GSource *
 real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
@@ -2959,7 +2959,7 @@ real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
     return source;
 }
 
-static void
+static gboolean
 refresh_exit_waiting (struct refresh_exit_waiting *rew)
 {
     GSource *source;
@@ -2972,6 +2972,8 @@ refresh_exit_waiting (struct refresh_exit_waiting *rew)
     }
     else
         g_main_loop_quit (rew->loop);
+
+    return G_SOURCE_REMOVE;
 }
 
 static void

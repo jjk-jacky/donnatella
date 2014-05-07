@@ -518,7 +518,7 @@ donna_provider_get_node (DonnaProvider    *provider,
         }
 
         loop = g_main_loop_new (NULL, TRUE);
-        donna_fd_add_source (fd, (GSourceFunc) g_main_loop_quit, loop, NULL);
+        donna_fd_add_source (fd, (GSourceFunc) donna_main_loop_quit_return_false, loop, NULL);
         donna_app_run_task (app, task);
         g_main_loop_run (loop);
     }

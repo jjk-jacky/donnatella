@@ -1211,7 +1211,8 @@ donna_task_wait_for_it (DonnaTask          *task,
         GMainLoop *loop;
 
         loop = g_main_loop_new (NULL, TRUE);
-        donna_fd_add_source (fd_wait, (GSourceFunc) g_main_loop_quit, loop, NULL);
+        donna_fd_add_source (fd_wait,
+                (GSourceFunc) donna_main_loop_quit_return_false, loop, NULL);
         g_main_loop_run (loop);
     }
     else

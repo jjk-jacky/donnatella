@@ -613,11 +613,17 @@ donna_g_object_unref (gpointer object)
         g_object_unref (object);
 }
 
+gboolean
+donna_main_loop_quit_return_false (GMainLoop *loop)
+{
+    g_main_loop_quit (loop);
+    return G_SOURCE_REMOVE;
+}
+
 static gboolean
 dispatch (GSource *source, GSourceFunc callback, gpointer data)
 {
-    callback (data);
-    return FALSE;
+    return callback (data);
 }
 
 static GSourceFuncs funcs = {
