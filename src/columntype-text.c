@@ -708,11 +708,14 @@ ct_text_set_tooltip (DonnaColumnType    *ct,
 
     /* don't show tooltip w/ an empty string */
     s = g_value_get_string (&value);
-    skip_blank (s);
-    if (*s != '\0')
-        gtk_tooltip_set_text (tooltip, g_value_get_string (&value));
-    else
-        s = NULL;
+    if (s)
+    {
+        skip_blank (s);
+        if (*s != '\0')
+            gtk_tooltip_set_text (tooltip, g_value_get_string (&value));
+        else
+            s = NULL;
+    }
     g_value_unset (&value);
     return !!s;
 }
