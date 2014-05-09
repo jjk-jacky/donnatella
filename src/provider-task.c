@@ -547,7 +547,7 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
             if (possible & (CAN_STOP | CAN_PAUSE))
             {
                 info->is_sensitive = TRUE;
-                info->trigger = "command:tasks_switch (@tree_get_nodes (%o, :selected))";
+                info->trigger = "command:tasks_switch (@tv_get_nodes (%o, :selected))";
 
                 if (!(possible & CAN_PAUSE))
                 {
@@ -563,7 +563,7 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
             {
                 info->icon_name = "media-playback-start";
                 info->is_sensitive = TRUE;
-                info->trigger = "command:tasks_switch (@tree_get_nodes (%o, :selected), 1)";
+                info->trigger = "command:tasks_switch (@tv_get_nodes (%o, :selected), 1)";
 
                 if (!(possible & CAN_RESUME))
                     info->name = "Start Selected Tasks";
@@ -685,7 +685,7 @@ provider_task_get_context_item_info (DonnaProvider      *provider,
                     case ST_ON_HOLD:
                         is_sensitive = TRUE;
                         info->trigger = "command:tasks_cancel ("
-                            "@tree_get_nodes (%o, :selected))";
+                            "@tv_get_nodes (%o, :selected))";
                         break;
 
                     case ST_CANCELLED:
