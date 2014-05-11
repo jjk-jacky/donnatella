@@ -1580,6 +1580,7 @@ static gboolean tree_conv_flag                          (const gchar      c,
 static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
 static void free_active_spinners (struct active_spinners *as);
+static inline void free_arrangement (DonnaArrangement *arr);
 
 static gboolean donna_tree_view_button_press_event  (GtkWidget      *widget,
                                                      GdkEventButton *event);
@@ -2042,6 +2043,9 @@ donna_tree_view_finalize (GObject *object)
     DonnaTreeViewPrivate *priv;
 
     priv = DONNA_TREE_VIEW (object)->priv;
+    donna_g_object_unref (priv->sync_with);
+    if (priv->arrangement)
+        free_arrangement (priv->arrangement);
     g_hash_table_foreach (priv->hashtable, (GHFunc) free_hashtable, object);
     g_hash_table_destroy (priv->hashtable);
     g_ptr_array_free (priv->providers, TRUE);
@@ -18411,13 +18415,13 @@ tree_context_get_item_info (const gchar             *item,
                 /* sensitive only if there's at least one parent to go up to */
                 info->is_sensitive = gtk_tree_model_iter_parent (
                         (GtkTreeModel *) t->priv->store, &iter, &t->priv->location_iter);
-                if (t != tree)
-                    g_object_unref (t);
 
                 info->trigger = g_strconcat (
                         "command:tv_go_root (", extra, ")", NULL);
                 info->free_trigger = TRUE;
             }
+            if (t != tree)
+                g_object_unref (t);
         }
         else if (streq (item, "up"))
         {
