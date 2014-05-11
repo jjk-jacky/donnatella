@@ -459,7 +459,7 @@ container_children_cb (DonnaTask    *task,
     if (get_children)
     {
         g_value_init (value, G_TYPE_PTR_ARRAY);
-        g_value_set_boxed (value, arr);
+        g_value_take_boxed (value, arr);
     }
     else
     {
