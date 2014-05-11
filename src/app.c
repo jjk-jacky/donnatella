@@ -7151,8 +7151,12 @@ load_custom_properties (DonnaApp *app)
             if (streq (domain, p->domain))
             {
                 if (!p->custom_properties)
+                {
                     p->custom_properties = g_array_new (FALSE, FALSE,
                             sizeof (struct custom_properties));
+                    g_array_set_clear_func (p->custom_properties,
+                            (GDestroyNotify) free_custom_properties);
+                }
                 g_array_append_val (p->custom_properties, cp);
                 DONNA_DEBUG (APP, NULL,
                         g_debug ("Added %d custom properties/groups to '%s' via '%s'",
