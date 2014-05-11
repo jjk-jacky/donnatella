@@ -6624,7 +6624,7 @@ set_active_list (DonnaApp *app, DonnaTreeView *list)
 
     switch_statuses_source (app, ST_SCE_ACTIVE, (DonnaStatusProvider *) list);
 
-    priv->active_list = g_object_ref (list);
+    priv->active_list = list;
     update_cur_dirname (app);
     refresh_window_title (app);
     refresh_status_donna (app);
