@@ -431,9 +431,9 @@ donna_node_new (DonnaProvider       *provider,
         priv->basic_props[BASIC_PROP_DESC].has_value = DONNA_NODE_VALUE_NEED_REFRESH;
 
     DONNA_DEBUG (NODE, donna_provider_get_domain (priv->provider),
-            g_debug ("Created new node '%s:%s'",
+            g_debug ("Created new node '%s:%s' (%s)",
                 donna_provider_get_domain (priv->provider),
-                priv->location));
+                priv->location, priv->name));
     return node;
 }
 
