@@ -173,6 +173,9 @@ provider_mark_finalize (GObject *object)
 
     g_mutex_clear (&priv->mutex);
     g_hash_table_unref (priv->marks);
+
+    /* chain up */
+    G_OBJECT_CLASS (donna_provider_mark_parent_class)->finalize (object);
 }
 
 
