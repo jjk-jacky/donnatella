@@ -2004,7 +2004,10 @@ donna_tree_view_set_property (GObject        *object,
     DonnaTreeViewPrivate *priv = DONNA_TREE_VIEW (object)->priv;
 
     if (prop_id == PROP_APP)
-        priv->app = g_value_get_object (value);
+    {
+        donna_g_object_unref (priv->app);
+        priv->app = g_value_dup_object (value);
+    }
     else
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -2130,6 +2133,7 @@ donna_tree_view_finalize (GObject *object)
     g_free (priv->click_mode);
     g_free (priv->key_mode);
     g_free (priv->name);
+    g_object_unref (priv->app);
 
     G_OBJECT_CLASS (donna_tree_view_parent_class)->finalize (object);
 }
@@ -23996,7 +24000,7 @@ donna_tree_view_new (DonnaApp    *app,
 
     tree        = DONNA_TREE_VIEW (w);
     priv        = tree->priv;
-    priv->app   = app;
+    priv->app   = g_object_ref (app);
     priv->name  = g_strdup (name);
 
     load_config (tree);
