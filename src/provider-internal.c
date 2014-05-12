@@ -190,6 +190,7 @@ trigger_node (DonnaTask *task, DonnaNode *node)
     donna_node_set_property_value (node, "_internal_destroy", &v_data);
     g_value_unset (&v_data);
 
+    g_object_unref (node);
     return ret;
 }
 
