@@ -33,6 +33,7 @@
 #include "conf.h"
 #include "util.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION: columntype-time
@@ -406,6 +407,9 @@ ct_time_finalize (GObject *object)
     DonnaColumnTypeTimePrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_TIME (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'time' finalizing"));
+
     g_object_unref (priv->app);
 
     /* chain up */

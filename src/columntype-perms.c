@@ -488,6 +488,9 @@ ct_perms_finalize (GObject *object)
     DonnaColumnTypePermsPrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_PERMS (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'perms' finalizing"));
+
     g_object_unref (priv->app);
     g_slist_free_full (priv->users, (GDestroyNotify) free_user);
     g_slist_free_full (priv->groups, (GDestroyNotify) free_group);

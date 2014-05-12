@@ -242,6 +242,8 @@ static void
 donna_terminal_finalize (GObject *object)
 {
     DonnaTerminalPrivate *priv = ((DonnaTerminal *) object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("Terminal '%s' finalizing", priv->name));
 
     g_free (priv->name);
     ((GObjectClass *) donna_terminal_parent_class)->finalize (object);

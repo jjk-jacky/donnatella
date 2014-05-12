@@ -32,6 +32,7 @@
 #include "sort.h"
 #include "util.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION: columntype-text
@@ -279,6 +280,9 @@ ct_text_finalize (GObject *object)
     DonnaColumnTypeTextPrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_TEXT (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'text' finalizing"));
+
     g_object_unref (priv->app);
 
     /* chain up */

@@ -450,6 +450,8 @@ provider_config_finalize (GObject *object)
     DonnaProviderConfigPrivate *priv;
 
     priv = DONNA_PROVIDER_CONFIG (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("Provider 'config' finalizing"));
 
     g_object_unref (priv->app);
     g_string_chunk_free (priv->str_chunk);

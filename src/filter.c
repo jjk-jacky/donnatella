@@ -228,6 +228,9 @@ donna_filter_finalize (GObject *object)
     DonnaConfig *config;
 
     priv = DONNA_FILTER (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("Filter '%s' finalizing", priv->filter));
+
     config = donna_app_peek_config (priv->app);
     if (priv->option_set_sid > 0)
         g_signal_handler_disconnect (config, priv->option_set_sid);

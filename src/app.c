@@ -990,6 +990,11 @@ app_free (DonnaApp *app)
         GObject *o = priv->tree_views->data;
 
         priv->tree_views = g_slist_delete_link (priv->tree_views, priv->tree_views);
+        DONNA_DEBUG (MEMORY, NULL,
+                if (o->ref_count > 1)
+                    g_debug ("TreeView '%s' still has %d refs",
+                    donna_tree_view_get_name ((DonnaTreeView*) o),
+                    o->ref_count - 1));
         g_object_unref (o);
     }
 
@@ -1013,6 +1018,13 @@ app_free (DonnaApp *app)
     for (i = 0; i < NB_COL_TYPES; ++i)
         if (priv->column_types[i].ct)
         {
+            DONNA_DEBUG (MEMORY, NULL,
+                    GObject *o = (GObject *) priv->column_types[i].ct;
+
+                    if (o->ref_count > 1)
+                        g_debug ("ColumnType '%s' still has %d refs",
+                        priv->column_types[i].name,
+                        o->ref_count - 1));
             g_object_unref (priv->column_types[i].ct);
             priv->column_types[i].ct = NULL;
         }
@@ -1040,6 +1052,8 @@ donna_app_finalize (GObject *object)
     DonnaAppPrivate *priv;
 
     priv = DONNA_APP (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("Finalizing app"));
 
     g_free (priv->config_dir);
     g_free (priv->cur_dirname);
@@ -1089,7 +1103,15 @@ static void
 free_provider (struct provider *p)
 {
     if (p->instance)
+    {
+        DONNA_DEBUG (MEMORY, NULL,
+                GObject *o = (GObject *) p->instance;
+
+                if (o->ref_count > 1)
+                    g_debug ("Provider '%s' still has %d ref",
+                        p->domain, o->ref_count - 1));
         g_object_unref (p->instance);
+    }
     if (p->custom_properties)
         g_array_unref (p->custom_properties);
 }
@@ -1107,6 +1129,15 @@ free_visuals (struct visuals *visuals)
 static void
 free_filter (struct filter *f)
 {
+    DONNA_DEBUG (MEMORY, NULL,
+            GObject *o = (GObject *) f->filter;
+
+            if (o->ref_count > 1)
+            {
+                gchar *s = donna_filter_get_filter (f->filter);
+                g_debug ("Filter '%s' still has %d refs", s, o->ref_count - 1);
+                g_free (s);
+            });
     g_object_unref (f->filter);
     g_free (f);
 }

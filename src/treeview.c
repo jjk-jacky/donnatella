@@ -2112,6 +2112,8 @@ donna_tree_view_finalize (GObject *object)
     DonnaTreeViewPrivate *priv;
 
     priv = DONNA_TREE_VIEW (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("TreeView '%s' finalizing", priv->name));
     donna_tree_view_destroy ((GtkWidget *) object);
     donna_g_object_unref (priv->sync_with);
     g_ptr_array_free (priv->providers, TRUE);

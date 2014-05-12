@@ -30,6 +30,7 @@
 #include "node.h"
 #include "sort.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION:columntype-value
@@ -226,6 +227,9 @@ ct_value_finalize (GObject *object)
     DonnaColumnTypeValuePrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_VALUE (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'value' finalizing"));
+
     g_object_unref (priv->app);
 
     /* chain up */

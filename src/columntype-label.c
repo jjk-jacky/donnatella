@@ -31,6 +31,7 @@
 #include "node.h"
 #include "util.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION:columntype-label
@@ -208,6 +209,9 @@ ct_label_finalize (GObject *object)
     DonnaColumnTypeLabelPrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_LABEL (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'label' finalizing"));
+
     g_object_unref (priv->app);
 
     /* chain up */

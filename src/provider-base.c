@@ -198,6 +198,9 @@ provider_base_finalize (GObject *object)
     DonnaProviderBasePrivate *priv;
 
     priv = DONNA_PROVIDER_BASE (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("Provider '%s' finalizing",
+                donna_provider_get_domain ((DonnaProvider *) object)));
 
     g_hash_table_destroy (priv->nodes);
     g_rec_mutex_clear (&priv->nodes_mutex);

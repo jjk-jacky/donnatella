@@ -31,6 +31,7 @@
 #include "conf.h"
 #include "util.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION:columntype-size
@@ -269,6 +270,9 @@ ct_size_finalize (GObject *object)
     DonnaColumnTypeSizePrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_SIZE (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'size' finalizing"));
+
     g_object_unref (priv->app);
 
     /* chain up */

@@ -29,6 +29,7 @@
 #include "app.h"
 #include "node.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION:columntype-progress
@@ -215,6 +216,9 @@ ct_progress_finalize (GObject *object)
     DonnaColumnTypeProgressPrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_PROGRESS (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'progress' finalizing"));
+
     g_object_unref (priv->app);
 
     /* chain up */

@@ -33,6 +33,7 @@
 #include "sort.h"
 #include "misc.h"
 #include "macros.h"
+#include "debug.h"
 
 /**
  * SECTION:columntype-name
@@ -271,6 +272,9 @@ ct_name_finalize (GObject *object)
     DonnaColumnTypeNamePrivate *priv;
 
     priv = DONNA_COLUMN_TYPE_NAME (object)->priv;
+    DONNA_DEBUG (MEMORY, NULL,
+            g_debug ("ColumnType 'name' finalizing"));
+
     g_object_unref (priv->app);
     if (priv->domains)
         g_ptr_array_free (priv->domains, TRUE);
