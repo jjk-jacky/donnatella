@@ -872,6 +872,7 @@ provider_mark_trigger_node (DonnaProviderBase  *_provider,
     if (state != DONNA_TASK_DONE)
     {
         g_free (location);
+        g_object_unref (tree);
         return state;
     }
 
@@ -882,11 +883,13 @@ provider_mark_trigger_node (DonnaProviderBase  *_provider,
         donna_task_take_error (task, err);
         g_object_unref (n);
         g_free (location);
+        g_object_unref (tree);
         return DONNA_TASK_FAILED;
     }
 
     g_object_unref (n);
     g_free (location);
+    g_object_unref (tree);
     return DONNA_TASK_DONE;
 }
 
