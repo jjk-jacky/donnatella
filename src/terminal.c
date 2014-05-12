@@ -246,6 +246,8 @@ donna_terminal_finalize (GObject *object)
             g_debug ("Terminal '%s' finalizing", priv->name));
 
     g_free (priv->name);
+    g_object_unref (priv->app);
+
     ((GObjectClass *) donna_terminal_parent_class)->finalize (object);
 }
 
@@ -1224,7 +1226,7 @@ donna_terminal_new (DonnaApp           *app,
 
     nb = (GtkNotebook *) g_object_new (DONNA_TYPE_TERMINAL, NULL);
     priv = ((DonnaTerminal *) nb)->priv;
-    priv->app = app;
+    priv->app = g_object_ref (app);
     priv->name = g_strdup (name);
 
     config = donna_app_peek_config (app);
