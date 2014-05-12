@@ -1581,7 +1581,9 @@ static void free_col_prop (struct col_prop *cp);
 static void free_provider_signals (struct provider_signals *ps);
 static void free_active_spinners (struct active_spinners *as);
 static inline void free_arrangement (DonnaArrangement *arr);
+static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree);
 
+static void     donna_tree_view_destroy             (GtkWidget      *widget);
 static gboolean donna_tree_view_button_press_event  (GtkWidget      *widget,
                                                      GdkEventButton *event);
 static gboolean donna_tree_view_button_release_event(GtkWidget      *widget,
@@ -1709,8 +1711,6 @@ g_string_append_c (GString *str, gchar c)
 #endif
 
 #ifndef GTK_IS_JJK
-static void selection_changed_cb (GtkTreeSelection *selection, DonnaTreeView *tree);
-
 /* this isn't really the same at all, because the patched version in GTK allows
  * to set the focus without affecting the selection or scroll. Here we have to
  * use set_cursor() to set the focus, and that can trigger some minimum
@@ -1838,6 +1838,7 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     tv_class->cursor_changed        = donna_tree_view_cursor_changed;
 
     w_class = GTK_WIDGET_CLASS (klass);
+    w_class->destroy                = donna_tree_view_destroy;
     w_class->draw                   = donna_tree_view_draw;
     w_class->button_press_event     = donna_tree_view_button_press_event;
     w_class->button_release_event   = donna_tree_view_button_release_event;
@@ -2037,17 +2038,82 @@ free_tree_visuals (gpointer key, GSList *l)
     return TRUE;
 }
 
+/* we should remove all refs on columntypes, mostly because one of those might
+ * be the treeview itself (line-number) and if we don't unref it, it never gets
+ * finalized.
+ * So we need to remove the columns, so the arrangement, so we clear the store
+ * first.
+ * Note that it might be called multiple times, as the signal destroy could be
+ * emitted more than once, or it could be called afterwards from finalize()*/
+static void
+donna_tree_view_destroy (GtkWidget      *widget)
+{
+    DonnaTreeViewPrivate *priv = ((DonnaTreeView *) widget)->priv;
+
+    if (priv->hashtable)
+    {
+        DonnaRowId rid = { DONNA_ARG_TYPE_PATH, (gpointer) ":last" };
+
+        /* to avoid warning about lost selection in BROWSE mode or trying to
+         * sync on change location */
+        g_signal_handlers_disconnect_by_func (
+                gtk_tree_view_get_selection ((GtkTreeView *) widget),
+                selection_changed_cb, widget);
+        /* clear the list (see selection_changed_cb() for why filling_list) */
+        priv->filling_list = TRUE;
+        /* speed up -- see change_location() for why */
+        donna_tree_view_set_focus ((DonnaTreeView *) widget, &rid, NULL);
+        gtk_tree_store_clear (priv->store);
+        priv->filling_list = FALSE;
+
+        g_hash_table_foreach (priv->hashtable, (GHFunc) free_hashtable, widget);
+        g_hash_table_destroy (priv->hashtable);
+        priv->hashtable = NULL;
+    }
+
+    if (priv->location)
+    {
+        g_object_unref (priv->location);
+        priv->location = NULL;
+    }
+    priv->location_iter.stamp = 0;
+
+    /* remove all columns */
+    while (priv->columns)
+    {
+        struct column *_col = priv->columns->data;
+
+        /* no need to remove the GtkTreeViewColumn, that will be handled by
+         * GtkTreeView automatically */
+        g_free (_col->name);
+        donna_column_type_free_data (_col->ct, _col->ct_data);
+        g_object_unref (_col->ct);
+        g_ptr_array_unref (_col->renderers);
+        g_slice_free (struct column, _col);
+        priv->columns = g_slist_delete_link (priv->columns, priv->columns);
+    }
+
+    priv->main_column = NULL;
+    priv->second_sort_column = NULL;
+    priv->sort_column = NULL;
+
+    if (priv->arrangement)
+    {
+        free_arrangement (priv->arrangement);
+        priv->arrangement = NULL;
+    }
+
+    ((GtkWidgetClass *) donna_tree_view_parent_class)->destroy (widget);
+}
+
 static void
 donna_tree_view_finalize (GObject *object)
 {
     DonnaTreeViewPrivate *priv;
 
     priv = DONNA_TREE_VIEW (object)->priv;
+    donna_tree_view_destroy ((GtkWidget *) object);
     donna_g_object_unref (priv->sync_with);
-    if (priv->arrangement)
-        free_arrangement (priv->arrangement);
-    g_hash_table_foreach (priv->hashtable, (GHFunc) free_hashtable, object);
-    g_hash_table_destroy (priv->hashtable);
     g_ptr_array_free (priv->providers, TRUE);
     g_mutex_clear (&priv->refresh_node_props_mutex);
     g_array_free (priv->col_props, TRUE);
