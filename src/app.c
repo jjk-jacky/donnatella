@@ -947,27 +947,53 @@ free_arrangements (GSList *list)
 }
 
 static void
-donna_app_finalize (GObject *object)
+app_free (DonnaApp *app)
 {
-    DonnaAppPrivate *priv;
+    DonnaAppPrivate *priv = app->priv;
     GSList *l;
     guint i;
 
-    priv = DONNA_APP (object)->priv;
+    if (priv->arrangements)
+        free_arrangements (priv->arrangements);
+    priv->arrangements = NULL;
+    if (priv->filters)
+    {
+        g_hash_table_destroy (priv->filters);
+        priv->filters = NULL;
+    }
+    if (priv->patterns)
+    {
+        g_hash_table_destroy (priv->patterns);
+        priv->patterns = NULL;
+    }
+    if (priv->visuals)
+    {
+        g_hash_table_destroy (priv->visuals);
+        priv->visuals = NULL;
+    }
+    if (priv->intrefs)
+    {
+        g_hash_table_destroy (priv->intrefs);
+        priv->intrefs = NULL;
+    }
 
-    g_free (priv->config_dir);
-    g_free (priv->cur_dirname);
-    g_strfreev (priv->environ);
-    g_rw_lock_clear (&priv->lock);
-    g_rec_mutex_clear (&priv->rec_mutex);
-    g_object_unref (priv->config);
-    free_arrangements (priv->arrangements);
-    g_hash_table_destroy (priv->filters);
-    g_hash_table_destroy (priv->patterns);
-    g_hash_table_destroy (priv->visuals);
-    g_hash_table_destroy (priv->intrefs);
-    g_thread_pool_free (priv->pool, TRUE, FALSE);
+    while (priv->terminals)
+    {
+        GObject *o = priv->terminals->data;
 
+        priv->terminals = g_slist_delete_link (priv->terminals, priv->terminals);
+        g_object_unref (o);
+    }
+
+    while (priv->tree_views)
+    {
+        GObject *o = priv->tree_views->data;
+
+        priv->tree_views = g_slist_delete_link (priv->tree_views, priv->tree_views);
+        g_object_unref (o);
+    }
+
+    /* do this now before unref-ing ct-s */
     for (l = priv->col_ct_datas; l; l = l->next)
     {
         struct col_ct_data *ccd = l->data;
@@ -982,10 +1008,46 @@ donna_app_finalize (GObject *object)
         g_free (ccd);
     }
     g_slist_free (priv->col_ct_datas);
+    priv->col_ct_datas = NULL;
 
     for (i = 0; i < NB_COL_TYPES; ++i)
         if (priv->column_types[i].ct)
+        {
             g_object_unref (priv->column_types[i].ct);
+            priv->column_types[i].ct = NULL;
+        }
+
+    if (priv->providers)
+    {
+        g_array_free (priv->providers, TRUE);
+        priv->providers = NULL;
+    }
+    if (priv->task_manager)
+    {
+        g_object_unref (priv->task_manager);
+        priv->task_manager = NULL;
+    }
+    if (priv->config)
+    {
+        g_object_unref (priv->config);
+        priv->config = NULL;
+    }
+}
+
+static void
+donna_app_finalize (GObject *object)
+{
+    DonnaAppPrivate *priv;
+
+    priv = DONNA_APP (object)->priv;
+
+    g_free (priv->config_dir);
+    g_free (priv->cur_dirname);
+    g_strfreev (priv->environ);
+    g_rw_lock_clear (&priv->lock);
+    g_rec_mutex_clear (&priv->rec_mutex);
+    app_free ((DonnaApp *) object);
+    g_thread_pool_free (priv->pool, TRUE, FALSE);
 
     G_OBJECT_CLASS (donna_app_parent_class)->finalize (object);
 }
@@ -2693,6 +2755,12 @@ filter_toggle_ref_cb (DonnaApp *app, DonnaFilter *filter, gboolean is_last)
     /* can NOT use g_object_get, as it takes a ref on the object! */
     filter_str = donna_filter_get_filter (filter);
     f = g_hash_table_lookup (priv->filters, filter_str);
+    if (G_UNLIKELY (!f))
+    {
+        /* when free-ing priv->filters it will already have been removed */
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return;
+    }
     if (is_last)
     {
         struct filter_toggle *t;
@@ -2794,10 +2862,14 @@ pattern_toggle_ref (DonnaPattern   *pattern,
             return;
         }
 
+        data.key = NULL;
         data.value = pattern;
         g_hash_table_find (priv->patterns, (GHRFunc) pattern_find, &data);
-        /* will free key & value */
-        g_hash_table_remove (priv->patterns, data.key);
+        /* when free-ing priv->patterns it will already have been removed, so
+         * not found here */
+        if (data.key)
+            /* will free key & value */
+            g_hash_table_remove (priv->patterns, data.key);
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
 }
@@ -7983,6 +8055,13 @@ donna_app_run (DonnaApp       *app,
     }
     gtk_widget_destroy ((GtkWidget *) priv->window);
     g_main_context_release (g_main_context_default ());
+
+    app_free (app);
+    if (((GObject *) app)->ref_count > 1)
+    {
+        g_warning ("Memory leak detected: %d ref remaining on app",
+                ((GObject *) app)->ref_count - 1);
+    }
 
 #ifdef DONNA_DEBUG_ENABLED
     donna_debug_reset_valid ();
