@@ -18525,9 +18525,11 @@ tree_context_get_item_info (const gchar             *item,
         {
             g_prefix_error (error, "TreeView '%s': Failed to get item '%s': ",
                     priv->name, item - 7);
+            g_object_unref (provider);
             return FALSE;
         }
 
+        g_object_unref (provider);
         return TRUE;
     }
     else if (streq (item, "move_root"))
