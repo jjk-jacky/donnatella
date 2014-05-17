@@ -634,10 +634,12 @@ static GSourceFuncs funcs = {
 };
 
 GSource *
-donna_fd_source_new (gint                fd,
-                     GSourceFunc         callback,
-                     gpointer            data,
-                     GDestroyNotify      destroy)
+donna_fd_source_new_full (gint           fd,
+                          GIOCondition   condition,
+                          gint           priority,
+                          GSourceFunc    callback,
+                          gpointer       data,
+                          GDestroyNotify destroy)
 {
     GSource *source;
 
@@ -645,7 +647,8 @@ donna_fd_source_new (gint                fd,
     g_return_val_if_fail (callback != NULL, NULL);
 
     source = g_source_new (&funcs, sizeof (GSource));
-    g_source_add_unix_fd (source, fd, G_IO_IN);
+    g_source_add_unix_fd (source, fd, condition);
+    g_source_set_priority (source, priority);
     g_source_set_callback (source, callback, data, destroy);
 
     return source;

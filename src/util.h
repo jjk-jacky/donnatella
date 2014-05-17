@@ -59,10 +59,14 @@ void            donna_g_string_append_concat    (GString            *str,
 gboolean        donna_unquote_string            (gchar             **str);
 void            donna_g_object_unref            (gpointer            object);
 gboolean        donna_main_loop_quit_return_false (GMainLoop        *loop);
-GSource *       donna_fd_source_new             (gint                fd,
+GSource *       donna_fd_source_new_full        (gint                fd,
+                                                 GIOCondition        condition,
+                                                 gint                priority,
                                                  GSourceFunc         callback,
                                                  gpointer            data,
                                                  GDestroyNotify      destroy);
+#define donna_fd_source_new(fd, callback, data, destroy) \
+    donna_fd_source_new_full (fd, G_IO_IN, G_PRIORITY_DEFAULT_IDLE, callback, data, destroy)
 guint           donna_fd_add_source             (gint                fd,
                                                  GSourceFunc         callback,
                                                  gpointer            data,
