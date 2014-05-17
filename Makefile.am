@@ -106,6 +106,8 @@ libdonnatella_la_SOURCES = \
 					 src/provider-task.c \
 					 src/provider-task.h \
 					 src/renderer.h \
+					 src/socket.c \
+					 src/socket.h \
 					 src/sort.c \
 					 src/sort.h \
 					 src/statusbar.c \

@@ -27,6 +27,11 @@
 #include <ctype.h>      /* isblank() */
 #include <string.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <glib/gprintf.h>
 #include <gtk/gtkx.h>
 #include <X11/Xlib.h>
 #ifdef DONNA_DEBUG_AUTOBREAK
@@ -63,6 +68,7 @@
 #include "imagemenuitem.h"
 #include "task-process.h"
 #include "misc.h"
+#include "socket.h"
 #include "util.h"
 #include "macros.h"
 #include "closures.h"
@@ -566,6 +572,7 @@ enum rc
     RC_OK = 0,
     RC_PARSE_CMDLINE_FAILED,
     RC_PREPARE_FAILED,
+    RC_INIT_FAILED,
     RC_LAYOUT_MISSING,
     RC_LAYOUT_INVALID,
     RC_ACTIVE_LIST_MISSING
@@ -703,6 +710,8 @@ struct _DonnaAppPrivate
     gchar           *config_dir;
     gchar           *cur_dirname;
     gchar          **environ;
+    gint             socket_fd;
+    GPtrArray       *sockets;
     /* visuals and providers (for custom properties) are under a RW lock so
      * everyone can read them at the same time (e.g. creating nodes,
      * get_children() & the likes). The write operation should be quite rare. */
@@ -962,6 +971,15 @@ app_free (DonnaApp *app)
     DonnaAppPrivate *priv = app->priv;
     GSList *l;
     guint i;
+    const gchar *socket_path;
+
+    if (priv->sockets && priv->sockets->len > 0)
+    {
+        for (i = 0; i < priv->sockets->len; ++i)
+            donna_socket_close ((DonnaSocket *) priv->sockets->pdata[i]);
+        g_ptr_array_unref (priv->sockets);
+        priv->sockets = NULL;
+    }
 
     if (priv->arrangements)
         free_arrangements (priv->arrangements);
@@ -1054,6 +1072,13 @@ app_free (DonnaApp *app)
         g_object_unref (priv->config);
         priv->config = NULL;
     }
+
+    /* do it here so it's always done on exit, even if app isn't finalized */
+    if (priv->socket_fd != -1)
+        close (priv->socket_fd);
+    socket_path = g_environ_getenv (priv->environ, "DONNATELLA_SOCKET");
+    if (socket_path)
+        unlink (socket_path);
 }
 
 static void
@@ -1065,12 +1090,12 @@ donna_app_finalize (GObject *object)
     DONNA_DEBUG (MEMORY, NULL,
             g_debug ("Finalizing app"));
 
+    app_free ((DonnaApp *) object);
     g_free (priv->config_dir);
     g_free (priv->cur_dirname);
     g_strfreev (priv->environ);
     g_rw_lock_clear (&priv->lock);
     g_rec_mutex_clear (&priv->rec_mutex);
-    app_free ((DonnaApp *) object);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
 
     G_OBJECT_CLASS (donna_app_parent_class)->finalize (object);
@@ -7839,8 +7864,92 @@ load_conf (DonnaConfig *config, const gchar *dir)
     return file_exists;
 }
 
-static inline void
-init_app (DonnaApp *app)
+static void
+_socket_send (DonnaSocket *socket, const gchar *fmt, ...)
+{
+    gchar *s;
+    va_list va_args;
+
+    va_start (va_args, fmt);
+    s = g_strdup_vprintf (fmt, va_args);
+    va_end (va_args);
+
+    donna_socket_send (socket, s, (gsize) -1);
+    g_free (s);
+}
+
+static void
+socket_process (DonnaSocket *socket, gchar *message, DonnaApp *app)
+{
+    gchar *e;
+
+    if (!message)
+    {
+        /* closing socket; this will unref it as well. */
+        g_ptr_array_remove_fast (app->priv->sockets, socket);
+        return;
+    }
+
+    e = strchr (message, ' ');
+    if (e)
+        *e = '\0';
+
+    if (streq (message, "VERSION"))
+    {
+        gchar buf[42];
+
+        if (e)
+        {
+            _socket_send (socket, "ERR %s No arguments supported for '%s'",
+                    message, message);
+            goto done;
+        }
+
+        g_snprintf (buf, 42, "OK VERSION %s", PACKAGE_VERSION);
+        donna_socket_send (socket, buf, (gsize) -1);
+    }
+    else
+        _socket_send (socket, "ERR %s Unknown command", message);
+
+done:
+    if (e)
+        *e = ' ';
+}
+
+static gboolean
+socket_accept (DonnaApp *app)
+{
+    DonnaAppPrivate *priv = app->priv;
+    DonnaSocket *socket;
+    gint fd;
+
+again:
+    fd = accept (priv->socket_fd, NULL, NULL);
+    if (fd == -1)
+    {
+        gint _errno = errno;
+
+        if (_errno == EINTR)
+            goto again;
+        else if (_errno != EAGAIN)
+            g_warning ("Socket: Failed to accept connection: %s",
+                    g_strerror (_errno));
+
+        return G_SOURCE_CONTINUE;
+    }
+
+    socket = donna_socket_new (fd, (socket_process_fn) socket_process,
+            g_object_ref (app), g_object_unref);
+    if (!priv->sockets)
+        priv->sockets = g_ptr_array_new_with_free_func (
+                (GDestroyNotify) donna_socket_unref);
+    g_ptr_array_add (priv->sockets, socket);
+
+    return G_SOURCE_CONTINUE;
+}
+
+static inline gboolean
+init_app (DonnaApp *app, GError **error)
 {
     DonnaAppPrivate *priv = app->priv;
     GPtrArray *arr = NULL;
@@ -7848,6 +7957,7 @@ init_app (DonnaApp *app)
     const gchar * const *extra_dirs;
     const gchar * const *dir;
     const gchar * const *first;
+    struct sockaddr_un sock = { 0, };
 
     /* load environ */
     priv->environ = g_get_environ ();
@@ -7911,6 +8021,78 @@ init_app (DonnaApp *app)
         }
         g_ptr_array_unref (arr);
     }
+
+    /* socket */
+    priv->socket_fd = socket (AF_UNIX, SOCK_STREAM, 0);
+    if (priv->socket_fd == -1)
+    {
+        gint _errno = errno;
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to create socket: %s",
+                g_strerror (_errno));
+        return FALSE;
+    }
+
+    if (fcntl (priv->socket_fd, F_SETFL, O_NONBLOCK) == -1)
+    {
+        gint _errno = errno;
+
+        close (priv->socket_fd);
+        priv->socket_fd = -1;
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to init socket: %s",
+                g_strerror (_errno));
+        return FALSE;
+    }
+
+    sock.sun_family = AF_UNIX;
+    g_sprintf (sock.sun_path, "%s/donnatella_socket_%u",
+            g_get_user_runtime_dir (), getpid());
+    if (bind (priv->socket_fd, (struct sockaddr *) &sock,
+                sizeof (struct sockaddr_un)) == -1)
+    {
+        gint _errno = errno;
+
+        close (priv->socket_fd);
+        priv->socket_fd = -1;
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to bind socket to '%s': %s",
+                sock.sun_path, g_strerror (_errno));
+        return FALSE;
+    }
+
+    if (chmod (sock.sun_path, 0600) == -1)
+    {
+        gint _errno = errno;
+
+        close (priv->socket_fd);
+        priv->socket_fd = -1;
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to chmod socket '%s': %s",
+                sock.sun_path, g_strerror (_errno));
+        return FALSE;
+    }
+
+    if (listen (priv->socket_fd, 0) == -1)
+    {
+        gint _errno = errno;
+
+        close (priv->socket_fd);
+        priv->socket_fd = -1;
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to listen socket: %s",
+                g_strerror (_errno));
+        return FALSE;
+    }
+
+    priv->environ = g_environ_setenv (priv->environ,
+            "DONNATELLA_SOCKET", sock.sun_path, TRUE);
+    DONNA_DEBUG (APP, NULL,
+            g_debug ("Created socket '%s'", sock.sun_path));
+
+    donna_fd_add_source (priv->socket_fd, (GSourceFunc) socket_accept, app, NULL);
+
+    return TRUE;
 }
 
 static gboolean
@@ -8276,7 +8458,20 @@ donna_app_run (DonnaApp       *app,
     }
 
     /* load config, css arrangements, required providers, etc */
-    init_app (app);
+    if (!init_app (app, &err))
+    {
+        GtkWidget *w = gtk_message_dialog_new (NULL,
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_CLOSE,
+                "Failed to initialize application: %s",
+                (err) ? err->message : "no error message");
+        g_clear_error (&err);
+        gtk_dialog_run ((GtkDialog *) w);
+        gtk_widget_destroy (w);
+        g_free (layout);
+        return RC_INIT_FAILED;
+    }
 
     /* create & show the main window */
     rc = create_gui (app, layout, maximized);

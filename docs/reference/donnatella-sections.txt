@@ -932,6 +932,17 @@ donna_sort_get_utf8_collate_key
 </SECTION>
 
 <SECTION>
+<FILE>socket</FILE>
+DonnaSocket
+socket_process_fn
+donna_socket_new
+donna_socket_unref
+donna_socket_ref
+donna_socket_close
+donna_socket_send
+</SECTION>
+
+<SECTION>
 <FILE>statusbar</FILE>
 <TITLE>DonnaStatusBar</TITLE>
 DONNA_STATUS_BAR_ERROR

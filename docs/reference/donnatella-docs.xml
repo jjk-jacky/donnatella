@@ -74,6 +74,7 @@
           <xi:include href="xml/node.xml"/>
           <xi:include href="xml/pattern.xml"/>
           <xi:include href="xml/renderer.xml"/>
+          <xi:include href="xml/socket.xml"/>
           <xi:include href="xml/sort.xml"/>
           <xi:include href="xml/statusbar.xml"/>
           <xi:include href="xml/statusprovider.xml"/>
