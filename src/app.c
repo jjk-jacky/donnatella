@@ -368,13 +368,13 @@
  * (800ms), so a single process can be executed for multiple nodes.
  *
  * The executed process will have its output parsed, where it is expected to
- * find, on every line, the full location of the node, then a colon, then the
- * name of the property, another colon, and the value to be set.
+ * find, on every line, the full location of the node, then a pipe sign, then
+ * the name of the property, another pipe sign, and the value to be set.
  *
  * It is possible to simply have a line containing the location (ending with a
- * colon) and nothing else, and have following lines starting with a colon,
- * omitting the location, in which case the last/current node/location will be
- * used. This can be useful when used with groups :
+ * pipe sign) and nothing else, and have following lines starting with a pipe
+ * sign, omitting the location, in which case the last/current node/location
+ * will be used. This can be useful when used with groups :
  *
  * Sometimes, you might want to have one process used to refresh multiple
  * properties. This can be handled by setting boolean option
@@ -1879,7 +1879,7 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
     /* filename */
     if (*line == '/')
     {
-        s = strchr (line, ':');
+        s = strchr (line, '|');
         if (!s)
             return;
 
@@ -1890,7 +1890,7 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
             location = donna_node_get_location (node);
             if (!streq (line, location))
             {
-                *s = ':';
+                *s = '|';
                 g_free (location);
                 cpr->current = (guint) -1;
                 return;
@@ -1911,19 +1911,19 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
             }
             if (i >= cpr->multi.items->len)
             {
-                *s++ = ':';
+                *s++ = '|';
                 cpr->current = (guint) -1;
                 return;
             }
             cpr->current = i;
         }
-        *s++ = ':';
+        *s++ = '|';
 
         /* filename only on the line */
         if (*s == '\0')
             return;
     }
-    else if (*line != ':' || cpr->current == (guint) -1)
+    else if (*line != '|' || cpr->current == (guint) -1)
         return;
     else
     {
@@ -1943,7 +1943,7 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
 
     /* property */
     line = s;
-    s = strchr (line, ':');
+    s = strchr (line, '|');
     if (!s)
     {
         cpr->current = (guint) -1;
@@ -1957,7 +1957,7 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
         if (streq (line, pd->name))
             break;
     }
-    *s = ':';
+    *s = '|';
     if (num_prop >= cpr->property->nb_props)
         /* unknown property, ignore but keep current file (if any) */
         return;
