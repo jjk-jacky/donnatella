@@ -1472,6 +1472,29 @@ cmd_focus_set (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * intref_free:
+ * @intref: String representation of the intref to free
+ *
+ * Free the memory from @intref
+ *
+ * See donna_app_free_int_ref() for more.
+ */
+static DonnaTaskState
+cmd_intref_free (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    const gchar *intref = args[0];
+
+    if (donna_app_free_int_ref (app, intref))
+        return DONNA_TASK_DONE;
+
+    donna_task_set_error (task, DONNA_COMMAND_ERROR,
+            DONNA_COMMAND_ERROR_NOT_FOUND,
+            "Command 'intref_free': Cannot free '%s': no such intref",
+            intref);
+    return DONNA_TASK_FAILED;
+}
+
+/**
  * menu_popup:
  * @nodes: (array): The nodes to show in a menu
  * @menu: (allow-none): The menu definition to use
@@ -5359,6 +5382,11 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (focus_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (intref_free, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

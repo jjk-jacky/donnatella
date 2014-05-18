@@ -30,6 +30,7 @@ config_try_get_string
 exec
 focus_move
 focus_set
+intref_free
 menu_popup
 node_get_property
 node_new_child
