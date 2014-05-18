@@ -257,11 +257,6 @@ provider_command_get_domain (DonnaProvider *provider)
     return "command";
 }
 
-struct command *init_parse (DonnaProviderCommand    *pc,
-                            gchar                   *cmdline,
-                            gchar                  **first_arg,
-                            GError                 **error);
-
 static DonnaTaskState
 provider_command_new_node (DonnaProviderBase  *_provider,
                            DonnaTask          *task,
@@ -277,8 +272,8 @@ provider_command_new_node (DonnaProviderBase  *_provider,
 
     klass = DONNA_PROVIDER_BASE_GET_CLASS (_provider);
 
-    cmd = init_parse ((DonnaProviderCommand *) _provider, (gchar *) location,
-            NULL, &err);
+    cmd = _donna_command_init_parse ((DonnaProviderCommand *) _provider,
+            (gchar *) location, NULL, &err);
     if (!cmd)
     {
         donna_task_take_error (task, err);
@@ -428,10 +423,10 @@ free_run_command (struct run_command *rc)
 }
 
 struct command *
-init_parse (DonnaProviderCommand    *pc,
-            gchar                   *cmdline,
-            gchar                  **first_arg,
-            GError                 **error)
+_donna_command_init_parse (DonnaProviderCommand    *pc,
+                           gchar                   *cmdline,
+                           gchar                  **first_arg,
+                           GError                 **error)
 {
     DonnaProviderCommandPrivate *priv = pc->priv;
     struct command *command;
@@ -501,7 +496,7 @@ unquote_string (gchar **start, gchar **end, GError **error)
 static DonnaTaskState run_command (DonnaTask *task, struct run_command *rc);
 
 /* parse the next argument for a command. data must have been properly set &
- * initialized via init_parse() and therefore data->start points
+ * initialized via _donna_command_init_parse() and therefore data->start points
  * to the beginning of the argument data->i
  * Will handle figuring out where the arg ends (can be quoted, can also be
  * another command to run & get its return value as arg, via @syntax), and
@@ -538,9 +533,9 @@ parse_arg (struct run_command    *rc,
         dereference = rc->start[1] == '*';
         start = rc->start + ((dereference) ? 2 : 1);
 
-        /* do the init_parse to known which command this is, so we can check
-         * visibility/ensure we can run it */
-        _rc.command = init_parse (rc->pc, start, NULL, &err);
+        /* do the _donna_command_init_parse to known which command this is, so
+         * we can check visibility/ensure we can run it */
+        _rc.command = _donna_command_init_parse (rc->pc, start, NULL, &err);
         if (!_rc.command)
         {
             g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
@@ -1234,7 +1229,7 @@ run_command (DonnaTask *task, struct run_command *rc)
     gboolean need_task = FALSE;
     DonnaTaskState ret;
 
-    rc->command = init_parse (rc->pc, rc->cmdline, &rc->start, NULL);
+    rc->command = _donna_command_init_parse (rc->pc, rc->cmdline, &rc->start, NULL);
     if (G_UNLIKELY (!rc->command))
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,

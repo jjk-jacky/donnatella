@@ -48,6 +48,13 @@ struct command
     GDestroyNotify       destroy;
 };
 
+/* used from app.c to get return_type of command triggered via socket */
+struct command *    _donna_command_init_parse       (DonnaProviderCommand    *pc,
+                                                     gchar                   *cmdline,
+                                                     gchar                  **first_arg,
+                                                     GError                 **error);
+
+
 gint                _donna_get_choice_from_list     (guint           nb,
                                                      const gchar    *choices[],
                                                      const gchar    *sel);

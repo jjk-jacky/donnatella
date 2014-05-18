@@ -689,6 +689,16 @@ struct status
     GArray  *providers;
 };
 
+struct socket
+{
+    /* socket we're connected with */
+    DonnaSocket *socket;
+    /* tasks started/triggered from socket */
+    GSList      *tasks;
+    /* last task-id used */
+    guint        last_id;
+};
+
 struct _DonnaAppPrivate
 {
     GtkWindow       *window;
@@ -711,7 +721,7 @@ struct _DonnaAppPrivate
     gchar           *cur_dirname;
     gchar          **environ;
     gint             socket_fd;
-    GPtrArray       *sockets;
+    GArray          *sockets;
     /* visuals and providers (for custom properties) are under a RW lock so
      * everyone can read them at the same time (e.g. creating nodes,
      * get_children() & the likes). The write operation should be quite rare. */
@@ -976,8 +986,12 @@ app_free (DonnaApp *app)
     if (priv->sockets && priv->sockets->len > 0)
     {
         for (i = 0; i < priv->sockets->len; ++i)
-            donna_socket_close ((DonnaSocket *) priv->sockets->pdata[i]);
-        g_ptr_array_unref (priv->sockets);
+        {
+            struct socket *sck;
+            sck = &g_array_index (priv->sockets, struct socket, i);
+            donna_socket_close (sck->socket);
+        }
+        g_array_unref (priv->sockets);
         priv->sockets = NULL;
     }
 
@@ -4086,6 +4100,8 @@ struct fir
     gboolean is_stack;
     DonnaApp *app;
     GPtrArray *intrefs;
+    /* used when trigger node from socket */
+    DonnaSocket *socket;
 };
 
 static void
@@ -4099,6 +4115,8 @@ free_fir (struct fir *fir)
             donna_app_free_int_ref (fir->app, fir->intrefs->pdata[i]);
         g_ptr_array_unref (fir->intrefs);
     }
+    if (fir->socket)
+        donna_socket_unref (fir->socket);
     if (!fir->is_stack)
         g_free (fir);
 }
@@ -4151,7 +4169,7 @@ trigger_fl (DonnaApp    *app,
 
     if (blocking)
     {
-        struct fir fir = { TRUE, app, intrefs };
+        struct fir fir = { TRUE, app, intrefs, NULL };
         gboolean r;
 
         donna_task_wait_for_it (task, NULL, NULL);
@@ -7879,14 +7897,121 @@ _socket_send (DonnaSocket *socket, const gchar *fmt, ...)
 }
 
 static void
+cmd_trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
+{
+    DonnaAppPrivate *priv = fir->app->priv;
+    DonnaTaskState state;
+    guint id;
+    gchar *s = NULL;
+    gchar *free_me = NULL;
+    guint i;
+
+    state = donna_task_get_state (task);
+    id = GPOINTER_TO_UINT (g_object_get_data ((GObject *) task, "donna-socket-task-id"));
+
+    if (state == DONNA_TASK_DONE)
+    {
+        const GValue *v;
+        v = donna_task_get_return_value (task);
+        if (v)
+        {
+            GType type = G_VALUE_TYPE (v);
+
+            if (type == G_TYPE_STRING)
+                s = (gchar *) g_value_get_string (v);
+            else if (type == G_TYPE_INT)
+                s = free_me = g_strdup_printf ("%d", g_value_get_int (v));
+            else if (type == DONNA_TYPE_TREE_VIEW)
+                s = free_me = donna_app_new_int_ref (fir->app,
+                        DONNA_ARG_TYPE_TREE_VIEW, g_value_get_object (v));
+            else if (type == DONNA_TYPE_NODE)
+                s = free_me = donna_app_new_int_ref (fir->app,
+                        DONNA_ARG_TYPE_NODE, g_value_get_object (v));
+            else if (type == DONNA_TYPE_TERMINAL)
+                s = free_me = donna_app_new_int_ref (fir->app,
+                        DONNA_ARG_TYPE_TERMINAL, g_value_get_object (v));
+            else
+            {
+                DonnaArgType t;
+
+                /* in case it was a command */
+                t = GPOINTER_TO_UINT (g_object_get_data ((GObject *) task,
+                            "donna-command-return-type"));
+                /* array of nodes/strings */
+                if (t && (t & DONNA_ARG_IS_ARRAY)
+                        && (t & (DONNA_ARG_TYPE_NODE | DONNA_ARG_TYPE_STRING)))
+                    s = free_me = donna_app_new_int_ref (fir->app,
+                            t, g_value_get_boxed (v));
+            }
+        }
+    }
+    else if (state == DONNA_TASK_FAILED)
+    {
+        const GError *error;
+
+        error = donna_task_get_error (task);
+        if (error)
+            s = error->message;
+    }
+
+    _socket_send (fir->socket, "%s %d%s%s",
+            (state == DONNA_TASK_DONE) ? "DONE"
+            : (state == DONNA_TASK_CANCELLED) ? "CANCELLED" : "FAILED",
+            id,
+            (s) ? " " : "",
+            (s) ? s : "");
+    g_free (free_me);
+
+    for (i = 0; i < priv->sockets->len; ++i)
+    {
+        struct socket *sck;
+        sck = &g_array_index (priv->sockets, struct socket, i);
+        if (sck->socket == fir->socket)
+        {
+            sck->tasks = g_slist_remove (sck->tasks, task);
+            g_object_unref (task);
+            break;
+        }
+    }
+    free_fir (fir);
+}
+
+static gboolean
+idle_run_task (DonnaTask *task)
+{
+    donna_app_run_task (
+            (DonnaApp *) g_object_get_data ((GObject *) task, "donna-app"),
+            task);
+    return G_SOURCE_REMOVE;
+}
+
+static void
 socket_process (DonnaSocket *socket, gchar *message, DonnaApp *app)
 {
+    GError *err = NULL;
     gchar *e;
+    struct socket *sck;
+    guint i;
+
+    /* find socket in our internal list */
+    for (i = 0; i < app->priv->sockets->len; ++i)
+    {
+        sck = &g_array_index (app->priv->sockets, struct socket, i);
+        if (sck->socket == socket)
+            break;
+    }
+    if (G_UNLIKELY (i >= app->priv->sockets->len))
+    {
+        g_critical ("Unable to find socket %p inside list of connected sockets "
+                "to process message '%s'",
+                socket, message);
+        return;
+    }
 
     if (!message)
     {
         /* closing socket; this will unref it as well. */
-        g_ptr_array_remove_fast (app->priv->sockets, socket);
+        g_array_remove_index_fast (app->priv->sockets, i);
         return;
     }
 
@@ -7908,6 +8033,124 @@ socket_process (DonnaSocket *socket, gchar *message, DonnaApp *app)
         g_snprintf (buf, 42, "OK VERSION %s", PACKAGE_VERSION);
         donna_socket_send (socket, buf, (gsize) -1);
     }
+    else if (streq (message, "TRIGGER"))
+    {
+        DonnaNode *node;
+        DonnaTask *task;
+        GPtrArray *intrefs = NULL;
+        gchar *fl;
+        struct fir *fir;
+
+        if (!e)
+        {
+            donna_socket_send (socket, "ERR TRIGGER Full location to trigger missing",
+                    (gsize) -1);
+            goto done;
+        }
+
+        fl = e + 1;
+        fl = donna_app_parse_fl (app, fl, FALSE, NULL, &intrefs);
+
+        node = donna_app_get_node (app, fl, FALSE, &err);
+        if (!node)
+        {
+            _socket_send (socket, "ERR TRIGGER Failed to get node for '%s': %s",
+                    fl, err->message);
+            g_clear_error (&err);
+            if (fl != e + 1)
+                g_free (fl);
+            goto done;
+        }
+
+        task = donna_node_trigger_task (node, &err);
+        if (G_UNLIKELY (!task))
+        {
+            _socket_send (socket, "ERR TRIGGER Failed to trigger '%s': %s",
+                    fl, err->message);
+            g_clear_error (&err);
+            if (fl != e + 1)
+                g_free (fl);
+            g_object_unref (node);
+            goto done;
+        }
+
+        /* if it's a command, let's store the return type so we can handle more
+         * than "basic" types, i.e. those for which the GType (of GValue) isn't
+         * enough to know what it is, e.g. array of nodes... */
+        if (streq (donna_node_get_domain (node), "command"))
+        {
+            struct command *command;
+
+            command = _donna_command_init_parse (
+                    (DonnaProviderCommand *) donna_node_peek_provider (node),
+                    fl + strlen ("command:"), NULL, NULL);
+            if (command)
+                g_object_set_data ((GObject *) task, "donna-command-return-type",
+                        GUINT_TO_POINTER (command->return_type));
+        }
+
+        g_object_unref (node);
+        if (fl != e + 1)
+            g_free (fl);
+
+        g_object_set_data ((GObject *) task, "donna-socket-task-id",
+                GUINT_TO_POINTER (++sck->last_id));
+        sck->tasks = g_slist_prepend (sck->tasks, g_object_ref (task));
+
+        fir = g_new0 (struct fir, 1);
+        fir->app = app;
+        fir->intrefs = intrefs;
+        fir->socket = donna_socket_ref (socket);
+        donna_task_set_callback (task, (task_callback_fn) cmd_trigger_cb, fir, NULL);
+
+        _socket_send (socket, "OK TRIGGER %u", sck->last_id);
+        /* we run the task from an idle source to avoid possibly "blocking" the
+         * current source. E.g. if the trigger was to call an UI command that
+         * would start a new main loop, the main/UI thread might not be blocked,
+         * but this source (socket_received() -> socket_process()) will, since
+         * we're still in its dispatcher. So the caller couldn't cancel it (or
+         * communicate any further to e.g. trigger something else, etc)
+         * Note: this is because there can only be one socket_process() at a
+         * time for a socket, see socket.c and the bit about re-entrancy of
+         * socket_received() for why */
+        g_object_set_data ((GObject *) task, "donna-app", app);
+        g_idle_add ((GSourceFunc) idle_run_task, task);
+    }
+    else if (streq (message, "CANCEL"))
+    {
+        guint id;
+        gchar *s;
+        GSList *l;
+
+        if (!e)
+        {
+            donna_socket_send (socket, "ERR CANCEL ID of triggered task missing",
+                    (gsize) -1);
+            goto done;
+        }
+
+        id = (guint) g_ascii_strtoull (e + 1, &s, 10);
+        if (!s || *s != '\0')
+        {
+            donna_socket_send (socket, "ERR CANCEL Invalid ID of triggered task",
+                    (gsize) -1);
+            goto done;
+        }
+
+        for (l = sck->tasks; l; l = l->next)
+        {
+            if (GPOINTER_TO_UINT (g_object_get_data (l->data, "donna-socket-task-id"))
+                    == id)
+            {
+                _socket_send (socket, "OK CANCEL %u", id);
+                donna_task_cancel ((DonnaTask *) l->data);
+                break;
+            }
+        }
+
+        if (!l)
+            _socket_send (socket, "ERR CANCEL No task with ID %u", id);
+    }
     else
         _socket_send (socket, "ERR %s Unknown command", message);
 
@@ -7916,11 +8159,21 @@ done:
         *e = ' ';
 }
 
+static void
+free_socket (gpointer data)
+{
+    struct socket *sck = data;
+
+    if (sck->tasks)
+        g_slist_free_full (sck->tasks, g_object_unref);
+    donna_socket_unref (sck->socket);
+}
+
 static gboolean
 socket_accept (DonnaApp *app)
 {
     DonnaAppPrivate *priv = app->priv;
-    DonnaSocket *socket;
+    struct socket sck = { NULL, };
     gint fd;
 
 again:
@@ -7938,12 +8191,14 @@ again:
         return G_SOURCE_CONTINUE;
     }
 
-    socket = donna_socket_new (fd, (socket_process_fn) socket_process,
+    sck.socket = donna_socket_new (fd, (socket_process_fn) socket_process,
             g_object_ref (app), g_object_unref);
     if (!priv->sockets)
-        priv->sockets = g_ptr_array_new_with_free_func (
-                (GDestroyNotify) donna_socket_unref);
-    g_ptr_array_add (priv->sockets, socket);
+    {
+        priv->sockets = g_array_new (FALSE, FALSE, sizeof (struct socket));
+        g_array_set_clear_func (priv->sockets, free_socket);
+    }
+    g_array_append_val (priv->sockets, sck);
 
     return G_SOURCE_CONTINUE;
 }
