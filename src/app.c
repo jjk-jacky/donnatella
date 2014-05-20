@@ -374,7 +374,16 @@
  * It is possible to simply have a line containing the location (ending with a
  * pipe sign) and nothing else, and have following lines starting with a pipe
  * sign, omitting the location, in which case the last/current node/location
- * will be used. This can be useful when used with groups :
+ * will be used. This can be useful when used with groups (see below).
+ *
+ * You can also set boolean option <systemitem>use_nuls</systemitem> to true, in
+ * which case the output format is a little different, in that no new line (LF)
+ * should be present, and both filenames and property values must be NUL
+ * terminated (and can therefore include any character but NUL).
+ *
+ * So e.g. to define the filename to use, then a property value, the output
+ * shoud be in the forms:
+ * &lt;FILENAME&gt;&lt;NUL&gt;|&lt;NUL&gt;|&lt;PROPERTY&gt;|&lt;VALUE&gt;&lt;NUL&gt;
  *
  * Sometimes, you might want to have one process used to refresh multiple
  * properties. This can be handled by setting boolean option
@@ -599,6 +608,7 @@ struct property
 {
     DonnaApp *app;
     gchar *cmdline;
+    gboolean use_nuls;
     gboolean preload;
     GArray *items;      /* cp_item[] for VISIBILITY_LOOP refresh_tasks */
     GSource *source;    /* timeout to run the cmdline for tasks */
@@ -1805,6 +1815,12 @@ struct cp_refresh {
     struct property *property;
     gboolean is_single;
     guint current;
+    GString *str;
+    enum {
+        DS_READY,
+        DS_POST_FILE,
+        DS_ERROR
+    } data_state;
     union {
         struct {
             DonnaNode *node;
@@ -1822,6 +1838,9 @@ static void
 free_cp_refresh (gpointer data)
 {
     struct cp_refresh *cpr = data;
+
+    if (cpr->str)
+        g_string_free (cpr->str, TRUE);
 
     if (G_UNLIKELY (cpr->is_single))
         /* single is on the stack, node isn't ref-ed (owned by the task calling
@@ -1853,6 +1872,225 @@ free_cpi_task (gpointer data)
     g_free (cpit);
 }
 
+enum cpr_state
+{
+    CPR_DONE,
+    CPR_NEED_DATA,
+    CPR_FAILED
+};
+
+/* assumes *data == '/' */
+static enum cpr_state
+cpr_filename (struct cp_refresh *cpr,
+              gchar             *data,
+              gsize              len,
+              DonnaNode        **node,
+              gchar            **next)
+{
+    gboolean is_nul_terminated = len > 0;
+    struct cp_item *cpi;
+    guint i;
+
+    if (!is_nul_terminated)
+    {
+        /* find the needed separator */
+        *next = strchr (data, '|');
+        if (!*next)
+            return CPR_FAILED;
+        /* temporary turn it into NUL so data "is" the filename */
+        **next = '\0';
+    }
+    else
+    {
+        /* make sure the end of data is within the buffer, else it means we
+         * haven't received a NUL as part of the data yet */
+        *next = data + strlen (data);
+        if (*next >= data + len)
+            return CPR_NEED_DATA;
+    }
+
+    if (cpr->is_single)
+    {
+        gchar *location;
+
+        *node = cpr->single.node;
+        location = donna_node_get_location (*node);
+        if (!streq (data, location))
+        {
+            if (!is_nul_terminated)
+                **next = '|';
+            g_free (location);
+            cpr->current = (guint) -1;
+            return CPR_FAILED;
+        }
+        g_free (location);
+        cpr->current = 1;
+    }
+    else
+    {
+        for (i = 0; i < cpr->multi.items->len; ++i)
+        {
+            cpi = &g_array_index (cpr->multi.items, struct cp_item, i);
+            if (streq (data, cpi->location))
+            {
+                *node = cpi->node;
+                break;
+            }
+        }
+        if (i >= cpr->multi.items->len)
+        {
+            if (!is_nul_terminated)
+                **next = '|';
+            cpr->current = (guint) -1;
+            return CPR_FAILED;
+        }
+        cpr->current = i;
+    }
+    if (!is_nul_terminated)
+        /* restore */
+        **next = '|';
+
+    if (is_nul_terminated)
+    {
+        /* move past the NUL */
+        (*next)++;
+        /* are we moving past received data? */
+        if (**next == '\0' && *next >= data + len)
+            return CPR_NEED_DATA;
+        /* make sure there is a separator */
+        else if (**next != '|')
+            return CPR_FAILED;
+    }
+
+    return CPR_DONE;
+}
+
+static enum cpr_state
+cpr_property (struct cp_refresh *cpr,
+              gchar             *data,
+              gsize              len,
+              gboolean           is_post_file,
+              guint             *num_prop,
+              gchar            **next)
+{
+    gboolean is_nul_terminated = len > 0;
+    struct prop_def *pd;
+    gchar *s;
+
+    if (*data != '|')
+        return CPR_FAILED;
+    else if (cpr->current == (guint) -1)
+        /* if not is_nul_terminated it'll move to next line */
+        return CPR_FAILED;
+    else if (is_nul_terminated && len == 1)
+        return CPR_NEED_DATA;
+
+    *next = data + 1;
+    if (is_post_file && **next == '\0')
+        return CPR_DONE;
+
+    s = strchr (*next, '|');
+    if (!s)
+    {
+        /* strlen (data) == len means there's no NUL character inside data, so
+         * we might just not have received everything yet */
+        if (is_nul_terminated && strlen (data) == len)
+            return CPR_NEED_DATA;
+
+        cpr->current = (guint) -1;
+        return CPR_FAILED;
+    }
+
+    *s = '\0';
+    for (*num_prop = 0; *num_prop < cpr->property->nb_props; ++*num_prop)
+    {
+        pd = &cpr->property->properties[*num_prop];
+        if (streq (*next, pd->name))
+            break;
+    }
+    *s = '|';
+    *next = s;
+    if (*num_prop >= cpr->property->nb_props)
+        /* unknown property, ignore but keep current file (if any) */
+        return CPR_FAILED;
+
+    return CPR_DONE;
+}
+
+static inline DonnaNode *
+cpr_get_node (struct cp_refresh *cpr)
+{
+    if (cpr->is_single)
+        return cpr->single.node;
+    else
+    {
+        struct cp_item *cpi;
+        cpi = &g_array_index (cpr->multi.items, struct cp_item, cpr->current);
+        return cpi->node;
+    }
+}
+
+static void
+cpr_refresh (struct cp_refresh  *cpr,
+             gchar              *str,
+             guint               num_prop,
+             DonnaNode          *node,
+             GObject            *o_tp)
+{
+    struct prop_def *pd;
+    GValue v = G_VALUE_INIT;
+    gboolean ok = TRUE;
+
+    pd = &cpr->property->properties[num_prop];
+    g_value_init (&v, pd->type);
+    if (pd->type == G_TYPE_STRING)
+        g_value_set_string (&v, str);
+    else /* G_TYPE_UNIT64 */
+    {
+        guint64 val;
+        gchar *e;
+
+        val = (guint64) g_ascii_strtoll (str, &e, 10);
+        if (e && *e == '\0')
+            g_value_set_uint64 (&v, val);
+        else
+            ok = FALSE;
+    }
+    if (ok)
+    {
+        donna_node_set_property_value (node, pd->name, &v);
+        DONNA_DEBUG (APP, NULL,
+                gchar *fl = donna_node_get_full_location (node);
+                g_debug3 ("Custom property '%s' on '%s' was refreshed to '%s'",
+                    pd->name, fl, str);
+                g_free (fl));
+    }
+    g_value_unset (&v);
+
+    /* flag refreshed */
+    if (cpr->is_single)
+    {
+        if (num_prop == cpr->single.num_prop)
+            g_object_set_data (o_tp, "donna-cp-refreshed",
+                    GINT_TO_POINTER (TRUE));
+    }
+    else
+    {
+        struct cp_item *cpi;
+        guint i;
+
+        cpi = &g_array_index (cpr->multi.items, struct cp_item, cpr->current);
+        for (i = 0; i < cpi->tasks->len; ++i)
+        {
+            struct cpi_task *cpit = cpi->tasks->pdata[i];
+
+            if (num_prop == cpit->num_prop)
+                g_object_set_data ((GObject *) cpit->task, "donna-cp-refreshed",
+                        GINT_TO_POINTER (TRUE));
+        }
+    }
+}
+
 static void
 cp_pipe_new_line (DonnaTaskProcess  *tp,
                   DonnaPipe          pipe,
@@ -1860,14 +2098,9 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
                   struct cp_refresh *cpr)
 {
     DonnaNode *node;
-    gchar *location;
-    struct cp_item *cpi;
-    struct prop_def *pd;
-    GValue v = G_VALUE_INIT;
     gchar *s;
-    guint i;
     guint num_prop;
-    gboolean ok = TRUE;
+    gboolean is_post_file = FALSE;
 
     if (!line)
         /* EOF */
@@ -1879,133 +2112,116 @@ cp_pipe_new_line (DonnaTaskProcess  *tp,
     /* filename */
     if (*line == '/')
     {
-        s = strchr (line, '|');
-        if (!s)
-            return;
-
-        *s = '\0';
-        if (cpr->is_single)
+        switch (cpr_filename (cpr, line, 0, &node, &s))
         {
-            node = cpr->single.node;
-            location = donna_node_get_location (node);
-            if (!streq (line, location))
-            {
-                *s = '|';
-                g_free (location);
-                cpr->current = (guint) -1;
+            case CPR_DONE:
+                line = s;
+                is_post_file = TRUE;
+                break;
+            case CPR_NEED_DATA:
+            case CPR_FAILED:
+                /* nothing to do */
                 return;
-            }
-            cpr->current = 1;
         }
-        else
-        {
-            for (i = 0; i < cpr->multi.items->len; ++i)
-            {
-                cpi = &g_array_index (cpr->multi.items, struct cp_item, i);
-                if (streq (line, cpi->location))
-                {
-                    node = cpi->node;
-                    location = cpi->location;
-                    break;
-                }
-            }
-            if (i >= cpr->multi.items->len)
-            {
-                *s++ = '|';
-                cpr->current = (guint) -1;
-                return;
-            }
-            cpr->current = i;
-        }
-        *s++ = '|';
-
-        /* filename only on the line */
-        if (*s == '\0')
-            return;
     }
-    else if (*line != '|' || cpr->current == (guint) -1)
-        return;
     else
-    {
-        s = line + 1;
-        if (cpr->is_single)
-        {
-            node = cpr->single.node;
-            location = donna_node_get_location (node);
-        }
-        else
-        {
-            cpi = &g_array_index (cpr->multi.items, struct cp_item, cpr->current);
-            node = cpi->node;
-            location = cpi->location;
-        }
-    }
+        node = cpr_get_node (cpr);
 
-    /* property */
-    line = s;
-    s = strchr (line, '|');
-    if (!s)
+    switch (cpr_property (cpr, line, 0, is_post_file, &num_prop, &s))
     {
-        cpr->current = (guint) -1;
-        return;
-    }
-
-    *s = '\0';
-    for (num_prop = 0; num_prop < cpr->property->nb_props; ++num_prop)
-    {
-        pd = &cpr->property->properties[num_prop];
-        if (streq (line, pd->name))
+        case CPR_DONE:
             break;
+        case CPR_NEED_DATA:
+        case CPR_FAILED:
+            /* nothing to do */
+            return;
     }
-    *s = '|';
-    if (num_prop >= cpr->property->nb_props)
-        /* unknown property, ignore but keep current file (if any) */
-        return;
     line = s + 1;
 
-    /* value */
-    g_value_init (&v, pd->type);
-    if (pd->type == G_TYPE_STRING)
-        g_value_set_string (&v, line);
-    else /* G_TYPE_UNIT64 */
-    {
-        guint64 val;
+    cpr_refresh (cpr, line, num_prop, node, (GObject *) tp);
+}
 
-        val = (guint64) g_ascii_strtoll (line, &s, 10);
-        if (s && *s == '\0')
-            g_value_set_uint64 (&v, val);
-        else
-            ok = FALSE;
-    }
-    if (ok)
-    {
-        donna_node_set_property_value (node, pd->name, &v);
-        DONNA_DEBUG (APP, NULL,
-                g_debug3 ("Custom property '%s' on '%s:%s' was refreshed to '%s'",
-                    pd->name, donna_node_get_domain (node), location, line));
-    }
-    g_value_unset (&v);
-    if (cpr->is_single)
-        g_free (location);
+static void
+cp_pipe_data_received (DonnaTaskProcess  *tp,
+                       DonnaPipe          pipe,
+                       gsize              len,
+                       gchar             *data,
+                       struct cp_refresh *cpr)
+{
+    DonnaNode *node;
+    gchar *s;
+    gboolean is_post_file = FALSE;
+    guint num_prop;
 
-    /* flag refreshed */
-    if (cpr->is_single)
+    if (len == 0)
+        /* EOF */
+        return;
+
+    if (pipe == DONNA_PIPE_ERROR || cpr->data_state == DS_ERROR)
+        return;
+
+    g_string_append_len (cpr->str, data, (gssize) len);
+
+again:
+    if (cpr->data_state == DS_READY)
     {
-        if (num_prop == cpr->single.num_prop)
-            g_object_set_data ((GObject *) tp, "donna-cp-refreshed",
-                    GINT_TO_POINTER (TRUE));
-    }
-    else
-    {
-        for (i = 0; i < cpi->tasks->len; ++i)
+        /* filename */
+        if (cpr->str->str[0] == '/')
         {
-            struct cpi_task *cpit = cpi->tasks->pdata[i];
-
-            if (num_prop == cpit->num_prop)
-                g_object_set_data ((GObject *) cpit->task, "donna-cp-refreshed",
-                        GINT_TO_POINTER (TRUE));
+            switch (cpr_filename (cpr, cpr->str->str, cpr->str->len, &node, &s))
+            {
+                case CPR_DONE:
+                    cpr->data_state = DS_POST_FILE;
+                    g_string_erase (cpr->str, 0, s - cpr->str->str);
+                    is_post_file = TRUE;
+                    break;
+                case CPR_NEED_DATA:
+                    /* nothing to do */
+                    return;
+                case CPR_FAILED:
+                    /* we're done */
+                    cpr->data_state = DS_ERROR;
+                    return;
+            }
         }
     }
+    else
+        node = cpr_get_node (cpr);
+
+    /* no more data to process */
+    if (cpr->str->len == 0)
+        return;
+
+    switch (cpr_property (cpr, cpr->str->str, cpr->str->len, is_post_file, &num_prop, &s))
+    {
+        case CPR_DONE:
+            break;
+        case CPR_NEED_DATA:
+            /* nothing to do */
+            return;
+        case CPR_FAILED:
+            /* we're done */
+            cpr->data_state = DS_ERROR;
+            return;
+    }
+
+    /* make sure we have received a NUL */
+    if (strlen (cpr->str->str) >= cpr->str->len)
+        return;
+
+    /* if after file and no property name, nothing to do (but remove processed
+     * data from buffer) */
+    if (!is_post_file || *s != '\0')
+    {
+        /* move past pipe into value */
+        ++s;
+        cpr_refresh (cpr, s, num_prop, node, (GObject *) tp);
+    }
+    g_string_erase (cpr->str, 0, (gssize) (strlen (cpr->str->str) + 1));
+    cpr->data_state = DS_READY;
+
+    if (cpr->str->len > 0)
+        goto again;
 }
 
 static gboolean
@@ -2062,9 +2278,17 @@ cp_get_task_process (struct cp_refresh *cpr)
     arr = g_ptr_array_new ();
     donna_task_set_devices ((DonnaTask *) tp, arr);
     g_ptr_array_unref (arr);
-    donna_task_process_set_ui_msg (tp);
     donna_task_process_set_default_closer (tp);
-    g_signal_connect (tp, "pipe-new-line", (GCallback) cp_pipe_new_line, cpr);
+    if (cpr->property->use_nuls)
+    {
+        cpr->str = g_string_new (NULL);
+        g_signal_connect (tp, "pipe-data-received", (GCallback) cp_pipe_data_received, cpr);
+    }
+    else
+    {
+        donna_task_process_set_ui_msg (tp);
+        g_signal_connect (tp, "pipe-new-line", (GCallback) cp_pipe_new_line, cpr);
+    }
 
     DONNA_DEBUG (APP, NULL,
             g_debug ("Custom property '%s'%s: running '%s'",
@@ -7162,6 +7386,10 @@ load_custom_properties (DonnaApp *app)
                 free_property (prop);
                 continue;
             }
+            donna_config_get_boolean (priv->config, NULL, &prop->use_nuls,
+                    "custom_properties/%s/%s/use_nuls",
+                    (gchar *) arr->pdata[i],
+                    (gchar *) arr_props->pdata[j]);
             donna_config_get_boolean (priv->config, NULL, &prop->preload,
                     "custom_properties/%s/%s/preload",
                     (gchar *) arr->pdata[i],
