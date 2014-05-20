@@ -75,13 +75,13 @@ extern void g_cclosure_user_marshal_POINTER__STRING_OBJECT (GClosure     *closur
                                                             gpointer      invocation_hint,
                                                             gpointer      marshal_data);
 
-/* VOID:INT,LONG,STRING (closures.def:7) */
-extern void g_cclosure_user_marshal_VOID__INT_LONG_STRING (GClosure     *closure,
-                                                           GValue       *return_value,
-                                                           guint         n_param_values,
-                                                           const GValue *param_values,
-                                                           gpointer      invocation_hint,
-                                                           gpointer      marshal_data);
+/* VOID:INT,LONG,POINTER (closures.def:7) */
+extern void g_cclosure_user_marshal_VOID__INT_LONG_POINTER (GClosure     *closure,
+                                                            GValue       *return_value,
+                                                            guint         n_param_values,
+                                                            const GValue *param_values,
+                                                            gpointer      invocation_hint,
+                                                            gpointer      marshal_data);
 
 /* VOID:INT,STRING (closures.def:8) */
 extern void g_cclosure_user_marshal_VOID__INT_STRING (GClosure     *closure,

@@ -303,21 +303,21 @@ g_cclosure_user_marshal_POINTER__STRING_OBJECT (GClosure     *closure,
   g_value_set_pointer (return_value, v_return);
 }
 
-/* VOID:INT,LONG,STRING (closures.def:7) */
+/* VOID:INT,LONG,POINTER (closures.def:7) */
 void
-g_cclosure_user_marshal_VOID__INT_LONG_STRING (GClosure     *closure,
-                                               GValue       *return_value G_GNUC_UNUSED,
-                                               guint         n_param_values,
-                                               const GValue *param_values,
-                                               gpointer      invocation_hint G_GNUC_UNUSED,
-                                               gpointer      marshal_data)
+g_cclosure_user_marshal_VOID__INT_LONG_POINTER (GClosure     *closure,
+                                                GValue       *return_value G_GNUC_UNUSED,
+                                                guint         n_param_values,
+                                                const GValue *param_values,
+                                                gpointer      invocation_hint G_GNUC_UNUSED,
+                                                gpointer      marshal_data)
 {
-  typedef void (*GMarshalFunc_VOID__INT_LONG_STRING) (gpointer     data1,
-                                                      gint         arg_1,
-                                                      glong        arg_2,
-                                                      gpointer     arg_3,
-                                                      gpointer     data2);
-  register GMarshalFunc_VOID__INT_LONG_STRING callback;
+  typedef void (*GMarshalFunc_VOID__INT_LONG_POINTER) (gpointer     data1,
+                                                       gint         arg_1,
+                                                       glong        arg_2,
+                                                       gpointer     arg_3,
+                                                       gpointer     data2);
+  register GMarshalFunc_VOID__INT_LONG_POINTER callback;
   register GCClosure *cc = (GCClosure*) closure;
   register gpointer data1, data2;
 
@@ -333,12 +333,12 @@ g_cclosure_user_marshal_VOID__INT_LONG_STRING (GClosure     *closure,
       data1 = g_value_peek_pointer (param_values + 0);
       data2 = closure->data;
     }
-  callback = (GMarshalFunc_VOID__INT_LONG_STRING) (marshal_data ? marshal_data : cc->callback);
+  callback = (GMarshalFunc_VOID__INT_LONG_POINTER) (marshal_data ? marshal_data : cc->callback);
 
   callback (data1,
             g_marshal_value_peek_int (param_values + 1),
             g_marshal_value_peek_long (param_values + 2),
-            g_marshal_value_peek_string (param_values + 3),
+            g_marshal_value_peek_pointer (param_values + 3),
             data2);
 }
 

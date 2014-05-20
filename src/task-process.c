@@ -142,12 +142,15 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
                 G_STRUCT_OFFSET (DonnaTaskProcessClass, pipe_data_received),
                 NULL,
                 NULL,
-                g_cclosure_user_marshal_VOID__INT_LONG_STRING,
+                /* POINTER and not STRING because it might contain NUL-byte, and
+                 * STRING assumes a NUL-terminated string (and therefore will be
+                 * truncated at the first NUL) */
+                g_cclosure_user_marshal_VOID__INT_LONG_POINTER,
                 G_TYPE_NONE,
                 3,
                 G_TYPE_INT,
                 G_TYPE_ULONG,
-                G_TYPE_STRING);
+                G_TYPE_POINTER);
     donna_task_process_signals[PIPE_NEW_LINE] =
         g_signal_new ("pipe-new-line",
                 DONNA_TYPE_TASK_PROCESS,
