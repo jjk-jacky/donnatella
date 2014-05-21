@@ -7872,8 +7872,11 @@ add_node_to_tree (DonnaTreeView *tree,
     /* add it to our hashtable */
     it   = gtk_tree_iter_copy (&iter);
     list = g_hash_table_lookup (priv->hashtable, node);
+    if (!list)
+        /* we're adding a new node, take a ref on it */
+        g_object_ref (node);
     list = g_slist_prepend (list, it);
-    g_hash_table_insert (priv->hashtable, g_object_ref (node), list);
+    g_hash_table_insert (priv->hashtable, node, list);
     /* new root? */
     if (!parent)
         priv->roots = g_slist_append (priv->roots, it);
