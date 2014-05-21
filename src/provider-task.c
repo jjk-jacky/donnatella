@@ -2855,7 +2855,7 @@ donna_task_manager_pre_exit (DonnaProviderTask      *tm,
 
     if (busy)
     {
-        if (donna_app_ask (priv->app, "Confirmation",
+        if (donna_app_ask (priv->app, -1, "Confirmation",
                     "Are you sure you want to cancel all pending tasks and exit?",
                     "application-exit", "Yes, cancel tasks & exit",
                     NULL, "No, don't exit",
@@ -2863,7 +2863,7 @@ donna_task_manager_pre_exit (DonnaProviderTask      *tm,
             return TRUE;
         priv->cancel_all_in_exit = TRUE;
     }
-    else if (always_confirm && donna_app_ask (priv->app, "Confirmation",
+    else if (always_confirm && donna_app_ask (priv->app, -1, "Confirmation",
                     "Are you sure you want to exit ?",
                     "application-exit", "Yes, exit",
                     NULL, "No, don't exit",
@@ -2926,7 +2926,7 @@ real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
                 msg = g_strdup_printf ("The task '%s' needs to be either %s or canceled.",
                         desc, (state & DONNA_TASK_STOPPED) ? "started" : "resumed");
                 while (r == 0)
-                    r = donna_app_ask (priv->app, "Exiting Donnatella", msg,
+                    r = donna_app_ask (priv->app, -1, "Exiting Donnatella", msg,
                             NULL, (state & DONNA_TASK_STOPPED) ? "Start task" : "Resume task",
                             NULL, "Cancel task",
                             NULL);

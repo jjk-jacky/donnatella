@@ -249,8 +249,8 @@ cmd_ask (DonnaTask *task, DonnaApp *app, gpointer *args)
     gint r;
     GValue *value;
 
-    r = donna_app_ask (app, title, details, btn1_icon, btn1_label,
-            btn2_icon, btn2_label, btn3_icon, btn3_label,
+    r = donna_app_ask (app, donna_task_get_fd (task), title, details,
+            btn1_icon, btn1_label, btn2_icon, btn2_label, btn3_icon, btn3_label,
             btn4_icon, btn4_label, btn5_icon, btn5_label, NULL);
 
     value = donna_task_grab_return_value (task);
@@ -290,8 +290,8 @@ cmd_ask_text (DonnaTask *task, DonnaApp *app, gpointer *args)
         /* we need to make it NULL-terminated for ask_text() */
         g_ptr_array_add (other, NULL);
 
-    s = donna_app_ask_text (app, title, details, main_default,
-            (other) ? (const gchar **) other->pdata : NULL,
+    s = donna_app_ask_text (app, donna_task_get_fd (task), title, details,
+            main_default, (other) ? (const gchar **) other->pdata : NULL,
             &err);
     if (other)
         g_ptr_array_remove_index_fast (other, other->len - 1);

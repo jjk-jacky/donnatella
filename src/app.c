@@ -5697,9 +5697,17 @@ btn_clicked (GObject *btn, struct ask *ask)
     gtk_widget_destroy (ask->win);
 }
 
+static gboolean
+on_fd_destroy_widget (gint fd, GIOCondition condition, GtkWidget *widget)
+{
+    gtk_widget_destroy (widget);
+    return G_SOURCE_REMOVE;
+}
+
 /**
  * donna_app_ask:
  * @app: The #DonnaApp
+ * @fd: A file descriptor that can be used to cancel the operation; -1 for none
  * @title: Title of the dialog
  * @details: (allow-none): Additional text to shown below the title
  * @btn1_icon: (allow-none): Name of the icon to use on button 1
@@ -5711,6 +5719,11 @@ btn_clicked (GObject *btn, struct ask *ask)
  * Show a dialog asking the user to make a choice. This will consist of @title,
  * optionally a longer text in @details which can begin with prefix "markup:" to
  * indicate that it must be parsed using Pango markup.
+ *
+ * If @fd is greater than -1, a new source will be created on @fd, and if it
+ * becomes available for reading then the main loop (asking the user) will be
+ * quitted, i.e. the operation is cancelled.
+ * This would typically be the fd of the task from which calling donna_app_ask()
  *
  * The dialog will then have at least 2 buttons, allowing the user to make a
  * choice. Buttons are numbered from 1, and will be placed from right to left.
@@ -5726,6 +5739,7 @@ btn_clicked (GObject *btn, struct ask *ask)
  */
 gint
 donna_app_ask (DonnaApp       *app,
+               gint            fd,
                const gchar    *title,
                const gchar    *details,
                const gchar    *btn1_icon,
@@ -5742,6 +5756,7 @@ donna_app_ask (DonnaApp       *app,
     GtkWidget *w;
     gint i = 0;
     va_list va_args;
+    GSource *source;
 
     g_return_val_if_fail (DONNA_IS_APP (app), 0);
     g_return_val_if_fail (title != NULL, 0);
@@ -5813,8 +5828,21 @@ donna_app_ask (DonnaApp       *app,
     ask.loop = g_main_loop_new (NULL, TRUE);
     g_signal_connect_swapped (ask.win, "destroy",
             (GCallback) g_main_loop_quit, ask.loop);
+    if (fd >= 0)
+    {
+        source = g_unix_fd_source_new (fd, G_IO_IN);
+        g_source_set_callback (source, (GSourceFunc) on_fd_destroy_widget, ask.win, NULL);
+        g_source_attach (source, NULL);
+    }
+    else
+        source = NULL;
     gtk_widget_show_all (ask.win);
     g_main_loop_run (ask.loop);
+    if (source)
+    {
+        g_source_destroy (source);
+        g_source_unref (source);
+    }
 
     return ask.response;
 }
@@ -5844,6 +5872,7 @@ key_press_cb (struct ask_text *data, GdkEventKey *event)
 /**
  * donna_app_ask_text:
  * @app: The #DonnaApp
+ * @fd: A file descriptor that can be used to cancel the operation; -1 for none
  * @title: Title of the dialog
  * @details: (allow-none): Additional text to shown below the title
  * @main_default: (allow-none): Default to use in the entry
@@ -5852,6 +5881,12 @@ key_press_cb (struct ask_text *data, GdkEventKey *event)
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Shows a dialog asking the user for input.
+ *
+ * If @fd is greater than -1, a new source will be created on @fd, and if it
+ * becomes available for reading then the main loop (asking the user) will be
+ * quitted, i.e. the operation is cancelled.
+ * This would typically be the fd of the task from which calling
+ * donna_app_ask_text()
  *
  * The window will have the CSS id/name <systemitem>ask-text</systemitem> to
  * allow customization. @title will be shown on the dialog, with CSS class
@@ -5881,6 +5916,7 @@ key_press_cb (struct ask_text *data, GdkEventKey *event)
  */
 gchar *
 donna_app_ask_text (DonnaApp       *app,
+                    gint            fd,
                     const gchar    *title,
                     const gchar    *details,
                     const gchar    *main_default,
@@ -5895,6 +5931,7 @@ donna_app_ask_text (DonnaApp       *app,
     GtkBox *btn_box;
     GtkLabel *lbl;
     GtkWidget *w;
+    GSource *source;
 
     g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
     g_return_val_if_fail (title != NULL, FALSE);
@@ -5976,10 +6013,23 @@ donna_app_ask_text (DonnaApp       *app,
 
     loop = g_main_loop_new (NULL, TRUE);
     g_signal_connect_swapped (data.win, "destroy", (GCallback) g_main_loop_quit, loop);
+    if (fd >= 0)
+    {
+        source = g_unix_fd_source_new (fd, G_IO_IN);
+        g_source_set_callback (source, (GSourceFunc) on_fd_destroy_widget, data.win, NULL);
+        g_source_attach (source, NULL);
+    }
+    else
+        source = NULL;
     gtk_widget_show_all ((GtkWidget *) data.win);
     gtk_widget_grab_focus ((GtkWidget *) data.entry);
     gtk_label_select_region (lbl, 0, 0);
     g_main_loop_run (loop);
+    if (source)
+    {
+        g_source_destroy (source);
+        g_source_unref (source);
+    }
 
     return data.s;
 }
