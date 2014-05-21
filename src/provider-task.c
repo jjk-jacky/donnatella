@@ -22,6 +22,7 @@
 
 #include "config.h"
 
+#include <glib-unix.h>
 #include <gtk/gtk.h>
 #include "provider-task.h"
 #include "provider.h"
@@ -2889,7 +2890,9 @@ struct refresh_exit_waiting
     GMainLoop *loop;
 };
 
-static gboolean refresh_exit_waiting (struct refresh_exit_waiting *rew);
+static gboolean refresh_exit_waiting (gint                           fd,
+                                      GIOCondition                   condition,
+                                      struct refresh_exit_waiting   *rew);
 
 static GSource *
 real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
@@ -2946,8 +2949,12 @@ real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
             if (!(donna_task_get_state (t->task) & DONNA_TASK_POST_RUN))
             {
                 if (!source)
-                    source = donna_fd_source_new (donna_task_get_wait_fd (t->task),
+                {
+                    source = g_unix_fd_source_new (donna_task_get_wait_fd (t->task),
+                            G_IO_IN);
+                    g_source_set_callback (source,
                             (GSourceFunc) refresh_exit_waiting, rew, NULL);
+                }
                 else
                     g_source_add_unix_fd (source, donna_task_get_wait_fd (t->task),
                             G_IO_IN);
@@ -2960,7 +2967,9 @@ real_refresh_exit_waiting (struct refresh_exit_waiting *rew)
 }
 
 static gboolean
-refresh_exit_waiting (struct refresh_exit_waiting *rew)
+refresh_exit_waiting (gint                           fd,
+                      GIOCondition                   condition,
+                      struct refresh_exit_waiting   *rew)
 {
     GSource *source;
 

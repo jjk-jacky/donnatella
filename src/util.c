@@ -614,58 +614,10 @@ donna_g_object_unref (gpointer object)
 }
 
 gboolean
-donna_main_loop_quit_return_false (GMainLoop *loop)
+donna_on_fd_close_main_loop (gint                fd,
+                             GIOCondition        condition,
+                             GMainLoop          *loop)
 {
     g_main_loop_quit (loop);
     return G_SOURCE_REMOVE;
-}
-
-static gboolean
-dispatch (GSource *source, GSourceFunc callback, gpointer data)
-{
-    return callback (data);
-}
-
-static GSourceFuncs funcs = {
-    .prepare = NULL,
-    .check = NULL,
-    .dispatch = dispatch,
-    .finalize = NULL
-};
-
-GSource *
-donna_fd_source_new_full (gint           fd,
-                          GIOCondition   condition,
-                          gint           priority,
-                          GSourceFunc    callback,
-                          gpointer       data,
-                          GDestroyNotify destroy)
-{
-    GSource *source;
-
-    g_return_val_if_fail (fd >= 0, NULL);
-    g_return_val_if_fail (callback != NULL, NULL);
-
-    source = g_source_new (&funcs, sizeof (GSource));
-    g_source_add_unix_fd (source, fd, condition);
-    g_source_set_priority (source, priority);
-    g_source_set_callback (source, callback, data, destroy);
-
-    return source;
-}
-
-guint
-donna_fd_add_source (gint                fd,
-                     GSourceFunc         callback,
-                     gpointer            data,
-                     GDestroyNotify      destroy)
-{
-    GSource *source;
-    guint id;
-
-    source = donna_fd_source_new (fd, callback, data, destroy);
-    id = g_source_attach (source, NULL);
-    g_source_unref (source);
-
-    return id;
 }

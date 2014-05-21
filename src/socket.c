@@ -22,6 +22,7 @@
 
 #include "config.h"
 
+#include <glib-unix.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -192,7 +193,7 @@ socket_received (DonnaSocket *socket)
 }
 
 static gboolean
-socket_incoming (DonnaSocket *socket)
+socket_incoming (gint fd, GIOCondition condition, DonnaSocket *socket)
 {
     gssize got;
     gsize len;
@@ -238,7 +239,7 @@ again:
 }
 
 static gboolean
-socket_close (DonnaSocket *socket)
+socket_close (gint fd, GIOCondition condition, DonnaSocket *socket)
 {
     socket->sid_err = 0;
     donna_socket_close (socket);
@@ -272,7 +273,6 @@ donna_socket_new (gint               fd,
                   GDestroyNotify     destroy)
 {
     DonnaSocket *socket;
-    GSource *source;
 
     socket = g_slice_new0 (DonnaSocket);
     socket->fd      = fd;
@@ -281,18 +281,17 @@ donna_socket_new (gint               fd,
     socket->data    = data;
     socket->destroy = destroy;
 
-    socket->sid_in = donna_fd_add_source (socket->fd,
-            (GSourceFunc) socket_incoming,
+    socket->sid_in = g_unix_fd_add_full (G_PRIORITY_DEFAULT,
+            socket->fd, G_IO_IN,
+            (GUnixFDSourceFunc) socket_incoming,
             donna_socket_ref (socket),
             (GDestroyNotify) donna_socket_unref);
 
-    source = donna_fd_source_new_full (socket->fd, G_IO_ERR | G_IO_HUP,
-            G_PRIORITY_DEFAULT_IDLE,
-            (GSourceFunc) socket_close,
+    socket->sid_err = g_unix_fd_add_full (G_PRIORITY_DEFAULT,
+            socket->fd, G_IO_ERR | G_IO_HUP,
+            (GUnixFDSourceFunc) socket_close,
             donna_socket_ref (socket),
             (GDestroyNotify) donna_socket_unref);
-    socket->sid_err = g_source_attach (source, NULL);
-    g_source_unref (source);
 
     return socket;
 }
@@ -418,7 +417,7 @@ again:
 }
 
 static gboolean
-socket_out (DonnaSocket *socket)
+socket_out (gint fd, GIOCondition condition, DonnaSocket *socket)
 {
     gssize written;
 
@@ -468,7 +467,6 @@ donna_socket_send (DonnaSocket    *socket,
                    const gchar    *message,
                    gsize           len)
 {
-    GSource *source;
     gssize written;
     gchar buf[16], *b = buf;
     gsize l;
@@ -532,12 +530,11 @@ donna_socket_send (DonnaSocket    *socket,
         socket->str_out = g_string_sized_new (len);
     g_string_append (socket->str_out, message + len);
 
-    source = donna_fd_source_new_full (socket->fd, G_IO_OUT, G_PRIORITY_DEFAULT_IDLE,
-            (GSourceFunc) socket_out,
+    socket->sid_out = g_unix_fd_add_full (G_PRIORITY_DEFAULT,
+            socket->fd, G_IO_OUT,
+            (GUnixFDSourceFunc) socket_out,
             donna_socket_ref (socket),
             (GDestroyNotify) donna_socket_unref);
-    socket->sid_out = g_source_attach (source, NULL);
-    g_source_unref (source);
 
     return TRUE;
 }

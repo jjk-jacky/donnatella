@@ -22,6 +22,7 @@
 
 #include "config.h"
 
+#include <glib-unix.h>
 #include <glib-object.h>
 #include "provider.h"
 #include "node.h"
@@ -518,7 +519,7 @@ donna_provider_get_node (DonnaProvider    *provider,
         }
 
         loop = g_main_loop_new (NULL, TRUE);
-        donna_fd_add_source (fd, (GSourceFunc) donna_main_loop_quit_return_false, loop, NULL);
+        g_unix_fd_add (fd, G_IO_IN, (GUnixFDSourceFunc) donna_on_fd_close_main_loop, loop);
         donna_app_run_task (app, task);
         g_main_loop_run (loop);
     }

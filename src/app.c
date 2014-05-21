@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <glib/gprintf.h>
+#include <glib-unix.h>
 #include <gtk/gtkx.h>
 #include <X11/Xlib.h>
 #ifdef DONNA_DEBUG_AUTOBREAK
@@ -2341,7 +2342,7 @@ cp_get_task_process (struct cp_refresh *cpr)
 }
 
 static gboolean
-cp_tp_done (struct cp_refresh *cpr)
+cp_tp_done (gint fd, GIOCondition condition, struct cp_refresh *cpr)
 {
     guint i;
 
@@ -2394,7 +2395,8 @@ cp_timeout (struct property *property)
     if (G_UNLIKELY (fd == -1))
         goto err;
 
-    source = donna_fd_source_new (fd, (GSourceFunc) cp_tp_done, cpr, NULL);
+    source = g_unix_fd_source_new (fd, G_IO_IN);
+    g_source_set_callback (source, (GSourceFunc) cp_tp_done, cpr, NULL);
     g_source_attach (source, g_main_context_get_thread_default ());
     g_source_unref (source);
 
@@ -8170,7 +8172,7 @@ free_socket (gpointer data)
 }
 
 static gboolean
-socket_accept (DonnaApp *app)
+socket_accept (gint socket_fd, GIOCondition condition, DonnaApp *app)
 {
     DonnaAppPrivate *priv = app->priv;
     struct socket sck = { NULL, };
@@ -8345,7 +8347,7 @@ init_app (DonnaApp *app, GError **error)
     DONNA_DEBUG (APP, NULL,
             g_debug ("Created socket '%s'", sock.sun_path));
 
-    donna_fd_add_source (priv->socket_fd, (GSourceFunc) socket_accept, app, NULL);
+    g_unix_fd_add (priv->socket_fd, G_IO_IN, (GUnixFDSourceFunc) socket_accept, app);
 
     return TRUE;
 }

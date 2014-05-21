@@ -22,6 +22,7 @@
 
 #include "config.h"
 
+#include <glib-unix.h>
 #include <glib-object.h>
 #include <sys/eventfd.h>
 #include <sys/select.h>
@@ -1211,8 +1212,8 @@ donna_task_wait_for_it (DonnaTask          *task,
         GMainLoop *loop;
 
         loop = g_main_loop_new (NULL, TRUE);
-        donna_fd_add_source (fd_wait,
-                (GSourceFunc) donna_main_loop_quit_return_false, loop, NULL);
+        g_unix_fd_add (fd_wait, G_IO_IN,
+                (GUnixFDSourceFunc) donna_on_fd_close_main_loop, loop);
         g_main_loop_run (loop);
     }
     else

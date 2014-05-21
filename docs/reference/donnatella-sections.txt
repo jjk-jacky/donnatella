@@ -1258,9 +1258,6 @@ donna_g_ptr_array_contains
 donna_g_string_append_quoted
 donna_g_string_append_concat
 donna_g_object_unref
-donna_main_loop_quit_return_false
-donna_fd_source_new_full
-donna_fd_source_new
-donna_fd_add_source
+donna_on_fd_close_main_loop
 </SECTION>
 
