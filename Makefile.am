@@ -16,7 +16,7 @@ else
 _VERSION = $(PACKAGE_VERSION)
 endif
 
-bin_PROGRAMS = donnatella
+bin_PROGRAMS = donnatella donna-trigger
 
 AM_CFLAGS = -D_GNU_SOURCE \
 			-DDOCDIR='"$(docdir)"' \
@@ -135,6 +135,12 @@ libdonnatella_la_SOURCES = \
 donnatella_CFLAGS = ${AM_CFLAGS} @GTK_CFLAGS@
 donnatella_LDADD = libdonnatella.la @GTK_LIBS@ -lX11
 donnatella_SOURCES = src/donnatella.c
+
+donna_trigger_CFLAGS = ${AM_CFLAGS} @GLIB_CFLAGS@
+donna_trigger_LDADD = @GLIB_LIBS@
+donna_trigger_SOURCES = src/donna-trigger/donna-trigger.c \
+						src/socket.c \
+						src/socket.h
 
 if DONNA_DEBUG_ENABLED
 AM_CFLAGS += -g -O0

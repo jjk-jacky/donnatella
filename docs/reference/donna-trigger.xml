@@ -1,0 +1,186 @@
+<?xml version="1.0"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+               "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
+]>
+<refentry id="donna-trigger">
+
+<refentryinfo>
+  <title>donna-trigger</title>
+  <productname>donna-trigger</productname>
+  <authorgroup>
+    <author>
+      <contrib>Developer</contrib>
+      <firstname>Olivier</firstname>
+      <surname>Brunel</surname>
+    </author>
+  </authorgroup>
+</refentryinfo>
+
+<refmeta>
+  <refentrytitle>donna-trigger</refentrytitle>
+  <manvolnum>1</manvolnum>
+  <refmiscinfo class="manual">User Commands</refmiscinfo>
+</refmeta>
+
+<refnamediv>
+  <refname>donna-trigger</refname>
+  <refpurpose>command-line arguments</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+<cmdsynopsis>
+<command>donna-trigger</command>
+<arg choice="opt">--log-level <arg choice="plain"><replaceable>LEVEL</replaceable></arg></arg>
+<arg choice="opt">--verbose</arg>
+<arg choice="opt">--quiet</arg>
+<arg choice="opt">--socket <arg choice="plain"><replaceable>SOCKET</replaceable></arg></arg>
+<arg choice="opt">--no-wait</arg>
+<arg choice="opt">--failed-on-err</arg>
+<arg choice="opt">--debug</arg>
+<arg choice="opt">--version</arg>
+</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1><title>Description</title>
+<para>
+    <command>donna-trigger</command> is a small helper that allows to trigger
+    nodes in donnatella from command line (useful e.g. to write scripts).
+    The specified full location will asked to be triggered by donnatella, and
+    the return value (or error message), if any, will be printed on stdout.
+</para>
+</refsect1>
+
+<refsect1><title>Options</title>
+<variablelist>
+  <varlistentry>
+    <term>-L</term>
+    <term>--log-level=<replaceable>LEVEL</replaceable></term>
+    <listitem><para>Set the log level to <replaceable>LEVEL</replaceable>,
+            defining which messages will be shown by the log handler.</para>
+        <para>Valid log levels are (in order) :</para>
+        <itemizedlist>
+            <listitem><para><systemitem>error</systemitem> : only show fatal
+                    error messages</para></listitem>
+            <listitem><para><systemitem>critical</systemitem> : also show
+                    critical warnings</para></listitem>
+            <listitem><para><systemitem>warning</systemitem> : also show
+                    warnings (default log level)</para></listitem>
+            <listitem><para><systemitem>message</systemitem> : also show
+                    messages</para></listitem>
+            <listitem><para><systemitem>info</systemitem> : also show informative
+                    messages</para></listitem>
+            <listitem><para><systemitem>debug</systemitem> : also show main debug
+                    messages</para></listitem>
+            <listitem><para><systemitem>debug2</systemitem> : show more debug
+                    messages</para></listitem>
+            <listitem><para><systemitem>debug3</systemitem> : show even more
+                    debug messages</para></listitem>
+            <listitem><para><systemitem>debug4</systemitem> : show all possible
+                    debug messages</para></listitem>
+        </itemizedlist>
+    </listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-v</term>
+    <term>--verbose</term>
+    <listitem><para>Increase verbosity of log; Can be repeated multiple times.
+            </para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-q</term>
+    <term>--quiet</term>
+    <listitem><para>Turns off verbosity;Same as
+            <systemitem>--log-level=error</systemitem></para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-s</term>
+    <term>--socket=<replaceable>SOCKET</replaceable></term>
+    <listitem><para>Use <replaceable>SOCKET</replaceable> as socket to
+            communicate with donnatella  If not specified, the value on
+            environment variable <systemitem>DONNATELLA_SOCKET</systemitem> will
+            be used. It is automatically set on anything executed from
+            donnatella, so you should usually not need to use this option.
+            </para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-n</term>
+    <term>--no-wait</term>
+    <listitem><para>Do not wait for the triggered task to be completed (either
+            done (success), cancelled or failed). You obviously don't get any
+            return value/error message in such case.</para>
+            <para>Note that if more than one full locations were specified,
+            this option is automatically enabled.</para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-e</term>
+    <term>--failed-on-err</term>
+    <listitem><para>By default on errors from donna-trigger are printed on stderr,
+            while the error message from a failed trigger is printed (like return
+            value on success) on stdout.</para>
+            <para>With this option, only return value goes to stdout, while error
+            message goes to stderr.</para></listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-d</term>
+    <term>--debug</term>
+    <listitem><para>Set log level to show debug messages; Same as
+            <systemitem>--log-level=debug</systemitem>
+        </para>
+    </listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>-V</term>
+    <term>--version</term>
+    <listitem><para>Show version info &amp; exit</para></listitem>
+  </varlistentry>
+
+</variablelist>
+</refsect1>
+
+<refsect1><title>Return value</title>
+<para>The return value can be :</para>
+<variablelist>
+    <varlistentry>
+        <term>0</term>
+        <listitem><para>Success (including trigger completed successfully)</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>1</term>
+        <listitem><para>Failed to parse command line</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>2</term>
+        <listitem><para>No socket path specified</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>3</term>
+        <listitem><para>Failed to connect to socket</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>4</term>
+        <listitem><para>No full location specified</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>5</term>
+        <listitem><para>Command to trigger full location failed</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>6</term>
+        <listitem><para>Trigger failed</para></listitem>
+    </varlistentry>
+    <varlistentry>
+        <term>7</term>
+        <listitem><para>Trigger was cancelled</para></listitem>
+    </varlistentry>
+</variablelist>
+</refsect1>
+
+
+</refentry>

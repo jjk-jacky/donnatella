@@ -77,10 +77,10 @@ include $(top_srcdir)/gtk-doc.make
 
 # Other files to distribute
 # e.g. EXTRA_DIST += version.xml.in
-EXTRA_DIST += version.xml.in donnatella.1
+EXTRA_DIST += version.xml.in donnatella.1 donna-trigger.1
 
 # man page
-man_MANS = donnatella.1
+man_MANS = donnatella.1 donna-trigger.1
 .xml.1:
 	$(AM_V_GEN) $(XSLTPROC) --nonet http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $<
 

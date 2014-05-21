@@ -100,6 +100,7 @@ if test "x$with_autobreak" = "xyes"; then
 fi
 
 # Checks for libraries.
+PKG_CHECK_MODULES(GLIB, [glib-2.0], , AC_MSG_ERROR([GLib is required]))
 PKG_CHECK_MODULES(GTK, [gtk+-3.0], , AC_MSG_ERROR([GTK+3 is required]))
 
 # Checks for header files.
