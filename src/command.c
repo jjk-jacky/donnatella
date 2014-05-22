@@ -3542,8 +3542,8 @@ cmd_tv_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
-                "Cannot set tree visual, unknown type '%s'. "
-                "Must be 'name', 'box', 'highlight' or 'click_mode'",
+                "Cannot get tree visual, unknown type '%s'. "
+                "Must be 'name', 'icon', 'box', 'highlight' or 'click_mode'",
                 visual);
         return DONNA_TASK_FAILED;
     }
@@ -3553,7 +3553,7 @@ cmd_tv_get_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
     {
         donna_task_set_error (task, DONNA_COMMAND_ERROR,
                 DONNA_COMMAND_ERROR_OTHER,
-                "Cannot set tree visual, unknown source '%s'. "
+                "Cannot get tree visual, unknown source '%s'. "
                 "Must be 'tree', 'node', or 'any'",
                 source);
         return DONNA_TASK_FAILED;
