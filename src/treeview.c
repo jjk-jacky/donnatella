@@ -12954,16 +12954,16 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
  * Trees support #tree-visuals, which can be applied either as tree-specific, or
  * via #node-visuals. @source determines where the value will come from. Using
  * %DONNA_TREE_VISUAL_SOURCE_ANY will return the tree-specific value if any,
- * else the value from the node if any, else %NULL.
+ * else the value from the node if any, else an empty string.
  *
  * Note that when getting the value from the node, it will only return a value
  * if the visual is actually used/shown on @tree (via option
  * <systemitem>node_visuals</systemitem>).
- * IOW when e.g. custom icons are not shown as part of node visuals, %NULL will
- * be returned even if a custom icon is defined on the node as visual, because
- * it isn't used on @tree. If you're looking for the value of the node visual
- * regardless, see #node-visuals to see which property to get value of from the
- * node directly.
+ * IOW when e.g. custom icons are not shown as part of node visuals, an empty
+ * string will be returned even if a custom icon is defined on the node as
+ * visual, because it isn't used on @tree. If you're looking for the value of
+ * the node visual regardless, see #node-visuals to see which property to get
+ * value of from the node directly.
  *
  * Note that this is obviously only supported on trees.
  *
@@ -13005,7 +13005,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     {
         g_set_error (error, DONNA_TREE_VIEW_ERROR,
                 DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
-                "TreeView '%s': Cannot set visual, invalid row-id",
+                "TreeView '%s': Cannot get visual, invalid row-id",
                 priv->name);
         return NULL;
     }
@@ -13036,12 +13036,12 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
     if (source == DONNA_TREE_VISUAL_SOURCE_TREE)
     {
         if (!(v & visual))
-            return NULL;
+            return g_strdup ("");
     }
     else if (source == DONNA_TREE_VISUAL_SOURCE_NODE)
     {
         if (v & visual)
-            return NULL;
+            return g_strdup ("");
     }
 
     gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
@@ -13069,7 +13069,7 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
         }
     }
 
-    return value;
+    return (value) ? value : g_strdup ("");
 }
 
 struct re_data
