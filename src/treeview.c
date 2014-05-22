@@ -4340,7 +4340,7 @@ remove_row_from_tree (DonnaTreeView *tree,
              * anymore */
             is_root = gtk_tree_store_iter_depth (priv->store, iter) == 0;
 
-            if (removal != RR_NOT_REMOVAL)
+            if (removal != RR_IS_REMOVAL)
             {
                 DonnaTreeVisual v;
 
