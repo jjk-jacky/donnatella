@@ -4460,6 +4460,140 @@ cmd_tv_reset_keys (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * tv_root_get_child_visual:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @node: A node (descendant of @rowid)
+ * @visual: Which tree visual to get the value of
+ * @source: Where to get the visual from
+ *
+ * Returns the value of specified tree visual for @node (under @rowid)
+ *
+ * @visual must be one of "name", "icon", "box", "highlight" or "click_mode"
+ * @source must be one of "any", "tree" or "node"
+ *
+ * See donna_tree_view_root_get_child_visual() for more
+ *
+ * Returns: The value of the tree visual
+ */
+static DonnaTaskState
+cmd_tv_root_get_child_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaRowId *rid = args[1];
+    DonnaNode *node = args[2];
+    gchar *visual = args[3];
+    gchar *source = args[4];
+
+    const gchar *c_visual[] = { "name", "icon", "box", "highlight", "click_mode" };
+    DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
+        DONNA_TREE_VISUAL_CLICK_MODE };
+    const gchar *c_source[] = { "any", "tree", "node" };
+    DonnaTreeVisualSource sources[] = { DONNA_TREE_VISUAL_SOURCE_ANY,
+        DONNA_TREE_VISUAL_SOURCE_TREE, DONNA_TREE_VISUAL_SOURCE_NODE };
+    gchar *s;
+    GValue *value;
+    gint c_v;
+    gint c_s;
+
+    c_v = _get_choice (c_visual, visual);
+    if (c_v < 0)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Cannot get tree visual, unknown type '%s'. "
+                "Must be 'name', 'icon', 'box', 'highlight' or 'click_mode'",
+                visual);
+        return DONNA_TASK_FAILED;
+    }
+
+    c_s = _get_choice (c_source, source);
+    if (c_s < 0)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Cannot get tree visual, unknown source '%s'. "
+                "Must be 'tree', 'node', or 'any'",
+                source);
+        return DONNA_TASK_FAILED;
+    }
+
+    s = donna_tree_view_root_get_child_visual (tree, rid, node,
+            visuals[c_v], sources[c_s], &err);
+    if (!s)
+    {
+        if (err)
+            donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_STRING);
+    g_value_take_string (value, s);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * tv_root_set_child_visual:
+ * @tree: A treeview
+ * @rowid: A #rowid
+ * @node: A node (descendant of @rowid)
+ * @visual: Which visual to set
+ * @value: The value to set @visual to
+ *
+ * Sets tree visual @visual for @node (descendant of @rowid) to @value
+ *
+ * @visual must be one of "name", "icon", "box", "highlight" or "click_mode"
+ *
+ * See donna_tree_view_root_set_child_visual() for more
+ */
+static DonnaTaskState
+cmd_tv_root_set_child_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaTreeView *tree = args[0];
+    DonnaRowId *rid = args[1];
+    DonnaNode *node = args[2];
+    gchar *visual = args[3];
+    gchar *value = args[4];
+
+    const gchar *choices[] = { "name", "icon", "box", "highlight", "click_mode" };
+    DonnaTreeVisual visuals[] = { DONNA_TREE_VISUAL_NAME, DONNA_TREE_VISUAL_ICON,
+        DONNA_TREE_VISUAL_BOX, DONNA_TREE_VISUAL_HIGHLIGHT,
+        DONNA_TREE_VISUAL_CLICK_MODE };
+    gint c;
+
+    c = _get_choice (choices, visual);
+    if (c < 0)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Cannot set tree visual, unknown type '%s'. "
+                "Must be 'name', 'icon', 'box', 'highlight' or 'click_mode'",
+                visual);
+        return DONNA_TASK_FAILED;
+    }
+
+    /* empty string as value is turned into NULL to means unset the visual */
+    if (*value == '\0')
+        value = NULL;
+
+    if (!donna_tree_view_root_set_child_visual (tree, rid, node,
+                visuals[c], value, &err))
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    return DONNA_TASK_DONE;
+}
+
+
+/**
  * tv_save_list_file:
  * @tree: A treeview
  * @file: Name of the file
@@ -5779,6 +5913,24 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     add_command (tv_reset_keys, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tv_root_get_child_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
+    arg_type[++i] = DONNA_ARG_TYPE_ROW_ID;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (tv_root_set_child_visual, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

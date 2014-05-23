@@ -352,8 +352,22 @@ gboolean        donna_tree_view_set_visual      (DonnaTreeView      *tree,
                                                  DonnaTreeVisual     visual,
                                                  const gchar        *value,
                                                  GError            **error);
+gboolean        donna_tree_view_root_set_child_visual (
+                                                 DonnaTreeView      *tree,
+                                                 DonnaRowId         *rowid,
+                                                 DonnaNode          *node,
+                                                 DonnaTreeVisual     visual,
+                                                 const gchar        *value,
+                                                 GError            **error);
 gchar *         donna_tree_view_get_visual      (DonnaTreeView      *tree,
                                                  DonnaRowId         *rowid,
+                                                 DonnaTreeVisual     visual,
+                                                 DonnaTreeVisualSource source,
+                                                 GError            **error);
+gchar *         donna_tree_view_root_get_child_visual (
+                                                 DonnaTreeView      *tree,
+                                                 DonnaRowId         *rowid,
+                                                 DonnaNode          *node,
                                                  DonnaTreeVisual     visual,
                                                  DonnaTreeVisualSource source,
                                                  GError            **error);

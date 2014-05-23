@@ -91,6 +91,8 @@ tv_move_root
 tv_refresh
 tv_remove_row
 tv_reset_keys
+tv_root_get_child_visual
+tv_root_set_child_visual
 tv_save_list_file
 tv_save_to_config
 tv_save_tree_file
@@ -1211,7 +1213,9 @@ donna_tree_view_toggle_column
 donna_tree_view_set_columns
 donna_tree_view_add_root
 donna_tree_view_set_visual
+donna_tree_view_root_set_child_visual
 donna_tree_view_get_visual
+donna_tree_view_root_get_child_visual
 donna_tree_view_toggle_row
 donna_tree_view_full_expand
 donna_tree_view_full_collapse

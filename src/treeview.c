@@ -11896,6 +11896,36 @@ convert_row_id_to_iter (DonnaTreeView   *tree,
         return ROW_ID_INVALID;
 }
 
+/* special case for "root_on_child" functions (e.g. root_get_child_visual) where
+ * the rowid must be that of a root. This means is we have a node and there are
+ * more than one rows on tree for said node, let's ignore non-root ones to try
+ * to find a valid match */
+/* mode tree only */
+static row_id_type
+convert_row_id_to_root_iter (DonnaTreeView  *tree,
+                             DonnaRowId     *rowid,
+                             GtkTreeIter    *iter)
+{
+    DonnaTreeViewPrivate *priv = tree->priv;
+    GSList *list;
+
+    if (rowid->type != DONNA_ARG_TYPE_NODE)
+        return convert_row_id_to_iter (tree, rowid, iter);
+
+    list = g_hash_table_lookup (priv->hashtable, rowid->ptr);
+    if (!list)
+        return ROW_ID_INVALID;
+    for ( ; list; list = list->next)
+        if (gtk_tree_store_iter_depth (priv->store, list->data) == 0)
+        {
+            *iter = * (GtkTreeIter *) list->data;
+            return ROW_ID_ROW;
+        }
+
+    return ROW_ID_INVALID;
+}
+
+
 static void
 unselect_path (gpointer p, gpointer s)
 {
@@ -12941,6 +12971,218 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
     return set_tree_visual (tree, &iter, visual, value, error);
 }
 
+static gboolean
+_set_visual_value (struct visuals   *visuals,
+                   DonnaTreeVisual   visual,
+                   const gchar      *value,
+                   GError          **error)
+{
+    if (visual == DONNA_TREE_VISUAL_NAME)
+    {
+        g_free (visuals->name);
+        visuals->name = g_strdup (value);
+    }
+    else if (visual == DONNA_TREE_VISUAL_ICON)
+    {
+        GIcon *icon;
+
+        if (value)
+        {
+            if (*value == '/')
+            {
+                GFile *file;
+
+                file = g_file_new_for_path (value);
+                icon = g_file_icon_new (file);
+                g_object_unref (file);
+            }
+            else
+                icon = g_themed_icon_new (value);
+
+            if (!icon)
+            {
+                g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                        DONNA_TREE_VIEW_ERROR_OTHER,
+                        "Cannot set visual 'icon', "
+                        "unable to get icon from '%s'",
+                        value);
+                return FALSE;
+            }
+        }
+        else
+            icon = NULL;
+
+        if (visuals->icon)
+            g_object_unref (visuals->icon);
+        visuals->icon = icon;
+    }
+    else if (visual == DONNA_TREE_VISUAL_BOX)
+    {
+        g_free (visuals->box);
+        visuals->box = g_strdup (value);
+    }
+    else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
+    {
+        g_free (visuals->highlight);
+        visuals->highlight = g_strdup (value);
+    }
+    else if (visual == DONNA_TREE_VISUAL_CLICK_MODE)
+    {
+        g_free (visuals->click_mode);
+        visuals->click_mode = g_strdup (value);
+    }
+    else
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "Cannot set visual, invalid visual type");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/**
+ * donna_tree_view_root_set_child_visual:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @node: The node to get visual for
+ * @visual: Which visual to set
+ * @value: New value to set for @visual
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Set the value of the specified #tree-visuals.
+ *
+ * This is similar to donna_tree_view_set_visual() except that you give a root
+ * and a node which must have a row as descendant of said root. The idea is that
+ * usually (when giving a rowid) you can only set the visual of an actual row,
+ * i.e. it won't work for any child which hasn't yet been loaded on tree, or
+ * with an ansendant collapsed.
+ *
+ * Otherwise, see donna_tree_view_set_visual() for more, since it works very
+ * much the same.
+ *
+ * Note that this is obviously only supported on trees.
+ *
+ * Returns: %TRUE on success, else %FALSE
+ */
+gboolean
+donna_tree_view_root_set_child_visual (DonnaTreeView      *tree,
+                                       DonnaRowId         *rowid,
+                                       DonnaNode          *node,
+                                       DonnaTreeVisual     visual,
+                                       const gchar        *value,
+                                       GError            **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    GSList      *list;
+    struct visuals *visuals;
+    GSList *l;
+    gchar *fl;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (rowid != NULL, FALSE);
+    g_return_val_if_fail (DONNA_IS_NODE (node), FALSE);
+    g_return_val_if_fail (visual != 0, FALSE);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!priv->is_tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "TreeView '%s': set_visual() doesn't apply in mode list",
+                priv->name);
+        return FALSE;
+    }
+
+    type = convert_row_id_to_root_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "TreeView '%s': Cannot set visual, invalid root row-id",
+                priv->name);
+        return FALSE;
+    }
+
+    /* try to find a row (even non-accessible) for the given node */
+    list = g_hash_table_lookup (priv->hashtable, node);
+    if (list)
+    {
+        GtkTreePath *path_root;
+        GtkTreePath *path_node;
+
+        path_root = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+        for ( ; list; list = list->next)
+        {
+            path_node = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, list->data);
+            if (gtk_tree_path_is_descendant (path_node, path_root))
+            {
+                /* switch iter to the actual row we're getting the visual of */
+                iter = * (GtkTreeIter *) list->data;
+
+                gtk_tree_path_free (path_node);
+                break;
+            }
+            gtk_tree_path_free (path_node);
+        }
+        gtk_tree_path_free (path_root);
+    }
+    if (list)
+        /* found a row/an iter */
+        return set_tree_visual (tree, &iter, visual, value, error);
+
+    /* this is an unloaded visuals */
+
+    fl = donna_node_get_full_location (node);
+    if (!priv->tree_visuals)
+    {
+        priv->tree_visuals = g_hash_table_new_full (
+                g_str_hash, g_str_equal, g_free, NULL);
+        list = NULL;
+    }
+    else
+        list = g_hash_table_lookup (priv->tree_visuals, fl);
+
+    for (l = list; l ; l = l->next)
+    {
+        visuals = l->data;
+
+        if (itereq (&iter, &visuals->root))
+        {
+            if (!_set_visual_value (visuals, visual, value, error))
+            {
+                g_prefix_error (error, "Treeview '%s': ", priv->name);
+                g_free (fl);
+                return FALSE;
+            }
+
+            g_free (fl);
+            return TRUE;
+        }
+    }
+
+    /* unsetting a value when there's none == noop */
+    if (!value)
+        return TRUE;
+
+    /* add new visual */
+    visuals = g_slice_new0 (struct visuals);
+    visuals->root = iter;
+    if (!_set_visual_value (visuals, visual, value, error))
+    {
+        g_prefix_error (error, "Treeview '%s': ", priv->name);
+        g_free (fl);
+        return FALSE;
+    }
+
+    list = g_slist_prepend (list, visuals);
+    g_hash_table_insert (priv->tree_visuals, fl, list);
+
+    return TRUE;
+}
+
 /**
  * donna_tree_view_get_visual:
  * @tree: A #DonnaTreeView
@@ -12949,7 +13191,7 @@ donna_tree_view_set_visual (DonnaTreeView      *tree,
  * @source: From where to get the value of @visual
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
- * Return the value of the specified visuals.
+ * Return the value of the specified visual.
  *
  * Trees support #tree-visuals, which can be applied either as tree-specific, or
  * via #node-visuals. @source determines where the value will come from. Using
@@ -13027,6 +13269,291 @@ donna_tree_view_get_visual (DonnaTreeView           *tree,
                 "TreeView '%s': Cannot get visual, invalid visual type",
                 priv->name);
         return NULL;
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            TREE_COL_VISUALS,   &v,
+            -1);
+
+    if (source == DONNA_TREE_VISUAL_SOURCE_TREE)
+    {
+        if (!(v & visual))
+            return g_strdup ("");
+    }
+    else if (source == DONNA_TREE_VISUAL_SOURCE_NODE)
+    {
+        if (v & visual)
+            return g_strdup ("");
+    }
+
+    gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
+            col,    &value,
+            -1);
+
+    if (col == TREE_COL_ICON)
+    {
+        GIcon *icon = (GIcon *) value;
+
+        value = g_icon_to_string (icon);
+        g_object_unref (icon);
+        if (G_UNLIKELY (!value || *value == '.'))
+        {
+            /* since a visual is a user-set icon, it should always be either
+             * a /path/to/file.png or an icon-name, and never something like
+             * ". GThemedIcon icon-name1 icon-name2" */
+            g_free (value);
+            g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                    DONNA_TREE_VIEW_ERROR_OTHER,
+                    "TreeView '%s': Cannot return visual 'icon', "
+                    "it doesn't have a straight-forward string value",
+                    priv->name);
+            return NULL;
+        }
+    }
+
+    return (value) ? value : g_strdup ("");
+}
+
+/**
+ * donna_tree_view_root_get_child_visual:
+ * @tree: A #DonnaTreeView
+ * @rowid: Identifier of a row; See #rowid for more
+ * @node: The node to get visual for
+ * @visual: Which visual to set
+ * @source: From where to get the value of @visual
+ * @error: (allow-none): Return location of a #GError, or %NULL
+ *
+ * Return the value of the specified visual.
+ *
+ * This is similar to donna_tree_view_get_visual() except that you give a root
+ * and a node which must have a row as descendant of said root. The idea is that
+ * usually (when giving a rowid) you can only get the visual of an actual row,
+ * i.e. it won't work for any child which hasn't yet been loaded on tree, or
+ * with an ansendant collapsed.
+ *
+ * Otherwise, see donna_tree_view_get_visual() for more, since it works very
+ * much the same.
+ *
+ * Returns: (transfer full): A newly-allocated string, value of the visual. Free
+ * it using g_free() when done.
+ */
+gchar *
+donna_tree_view_root_get_child_visual (DonnaTreeView           *tree,
+                                       DonnaRowId              *rowid,
+                                       DonnaNode               *node,
+                                       DonnaTreeVisual          visual,
+                                       DonnaTreeVisualSource    source,
+                                       GError                 **error)
+{
+    DonnaTreeViewPrivate *priv;
+    GtkTreeIter  iter;
+    row_id_type  type;
+    GSList *list;
+    DonnaTreeVisual v;
+    guint col;
+    const gchar *prop_name;
+    gchar *value;
+
+    g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
+    g_return_val_if_fail (rowid != NULL, NULL);
+    g_return_val_if_fail (DONNA_IS_NODE (node), NULL);
+    g_return_val_if_fail (visual != 0, NULL);
+    g_return_val_if_fail (source == DONNA_TREE_VISUAL_SOURCE_TREE
+            || source == DONNA_TREE_VISUAL_SOURCE_NODE
+            || source == DONNA_TREE_VISUAL_SOURCE_ANY, NULL);
+    priv = tree->priv;
+
+    if (G_UNLIKELY (!priv->is_tree))
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR, DONNA_TREE_VIEW_ERROR_OTHER,
+                "TreeView '%s': root_get_child_visual() doesn't apply in mode list",
+                priv->name);
+        return NULL;
+    }
+
+    type = convert_row_id_to_root_iter (tree, rowid, &iter);
+    if (type != ROW_ID_ROW)
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_INVALID_ROW_ID,
+                "TreeView '%s': Cannot get visual, invalid root row-id",
+                priv->name);
+        return NULL;
+    }
+
+    if (visual == DONNA_TREE_VISUAL_NAME)
+    {
+        col = TREE_COL_NAME;
+        prop_name = "visual-name";
+    }
+    else if (visual == DONNA_TREE_VISUAL_ICON)
+    {
+        col = TREE_COL_ICON;
+        prop_name = "visual-icon";
+    }
+    else if (visual == DONNA_TREE_VISUAL_BOX)
+    {
+        col = TREE_COL_BOX;
+        prop_name = "visual-box";
+    }
+    else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
+    {
+        col = TREE_COL_HIGHLIGHT;
+        prop_name = "visual-highlight";
+    }
+    else if (visual == DONNA_TREE_VISUAL_CLICK_MODE)
+        col = TREE_COL_CLICK_MODE;
+    else
+    {
+        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                DONNA_TREE_VIEW_ERROR_OTHER,
+                "TreeView '%s': Cannot get visual, invalid visual type",
+                priv->name);
+        return NULL;
+    }
+
+    /* try to find a row (even non-accessible) for the given node */
+    list = g_hash_table_lookup (priv->hashtable, node);
+    if (list)
+    {
+        GtkTreePath *path_root;
+        GtkTreePath *path_node;
+
+        path_root = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, &iter);
+        for ( ; list; list = list->next)
+        {
+            path_node = gtk_tree_model_get_path ((GtkTreeModel *) priv->store, list->data);
+            if (gtk_tree_path_is_descendant (path_node, path_root))
+            {
+                /* switch iter to the actual row we're getting the visual of */
+                iter = * (GtkTreeIter *) list->data;
+
+                gtk_tree_path_free (path_node);
+                break;
+            }
+            gtk_tree_path_free (path_node);
+        }
+        gtk_tree_path_free (path_root);
+    }
+    /* no row found (under root), let's check "unloaded" visuals */
+    if (!list)
+    {
+        gchar *fl;
+
+        if (!priv->tree_visuals)
+            /* we don't check that node could be a descendant of rowid, because
+             * we couldn't tell when provider is flat, and so we'd have to
+             * assume either way, and it would work to possible inconsistent
+             * behavior whether the child has a row in model or not.
+             * Same goes when setting, we just add an "unloaded" visual and
+             * assume the user knows what he's doing. (If not, no biggie. And to
+             * clean it up, a simple editing of the treefile will do it.) */
+            return g_strdup ("");
+
+        fl = donna_node_get_full_location (node);
+        list = g_hash_table_lookup (priv->tree_visuals, fl);
+        g_free (fl);
+        for ( ; list ; list = list->next)
+        {
+            struct visuals *visuals = list->data;
+
+            if (itereq (&iter, &visuals->root))
+            {
+                GValue node_value = G_VALUE_INIT;
+                DonnaNodeHasValue has;
+
+                if (visual == DONNA_TREE_VISUAL_NAME)
+                    value = visuals->name;
+                else if (visual == DONNA_TREE_VISUAL_ICON)
+                {
+                    value = g_icon_to_string (visuals->icon);
+                    if (G_UNLIKELY (!value || *value == '.'))
+                    {
+                        /* since a visual is a user-set icon, it should always be either
+                         * a /path/to/file.png or an icon-name, and never something like
+                         * ". GThemedIcon icon-name1 icon-name2" */
+                        g_free (value);
+                        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                                DONNA_TREE_VIEW_ERROR_OTHER,
+                                "TreeView '%s': Cannot return visual 'icon', "
+                                "it doesn't have a straight-forward string value",
+                                priv->name);
+                        return NULL;
+                    }
+                }
+                else if (visual == DONNA_TREE_VISUAL_BOX)
+                    value = visuals->box;
+                else if (visual == DONNA_TREE_VISUAL_HIGHLIGHT)
+                    value = visuals->highlight;
+                else /* DONNA_TREE_VISUAL_CLICK_MODE */
+                    value = visuals->click_mode;
+
+                if (source == DONNA_TREE_VISUAL_SOURCE_TREE)
+                {
+                    if (!value)
+                        return g_strdup ("");
+                    else if (visual == DONNA_TREE_VISUAL_ICON)
+                        return value;
+                    else
+                        return g_strdup (value);
+                }
+                else if (source == DONNA_TREE_VISUAL_SOURCE_NODE)
+                {
+                    if (value)
+                    {
+                        if (visual == DONNA_TREE_VISUAL_ICON)
+                            g_free (value);
+                        return g_strdup ("");
+                    }
+                }
+                else /* DONNA_TREE_VISUAL_SOURCE_ANY */
+                {
+                    if (value)
+                    {
+                        if (visual == DONNA_TREE_VISUAL_ICON)
+                            return value;
+                        else
+                            return g_strdup (value);
+                    }
+                }
+                /* return value from node */
+
+                /* if we don't shown those node visuals (or it isn' one) then
+                 * there's no value */
+                if (!(priv->node_visuals & visual)
+                        || visual == DONNA_TREE_VISUAL_CLICK_MODE)
+                    return g_strdup ("");
+
+                donna_node_get (node, TRUE, prop_name, &has, &node_value, NULL);
+                if (has != DONNA_NODE_VALUE_SET)
+                    return g_strdup ("");
+
+                if (visual == DONNA_TREE_VISUAL_ICON)
+                {
+                    value = g_icon_to_string (g_value_get_boxed (&node_value));
+                    if (G_UNLIKELY (!value || *value == '.'))
+                    {
+                        /* since a visual is a user-set icon, it should always be either
+                         * a /path/to/file.png or an icon-name, and never something like
+                         * ". GThemedIcon icon-name1 icon-name2" */
+                        g_free (value);
+                        g_set_error (error, DONNA_TREE_VIEW_ERROR,
+                                DONNA_TREE_VIEW_ERROR_OTHER,
+                                "TreeView '%s': Cannot return visual 'icon', "
+                                "it doesn't have a straight-forward string value",
+                                priv->name);
+                        g_value_unset (&node_value);
+                        return NULL;
+                    }
+                }
+                else
+                    value = g_value_dup_string (&node_value);
+
+                g_value_unset (&node_value);
+                return value;
+            }
+        }
+        return g_strdup ("");
     }
 
     gtk_tree_model_get ((GtkTreeModel *) priv->store, &iter,
