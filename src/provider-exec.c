@@ -759,10 +759,13 @@ get_node_children_task (DonnaProvider      *provider,
     g_free (location);
     g_free (free_me);
 
+    if (!app)
+        g_object_get (provider, "app", &app, NULL);
+    /* make sure to use donna's environ, w/ e.g. DONNATELLA_SOCKET */
+    donna_task_process_import_environ ((DonnaTaskProcess *) task, app);
+
     if (!workdir)
     {
-        if (!app)
-            g_object_get (provider, "app", &app, NULL);
         if (!donna_task_process_set_workdir_to_curdir ((DonnaTaskProcess *) task, app))
         {
             g_set_error (error, DONNA_PROVIDER_ERROR,

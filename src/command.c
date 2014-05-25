@@ -1388,6 +1388,8 @@ cmd_exec (DonnaTask *task, DonnaApp *app, gpointer *args)
                 "Failed to set task-process's workdir to curdir");
         return DONNA_TASK_FAILED;
     }
+    /* make sure to use donna's environ, w/ e.g. DONNATELLA_SOCKET */
+    donna_task_process_import_environ ((DonnaTaskProcess *) t, app);
 
     /* set taskui messages */
     donna_task_process_set_ui_msg ((DonnaTaskProcess *) t);
