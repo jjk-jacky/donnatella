@@ -330,8 +330,8 @@ free_node_prop (DonnaNodeProp *prop)
  * @filename: (allow-none): filename of the node (in GLib filename encoding),
  * or %NULL if we can use @name)
  * @visibility: Visibility for the refresher
- * @refresher_task: function to return a task to refresh basic property, if
- * @visibility is #DONNA_TASK_VISIBILITY_INTERNAL_LOOP
+ * @refresher_task: (allow-none): function to return a task to refresh a basic
+ * property in non-blocking manner.
  * @refresher: function called to refresh a basic property
  * @setter: function to change value of a basic property
  * @name: name of the node
@@ -350,10 +350,9 @@ free_node_prop (DonnaNodeProp *prop)
  * #DONNA_TASK_VISIBILITY_INTERNAL_GUI and #DONNA_TASK_VISIBILITY_PULIC aren't
  * allowed, and will be reverted back to #DONNA_TASK_VISIBILITY_INTERNAL.
  *
- * Additionally if a refresher is #DONNA_TASK_VISIBILITY_INTERNAL_LOOP then the
- * refresher will only be called in blocking calls, else @refresher_task will be
- * called and the returned task will be used to refresh the property; See
- * #refresher_task_fn for more.
+ * Additionally if a @refresher_task is provided, for non-blocking refreshing it
+ * will be called and the returned task ran (instead of calling @refresher).
+ * See #refresher_task_fn for more.
  *
  * If you need a node to use it, see donna_provider_get_node() or
  * donna_app_get_node()
@@ -380,15 +379,12 @@ donna_node_new (DonnaProvider       *provider,
     g_return_val_if_fail (node_type == DONNA_NODE_ITEM
             || node_type == DONNA_NODE_CONTAINER, NULL);
     g_return_val_if_fail (refresher != NULL, NULL);
-    if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
-        g_return_val_if_fail (refresher_task != NULL, NULL);
     if ((flags & DONNA_NODE_ALL_WRITABLE) != 0)
         g_return_val_if_fail (setter != NULL, NULL);
     g_return_val_if_fail (name != NULL, NULL);
 
     if (visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
-            && visibility != DONNA_TASK_VISIBILITY_INTERNAL
-            && visibility != DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+            && visibility != DONNA_TASK_VISIBILITY_INTERNAL)
         visibility = DONNA_TASK_VISIBILITY_INTERNAL;
 
     node = g_object_new (DONNA_TYPE_NODE, NULL);
@@ -444,8 +440,8 @@ donna_node_new (DonnaProvider       *provider,
  * @type: type of the property
  * @value: (allow-none): Initial value of the property
  * @visibility: Visibility for the refresher
- * @refresher_task: function to return a task to refresh basic property, if
- * @visibility is #DONNA_TASK_VISIBILITY_INTERNAL_LOOP
+ * @refresher_task: (allow-none): function to return a task to refresh the
+ * property's value in non-blocking manner.
  * @refresher: function to be called to refresh the property's value
  * @setter: (allow-none): Function to be called to change the property's value
  * @data: (allow-none): Data to given to @refresher and @setter
@@ -484,8 +480,7 @@ donna_node_add_property (DonnaNode       *node,
     /* setter is optional (can be read-only) */
 
     if (visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST
-            && visibility != DONNA_TASK_VISIBILITY_INTERNAL
-            && visibility != DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+            && visibility != DONNA_TASK_VISIBILITY_INTERNAL)
         visibility = DONNA_TASK_VISIBILITY_INTERNAL;
 
     priv = node->priv;
@@ -1476,8 +1471,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
             if (streq (names->pdata[i], *s))
             {
                 refresher = priv->refresher;
-                if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
-                    refresher_task = priv->refresher_task;
+                refresher_task = priv->refresher_task;
                 break;
             }
         }
@@ -1492,8 +1486,7 @@ node_refresh (DonnaTask *task, struct refresh_data *data)
             {
                 refresher = prop->refresher;
                 refresher_data = prop->data;
-                if (prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
-                    refresher_task = prop->refresher_task;
+                refresher_task = prop->refresher_task;
             }
         }
 
@@ -1703,9 +1696,8 @@ add_prop_to_arr (DonnaNode              *node,
         {
             if (prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
                 *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
-            else if (prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+            if (prop->refresher_task)
             {
-                *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
                 *refresher_task = prop->refresher_task;
                 *refresher_data = prop->data;
             }
@@ -1714,9 +1706,8 @@ add_prop_to_arr (DonnaNode              *node,
         {
             if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
                 *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
-            else if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+            if (priv->refresher_task)
             {
-                *visibility = DONNA_TASK_VISIBILITY_INTERNAL;
                 *refresher_task = priv->refresher_task;
                 *refresher_data = NULL;
             }
@@ -1797,8 +1788,7 @@ _donna_node_refresh (DonnaNode   *node,
 
         g_rw_lock_reader_lock (&priv->props_lock);
 
-        if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP
-                && get_tasks_array)
+        if (priv->refresher_task && get_tasks_array)
             names = g_ptr_array_new_with_free_func (g_free);
         else
             names = g_ptr_array_new_full (
@@ -1809,7 +1799,7 @@ _donna_node_refresh (DonnaNode   *node,
                     g_free);
 
         /* always have name, since it's always set */
-        if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+        if (priv->refresher_task)
         {
             refresher_task = priv->refresher_task;
             if (get_tasks_array)
@@ -1834,8 +1824,7 @@ _donna_node_refresh (DonnaNode   *node,
                     || (first_name /* ALL_VALUES */
                         && priv->basic_props[i].has_value != DONNA_NODE_VALUE_NONE))
             {
-                if (get_tasks_array
-                        && priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+                if (get_tasks_array && priv->refresher_task)
                 {
                     DonnaTask *t;
 
@@ -1850,11 +1839,8 @@ _donna_node_refresh (DonnaNode   *node,
                     g_ptr_array_add (names, g_strdup (*s));
                     if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
                         visibility = DONNA_TASK_VISIBILITY_INTERNAL;
-                    else if (priv->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
-                    {
-                        visibility = DONNA_TASK_VISIBILITY_INTERNAL;
+                    if (priv->refresher_task)
                         refresher_task = priv->refresher_task;
-                    }
                 }
             }
 
@@ -1865,8 +1851,7 @@ _donna_node_refresh (DonnaNode   *node,
 
             if (first_name || prop->has_value)
             {
-                if (get_tasks_array
-                        && prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+                if (get_tasks_array && prop->refresher_task)
                 {
                     DonnaTask *t;
 
@@ -1882,9 +1867,8 @@ _donna_node_refresh (DonnaNode   *node,
                     g_ptr_array_add (names, value);
                     if (prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL)
                         visibility = DONNA_TASK_VISIBILITY_INTERNAL;
-                    else if (prop->visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
+                    if (prop->refresher_task)
                     {
-                        visibility = DONNA_TASK_VISIBILITY_INTERNAL;
                         refresher_task = prop->refresher_task;
                         refresher_data = prop->data;
                     }
@@ -2022,8 +2006,8 @@ donna_node_refresh_task (DonnaNode   *node,
  * @...: %NULL-terminated list of names of property to refresh
  *
  * Same as donna_node_refresh_task() but returns an array of #DonnaTask
- * instead of a single one. This can be useful when some properties have their
- * refresher using a #DONNA_TASK_VISIBILITY_INTERNAL_LOOP
+ * instead of a single one. This can be useful when some properties can provide
+ * a task to perform the refreshing (via #refresher_task_fn)
  *
  * All tasks are floating, so need to be ref_sinked then unref-ed (or e.g. call
  * donna_app_run_task()). The array itself is @tasks unless it was %NULL, in
@@ -2187,8 +2171,8 @@ donna_node_refresh_arr_task (DonnaNode *node,
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
  * Same as donna_node_refresh_task_arr() but returns an array of #DonnaTask
- * instead of a single one. This can be useful when some properties have their
- * refresher using a #DONNA_TASK_VISIBILITY_INTERNAL_LOOP
+ * instead of a single one. This can be useful when some properties can provide
+ * a task to perform the refreshing (via #refresher_task_fn).
  *
  * All tasks are floating, so need to be ref_sinked then unref-ed (or e.g. call
  * donna_app_run_task()). The array itself is @tasks unless it was %NULL, in

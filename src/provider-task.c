@@ -1789,6 +1789,20 @@ is_task_conflicting (DonnaTask *task, GPtrArray *devices)
     return FALSE;
 }
 
+static void
+real_run_task (DonnaTaskManager *tm, DonnaTask *task)
+{
+    g_thread_pool_push (tm->priv->pool, task, NULL);
+}
+
+#define run_task(t) do {                                                \
+    t->in_pool = TRUE;                                                  \
+    if (donna_task_need_prerun (t->task))                               \
+        donna_task_prerun (t->task, (task_run_fn) real_run_task, tm);   \
+    else                                                                \
+        real_run_task (tm, t->task);                                    \
+} while (0)
+
 static DonnaTaskState
 refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
 {
@@ -1843,10 +1857,7 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
                 t->own_pause = FALSE;
             }
             else if (!(state & DONNA_TASK_IN_RUN))
-            {
-                g_thread_pool_push (priv->pool, t->task, NULL);
-                t->in_pool = TRUE;
-            }
+                run_task (t);
             g_ptr_array_unref (devices);
             continue;
         }
@@ -1984,8 +1995,7 @@ refresh_tm (DonnaTask *task, DonnaTaskManager *tm)
                         g_debug ("TaskManager: auto-start task '%s' (%p)",
                             d, t->task);
                         g_free (d));
-                g_thread_pool_push (priv->pool, t->task, NULL);
-                t->in_pool = TRUE;
+                run_task (t);
             }
         }
 
@@ -2155,7 +2165,6 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
                     g_value_set_int (&v, ST_STOPPED);
                     break;
                 case DONNA_TASK_WAITING:
-                case DONNA_TASK_PRERUNNING: /* silence warning */
                     g_value_set_int (&v, ST_WAITING);
                     break;
                 case DONNA_TASK_RUNNING:

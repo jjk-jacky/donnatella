@@ -586,11 +586,11 @@ enum
     TITLE_DOMAIN_CUSTOM
 };
 
-/* custom properties: when this many tasks LOOP are waiting for the timeout,
- * we just remove it and set up a PRIORITY_HIGH idle instead. Note that it is
- * possible that one go (i.e. task process) handles more than this many nodes at
- * once. This is not to ensure there isn't more than this many nodes per task
- * really, but that when reached we stop the wait (for the timeout) */
+/* custom properties: when this many tasks are waiting for the timeout, we just
+ * remove it and set up a PRIORITY_HIGH idle instead. Note that it is possible
+ * that one go (i.e. task process) handles more than this many nodes at once.
+ * This is not to ensure there isn't more than this many nodes per task really,
+ * but that when reached we stop the wait (for the timeout) */
 #define CP_MAX_NODE_WAITING     20
 
 struct cpi_task
@@ -598,6 +598,8 @@ struct cpi_task
     struct property *property;
     guint num_prop;
     DonnaTask *task;
+    task_run_fn run_task;
+    gpointer run_task_data;
 };
 
 struct cp_item {
@@ -618,7 +620,7 @@ struct property
     gchar *cmdline;
     gboolean use_nuls;
     gboolean preload;
-    GArray *items;      /* cp_item[] for VISIBILITY_LOOP refresh_tasks */
+    GArray *items;      /* cp_item[] for refresh_tasks */
     GSource *source;    /* timeout to run the cmdline for tasks */
     guint nb_props;     /* nb of actual props, i.e. len of properties[] below */
     struct prop_def properties[];
@@ -733,9 +735,6 @@ struct _DonnaAppPrivate
      * there shouldn't be a need to separate them all. We use a recursive mutex
      * because we need it for filters, to handle correctly the toggle_ref */
     GRecMutex        rec_mutex;
-    GMainLoop       *loop;
-    GSource         *source_loop_timeout;
-    gint             tasks_in_loop;
     struct col_type
     {
         const gchar     *name;
@@ -2352,9 +2351,16 @@ cp_tp_done (gint fd, GIOCondition condition, struct cp_refresh *cpr)
         guint j;
 
         for (j = 0; j < cpi->tasks->len; ++j)
-            donna_task_run (((struct cpi_task *) cpi->tasks->pdata[j])->task);
+        {
+            struct cpi_task *cpit = cpi->tasks->pdata[j];
+            donna_task_set_preran (cpit->task, DONNA_TASK_DONE,
+                    cpit->run_task, cpit->run_task_data);
+        }
     }
 
+    /* Note: this works because our tasks are FAST and so they ran during the
+     * call to set_preran() above; else we'd have to make cpr ref_counted and
+     * owned by all the tasks and whatnot */
     free_cp_refresh (cpr);
     return G_SOURCE_REMOVE;
 }
@@ -2397,7 +2403,7 @@ cp_timeout (struct property *property)
 
     source = g_unix_fd_source_new (fd, G_IO_IN);
     g_source_set_callback (source, (GSourceFunc) cp_tp_done, cpr, NULL);
-    g_source_attach (source, g_main_context_get_thread_default ());
+    g_source_attach (source, NULL);
     g_source_unref (source);
 
     donna_app_run_task (cpr->property->app, (DonnaTask *) cpr->multi.tp);
@@ -2411,19 +2417,32 @@ err:
         guint j;
 
         for (j = 0; j < cpi->tasks->len; ++j)
-            donna_task_run (((struct cpi_task *) cpi->tasks->pdata[j])->task);
+        {
+            struct cpi_task *cpit = cpi->tasks->pdata[j];
+            /* set pre-worker to DONE so the task worker (cp_worker) runs, since
+             * it only sets the return state (& error message if applicable), to
+             * keep things centralized. */
+            donna_task_set_preran (cpit->task, DONNA_TASK_DONE,
+                    cpit->run_task, cpit->run_task_data);
+        }
     }
     free_cp_refresh (cpr);
     return G_SOURCE_REMOVE;
 }
 
-static gboolean
-cp_preworker (DonnaTask *task, struct cpi_task *cpit)
+static void
+cp_preworker (DonnaTask         *task,
+              task_run_fn        run_task,
+              gpointer           run_task_data,
+              struct cpi_task   *cpit)
 {
     struct property *property = cpit->property;
     struct cp_item _cpi = { NULL, };
     struct cp_item *cpi;
     guint i;
+
+    cpit->run_task = run_task;
+    cpit->run_task_data = run_task_data;
 
     if (!property->items)
     {
@@ -2465,18 +2484,15 @@ cp_preworker (DonnaTask *task, struct cpi_task *cpit)
         g_source_set_priority (property->source, G_PRIORITY_HIGH);
         g_source_set_callback (property->source,
                 (GSourceFunc) cp_timeout, property, NULL);
-        g_source_attach (property->source, g_main_context_get_thread_default ());
+        g_source_attach (property->source, NULL);
     }
     else if (!property->source)
     {
         property->source = g_timeout_source_new (800);
         g_source_set_callback (property->source,
                 (GSourceFunc) cp_timeout, property, NULL);
-        g_source_attach (property->source, g_main_context_get_thread_default ());
+        g_source_attach (property->source, NULL);
     }
-
-    /* do not run task now */
-    return FALSE;
 }
 
 static DonnaTask *
@@ -2514,6 +2530,7 @@ cp_refresher_task (DonnaNode        *node,
         return NULL;
     }
     cpit->task = g_object_ref (task);
+    donna_task_set_visibility (task, DONNA_TASK_VISIBILITY_INTERNAL_FAST);
     donna_task_set_pre_worker (task, (task_pre_fn) cp_preworker);
     g_object_set_data_full ((GObject *) task, "donna-cp-node",
             g_object_ref (node), g_object_unref);
@@ -2568,7 +2585,7 @@ custom_property_refresher (DonnaTask        *task,
      * (thus could "invalidate" things and cause all kinds of trouble).
      * We can assume there's no (current) task, since for non-blocking calls
      * (even from the node's internal task) cp_refresher_task would have been
-     * called and the returned LOOP task started instead. */
+     * called and the returned task started instead. */
     fd = donna_task_get_wait_fd (t);
     if (G_UNLIKELY (fd == -1))
     {
@@ -2649,7 +2666,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
 
                         if (!donna_node_add_property (node, pd->name,
                                     pd->type, NULL,
-                                    DONNA_TASK_VISIBILITY_INTERNAL_LOOP,
+                                    DONNA_TASK_VISIBILITY_INTERNAL_FAST,
                                     (refresher_task_fn) cp_refresher_task,
                                     (refresher_fn) custom_property_refresher,
                                     NULL,
@@ -3214,92 +3231,6 @@ donna_app_get_pattern (DonnaApp       *app,
     return p;
 }
 
-struct idle_loop
-{
-    DonnaApp  *app;
-    DonnaTask *task;
-    gulong sid_notify;
-};
-
-static gboolean
-loop_quit (DonnaApp *app)
-{
-    DonnaAppPrivate *priv = app->priv;
-
-    g_rec_mutex_lock (&priv->rec_mutex);
-    if (!g_source_is_destroyed (g_main_current_source ()))
-    {
-        g_source_unref (priv->source_loop_timeout);
-        priv->source_loop_timeout = NULL;
-
-        if (priv->tasks_in_loop == 0 && priv->loop)
-        {
-            DONNA_DEBUG (APP, NULL,
-                    g_debug ("Quitting tasks-loop"));
-            g_main_loop_quit (priv->loop);
-            priv->loop = NULL;
-        }
-    }
-    g_rec_mutex_unlock (&priv->rec_mutex);
-
-    return G_SOURCE_REMOVE;
-}
-
-static void
-loop_task_state (struct idle_loop *il)
-{
-    DonnaAppPrivate *priv = il->app->priv;
-
-    if (!(donna_task_get_state (il->task) & DONNA_TASK_POST_RUN))
-        return;
-
-    g_object_unref (il->task);
-
-    /* update counter, adding a timeout to end the thread if no other tasks is
-     * added by then */
-    g_rec_mutex_lock (&priv->rec_mutex);
-    if (--priv->tasks_in_loop == 0 && priv->loop)
-    {
-        DONNA_DEBUG (APP, NULL,
-                g_debug2 ("Adding timeout to tasks-loop"));
-
-        if (priv->source_loop_timeout)
-        {
-            g_source_destroy (priv->source_loop_timeout);
-            g_source_unref (priv->source_loop_timeout);
-        }
-
-        priv->source_loop_timeout = g_timeout_source_new_seconds (5);
-        g_source_set_callback (priv->source_loop_timeout,
-                (GSourceFunc) loop_quit, il->app, NULL);
-         g_source_attach (priv->source_loop_timeout,
-                 g_main_loop_get_context (priv->loop));
-    }
-    g_rec_mutex_unlock (&priv->rec_mutex);
-
-    g_slice_free (struct idle_loop, il);
-}
-
-static gboolean
-loop_idle_cb (struct idle_loop *il)
-{
-    /* we will free memory & stuff when it gets to POST_RUN state */
-    il->sid_notify = g_signal_connect_swapped (il->task, "notify::state",
-            (GCallback) loop_task_state, il);
-
-    /* prerun the task */
-    donna_task_prerun (il->task);
-
-    return G_SOURCE_REMOVE;
-}
-
-static void
-loop_run (GMainLoop *loop)
-{
-    g_main_context_push_thread_default (g_main_loop_get_context (loop));
-    g_main_loop_run (loop);
-}
-
 /**
  * donna_app_run_task:
  * @app: The #DonnaApp
@@ -3312,8 +3243,6 @@ loop_run (GMainLoop *loop)
  * - %DONNA_TASK_VISIBILITY_INTERNAL_FAST tasks are run in the current thread
  * - %DONNA_TASK_VISIBILITY_INTERNAL tasks are run in a thread for the internal
  *   thread pool
- * - %DONNA_TASK_VISIBILITY_INTERNAL_LOOP tasks are run as idle source in a main
- *   loop in a dedicated thread
  * - %DONNA_TASK_VISIBILITY_PULIC tasks are deferred to the task manager via
  *   donna_task_manager_add_task()
  *
@@ -3326,54 +3255,31 @@ void
 donna_app_run_task (DonnaApp       *app,
                     DonnaTask      *task)
 {
-    DonnaAppPrivate *priv;
     DonnaTaskVisibility visibility;
 
     g_return_if_fail (DONNA_IS_APP (app));
     g_return_if_fail (DONNA_IS_TASK (task));
-    priv = app->priv;
 
     donna_task_prepare (task);
     g_object_get (task, "visibility", &visibility, NULL);
+
+    if (visibility == DONNA_TASK_VISIBILITY_PULIC)
+    {
+        donna_task_manager_add_task (app->priv->task_manager, task, NULL);
+        return;
+    }
+
+    if (donna_task_need_prerun (task))
+    {
+        donna_task_prerun (task, (task_run_fn) donna_app_run_task, app);
+        return;
+    }
+
     if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI)
         g_main_context_invoke (NULL, (GSourceFunc) donna_app_task_run,
                 g_object_ref_sink (task));
     else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_FAST)
         donna_app_task_run (g_object_ref_sink (task));
-    else if (visibility == DONNA_TASK_VISIBILITY_INTERNAL_LOOP)
-    {
-        GMainContext *context;
-        GSource *source;
-        struct idle_loop *il;
-
-        g_rec_mutex_lock (&priv->rec_mutex);
-        if (!priv->loop)
-        {
-            context = g_main_context_new ();
-            priv->loop = g_main_loop_new (context, FALSE);
-            g_main_context_unref (context);
-
-            DONNA_DEBUG (APP, NULL,
-                    g_debug ("New tasks-loop created, starting thread"));
-            g_thread_unref (g_thread_new ("tasks-loop",
-                        (GThreadFunc) loop_run, priv->loop));
-        }
-        else
-            context = g_main_loop_get_context (priv->loop);
-
-        il = g_slice_new (struct idle_loop);
-        il->app = app;
-        il->task = g_object_ref_sink (task);
-
-        source = g_idle_source_new ();
-        g_source_set_callback (source, (GSourceFunc) loop_idle_cb, il, NULL);
-        g_source_attach (source, context);
-        g_source_unref (source);
-        ++priv->tasks_in_loop;
-        g_rec_mutex_unlock (&priv->rec_mutex);
-    }
-    else if (visibility == DONNA_TASK_VISIBILITY_PULIC)
-        donna_task_manager_add_task (app->priv->task_manager, task, NULL);
     else
         g_thread_pool_push (app->priv->pool, g_object_ref_sink (task), NULL);
 }
@@ -8797,14 +8703,6 @@ donna_app_run (DonnaApp       *app,
     priv->exiting = TRUE;
     donna_app_emit_event (app, "exit", FALSE, NULL, NULL, NULL, NULL);
 
-    /* stop the tasks-loop if there's one running */
-    g_rec_mutex_lock (&priv->rec_mutex);
-    if (priv->loop)
-    {
-        g_main_loop_quit (priv->loop);
-        priv->loop = NULL;
-    }
-    g_rec_mutex_unlock (&priv->rec_mutex);
     /* let's make sure all (internal) tasks (e.g. triggered from event "exit")
      * are done before we die */
     g_thread_pool_stop_unused_threads ();

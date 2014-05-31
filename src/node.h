@@ -213,8 +213,7 @@ typedef enum
  * gets called. In non-blocking manner, a task is created to perform the
  * refresh.
  *
- * If the refresher was set to a task visibility of
- * #DONNA_TASK_VISIBILITY_INTERNAL_LOOP and only that property needs to be
+ * If a refresher_task_fn was provided and only that property needs to be
  * refreshed, then this function will be called and the returned task be
  * returned (by e.g. donna_node_refresh_task())
  *
