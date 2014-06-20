@@ -23,6 +23,7 @@
 #include "config.h"
 
 #include <gtk/gtk.h>
+#include <glib-unix.h>
 #include "provider-command.h"
 #include "command.h"
 #include "provider.h"
@@ -367,14 +368,17 @@ provider_command_get_children (DonnaProviderBase  *_provider,
 
 struct run_command
 {
-    gboolean                 is_stack;
+    gboolean                 is_subcommand;
     DonnaProviderCommand    *pc;
     gchar                   *cmdline;
     struct command          *command;
     gchar                   *start;
     guint                    i;
+    struct run_command      *sub_rc;
     GPtrArray               *args;
     DonnaTask               *task;
+    task_run_fn              run_task;
+    gpointer                 run_task_data;
 };
 
 static void
@@ -416,10 +420,20 @@ free_command_args (struct command *command, GPtrArray *args)
 static void
 free_run_command (struct run_command *rc)
 {
-    g_free (rc->cmdline);
+    if (rc->is_subcommand)
+        return;
+    if (rc->sub_rc)
+    {
+        /* so it gets free-d */
+        rc->sub_rc->is_subcommand = FALSE;
+        /* because it points into our own rc->cmdline */
+        rc->sub_rc->cmdline = NULL;
+
+        free_run_command (rc->sub_rc);
+    }
     free_command_args (rc->command, rc->args);
-    if (!rc->is_stack)
-        g_slice_free (struct run_command, rc);
+    g_free (rc->cmdline);
+    g_slice_free (struct run_command, rc);
 }
 
 struct command *
@@ -493,7 +507,71 @@ unquote_string (gchar **start, gchar **end, GError **error)
     return TRUE;
 }
 
+static void parse_command (struct run_command *rc);
+
+static gboolean
+subcommand_cb (gint fd, GIOCondition condition, struct run_command *rc)
+{
+    DonnaTaskState state;
+
+    state = donna_task_get_state (rc->sub_rc->task);
+
+    if (state == DONNA_TASK_CANCELLED)
+    {
+        g_object_unref (rc->sub_rc->task);
+        donna_task_set_preran (rc->task, DONNA_TASK_CANCELLED,
+                rc->run_task, rc->run_task_data);
+        return G_SOURCE_REMOVE;
+    }
+    else if (state != DONNA_TASK_DONE)
+    {
+        const GError *e;
+        GError *err = NULL;
+
+        e = donna_task_get_error (rc->sub_rc->task);
+        if (e)
+        {
+            err = g_error_copy (e);
+            g_prefix_error (&err, "Command '%s', argument %d: "
+                    "Command %s%s%s failed: ",
+                    rc->command->name, rc->i + 1,
+                    (rc->sub_rc->command) ? "'" : "",
+                    (rc->sub_rc->command) ? rc->sub_rc->command->name : "",
+                    (rc->sub_rc->command) ? "' " : "");
+            donna_task_take_error (rc->task, err);
+        }
+        else
+            donna_task_set_error (rc->task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command '%s', argument %d: "
+                    "Command %s%s%sfailed (w/out error message)",
+                    rc->command->name, rc->i + 1,
+                    (rc->sub_rc->command) ? "'" : "",
+                    (rc->sub_rc->command) ? rc->sub_rc->command->name : "",
+                    (rc->sub_rc->command) ? "' " : "");
+
+        g_object_unref (rc->sub_rc->task);
+        donna_task_set_preran (rc->task, DONNA_TASK_FAILED,
+                rc->run_task, rc->run_task_data);
+        return G_SOURCE_REMOVE;
+    }
+
+    parse_command (rc);
+    return G_SOURCE_REMOVE;
+}
+
+static void pre_run_command (DonnaTask          *task,
+                             task_run_fn         run_task,
+                             gpointer            run_task_data,
+                             struct run_command *rc);
 static DonnaTaskState run_command (DonnaTask *task, struct run_command *rc);
+
+enum parse
+{
+    PARSE_DONE,
+    PARSE_PENDING,  /* source on task for subcommand was set up */
+    PARSE_FAILED
+};
 
 /* parse the next argument for a command. data must have been properly set &
  * initialized via _donna_command_init_parse() and therefore data->start points
@@ -501,7 +579,7 @@ static DonnaTaskState run_command (DonnaTask *task, struct run_command *rc);
  * Will handle figuring out where the arg ends (can be quoted, can also be
  * another command to run & get its return value as arg, via @syntax), and
  * moving data->start & whatnot where needs be */
-static DonnaTaskState
+static enum parse
 parse_arg (struct run_command    *rc,
            GError               **error)
 {
@@ -519,101 +597,88 @@ parse_arg (struct run_command    *rc,
     {
         g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
                 rc->command->name, rc->i + 1);
-        return DONNA_TASK_FAILED;
+        return PARSE_FAILED;
     }
     else if (*rc->start == '@')
     {
-        struct run_command _rc;
-        gboolean dereference;
+        struct run_command *sub_rc;
         DonnaTask *task;
-        DonnaTaskState state;
         const GValue *v;
-        gchar *start;
 
-        dereference = rc->start[1] == '*';
-        start = rc->start + ((dereference) ? 2 : 1);
-
-        /* do the _donna_command_init_parse to known which command this is, so
-         * we can check visibility/ensure we can run it */
-        _rc.command = _donna_command_init_parse (rc->pc, start, NULL, &err);
-        if (!_rc.command)
+        /* do we need to start a task for subcommand */
+        if (!rc->sub_rc)
         {
-            g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
-                    rc->command->name, rc->i + 1);
-            return DONNA_TASK_FAILED;
-        }
+            struct command *command;
+            GSource *source;
 
-        memset (&_rc, 0, sizeof (struct run_command));
-        _rc.is_stack = TRUE; /* so free_run_command() doesn't try to free it */
-        _rc.pc = rc->pc;
-        _rc.cmdline = g_strdup (start);
-
-        /* create a "fake" task for error/return value */
-        task = g_object_ref_sink (donna_task_new ((task_fn) gtk_true, NULL, NULL));
-        state = run_command (task, &_rc);
-        if (state == DONNA_TASK_CANCELLED)
-        {
-            g_object_unref (task);
-            return DONNA_TASK_CANCELLED;
-        }
-        else if (state != DONNA_TASK_DONE)
-        {
-            if (error)
+            s = rc->start + ((rc->start[1] == '*') ? 2 : 1);
+            /* do the _donna_command_init_parse to known which command this is,
+             * making sure it exists, and get its visibility */
+            command = _donna_command_init_parse (rc->pc, s, NULL, &err);
+            if (!command)
             {
-                const GError *e;
-
-                e = donna_task_get_error (task);
-                if (e)
-                {
-                    *error = g_error_copy (e);
-                    g_prefix_error (error, "Command '%s', argument %d: "
-                            "Command %s%s%s failed: ",
-                            rc->command->name, rc->i + 1,
-                            (_rc.command) ? "'" : "",
-                            (_rc.command) ? _rc.command->name : "",
-                            (_rc.command) ? "' " : "");
-                }
-                else
-                    g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_OTHER,
-                            "Command '%s', argument %d: "
-                            "Command %s%s%sfailed (w/out error message)",
-                            rc->command->name, rc->i + 1,
-                            (_rc.command) ? "'" : "",
-                            (_rc.command) ? _rc.command->name : "",
-                            (_rc.command) ? "' " : "");
+                g_propagate_prefixed_error (error, err, "Command '%s', argument %d: ",
+                        rc->command->name, rc->i + 1);
+                return PARSE_FAILED;
             }
 
-            g_object_unref (task);
-            return DONNA_TASK_FAILED;
-        }
+            sub_rc = g_slice_new0 (struct run_command);
+            sub_rc->is_subcommand = TRUE;
+            sub_rc->pc = rc->pc;
+            sub_rc->command = command;
+            sub_rc->cmdline = s;
 
+            task = donna_task_new ((task_fn) run_command, sub_rc,
+                    (GDestroyNotify) free_run_command);
+            donna_task_set_pre_worker (task, (task_pre_fn) pre_run_command);
+            donna_task_set_visibility (task, command->visibility);
+
+            DONNA_DEBUG (TASK, NULL,
+                    donna_task_take_desc (task, g_strdup_printf (
+                            "trigger for subcommand '%s'", sub_rc->cmdline)));
+
+            rc->sub_rc = sub_rc;
+            source = g_unix_fd_source_new (donna_task_get_wait_fd (task), G_IO_IN);
+            g_source_set_callback (source, (GSourceFunc) subcommand_cb, rc, NULL);
+            g_source_attach (source, NULL);
+            g_source_unref (source);
+
+            /* take a ref on task for our source; sub_rc->task will be set when
+             * the pre_worker is called */
+            donna_app_run_task (app, g_object_ref (task));
+            return PARSE_PENDING;
+        }
+        /* we are parsing return value of subcommand */
+
+        sub_rc = rc->sub_rc;
+        task = sub_rc->task;
         v = donna_task_get_return_value (task);
         if (!v)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_IS_OPTIONAL)
             {
                 g_ptr_array_add (rc->args, NULL);
-                end = start + (_rc.start - _rc.cmdline + 1);
-                g_object_unref (task);
-                goto next;
+                end = sub_rc->start + 1;
+                s = NULL; /* to goto next */
+                goto clear_and_goto;
             }
             else
             {
                 g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                         "Command '%s', argument %d: "
                         "Argument required, and command '%s' didn't return anything",
-                        rc->command->name, rc->i + 1, _rc.command->name);
+                        rc->command->name, rc->i + 1, sub_rc->command->name);
                 g_object_unref (task);
-                return DONNA_TASK_FAILED;
+                return PARSE_FAILED;
             }
         }
 
         s = NULL;
-        if (_rc.command->return_type & DONNA_ARG_IS_ARRAY)
+        if (sub_rc->command->return_type & DONNA_ARG_IS_ARRAY)
         {
             /* is it a matching array? */
-            if ((rc->command->arg_type[rc->i] & _rc.command->return_type)
-                    == _rc.command->return_type)
+            if ((rc->command->arg_type[rc->i] & sub_rc->command->return_type)
+                    == sub_rc->command->return_type)
                 g_ptr_array_add (rc->args, g_value_dup_boxed (v));
             /* since we're talking about a command's return_type, we expect
              * thigs to make sense, i.e. we don't check for unsupported array
@@ -627,10 +692,10 @@ parse_arg (struct run_command    *rc,
                 /* try to match things up */
                 if (arr->len == 1)
                 {
-                    if ((_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                    if ((sub_rc->command->return_type & DONNA_ARG_TYPE_NODE)
                             && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_NODE))
                         g_ptr_array_add (rc->args, g_object_ref (arr->pdata[0]));
-                    else if ((_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                    else if ((sub_rc->command->return_type & DONNA_ARG_TYPE_NODE)
                             && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_ROW_ID))
                     {
                         DonnaRowId *rid = g_new (DonnaRowId, 1);
@@ -638,14 +703,14 @@ parse_arg (struct run_command    *rc,
                         rid->type = DONNA_ARG_TYPE_NODE;
                         g_ptr_array_add (rc->args, rid);
                     }
-                    else if ((_rc.command->return_type & DONNA_ARG_TYPE_STRING)
+                    else if ((sub_rc->command->return_type & DONNA_ARG_TYPE_STRING)
                             && (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_STRING))
                         g_ptr_array_add (rc->args, g_strdup (arr->pdata[0]));
                     else
                     {
                         /* since we only have one element, we'll give the string
                          * (or full location) unquoted */
-                        if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                        if (sub_rc->command->return_type & DONNA_ARG_TYPE_NODE)
                             s = donna_node_get_full_location (arr->pdata[0]);
                         else
                             s = g_strdup (arr->pdata[0]);
@@ -666,7 +731,7 @@ parse_arg (struct run_command    *rc,
                         gchar *ss;
 
                         /* only 2 types of arrays are supported: NODE & STRING */
-                        if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                        if (sub_rc->command->return_type & DONNA_ARG_TYPE_NODE)
                             s = donna_node_get_full_location (arr->pdata[i]);
                         else
                             s = arr->pdata[i];
@@ -680,7 +745,7 @@ parse_arg (struct run_command    *rc,
                         }
                         g_string_append_c (str, '"');
 
-                        if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+                        if (sub_rc->command->return_type & DONNA_ARG_TYPE_NODE)
                             g_free (s);
                         g_string_append_c (str, ',');
                     }
@@ -690,7 +755,7 @@ parse_arg (struct run_command    *rc,
                 }
             }
         }
-        else if (_rc.command->return_type & DONNA_ARG_TYPE_INT)
+        else if (sub_rc->command->return_type & DONNA_ARG_TYPE_INT)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_INT)
                 g_ptr_array_add (rc->args,
@@ -698,7 +763,7 @@ parse_arg (struct run_command    *rc,
             else
                 s = g_strdup_printf ("%d", g_value_get_int (v));
         }
-        else if (_rc.command->return_type & DONNA_ARG_TYPE_STRING)
+        else if (sub_rc->command->return_type & DONNA_ARG_TYPE_STRING)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_STRING)
             {
@@ -716,21 +781,21 @@ parse_arg (struct run_command    *rc,
             else
                 s = g_value_dup_string (v);
         }
-        else if (_rc.command->return_type & DONNA_ARG_TYPE_TREE_VIEW)
+        else if (sub_rc->command->return_type & DONNA_ARG_TYPE_TREE_VIEW)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TREE_VIEW)
                 g_ptr_array_add (rc->args, g_value_dup_object (v));
             else
                 s = g_strdup (donna_tree_view_get_name (g_value_get_object (v)));
         }
-        else if (_rc.command->return_type & DONNA_ARG_TYPE_TERMINAL)
+        else if (sub_rc->command->return_type & DONNA_ARG_TYPE_TERMINAL)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_TERMINAL)
                 g_ptr_array_add (rc->args, g_value_dup_object (v));
             else
                 s = g_strdup (donna_terminal_get_name (g_value_get_object (v)));
         }
-        else if (_rc.command->return_type & DONNA_ARG_TYPE_NODE)
+        else if (sub_rc->command->return_type & DONNA_ARG_TYPE_NODE)
         {
             if (rc->command->arg_type[rc->i] & DONNA_ARG_TYPE_NODE)
             {
@@ -760,12 +825,19 @@ parse_arg (struct run_command    *rc,
             g_warning ("Command '%s', argument %d: "
                     "Command '%s' had an unsupported type (%d) of return value",
                     rc->command->name, rc->i + 1,
-                    _rc.command->name, _rc.command->return_type);
+                    sub_rc->command->name, sub_rc->command->return_type);
         }
 
-        end = start + (_rc.start - _rc.cmdline + 1);
-        c = start[end - start];
+        end = sub_rc->start + 1;
+        c = *end;
+clear_and_goto:
         g_object_unref (task);
+
+        rc->sub_rc = NULL;
+        sub_rc->is_subcommand = FALSE;
+        sub_rc->cmdline = NULL;
+        free_run_command (sub_rc);
+
         if (!s)
             goto next;
         else
@@ -780,7 +852,7 @@ parse_arg (struct run_command    *rc,
         g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                 "Command '%s', argument %d: Unexpected end-of-string",
                 rc->command->name, rc->i + 1);
-        return DONNA_TASK_FAILED;
+        return PARSE_FAILED;
     }
 
     if (*end != ')')
@@ -790,14 +862,14 @@ parse_arg (struct run_command    *rc,
             g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                     "Command '%s', argument %d: Closing parenthesis missing: %s",
                     rc->command->name, rc->i + 1, end);
-            return DONNA_TASK_FAILED;
+            return PARSE_FAILED;
         }
         else if (*end != ',')
         {
             g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
                     "Command '%s', argument %d: Unexpected character (expected ',' or ')'): %s",
                     rc->command->name, rc->i + 1, end);
-            return DONNA_TASK_FAILED;
+            return PARSE_FAILED;
         }
     }
 
@@ -813,7 +885,7 @@ parse_arg (struct run_command    *rc,
             g_set_error (error, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MISSING_ARG,
                     "Command '%s', argument %d required",
                     rc->command->name, rc->i + 1);
-            return DONNA_TASK_FAILED;
+            return PARSE_FAILED;
         }
     }
 
@@ -1207,52 +1279,34 @@ next:
         rc->start = end + 1;
         skip_blank (rc->start);
     }
-    return DONNA_TASK_DONE;
+    return PARSE_DONE;
 
 error:
     s[end - s] = c;
-    return DONNA_TASK_FAILED;
+    return PARSE_FAILED;
 }
 
-static DonnaTaskState
-task_run_command (DonnaTask *cmd_task, struct run_command *rc)
-{
-    return rc->command->func (rc->task, rc->pc->priv->app,
-            rc->args->pdata, rc->command->data);
-}
-
-static DonnaTaskState
-run_command (DonnaTask *task, struct run_command *rc)
+static void
+parse_command (struct run_command *rc)
 {
     GError *err = NULL;
-    DonnaApp *app = rc->pc->priv->app;
-    gboolean need_task = FALSE;
-    DonnaTaskState ret;
+    DonnaTaskState prestate = DONNA_TASK_DONE;
 
-    rc->command = _donna_command_init_parse (rc->pc, rc->cmdline, &rc->start, NULL);
-    if (G_UNLIKELY (!rc->command))
+    for ( ; rc->i < rc->command->argc; ++rc->i)
     {
-        donna_task_set_error (task, DONNA_COMMAND_ERROR,
-                DONNA_COMMAND_ERROR_NOT_FOUND,
-                "run_command failed to identify command for: %s",
-                rc->cmdline);
-        free_run_command (rc);
-        return DONNA_TASK_FAILED;
-    }
-
-    rc->args = g_ptr_array_sized_new (rc->command->argc);
-    for (rc->i = 0; rc->i < rc->command->argc; ++rc->i)
-    {
-        DonnaTaskState parsed;
+        enum parse parsed;
 
         parsed = parse_arg (rc, &err);
-        if (parsed != DONNA_TASK_DONE)
+        if (parsed == PARSE_FAILED)
         {
-            if (parsed == DONNA_TASK_FAILED)
-                donna_task_take_error (task, err);
-            free_run_command (rc);
-            return parsed;
+            donna_task_take_error (rc->task, err);
+            prestate = DONNA_TASK_FAILED;
+            goto done;
         }
+        else if (parsed == PARSE_PENDING)
+            /* a source on a task for a subcommand was set up */
+            return;
+        /* PARSE_DONE */
 
         if (*rc->start == ')' && rc->i + 1 < rc->command->argc)
         {
@@ -1269,73 +1323,68 @@ run_command (DonnaTask *task, struct run_command *rc)
                 /* allow missing arg(s) if they're optional */
                 for (rc->i = rc->i + 1; rc->i < rc->command->argc; ++rc->i)
                     g_ptr_array_add (rc->args, NULL);
-                g_clear_error (&err);
             }
             else
             {
-                donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_MISSING_ARG,
+                donna_task_set_error (rc->task, DONNA_COMMAND_ERROR,
+                        DONNA_COMMAND_ERROR_MISSING_ARG,
                         "Command '%s', argument %d required",
                         rc->command->name, j + 1);
-                free_run_command (rc);
-                return DONNA_TASK_FAILED;
+                prestate = DONNA_TASK_FAILED;
+                goto done;
             }
         }
     }
 
     if (*rc->start != ')')
     {
-        donna_task_set_error (task, DONNA_COMMAND_ERROR, DONNA_COMMAND_ERROR_SYNTAX,
+        donna_task_set_error (rc->task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
                 "Command '%s': Too many arguments: %s",
                 rc->command->name, rc->start);
+        prestate = DONNA_TASK_FAILED;
+        goto done;
+    }
+
+done:
+    donna_task_set_preran (rc->task, prestate, rc->run_task, rc->run_task_data);
+}
+
+static void
+pre_run_command (DonnaTask          *task,
+                 task_run_fn         run_task,
+                 gpointer            run_task_data,
+                 struct run_command *rc)
+{
+    GError *err = NULL;
+
+    rc->task = task;
+    rc->run_task = run_task;
+    rc->run_task_data = run_task_data;
+
+    rc->command = _donna_command_init_parse (rc->pc, rc->cmdline, &rc->start, &err);
+    if (G_UNLIKELY (!rc->command))
+    {
+        donna_task_take_error (task, err);
         free_run_command (rc);
-        return DONNA_TASK_FAILED;
+        donna_task_set_preran (task, DONNA_TASK_FAILED, run_task, run_task_data);
+        return;
     }
 
-    /* are we in the main/UI thread? */
-    if (g_main_context_is_owner (g_main_context_default ()))
-    {
-        /* unless the command is GUI or FAST, a new task is needed, to start a
-         * new main loop meanwhile in order not to block the UI */
-        if (rc->command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_GUI
-                && rc->command->visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST)
-            need_task = TRUE;
-    }
-    else
-    {
-        /* if the command is GUI a new task is needed */
-        if (rc->command->visibility == DONNA_TASK_VISIBILITY_INTERNAL_GUI)
-            need_task = TRUE;
-    }
+    rc->args = g_ptr_array_sized_new (rc->command->argc);
+    parse_command (rc);
+}
 
-    if (need_task)
-    {
-        DonnaTask *cmd_task;
+static DonnaTaskState
+run_command (DonnaTask *task, struct run_command *rc)
+{
+    DonnaTaskState state;
 
-        /* this will allow to call to the command's function with this "main"
-         * task, so that's where error/return value will be set. Since this new
-         * task (cmd_task) is only there to run in the right thread */
-        rc->task = task;
-
-        cmd_task = donna_task_new ((task_fn) task_run_command, rc, NULL);
-        DONNA_DEBUG (TASK, NULL,
-                donna_task_take_desc (cmd_task, g_strdup_printf (
-                        "run command: %s", rc->cmdline)));
-        donna_task_set_visibility (cmd_task, rc->command->visibility);
-        if (!donna_app_run_task_and_wait (app, g_object_ref (cmd_task), task, &err))
-        {
-            g_prefix_error (&err, "Failed to run command's task: ");
-            donna_task_take_error (task, err);
-            g_object_unref (cmd_task);
-            return DONNA_TASK_FAILED;
-        }
-        ret = donna_task_get_state (cmd_task);
-        g_object_unref (cmd_task);
-    }
-    else
-        ret = rc->command->func (task, app, rc->args->pdata, rc->command->data);
+    state = rc->command->func (task, rc->pc->priv->app,
+            rc->args->pdata, rc->command->data);
 
     free_run_command (rc);
-    return ret;
+    return state;
 }
 
 static DonnaTask *
@@ -1354,6 +1403,7 @@ provider_command_trigger_node_task (DonnaProvider      *provider,
 
     task = donna_task_new ((task_fn) run_command, rc,
             (GDestroyNotify) free_run_command);
+    donna_task_set_pre_worker (task, (task_pre_fn) pre_run_command);
     donna_node_get (node, FALSE, "trigger-visibility", &has, &v, NULL);
     donna_task_set_visibility (task, g_value_get_uint (&v));
     g_value_unset (&v);
