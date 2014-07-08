@@ -903,7 +903,6 @@ provider_mark_new_child (DonnaProviderBase  *_provider,
     GError *err = NULL;
     DonnaProviderMarkPrivate *priv = ((DonnaProviderMark *) _provider)->priv;
     struct mark *mark;
-    DonnaNode *node_root;
     DonnaNode *node;
     GValue *value;
 
@@ -936,14 +935,7 @@ provider_mark_new_child (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
-    node_root = get_node_for ((DonnaProviderMark *) _provider, GET_IF_IN_CACHE,
-            (gpointer) "/", NULL);
-    if (node_root)
-    {
-        donna_provider_node_new_child ((DonnaProvider *) _provider,
-                node_root, node);
-        g_object_unref (node_root);
-    }
+    donna_provider_node_new_child ((DonnaProvider *) _provider, parent, node);
 
     value = donna_task_grab_return_value (task);
     g_value_init (value, DONNA_TYPE_NODE);
