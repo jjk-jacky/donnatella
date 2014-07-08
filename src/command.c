@@ -1918,6 +1918,13 @@ popup_children (DonnaTask *task, struct popup_children_data *data)
     return DONNA_TASK_DONE;
 }
 
+static void
+free_popup_children_nodes (gpointer data)
+{
+    struct popup_children_data *pcd = data;
+    g_ptr_array_unref (pcd->nodes);
+}
+
 /**
  * node_popup_children:
  * @node: The node to popup children of in a menu
@@ -2011,7 +2018,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
     data.nodes  = g_value_dup_boxed (donna_task_get_return_value (t));
     g_object_unref (t);
 
-    t = donna_task_new ((task_fn) popup_children, &data, NULL);
+    t = donna_task_new ((task_fn) popup_children, &data, free_popup_children_nodes);
     donna_task_set_visibility (t, DONNA_TASK_VISIBILITY_INTERNAL_GUI);
     if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
     {
