@@ -5483,7 +5483,7 @@ donna_app_filter_nodes (DonnaApp       *app,
     g_return_val_if_fail (!tree || DONNA_IS_TREE_VIEW (tree), FALSE);
 
     if (G_UNLIKELY (nodes->len == 0))
-        return FALSE;
+        return TRUE;
 
     filter = donna_app_get_filter (app, filter_str);
     if (G_UNLIKELY (!filter))
