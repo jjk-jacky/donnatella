@@ -21195,14 +21195,14 @@ again:
  */
 gboolean
 donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
-                                   const gchar        *filter,
+                                   DonnaFilter        *filter,
                                    gboolean            toggle,
                                    GError            **error)
 {
     DonnaTreeViewPrivate *priv;
-    DonnaFilter *f = NULL;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), FALSE);
+    g_return_val_if_fail (filter == NULL || DONNA_IS_FILTER (filter), FALSE);
     priv = tree->priv;
 
     if (priv->is_tree)
@@ -21219,41 +21219,20 @@ donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
 
     if (filter)
     {
-        f = donna_app_get_filter (priv->app, filter);
-        if (!f)
-        {
-            g_set_error (error, DONNA_TREE_VIEW_ERROR,
-                    DONNA_TREE_VIEW_ERROR_OTHER,
-                    "TreeView '%s': Failed to get visual filter for '%s'",
-                    priv->name, filter);
-            return FALSE;
-        }
+        if (priv->filter && toggle && priv->filter == filter)
+            filter = NULL;
 
-        if (priv->filter && toggle)
-        {
-            gchar *s1, *s2;
-
-            s1 = donna_filter_get_filter (f);
-            s2 = donna_filter_get_filter (priv->filter);
-
-            if (streq (s1, s2))
-                f = NULL;
-
-            g_free (s1);
-            g_free (s2);
-        }
-
-        if (f && !donna_filter_is_compiled (f) && !donna_filter_compile (f, error))
+        if (filter && !donna_filter_is_compiled (filter)
+                && !donna_filter_compile (filter, error))
         {
             g_prefix_error (error, "TreeView '%s': Failed to set current visual filter: ",
                     priv->name);
-            g_object_unref (f);
             return FALSE;
         }
     }
 
     donna_g_object_unref (priv->filter);
-    priv->filter = f;
+    priv->filter = (filter) ? g_object_ref (filter) : NULL;
     refilter_list (tree);
     check_statuses (tree, STATUS_CHANGED_ON_VF);
     return TRUE;
@@ -21264,17 +21243,17 @@ donna_tree_view_set_visual_filter (DonnaTreeView      *tree,
  * @tree: A #DonnaTreeView
  * @error: (allow-none): Return location of a #GError, or %NULL
  *
- * Returns the string representation of the current visual filter, or %NULL
+ * Returns the current visual filter, or %NULL
  *
  * Note that you need to use @error to determine if there's no filter, or an
  * error occured. Also note that the only possible error is a
- * %DONNA_TREE_VIEW_ERROR_INVALID_MODE is used on a tree, as VF are only
+ * %DONNA_TREE_VIEW_ERROR_INVALID_MODE is used on a tree, as VFs are only
  * supported on lists.
  *
- * Returns: A newly allocated string of the current VF (use g_free() when done),
- * or %NULL on error or if there's no VF.
+ * Returns: (transfer full): The #DonnaFilter currently set as VF, or %NULL if
+ * none or on error
  */
-gchar *
+DonnaFilter *
 donna_tree_view_get_visual_filter (DonnaTreeView      *tree,
                                    GError            **error)
 {
@@ -21292,10 +21271,10 @@ donna_tree_view_get_visual_filter (DonnaTreeView      *tree,
         return NULL;
     }
 
-    if (!priv->filter)
+    if (priv->filter)
+        return g_object_ref (priv->filter);
+    else
         return NULL;
-
-    return donna_filter_get_filter (priv->filter);
 }
 
 /**

@@ -38,6 +38,9 @@ enum
     PROP_APP,
     PROP_FILTER,
     PROP_COMPILED,
+    PROP_ALIAS,
+    PROP_NAME,
+    PROP_ICON_NAME,
 
     NB_PROPS
 };
@@ -82,6 +85,9 @@ struct _DonnaFilterPrivate
     gulong           option_deleted_sid;
     struct element  *element;
     GSList          *col_ct_datas;
+    gchar           *alias;
+    gchar           *name;
+    gchar           *icon_name;
 };
 
 static GParamSpec *donna_filter_props[NB_PROPS] = { NULL, };
@@ -121,6 +127,21 @@ donna_filter_class_init (DonnaFilterClass *klass)
     donna_filter_props[PROP_COMPILED] =
         g_param_spec_boolean ("compiled", "compiled", "Whether filter is compiled or not",
                 FALSE, G_PARAM_READABLE);
+
+    donna_filter_props[PROP_ALIAS] =
+        g_param_spec_string ("alias", "alias", "Alias to use the filter",
+                NULL,
+                G_PARAM_READABLE);
+
+    donna_filter_props[PROP_NAME] =
+        g_param_spec_string ("name", "name", "Name/description of the filter",
+                NULL,
+                G_PARAM_READABLE);
+
+    donna_filter_props[PROP_ICON_NAME] =
+        g_param_spec_string ("icon-name", "icon-name", "Icon name associated with the filter",
+                NULL,
+                G_PARAM_READABLE);
 
     g_object_class_install_properties (o_class, NB_PROPS, donna_filter_props);
 
@@ -177,6 +198,15 @@ donna_filter_get_property (GObject            *object,
             break;
         case PROP_COMPILED:
             g_value_set_boolean (value, priv->element != NULL);
+            break;
+        case PROP_ALIAS:
+            g_value_set_string (value, priv->alias);
+            break;
+        case PROP_NAME:
+            g_value_set_string (value, priv->name);
+            break;
+        case PROP_ICON_NAME:
+            g_value_set_string (value, priv->icon_name);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -238,9 +268,101 @@ donna_filter_finalize (GObject *object)
         g_signal_handler_disconnect (config, priv->option_deleted_sid);
     g_object_unref (priv->app);
     g_free (priv->filter);
+    g_free (priv->alias);
+    g_free (priv->name);
+    g_free (priv->icon_name);
     free_element (priv->element);
 
     G_OBJECT_CLASS (donna_filter_parent_class)->finalize (object);
+}
+
+
+/* private API used by provider-filter.c */
+
+gboolean
+_donna_filter_has_props (DonnaFilter *filter, guint props)
+{
+    DonnaFilterPrivate *priv;
+
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
+    priv = filter->priv;
+
+    if ((props & _DONNA_FILTER_PROP_ALIAS) && priv->alias)
+        return TRUE;
+    if ((props & _DONNA_FILTER_PROP_NAME) && priv->name)
+        return TRUE;
+    if ((props & _DONNA_FILTER_PROP_ICON_NAME) && priv->icon_name)
+        return TRUE;
+
+    return FALSE;
+}
+
+gchar *
+_donna_filter_get_key (DonnaFilter *filter)
+{
+    DonnaFilterPrivate *priv;
+    gchar *key;
+
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), NULL);
+    priv = filter->priv;
+
+    if (priv->alias)
+        key = g_strconcat ("|", priv->alias, NULL);
+    else
+        key = g_strdup (priv->filter);
+
+    return key;
+}
+
+void
+_donna_filter_set_alias (DonnaFilter *filter, const gchar *alias, gboolean notify)
+{
+    DonnaFilterPrivate *priv;
+    gchar *s;
+
+    g_return_if_fail (DONNA_IS_FILTER (filter));
+    priv = filter->priv;
+
+    s = priv->alias;
+    priv->alias = g_strdup (alias);
+    g_free (s);
+
+    if (notify)
+        g_object_notify_by_pspec ((GObject *) filter, donna_filter_props[PROP_ALIAS]);
+}
+
+void
+_donna_filter_set_name (DonnaFilter *filter, const gchar *name, gboolean notify)
+{
+    DonnaFilterPrivate *priv;
+    gchar *s;
+
+    g_return_if_fail (DONNA_IS_FILTER (filter));
+    priv = filter->priv;
+
+    s = priv->name;
+    priv->name = g_strdup (name);
+    g_free (s);
+
+    if (notify)
+        g_object_notify_by_pspec ((GObject *) filter, donna_filter_props[PROP_NAME]);
+}
+
+void
+_donna_filter_set_icon_name (DonnaFilter *filter, const gchar *icon_name, gboolean notify)
+{
+    DonnaFilterPrivate *priv;
+    gchar *s;
+
+    g_return_if_fail (DONNA_IS_FILTER (filter));
+    priv = filter->priv;
+
+    s = priv->icon_name;
+    priv->icon_name = g_strdup (icon_name);
+    g_free (s);
+
+    if (notify)
+        g_object_notify_by_pspec ((GObject *) filter, donna_filter_props[PROP_ICON_NAME]);
 }
 
 static gboolean
@@ -772,12 +894,20 @@ donna_filter_is_match (DonnaFilter    *filter,
     return match;
 }
 
-/* this is needed for filter_toggle_ref_cb() in app.c where we need to get the
- * filter string, but can't use g_object_get() as it would take a ref on it,
- * thus triggering the toggle_ref and enterring an infinite recursion... */
+/* this is needed for filter_toggle_ref_cb() in provider-filter.c where we need
+ * to get the filter string, but can't use g_object_get() as it would take a ref
+ * on it, thus triggering the toggle_ref and enterring an infinite recursion...
+ * */
 gchar *
 donna_filter_get_filter (DonnaFilter *filter)
 {
     g_return_val_if_fail (DONNA_IS_FILTER (filter), NULL);
     return g_strdup (filter->priv->filter);
+}
+
+DonnaApp *
+_donna_filter_peek_app (DonnaFilter *filter)
+{
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), NULL);
+    return filter->priv->app;
 }

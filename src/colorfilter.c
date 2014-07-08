@@ -289,11 +289,10 @@ donna_color_filter_apply_if_match (DonnaColorFilter *cf,
 
     if (!priv->filter_obj)
     {
-        priv->filter_obj = donna_app_get_filter (priv->app, priv->filter);
+        priv->filter_obj = donna_app_get_filter (priv->app, priv->filter, error);
         if (G_UNLIKELY (!priv->filter_obj))
         {
-            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
-                    "Color filter failed: cannot get filter object for '%s'",
+            g_prefix_error (error, "Color filter failed: cannot get filter for '%s': ",
                     priv->filter);
             return FALSE;
         }

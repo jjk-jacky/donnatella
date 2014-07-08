@@ -28,6 +28,7 @@
 #include "treeview.h"
 #include "task-manager.h"
 #include "provider.h"
+#include "provider-filter.h"
 #include "task-process.h"   /* for command exec() */
 #include "util.h"
 #include "macros.h"
@@ -1885,7 +1886,7 @@ struct popup_children_data
 {
     DonnaApp        *app;
     DonnaTreeView   *tree;
-    gchar           *filter;
+    DonnaFilter     *filter;
     GPtrArray       *nodes;
     gchar           *menus;
 };
@@ -1930,16 +1931,16 @@ free_popup_children_nodes (gpointer data)
  * @node: The node to popup children of in a menu
  * @children: Which types of children to show
  * @menus: (allow-none): Menu definition to use
- * @filter: (allow-none): Filter to use to filter which children to show
+ * @filter: (allow-none): Node of filter to use to filter which children to show
  * @tree: (allow-none): Name of the treeview to filter children through
  *
  * Show a popup menu with the children of @node
  *
  * @children must be one of "all", "item" or "container"
  *
- * @filter can be a string used to filter children, only including in the menu
- * the ones that match. Note that to only show non-hidden (dot files) children
- * you can use options via @menus
+ * @filter can be used to filter children, only including in the menu the ones
+ * that match. Note that to only show non-hidden (dot files) children you can
+ * use options via @menus
  *
  * See donna_app_show_menu() for more on menus; See donna_app_filter_nodes() for
  * more on node filtering.
@@ -1951,7 +1952,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaNode *node = args[0];
     gchar *children = args[1];
     gchar *menus = args[2]; /* opt */
-    gchar *filter = args[3]; /* opt */
+    DonnaNode *node_filter = args[3]; /* opt */
     DonnaTreeView *tree = args[4]; /* opt */
 
     const gchar *c_children[] = { "all", "item", "container" };
@@ -1959,6 +1960,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
         DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
     DonnaTaskState state;
     DonnaTask *t;
+    DonnaFilter *filter;
     struct popup_children_data data;
     gint c;
 
@@ -1972,10 +1974,29 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
+    if (node_filter)
+    {
+        DonnaProviderFilter *pf;
+
+        pf = (DonnaProviderFilter *) donna_app_get_provider (app, "filter");
+        filter = donna_provider_filter_get_filter_from_node (pf, node_filter, &err);
+        g_object_unref (pf);
+        if (!filter)
+        {
+            g_prefix_error (&err, "Command '%s': Invalid node filter: ",
+                    "node_popup_children");
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        filter = NULL;
+
     t = donna_node_get_children_task (node, childrens[c], &err);
     if (!t)
     {
         donna_task_take_error (task, err);
+        donna_g_object_unref (filter);
         return DONNA_TASK_FAILED;
     }
 
@@ -1985,6 +2006,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
                 "Failed to run get_children task: ");
         donna_task_take_error (task, err);
         g_object_unref (t);
+        donna_g_object_unref (filter);
         return DONNA_TASK_FAILED;
     }
 
@@ -2008,6 +2030,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
             g_free (fl);
         }
         g_object_unref (t);
+        donna_g_object_unref (filter);
         return state;
     }
 
@@ -2026,6 +2049,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
                 "Failed to run popup_children task: ");
         donna_task_take_error (task, err);
         g_object_unref (t);
+        donna_g_object_unref (filter);
         return DONNA_TASK_FAILED;
     }
 
@@ -2037,6 +2061,7 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
             donna_task_take_error (task, g_error_copy (err));
     }
     g_object_unref (t);
+    donna_g_object_unref (filter);
     return state;
 }
 
@@ -2248,13 +2273,13 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
 /**
  * nodes_filter:
  * @nodes: (array): The nodes to filter
- * @filter: The filter to use
+ * @filter: Node of filter to use
  * @tree: (allow-none): Name of the treeview to filter children through
  * @duplicate: (allow-none): Whether to duplicate the array @nodes or not
  *
  * Filters @nodes, removing from the array all nodes not matching @filter
  *
- * @filter is the string used to filter @nodes, which will be applied using
+ * @filter is the filter used to filter @nodes, which will be applied using
  * column options from @tree is specified, else the (non tree-specific)
  * defaults.
  *
@@ -2274,12 +2299,25 @@ cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     GPtrArray *nodes = args[0];
-    const gchar *filter = args[1];
+    DonnaNode *node_filter = args[1];
     DonnaTreeView *tree = args[2]; /* opt */
     gboolean dup_arr = GPOINTER_TO_INT (args[3]); /* opt */
 
+    DonnaProviderFilter *pf;
+    DonnaFilter *filter;
     GPtrArray *arr;
     GValue *value;
+
+    pf = (DonnaProviderFilter *) donna_app_get_provider (app, "filter");
+    filter = donna_provider_filter_get_filter_from_node (pf, node_filter, &err);
+    g_object_unref (pf);
+    if (!filter && err)
+    {
+        g_prefix_error (&err, "Command '%s': Invalid node filter: ",
+                "nodes_filter");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
 
     if (dup_arr)
     {
@@ -2292,13 +2330,18 @@ cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
     else
         arr = nodes;
 
-    if (!donna_app_filter_nodes (app, arr, filter, tree, &err))
+    if (filter)
     {
-        g_prefix_error (&err, "Command 'nodes_filter': ");
-        donna_task_take_error (task, err);
-        if (dup_arr)
-            g_ptr_array_unref (arr);
-        return DONNA_TASK_FAILED;
+        if (!donna_app_filter_nodes (app, arr, filter, tree, &err))
+        {
+            g_prefix_error (&err, "Command 'nodes_filter': ");
+            donna_task_take_error (task, err);
+            if (dup_arr)
+                g_ptr_array_unref (arr);
+            g_object_unref (filter);
+            return DONNA_TASK_FAILED;
+        }
+        g_object_unref (filter);
     }
 
     value = donna_task_grab_return_value (task);
@@ -3632,7 +3675,7 @@ cmd_tv_get_node_down (DonnaTask *task, DonnaApp *app, gpointer *args)
  *
  * See donna_tree_view_get_visual_filter() for more
  *
- * Returns: The current visual filter on @tree
+ * Returns: Node of the current visual filter on @tree
  */
 static DonnaTaskState
 cmd_tv_get_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
@@ -3641,21 +3684,32 @@ cmd_tv_get_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
     DonnaTreeView *tree = args[0];
 
     GValue *value;
-    gchar *vf;
+    DonnaProviderFilter *pf;
+    DonnaFilter *filter;
+    DonnaNode *node_filter;
 
-    vf = donna_tree_view_get_visual_filter (tree, &err);
-    if (!vf && err)
+    filter = donna_tree_view_get_visual_filter (tree, &err);
+    if (!filter && err)
     {
+        g_prefix_error (&err, "Command '%s': ", "tv_get_visual_filter");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    pf = (DonnaProviderFilter *) donna_app_get_provider (app, "filter");
+    node_filter = donna_provider_filter_get_node_for_filter (pf, filter, &err);
+    g_object_unref (pf);
+    donna_g_object_unref (filter);
+    if (!node_filter)
+    {
+        g_prefix_error (&err, "Command '%s': ", "tv_get_visual_filter");
         donna_task_take_error (task, err);
         return DONNA_TASK_FAILED;
     }
 
     value = donna_task_grab_return_value (task);
-    g_value_init (value, G_TYPE_STRING);
-    if (vf)
-        g_value_take_string (value, vf);
-    else
-        g_value_take_string (value, g_strdup (""));
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node_filter);
     donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
@@ -5168,15 +5222,12 @@ cmd_tv_set_visual (DonnaTask *task, DonnaApp *app, gpointer *args)
 /**
  * tv_set_visual_filter:
  * @tree: A treeview
- * @filter: (allow-none): A filter to set as VF (or nothing to unset any current
- * VF)
+ * @filter: (allow-none): Node of filter to set as VF (or nothing to unset any
+ * current VF)
  * @toggle: (allow-none): 1 to toggle, i.e. remove the VF is already set to
  * @filter
  *
  * Sets the current visual filter
- *
- * Note that if @filter is an empty string, it will work as if none was
- * specified, i.e. unset any current VF.
  *
  * See donna_tree_view_set_visual_filter() for more
  */
@@ -5185,21 +5236,37 @@ cmd_tv_set_visual_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
 {
     GError *err = NULL;
     DonnaTreeView *tree = args[0];
-    const gchar *filter = args[1]; /* opt */
+    DonnaNode *node_filter = args[1]; /* opt */
     gboolean toggle = GPOINTER_TO_INT (args[2]); /* opt */
 
-    /* special: if filter is an empty string, we treat it as NULL, so that user
-     * can use an empty string (which is an invalid filter) to mean turn it off;
-     * which can be useful when said filter is e.g. a command's return value */
-    if (streq (filter, ""))
+    DonnaFilter *filter;
+
+    if (node_filter)
+    {
+        DonnaProviderFilter *pf;
+
+        pf = (DonnaProviderFilter *) donna_app_get_provider (app, "filter");
+        filter = donna_provider_filter_get_filter_from_node (pf, node_filter, &err);
+        g_object_unref (pf);
+        if (!filter && err)
+        {
+            g_prefix_error (&err, "Command '%s': Invalid node filter: ",
+                    "tv_set_visual_filter");
+            donna_task_take_error (task, err);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
         filter = NULL;
 
     if (!donna_tree_view_set_visual_filter (tree, filter, toggle, &err))
     {
         donna_task_take_error (task, err);
+        donna_g_object_unref (filter);
         return DONNA_TASK_FAILED;
     }
 
+    donna_g_object_unref (filter);
     return DONNA_TASK_DONE;
 }
 
@@ -5570,7 +5637,7 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (nodes_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
@@ -5805,7 +5872,7 @@ _donna_add_commands (GHashTable *commands)
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
     add_command (tv_get_visual_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
-            DONNA_ARG_TYPE_STRING);
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
@@ -6040,7 +6107,7 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW;
-    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
     add_command (tv_set_visual_filter, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);

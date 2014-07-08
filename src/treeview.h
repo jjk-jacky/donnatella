@@ -29,6 +29,7 @@
 #include "conf.h"
 #include "node.h"
 #include "history.h"
+#include "filter.h"
 
 G_BEGIN_DECLS
 
@@ -442,10 +443,10 @@ gboolean        donna_tree_view_go_down         (DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_set_visual_filter (
                                                  DonnaTreeView      *tree,
-                                                 const gchar        *filter,
+                                                 DonnaFilter        *filter,
                                                  gboolean            toggle,
                                                  GError            **error);
-gchar *         donna_tree_view_get_visual_filter (
+DonnaFilter *   donna_tree_view_get_visual_filter (
                                                  DonnaTreeView      *tree,
                                                  GError            **error);
 gboolean        donna_tree_view_column_refresh_nodes (

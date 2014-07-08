@@ -47,6 +47,7 @@
 #include "provider-config.h"
 #include "provider-task.h"
 #include "provider-exec.h"
+#include "provider-filter.h"
 #include "provider-register.h"
 #include "provider-internal.h"
 #include "provider-mark.h"
@@ -648,12 +649,6 @@ struct visuals
     gchar *highlight;
 };
 
-struct filter
-{
-    DonnaFilter *filter;
-    guint        timeout;
-};
-
 struct intref
 {
     DonnaArgType type;
@@ -731,8 +726,8 @@ struct _DonnaAppPrivate
     GRWLock          lock;
     GHashTable      *visuals;
     GArray          *providers;
-    /* ct, filters, patterns, intrefs, etc are all under the same lock because
-     * there shouldn't be a need to separate them all. We use a recursive mutex
+    /* ct, patterns, intrefs, etc are all under the same lock because there
+     * shouldn't be a need to separate them all. We use a recursive mutex
      * because we need it for filters, to handle correctly the toggle_ref */
     GRecMutex        rec_mutex;
     struct col_type
@@ -743,7 +738,6 @@ struct _DonnaAppPrivate
         DonnaColumnType *ct;
     } column_types[NB_COL_TYPES];
     GSList          *col_ct_datas;
-    GHashTable      *filters;
     GHashTable      *patterns;
     GHashTable      *intrefs;
     guint            intrefs_timeout;
@@ -998,11 +992,6 @@ app_free (DonnaApp *app)
     if (priv->arrangements)
         free_arrangements (priv->arrangements);
     priv->arrangements = NULL;
-    if (priv->filters)
-    {
-        g_hash_table_destroy (priv->filters);
-        priv->filters = NULL;
-    }
     if (priv->patterns)
     {
         g_hash_table_destroy (priv->patterns);
@@ -1173,22 +1162,6 @@ free_visuals (struct visuals *visuals)
     g_free (visuals->box);
     g_free (visuals->highlight);
     g_slice_free (struct visuals, visuals);
-}
-
-static void
-free_filter (struct filter *f)
-{
-    DONNA_DEBUG (MEMORY, NULL,
-            GObject *o = (GObject *) f->filter;
-
-            if (o->ref_count > 1)
-            {
-                gchar *s = donna_filter_get_filter (f->filter);
-                g_debug ("Filter '%s' still has %d refs", s, o->ref_count - 1);
-                g_free (s);
-            });
-    g_object_unref (f->filter);
-    g_free (f);
 }
 
 static void
@@ -1368,6 +1341,11 @@ donna_app_init (DonnaApp *app)
     provider.instance = NULL;
     g_array_append_val (priv->providers, provider);
 
+    provider.domain = "filter";
+    provider.type = DONNA_TYPE_PROVIDER_FILTER;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
     provider.domain = "exec";
     provider.type = DONNA_TYPE_PROVIDER_EXEC;
     provider.instance = NULL;
@@ -1382,9 +1360,6 @@ donna_app_init (DonnaApp *app)
     provider.type = DONNA_TYPE_PROVIDER_INVALID;
     provider.instance = NULL;
     g_array_append_val (priv->providers, provider);
-
-    priv->filters = g_hash_table_new_full (g_str_hash, g_str_equal,
-            g_free, (GDestroyNotify) free_filter);
 
     priv->patterns = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) donna_pattern_unref);
@@ -3019,122 +2994,28 @@ donna_app_get_column_type (DonnaApp      *app,
     return (i < NB_COL_TYPES) ? g_object_ref (priv->column_types[i].ct) : NULL;
 }
 
-struct filter_toggle
-{
-    DonnaApp *app;
-    gchar *filter_str;
-};
-
-static void
-free_filter_toggle (struct filter_toggle *t)
-{
-    g_free (t->filter_str);
-    g_free (t);
-}
-
-static gboolean
-filter_remove (struct filter_toggle *t)
-{
-    DonnaAppPrivate *priv = t->app->priv;
-    struct filter *f;
-
-    g_rec_mutex_lock (&priv->rec_mutex);
-    f = g_hash_table_lookup (priv->filters, t->filter_str);
-    if (((GObject *) f->filter)->ref_count > 1)
-    {
-        g_rec_mutex_unlock (&priv->rec_mutex);
-        return G_SOURCE_REMOVE;
-    }
-
-    /* will also unref filter */
-    g_hash_table_remove (priv->filters, t->filter_str);
-    g_rec_mutex_unlock (&priv->rec_mutex);
-    return G_SOURCE_REMOVE;
-}
-
-/* see node_toggle_ref_cb() in provider-base.c for more. Here we only add a
- * little extra: we don't unref/remove the filter (from hashtable) right away,
- * but after a little delay.
- * Mostly useful since on each location change/new arrangement, all color
- * filters are let go, then loaded again (assuming they stay active). */
-static void
-filter_toggle_ref_cb (DonnaApp *app, DonnaFilter *filter, gboolean is_last)
-{
-    DonnaAppPrivate *priv = app->priv;
-    struct filter *f;
-    gchar *filter_str;
-
-    g_rec_mutex_lock (&priv->rec_mutex);
-    /* can NOT use g_object_get, as it takes a ref on the object! */
-    filter_str = donna_filter_get_filter (filter);
-    f = g_hash_table_lookup (priv->filters, filter_str);
-    if (G_UNLIKELY (!f))
-    {
-        /* when free-ing priv->filters it will already have been removed */
-        g_rec_mutex_unlock (&priv->rec_mutex);
-        return;
-    }
-    if (is_last)
-    {
-        struct filter_toggle *t;
-
-        if (((GObject *) f->filter)->ref_count > 1)
-        {
-            g_rec_mutex_unlock (&priv->rec_mutex);
-            g_free (filter_str);
-            return;
-        }
-        t = g_new (struct filter_toggle, 1);
-        t->app = app;
-        t->filter_str = filter_str;
-        f->timeout = g_timeout_add_seconds_full (G_PRIORITY_LOW,
-                60 * 15, /* 15min */
-                (GSourceFunc) filter_remove,
-                t, (GDestroyNotify) free_filter_toggle);
-    }
-    else
-    {
-        if (f->timeout)
-        {
-            g_source_remove (f->timeout);
-            f->timeout = 0;
-        }
-        g_free (filter_str);
-    }
-    g_rec_mutex_unlock (&priv->rec_mutex);
-}
-
 DonnaFilter *
 donna_app_get_filter (DonnaApp       *app,
-                      const gchar    *filter)
+                      const gchar    *filter_str,
+                      GError        **error)
 {
-    DonnaAppPrivate *priv;
-    struct filter *f;
+    DonnaProviderFilter *pf;
+    DonnaFilter *filter;
 
     g_return_val_if_fail (DONNA_IS_APP (app), NULL);
-    g_return_val_if_fail (filter != NULL, NULL);
-    priv = app->priv;
+    g_return_val_if_fail (filter_str != NULL, NULL);
 
-    g_rec_mutex_lock (&priv->rec_mutex);
-    f = g_hash_table_lookup (priv->filters, filter);
-    if (!f)
+    pf = (DonnaProviderFilter *) donna_app_get_provider (app, "filter");
+    if (G_UNLIKELY (!pf))
     {
-        f = g_new (struct filter, 1);
-        f->filter = g_object_new (DONNA_TYPE_FILTER,
-                "app",      app,
-                "filter",   filter,
-                NULL);
-        f->timeout = 0;
-        /* add a toggle ref, which adds a strong ref to filter */
-        g_object_add_toggle_ref ((GObject *) f->filter,
-                (GToggleNotify) filter_toggle_ref_cb, app);
-        g_hash_table_insert (priv->filters, g_strdup (filter), f);
+        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                "Failed to load provider '%s'", "filter");
+        return NULL;
     }
-    else
-        g_object_ref (f->filter);
-    g_rec_mutex_unlock (&priv->rec_mutex);
 
-    return f->filter;
+    filter = donna_provider_filter_get_filter (pf, filter_str, error);
+    g_object_unref (pf);
+    return filter;
 }
 
 static gboolean
@@ -5470,29 +5351,19 @@ _donna_app_unref_col_ct_data (DonnaApp              *app,
 gboolean
 donna_app_filter_nodes (DonnaApp       *app,
                         GPtrArray      *nodes,
-                        const gchar    *filter_str,
+                        DonnaFilter    *filter,
                         DonnaTreeView  *tree,
                         GError       **error)
 {
-    DonnaFilter *filter;
     guint i;
 
     g_return_val_if_fail (DONNA_IS_APP (app), FALSE);
     g_return_val_if_fail (nodes != NULL, FALSE);
-    g_return_val_if_fail (filter_str != NULL, FALSE);
+    g_return_val_if_fail (DONNA_IS_FILTER (filter), FALSE);
     g_return_val_if_fail (!tree || DONNA_IS_TREE_VIEW (tree), FALSE);
 
     if (G_UNLIKELY (nodes->len == 0))
         return TRUE;
-
-    filter = donna_app_get_filter (app, filter_str);
-    if (G_UNLIKELY (!filter))
-    {
-        g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
-                "Failed to create a filter object for '%s'",
-                filter_str);
-        return FALSE;
-    }
 
     /* make sure it is compiled, if not do it so we can report any error */
     if (!donna_filter_is_compiled (filter)
@@ -5506,7 +5377,6 @@ donna_app_filter_nodes (DonnaApp       *app,
         else
             ++i;
 
-    g_object_unref (filter);
     return TRUE;
 }
 
@@ -7324,7 +7194,17 @@ load_custom_properties (DonnaApp *app)
         if (donna_config_get_string (priv->config, &err, &s,
                     "custom_properties/%s/filter", (gchar *) arr->pdata[i]))
         {
-            cp.filter = donna_app_get_filter (app, s);
+            cp.filter = donna_app_get_filter (app, s, &err);
+            if (!cp.filter)
+            {
+                g_warning ("Failed to load custom properties (%s), "
+                        "failed to load filter (%s): %s",
+                        (gchar *) arr->pdata[i], s, err->message);
+                g_clear_error (&err);
+                g_free (s);
+                g_free (domain);
+                continue;
+            }
             if (!donna_filter_compile (cp.filter, &err))
             {
                 g_warning ("Failed to load custom properties (%s), "
@@ -7491,10 +7371,16 @@ load_custom_properties (DonnaApp *app)
                 }
                 g_array_append_val (p->custom_properties, cp);
                 DONNA_DEBUG (APP, NULL,
+                        if (cp.filter)
+                            s = donna_filter_get_filter (cp.filter);
+                        else
+                            s = NULL;
+
                         g_debug ("Added %d custom properties/groups to '%s' via '%s'",
                             cp.properties->len,
                             domain,
-                            (cp.filter) ? donna_filter_get_filter (cp.filter) : "<all>"));
+                            (s) ? s : "<all>");
+                        g_free (s));
                 break;
             }
         }
@@ -8427,6 +8313,7 @@ prepare_app (DonnaApp *app, GError **error)
      * having to ref/unref on each command call) */
     g_object_unref (donna_app_get_provider (app, "register"));
     g_object_unref (donna_app_get_provider (app, "mark"));
+    g_object_unref (donna_app_get_provider (app, "filter"));
 
     return TRUE;
 }

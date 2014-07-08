@@ -4,6 +4,7 @@ DISTCLEANFILES = src/command-docs.h
 SUBDIRS = . docs/reference
 
 DEF_COMMANDS = src/command.c \
+			   src/provider-filter.c \
 			   src/provider-mark.c \
 			   src/provider-register.c
 
@@ -93,6 +94,8 @@ libdonnatella_la_SOURCES = \
 					 src/provider-config.h \
 					 src/provider-exec.c \
 					 src/provider-exec.h \
+					 src/provider-filter.c \
+					 src/provider-filter.h \
 					 src/provider-fs.c \
 					 src/provider-fs.h \
 					 src/provider-internal.c \

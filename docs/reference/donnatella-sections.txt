@@ -28,6 +28,10 @@ config_try_get_boolean
 config_try_get_int
 config_try_get_string
 exec
+filter_load
+filter_resolve_alias
+filter_save
+filter_set_alias
 focus_move
 focus_set
 intref_free

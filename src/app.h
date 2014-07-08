@@ -96,7 +96,8 @@ gboolean            donna_app_trigger_node          (DonnaApp       *app,
 DonnaColumnType *   donna_app_get_column_type       (DonnaApp       *app,
                                                      const gchar    *type);
 DonnaFilter *       donna_app_get_filter            (DonnaApp       *app,
-                                                     const gchar    *filter);
+                                                     const gchar    *filter,
+                                                     GError        **error);
 DonnaPattern *      donna_app_get_pattern           (DonnaApp       *app,
                                                      const gchar    *pattern,
                                                      GError        **error);
@@ -152,7 +153,7 @@ void                donna_app_show_error            (DonnaApp       *app,
                                                      ...);
 gboolean            donna_app_filter_nodes          (DonnaApp       *app,
                                                      GPtrArray      *nodes,
-                                                     const gchar    *filter,
+                                                     DonnaFilter    *filter,
                                                      DonnaTreeView  *tree,
                                                      GError       **error);
 DonnaTask *         donna_app_nodes_io_task         (DonnaApp       *app,

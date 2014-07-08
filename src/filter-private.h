@@ -62,6 +62,29 @@ struct col_ct_data *    _donna_app_get_col_ct_data      (DonnaApp       *app,
 void                    _donna_app_unref_col_ct_data    (DonnaApp       *app,
                                                          struct col_ct_data *col_ct_data);
 
+
+/* private API from filter.c (for provider-filter.c) */
+enum
+{
+    _DONNA_FILTER_PROP_ALIAS        = (1 << 0),
+    _DONNA_FILTER_PROP_NAME         = (1 << 1),
+    _DONNA_FILTER_PROP_ICON_NAME    = (1 << 2)
+};
+
+gboolean    _donna_filter_has_props                     (DonnaFilter        *filter,
+                                                         guint               props);
+gchar *     _donna_filter_get_key                       (DonnaFilter        *filter);
+void        _donna_filter_set_alias                     (DonnaFilter        *filter,
+                                                         const gchar        *alias,
+                                                         gboolean            notify);
+void        _donna_filter_set_name                      (DonnaFilter        *filter,
+                                                         const gchar        *name,
+                                                         gboolean            notify);
+void        _donna_filter_set_icon_name                 (DonnaFilter        *filter,
+                                                         const gchar        *icon_name,
+                                                         gboolean            notify);
+DonnaApp *  _donna_filter_peek_app                      (DonnaFilter        *filter);
+
 G_END_DECLS
 
 #endif /* __DONNA_FILTER_H__ */
