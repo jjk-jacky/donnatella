@@ -1475,6 +1475,54 @@ cmd_focus_set (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * get_node_from:
+ * @domain: Domain of the node to get
+ * @location: Location of the node (in @domain)
+ *
+ * Returns the node for @location in @domain
+ *
+ * Returns: The corresponding node
+ */
+static DonnaTaskState
+cmd_get_node_from (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    const gchar *domain = args[0];
+    const gchar *location = args[1];
+
+    DonnaProvider *provider;
+    DonnaNode *node;
+    GValue *value;
+
+    provider = donna_app_get_provider (app, domain);
+    if (!provider)
+    {
+        donna_task_set_error (task, DONNA_APP_ERROR,
+                DONNA_APP_ERROR_NOT_FOUND,
+                "Command '%s': Cannot get node for '%s' in '%s': No such domain",
+                "get_node_from", location, domain);
+        return DONNA_TASK_FAILED;
+    }
+
+    node = donna_provider_get_node (provider, location, &err);
+    if (!node)
+    {
+        g_prefix_error (&err, "Command '%s': ", "get_node_from");
+        donna_task_take_error (task, err);
+        g_object_unref (provider);
+        return DONNA_TASK_FAILED;
+    }
+    g_object_unref (provider);
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_take_object (value, node);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * intref_free:
  * @intref: String representation of the intref to free
  *
@@ -5593,6 +5641,12 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     add_command (focus_set, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    add_command (get_node_from, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;

@@ -34,6 +34,7 @@ filter_save
 filter_set_alias
 focus_move
 focus_set
+get_node_from
 intref_free
 menu_popup
 node_get_property
