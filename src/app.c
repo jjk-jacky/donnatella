@@ -3058,12 +3058,16 @@ pattern_toggle_ref (DonnaPattern   *pattern,
 
         data.key = NULL;
         data.value = pattern;
-        g_hash_table_find (priv->patterns, (GHRFunc) pattern_find, &data);
-        /* when free-ing priv->patterns it will already have been removed, so
-         * not found here */
-        if (data.key)
-            /* will free key & value */
-            g_hash_table_remove (priv->patterns, data.key);
+        /* in case app_free() has already been called */
+        if (G_LIKELY (priv->patterns))
+        {
+            g_hash_table_find (priv->patterns, (GHRFunc) pattern_find, &data);
+            /* when free-ing priv->patterns it will already have been removed, so
+             * not found here */
+            if (data.key)
+                /* will free key & value */
+                g_hash_table_remove (priv->patterns, data.key);
+        }
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
 }
