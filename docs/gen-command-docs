@@ -41,7 +41,7 @@ BEGIN {
 }
 
 # an argument
-/^ \* @.*:/ {
+/^ \* @[a-zA-Z0-9_]*:/ {
     if (in_cmt == 0) next
     e = index ($0, ": ")
     arg++
@@ -135,7 +135,7 @@ BEGIN {
             has_doc = 1;
             if (arg != fn_args[fn]) {
                 warn("command " fn ": args number mismatch:" \
-                        " " arg " (doc) vs " fn_args[fn] " (def)")
+                        " " arg " (def) vs " fn_args[fn] " (doc)")
             }
             else
             {
