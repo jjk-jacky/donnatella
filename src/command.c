@@ -2113,6 +2113,335 @@ cmd_node_popup_children (DonnaTask *task, DonnaApp *app, gpointer *args)
     return state;
 }
 
+/**
+ * node_set_property:
+ * @node: Node to set property on
+ * @name: Name of the property to set
+ * @value: String representation of the value to set
+ * @type: (allow-none): Type of @property on @node
+ *
+ * Sets the value of @property on @node
+ *
+ * @value is always a string representation of the value to set. When the
+ * property contains a string, nothing needs to be done (@type defaults to
+ * "string")
+ *
+ * @type can be one of "string", "int", "uint" or "date" With "string" nothing
+ * is done and @value is used as is. "int" and "uint" will convert it to a
+ * signed/unsigned integer. When using "date" @value will be parsed and
+ * transformed into a UNIX timestamp (uint, as used by e.g. mtime, ctime and
+ * atime)
+ * @value is then expected to be in format "YYYY-MM-DD HH:MM:SS" where the date
+ * part is mandatory, while the time is optional (and then, the seconds are as
+ * well; i.e. your can use HH:MM or HH:MM:SS). When time/seconds aren't
+ * specified, they'll default to 00:00:00. The given date is processed is being
+ * in the local timezone.
+ *
+ * For more possibilities, you'll want to set properties values via a column in
+ * a treeview (e.g. see tv_column_set_value())
+ */
+static DonnaTaskState
+cmd_node_set_property (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaNode *node = args[0];
+    const gchar *name = args[1];
+    gchar *value = args[2];
+    const gchar *s_type = args[3]; /* opt */
+
+    const gchar *c_type[] = { "string", "int", "uint", "date" };
+    enum
+    {
+        NSP_STRING = 0,
+        NSP_INT,
+        NSP_UINT,
+        NSP_DATE
+    } type[]  = { NSP_STRING, NSP_INT, NSP_UINT, NSP_DATE };
+    gint c;
+
+    DonnaTask *t;
+    DonnaTaskState state;
+    GValue v = G_VALUE_INIT;
+    guint64 nb;
+    gchar *end;
+
+    if (s_type)
+    {
+        c = _get_choice (c_type, s_type);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
+                    "Command '%s': Invalid type '%s': "
+                    "Must be 'string', 'int', 'uint' or 'date'",
+                    "node_set_property", s_type);
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* NSP_STRING */
+        c = 0;
+
+    switch (type[c])
+    {
+        case NSP_STRING:
+            g_value_init (&v, G_TYPE_STRING);
+            g_value_set_string (&v, value);
+            break;
+
+        case NSP_INT:
+            nb = (guint64) g_ascii_strtoll (value, &end, 10);
+            if (end == value || *end != '\0')
+            {
+                donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                        DONNA_COMMAND_ERROR_OTHER,
+                        "Command '%s': Invalid value '%s' for type 'int'",
+                        "node_set_property", value);
+                return DONNA_TASK_FAILED;
+            }
+
+            g_value_init (&v, G_TYPE_INT64);
+            g_value_set_int64 (&v, (gint64) nb);
+            break;
+
+        case NSP_UINT:
+            nb = g_ascii_strtoull (value, &end, 10);
+            if (end == value || *end != '\0')
+            {
+                donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                        DONNA_COMMAND_ERROR_OTHER,
+                        "Command '%s': Invalid value '%s' for type 'uint'",
+                        "node_set_property", value);
+                return DONNA_TASK_FAILED;
+            }
+
+            g_value_init (&v, G_TYPE_UINT64);
+            g_value_set_uint64 (&v, nb);
+            break;
+
+        case NSP_DATE:
+            {
+                gchar *s = value;
+                gint i;
+                GDateTime *dt;
+                gint year, month, day, hour = 0, minute = 0;
+                gdouble seconds = 0;
+
+                for (i = 0; i < 4; ++i)
+                    if (!(s[i] >= '0' && s[i] <= '9'))
+                    {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid year in date '%s'",
+                                "node_set_property", value);
+                        return DONNA_TASK_FAILED;
+                    }
+                if (s[i] != '-')
+                {
+                    donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                            DONNA_COMMAND_ERROR_OTHER,
+                            "Command '%s': Invalid year-month separator in date '%s'",
+                            "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                year = (gint) g_ascii_strtoull (s, &end, 10);
+                if (end != s + i)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid year in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                s += i + 1;
+
+                for (i = 0; i < 2; ++i)
+                    if (!(s[i] >= '0' && s[i] <= '9'))
+                    {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid month in date '%s'",
+                                "node_set_property", value);
+                        return DONNA_TASK_FAILED;
+                    }
+                if (s[i] != '-')
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid month-day separator in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                month = (gint) g_ascii_strtoull (s, &end, 10);
+                if (end != s + i)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid month in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                s += i + 1;
+
+                for (i = 0; i < 2; ++i)
+                    if (!(s[i] >= '0' && s[i] <= '9'))
+                    {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid day in date '%s'",
+                                "node_set_property", value);
+                        return DONNA_TASK_FAILED;
+                    }
+                if (s[i] != ' ' && s[i] != '\0')
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid day hour separator in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                day = (gint) g_ascii_strtoull (s, &end, 10);
+                if (end != s + i)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid day in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                if (s[i] == '\0')
+                    goto date;
+                s += i + 1;
+
+                for (i = 0; i < 2; ++i)
+                    if (!(s[i] >= '0' && s[i] <= '9'))
+                    {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid hour in date '%s'",
+                                "node_set_property", value);
+                        return DONNA_TASK_FAILED;
+                    }
+                if (s[i] != ':')
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid hour:minute separator in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                hour = (gint) g_ascii_strtoull (s, &end, 10);
+                if (end != s + i)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid hour in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                s += i + 1;
+
+                for (i = 0; i < 2; ++i)
+                    if (!(s[i] >= '0' && s[i] <= '9'))
+                    {
+                        return DONNA_TASK_FAILED;
+                    }
+                if (s[i] != ':' && s[i] != '\0')
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid minute:seconds in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                minute = (gint) g_ascii_strtoull (s, &end, 10);
+                if (end != s + i)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid minute in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                if (s[i] == '\0')
+                    goto date;
+                s += i + 1;
+
+                for (i = 0; i < 2; ++i)
+                    if (!(s[i] >= '0' && s[i] <= '9'))
+                    {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid seconds in date '%s'",
+                                "node_set_property", value);
+                        return DONNA_TASK_FAILED;
+                    }
+                if (s[i] != '\0')
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+                seconds = (gdouble) g_ascii_strtoull (s, &end, 10);
+                if (end != s + i)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid seconds in date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+
+date:
+                dt = g_date_time_new_local (year, month, day, hour, minute, seconds);
+                if (!dt)
+                {
+                        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                                DONNA_COMMAND_ERROR_OTHER,
+                                "Command '%s': Invalid date '%s'",
+                                "node_set_property", value);
+                    return DONNA_TASK_FAILED;
+                }
+
+                g_value_init (&v, G_TYPE_UINT64);
+                g_value_set_uint64 (&v, (guint64) g_date_time_to_unix (dt));
+                g_date_time_unref (dt);
+            }
+            break;
+    }
+
+    t = donna_node_set_property_task (node, name, &v, &err);
+    g_value_unset (&v);
+    if (!t)
+    {
+        g_prefix_error (&err, "Command '%s': Failed to get task: ",
+                "node_set_property");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command '%s': Task failed: ",
+                "node_set_property");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
+
+    state = donna_task_get_state (t);
+    if (state != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+            donna_task_take_error (task, g_error_copy (err));
+    }
+    g_object_unref (t);
+    return state;
+}
+
 struct node_trigger_goto
 {
     DonnaApp *app;
@@ -5680,6 +6009,14 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_TREE_VIEW | DONNA_ARG_IS_OPTIONAL;
     add_command (node_popup_children, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (node_set_property, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
 
     i = -1;

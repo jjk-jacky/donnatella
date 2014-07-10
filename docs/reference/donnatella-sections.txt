@@ -40,6 +40,7 @@ menu_popup
 node_get_property
 node_new_child
 node_popup_children
+node_set_property
 node_trigger
 nodes_filter
 nodes_io
