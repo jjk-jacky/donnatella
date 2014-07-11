@@ -3046,33 +3046,32 @@ pattern_toggle_ref (DonnaPattern   *pattern,
                     DonnaApp       *app)
 {
     DonnaAppPrivate *priv = app->priv;
+    struct {
+        const gchar *key;
+        DonnaPattern *value;
+    } data;
+
+    if (!is_last)
+        return;
 
     g_rec_mutex_lock (&priv->rec_mutex);
-    if (is_last)
+    if (donna_pattern_get_ref_count (pattern) != 1)
     {
-        struct {
-            const gchar *key;
-            DonnaPattern *value;
-        } data;
+        g_rec_mutex_unlock (&priv->rec_mutex);
+        return;
+    }
 
-        if (donna_pattern_get_ref_count (pattern) != 1)
-        {
-            g_rec_mutex_unlock (&priv->rec_mutex);
-            return;
-        }
-
-        data.key = NULL;
-        data.value = pattern;
-        /* in case app_free() has already been called */
-        if (G_LIKELY (priv->patterns))
-        {
-            g_hash_table_find (priv->patterns, (GHRFunc) pattern_find, &data);
-            /* when free-ing priv->patterns it will already have been removed, so
-             * not found here */
-            if (data.key)
-                /* will free key & value */
-                g_hash_table_remove (priv->patterns, data.key);
-        }
+    data.key = NULL;
+    data.value = pattern;
+    /* in case app_free() has already been called */
+    if (G_LIKELY (priv->patterns))
+    {
+        g_hash_table_find (priv->patterns, (GHRFunc) pattern_find, &data);
+        /* when free-ing priv->patterns it will already have been removed, so
+         * not found here */
+        if (data.key)
+            /* will free key & value */
+            g_hash_table_remove (priv->patterns, data.key);
     }
     g_rec_mutex_unlock (&priv->rec_mutex);
 }
