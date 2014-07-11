@@ -727,8 +727,13 @@ struct _DonnaAppPrivate
     GHashTable      *visuals;
     GArray          *providers;
     /* ct, patterns, intrefs, etc are all under the same lock because there
-     * shouldn't be a need to separate them all. We use a recursive mutex
-     * because we need it for filters, to handle correctly the toggle_ref */
+     * shouldn't be a need to separate them all.
+     * We use a recursive mutex for cts and cases for as:
+     * - lock taken in _donna_app_get_col_ct_data(), which calls a
+     *   refresh_ct_data() on some ct
+     * - this makes a write in config, e.g. setting a (missing) default value
+     * - option_cb is called as a result, and wants the lock!
+     */
     GRecMutex        rec_mutex;
     struct col_type
     {
