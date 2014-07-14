@@ -697,6 +697,49 @@ struct socket
     guint        last_id;
 };
 
+/* visuals and providers (for custom properties) are under a RW lock so everyone
+ * can read them at the same time (e.g. creating nodes, get_children() & the
+ * likes). The write operation should be quite rare. */
+enum lock_for
+{
+    /* to read visuals */
+    LOCK_VISUALS_READ       = (1 << 0),
+    /* to write visuals */
+    LOCK_VISUALS_WRITE      = (1 << 1),
+    /* to read providers, i.e. list/ref objects */
+    LOCK_PROVIDERS_READ     = (1 << 2),
+    /* to write providers, i.e. load objects */
+    LOCK_PROVIDERS_WRITE    = (1 << 3),
+
+    /* to access actual ct-s */
+    LOCK_COLUMN_TYPES       = (1 << 4),
+    /* to access the global/app ct-data-s */
+    LOCK_COL_CT_DATAS       = (1 << 5),
+    /* to access patterns */
+    LOCK_PATTERNS           = (1 << 6),
+    /* to access intrefs */
+    LOCK_INTREFS            = (1 << 7),
+    /* to access the status_donna (statusbar) */
+    LOCK_STATUS             = (1 << 8)
+};
+
+struct lock
+{
+    GMutex mutex;
+    GCond cond;
+    /* flags indicating which locks are taken */
+    enum lock_for locked_for;
+
+    /* nb of readers having LOCK_VISUALS_READ */
+    guint visuals_readers;
+    /* nb of writers waiting for LOCK_VISUALS_WRITE */
+    guint visuals_writers;
+    /* nb of readers having LOCK_PROVIDERS_READ */
+    guint providers_readers;
+    /* nb of writers waiting for LOCK_PROVIDERS_WRITE */
+    guint providers_writers;
+};
+
 struct _DonnaAppPrivate
 {
     GtkWindow       *window;
@@ -720,21 +763,11 @@ struct _DonnaAppPrivate
     gchar          **environ;
     gint             socket_fd;
     GArray          *sockets;
-    /* visuals and providers (for custom properties) are under a RW lock so
-     * everyone can read them at the same time (e.g. creating nodes,
-     * get_children() & the likes). The write operation should be quite rare. */
-    GRWLock          lock;
+    /* our lock, which separates the different things and has some under a
+     * Read/Write lock while most are under a simple one */
+    struct lock      lock;
     GHashTable      *visuals;
     GArray          *providers;
-    /* ct, patterns, intrefs, etc are all under the same lock because there
-     * shouldn't be a need to separate them all.
-     * We use a recursive mutex for cts and cases for as:
-     * - lock taken in _donna_app_get_col_ct_data(), which calls a
-     *   refresh_ct_data() on some ct
-     * - this makes a write in config, e.g. setting a (missing) default value
-     * - option_cb is called as a result, and wants the lock!
-     */
-    GRecMutex        rec_mutex;
     struct col_type
     {
         const gchar     *name;
@@ -827,6 +860,13 @@ static gboolean status_provider_set_tooltip         (DonnaStatusProvider    *sp,
                                                      guint                   id,
                                                      guint                   index,
                                                      GtkTooltip             *tooltip);
+
+#define app_lock(app,lock_for)  _app_lock (app, lock_for, TRUE)
+static gboolean     _app_lock                       (DonnaApp               *app,
+                                                     enum lock_for           lock_for,
+                                                     gboolean                wait_for_lock);
+static void         app_unlock                      (DonnaApp               *app,
+                                                     enum lock_for           unlock_for);
 
 static void
 donna_app_status_provider_init (DonnaStatusProviderInterface *interface)
@@ -1102,8 +1142,8 @@ donna_app_finalize (GObject *object)
     g_free (priv->config_dir);
     g_free (priv->cur_dirname);
     g_strfreev (priv->environ);
-    g_rw_lock_clear (&priv->lock);
-    g_rec_mutex_clear (&priv->rec_mutex);
+    g_cond_clear (&priv->lock.cond);
+    g_mutex_clear (&priv->lock.mutex);
     g_thread_pool_free (priv->pool, TRUE, FALSE);
 
     G_OBJECT_CLASS (donna_app_parent_class)->finalize (object);
@@ -1182,7 +1222,25 @@ free_intref (struct intref *ir)
     g_free (ir);
 }
 
-static void
+struct idle_option
+{
+    DonnaApp *app;
+    gchar *option;
+};
+static gboolean option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app);
+
+static gboolean
+idle_option_cb (struct idle_option *io)
+{
+    if (!option_cb (NULL, io->option, io->app))
+        return G_SOURCE_CONTINUE;
+
+    g_free (io->option);
+    g_free (io);
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean
 option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
 {
     DonnaAppPrivate *priv = app->priv;
@@ -1203,16 +1261,16 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
         tv = (gchar *) option + strlen ("tree_views/");
         s = strchr (tv, '/');
         if (!s)
-            return;
+            return TRUE;
         if (!streqn (s + 1, "arrangements/", strlen ("arrangements/")))
-            return;
+            return TRUE;
 
         tv = g_strdup_printf ("%.*s", (gint) (s - tv), tv);
         tree = donna_app_get_tree_view (app, tv);
         g_free (tv);
 
         if (!tree)
-            return;
+            return TRUE;
 
         g_object_set_data_full ((GObject *) tree, "arrangements-masks",
                 NULL, (GDestroyNotify) free_arrangements);
@@ -1223,7 +1281,33 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
     {
         GSList *l;
 
-        g_rec_mutex_lock (&priv->rec_mutex);
+        /* There is a possibility of recursion where we would deadlock:
+         * - lock taken in _donna_app_get_col_ct_data(), which calls a
+         *   refresh_ct_data() on some ct
+         * - this makes a write in config, e.g. setting a (missing) default value
+         * - option_cb is called as a result, and wants the lock!
+         * Because our lock isn't recursive, we'll handle this to avoid deadlock
+         * by trying to get the lock, returning FALSE without blocking if not
+         * possible, in which case we add an idle source to try again later
+         */
+        if (!_app_lock (app, LOCK_COL_CT_DATAS, FALSE))
+        {
+            /* if config is set, this is the callback. If it is NULL, it is
+             * actually a call from idle_option_cb() so there's already an idle
+             * source, no need for another one */
+            if (config)
+            {
+                struct idle_option *io;
+
+                io = g_new (struct idle_option, 1);
+                io->app = app;
+                io->option = g_strdup (option);
+
+                g_idle_add ((GSourceFunc) idle_option_cb, io);
+            }
+            return FALSE;
+        }
+
         for (l = priv->col_ct_datas; l; l = l->next)
         {
             struct col_ct_data *ccd = l->data;
@@ -1256,12 +1340,14 @@ option_cb (DonnaConfig *config, const gchar *option, DonnaApp *app)
                     l->data = new_ccd;
                 }
 
-                g_rec_mutex_unlock (&priv->rec_mutex);
-                return;
+                app_unlock (app, LOCK_COL_CT_DATAS);
+                return TRUE;
             }
         }
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_COL_CT_DATAS);
     }
+
+    return TRUE;
 }
 
 static void
@@ -1275,8 +1361,8 @@ donna_app_init (DonnaApp *app)
 
     priv = app->priv = G_TYPE_INSTANCE_GET_PRIVATE (app, DONNA_TYPE_APP, DonnaAppPrivate);
 
-    g_rw_lock_init (&priv->lock);
-    g_rec_mutex_init (&priv->rec_mutex);
+    g_cond_init (&priv->lock.cond);
+    g_mutex_init (&priv->lock.mutex);
 
     priv->config = g_object_new (DONNA_TYPE_PROVIDER_CONFIG, "app", app, NULL);
     g_signal_connect (priv->config, "new-node", (GCallback) new_node_cb, app);
@@ -1374,6 +1460,161 @@ donna_app_init (DonnaApp *app)
 
     priv->intrefs = g_hash_table_new_full (g_str_hash, g_str_equal,
             g_free, (GDestroyNotify) free_intref);
+}
+
+static gboolean
+_app_lock (DonnaApp               *app,
+          enum lock_for           lock_for,
+          gboolean                wait_for_lock)
+{
+    DonnaAppPrivate *priv = app->priv;
+    struct lock *lock = &priv->lock;
+    struct
+    {
+        guint lock_read;
+        guint lock_write;
+        guint *readers;
+        guint *writers;
+    } rw_locks[] = {
+        { LOCK_VISUALS_READ, LOCK_VISUALS_WRITE,
+            &lock->visuals_readers, &lock->visuals_writers },
+        { LOCK_PROVIDERS_READ, LOCK_PROVIDERS_WRITE,
+            &lock->providers_readers, &lock->providers_writers },
+        { 0, }
+    };
+    guint locks[] = { LOCK_COLUMN_TYPES, LOCK_COL_CT_DATAS, LOCK_PATTERNS,
+        LOCK_INTREFS, LOCK_STATUS, 0 };
+    guint i;
+
+    g_mutex_lock (&lock->mutex);
+
+    /* wait_for_lock is a special case that can only be used for non-RW locks,
+     * and will return FALSE without doing anything if the lock cannot be taken
+     * instead of waiting/blocking for it -- see option_cb() for use case */
+    if (!wait_for_lock && (lock->locked_for & lock_for))
+    {
+        g_mutex_unlock (&lock->mutex);
+        return FALSE;
+    }
+
+    i = 0;
+    while (rw_locks[i].lock_read > 0)
+    {
+        if (G_UNLIKELY ((lock_for & (rw_locks[i].lock_write | rw_locks[i].lock_read))
+                == (rw_locks[i].lock_write | rw_locks[i].lock_read)))
+        {
+            g_warning ("app_lock(): Invalid lock_for value (%u), "
+                    "contains both READ & WRITE for the same lock",
+                    lock_for);
+            ++i;
+            continue;
+        }
+
+        if (lock_for & rw_locks[i].lock_write)
+        {
+            ++*rw_locks[i].writers;
+            while (lock->locked_for & (rw_locks[i].lock_write | rw_locks[i].lock_read))
+                g_cond_wait (&lock->cond, &lock->mutex);
+            --*rw_locks[i].writers;
+            lock->locked_for |= rw_locks[i].lock_write;
+        }
+        else if (lock_for & rw_locks[i].lock_read)
+        {
+            while ((lock->locked_for & rw_locks[i].lock_write) || *rw_locks[i].writers > 0)
+                g_cond_wait (&lock->cond, &lock->mutex);
+            ++*rw_locks[i].readers;
+            lock->locked_for |= rw_locks[i].lock_read;
+        }
+        ++i;
+    }
+
+    i = 0;
+    while (locks[i] > 0)
+    {
+        if (lock_for & locks[i])
+        {
+            while (lock->locked_for & locks[i])
+                g_cond_wait (&lock->cond, &lock->mutex);
+            lock->locked_for |= locks[i];
+        }
+        ++i;
+    }
+
+    g_mutex_unlock (&lock->mutex);
+    return TRUE;
+}
+
+static void
+app_unlock (DonnaApp               *app,
+            enum lock_for           unlock_for)
+{
+    DonnaAppPrivate *priv = app->priv;
+    struct lock *lock = &priv->lock;
+    struct
+    {
+        guint lock_read;
+        guint lock_write;
+        guint *readers;
+        guint *writers;
+    } rw_locks[] = {
+        { LOCK_VISUALS_READ, LOCK_VISUALS_WRITE,
+            &lock->visuals_readers, &lock->visuals_writers },
+        { LOCK_PROVIDERS_READ, LOCK_PROVIDERS_WRITE,
+            &lock->providers_readers, &lock->providers_writers },
+        { 0, }
+    };
+    guint locks[] = { LOCK_COLUMN_TYPES, LOCK_COL_CT_DATAS, LOCK_PATTERNS,
+        LOCK_INTREFS, LOCK_STATUS, 0 };
+    guint i;
+    gboolean broadcast = FALSE;
+
+    g_mutex_lock (&lock->mutex);
+
+    i = 0;
+    while (rw_locks[i].lock_read > 0)
+    {
+        if (G_UNLIKELY ((unlock_for & (rw_locks[i].lock_write | rw_locks[i].lock_read))
+                == (rw_locks[i].lock_write | rw_locks[i].lock_read)))
+        {
+            g_warning ("app_unlock(): Invalid unlock_for value (%u), "
+                    "contains both READ & WRITE for the same lock",
+                    unlock_for);
+            ++i;
+            continue;
+        }
+
+        if (unlock_for & rw_locks[i].lock_write)
+        {
+            lock->locked_for &= ~rw_locks[i].lock_write;
+            /* since the WRITE lock is gone, make sure to wake up all possible
+             * readers */
+            broadcast = TRUE;
+        }
+        else if (unlock_for & rw_locks[i].lock_read && --*rw_locks[i].readers == 0)
+        {
+            lock->locked_for &= ~rw_locks[i].lock_read;
+            if (*rw_locks[i].writers > 0)
+                /* if there are writers pending, make sure to wake them up */
+                broadcast = TRUE;
+        }
+
+        ++i;
+    }
+
+    i = 0;
+    while (locks[i] > 0)
+    {
+        if (unlock_for & locks[i])
+            lock->locked_for &= ~locks[i];
+        ++i;
+    }
+
+    if (broadcast)
+        g_cond_broadcast (&lock->cond);
+    else
+        g_cond_signal (&lock->cond);
+
+    g_mutex_unlock (&lock->mutex);
 }
 
 struct log_msg
@@ -2612,9 +2853,9 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
 
     domain = donna_node_get_domain (node);
     fl = donna_node_get_full_location (node);
-    g_rw_lock_reader_lock (&priv->lock);
 
     /* custom properties */
+    app_lock (app, LOCK_PROVIDERS_READ);
     for (i = 0; i < priv->providers->len; ++i)
     {
         struct provider *p;
@@ -2673,8 +2914,10 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             break;
         }
     }
+    app_unlock (app, LOCK_PROVIDERS_READ);
 
     /* node visuals */
+    app_lock (app, LOCK_VISUALS_READ);
     visuals = g_hash_table_lookup (priv->visuals, fl);
     if (visuals)
     {
@@ -2736,8 +2979,8 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
             g_value_unset (&value);
         }
     }
+    app_unlock (app, LOCK_VISUALS_READ);
 
-    g_rw_lock_reader_unlock (&priv->lock);
     g_free (fl);
 }
 
@@ -2763,7 +3006,7 @@ donna_app_get_provider (DonnaApp       *app,
     g_return_val_if_fail (domain != NULL, NULL);
     priv = app->priv;
 
-    g_rw_lock_reader_lock (&priv->lock);
+    app_lock (app, LOCK_PROVIDERS_READ);
 again:
     for (i = 0; i < priv->providers->len; ++i)
     {
@@ -2776,7 +3019,7 @@ again:
             {
                 if (!writer)
                 {
-                    g_rw_lock_reader_unlock (&priv->lock);
+                    app_unlock (app, LOCK_PROVIDERS_READ);
                     /* we create it now, because it might (upon creation) call
                      * this very get_provider() and the writer lock isn't
                      * recursive, and would therefore deadlock (So would doing
@@ -2784,14 +3027,14 @@ again:
                      * writer lock in case we need to). */
                     provider = g_object_new (p->type, "app", app, NULL);
                     writer = TRUE;
-                    g_rw_lock_writer_lock (&priv->lock);
+                    app_lock (app, LOCK_PROVIDERS_WRITE);
                     goto again;
                 }
                 else
                 {
                     /* extra ref for caller */
                     p->instance = g_object_ref (provider);
-                    g_rw_lock_writer_unlock (&priv->lock);
+                    app_unlock (app, LOCK_PROVIDERS_WRITE);
                     g_signal_connect (p->instance, "new-node",
                             (GCallback) new_node_cb, app);
                 }
@@ -2800,10 +3043,10 @@ again:
             {
                 g_object_ref (p->instance);
                 if (G_LIKELY (!writer))
-                    g_rw_lock_reader_unlock (&priv->lock);
+                    app_unlock (app, LOCK_PROVIDERS_READ);
                 else
                 {
-                    g_rw_lock_writer_unlock (&priv->lock);
+                    app_unlock (app, LOCK_PROVIDERS_WRITE);
                     /* an instance while we're writer means it got instanciated
                      * while we were switching locks, so we should unref our
                      * unneeded provider */
@@ -2815,10 +3058,7 @@ again:
     }
     /* reaching here means unknown provider */
 
-    if (G_LIKELY (!writer))
-        g_rw_lock_reader_unlock (&priv->lock);
-    else
-        g_rw_lock_writer_unlock (&priv->lock);
+    app_unlock (app, (writer) ? LOCK_PROVIDERS_WRITE : LOCK_PROVIDERS_READ);
     return NULL;
 }
 
@@ -2984,7 +3224,7 @@ donna_app_get_column_type (DonnaApp      *app,
     g_return_val_if_fail (type != NULL, NULL);
     priv = app->priv;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_COLUMN_TYPES);
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
         if (streq (type, priv->column_types[i].name))
@@ -2995,7 +3235,7 @@ donna_app_get_column_type (DonnaApp      *app,
             break;
         }
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_COLUMN_TYPES);
     return (i < NB_COL_TYPES) ? g_object_ref (priv->column_types[i].ct) : NULL;
 }
 
@@ -3054,10 +3294,10 @@ pattern_toggle_ref (DonnaPattern   *pattern,
     if (!is_last)
         return;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_PATTERNS);
     if (donna_pattern_get_ref_count (pattern) != 1)
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_PATTERNS);
         return;
     }
 
@@ -3073,7 +3313,7 @@ pattern_toggle_ref (DonnaPattern   *pattern,
             /* will free key & value */
             g_hash_table_remove (priv->patterns, data.key);
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_PATTERNS);
 }
 
 /**
@@ -3101,7 +3341,7 @@ donna_app_get_pattern (DonnaApp       *app,
     g_return_val_if_fail (pattern != NULL, NULL);
     priv = app->priv;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_PATTERNS);
     p = g_hash_table_lookup (priv->patterns, pattern);
     if (!p)
     {
@@ -3109,13 +3349,13 @@ donna_app_get_pattern (DonnaApp       *app,
                 app, NULL, error);
         if (!p)
         {
-            g_rec_mutex_unlock (&priv->rec_mutex);
+            app_unlock (app, LOCK_PATTERNS);
             return NULL;
         }
         g_hash_table_insert (priv->patterns, g_strdup (pattern), p);
     }
     donna_pattern_ref (p);
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_PATTERNS);
 
     return p;
 }
@@ -3441,12 +3681,12 @@ intrefs_gc (DonnaApp *app)
     DonnaAppPrivate *priv = app->priv;
     gboolean keep_going;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_INTREFS);
     g_hash_table_foreach_remove (priv->intrefs, (GHRFunc) intrefs_remove, NULL);
     keep_going = g_hash_table_size (priv->intrefs) > 0;
     if (!keep_going)
         priv->intrefs_timeout = 0;
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_INTREFS);
 
     return keep_going;
 }
@@ -3508,13 +3748,13 @@ donna_app_new_int_ref (DonnaApp       *app,
     ir->last = g_get_monotonic_time ();
 
     s = g_strdup_printf ("<%u%u>", rand (), (guint) (gintptr) ir);
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_INTREFS);
     g_hash_table_insert (priv->intrefs, g_strdup (s), ir);
     if (priv->intrefs_timeout == 0)
         priv->intrefs_timeout = g_timeout_add_seconds_full (G_PRIORITY_LOW,
                 60 * 15, /* 15min */
                 (GSourceFunc) intrefs_gc, app, NULL);
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_INTREFS);
     return s;
 }
 
@@ -3547,7 +3787,7 @@ donna_app_get_int_ref (DonnaApp       *app,
     g_return_val_if_fail (type != DONNA_ARG_TYPE_NOTHING, NULL);
     priv = app->priv;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_INTREFS);
     ir = g_hash_table_lookup (priv->intrefs, intref);
     if (ir && ir->type == type)
     {
@@ -3559,7 +3799,7 @@ donna_app_get_int_ref (DonnaApp       *app,
                     | DONNA_ARG_TYPE_TERMINAL))
             ptr = g_object_ref (ptr);
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_INTREFS);
 
     return ptr;
 }
@@ -3588,10 +3828,10 @@ donna_app_free_int_ref (DonnaApp       *app,
     g_return_val_if_fail (intref != NULL, NULL);
     priv = app->priv;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_INTREFS);
     /* frees key & value */
     ret = g_hash_table_remove (priv->intrefs, intref);
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_INTREFS);
 
     return ret;
 }
@@ -5261,14 +5501,14 @@ _donna_app_get_col_ct_data (DonnaApp       *app,
     GSList *l;
     guint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_COL_CT_DATAS);
     for (l = priv->col_ct_datas; l; l = l->next)
     {
         ccd = l->data;
         if (streq (ccd->col_name, col_name))
         {
             ccd->ref_count++;
-            g_rec_mutex_unlock (&priv->rec_mutex);
+            app_unlock (app, LOCK_COL_CT_DATAS);
             return ccd;
         }
     }
@@ -5278,6 +5518,7 @@ _donna_app_get_col_ct_data (DonnaApp       *app,
         /* fallback to its name */
         type = g_strdup (col_name);
 
+    app_lock (app, LOCK_COLUMN_TYPES);
     for (i = 0; i < NB_COL_TYPES; ++i)
     {
         if (streq (type, priv->column_types[i].name))
@@ -5290,10 +5531,11 @@ _donna_app_get_col_ct_data (DonnaApp       *app,
         }
     }
     g_free (type);
+    app_unlock (app, LOCK_COLUMN_TYPES);
 
     if (G_UNLIKELY (i >= NB_COL_TYPES))
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_COL_CT_DATAS);
         return NULL;
     }
 
@@ -5309,7 +5551,7 @@ _donna_app_get_col_ct_data (DonnaApp       *app,
     ccd->ref_count = 1;
 
     priv->col_ct_datas = g_slist_append (priv->col_ct_datas, ccd);
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_COL_CT_DATAS);
 
     return ccd;
 }
@@ -5320,7 +5562,7 @@ _donna_app_unref_col_ct_data (DonnaApp              *app,
 {
     DonnaAppPrivate *priv = app->priv;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_COL_CT_DATAS);
     if (--ccd->ref_count == 0 && !g_slist_find (priv->col_ct_datas, ccd))
     {
         /* don't free ccd->col_name/props, since they're now owned by the new
@@ -5331,7 +5573,7 @@ _donna_app_unref_col_ct_data (DonnaApp              *app,
             g_ptr_array_unref (ccd->props);
         g_free (ccd);
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_COL_CT_DATAS);
 }
 
 /**
@@ -5840,7 +6082,7 @@ status_clear (struct status_clear *sc)
     struct status_donna *sd;
     guint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (sc->app, LOCK_STATUS);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -5850,7 +6092,7 @@ status_clear (struct status_clear *sc)
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (sc->app, LOCK_STATUS);
         return G_SOURCE_REMOVE;
     }
 
@@ -5863,7 +6105,7 @@ status_clear (struct status_clear *sc)
         sd->sce_timeout = 0;
     }
 
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (sc->app, LOCK_STATUS);
 
     donna_status_provider_status_changed ((DonnaStatusProvider *) sc->app, sc->id);
     return G_SOURCE_REMOVE;
@@ -5885,7 +6127,7 @@ static void status_log (DonnaApp       *app,
     gint *lvl;
     gint timeout;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -5895,7 +6137,7 @@ static void status_log (DonnaApp       *app,
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_STATUS);
         return;
     }
 
@@ -5961,7 +6203,7 @@ static void status_log (DonnaApp       *app,
         }
     }
 
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
 
     donna_status_provider_status_changed ((DonnaStatusProvider *) app, id);
 }
@@ -5971,12 +6213,13 @@ status_provider_create_status (DonnaStatusProvider    *sp,
                                gpointer                _name,
                                GError                **error)
 {
-    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    DonnaApp *app = (DonnaApp *) sp;
+    DonnaAppPrivate *priv = app->priv;
     struct status_donna sd = { 0, };
 
     sd.name = g_strdup (_name);
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     if (!priv->status_donna)
         priv->status_donna = g_array_sized_new (FALSE, FALSE,
                 sizeof (struct status_donna), 1);
@@ -5984,7 +6227,7 @@ status_provider_create_status (DonnaStatusProvider    *sp,
     sd.sid_log = g_signal_connect (sp, "event::log",
             (GCallback) status_log, GINT_TO_POINTER (sd.id));
     g_array_append_val (priv->status_donna, sd);
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
 
     return sd.id;
 }
@@ -5993,10 +6236,11 @@ static void
 status_provider_free_status (DonnaStatusProvider    *sp,
                              guint                   id)
 {
-    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    DonnaApp *app = (DonnaApp *) sp;
+    DonnaAppPrivate *priv = app->priv;
     guint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         struct status_donna *sd = &g_array_index (priv->status_donna,
@@ -6013,17 +6257,18 @@ status_provider_free_status (DonnaStatusProvider    *sp,
             break;
         }
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
 }
 
 static const gchar *
 status_provider_get_renderers (DonnaStatusProvider    *sp,
                                guint                   id)
 {
-    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    DonnaApp *app = (DonnaApp *) sp;
+    DonnaAppPrivate *priv = app->priv;
     guint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         struct status_donna *sd = &g_array_index (priv->status_donna,
@@ -6031,11 +6276,11 @@ status_provider_get_renderers (DonnaStatusProvider    *sp,
 
         if (sd->id == id)
         {
-            g_rec_mutex_unlock (&priv->rec_mutex);
+            app_unlock (app, LOCK_STATUS);
             return "pt";
         }
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
     return NULL;
 }
 
@@ -6045,11 +6290,12 @@ status_provider_render (DonnaStatusProvider    *sp,
                         guint                   index,
                         GtkCellRenderer        *renderer)
 {
+    DonnaApp *app = (DonnaApp *) sp;
     DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
     struct status_donna *sd;
     guint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -6059,7 +6305,7 @@ status_provider_render (DonnaStatusProvider    *sp,
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_STATUS);
         g_object_set (renderer, "visible", FALSE, NULL);
         return;
     }
@@ -6103,7 +6349,7 @@ status_provider_render (DonnaStatusProvider    *sp,
         if (!donna_config_get_string (priv->config, NULL, &fmt,
                     "statusbar/%s/format", sd->name))
         {
-            g_rec_mutex_unlock (&priv->rec_mutex);
+            app_unlock (app, LOCK_STATUS);
             g_object_set (renderer, "visible", FALSE, NULL);
             return;
         }
@@ -6118,7 +6364,7 @@ status_provider_render (DonnaStatusProvider    *sp,
             g_string_free (str, TRUE);
         g_free (fmt);
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
 }
 
 static gboolean
@@ -6127,13 +6373,14 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
                              guint                   index,
                              GtkTooltip             *tooltip)
 {
-    DonnaAppPrivate *priv = ((DonnaApp *) sp)->priv;
+    DonnaApp *app = (DonnaApp *) sp;
+    DonnaAppPrivate *priv = app->priv;
     struct status_donna *sd;
     GString *str = NULL;
     gchar *fmt;
     guint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     for (i = 0; i < priv->status_donna->len; ++i)
     {
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
@@ -6143,24 +6390,24 @@ status_provider_set_tooltip (DonnaStatusProvider    *sp,
 
     if (G_UNLIKELY (i >= priv->status_donna->len))
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_STATUS);
         return FALSE;
     }
 
     if (sd->message)
     {
         gtk_tooltip_set_text (tooltip, sd->message);
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_STATUS);
         return TRUE;
     }
 
     if (!donna_config_get_string (priv->config, NULL, &fmt,
                 "statusbar/%s/format_tooltip", sd->name))
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_STATUS);
         return FALSE;
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
 
     parse_app ((DonnaApp *) sp, fmt, &str);
     gtk_tooltip_set_text (tooltip, (str) ? str->str : fmt);
@@ -6787,10 +7034,10 @@ refresh_status_donna (DonnaApp *app)
     guint _ids[8], *ids = _ids;
     gint i;
 
-    g_rec_mutex_lock (&priv->rec_mutex);
+    app_lock (app, LOCK_STATUS);
     if (!priv->status_donna)
     {
-        g_rec_mutex_unlock (&priv->rec_mutex);
+        app_unlock (app, LOCK_STATUS);
         return;
     }
 
@@ -6801,7 +7048,7 @@ refresh_status_donna (DonnaApp *app)
         sd = &g_array_index (priv->status_donna, struct status_donna, i);
         ids[i] = sd->id;
     }
-    g_rec_mutex_unlock (&priv->rec_mutex);
+    app_unlock (app, LOCK_STATUS);
 
     for (--i; i >= 0; --i)
         donna_status_provider_status_changed ((DonnaStatusProvider *) app, ids[i]);
@@ -7170,7 +7417,7 @@ load_custom_properties (DonnaApp *app)
         if (donna_config_get_string (priv->config, &err, &domain,
                     "custom_properties/%s/domain", (gchar *) arr->pdata[i]))
         {
-            g_rw_lock_reader_lock (&priv->lock);
+            app_lock (app, LOCK_PROVIDERS_READ);
             for (j = 0; j < priv->providers->len; ++j)
             {
                 struct provider *p;
@@ -7180,7 +7427,7 @@ load_custom_properties (DonnaApp *app)
                     break;
             }
             j = (j >= priv->providers->len) ? 1 : 0;
-            g_rw_lock_reader_unlock (&priv->lock);
+            app_unlock (app, LOCK_PROVIDERS_READ);
 
             if (j)
             {
@@ -7362,7 +7609,7 @@ load_custom_properties (DonnaApp *app)
         }
 
         /* add custom properties to the provider */
-        g_rw_lock_writer_lock (&priv->lock);
+        app_lock (app, LOCK_PROVIDERS_WRITE);
         for (j = 0; j < priv->providers->len; ++j)
         {
             struct provider *p;
@@ -7392,7 +7639,7 @@ load_custom_properties (DonnaApp *app)
                 break;
             }
         }
-        g_rw_lock_writer_unlock (&priv->lock);
+        app_unlock (app, LOCK_PROVIDERS_WRITE);
         g_free (domain);
     }
 
