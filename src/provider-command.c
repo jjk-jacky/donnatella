@@ -84,6 +84,21 @@
  * node as argument of anything other than a(n array of) node(s) will have the
  * node's full location be used as argument.
  *
+ * Nodes for commands are items that can be triggered. It is however possible to
+ * prefix a command/location with the lesser than sign (&lt;) so that the
+ * corresponding node isn't an item, but a container.
+ *
+ * Then, when getting children of said container/node, the command will run as
+ * usual and the returned nodes be its children. Obviously, this is only
+ * supported for commands whose return value is a(n array of) node(s).
+ * The main benefit is to be able to use such commands where containers are
+ * used, e.g. one could do:
+ * <systemitem>command:node_popup_children ("command:&lt;mru_get_nodes
+ * (id)",a)</systemitem>
+ * (Noting that in this case, command <systemitem>menu_popup()</systemitem>
+ * could have been used insead, of course. But e.g. in context menus where a
+ * container (as submenu) is to be used, this might prove useful.)
+ *
  * For the list of all supported commands, refer to
  * #donnatella-Commands.description
  */
@@ -95,6 +110,32 @@ enum
     PROP_APP,
 
     NB_PROPS
+};
+
+enum which
+{
+    WHICH_TRIGGER,
+    WHICH_HAS_CHILDREN,
+    WHICH_GET_CHILDREN
+};
+
+struct run_command
+{
+    enum which               which;
+    gboolean                 is_subcommand;
+    DonnaProviderCommand    *pc;
+    gchar                   *cmdline;
+    struct command          *command;
+    gchar                   *start;
+    guint                    i;
+    struct run_command      *sub_rc;
+    GPtrArray               *args;
+    DonnaTask               *task;
+    task_run_fn              run_task;
+    gpointer                 run_task_data;
+    /* for WHICH_HAS_CHILDREN || WHICH_GET_CHILDREN */
+    DonnaNode               *node;
+    DonnaNodeType            node_types;
 };
 
 struct _DonnaProviderCommandPrivate
@@ -121,28 +162,42 @@ static DonnaTask *      provider_command_trigger_node_task (
                                                          DonnaProvider      *provider,
                                                          DonnaNode          *node,
                                                          GError            **error);
+static DonnaTask *      provider_command_has_node_children_task (
+                                                         DonnaProvider      *provider,
+                                                         DonnaNode          *node,
+                                                         DonnaNodeType       node_types,
+                                                         GError            **error);
+static DonnaTask *      provider_command_get_node_children_task (
+                                                         DonnaProvider      *provider,
+                                                         DonnaNode          *node,
+                                                         DonnaNodeType       node_types,
+                                                         GError            **error);
 /* DonnaProviderBase */
 static DonnaTaskState   provider_command_new_node       (DonnaProviderBase  *provider,
                                                          DonnaTask          *task,
                                                          const gchar        *location);
-static DonnaTaskState   provider_command_has_children   (DonnaProviderBase  *provider,
-                                                         DonnaTask          *task,
-                                                         DonnaNode          *node,
-                                                         DonnaNodeType       node_types);
-static DonnaTaskState   provider_command_get_children   (DonnaProviderBase  *provider,
-                                                         DonnaTask          *task,
-                                                         DonnaNode          *node,
-                                                         DonnaNodeType       node_types);
 
 /* internal from command.c */
 void _donna_add_commands (GHashTable *commands);
 
+static void             free_run_command                (gpointer            data);
+static void             parse_command                   (struct run_command *rc);
+static void             pre_run_command                 (DonnaTask          *task,
+                                                         task_run_fn         run_task,
+                                                         gpointer            run_task_data,
+                                                         struct run_command *rc);
+static DonnaTaskState   run_command                     (DonnaTask          *task,
+                                                         struct run_command *rc);
+
+
 static void
 provider_command_provider_init (DonnaProviderInterface *interface)
 {
-    interface->get_domain        = provider_command_get_domain;
-    interface->get_flags         = provider_command_get_flags;
-    interface->trigger_node_task = provider_command_trigger_node_task;
+    interface->get_domain               = provider_command_get_domain;
+    interface->get_flags                = provider_command_get_flags;
+    interface->trigger_node_task        = provider_command_trigger_node_task;
+    interface->has_node_children_task   = provider_command_has_node_children_task;
+    interface->get_node_children_task   = provider_command_get_node_children_task;
 }
 
 G_DEFINE_TYPE_WITH_CODE (DonnaProviderCommand, donna_provider_command,
@@ -158,13 +213,8 @@ donna_provider_command_class_init (DonnaProviderCommandClass *klass)
 
     pb_class = (DonnaProviderBaseClass *) klass;
 
-    pb_class->task_visibility.new_node      = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
-    pb_class->task_visibility.has_children  = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
-    pb_class->task_visibility.get_children  = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
-
+    pb_class->task_visibility.new_node = DONNA_TASK_VISIBILITY_INTERNAL_FAST;
     pb_class->new_node      = provider_command_new_node;
-    pb_class->has_children  = provider_command_has_children;
-    pb_class->get_children  = provider_command_get_children;
 
     o_class = (GObjectClass *) klass;
     o_class->get_property   = provider_command_get_property;
@@ -281,8 +331,20 @@ provider_command_new_node (DonnaProviderBase  *_provider,
         return DONNA_TASK_FAILED;
     }
 
+    /* container mode only works for commands returning a(n array of) node(s) */
+    if (*location == '<' && !(cmd->return_type & DONNA_ARG_TYPE_NODE))
+    {
+        donna_task_set_error (task, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_LOCATION_NOT_FOUND,
+                "Provider '%s': Command '%s' cannot be a container, "
+                "only commands returning a(n array of) node(s) can",
+                "command", cmd->name);
+        return DONNA_TASK_FAILED;
+    }
+
     node = donna_node_new ((DonnaProvider *) _provider, location,
-            DONNA_NODE_ITEM, NULL,
+            (*location == '<') ? DONNA_NODE_CONTAINER : DONNA_NODE_ITEM,
+            NULL, /* filename */
             DONNA_TASK_VISIBILITY_INTERNAL_FAST,
             NULL, (refresher_fn) gtk_true, NULL,
             cmd->name,
@@ -342,45 +404,6 @@ provider_command_new_node (DonnaProviderBase  *_provider,
     return DONNA_TASK_DONE;
 }
 
-static DonnaTaskState
-provider_command_has_children (DonnaProviderBase  *_provider,
-                               DonnaTask          *task,
-                               DonnaNode          *node,
-                               DonnaNodeType       node_types)
-{
-    donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-            DONNA_PROVIDER_ERROR_INVALID_CALL,
-            "Provider 'command': has_children() not supported");
-    return DONNA_TASK_FAILED;
-}
-
-static DonnaTaskState
-provider_command_get_children (DonnaProviderBase  *_provider,
-                               DonnaTask          *task,
-                               DonnaNode          *node,
-                               DonnaNodeType       node_types)
-{
-    donna_task_set_error (task, DONNA_PROVIDER_ERROR,
-            DONNA_PROVIDER_ERROR_INVALID_CALL,
-            "Provider 'command': get_children() not supported");
-    return DONNA_TASK_FAILED;
-}
-
-struct run_command
-{
-    gboolean                 is_subcommand;
-    DonnaProviderCommand    *pc;
-    gchar                   *cmdline;
-    struct command          *command;
-    gchar                   *start;
-    guint                    i;
-    struct run_command      *sub_rc;
-    GPtrArray               *args;
-    DonnaTask               *task;
-    task_run_fn              run_task;
-    gpointer                 run_task_data;
-};
-
 static void
 free_command_args (struct command *command, GPtrArray *args)
 {
@@ -418,8 +441,10 @@ free_command_args (struct command *command, GPtrArray *args)
 }
 
 static void
-free_run_command (struct run_command *rc)
+free_run_command (gpointer data)
 {
+    struct run_command *rc = data;
+
     if (rc->is_subcommand)
         return;
     if (rc->sub_rc)
@@ -433,6 +458,8 @@ free_run_command (struct run_command *rc)
     }
     free_command_args (rc->command, rc->args);
     g_free (rc->cmdline);
+    if (rc->node)
+        g_object_unref (rc->node);
     g_slice_free (struct run_command, rc);
 }
 
@@ -446,6 +473,10 @@ _donna_command_init_parse (DonnaProviderCommand    *pc,
     struct command *command;
     gchar  c;
     gchar *s;
+
+    /* containe prefix, to be skipped */
+    if (*cmdline == '<')
+        ++cmdline;
 
     for (s = cmdline; isalnum (*s) || *s == '_'; ++s)
         ;
@@ -507,8 +538,6 @@ unquote_string (gchar **start, gchar **end, GError **error)
     return TRUE;
 }
 
-static void parse_command (struct run_command *rc);
-
 static gboolean
 subcommand_cb (gint fd, GIOCondition condition, struct run_command *rc)
 {
@@ -559,12 +588,6 @@ subcommand_cb (gint fd, GIOCondition condition, struct run_command *rc)
     parse_command (rc);
     return G_SOURCE_REMOVE;
 }
-
-static void pre_run_command (DonnaTask          *task,
-                             task_run_fn         run_task,
-                             gpointer            run_task_data,
-                             struct run_command *rc);
-static DonnaTaskState run_command (DonnaTask *task, struct run_command *rc);
 
 enum parse
 {
@@ -628,8 +651,7 @@ parse_arg (struct run_command    *rc,
             sub_rc->command = command;
             sub_rc->cmdline = s;
 
-            task = donna_task_new ((task_fn) run_command, sub_rc,
-                    (GDestroyNotify) free_run_command);
+            task = donna_task_new ((task_fn) run_command, sub_rc, free_run_command);
             donna_task_set_pre_worker (task, (task_pre_fn) pre_run_command);
             donna_task_set_visibility (task, command->visibility);
 
@@ -1383,6 +1405,62 @@ run_command (DonnaTask *task, struct run_command *rc)
     state = rc->command->func (task, rc->pc->priv->app,
             rc->args->pdata, rc->command->data);
 
+    if (state == DONNA_TASK_DONE
+            && (rc->which == WHICH_GET_CHILDREN || rc->which == WHICH_HAS_CHILDREN))
+    {
+        GPtrArray *arr;
+        guint i;
+
+        arr = (GPtrArray *) g_value_get_boxed (donna_task_get_return_value (task));
+
+        /* here we could emit node-children, but:
+         * 1. there's no obligation to do so,
+         * 2. since commands could return an array containing some NULLs (e.g.
+         * separators for menus, via nodes_add()) this might not be a good idea,
+         * 3. such nodes will usually not be used in a way where such a signal
+         * is useful anyways, i.e. either it's only for a command needing a
+         * container or via context menus, or should it be as a treeview's
+         * location, that treeview will be the one asking for children anyways
+         * (so getting our return value)
+         *
+         * XXX: should everything doing a get_children() or connecting to
+         * node-children be made NULL-safe (in case of separators) ?
+         */
+#if 0
+        /* emit node-children */
+        donna_provider_node_children ((DonnaProvider *) rc->pc,
+                rc->node, DONNA_NODE_ITEM | DONNA_NODE_CONTAINER, arr);
+#endif
+
+        /* filter the array to only what was asked */
+        for (i = 0; i < arr->len; )
+        {
+            DonnaNode *node = arr->pdata[i];
+
+            /* allow node to be NULL in case this is for a menu with separators
+             * (e.g. via nodes_add() */
+            if (node && !(donna_node_get_node_type (node) & rc->node_types))
+                g_ptr_array_remove_index_fast (arr, i);
+            else
+                ++i;
+        }
+
+        if (rc->which == WHICH_HAS_CHILDREN)
+        {
+            GValue *value;
+            gboolean has_children;
+
+            /* turn the array of nodes/children in to a TRUE/FALSE */
+
+            has_children = arr->len > 0;
+            value = donna_task_grab_return_value (task);
+            g_value_unset (value);
+            g_value_init (value, G_TYPE_BOOLEAN);
+            g_value_set_boolean (value, has_children);
+            donna_task_release_return_value (task);
+        }
+    }
+
     free_run_command (rc);
     return state;
 }
@@ -1398,11 +1476,11 @@ provider_command_trigger_node_task (DonnaProvider      *provider,
     GValue v = G_VALUE_INIT;
 
     rc = g_slice_new0 (struct run_command);
+    rc->which = WHICH_TRIGGER;
     rc->pc = (DonnaProviderCommand *) provider;
     rc->cmdline = donna_node_get_location (node);
 
-    task = donna_task_new ((task_fn) run_command, rc,
-            (GDestroyNotify) free_run_command);
+    task = donna_task_new ((task_fn) run_command, rc, free_run_command);
     donna_task_set_pre_worker (task, (task_pre_fn) pre_run_command);
     donna_node_get (node, FALSE, "trigger-visibility", &has, &v, NULL);
     donna_task_set_visibility (task, g_value_get_uint (&v));
@@ -1416,6 +1494,73 @@ provider_command_trigger_node_task (DonnaProvider      *provider,
 
     return task;
 }
+
+static DonnaTask *
+provider_command_has_node_children_task (DonnaProvider      *provider,
+                                         DonnaNode          *node,
+                                         DonnaNodeType       node_types,
+                                         GError            **error)
+{
+    struct run_command *rc;
+    DonnaTask *task;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+
+    rc = g_slice_new0 (struct run_command);
+    rc->which = WHICH_HAS_CHILDREN;
+    rc->pc = (DonnaProviderCommand *) provider;
+    rc->cmdline = donna_node_get_location (node);
+    rc->node = g_object_ref (node);
+    rc->node_types = node_types;
+
+    task = donna_task_new ((task_fn) run_command, rc, free_run_command);
+    donna_task_set_pre_worker (task, (task_pre_fn) pre_run_command);
+    donna_node_get (node, FALSE, "trigger-visibility", &has, &v, NULL);
+    donna_task_set_visibility (task, g_value_get_uint (&v));
+    g_value_unset (&v);
+
+    DONNA_DEBUG (TASK, NULL,
+            gchar *fl = donna_node_get_full_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "has_node_children() for node '%s'", fl));
+            g_free (fl));
+
+    return task;
+}
+
+static DonnaTask *
+provider_command_get_node_children_task (DonnaProvider      *provider,
+                                         DonnaNode          *node,
+                                         DonnaNodeType       node_types,
+                                         GError            **error)
+{
+    struct run_command *rc;
+    DonnaTask *task;
+    DonnaNodeHasValue has;
+    GValue v = G_VALUE_INIT;
+
+    rc = g_slice_new0 (struct run_command);
+    rc->which = WHICH_GET_CHILDREN;
+    rc->pc = (DonnaProviderCommand *) provider;
+    rc->cmdline = donna_node_get_location (node);
+    rc->node = g_object_ref (node);
+    rc->node_types = node_types;
+
+    task = donna_task_new ((task_fn) run_command, rc, free_run_command);
+    donna_task_set_pre_worker (task, (task_pre_fn) pre_run_command);
+    donna_node_get (node, FALSE, "trigger-visibility", &has, &v, NULL);
+    donna_task_set_visibility (task, g_value_get_uint (&v));
+    g_value_unset (&v);
+
+    DONNA_DEBUG (TASK, NULL,
+            gchar *fl = donna_node_get_full_location (node);
+            donna_task_take_desc (task, g_strdup_printf (
+                    "get_node_children() for node '%s'", fl));
+            g_free (fl));
+
+    return task;
+}
+
 
 gboolean
 donna_provider_command_add_command (DonnaProviderCommand   *pc,
