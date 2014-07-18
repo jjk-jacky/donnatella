@@ -37,6 +37,7 @@ enum type
     TYPE_TRIGGER,
     TYPE_CONTAINER,
     TYPE_EMPTY,
+    TYPE_COMBINED,
     NB_TYPES
 };
 
@@ -69,7 +70,7 @@ gboolean _donna_context_register_extras (DonnaConfig *config, GError **error);
 gboolean
 _donna_context_register_extras (DonnaConfig *config, GError **error)
 {
-    DonnaConfigItemExtraListInt it[4];
+    DonnaConfigItemExtraListInt it[5];
     gint i;
 
     i = 0;
@@ -88,6 +89,10 @@ _donna_context_register_extras (DonnaConfig *config, GError **error)
     it[i].value     = TYPE_EMPTY;
     it[i].in_file   = "empty";
     it[i].label     = "Empty item (no trigger)";
+    ++i;
+    it[i].value     = TYPE_COMBINED;
+    it[i].in_file   = "combined";
+    it[i].label     = "Combined trigger+container";
     ++i;
     if (G_UNLIKELY (!donna_config_add_extra (config,
                     DONNA_CONFIG_EXTRA_TYPE_LIST_INT, "context-type",
@@ -818,7 +823,7 @@ get_user_item_info (const gchar             *item,
     else
         type = TYPE_STANDARD;
 
-    if (type == TYPE_CONTAINER)
+    if (type == TYPE_CONTAINER || type == TYPE_COMBINED)
         info->is_container = TRUE;
 
     /* shall we import non-specified stuff from node trigger? */
@@ -901,6 +906,14 @@ get_user_item_info (const gchar             *item,
                                 source, item, (gint) (len - 7 - 5), t + 7))
                         info->free_icon_selected = TRUE;
 
+                    if (type == TYPE_COMBINED)
+                        /* try to get the container under the same suffix */
+                        if (donna_config_get_string (config, NULL,
+                                    (gchar **) &info->container,
+                                    "context_menus/%s/%s/container%.*s",
+                                    source, item, (gint) (len - 7 - 5), t + 7))
+                            info->free_container = TRUE;
+
                     break;
                 }
                 else /* EXPR_FALSE */
@@ -953,6 +966,23 @@ get_user_item_info (const gchar             *item,
 
         return TRUE;
     }
+
+    if (type == TYPE_COMBINED && !info->container)
+    {
+        if (!donna_config_get_string (config, &err,
+                    (gchar **) &info->container,
+                    "context_menus/%s/%s/container", source, item))
+        {
+            g_prefix_error (error,
+                    "No container found for TYPE_COMBINED item 'context_menus/%s/%s: ",
+                    source, item);
+            return FALSE;
+        }
+        info->free_container = TRUE;
+    }
+    if (info->container)
+        /* parse %C/%c in the container (we know info->free_container == TRUE) */
+        info->container = parse_Cc ((gchar *) info->container, s_C, s_c);
 
     /* is_sensitive is a bit special, in that we only import from trigger if
      * TRUE (since if FALSE, that takes precedence, but if TRUE the value from
@@ -1654,6 +1684,7 @@ parse_items (DonnaApp               *app,
         else /* not a submenu */
         {
             struct gcem *gcem = NULL;
+            gchar *container_trigger = NULL;
 
             if (info.node)
             {
@@ -1671,7 +1702,28 @@ parse_items (DonnaApp               *app,
             {
                 if (info.is_container)
                 {
-                    ni->node_trigger = donna_app_get_node (app, info.trigger, TRUE, &err);
+                    const gchar *container;
+
+                    /* if we have info.container, then that's for the container
+                     * part, and info.trigger is for the trigger part
+                     * (TYPE_COMBINED); else there's only info.trigger for the
+                     * container part */
+                    if (info.container)
+                    {
+                        /* we do the parsing, but ignore intrefs since the
+                         * trigger is just a string property, so they'll be
+                         * cleaned via GC */
+                        container_trigger = donna_app_parse_fl (app,
+                                (gchar *) info.trigger, info.free_trigger,
+                                context, NULL);
+                        info.trigger = NULL;
+                        info.free_trigger = FALSE;
+                        container = info.container;
+                    }
+                    else
+                        container = info.trigger;
+
+                    ni->node_trigger = donna_app_get_node (app, container, TRUE, &err);
                     if (!ni->node_trigger)
                     {
                         gcem = g_new (struct gcem, 1);
@@ -1697,6 +1749,7 @@ parse_items (DonnaApp               *app,
                         free_context_info (&info);
                         free_node_internal (ni);
                         g_ptr_array_unref (nodes);
+                        g_free (container_trigger);
                         return NULL;
                     }
                 }
@@ -1730,10 +1783,37 @@ parse_items (DonnaApp               *app,
                 free_context_info (&info);
                 free_node_internal (ni);
                 g_ptr_array_unref (nodes);
+                g_free (container_trigger);
                 return NULL;
             }
 
             load_menu_properties_to_node (&info, node, app, items);
+
+            if (container_trigger)
+            {
+                g_value_init (&v, G_TYPE_STRING);
+                g_value_take_string (&v, container_trigger);
+
+                if (G_UNLIKELY (!donna_node_add_property (node,
+                                "container-trigger",
+                                G_TYPE_STRING, &v,
+                                DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+                                NULL, (refresher_fn) gtk_true,
+                                NULL,
+                                NULL, NULL,
+                                error)))
+                {
+                    g_prefix_error (error, "Error for item '%s': "
+                            "Failed to set 'container-trigger': ",
+                            items);
+                    g_value_unset (&v);
+                    g_object_unref (node);
+                    free_context_info (&info);
+                    g_ptr_array_unref (nodes);
+                    return NULL;
+                }
+                g_value_unset (&v);
+            }
 
             if (info.new_node_fn)
             {

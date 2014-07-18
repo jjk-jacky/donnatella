@@ -76,6 +76,7 @@ typedef struct
     };
     const gchar            *desc;
     const gchar            *trigger;
+    const gchar            *container;
     /* container only */
     const gchar            *menu;
 
@@ -102,6 +103,7 @@ typedef struct
     gboolean                free_icon_selected;
     gboolean                free_desc;
     gboolean                free_trigger;
+    gboolean                free_container;
     gboolean                free_menu;
 } DonnaContextInfo;
 
