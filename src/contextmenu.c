@@ -933,11 +933,8 @@ get_user_item_info (const gchar             *item,
     }
 
     if (info->trigger)
-    {
-        /* parse %C/%c in the trigger */
+        /* parse %C/%c in the trigger (we know info->free_trigger == TRUE) */
         info->trigger = parse_Cc ((gchar *) info->trigger, s_C, s_c);
-        info->free_trigger = TRUE;
-    }
 
     if (type == TYPE_TRIGGER)
     {
@@ -1045,7 +1042,7 @@ get_user_item_info (const gchar             *item,
         info->free_name = TRUE;
     }
     else
-        /* parse %C/%c in the name */
+        /* parse %C/%c in the name (we know info->free_name == TRUE) */
         info->name = parse_Cc ((gchar *) info->name, s_C, s_c);
 
     if (node_trigger)
