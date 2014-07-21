@@ -1572,6 +1572,100 @@ cmd_menu_popup (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * node_get_children:
+ * @node: The node to get children of
+ * @type: (allow-none): Type of children to get
+ *
+ * Returns the children of @node of type @type
+ *
+ * @type must be one of "all", "item" or "container" Defaults to "all"
+ *
+ * Returns: (array): The matching children of @node
+ */
+static DonnaTaskState
+cmd_node_get_children (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GError *err = NULL;
+    DonnaNode *node = args[0];
+    gchar *s_children = args[1]; /* opt */
+
+    const gchar *c_children[] = { "all", "item", "container" };
+    DonnaNodeType childrens[]  = { DONNA_NODE_ITEM | DONNA_NODE_CONTAINER,
+        DONNA_NODE_ITEM, DONNA_NODE_CONTAINER };
+    gint c;
+
+    DonnaTask *t;
+    DonnaTaskState state;
+    GValue *value;
+
+    if (s_children)
+    {
+        c = _get_choice (c_children, s_children);
+        if (c < 0)
+        {
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_SYNTAX,
+                    "Command '%s': Invalid type of children: '%s'; "
+                    "Must be '%s', '%s' or '%s'",
+                    "node_get_children",
+                    s_children,
+                    "all", "item", "container");
+            return DONNA_TASK_FAILED;
+        }
+    }
+    else
+        /* ALL */
+        c = 0;
+
+    t = donna_node_get_children_task (node, childrens[c], &err);
+    if (!t)
+    {
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
+    {
+        g_prefix_error (&err, "Command '%s': Failed to run get_children task: ",
+                "node_get_children");
+        donna_task_take_error (task, err);
+        g_object_unref (t);
+        return DONNA_TASK_FAILED;
+    }
+
+    state = donna_task_get_state (t);
+    if (state != DONNA_TASK_DONE)
+    {
+        err = (GError *) donna_task_get_error (t);
+        if (err)
+        {
+            err = g_error_copy (err);
+            g_prefix_error (&err, "Command '%s' failed: ", "node_get_children");
+            donna_task_take_error (task, err);
+        }
+        else
+        {
+            gchar *fl = donna_node_get_full_location (node);
+            donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                    DONNA_COMMAND_ERROR_OTHER,
+                    "Command '%s' failed: Unable to get children of '%s'",
+                    "node_get_children", fl);
+            g_free (fl);
+        }
+        g_object_unref (t);
+        return state;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_PTR_ARRAY);
+    g_value_set_boxed (value, g_value_get_boxed (donna_task_get_return_value (t)));
+    donna_task_release_return_value (task);
+
+    g_object_unref (t);
+    return DONNA_TASK_DONE;
+}
+
+/**
  * node_get_property:
  * @node: The node to get @property from
  * @property: The name of the property to get
@@ -5987,6 +6081,12 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (menu_popup, ++i, DONNA_TASK_VISIBILITY_INTERNAL_GUI,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (node_get_children, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
