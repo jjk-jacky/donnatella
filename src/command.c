@@ -2742,6 +2742,114 @@ cmd_node_trigger (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * nodes_add:
+ * @arr_sce: (array): First array of nodes
+ * @arr_add: (array): (allow-none): Array of nodes to add to @arr_sce
+ * @flags: (allow-none): Whether to append or prepend; and/or if @arr_sce must
+ * be copied
+ *
+ * Adds the nodes in @arr_add into @arr_sce and returns the resulting array
+ *
+ * By default, nodes in @arr_add will be added to @arr_sce (operation append),
+ * and @arr_sce is returned by the command.
+ * You can have nodes of @arr_add be added before existing ones, by using
+ * "prepend" in @flags (i.e. results in @arr_add+@arr_sce, the nodes in each
+ * arrays remaining in their current order).
+ *
+ * You can also have the command create a new array, adding nodes from both
+ * @arr_sce and @arr_add (or the other way around with "prepend") and returned
+ * the newly allocated array, as to not modify @arr_sce, by using "copy" in
+ * @flags (This is requird if you don't own the array, e.g. comes from an event)
+ *
+ * Since "append" is the default operation, you'll usually only want to set
+ * flags to either "prepend", "copy" (same as "append+copy") or "prepend+copy"
+ * Obviously setting both "append" and "prepend" will result in an error.
+ *
+ * Note that if @arr_add isn't specified, an "empty element" will be added to
+ * the array, which can be useful when showing the array of nodes as menu (e.g.
+ * via menu_popup()) to add a separator.
+ *
+ * Returns: (array): @arr_sce (or a copy, if @flags contained "copy") after
+ * having added nodes from @arr_add as specified
+ */
+static DonnaTaskState
+cmd_nodes_add (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *arr_sce = args[0];
+    GPtrArray *arr_add = args[1]; /* opt */
+    gchar *s_flags = args[2]; /* opt */
+
+    const gchar *c_flags[] = { "append", "prepend", "copy" };
+    enum {
+        NA_APPEND   = (1 << 0),
+        NA_PREPEND  = (1 << 1),
+        NA_COPY     = (1 << 2)
+    } flag[] = { NA_APPEND, NA_PREPEND, NA_COPY };
+    guint flags;
+
+    GPtrArray *arr;
+    guint i;
+
+    GValue *value;
+
+    if (s_flags)
+    {
+        flags = _get_flags (c_flags, flag, s_flags);
+        /* if only COPY was set, still default to APPEND */
+        if (flags == NA_COPY)
+            flags |= NA_APPEND;
+    }
+    else
+        flags = NA_APPEND;
+
+    if (flags == (guint) -1)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
+                "Command '%s': Invalid flags '%s': "
+                "Must be (a '+'-separated list of) either 'append' or 'prepend', "
+                "and/or 'copy'",
+                "nodes_add", s_flags);
+        return DONNA_TASK_FAILED;
+    }
+    else if ((flags & (NA_APPEND | NA_PREPEND)) == (NA_APPEND | NA_PREPEND))
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_SYNTAX,
+                "Command '%s': Invalid flags '%s': "
+                "Cannot combine 'append' and 'prepend'",
+                "nodes_add", s_flags);
+        return DONNA_TASK_FAILED;
+    }
+
+    if (flags & NA_COPY)
+    {
+        arr = g_ptr_array_sized_new (arr_sce->len + (arr_add) ? arr_add->len : 1);
+        for (i = 0; i < arr_sce->len; ++i)
+            g_ptr_array_add (arr, g_object_ref ((DonnaNode *) arr_sce->pdata[i]));
+    }
+    else
+        arr = g_ptr_array_ref (arr_sce);
+    /* force it on arr_sce as well, in case it was set to g_object_unref() since
+     * we might be adding NULLs */
+    g_ptr_array_set_free_func (arr, donna_g_object_unref);
+
+    if (arr_add)
+        for (i = 0; i < arr_add->len; ++i)
+            g_ptr_array_insert (arr, (flags & NA_APPEND) ? -1 : (gint) i,
+                    g_object_ref ((DonnaNode *) arr_add->pdata[i]));
+    else
+        g_ptr_array_insert (arr, (flags & NA_APPEND) ? -1 : 0, NULL);
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_PTR_ARRAY);
+    g_value_take_boxed (value, arr);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * nodes_filter:
  * @nodes: (array): The nodes to filter
  * @filter: Node of filter to use
@@ -6125,6 +6233,13 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (node_trigger, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (nodes_add, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;

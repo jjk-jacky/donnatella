@@ -43,6 +43,7 @@ node_new_child
 node_popup_children
 node_set_property
 node_trigger
+nodes_add
 nodes_filter
 nodes_io
 nodes_remove_from
