@@ -28,6 +28,7 @@ config_try_get_boolean
 config_try_get_int
 config_try_get_string
 exec
+filter_ensure_valid
 filter_load
 filter_resolve_alias
 filter_save

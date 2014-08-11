@@ -1291,6 +1291,72 @@ donna_provider_filter_get_node_for_filter (DonnaProviderFilter    *pf,
 /* commands */
 
 /**
+ * filter_ensure_valid:
+ * @node: Node of a filter to check
+ * @allow_no_filter: (allow-none): Set to 1 for the special node "filter:"
+ * (meaning no filter) to be accepted as valid, else it will be an error
+ *
+ * Ensures that @node is a node for a valid filter. That is, the filter was
+ * properly compiled (if it isn't yet, do it), i.e. there isn't any syntax error
+ * and all referenced columns exists.
+ *
+ * If @node isn't node of a filter, or not a valid one, or if it is the special
+ * node ("filter:") for no filter (unless @allow_no_filter was set to 1) then
+ * the task will fail; Else it returns the given @node.
+ *
+ * Returns: The node @node
+ */
+static DonnaTaskState
+cmd_filter_ensure_valid (DonnaTask              *task,
+                         DonnaApp               *app,
+                         gpointer               *args,
+                         DonnaProviderFilter    *pf)
+{
+    GError *err = NULL;
+    DonnaNode *node = args[0];
+    gboolean allow_no_filter = GPOINTER_TO_INT (args[1]); /* opt */
+
+    DonnaFilter *filter;
+    GValue *value;
+
+    filter = donna_provider_filter_get_filter_from_node (pf, node, &err);
+    if (err)
+    {
+        g_prefix_error (&err, "Command '%s': ", "filter_ensure_valid");
+        donna_task_take_error (task, err);
+        return DONNA_TASK_FAILED;
+    }
+
+    /* filter could be NULL for the special node meaning no filter */
+    if (filter)
+    {
+        if (!donna_filter_is_compiled (filter) && !donna_filter_compile (filter, &err))
+        {
+            g_prefix_error (&err, "Command '%s': ", "filter_ensure_valid");
+            donna_task_take_error (task, err);
+            g_object_unref (filter);
+            return DONNA_TASK_FAILED;
+        }
+        g_object_unref (filter);
+    }
+    else if (!allow_no_filter)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Command '%s': Node is the special node for 'no filter'",
+                "filter_ensure_valid");
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_set_object (value, node);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * filter_load:
  * @category: (allow-none): Config category where to load filters from
  * @keep_current: (allow-none): Set to 1 to keep current filters
@@ -1947,6 +2013,12 @@ provider_filter_contructed (GObject *object)
                 "filter", "command");
         return;
     }
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE;
+    arg_type[++i] = DONNA_ARG_TYPE_INT | DONNA_ARG_IS_OPTIONAL;
+    add_command (filter_ensure_valid, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NODE);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
