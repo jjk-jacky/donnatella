@@ -694,7 +694,15 @@ provider_base_trigger_node_task (DonnaProvider       *provider,
     DonnaTask *task;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_BASE (provider), NULL);
-    g_return_val_if_fail (DONNA_PROVIDER_BASE_GET_CLASS (provider)->trigger_node != NULL, NULL);
+
+    if (DONNA_PROVIDER_BASE_GET_CLASS (provider)->trigger_node == NULL)
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider '%s': No support of triggering items",
+                donna_provider_get_domain (provider));
+        return NULL;
+    }
 
     task = donna_task_new ((task_fn) trigger_node, g_object_ref (node),
             g_object_unref);
