@@ -6,6 +6,7 @@ SUBDIRS = . docs/reference
 DEF_COMMANDS = src/command.c \
 			   src/provider-filter.c \
 			   src/provider-mark.c \
+			   src/provider-mru.c \
 			   src/provider-register.c
 
 ACLOCAL_AMFLAGS = -I m4
@@ -104,6 +105,8 @@ libdonnatella_la_SOURCES = \
 					 src/provider-invalid.h \
 					 src/provider-mark.c \
 					 src/provider-mark.h \
+					 src/provider-mru.c \
+					 src/provider-mru.h \
 					 src/provider-register.c \
 					 src/provider-register.h \
 					 src/provider-task.c \

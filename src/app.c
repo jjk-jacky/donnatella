@@ -51,6 +51,7 @@
 #include "provider-register.h"
 #include "provider-internal.h"
 #include "provider-mark.h"
+#include "provider-mru.h"
 #include "provider-invalid.h"
 #include "columntype.h"
 #include "columntype-name.h"
@@ -1424,6 +1425,11 @@ donna_app_init (DonnaApp *app)
 
     provider.domain = "mark";
     provider.type = DONNA_TYPE_PROVIDER_MARK;
+    provider.instance = NULL;
+    g_array_append_val (priv->providers, provider);
+
+    provider.domain = "mru";
+    provider.type = DONNA_TYPE_PROVIDER_MRU;
     provider.instance = NULL;
     g_array_append_val (priv->providers, provider);
 
@@ -8568,6 +8574,7 @@ prepare_app (DonnaApp *app, GError **error)
      * having to ref/unref on each command call) */
     g_object_unref (donna_app_get_provider (app, "register"));
     g_object_unref (donna_app_get_provider (app, "mark"));
+    g_object_unref (donna_app_get_provider (app, "mru"));
     g_object_unref (donna_app_get_provider (app, "filter"));
 
     return TRUE;

@@ -38,6 +38,15 @@ focus_set
 get_node_from
 intref_free
 menu_popup
+mru_add_node
+mru_add_string
+mru_clear
+mru_delete
+mru_get_nodes
+mru_get_strings
+mru_new
+mru_load
+mru_save
 node_get_children
 node_get_property
 node_new_child
@@ -879,6 +888,22 @@ DONNA_PROVIDER_MARK_GET_CLASS
 DONNA_TYPE_PROVIDER_MARK
 DonnaProviderMarkPrivate
 donna_provider_mark_get_type
+</SECTION>
+
+<SECTION>
+<FILE>provider-mru</FILE>
+<TITLE>DonnaProviderMru</TITLE>
+DonnaProviderMru
+DonnaProviderMruClass
+<SUBSECTION Standard>
+DONNA_IS_PROVIDER_MRU
+DONNA_IS_PROVIDER_MRU_CLASS
+DONNA_PROVIDER_MRU
+DONNA_PROVIDER_MRU_CLASS
+DONNA_PROVIDER_MRU_GET_CLASS
+DONNA_TYPE_PROVIDER_MRU
+DonnaProviderMruPrivate
+donna_provider_mru_get_type
 </SECTION>
 
 <SECTION>
