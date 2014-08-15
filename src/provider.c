@@ -451,7 +451,10 @@ donna_provider_get_flags (DonnaProvider *provider)
  * However, if the node didn't yet exist and the provider might block (e.g. for
  * "fs" where filesystem calls (i.e. IO operations) are required), then:
  * - if in the main/UI thread, a #DonnaTask will be run while a new #GMainLoop
- *   is created while waiting for it
+ *   is created while waiting for it, unless the task doesn't have a pre-worker
+ *   set and is either #DONNA_TASK_VISIBILITY_INTERNAL_GUI or
+ *   #DONNA_TASK_VISIBILITY_INTERNAL_FAST, in which case it directly runs
+ *   blockingly
  * - else, the #DonnaTask is simply run blockingly
  *
  * This is important to remember when calling from the main/UI thread, since a
@@ -472,6 +475,7 @@ donna_provider_get_node (DonnaProvider    *provider,
     DonnaProviderInterface *interface;
     DonnaApp *app;
     DonnaTask *task;
+    DonnaTaskVisibility visibility;
     DonnaTaskState state;
     gboolean is_node;
     gpointer ret;
@@ -494,14 +498,19 @@ donna_provider_get_node (DonnaProvider    *provider,
      * get the actual node (e.g. requires access to (potentially slow)
      * filesystem), in which case we'll determine whether we're in the UI thead
      * or not.
-     * If so, we start a new main loop while waiting for the task.
-     * If not, we can just block the thread.
-     * */
+     * If so, and either it has a pre-worker or it's not UI/FAST, we start a new
+     * main loop while waiting for the task
+     * Else, we can just block the thread.
+     */
 
     g_object_get (provider, "app", &app, NULL);
     task = (DonnaTask *) g_object_ref_sink (ret);
+    g_object_get (task, "visibility", &visibility, NULL);
 
-    if (g_main_context_is_owner (g_main_context_default ()))
+    if (g_main_context_is_owner (g_main_context_default ())
+            && (donna_task_need_prerun (task)
+                || (visibility != DONNA_TASK_VISIBILITY_INTERNAL_GUI
+                    && visibility != DONNA_TASK_VISIBILITY_INTERNAL_FAST)))
     {
         GMainLoop *loop;
         gint fd;
