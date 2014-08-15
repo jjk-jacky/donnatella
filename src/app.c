@@ -4490,22 +4490,6 @@ static gboolean menuitem_button_release_cb (GtkWidget           *item,
                                             GdkEventButton      *event,
                                             struct menu_click   *mc);
 
-static void
-menuitem_activate_cb (GtkWidget *item, struct menu_click *mc)
-{
-    GdkEventButton event;
-
-    /* because GTK emit "activate" when selecting an item with a submenu, for
-     * some reason */
-    if (gtk_menu_item_get_submenu (((GtkMenuItem *) item)))
-        return;
-
-    event.state = 0;
-    event.button = 1;
-
-    menuitem_button_release_cb (item, &event, mc);
-}
-
 struct menu_trigger
 {
     DonnaApp *app;
@@ -4536,10 +4520,6 @@ menuitem_button_release_cb (GtkWidget           *item,
     /* longest possible is "ctrl_shift_middle_click" (len=23) */
     gchar buf[24];
     gchar *b = buf;
-
-    /* we process it now, let's make sure activate isn't triggered; It is there
-     * for when user press Enter */
-    g_signal_handlers_disconnect_by_func (item, menuitem_activate_cb, mc);
 
     node = g_object_get_data ((GObject *) item, "node");
     if (!node)
@@ -4983,6 +4963,41 @@ load_mc (DonnaApp *app, const gchar *name, GPtrArray *nodes)
     return mc;
 }
 
+static void
+menu_activate_current (GtkMenuShell *shell, gboolean force, struct menu_click *mc)
+{
+    DonnaImageMenuItem *item;
+    gboolean sensitive;
+
+    item = (DonnaImageMenuItem *) gtk_menu_shell_get_selected_item (shell);
+    if (!item)
+        return;
+
+    /* This is called whenever a corresponding key (e.g. Enter) was pressed,
+     * even if the item is a submenu or disabled. So we need to determine
+     * whether there's a sensitive item to trigger, or nothing to do */
+
+    if (donna_image_menu_item_get_is_combined (item))
+        sensitive = donna_image_menu_item_get_is_combined_sensitive (item);
+    else if (!gtk_menu_item_get_submenu ((GtkMenuItem *) item))
+        g_object_get (item, "sensitive", &sensitive, NULL);
+    else
+        sensitive = FALSE;
+
+    if (sensitive)
+    {
+        GdkEventButton event;
+
+        event.state = 0;
+        event.button = 1;
+
+        menuitem_button_release_cb (gtk_menu_shell_get_selected_item (shell), &event, mc);
+        /* in case forcing to deactivate the shell (hide the menu) wasn't done,
+         * as can happen with Space, we force it */
+        gtk_menu_shell_deactivate (shell);
+    }
+}
+
 static GtkWidget *
 load_menu (struct menu_click *mc)
 {
@@ -5274,7 +5289,6 @@ load_menu (struct menu_click *mc)
         gtk_widget_add_events (item, GDK_BUTTON_RELEASE_MASK);
         g_signal_connect (item, "button-release-event",
                 (GCallback) menuitem_button_release_cb, mc);
-        g_signal_connect (item, "activate", (GCallback) menuitem_activate_cb, mc);
 
         gtk_widget_show (item);
         gtk_menu_attach ((GtkMenu *) menu, item, 0, 1, i, i + 1);
@@ -5287,6 +5301,10 @@ load_menu (struct menu_click *mc)
         return NULL;
     }
 
+    /* key handling doesn't work well with our DonnaImageMenuItem (due to our
+     * combine stuff) so we need to handle the activate-current signal, a.k.a.
+     * when user pressed Enter/Space */
+    g_signal_connect (menu, "activate-current", (GCallback) menu_activate_current, mc);
     g_signal_connect_swapped (menu, "destroy", (GCallback) free_menu_click, mc);
     return menu;
 }
