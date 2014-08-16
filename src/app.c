@@ -8056,6 +8056,8 @@ cmd_trigger_cb (DonnaTask *task, gboolean timeout_called, struct fir *fir)
                 s = (gchar *) g_value_get_string (v);
             else if (type == G_TYPE_INT)
                 s = free_me = g_strdup_printf ("%d", g_value_get_int (v));
+            else if (type == G_TYPE_UINT)
+                s = free_me = g_strdup_printf ("%u", g_value_get_uint (v));
             else if (type == DONNA_TYPE_TREE_VIEW)
                 s = free_me = donna_app_new_int_ref (fir->app,
                         DONNA_ARG_TYPE_TREE_VIEW, g_value_get_object (v));
