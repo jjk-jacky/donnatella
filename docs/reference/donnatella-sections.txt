@@ -55,8 +55,12 @@ node_set_property
 node_trigger
 nodes_add
 nodes_filter
+nodes_get_item
 nodes_io
+nodes_len
 nodes_remove_from
+strings_get_item
+strings_len
 task_cancel
 task_set_state
 task_show_ui

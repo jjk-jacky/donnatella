@@ -2935,6 +2935,47 @@ cmd_nodes_filter (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * nodes_get_item:
+ * @nodes: (array): An array of nodes
+ * @index: 0-based index of the item/node to get
+ *
+ * Returns the item/node @index from @nodes
+ *
+ * Returns: The node @index
+ */
+static DonnaTaskState
+cmd_nodes_get_item (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *arr = args[0];
+    gint i = GPOINTER_TO_INT (args[1]);
+    GValue *value;
+
+    if (arr->len == 0)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Command '%s': array is empty",
+                "nodes_get_item");
+        return DONNA_TASK_FAILED;
+    }
+    else if (i < 0 || (guint) i >= arr->len)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Command '%s': Invalid index '%d' (must be between 0 and %u)",
+                "nodes_get_item", i, arr->len - 1);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, DONNA_TYPE_NODE);
+    g_value_set_object (value, arr->pdata[i]);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * nodes_io:
  * @nodes: (array): The source nodes for the operation
  * @io_type: The type of IO operation to perform
@@ -3025,6 +3066,28 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
 }
 
 /**
+ * nodes_len:
+ * @nodes: (array): An array of nodes
+ *
+ * Returns the number of items/nodes in @nodes
+ *
+ * Returns: The number of items/nodes in the array
+ */
+static DonnaTaskState
+cmd_nodes_len (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *arr = args[0];
+    GValue *value;
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, (gint) arr->len);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
  * nodes_remove_from:
  * @nodes: (array): Nodes to remove from @source
  * @source: Source where to removes @nodes from
@@ -3085,6 +3148,69 @@ cmd_nodes_remove_from (DonnaTask *task, DonnaApp *app, gpointer *args)
         return state;
     }
     g_object_unref (t);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * strings_get_item:
+ * @strings: (array): An array of strings
+ * @index: 0-based index of the item/string to get
+ *
+ * Returns the item/string @index from @strings
+ *
+ * Returns: The string @index
+ */
+static DonnaTaskState
+cmd_strings_get_item (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *arr = args[0];
+    gint i = GPOINTER_TO_INT (args[1]);
+    GValue *value;
+
+    if (arr->len == 0)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Command '%s': array is empty",
+                "strings_get_item");
+        return DONNA_TASK_FAILED;
+    }
+    else if (i < 0 || (guint) i >= arr->len)
+    {
+        donna_task_set_error (task, DONNA_COMMAND_ERROR,
+                DONNA_COMMAND_ERROR_OTHER,
+                "Command '%s': Invalid index '%d' (must be between 0 and %u)",
+                "strings_get_item", i, arr->len - 1);
+        return DONNA_TASK_FAILED;
+    }
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_STRING);
+    g_value_set_string (value, arr->pdata[i]);
+    donna_task_release_return_value (task);
+
+    return DONNA_TASK_DONE;
+}
+
+/**
+ * strings_len:
+ * @strings: (array): An array of strings
+ *
+ * Returns the number of items/strings in @strings
+ *
+ * Returns: The number of items/nodes in the array
+ */
+static DonnaTaskState
+cmd_strings_len (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *arr = args[0];
+    GValue *value;
+
+    value = donna_task_grab_return_value (task);
+    g_value_init (value, G_TYPE_INT);
+    g_value_set_int (value, (gint) arr->len);
+    donna_task_release_return_value (task);
 
     return DONNA_TASK_DONE;
 }
@@ -6251,6 +6377,12 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (nodes_get_item, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_NODE);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     arg_type[++i] = DONNA_ARG_TYPE_STRING;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
@@ -6259,9 +6391,25 @@ _donna_add_commands (GHashTable *commands)
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    add_command (nodes_len, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
     add_command (nodes_remove_from, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NOTHING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_INT;
+    add_command (strings_get_item, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_STRING);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_ARRAY;
+    add_command (strings_len, ++i, DONNA_TASK_VISIBILITY_INTERNAL_FAST,
+            DONNA_ARG_TYPE_INT);
 
     i = -1;
     arg_type[++i] = DONNA_ARG_TYPE_NODE;
