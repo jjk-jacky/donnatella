@@ -139,6 +139,15 @@
  * processing, whether the variable appears within (single) quote or not is
  * irrelevant. In order to include a literal dollar sign, use
  * <systemitem>$$</systemitem>
+ *
+ * Lastly, note that donnatella adds a few environement variables of its own,
+ * specifically:
+ * - <systemitem>DONNATELLA_SOCKET</systemitem> will contains the path to the
+ *   socket to communicate with donantella
+ * - <systemitem>DONNATELLA_CONFIG_DIR</systemitem> will contain the path of the
+ *   current configuration directory
+ * - <systemitem>DONNATELLA_EMBEDDED</systemitem> will be set to 1 when running
+ *   in an embedded terminal
  */
 
 enum mode

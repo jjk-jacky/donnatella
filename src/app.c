@@ -113,6 +113,17 @@
  *
  * If you need to you can specify another directory to be used, using
  * command-line option <systemitem>--config-dir</systemitem>
+ *
+ * Note that when executing command line from donna, a new environment variable
+ * <systemitem>DONNATELLA_CONFIG_DIR</systemitem> will be set to the current
+ * configuration directory.
+ * Additionally, the PATH used will be extended to include
+ * <systemitem>$DONNATELLA_CONFIG_DIR/bin</systemitem> and, similarly, subfolder
+ * "donnatella/bin" of all system config directories
+ * (<systemitem>$XDG_CONFIG_DIRS</systemitem>) to e.g. allow easy use of
+ * donna-specific scripts. You can disable this by setting boolean option
+ * <systemitem>donna/extend_path</systemitem> to <systemitem>false</systemitem>
+ * if needed.
  * </para></refsect2>
  *
  * <refsect2 id="concept">
@@ -2541,6 +2552,7 @@ cp_get_task_process (struct cp_refresh *cpr)
         return NULL;
     }
 
+    donna_task_process_import_environ (tp, cpr->property->app);
     arr = g_ptr_array_new ();
     donna_task_set_devices ((DonnaTask *) tp, arr);
     g_ptr_array_unref (arr);
@@ -8336,6 +8348,7 @@ init_app (DonnaApp *app, GError **error)
     const gchar * const *dir;
     const gchar * const *first;
     struct sockaddr_un sock = { 0, };
+    gboolean extend_path = TRUE;
 
     /* load environ */
     priv->environ = g_get_environ ();
@@ -8365,6 +8378,31 @@ init_app (DonnaApp *app, GError **error)
         load_css (*dir, FALSE);
     }
     load_css (main_dir, TRUE);
+
+    /* add config dir into environ (e.g. for scripts) */
+    priv->environ = g_environ_setenv (priv->environ,
+            "DONNATELLA_CONFIG_DIR", priv->config_dir, TRUE);
+
+    /* extend PATH (e.g. to add scripts folder) */
+    donna_config_get_boolean (priv->config, NULL, &extend_path, "donna/extend_path");
+    if (extend_path)
+    {
+        const gchar *path;
+        GString *str;
+
+        path = g_environ_getenv (priv->environ, "PATH");
+        if (G_UNLIKELY (!path))
+            path = "/bin:/usr/bin";
+
+        str = g_string_new (path);
+        donna_g_string_append_concat (str, ":", priv->config_dir, "/bin", NULL);
+
+        for (dir = extra_dirs; *dir; ++dir)
+            donna_g_string_append_concat (str, ":", *dir, "/donnatella/bin", NULL);
+
+        priv->environ = g_environ_setenv (priv->environ, "PATH", str->str, TRUE);
+        g_string_free (str, TRUE);
+    }
 
     /* load custom properties */
     load_custom_properties (app);

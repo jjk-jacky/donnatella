@@ -527,7 +527,10 @@ task_worker (DonnaTask *task, gpointer data)
         return DONNA_TASK_FAILED;
     }
 
-    flags = G_SPAWN_SEARCH_PATH;
+    if (priv->envp)
+        flags = G_SPAWN_SEARCH_PATH_FROM_ENVP;
+    else
+        flags = G_SPAWN_SEARCH_PATH;
     if (priv->wait)
         flags |= G_SPAWN_DO_NOT_REAP_CHILD;
     if (!g_spawn_async_with_pipes (priv->workdir, argv, priv->envp, flags, NULL, NULL,
