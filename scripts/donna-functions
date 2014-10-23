@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# donnatella - Copyright (C) 2014 Olivier Brunel
+#
+# donna-functions
+# Copyright (C) 2014 Olivier Brunel <jjk@jjacky.com>
+#
+# This file is part of donnatella
+#
+# donnatella is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# donnatella is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# donnatella If not, see http://www.gnu.org/licenses/
+
+if [[ -z $DONNATELLA_SOCKET ]] || [[ ! -S $DONNATELLA_SOCKET ]]; then
+    echo "Error: \$DONNATELLA_SOCKET doesn't exist or isn't a socket" >&2
+    exit 255
+fi
+
+DT="donna-trigger"
+
+function quotes()
+{
+    str="$@"
+    str=${str//\\/\\\\}
+    str=${str//\"/\\\"}
+    echo "\"$str\""
+}
+
+function intref_free()
+{
+    [[ -n $1 ]] && "$DT" "command:intref_free ($1)"
+}
+

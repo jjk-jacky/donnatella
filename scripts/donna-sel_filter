@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# donnatella - Copyright (C) 2014 Olivier Brunel
+#
+# donna-sel_filter
+# Copyright (C) 2014 Olivier Brunel <jjk@jjacky.com>
+#
+# This file is part of donnatella
+#
+# donnatella is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# donnatella is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# donnatella If not, see http://www.gnu.org/licenses/
+
+. donna-functions
+
+MRU="sel_filter"
+TITLE="Selection Filter"
+DETAILS="Enter the selection filter to apply"
+
+tv=$(quotes $1)
+shift
+
+mru_nodes=
+node=
+def=
+
+MRU=$(quotes "mru:$MRU")
+
+while (true); do
+    mru_nodes=$("$DT" "command:mru_get_nodes ($MRU, 1)")
+    [[ $? -eq 0 ]] || break
+    node=$("$DT" "command:nodes_get_item ($mru_nodes, 0)")
+    [[ $? -eq 0 ]] || break
+    tmp=$("$DT" "command:node_get_property ($node, alias)")
+    [[ $? -eq 0 ]] || break
+    if [[ -n $tmp ]]; then
+        def="|$tmp"
+    else
+        tmp=$("$DT" "command:node_get_property ($node, location)")
+        [[ $? -eq 0 ]] || break
+        def="$tmp"
+    fi
+    break
+done
+
+intref_free $node
+intref_free $mru_nodes
+
+TITLE=$(quotes $TITLE)
+DETAILS=$(quotes $DETAILS)
+def=$(quotes $def)
+
+"$DT" "command:tv_selection_nodes ($tv, d, \
+    @nodes_filter (@tv_get_nodes ($tv, :all), \
+    @mru_add_node ($MRU, @filter_ensure_valid ( \
+    @get_node_from (filter, @ask_text ($TITLE, $DETAILS, $def)), 1)), $tv))"
+
