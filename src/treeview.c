@@ -6715,9 +6715,16 @@ donna_tree_view_cursor_changed (GtkTreeView    *treev)
              * redraw the column. */
             if (priv->ln_relative && (!priv->ln_relative_focused
                         || gtk_widget_has_focus ((GtkWidget *) tree)))
-                gtk_widget_queue_draw_area ((GtkWidget *) tree, 0, 0,
+            {
+                gint x, y;
+
+                gtk_tree_view_convert_tree_to_widget_coords (treev,
+                        gtk_tree_view_column_get_x_offset (_col->column), 0,
+                        &x, &y);
+                gtk_widget_queue_draw_area ((GtkWidget *) tree, x, 0,
                         gtk_tree_view_column_get_width (_col->column),
                         gtk_widget_get_allocated_height ((GtkWidget*) tree));
+            }
         }
     }
 }
