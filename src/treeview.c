@@ -44,6 +44,11 @@
 
 #ifdef GTK_IS_JJK
 #define GTK_TREEVIEW_REMOVE_COLUMN_FIXED
+#if GTK_CHECK_VERSION (3, 14, 0)
+#define JJK_RUBBER_SIGNAL
+#else
+#define JJK_RUBBER_START
+#endif
 #endif
 
 #if GTK_CHECK_VERSION (3, 12, 0)
@@ -1612,6 +1617,12 @@ static void     donna_tree_view_row_expanded        (GtkTreeView    *treev,
                                                      GtkTreeIter    *iter,
                                                      GtkTreePath    *path);
 static void     donna_tree_view_cursor_changed      (GtkTreeView    *treev);
+#ifdef JJK_RUBBER_SIGNAL
+static gboolean donna_tree_view_test_rubber_banding (GtkTreeView    *treev,
+                                                     gint            button,
+                                                     gint            bin_x,
+                                                     gint            bin_y);
+#endif
 static void     donna_tree_view_get_property        (GObject        *object,
                                                      guint           prop_id,
                                                      GValue         *value,
@@ -1836,6 +1847,9 @@ donna_tree_view_class_init (DonnaTreeViewClass *klass)
     tv_class->test_collapse_row     = donna_tree_view_test_collapse_row;
     tv_class->test_expand_row       = donna_tree_view_test_expand_row;
     tv_class->cursor_changed        = donna_tree_view_cursor_changed;
+#ifdef JJK_RUBBER_SIGNAL
+    tv_class->test_rubber_banding   = donna_tree_view_test_rubber_banding;
+#endif
 
     w_class = GTK_WIDGET_CLASS (klass);
     w_class->destroy                = donna_tree_view_destroy;
@@ -22413,7 +22427,8 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
      * (just move the mouse quickly after the dbl-click) and would get the
      * selection be way off (e.g. in a long scrolled list, go back up to the
      * first rows or something). This isn't a fix, but "fixes" the issue. */
-    if (event->button == 1 && (!priv->last_event || priv->last_event_expired))
+    if (!priv->is_tree && event->button == 1
+            && (!priv->last_event || priv->last_event_expired))
     {
         gint x, y;
 
@@ -22426,13 +22441,27 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
                 /* don't start if this is a focusing click to be skipped. We
                  * know it's LEFT, it might not be SINGLE but pretending should
                  * be fine, since anything else wouldn't be a focusing click */
-                && !priv->is_tree && !skip_focusing_click (tree,
-                    DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT, event, NULL))
+                && !skip_focusing_click (tree, DONNA_CLICK_SINGLE | DONNA_CLICK_LEFT,
+                    event, NULL))
+        {
             /* this will only "prepare", the actual operation starts if there's
              * a drag/motion. If/when that happens, signal rubber-banding-active
              * will be emitted. Either way, the click will be processed as
              * usual. */
+#ifdef JJK_RUBBER_START
             gtk_tree_view_start_rubber_banding ((GtkTreeView *) tree, event);
+#else /* JJK_RUBBER_SIGNAL */
+            /* this will have the button-press processing skipped, i.e. no
+             * set_cursor or anything such thing */
+            gtk_tree_view_skip_next_button_press ((GtkTreeView *) tree);
+            /* we still need to chain up though, because this button-press-event
+             * needs to chain up to GtkWidget, as that's where the GtkGesture-s
+             * will be triggered, and the GtkGestureDrag is what's handling the
+             * whole rubber band thing. */
+            GTK_WIDGET_CLASS (donna_tree_view_parent_class)
+                ->button_press_event (widget, event);
+        }
+#endif
     }
 #endif
 
@@ -22574,6 +22603,35 @@ donna_tree_view_button_press_event (GtkWidget      *widget,
     /* handled */
     return TRUE;
 }
+
+#ifdef JJK_RUBBER_SIGNAL
+static gboolean
+donna_tree_view_test_rubber_banding (GtkTreeView    *treev,
+                                     gint            button,
+                                     gint            bin_x,
+                                     gint            bin_y)
+{
+    DonnaTreeView *tree = (DonnaTreeView *) treev;
+    DonnaTreeViewPrivate *priv = tree->priv;
+
+    if (!priv->is_tree && (!priv->last_event || priv->last_event_expired))
+    {
+        gint x, y;
+
+        /* this is all to be safe, since we've already done this before chaining
+         * up to "allow" this signal to be emitted */
+        gtk_tree_view_convert_bin_window_to_widget_coords (treev,
+                bin_x, bin_y, &x, &y);
+        if (gtk_tree_view_get_tooltip_context (treev, &x, &y, 0,
+                    NULL, NULL, NULL))
+            /* allow rubber band to maybe start */
+            return FALSE;
+    }
+
+    /* no rubber banding allowed */
+    return TRUE;
+}
+#endif
 
 static gboolean
 donna_tree_view_button_release_event (GtkWidget      *widget,
@@ -24557,6 +24615,9 @@ donna_tree_view_new (DonnaApp    *app,
         gtk_tree_view_set_headers_visible (treev, TRUE);
         /* to refuse reordering column past the blank column on the right */
         gtk_tree_view_set_column_drag_function (treev, col_drag_func, NULL, NULL);
+#ifdef JJK_RUBBER_SIGNAL
+        gtk_tree_view_set_rubber_banding (treev, TRUE);
+#endif
     }
 
     /* because on property update the refesh does only that, i.e. there's no
