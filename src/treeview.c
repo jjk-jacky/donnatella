@@ -8453,6 +8453,7 @@ load_arrangement (DonnaTreeView     *tree,
             gtk_tree_view_column_set_sizing (expander_column,
                     GTK_TREE_VIEW_COLUMN_FIXED);
             gtk_tree_view_insert_column (treev, expander_column, 0);
+            gtk_tree_view_column_set_visible (expander_column, FALSE);
         }
         last_column = expander_column;
     }
