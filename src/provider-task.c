@@ -2007,7 +2007,7 @@ done:
     return DONNA_TASK_DONE;
 }
 
-static void
+static gboolean
 run_task_refresh_tm (DonnaProviderTask *tm)
 {
     DonnaProviderTaskPrivate *priv = tm->priv;
@@ -2024,6 +2024,7 @@ run_task_refresh_tm (DonnaProviderTask *tm)
     DONNA_DEBUG (TASK, NULL,
             donna_task_set_desc (task, "Refresh Task Manager"));
     donna_app_run_task (priv->app, task);
+    return G_SOURCE_REMOVE;
 }
 
 struct conv
@@ -2251,7 +2252,17 @@ notify_cb (DonnaTask *task, GParamSpec *pspec, DonnaTaskManager *tm)
 next:
     if (check_refresh && (is_state || streq (pspec->name, "priority")
             || streq (pspec->name, "devices")))
-        run_task_refresh_tm (tm);
+        /* we'll trigger it from an IDLE source in case this notify callback was
+         * itself called while we has the lock. Possible case:
+         * - a tasked is resumed, in donna_task_manager_set_state() we take a
+         *   WRITE lock to update the task, then unlock & trigger a refresh_tm
+         * - directly (task is INTERNAL_FAST) the refresh triggers a
+         *   donna_task_resume() to make it running again (from "on hold") which
+         *   triggers a notify for the task's "state" property
+         * - and here we end up, in notify_cb and we trigger another refresh_tm
+         *   and deadlock waiting for the REFRESH lock we already have...
+         */
+        g_idle_add ((GSourceFunc) run_task_refresh_tm, tm);
      if (is_state)
      {
          refresh_statuses (tm);
@@ -2413,6 +2424,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
         case DONNA_TASK_RUNNING:
             if (cur_state == DONNA_TASK_PAUSED)
             {
+                gboolean refresh = FALSE;
                 guint i;
 
                 /* if we didn't own the pause (i.e. it was a manual one) then we
@@ -2438,12 +2450,14 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                             donna_node_set_property_value (node, "state", &v);
                             g_value_unset (&v);
 
-                            run_task_refresh_tm (tm);
+                            refresh = TRUE;
                         }
                         break;
                     }
                 }
                 unlock_manager (tm, TM_BUSY_WRITE);
+                if (refresh)
+                    run_task_refresh_tm (tm);
             }
             else if (cur_state == DONNA_TASK_PAUSING)
                 /* try to override the pausing we a resume */
@@ -2463,6 +2477,7 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                 donna_task_pause (task);
             else if (cur_state == DONNA_TASK_PAUSED)
             {
+                gboolean refresh = FALSE;
                 guint i;
 
                 /* if we owned the pause, we shall release it, so it becomes a
@@ -2486,12 +2501,14 @@ donna_task_manager_set_state (DonnaTaskManager  *tm,
                             donna_node_set_property_value (node, "state", &v);
                             g_value_unset (&v);
 
-                            run_task_refresh_tm (tm);
+                            refresh = TRUE;
                         }
                         break;
                     }
                 }
                 unlock_manager (tm, TM_BUSY_WRITE);
+                if (refresh)
+                    run_task_refresh_tm (tm);
             }
             else if (cur_state != DONNA_TASK_PAUSING)
                 ret = FALSE;
