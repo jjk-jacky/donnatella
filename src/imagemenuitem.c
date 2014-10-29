@@ -1164,7 +1164,11 @@ donna_image_menu_item_draw (GtkWidget          *widget,
                 && priv->is_inconsistent)
             state |= GTK_STATE_FLAG_INCONSISTENT;
         else if (priv->is_active)
-            state |= GTK_STATE_FLAG_ACTIVE;
+            state |= GTK_STATE_FLAG_ACTIVE
+#if GTK_CHECK_VERSION (3, 14, 0)
+                | GTK_STATE_FLAG_CHECKED
+#endif
+                ;
 
         gtk_style_context_set_state (context, state);
 
