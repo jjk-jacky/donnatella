@@ -577,7 +577,6 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
     donna_app_add_window (app, (GtkWindow *) win, TRUE);
     gtk_window_set_default_size ((GtkWindow *) win, 420, -1);
     gtk_window_set_decorated ((GtkWindow *) win, FALSE);
-    gtk_window_set_has_resize_grip ((GtkWindow *) win, FALSE);
     gtk_container_set_border_width ((GtkContainer *) win, 4);
 
     hbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
@@ -633,7 +632,8 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
             s = g_strdup_printf ("(<i>%s/columns_options/%s</i>)", arr_name, col_name);
             gtk_label_set_markup ((GtkLabel *) w, s);
             g_free (s);
-            gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+            gtk_widget_set_halign (w, GTK_ALIGN_START);
+            gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
             if (from == _DONNA_CONFIG_COLUMN_FROM_ARRANGEMENT)
                 g_object_set (btn, "active", TRUE, NULL);
             gtk_grid_attach (grid, w, 1, row, 1, 1);
@@ -662,7 +662,8 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
         s = g_strdup_printf ("(<i>tree_views/%s</i>)", tv_name);
     gtk_label_set_markup ((GtkLabel *) w, s);
     g_free (s);
-    gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+    gtk_widget_set_halign (w, GTK_ALIGN_START);
+    gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
     if (from == _DONNA_CONFIG_COLUMN_FROM_TREE)
         g_object_set (btn, "active", TRUE, NULL);
     gtk_grid_attach (grid, w, 1, row, 1, 1);
@@ -686,7 +687,8 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
                 (is_tree) ? "trees": "lists", col_name);
     gtk_label_set_markup ((GtkLabel *) w, s);
     g_free (s);
-    gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+    gtk_widget_set_halign (w, GTK_ALIGN_START);
+    gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
     if (from == _DONNA_CONFIG_COLUMN_FROM_MODE)
         g_object_set (btn, "active", TRUE, NULL);
     gtk_grid_attach (grid, w, 1, row, 1, 1);
@@ -713,7 +715,8 @@ _donna_column_type_ask_save_location (DonnaApp    *app,
             s = g_strdup_printf ("(<i>defaults/%s</i>)", def_cat);
             gtk_label_set_markup ((GtkLabel *) w, s);
             g_free (s);
-            gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+            gtk_widget_set_halign (w, GTK_ALIGN_START);
+            gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
             if (from == _DONNA_CONFIG_COLUMN_FROM_DEFAULT)
                 g_object_set (btn, "active", TRUE, NULL);
             gtk_grid_attach (grid, w, 1, row, 1, 1);

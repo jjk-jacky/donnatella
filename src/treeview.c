@@ -8188,28 +8188,29 @@ set_second_arrow (DonnaTreeView *tree)
     DonnaTreeViewPrivate *priv = tree->priv;
     struct column *_col;
     gboolean alt;
-    GtkArrowType arrow_type;
+    const gchar *icon_name;
 
     /* GTK settings whether to use sane/alternative arrows or not */
     g_object_get (gtk_widget_get_settings (GTK_WIDGET (tree)),
             "gtk-alternative-sort-arrows", &alt, NULL);
 
     if (priv->second_sort_order == GTK_SORT_ASCENDING)
-        arrow_type = (alt) ? GTK_ARROW_UP : GTK_ARROW_DOWN;
+        icon_name = (alt) ? "pan-up-symbolic" : "pan-down-symbolic";
     else
-        arrow_type = (alt) ? GTK_ARROW_DOWN : GTK_ARROW_UP;
+        icon_name = (alt) ? "pan-down-symbolic" : "pan-up-symbolic";
 
     /* show/update the second arrow */
     _col = get_column_by_column (tree, priv->second_sort_column);
-    gtk_arrow_set (GTK_ARROW (_col->second_arrow), arrow_type, GTK_SHADOW_IN);
+    gtk_image_set_from_icon_name ((GtkImage *) _col->second_arrow,
+            icon_name, GTK_ICON_SIZE_MENU);
     /* visible unless main & second sort are the same */
     gtk_widget_set_visible (_col->second_arrow,
             priv->second_sort_column != priv->sort_column);
 
     DONNA_DEBUG (TREE_VIEW, priv->name,
-            g_debug4 ("TreeView '%s': set second arrow %s on %s (%d)",
+            g_debug4 ("TreeView '%s': set second arrow to %s on %s (%d)",
                 priv->name,
-                (arrow_type == GTK_ARROW_UP) ? "up" : "down",
+                icon_name,
                 _col->name,
                 priv->second_sort_column != priv->sort_column));
 }
@@ -8798,7 +8799,7 @@ load_arrangement (DonnaTreeView     *tree,
              * second sort) */
             hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
             label = gtk_label_new (NULL);
-            arrow = gtk_arrow_new (GTK_ARROW_NONE, GTK_SHADOW_IN);
+            arrow = gtk_image_new_from_icon_name ("pan-down-symbolic", GTK_ICON_SIZE_MENU);
             gtk_style_context_add_class (gtk_widget_get_style_context (arrow),
                     "second-arrow");
             gtk_box_pack_start (GTK_BOX (hbox), label, TRUE, TRUE, 0);
@@ -24601,7 +24602,9 @@ donna_tree_view_new (DonnaApp    *app,
         model = GTK_TREE_MODEL (priv->store);
         /* some stylling */
         gtk_tree_view_set_enable_tree_lines (treev, TRUE);
+        G_GNUC_BEGIN_IGNORE_DEPRECATIONS
         gtk_tree_view_set_rules_hint (treev, FALSE);
+        G_GNUC_END_IGNORE_DEPRECATIONS
         gtk_tree_view_set_headers_visible (treev, FALSE);
     }
     else
@@ -24611,7 +24614,9 @@ donna_tree_view_new (DonnaApp    *app,
                 DONNA_TYPE_NODE); /* LIST_COL_NODE */
         model = GTK_TREE_MODEL (priv->store);
         /* some stylling */
+        G_GNUC_BEGIN_IGNORE_DEPRECATIONS
         gtk_tree_view_set_rules_hint (treev, TRUE);
+        G_GNUC_END_IGNORE_DEPRECATIONS
         gtk_tree_view_set_headers_visible (treev, TRUE);
         /* to refuse reordering column past the blank column on the right */
         gtk_tree_view_set_column_drag_function (treev, col_drag_func, NULL, NULL);

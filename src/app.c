@@ -5875,7 +5875,9 @@ donna_app_ask (DonnaApp       *app,
                     "%s", details);
     }
 
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     area = gtk_dialog_get_action_area ((GtkDialog *) ask.win);
+    G_GNUC_END_IGNORE_DEPRECATIONS
     box = (GtkBox *) gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 4);
     gtk_box_set_homogeneous (box, TRUE);
     gtk_container_add ((GtkContainer *) area, (GtkWidget *) box);
@@ -6062,7 +6064,8 @@ donna_app_ask_text (DonnaApp       *app,
         else
             w = gtk_label_new (details);
         gtk_label_set_selectable ((GtkLabel *) w, TRUE);
-        gtk_misc_set_alignment ((GtkMisc *) w, 0, 0.5);
+        gtk_widget_set_halign (w, GTK_ALIGN_START);
+        gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
         context = gtk_widget_get_style_context (w);
         gtk_style_context_add_class (context, "details");
         gtk_box_pack_start (box, w, FALSE, FALSE, 0);

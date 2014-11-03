@@ -4229,7 +4229,6 @@ donna_config_set_option (DonnaConfig            *config,
         donna_app_add_window (priv->app, (GtkWindow *) so.win, TRUE);
         gtk_window_set_default_size ((GtkWindow *) so.win, 230, -1);
         gtk_window_set_decorated ((GtkWindow *) so.win, FALSE);
-        gtk_window_set_has_resize_grip ((GtkWindow *) so.win, FALSE);
         gtk_container_set_border_width ((GtkContainer *) so.win, 4);
 
         w = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
@@ -4257,15 +4256,18 @@ donna_config_set_option (DonnaConfig            *config,
         ++i;
 
         w = gtk_label_new ("Parent:");
-        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
+        gtk_widget_set_halign (w, GTK_ALIGN_END);
+        gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
         gtk_grid_attach (so.grid, w, 0, i, 1, 1);
         w = gtk_label_new (parent_name);
-        gtk_misc_set_alignment ((GtkMisc *) w, 0.0, 0.5);
+        gtk_widget_set_halign (w, GTK_ALIGN_START);
+        gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
         gtk_grid_attach (so.grid, w, 1, i, 1, 1);
         ++i;
 
         w = gtk_label_new ("Type:");
-        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
+        gtk_widget_set_halign (w, GTK_ALIGN_END);
+        gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
         gtk_grid_attach (so.grid, w, 0, i, 1, 1);
         w = gtk_combo_box_text_new ();
         so.combo = (GtkComboBox *) w;
@@ -4286,7 +4288,8 @@ donna_config_set_option (DonnaConfig            *config,
         ++i;
 
         w = gtk_label_new ("Name:");
-        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.5);
+        gtk_widget_set_halign (w, GTK_ALIGN_END);
+        gtk_widget_set_valign (w, GTK_ALIGN_CENTER);
         gtk_grid_attach (so.grid, w, 0, i, 1, 1);
         w = w_focus = gtk_entry_new ();
         so.entry = (GtkEntry *) w;
@@ -4297,8 +4300,9 @@ donna_config_set_option (DonnaConfig            *config,
         ++i;
 
         w = gtk_label_new ("Value:");
-        gtk_misc_set_alignment ((GtkMisc *) w, 1.0, 0.0);
-        gtk_misc_set_padding ((GtkMisc *) w, 0, 4);
+        gtk_widget_set_halign (w, GTK_ALIGN_END);
+        gtk_widget_set_valign (w, GTK_ALIGN_START);
+        gtk_widget_set_margin_top (w, 4);
         gtk_grid_attach (so.grid, w, 0, i, 1, 1);
         so.row_value = i;
         ++i;

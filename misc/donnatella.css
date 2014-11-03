@@ -1,4 +1,4 @@
-.second-arrow { color: alpha(@fg_color,0.5); -GtkArrow-arrow-scaling: 0.6; }
+.second-arrow { color: alpha(@fg_color,0.5); }
 DonnaTreeView row.minitree-unknown.expander { color: red; }
 DonnaTreeView row.minitree-partial.expander { color: orange; }
 

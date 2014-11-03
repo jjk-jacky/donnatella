@@ -205,7 +205,9 @@ donna_cell_renderer_text_render (GtkCellRenderer        *cell,
         /* we now add a region for the overflow, so it can be made to still be
          * visible even when selected */
         gtk_style_context_save (context);
+        G_GNUC_BEGIN_IGNORE_DEPRECATIONS
         gtk_style_context_add_region (context, REGION_HIGHLIGHT_OVERFLOW, 0);
+        G_GNUC_END_IGNORE_DEPRECATIONS
         gtk_render_background (context, cr,
                 (pref_width + highlighted_size <= cell_area.width)
                 ? cell_area.x + pref_width
