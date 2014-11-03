@@ -633,6 +633,9 @@ struct property
     gchar *cmdline;
     gboolean use_nuls;
     gboolean preload;
+    /* items & source shall both be accessed while under LOCK_PROVIDERS_WRITE
+     * since they could be accessed from different threads at once. (Everything
+     * else is read-only) */
     GArray *items;      /* cp_item[] for refresh_tasks */
     GSource *source;    /* timeout to run the cmdline for tasks */
     guint nb_props;     /* nb of actual props, i.e. len of properties[] below */
@@ -720,7 +723,8 @@ enum lock_for
     LOCK_VISUALS_WRITE      = (1 << 1),
     /* to read providers, i.e. list/ref objects */
     LOCK_PROVIDERS_READ     = (1 << 2),
-    /* to write providers, i.e. load objects */
+    /* to write providers, i.e. load objects. Also used to access custom
+     * properties' items & source (in struct property)  */
     LOCK_PROVIDERS_WRITE    = (1 << 3),
 
     /* to access actual ct-s */
@@ -2612,8 +2616,15 @@ cp_timeout (struct property *property)
     gint fd;
     guint i;
 
+    /* we need the lock to use property->{items,source} */
+    app_lock (property->app, LOCK_PROVIDERS_WRITE);
+
     if (g_source_is_destroyed (g_main_current_source ()))
+    {
+        app_unlock (property->app, LOCK_PROVIDERS_WRITE);
         return G_SOURCE_REMOVE;
+    }
+
     g_source_unref (property->source);
     property->source = NULL;
 
@@ -2623,6 +2634,8 @@ cp_timeout (struct property *property)
     cpr->current = (guint) -1;
     cpr->multi.items = property->items;
     property->items = NULL;
+
+    app_unlock (property->app, LOCK_PROVIDERS_WRITE);
 
     cpr->multi.nodes = g_ptr_array_sized_new (cpr->multi.items->len);
     for (i = 0; i < cpr->multi.items->len; ++i)
@@ -2676,12 +2689,16 @@ cp_preworker (DonnaTask         *task,
               struct cpi_task   *cpit)
 {
     struct property *property = cpit->property;
+    DonnaApp *app = property->app;
     struct cp_item _cpi = { NULL, };
     struct cp_item *cpi;
     guint i;
 
     cpit->run_task = run_task;
     cpit->run_task_data = run_task_data;
+
+    /* we need the lock to use property->{items,source} */
+    app_lock (app, LOCK_PROVIDERS_WRITE);
 
     if (!property->items)
     {
@@ -2732,6 +2749,8 @@ cp_preworker (DonnaTask         *task,
                 (GSourceFunc) cp_timeout, property, NULL);
         g_source_attach (property->source, NULL);
     }
+
+    app_unlock (app, LOCK_PROVIDERS_WRITE);
 }
 
 static DonnaTask *
@@ -2864,6 +2883,7 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
 {
     GError *err = NULL;
     DonnaAppPrivate *priv = app->priv;
+    GPtrArray *tasks = NULL;
     gchar *fl;
     struct visuals *visuals;
     const gchar *domain;
@@ -2922,9 +2942,16 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
                             DONNA_DEBUG (APP, NULL,
                                     g_debug2 ("Added custom property '%s' (preload=%d) to '%s'",
                                         pd->name, prop->preload, fl));
+                            /* we can't start the task now, because we have the
+                             * LOCK_PROVIDERS_READ and cp_preworker() requires
+                             * the LOCK_PROVIDERS_WRITE which wculd deadlock */
                             if (prop->preload)
-                                donna_app_run_task (app,
+                            {
+                                if (!tasks)
+                                    tasks = g_ptr_array_new ();
+                                g_ptr_array_add (tasks,
                                         cp_refresher_task (node, pd->name, prop, NULL));
+                            }
                         }
                     }
                 }
@@ -2933,6 +2960,14 @@ new_node_cb (DonnaProvider *provider, DonnaNode *node, DonnaApp *app)
         }
     }
     app_unlock (app, LOCK_PROVIDERS_READ);
+
+    /* outside the lock, we can now start the tasks */
+    if (tasks)
+    {
+        for (i = 0; i < tasks->len; ++i)
+            donna_app_run_task (app, tasks->pdata[i]);
+        g_ptr_array_unref (tasks);
+    }
 
     /* node visuals */
     app_lock (app, LOCK_VISUALS_READ);
