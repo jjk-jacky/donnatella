@@ -73,6 +73,7 @@ libdonnatella_la_SOURCES = \
 					 src/embedder.h \
 					 src/filter.c \
 					 src/filter.h \
+					 src/filter-private.h \
 					 src/fsengine-basic.c \
 					 src/history.c \
 					 src/history.h \
