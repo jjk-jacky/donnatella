@@ -6101,6 +6101,8 @@ command.argc           = (guint) cmd_argc; \
 command.return_type    = cmd_return_type; \
 command.visibility     = cmd_visibility; \
 command.func           = (command_fn) cmd_##cmd_name; \
+command.data           = NULL; \
+command.destroy        = NULL; \
 _command = g_slice_new (struct command); \
 memcpy (_command, &command, sizeof (struct command)); \
 _command->arg_type = g_new (DonnaArgType, command.argc); \
