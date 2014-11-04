@@ -1,4 +1,50 @@
 
+# 2014-11-05, v0.3.0
+
++++ Add command exec() See [1] for more
+ +  Add event "notify-dirname" when current directory changes
+ +  provider-exec: Parse environment variables; See [1] for more
++++ Add custom properties See [2] and [3] for more
+ !  treeview: save_to_config(): Fix not saving right column layout
+ +  ColumnType text: Add tooltip, and option property_tooltip
+ +  ColumnType time: Support ":property" & ":format" in tooltip options
+ !  treeview: Fix not refreshing column options saved to arrangement/defaults
+ +  tree: Trigger flat item when selected
+ !  config: Fix not exporting/saving empty categories
+ +  Command config_save(): Emit event info upon save
+ -  ColumnType time: Remove tooltip versions of some options (not needed/useful)
+ +  ColumnType time: Add new specifier %f for "fluid" format See [3] for more
+ +  ColumnTypes time, perms & text: Add option align
++++ Add a socket to communicate with donna from e.g. scripts; as well as helper
+    donna-trigger See [4] for more
+ +  Add command intref_free()
+ +  tree: Add commands root_{g,s}et_child_visual() to get/set tree visuals even
+    for a row that isn't accessible or not yet loaded
++++ Add provider filter to handle filters See [5] for more
+ +  Add command get_node_from()
+ +  Add command node_set_property()
++++ Provider command: Add prefix '<' to make the node a container instead of an
+    item: See [5] for more
+ +  Content menus: Add new context-type "combined" for defining both the item
+    and the submenu (via container) part of a menu item. See [5] for more
+ +  Add command node_get_children()
+ +  Add command nodes_add()
+ +  Add provider mru to maintain Most Recently Used lists. See [5] for more
+ !  Menus: Fix keys (e.g. Enter) not triggering items
+ +  Add $DONNATELLA_CONFIG_DIR & extend $PATH (for scripts) See [5] for more
+ +  Add commands {nodes,strings}_{len,get_item}
+ +  GTK+3.14 fixes/compatibility changes, update patchset gtk3-donnatella
+ !  list: Fix refreshing relative line number column (when not first one)
+ *  Many other fixes & optimizations; see git log for details
+
+Additional information:
+[1] http://jjacky.com/2014-04-20-columns-format-and-command-exec-in-donnatella/
+[2] http://jjacky.com/2014-05-04-donnatella-adds-custom-properties/
+[3] http://jjacky.com/2014-05-24-donnatella-fluid-time-format-and-custom-properties/
+[4] http://jjacky.com/2014-07-14-now-you-can-script-donnatella/
+[5] http://jjacky.com/2014-10-29-donnatella-filters-mrus-scripts-and-gtk-3.14/
+
+
 # 2014-04-03, v0.2.0
 
  +  New event "log" to process some log events in donna; Messages are sent on

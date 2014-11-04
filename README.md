@@ -55,8 +55,20 @@ Here's a list of cool features already available :
   anything.
 
   Possibilities are limitless, so should you want/need to tweak something, it
-  should be possible. Things will crazier with command `exec` allowing you to
-  use external scripts (or binaries) to interact with donna...
+  should be possible. Things get even crazier with command `exec` allowing you
+  to use external scripts (or binaries) to interact with donna...
+
+- **Scripting**. Because if donna does not come with its own script
+  engine/parser - why would it? - instead, it uses commands, including command
+  `exec` which allows not only to execute something, but have its output be
+  processed as return value of said command.
+
+  But to make things even easier, donna creates a socket on start, which can be
+  used to trigger commands from anything that use sockets. And to make writing
+  simple scripts (e.g. bash), an helper `donna-trigger` is provided.
+
+  So you can have keys, clicks or menu items in donna do simple (or not so
+  simple) things exactly as you want...
 
 - **Mini Tree**. As it happens, sometimes less is more. Browsing around in your
   file system might be something you do every single day, but you rarely visit
@@ -73,7 +85,7 @@ Here's a list of cool features already available :
   go.
 
 - **Multi Root Tree**. Sure, by default your tree will have one root, that of
-  your filesystem. But that's not always the most useful. Maybe you'd like to
+  your file system. But that's not always the most useful. Maybe you'd like to
   have your home folder as a root, or event just your project's main folder? You
   can do it!
 
@@ -115,7 +127,7 @@ Here's a list of cool features already available :
   order of course, but also the format of each of them. However you want you
   date or size to be formatted is how they shall be. donna can even show the age
   of files (e.g. "42m ago") instead of a full date, for all files or only
-  recently modified ones.
+  recently modified ones, or use a customizable "fluid" format.
 
   donna also offers a colored ways of showing permissions, focusing on what you
   can do (and why). And of course, tooltips can be used for the more lengthy
@@ -127,8 +139,8 @@ Here's a list of cool features already available :
   color filters & can even include column options.
 
   Column options do not indeed come from a single location in config, instead
-  multiple locations are tried, refered to as the option path. Using such option
-  path allows you to use arrangement to have different columns, or column
+  multiple locations are tried, referred to as the option path. Using such
+  option path allows you to use arrangement to have different columns, or column
   options, based on the current location.
 
   You can therefore have certain locations with a different default sort order,
@@ -144,6 +156,40 @@ Here's a list of cool features already available :
   You can even combine them using boolean logic. Filters allow powerful
   selections on names, times, permissions and more, and can be used in various
   forms (selection filters, color filters, visual filters, etc)
+
+  Filters can be given a name, icon and/or alias, and because they are nodes,
+  they can easily be used in menus like any other nodes.
+
+- **Visual Filters**. Speaking of which, visual filters allow you to only show
+  on list the files you're interested in. As seen, you can use any and all
+  criteria you wish, and since VF don't go away on location changes, this might
+  even serve as a quick way to find files.
+
+  And since files are often what you might be looking for, you can also have VFs
+  only apply to items (files), not containers (folders).
+
+- **Custom Properties**. Of course nodes come with their properties (e.g. name,
+  size, etc) but sometimes you want some extra (meta-)data, and this can be
+  achieved in donna via custom properties: You define the domain it applies to,
+  optionally a filter (e.g. to only be added to pictures, files/folders in a
+  given location, etc) and the command line to execute.
+
+  Then, when the property is accessed/refreshed, donna will execute said command
+  line, with the property name & file name(s), parsing the output for the
+  values.
+
+  You can then simply add columns to show those new properties, and see duration
+  of video files, dimensions of pictures, uncompressed size of compressed
+  archives, and just about anything you can think of... It's up to you, be
+  creative!
+
+  For performances issue, donna will try to execute the command line for groups
+  of nodes at once, but you can also have columns not show anything by default,
+  and instead of "preloading"/refreshing properties as soon as possible, wait
+  for nodes to become visible to do so.
+
+  Or, you can use on-demand feature, and properties will only be refreshed via
+  a command or when clicking on the column's refresh button.
 
 - **Colors**. Using colors can help a lot to figure out things without having to
   actually read and analyse information. Certain rows on tree can be "boxed" to
@@ -192,6 +238,25 @@ Here's a list of cool features already available :
   a file, or going to "register:t" to browse the content of register 't', and
   simply select & remove files from there as you would from any regular folder.
 
+- **Embedded Terminals**. Because as useful as a GUI file manager can be,
+  sometimes there's no question: a terminal is the best/only/easiest/fastest way
+  to get what you need done.
+
+  In such cases, simply open an embedded terminal emulator into donnatella! As
+  long as your emulator of choice supports embedding via the XEMBED protocol
+  (e.g. urxvt, xterm...) you can do it. Then, pressing `t` is all you'll need to
+  open a new embedded terminal in the current location. (Or `T` to open it in an
+  external window.)
+
+  This also means you can you the power of any CLI tool from donna, e.g. use
+  `less` to view files, `vim` to edit them, or `git` to show the log, a diff or
+  whatever you need.
+
+  For example, using donna's aliases you could press `:` and then get the diff
+  of the last commit by typing `g d last -p` (assuming "g" is an alias in donna
+  for "exec:!git" (i.e. run "git" in embedded terminal) and "last" a git alias
+  to "log -1 HEAD").
+
 - **Much More**. There's even more goodies in donna already, and an even longer
   list of things to add.
 
@@ -229,8 +294,8 @@ donna is built upon GTK+3 (and the underlying GLib/GIO libraries). However,
 because some of the features of donna were not doable using GTK+ as it is,
 especially when it comes to the treeview, a patchset is available.
 
-This [set of patches for
-GTK+](http://jjacky.com/donnatella/gtk3-donnatella.1.tar.gz "Patchset for GTK+3")
+This [set of patches for GTK+
+(3.14.4)](http://jjacky.com/donnatella/gtk3-donnatella-3.14.4-1.tar.gz "Patchset for GTK+ 3.14.4")
 will fix some bugs & add extra features, all the while remaining 100% compatible
 with GTK+3. You can safely compile your patched GTK+ and install it, replacing
 the vanilla GTK+. It won't change anything for other applications (unless they
@@ -264,7 +329,7 @@ donnatella (COPYING). If not, see http://www.gnu.org/licenses/
 
 Some useful links if you're looking for more info:
 
-- [official site](http://jjacky.com/donnatella "donnatella @ jjacky.com")
+- [official site / screen shots](http://jjacky.com/donnatella "donnatella @ jjacky.com")
 
 - [source code & issue tracker](https://github.com/jjk-jacky/donnatella "donnatella @ GitHub.com")
 
