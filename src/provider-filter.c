@@ -1584,7 +1584,7 @@ cmd_filter_load (DonnaTask              *task,
         for (i = 0; i < notify->len; ++i)
         {
             struct notify *n;
-            const gchar *prop;
+            const gchar *prop = NULL;
 
             n = &g_array_index (notify, struct notify, i);
             if (n->prop == 0)
@@ -1606,7 +1606,8 @@ cmd_filter_load (DonnaTask              *task,
                 prop = "name";
             else /* _DONNA_FILTER_PROP_ICON_NAME */
                 prop = "icon-name";
-            g_object_notify ((GObject *) n->filter, prop);
+            if (prop)
+                g_object_notify ((GObject *) n->filter, prop);
         }
         g_array_unref (notify);
     }
