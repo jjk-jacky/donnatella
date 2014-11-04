@@ -635,7 +635,7 @@ ct_text_render (DonnaColumnType    *ct,
     struct tv_col_data *data = _data;
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
-    gdouble xalign;
+    gdouble xalign = 0.0;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TEXT (ct), NULL);
 

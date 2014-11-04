@@ -1557,7 +1557,7 @@ ct_time_render (DonnaColumnType    *ct,
     DonnaNodeHasValue has;
     GValue value = G_VALUE_INIT;
     guint64 time;
-    gdouble xalign;
+    gdouble xalign = 0.0;
     gchar *s;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_TIME (ct), NULL);

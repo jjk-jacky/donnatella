@@ -2141,7 +2141,7 @@ ct_perms_render (DonnaColumnType    *ct,
     uid_t uid = 0;
     gid_t gid = 0;
     gchar buf[20], *b = buf;
-    gdouble xalign;
+    gdouble xalign = 0.0;
 
     g_return_val_if_fail (DONNA_IS_COLUMN_TYPE_PERMS (ct), NULL);
 

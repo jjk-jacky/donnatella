@@ -5207,9 +5207,9 @@ set_children (DonnaTreeView *tree,
         gint sort_col_id;
         GtkSortType order;
 
-        struct refresh_data *rd;
+        struct refresh_data *rd = NULL;
         GPtrArray *tasks = NULL;
-        GPtrArray *props;
+        GPtrArray *props = NULL;
         GHashTableIter ht_it;
         GSList *list = NULL;
         DonnaNode *node;
@@ -13374,7 +13374,7 @@ donna_tree_view_root_get_child_visual (DonnaTreeView           *tree,
     GSList *list;
     DonnaTreeVisual v;
     guint col;
-    const gchar *prop_name;
+    const gchar *prop_name = NULL; /* silence warning */
     gchar *value;
 
     g_return_val_if_fail (DONNA_IS_TREE_VIEW (tree), NULL);
