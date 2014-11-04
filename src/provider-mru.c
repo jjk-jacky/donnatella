@@ -2040,7 +2040,7 @@ cmd_mru_save (DonnaTask        *task,
 
     GHashTableIter iter;
     struct mru *mru;
-    guint i;
+    guint i = 0;
 
     if (!category)
         category = "providers/mru/mrus";
