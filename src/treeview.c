@@ -22224,7 +22224,8 @@ trigger_click (DonnaTreeView *tree, DonnaClick click, GdkEventButton *event)
 #ifdef GTK_IS_JJK
                 if (renderer == int_renderers[INTERNAL_RENDERER_PIXBUF])
 #else
-                if (is_col_node_need_refresh (tree, _col, node))
+                if (is_col_node_need_refresh (tree,
+                            get_column_by_column (tree, column), node))
 #endif
                     refresh_props_for_col (tree, get_column_by_column (tree, column), node);
                 else
