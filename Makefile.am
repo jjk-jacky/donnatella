@@ -163,9 +163,11 @@ dist_doc_DATA = README.md \
 miscdir = @xdgdir@/${PACKAGE}
 dist_misc_DATA = misc/donnatella.conf \
 				 misc/donnatella.css \
-				 misc/marks.conf \
-				 scripts/donna-functions \
-				 scripts/donna-sel_filter
+				 misc/marks.conf
+
+miscbindir = @xdgdir@/${PACKAGE}/bin
+dist_miscbin_DATA = scripts/donna-functions \
+					scripts/donna-sel_filter
 
 desktopdir = ${datadir}/applications
 dist_desktop_DATA = misc/donnatella.desktop
@@ -174,4 +176,4 @@ src/command-docs.h: $(DEF_COMMANDS)
 	$(AM_V_GEN)./docs/gen-command-docs $(DEF_COMMANDS) > src/command-docs.h
 
 install-data-hook:
-	chmod ugo+x "$(DESTDIR)$(miscdir)/donna-sel_filter"
+	chmod ugo+x "$(DESTDIR)$(miscbindir)/donna-sel_filter"
