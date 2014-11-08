@@ -76,8 +76,11 @@
  * emulator process ends. To keep the window open even after the process has
  * finished, you need to ask the emulator to not close the window; e.g. urxvt
  * has an option <systemitem>-hold</systemitem> for this purpose. In this case,
- * you'll have to use command terminal_remove_page() or terminal_remove_tab() to
- * remove the tab; or cancel its running task.
+ * if boolean option <systemitem>cancel_childless</systemitem> is true (the
+ * default) then pressing Enter or Esc will automatically cancel the task if the
+ * running process (i.e. the terminal emulato) has no child.
+ * Otherwise, you'll have to use command terminal_remove_page() or
+ * terminal_remove_tab() to remove the tab; or cancel its running task.
  * Note that this process is handled as a task through the task manager, and can
  * therefore be cancelled that way.
  */
@@ -372,6 +375,8 @@ _config_get_string (DonnaTerminal   *terminal,
     _config_get_string (t, c, "cmdline", "")
 #define cfg_get_cmdline_extra(t,c,e) \
     _config_get_string (t, c, "cmdline_", e)
+#define cfg_get_cancel_childless(t, c) \
+    _config_get_boolean (t, c, "cancel_childless", TRUE)
 
 static void
 free_term (struct term *term)
@@ -818,6 +823,96 @@ button_pressed (GtkSocket *socket, GdkEventButton *event, struct term *term)
     return GDK_EVENT_PROPAGATE;
 }
 
+static gboolean
+is_id (const gchar *name)
+{
+    while (*name != '\0')
+    {
+        if (*name < '0' || *name > '9')
+            return FALSE;
+        ++name;
+    }
+    return TRUE;
+}
+
+static gboolean
+is_process_childless (gint process)
+{
+    GDir *dir;
+    const gchar *name;
+
+    dir = g_dir_open ("/proc", 0, NULL);
+    if (!dir)
+        return FALSE;
+
+    while ((name = g_dir_read_name (dir)))
+    {
+        gchar buf[256], *b = buf;
+        gint len;
+        FILE *file;
+        gint pid;
+        gchar comm[256];
+        gchar state;
+        gint ppid;
+
+        if (!is_id (name))
+            continue;
+
+        len = snprintf (buf, 256, "/proc/%s/stat", name);
+        if (len >= 256)
+            b = g_strdup_printf ("/proc/%s/stat", name);
+
+        file = fopen (b, "r");
+        if (!file)
+        {
+            if (b != buf)
+            {
+                g_free (b);
+                b = buf;
+            }
+            continue;
+        }
+
+        fscanf (file, "%d %s %c %d ", &pid, comm, &state, &ppid);
+        fclose (file);
+
+        if (b != buf)
+        {
+            g_free (b);
+            b = buf;
+        }
+
+        if (ppid == process)
+        {
+            g_dir_close (dir);
+            return FALSE;
+        }
+    }
+
+    g_dir_close (dir);
+    return TRUE;
+}
+
+static gboolean
+key_pressed (GtkSocket *socket, GdkEventKey *event, struct term *term)
+{
+    if ((event->keyval == GDK_KEY_Return || event->keyval == GDK_KEY_KP_Enter
+            || event->keyval == GDK_KEY_Escape)
+        && cfg_get_cancel_childless (term->terminal, NULL))
+    {
+        gint pid;
+
+        g_object_get (term->task, "pid", &pid, NULL);
+        if (pid != 0 && is_process_childless (pid))
+        {
+            donna_task_cancel (term->task);
+            return GDK_EVENT_STOP;
+        }
+    }
+
+    return GDK_EVENT_PROPAGATE;
+}
+
 /* from task.c */
 const gchar * state_name (DonnaTaskState state);
 
@@ -1037,6 +1132,7 @@ donna_terminal_add_tab (DonnaTerminal      *terminal,
     g_signal_connect (socket, "plug-added", (GCallback) plugged, term);
     g_signal_connect (socket, "plug-removed", (GCallback) unplugged, term);
     g_signal_connect (socket, "button-press-event", (GCallback) button_pressed, term);
+    g_signal_connect (socket, "key-press-event", (GCallback) key_pressed, term);
 
     DONNA_DEBUG (TERMINAL, priv->name,
             g_debug ("Terminal '%s': Added tab %u (window %lu) for '%s' using '%s'",
