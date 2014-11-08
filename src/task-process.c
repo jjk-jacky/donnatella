@@ -46,6 +46,7 @@ enum
     PROP_CMDLINE,
     PROP_ENVIRON,
     PROP_AUTOPULSE,
+    PROP_PID,
 
     NB_PROPS
 };
@@ -72,6 +73,7 @@ struct _DonnaTaskProcessPrivate
     gchar              **envp;
     gboolean             wait;
     DonnaTaskUiMessages *tuimsg;
+    gint                 pid;
 
     task_pauser_fn       pauser_fn;
     gpointer             pauser_data;
@@ -134,6 +136,13 @@ donna_task_process_class_init (DonnaTaskProcessClass *klass)
                 "Whether to automatically pulse during process execution",
                 TRUE, /* default */
                 G_PARAM_READWRITE);
+    donna_task_process_props[PROP_PID] =
+        g_param_spec_int ("pid", "pid",
+                "Process ID of the running task",
+                G_MININT,
+                G_MAXINT,
+                0,
+                G_PARAM_READABLE);
 
     donna_task_process_signals[PIPE_DATA_RECEIVED] =
         g_signal_new ("pipe-data-received",
@@ -263,6 +272,10 @@ donna_task_process_get_property (GObject            *object,
 
         case PROP_AUTOPULSE:
             g_value_set_boolean (value, priv->autopulse);
+            break;
+
+        case PROP_PID:
+            g_value_set_int (value, priv->pid);
             break;
 
         default:
@@ -548,6 +561,8 @@ task_worker (DonnaTask *task, gpointer data)
     if (!priv->wait)
         return DONNA_TASK_DONE;
 
+    priv->pid = (gint) pid;
+    g_object_notify_by_pspec ((GObject *) task, donna_task_process_props[PROP_PID]);
     g_signal_emit (task, donna_task_process_signals[PROCESS_STARTED], 0);
 
     /* install a timeout to pulsate our progress */
@@ -769,6 +784,8 @@ again:
     }
 
     g_signal_emit (task, donna_task_process_signals[PROCESS_ENDED], 0);
+    priv->pid = 0;
+    g_object_notify_by_pspec ((GObject *) task, donna_task_process_props[PROP_PID]);
 
     if (sid)
         g_source_remove (sid);
