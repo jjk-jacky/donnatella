@@ -45,9 +45,8 @@
  * conf/INI files, where empty lines are lines starting with a semi-colon are
  * ignored, and options are organized in sections.
  *
- * <refsect2 id="config-overview">
- * <title>What's an option?</title>
- * <para>
+ * # What's an option? # {#config-overview}
+ *
  * A section is simply a name in between brackets, e.g:
  * <programlisting>
  * [section]
@@ -70,7 +69,7 @@
  * </programlisting>
  *
  * Option names must follow the same rule as section names. An option is simply
- * defined via the <systemitem>name=value</systemitem> syntax.
+ * defined via the `name=value` syntax.
  *
  * However, as hinted before, options in donna are typed. Basic types are
  * boolean, integer, double and string. An option whose value is either true or
@@ -90,18 +89,15 @@
  * easier.
  *
  * So if an extra foobar has two possible values, 0 (for foo) and 1 (for bar),
- * the option could be written either as <systemitem>option=1</systemitem> or
- * (preferably) as <systemitem>option:foobar=bar</systemitem>
+ * the option could be written either as `option=1` or (preferably) as
+ * `option:foobar=bar`
  *
  * Similarly for flags, if extra foobar allows for 1 (foo) and 2 (bar) it could
- * be found as either <systemitem>option=3</systemitem> or (preferably)
- * <systemitem>option:foobar=foo,bar</systemitem>
- * </para>
- * </refsect2>
+ * be found as either `option=3` or (preferably) `option:foobar=foo,bar`
  *
- * <refsect2 id="option-paths">
- * <title>One option, in multiple categories at once</title>
- * <para>
+ *
+ * # One option, in multiple categories at once # {#option-paths}
+ *
  * As happens often in donna, options can be looked for in multiple places. That
  * is, instead of looking for one option under a single category, a list of
  * possible categories will be searched, the first one found being used.  This
@@ -109,32 +105,28 @@
  *
  * Option paths allow for instance to be able to set an option as default, and
  * override it in specific cases. For example, treeview options (except for
- * <systemitem>is_tree</systemitem>) will be looked for in the following
- * categories :
+ * `is_tree`) will be looked for in the following categories :
  *
- * - tree_views/<systemitem>&lt;TREEVIEW-NAME&gt;</systemitem> : for options
- *   specific to this treeview only
- * - default/<systemitem>&lt;TREEVIEW-MODE&gt;s</systemitem> : for
- *   default options to all tree views of the same mode (tree/list)
+ * - tree_views/`&lt;TREEVIEW-NAME&gt;` : for options specific to this treeview
+*   only
+ * - default/`&lt;TREEVIEW-MODE&gt;s` : for default options to all tree views of
+*   the same mode (tree/list)
  *
- * For example, when looking for option <systemitem>show_hidden</systemitem> for
- * treeview foobar, which is a list:
+ * For example, when looking for option `show_hidden` for treeview foobar, which
+ * is a list:
  *
- * - if <systemitem>tree_views/foobar/show_hidden</systemitem> exists, it is
- *   used; Else
- * - if <systemitem>default/lists/show_hidden</systemitem> exists, it
- *   is used; Else
+ * - if `tree_views/foobar/show_hidden` exists, it is used; Else
+ * - if `default/lists/show_hidden` exists, it is used; Else
  * - when no more possible categories to look in are left, an
  *   internal/hard-coded default will be used. (It might also set the last
  *   possible option at the same time.)
- *   In our example, <systemitem>default/lists/show_hidden</systemitem>
- *   would be set to <systemitem>true</systemitem>, and be used.
+ *   In our example, `default/lists/show_hidden` would be set to `true`, and be
+ *   used.
  *
  * It should be noted that when looking for an option, its type is taken into
  * account. That is, in our example show_hidden is of type boolean; If somehow
- * <systemitem>tree_views/foobar/show_hidden</systemitem> existed in the config,
+ * `tree_views/foobar/show_hidden` existed in the config,
  * but not as a boolean, donna would behave as if the option did not exist.
- * </para></refsect2>
  */
 
 enum

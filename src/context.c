@@ -53,11 +53,11 @@
  *
  * It is possible to "dereference" a variable, so that instead of using an
  * intref, the full location of the node will be used. This is done by using a
- * star after the percent sign, e.g. <systemitem>\%*n</systemitem>
+ * star after the percent sign, e.g. `\%*n`
  * This can be useful if it isn't meant to be used as a command argument, but
  * e.g. to be used as part of a string or something.
  * Additionally, you can also use a special dereferencing, using a colon
- * instead, e.g. <systemitem>\%:n</systemitem>
+ * instead, e.g. `\%:n`
  * This will use the location for nodes in "fs", and skip/use empty string for
  * any node in another domain; Particularly useful for use in command line of
  * external process.

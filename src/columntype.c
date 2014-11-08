@@ -35,16 +35,16 @@
  *
  * Tree views use columns to show information about nodes. A column is first
  * defined by its columntype, through option
- * <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;</systemitem>
+ * `defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;`
  *
  * A column type is what defines the behavior of the column: what it will show
  * and how, it also handles sorting by that column or the filtering capabilities
  * of the column.
  *
  * In addition, in their context menus tree views will offer an alias
- * <systemitem>column.&lt;COLUMN-NAME&gt;.options</systemitem> which is resolved
- * by the column type, which can also offer items that will be available under
- * <systemitem>column.&lt;COLUMN-NAME&gt;.&lt;ITEM&gt;</systemitem>
+ * `column.&lt;COLUMN-NAME&gt;.options` which is resolved by the column type,
+ * which can also offer items that will be available under
+ * `column.&lt;COLUMN-NAME&gt;.&lt;ITEM&gt;`
  * As a rule, column types will provide items for their options.
  *
  * Available column types are:

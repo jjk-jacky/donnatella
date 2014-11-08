@@ -68,12 +68,11 @@
  * you're using a patched version of GTK+3 which adds support for all of those,
  * while remaining 100% compatible with GTK+3.
  *
- * <refsect2 id="tree-or-list">
- * <title>Tree or List</title>
- * <para>
+ * # Tree or List # {#tree-or-list}
+ *
  * The first thing to do for a treeview, is set whether it should be a list or a
  * tree. This is done via boolean option
- * <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/is_tree</systemitem>.
+ * `tree_views/&lt;TREEVIEW-NAME&gt;/is_tree`.
  *
  * For example, to have treeview "foobar" be a tree, you'd set:
  * <programlisting>
@@ -81,57 +80,52 @@
  * is_tree=true
  * </programlisting>
  *
- * This option is obviously required, and if missing it will default to
- * <systemitem>false</systemitem>.
+ * This option is obviously required, and if missing it will default to `false`.
  *
  * Some of the other treeview options apply to both modes, while each mode has
  * its own specific set of options.
- * </para></refsect2>
  *
- * <refsect2 id="tree-and-list-options">
- * <title>Tree and List options</title>
- * <para>
+ *
+ * # Tree and List options # {#tree-and-list-options}
+ *
  * The following treeview options apply to both trees and lists, using the
  * treeview option paths, as described in #option-paths.
  *
- * - <systemitem>show_hidden</systemitem> &lpar;boolean&rpar; : Whether or not
- *   to show "hidden" files/folders, i.e.  beginning with a dot
- * - <systemitem>node_types</systemitem> &lpar;integer:node-type&rpar; : Which
- *   types of nodes to show: "items" &lpar;e.g.  files&rpar;, "containers"
- *   &lpar;e.g. folders&rpar;, or "all" for both
- * - <systemitem>sort_groups</systemitem> &lpar;integer:sg&rpar; : How to sort
- *   containers: "first" to have them listed first when sorting ascendingly, and
- *   last when sorting descendingly; "first-always" to have them always listed
- *   first; or "mixed" to have them mixed with items
- * - <systemitem>select_highlight</systemitem> &lpar;integer:highlight&rpar; :
- *   How to draw rows that are selected; Note that this requires a patched GTK
- *   to work.  "fullrow" for a full row highlight &lpar;GTK default&rpar;;
- *   "column" for an highlight on the column &lpar;cell&rpar; only; "underline"
- *   for a simple underline of the full row; or "column-underline" to combine
- *   both the cell highlight and the full row underline.
- * - <systemitem>key_mode</systemitem> &lpar;string&rpar; : Default key mode for
- *   the treeview. See #key-modes for more.
- * - <systemitem>click_mode</systemitem> &lpar;string&rpar; : Click mode for the
- *   treeview.  See #click-modes for more.
- * - <systemitem>default_save_location</systemitem>
- *   &lpar;integer:save-location&rpar; : Default location to save options to
- *   (See commands tv_set_option() and tv_column_set_option())
+ * - `show_hidden` &lpar;boolean&rpar; : Whether or not to show "hidden"
+ *   files/folders, i.e.  beginning with a dot
+ * - `node_types` &lpar;integer:node-type&rpar; : Which types of nodes to show:
+ *   "items" &lpar;e.g.  files&rpar;, "containers" &lpar;e.g. folders&rpar;, or
+ *   "all" for both
+ * - `sort_groups` &lpar;integer:sg&rpar; : How to sort containers: "first" to
+ *   have them listed first when sorting ascendingly, and last when sorting
+ *   descendingly; "first-always" to have them always listed first; or "mixed"
+ *   to have them mixed with items
+ * - `select_highlight` &lpar;integer:highlight&rpar; : How to draw rows that
+ *   are selected; Note that this requires a patched GTK to work.  "fullrow" for
+ *   a full row highlight &lpar;GTK default&rpar;; "column" for an highlight on
+ *   the column &lpar;cell&rpar; only; "underline" for a simple underline of the
+ *   full row; or "column-underline" to combine both the cell highlight and the
+ *   full row underline.
+ * - `key_mode` &lpar;string&rpar; : Default key mode for the treeview. See
+ *   #key-modes for more.
+ * - `click_mode` &lpar;string&rpar; : Click mode for the treeview.  See
+ *   #click-modes for more.
+ * - `default_save_location` &lpar;integer:save-location&rpar; : Default
+ *   location to save options to (See commands tv_set_option() and
+ *   tv_column_set_option())
  *
- * </para></refsect2>
  *
- * <refsect2 id="how-gui-works">
- * <title>Know (how) your GUI (works)</title>
- * <para>
+ * # Know (how) your GUI (works) # {#how-gui-works}
+ *
  * As with most graphical file manager, donna's main window is composed of a few
  * GUI elements, at the center of it a list, showing you the content of a
  * folder. It usually comes along with a tree, where the folder
  * structure/hierarchy of the file system is represented.
  *
  * In donna, both list and tree are done by the same component, a treeview.
- * Obviously, though they have similarities, lists and trees are quite
- * different in their behaviors. Option <systemitem>is_tree</systemitem> will
- * determine which it is, and then list and tree share common options, as well as
- * having their own.
+ * Obviously, though they have similarities, lists and trees are quite different
+ * in their behaviors. Option `is_tree` will determine which it is, and then
+ * list and tree share common options, as well as having their own.
  *
  * Either way, a treeview is made up of columns, columns being defined similarly
  * first by their type - commonly referred to as columntype - then a mix of
@@ -141,35 +135,30 @@
  * features/behaviors of the treeview, but you don't configure columns directly.
  *
  * Instead, donna uses arrangements. An arrangement defines which columns are
- * features on the treeview, the main and secondary sort orders, column options as
- * well as color filters.
- * </para></refsect2>
+ * features on the treeview, the main and secondary sort orders, column options
+ * as well as color filters.
  *
- * <refsect2 id="arrangements">
- * <title>Arranging your columns</title>
- * <para>
+ *
+ * # Arranging your columns # {#arrangements}
+ *
  * Tree views, both as list and tree, uses arrangements. Arrangements are
  * defined like regular treeview options, with an extra twist.
  *
  * First of all, what is found in an arrangement definition? It can contain the
  * following:
- * - columns; Option <systemitem>columns</systemitem> is a coma-separated list
- *   of columns to load in the treeview. Option
- *   <systemitem>main_column</systemitem> allows to set the main column, i.e.
+ * - columns; Option `columns` is a coma-separated list of columns to load in
+ *   the treeview. Option `main_column` allows to set the main column, i.e.
  *   used for the selection highlight effect (and expanders on trees).
- * - sort order; Options <systemitem>sort_column</systemitem> and
- *   <systemitem>sort_order</systemitem> define the (main) sort order
- * - secondary sort order; Options <systemitem>second_sort_column</systemitem>,
- *   <systemitem>second_sort_order</systemitem> and
- *   <systemitem>second_sort_sticky</systemitem> define the secondary sort
- *   order. If sticky, it means when the main sort order is set to the current
- *   second sort order, the later remains set and will be "restored" back when
- *   the main sort order is set elsewhere.
- * - column options; Category <systemitem>column_options</systemitem> can
- *   contain column options, which will be first in the option paths for column
- *   options.
- * - color filter; Category <systemitem>color_filters</systemitem> can contain
- *   color filters.
+ * - sort order; Options `sort_column` and `sort_order` define the (main) sort
+ *   order
+ * - secondary sort order; Options `second_sort_column`, `second_sort_order` and
+ *   `second_sort_sticky` define the secondary sort order. If sticky, it means
+ *   when the main sort order is set to the current second sort order, the later
+ *   remains set and will be "restored" back when the main sort order is set
+ *   elsewhere.
+ * - column options; Category `column_options` can contain column options, which
+ *   will be first in the option paths for column options.
+ * - color filter; Category `color_filters` can contain color filters.
  *
  * Each of those elements will be looked for and loaded into the current
  * arrangement. Unless all elements have been loaded, loading continues for
@@ -181,8 +170,8 @@
  *
  * Trees simply load an arrangement on start, using the typical option path for
  * treeview options:
- * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/arrangement</systemitem>
- * - <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/arrangement</systemitem>
+ * - `tree_views/&lt;TREEVIEW-NAME&gt;/arrangement`
+ * - `defaults/&lt;TREEVIEW-MODE&gt;s/arrangement`
  *
  * For lists however, there's a little more to it. First off, donna allows
  * "dynamic arrangements" which must contain an option "mask" a #DonnaPattern
@@ -190,21 +179,18 @@
  * donna_pattern_new() for more.
  *
  * Those dynamic arrangements will be looked for using typical option path:
- * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/arrangements</systemitem> (Note
- *   that final 's')
- * - <systemitem>defaults/lists/arrangements</systemitem> (Again,
- *   plural)
+ * - `tree_views/&lt;TREEVIEW-NAME&gt;/arrangements` (Note that final 's')
+ * - `defaults/lists/arrangements` (Again, plural)
  *
  * Each of those can have an option type set to either :
- * - <systemitem>disabled</systemitem> to stop loading dynamic arrangements.
- *   Loading will continue for "fixed" arrangements however.
- * - <systemitem>enabled</systemitem> to load dynamic arrangements. In this
- *   case, no other dynamic arrangements will be loaded (though "fixed" one are
- *   still processed).
- * - <systemitem>combine</systemitem> to load arrangements, but continue loading
- *   dynamic arrangements if possible
- * - <systemitem>ignore</systemitem> to simply ignore them (as if they didn't
- *   exist) and look for the next ones
+ * - `disabled` to stop loading dynamic arrangements. Loading will continue for
+ *   "fixed" arrangements however.
+ * - `enabled` to load dynamic arrangements. In this case, no other dynamic
+ *   arrangements will be loaded (though "fixed" one are still processed).
+ * - `combine` to load arrangements, but continue loading dynamic arrangements
+ *   if possible
+ * - `ignore` to simply ignore them (as if they didn't exist) and look for the
+ *   next ones
  *
  * If the current arrangement isn't complete (i.e. not all elements have been
  * loaded yet) then the regular option paths are traversed as well (the
@@ -219,61 +205,58 @@
  * one default format used to show the modified date, and another one used only
  * in a (few) selected location(s); Or simply set some different sort orders for
  * some locations.
- * </para></refsect2>
  *
- * <refsect2 id="define-columns">
- * <title>Defining your columns</title>
- * <para>
+ *
+ * # Defining your columns # {#define-columns}
+ *
  * The arrangement will define the list of columns to be featured in the
  * treeview.  Columns are defined first by their type, from option
- * <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;/type</systemitem>
+ * `defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;/type`
  *
  * Then, a mix of general and type-specific column options are available. The
  * option paths for those options are:
- * - <systemitem>&lt;ARRANGEMENT&gt;/columns_options/&lt;COLUMN-NAME&gt;</systemitem>
- * - <systemitem>tree_views/&lt;TREEVIEW-NAME&gt;/columns/&lt;COLUMN-NAME&gt;</systemitem>
- * - <systemitem>defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;</systemitem>
- * - <systemitem>defaults/&lt;DEFAULT&gt;</systemitem>
+ * - `&lt;ARRANGEMENT&gt;/columns_options/&lt;COLUMN-NAME&gt;`
+ * - `tree_views/&lt;TREEVIEW-NAME&gt;/columns/&lt;COLUMN-NAME&gt;`
+ * - `defaults/&lt;TREEVIEW-MODE&gt;s/columns/&lt;COLUMN-NAME&gt;`
+ * - `defaults/&lt;DEFAULT&gt;`
  *
  * Obviously the first one is optional, since current arrangement might not
  * feature columns options. The later is as well, as certain options might have
- * a default path (e.g. for date format,
- * <systemitem>defaults/date/format</systemitem>) while others may not.
+ * a default path (e.g. for date format, `defaults/date/format`) while others
+ * may not.
  *
  * Generic options, common to all column types, are:
- * - <systemitem>width</systemitem> (integer) : Width of the column
- * - <systemitem>title</systemitem> (string) : Title of the column (shown in
- *   column header)
- * - <systemitem>desc_first</systemitem> (boolean) : When sorting on this
- *   column, whether to default to descending (true) or ascending (false).
- *   Default value depends on the columntype
- * - <systemitem>refresh_properties</systemitem> (integer:col-rp) : How the
- *   treeview will handle properties whose value hasn't been loaded yet, and
- *   needs a refresh. This will most likely be the case for #custom-properties
- *   where executing an external process is required to get the value.
- *   By default, <systemitem>visible</systemitem>, only properties for visible
- *   rows will be refreshed. So when e.g. scrolling down, the columns will be
- *   empty at first, while properties are refreshed and then columns updated.
- *   With <systemitem>preload</systemitem> visible rows will be handled first,
- *   but then a background task will be started to refresh properties on all
- *   rows, thus "preloading" the values.
- *   Finally, using <systemitem>on_demand</systemitem> no property will be
- *   loaded automatically, instead a refresh icon will be shown on the column. A
- *   manual click on said icon is required to trigger the refresh. This can be
- *   useful for properties that are slow to refreshn, e.g. calculating the hash
- *   (MD5, SHA1, etc) of a file, especially on large files. When used, sorting
- *   by this column will sort all rows with a value, groupping all rows without
- *   one afterwards. Trying to filter via this column will work as usual when
- *   the value is set, and simply not match when it doesn't. See command
- *   tv_column_refresh_nodes() to trigger the refresh of multiple/all rows.
+ * - `width` (integer) : Width of the column
+ * - `title` (string) : Title of the column (shown in column header)
+ * - `desc_first` (boolean) : When sorting on this column, whether to default to
+ *   descending (true) or ascending (false).  Default value depends on the
+ *   columntype
+ * - `refresh_properties` (integer:col-rp) : How the treeview will handle
+ *   properties whose value hasn't been loaded yet, and needs a refresh. This
+ *   will most likely be the case for #custom-properties where executing an
+ *   external process is required to get the value.
+ *   By default, `visible`, only properties for visible rows will be refreshed.
+ *   So when e.g. scrolling down, the columns will be empty at first, while
+ *   properties are refreshed and then columns updated.
+ *   With `preload` visible rows will be handled first, but then a background
+ *   task will be started to refresh properties on all rows, thus "preloading"
+ *   the values.
+ *   Finally, using `on_demand` no property will be loaded automatically,
+ *   instead a refresh icon will be shown on the column. A manual click on said
+ *   icon is required to trigger the refresh. This can be useful for properties
+ *   that are slow to refreshn, e.g.  calculating the hash (MD5, SHA1, etc) of a
+ *   file, especially on large files. When used, sorting by this column will
+ *   sort all rows with a value, groupping all rows without one afterwards.
+ *   Trying to filter via this column will work as usual when the value is set,
+ *   and simply not match when it doesn't. See command tv_column_refresh_nodes()
+ *   to trigger the refresh of multiple/all rows.
  *
  * Other options depend on their column types, each having its own options (or
  * none). See #DonnaColumnType.description
- * </para></refsect2>
  *
- * <refsect2 id="list">
- * <title>Treeview: Lists</title>
- * <para>
+ *
+ * # Treeview: Lists # {#list}
+ *
  * A list is where content of the current location will be listed. Lists usually
  * have multiple columns (name, size, etc), and you can easilly filter/sort by
  * the column(s) of your choice. Lists support multiple selection, i.e. more
@@ -285,38 +268,36 @@
  * the following list-specific options, using treeview's #option-paths as well,
  * are available :
  *
- * - <systemitem>focusing_click</systemitem> (boolean) : When donna isn't
- *   focused, any left-click will be treated as a focusing click, and therefore
- *   otherwise ignored. That way you can safely click to activate/focus donna
- *   without worrying that said click might do something you didn't want (e.g.
- *   lose selection, focus row, etc).  With this option set to true (the
- *   default), it will do the same when the focus wasn't on the list itself,
- *   even though donna was focused (e.g. another treeview was focused).
- * - <systemitem>goto_item_set</systemitem> (integer:tree-set) : Defines what
- *   happens when an item is given as new location. Obviously, the current
- *   location will be set to its parent, but you can then use "scroll" to scroll
- *   to the row of item itself; "focus" to focus the row; or "cursor" to set the
- *   cursor to that row (Setting the cursor means unselect all, select, focus
- *   and scroll to the row).  You can also combine those, even though combining
- *   anything with "cursor" makes little sense. The default is "focus,scroll"
- * - <systemitem>history_max</systemitem> (integer) : Defines the maximum number
- *   of items stored in the history; Defaults to 100.
- * - <systemitem>vf_items_only</systemitem> (boolean) : When true any visual
- *   filter will only be applied to items (e.g. files), i.e. containers (e.g.
- *   folders) will remain visible regardless of the VF. Defaults to false
+ * - `focusing_click` (boolean) : When donna isn't focused, any left-click will
+ *   be treated as a focusing click, and therefore otherwise ignored. That way
+ *   you can safely click to activate/focus donna without worrying that said
+ *   click might do something you didn't want (e.g. lose selection, focus row,
+ *   etc).  With this option set to true (the default), it will do the same when
+ *   the focus wasn't on the list itself, even though donna was focused (e.g.
+ *   another treeview was focused).
+ * - `goto_item_set` (integer:tree-set) : Defines what happens when an item is
+ *   given as new location. Obviously, the current location will be set to its
+ *   parent, but you can then use "scroll" to scroll to the row of item itself;
+ *   "focus" to focus the row; or "cursor" to set the cursor to that row
+ *   (Setting the cursor means unselect all, select, focus and scroll to the
+ *   row).  You can also combine those, even though combining anything with
+ *   "cursor" makes little sense. The default is "focus,scroll"
+ * - `history_max` (integer) : Defines the maximum number of items stored in the
+ *   history; Defaults to 100.
+ * - `vf_items_only` (boolean) : When true any visual filter will only be
+ *   applied to items (e.g. files), i.e. containers (e.g. folders) will remain
+ *   visible regardless of the VF. Defaults to false
  *
- * </para></refsect2>
  *
- * <refsect2 id="tree">
- * <title>Treeview: Trees</title>
- * <para>
+ * # Treeview: Trees # {#tree}
+ *
  * A tree shows one or more user-specifed rows, and lists its children in a
  * hierarchy. Trees will usually have only one column (name), so no column
  * header will be shown. It can only have one row selected at a time.
  *
  * Trees can be synchronized with another treeview, a list. In such a case the
  * tree's selection might be automatically adjusted to follow the list's current
- * location, according to option <systemitem>sync_mode</systemitem> (see below).
+ * location, according to option `sync_mode` (see below).
  *
  * In most file managers, the root of the tree is the root of the file system.
  * Sometimes another root can be available, your home directory. In donna, you
@@ -327,45 +308,41 @@
  * can define manually on rows of your choice. donna also supports node visuals,
  * where visuals can be automatically applied based on the node behind the row.
  * See #node-visuals for more, as well as option
- * <systemitem>node_visuals</systemitem> below.
+ * `node_visuals` below.
  *
  * See #tree-and-list-options for common options to trees & lists. In addition,
  * the following tree-specific options, using treeview's #option-paths as well,
  * are available :
  *
- * - <systemitem>is_minitree</systemitem> (boolean): Defines whether the tree is
- *   a mini-tree or not.  Minitrees are awesome, see #minitree for why.
- *   Defaults to false.
- * - <systemitem>sync_with</systemitem> (string): Name of the list to be
- *   synchronized with. This means both that on change of selection/current
- *   location, the list will be set to the same location, as well as have the
- *   tree adjust its selection/current location based on the list's. You can use
- *   ":active" to syncronized with the active list (auto-adjusting when the
- *   active list changes). Defaults to nothing.
- * - <systemitem>sync_mode</systemitem> (integer:sync): Defines the level of
- *   synchonization; Defaults to "full". Can be one of "none", "nodes",
- *   "known-children", "children" or "full". With "none" the tree won't react on
- *   list's change of location. With "nodes" it will only sync if a row for the
- *   location already exists on tree and is accessible (i.e. not a children with
- *   an ancestor collapsed). With "known-children" a row must exists on tree,
- *   but expansion might happen if needed. With "children" there might be
- *   first-time expansion loading/adding children to the tree. And with "full"
- *   if no parent row to be expanded is found, a new root will be automatically
- *   added.
- * - <systemitem>sync_scroll</systemitem> (boolean): Whether to scroll to the
- *   new selection/current location or not; Defaults to true.
- * - <systemitem>auto_focus_sync</systemitem> (boolean): When true, on a change
- *   of location the focus will automatically be sent to the list. This means
- *   after e.g. click on a row to change the list's location, the focus will
- *   automatically be sent to the list. Defaults to true.
- * - <systemitem>node_visuals</systemitem> (integer:visuals): Defines which
- *   visuals can be loaded from the node and applied on tree.
+ * - `is_minitree` (boolean): Defines whether the tree is a mini-tree or not.
+ *   Minitrees are awesome, see #minitree for why. Defaults to false.
+ * - `sync_with` (string): Name of the list to be synchronized with. This means
+ *   both that on change of selection/current location, the list will be set to
+ *   the same location, as well as have the tree adjust its selection/current
+ *   location based on the list's. You can use ":active" to syncronized with the
+ *   active list (auto-adjusting when the active list changes). Defaults to
+ *   nothing.
+ * - `sync_mode` (integer:sync): Defines the level of synchonization; Defaults
+ *   to "full". Can be one of "none", "nodes", "known-children", "children" or
+ *   "full". With "none" the tree won't react on list's change of location.
+ *   With "nodes" it will only sync if a row for the location already exists on
+ *   tree and is accessible (i.e. not a children with an ancestor collapsed).
+ *   With "known-children" a row must exists on tree, but expansion might happen
+ *   if needed. With "children" there might be first-time expansion
+ *   loading/adding children to the tree. And with "full" if no parent row to be
+ *   expanded is found, a new root will be automatically added.
+ * - `sync_scroll` (boolean): Whether to scroll to the new selection/current
+ *   location or not; Defaults to true.
+ * - `auto_focus_sync` (boolean): When true, on a change of location the focus
+ *   will automatically be sent to the list. This means after e.g. click on a
+ *   row to change the list's location, the focus will automatically be sent to
+ *   the list. Defaults to true.
+ * - `node_visuals` (integer:visuals): Defines which visuals can be loaded from
+ *   the node and applied on tree.
  *
- * </para></refsect2>
  *
- * <refsect2 id="minitree">
- * <title>More than a tree: a Mini-Tree</title>
- * <para>
+ * # More than a tree: a Mini-Tree # {#minitree}
+ *
  * A mini-tree is basically your regular tree (also referred to a maxi-tree)
  * only with a simple twist: only show you what you need. Or, more specifically,
  * only show rows for location you've actually visited.
@@ -431,14 +408,13 @@
  * from the list.)
  * Also note that the color of the expander only refer to its expand state, not
  * whether or not the row is actually expanded or collapsed.
- * And finally, if option <systemitem>show_hidden</systemitem> is false, the
+ * And finally, if option `show_hidden` is false, the
  * tree completely ignores dotted items, and thus will consider rows to be
  * maxi-expanded if all non-dotted children are loaded.
- * </para></refsect2>
  *
- * <refsect2 id="tree-visuals">
- * <title>Tree Visuals</title>
- * <para>
+ *
+ * # Tree Visuals # {#tree-visuals}
+ *
  * Tree visuals are row-specific properties that you can define manually on rows
  * of your choice. Note donna also supports #node-visuals.
  *
@@ -461,7 +437,7 @@
  *   which case all colors will be visible on each row in the expander area. Box
  *   effect will also remain visible in that expander area even when selected
  *   with full row highlight effect (see option
- *   <systemitem>select_highlight</systemitem>).
+ *   `select_highlight`).
  *   Note that this is only available with a patched GTK.
  * - highlight: Define the name of the class to be used for the highlight
  *   effect. This will have the row's name under a special set of colors,
@@ -476,11 +452,9 @@
  * Note that tree visuals take precedence over node visuals, if both are
  * specified.
  *
- * </para></refsect2>
  *
- * <refsect2 id="key-modes">
- * <title>Key Modes, or how keys are handled</title>
- * <para>
+ * # Key Modes, or how keys are handled # {#key-modes}
+ *
  * donna works in a different way than most file managers, in that it uses
  * vim-inspired key modes to handle key presses. While in most file managers if
  * you start typing something this is processed as some sort of "find as you
@@ -502,16 +476,16 @@
  * the way multiplier works in donna isn't by repeating the action as many times
  * as specified via the multiplier (for multiple reasons, where it wouldn't work
  * (as expected)).
- * Instead, the multiplier will be available as variable
- * <systemitem>\%m</systemitem> on the trigger/full location. It does mean that
- * if not used, the multiplier is simply ignored, however commands such as
- * tv_goto_line() support an argument especially made for the multipier.
+ * Instead, the multiplier will be available as variable `%m` on the
+ * trigger/full location. It does mean that if not used, the multiplier is
+ * simply ignored, however commands such as tv_goto_line() support an argument
+ * especially made for the multipier.
  *
  * In addition to "direct" keys, you can use type "spec" A "spec" key is very
  * much like a direct one except that after pressing it nothing happens, as it
  * waits for another key to be pressed, the so-called "spec."
  * This spec can be restricted (e.g. only numbers, and/or letters, etc) and will
- * be available on trigger as variable <systemitem>\%k</systemitem> (think key).
+ * be available on trigger as variable `%k` (think key).
  *
  * This allows to quickly specify an argument to e.g. the triggered command. In
  * addition, it is possible to have keys use a spec motion, which means that the
@@ -523,9 +497,8 @@
  *
  * - first, the motion key is triggered, so the focus can move.
  * - then, the original (spec) key is triggered, but it will now have the
- *   originally focused row available through variables
- *   <systemitem>\%r</systemitem> and <systemitem>\%n</systemitem> (instead of
- *   the focused row).
+ *   originally focused row available through variables `%r` and `%n` (instead
+ *   of the focused row).
  *
  * This pretty much allows to do the same kind of operation that are possible
  * via mouse (where it is possible to click on a row other than the focused
@@ -546,8 +519,7 @@
  *
  * Another type of key supported is "combine" which works just the like spec, in
  * that it requires another key to be pressed just the same (expect you can't
- * use a spec motion), and it will be available as variable
- * <systemitem>\%c</systemitem>
+ * use a spec motion), and it will be available as variable `%c`
  * However, a combine is meant to be used as an optional argument, one that can
  * be used on more than one key. For example, when dealing with registers you
  * could have a few keys set, to yank/paste/etc to/from a register. But to avoid
@@ -571,72 +543,64 @@
  * Now that we've seen how keys are handled by donna, let's have a look at how
  * all of this work/is configured.
  *
- * <refsect3 id="key-modes-config">
- * <title>How keys are defined</title>
- * <para>
- * First of all, treeviews have an option <systemitem>key_mode</systemitem>
- * which defines the default key mode for the treeview. This is simply the name
- * of a category under <systemitem>key_modes</systemitem>.
  *
- * Much like with #click-modes, a key mode can have an option
- * <systemitem>fallback</systemitem> which is simply the name of another key
- * mode that will be used as fallback if the option isn't found.  This is useful
- * to preserve a key mode as it is, and only make a small set of changes. It
- * will be refered to as &lt;FALLBACK&gt;.
+ * ## How keys are defined ## {#key-modes-config}
+ *
+ * First of all, treeviews have an option `key_mode` which defines the default
+ * key mode for the treeview. This is simply the name of a category under
+ * `key_modes`.
+ *
+ * Much like with #click-modes, a key mode can have an option `fallback` which
+ * is simply the name of another key mode that will be used as fallback if the
+ * option isn't found.
+ * This is useful to preserve a key mode as it is, and only make a small set of
+ * changes. It will be refered to as &lt;FALLBACK&gt;.
  *
  * (Note that when looking for options in a fallback key mode, its own option
- * <systemitem>fallback</systemitem> (if any) will be ignored.)
+ * `fallback` (if any) will be ignored.)
  *
  * When a key is pressed, donna determines which key it is, using
  * gdk_keyval_name(), referred to as &lt;KEY&gt;
  *
- * Then it looks for category
- * <systemitem>key_modes/&lt;KEY-MODE&gt;/key_&lt;KEY&gt;</systemitem>
- * If not found, then
- * <systemitem>key_modes/&lt;FALLBACK&gt;/key_&lt;KEY&gt;</systemitem> is tried.
+ * Then it looks for category `key_modes/&lt;KEY-MODE&gt;/key_&lt;KEY&gt;`
+ * If not found, then `key_modes/&lt;FALLBACK&gt;/key_&lt;KEY&gt;` is tried.
  * If not found, the key is not defined.
  *
  * When a category is found, a few options are available, defining the key:
  *
- * - <systemitem>type</systemitem> &lpar;integer:key&rpar;: The type of key, one
- *   of "disabled" (as if the key wasn't defined, except without fallback
- *   lookup), "combine", "direct", "spec" or "alias" Defaults to "direct"
+ * - `type` &lpar;integer:key&rpar;: The type of key, one of "disabled" (as if
+ *   the key wasn't defined, except without fallback lookup), "combine",
+ *   "direct", "spec" or "alias" Defaults to "direct"
  *
  * For "alias":
  *
- * - <systemitem>key</systemitem> &lpar;string&rpar;: Name of the key
- *   (definition) to use
+ * - `key` &lpar;string&rpar;: Name of the key (definition) to use
  *
  * For "direct" and "spec":
  *
- * - <systemitem>trigger</systemitem> &lpar;string&rpar; : Full location to trigger
- * - <systemitem>is_motion</systemitem> &lpar;optional; boolean&rpar; : Whether
- *   this is a motion or not (Defaults to false)
- * - <systemitem>combine</systemitem> &lpar;optional; string&rpar; : Name of the
- *   combine that can be used with this key
+ * - `trigger` &lpar;string&rpar; : Full location to trigger
+ * - `is_motion` &lpar;optional; boolean&rpar; : Whether this is a motion or not
+*   (Defaults to false)
+ * - `combine` &lpar;optional; string&rpar; : Name of the combine that can be
+ *   used with this key
  *
  * For "spec":
  *
- * - <systemitem>spec</systemitem> &lpar;integer:spec&rpar; : Type of keys allowed as
- *   spec; One or more of "lower", "upper", "digits", "extra" or "custom" (see
- *   option <systemitem>custom_chars</systemitem>) Can also be "motion" Defaults
- *   to "lower,upper"
- * - <systemitem>custom_chars</systemitem> &lpar;optional; string&rpar; : The
- *   list of allowed characters when using "custom" in
- *   <systemitem>spec</systemitem>
+ * - `spec` &lpar;integer:spec&rpar; : Type of keys allowed as spec; One or more
+ *   of "lower", "upper", "digits", "extra" or "custom" (see option
+ *   `custom_chars`) Can also be "motion" Defaults to "lower,upper"
+ * - `custom_chars` &lpar;optional; string&rpar; : The list of allowed
+ *   characters when using "custom" in `spec`
  *
  * For "combine":
  *
- * - <systemitem>combine</systemitem> &lpar;string&rpar; : Name of the combine
- * - <systemitem>spec</systemitem> &lpar;integer:spec&rpar; : Same as
- *   <systemitem>spec</systemitem> above, except that "motion" cannot be used.
+ * - `combine` &lpar;string&rpar; : Name of the combine
+ * - `spec` &lpar;integer:spec&rpar; : Same as `spec` above, except that
+ *   "motion" cannot be used.
  *
- * </para></refsect3>
- * </para></refsect2>
  *
- * <refsect2 id="click-modes">
- * <title>Click Modes, or how clicks are processed</title>
- * <para>
+ * # Click Modes, or how clicks are processed # {#click-modes}
+ *
  * Commonly in applications, while you might be able to assign keyboard
  * shortcuts to map certains keys to operations of your choosing (see #key-modes
  * to see how donna gives you full control over your keys), things are different
@@ -687,38 +651,37 @@
  * click mode used in tree view (Note that it can be changed used command
  * tv_set_key_mode()).
  *
- * A click mode is defined under
- * <systemitem>click_modes/&lt;CLICK-MODE&gt;</systemitem>
+ * A click mode is defined under `click_modes/&lt;CLICK-MODE&gt;`
  * Before describing the full option path used, it should be noted that a click
- * mode can have an option <systemitem>fallback</systemitem> set, name of
- * another click mode that will be used as fallback if the option isn't found.
+ * mode can have an option `fallback` set, name of another click mode that will
+ * be used as fallback if the option isn't found.
  * This is useful to preserve a click mode as it is, and only make a small set
  * of changes. It will be refered to as &lt;FALLBACK&gt; in the option path
  * below.
  *
  * (Note that when looking for options in a fallback click mode, its own option
- * <systemitem>fallback</systemitem> (if any) will be ignored.)
+ * `fallback` (if any) will be ignored.)
  *
  * So, the full option path goes as follow (using &lt;CLICK&gt; to refer to the
  * option name as described above):
  *
  * If the click was on a selected row:
  *
- * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/columns/&lt;COLUMN&gt;/selected/&lt;CLICK&gt;</systemitem>
+ * - `click_modes/&lt;CLICK-MODE&gt;/columns/&lt;COLUMN&gt;/selected/&lt;CLICK&gt;`
  *   if the click was on a column
- * - <systemitem>click_modes/&lt;FALLBACK&gt;/columns/&lt;COLUMN&gt;/selected/&lt;CLICK&gt;</systemitem>
+ * - `click_modes/&lt;FALLBACK&gt;/columns/&lt;COLUMN&gt;/selected/&lt;CLICK&gt;`
  *   if the click was on a column
- * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/selected/&lt;CLICK&gt;</systemitem>
- * - <systemitem>click_modes/&lt;FALLBACK&gt;/selected/&lt;CLICK&gt;</systemitem>
+ * - `click_modes/&lt;CLICK-MODE&gt;/selected/&lt;CLICK&gt;`
+ * - `click_modes/&lt;FALLBACK&gt;/selected/&lt;CLICK&gt;`
  *
  * If nothing was found, or the click wasn't on a selected row:
  *
- * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/columns/&lt;COLUMN&gt;/&lt;CLICK&gt;</systemitem>
+ * - `click_modes/&lt;CLICK-MODE&gt;/columns/&lt;COLUMN&gt;/&lt;CLICK&gt;`
  *   if the click was on a column
- * - <systemitem>click_modes/&lt;FALLBACK&gt;/columns/&lt;COLUMN&gt;/&lt;CLICK&gt;</systemitem>
+ * - `click_modes/&lt;FALLBACK&gt;/columns/&lt;COLUMN&gt;/&lt;CLICK&gt;`
  *   if the click was on a column
- * - <systemitem>click_modes/&lt;CLICK-MODE&gt;/&lt;CLICK&gt;</systemitem>
- * - <systemitem>click_modes/&lt;FALLBACK&gt;/&lt;CLICK&gt;</systemitem>
+ * - `click_modes/&lt;CLICK-MODE&gt;/&lt;CLICK&gt;`
+ * - `click_modes/&lt;FALLBACK&gt;/&lt;CLICK&gt;`
  *
  * If nothing was found, nothing happens. Else the trigger (option value) is
  * contextually parsed and the associated node triggered; Also see
@@ -727,11 +690,10 @@
  * As a result, you can control absolutely any & every clicks made. See
  * #default-click-modes for description of how to use donna with default
  * options.
- * </para></refsect2>
  *
- * <refsect2 id="treeview-context">
- * <title>Context variables from treeviews</title>
- * <para>
+ *
+ * # Context variables from treeviews # {#treeview-context}
+ *
  * On multiple occasions in donna, you can use a full location, also refered to
  * as trigger, that will be contextually parsed before the corresponding node is
  * triggered. For instance this happens from keys, clicks or context menus.
@@ -743,31 +705,28 @@
  * It is possible for a row and/or a column to be available in the context. For
  * example, on a click the reference row and the column will be those clicked,
  * if applicable.
- * For context menu, it will be what was specified on
- * tv_context_get_nodes()
+ * For context menu, it will be what was specified on tv_context_get_nodes()
  *
  * The following variables are available:
  *
- * - <systemitem>\%o</systemitem>: treeview
- * - <systemitem>\%l</systemitem>: node of the current location (if any)
- * - <systemitem>\%R</systemitem>: name of the column (if any)
- * - <systemitem>\%r</systemitem>: reference row (if any)
- * - <systemitem>\%n</systemitem>: node of the reference row (if any)
- * - <systemitem>\%f</systemitem>: node of the focused row (if any)
- * - <systemitem>\%s</systemitem>: array of selected nodes (might be empty)
- * - <systemitem>\%S</systemitem>: array of selected nodes if any, else node of
- *   the focused row (same as <systemitem>\%f</systemitem>)
- * - <systemitem>\%m</systemitem>: current multiplier (if any)
- * - <systemitem>\%k</systemitem>: current key pressed &amp; waiting for its
- *   specifier (spec) (if any)
- * - <systemitem>\%c</systemitem>: current combine (if any)
+ * - `%o`: treeview
+ * - `%l`: node of the current location (if any)
+ * - `%R`: name of the column (if any)
+ * - `%r`: reference row (if any)
+ * - `%n`: node of the reference row (if any)
+ * - `%f`: node of the focused row (if any)
+ * - `%s`: array of selected nodes (might be empty)
+ * - `%S`: array of selected nodes if any, else node of the focused row (same as
+ *   `%f`)
+ * - `%m`: current multiplier (if any)
+ * - `%k`: current key pressed &amp; waiting for its specifier (spec) (if any)
+ * - `%c`: current combine (if any)
  *
  * See also donna_app_parse_fl() about dereferencing such variables.
- * </para></refsect2>
  *
- * <refsect2 id="rowid">
- * <title>Referencing rows (in commands)</title>
- * <para>
+ *
+ * # Referencing rows (in commands) # {#rowid}
+ *
  * When interacting with treeviews via commands, it is required to reference
  * rows. This is done using "row ids" which allow different ways to identify a
  * row:
@@ -818,55 +777,46 @@
  * in which rows/nodes are listed, which might matter in certain cases (e.g.
  * when the first (few) names are used as templates, etc).
  * This same principle is used for ":item", ":container" and ":other"
- * </para></refsect2>
  *
- * <refsect2 id="treeview-status">
- * <title>Treeview as status provider</title>
- * <para>
+ *
+ * # Treeview as status provider # {#treeview-status}
+ *
  * You can use a treeview as source of a statusbar area (See #statusbar for
- * more). In that case, you must specify string option
- * <systemitem>format</systemitem>, defining the format of what to show in the
- * area. The following variable are available:
+ * more). In that case, you must specify string option `format`, defining the
+ * format of what to show in the area. The following variable are available:
  *
- * - <systemitem>\%o</systemitem> : treeview name
- * - <systemitem>\%l</systemitem> : full location of current location; a dash
+ * - `%o` : treeview name
+ * - `%l` : full location of current location; a dash (-) if no current location
+ *   is set
+ * - `%L` : location of current location if in "fs", else full location; a dash
  *   (-) if no current location is set
- * - <systemitem>\%L</systemitem> : location of current location if in "fs",
- *   else full location; a dash (-) if no current location is set
- * - <systemitem>\%f</systemitem> : name of focused row
- * - <systemitem>\%F</systemitem> : current visual filter (if any)
- * - <systemitem>\%K</systemitem> : current key mode
- * - <systemitem>\%k</systemitem> : current key status; that is the current
- *   combine if any, the current combine spec if any, the current multiplier if
- *   any, the current key pressed if any (waiting for its spec), and the current
- *   multiplier of the spec motion if any. Can be an empty string.
- * - <systemitem>\%a</systemitem> : number of all rows (i.e. including hidden
- *   ones for lists)
- * - <systemitem>\%v</systemitem> : number of visible rows
- * - <systemitem>\%h</systemitem> : number of hidden rows
- * - <systemitem>\%s</systemitem> : number of selected rows
- * - <systemitem>\%A</systemitem> : total size of all rows
- * - <systemitem>\%V</systemitem> : total size of visible rows
- * - <systemitem>\%H</systemitem> : total size of hidden rows
- * - <systemitem>\%S</systemitem> : total size of selected rows
- * - <systemitem>\%n</systemitem> : name of focused row, if any
- * - <systemitem>\%N</systemitem> : name of selected item if there's only one,
- *   string "n items selected" (with n the number of selected items) if more
- *   than one, else nothing
+ * - `%f` : name of focused row
+ * - `%F` : current visual filter (if any)
+ * - `%K` : current key mode
+ * - `%k` : current key status; that is the current combine if any, the current
+ *   combine spec if any, the current multiplier if any, the current key pressed
+ *   if any (waiting for its spec), and the current multiplier of the spec
+ *   motion if any. Can be an empty string.
+ * - `%a` : number of all rows (i.e. including hidden ones for lists)
+ * - `%v` : number of visible rows
+ * - `%h` : number of hidden rows
+ * - `%s` : number of selected rows
+ * - `%A` : total size of all rows
+ * - `%V` : total size of visible rows
+ * - `%H` : total size of hidden rows
+ * - `%S` : total size of selected rows
+ * - `%n` : name of focused row, if any
+ * - `%N` : name of selected item if there's only one, string "n items selected"
+ *   (with n the number of selected items) if more than one, else nothing
  *
- * Note that <systemitem>\%A</systemitem>, <systemitem>\%V</systemitem>,
- * <systemitem>H</systemitem> and <systemitem>\%S</systemitem> will use the
- * format as specified in option <systemitem>size_format</systemitem>
- * (defaulting to that of <systemitem>defaults/size/format</systemitem> to
- * format the size, alongside options <systemitem>digits</systemitem> and
- * <systemitem>long_unit</systemitem> (defaulting to whatever is set under
- * <systemitem>defaults/size</systemitem>).
+ * Note that `%A`, `%V`, `%H` and `%S` will use the format as specified in
+ * option `size_format` (defaulting to that of `defaults/size/format` to
+ * format the size, alongside options `digits` and `long_unit` (defaulting to
+ * whatever is set under `defaults/size`).
  * You can however specify the format to use, by putting it in between brackets
- * right after the percent sign, e.g. <systemitem>\%{\%b}S</systemitem>
+ * right after the percent sign, e.g. `%{%b}S`
  *
- * <systemitem>\%a</systemitem>, <systemitem>\%v</systemitem>,
- * <systemitem>\%h</systemitem>, <systemitem>\%s</systemitem> and
- * <systemitem>\%F</systemitem> also supports an extra (in between brackets),
+ * `%a`, `%v`, `%h`, `%s` and `%F` also supports an extra (in between brackets),
  * which is itself a string parsed the same way and supporting the same
  * variables (If you need recursion, any backslash or closing braquet must be
  * escaped via backslash).
@@ -874,11 +824,11 @@
  * The parsed string will then be shown instead of what the variable usually
  * resolves to. However, there's a twist:
  *
- * - for <systemitem>\%F</systemitem> it will only be shown when a VF is set
- *   (else resolves to nothing/empty string)
+ * - for `%F` it will only be shown when a VF is set (else resolves to
+ *   nothing/empty string)
  * - for the others, the string will also be splitted using comma as separator
- *   (if you need to use commas, you then need to use
- *   <systemitem>\%,</systemitem>), so you can specify up to 3 strings.
+ *   (if you need to use commas, you then need to use `%,`), so you can specify
+ *   up to 3 strings.
  *
  * With only 1 string, it will be shown unless the reference (i.e. the number
  * of items the variable refers to) is zero.
@@ -887,33 +837,29 @@
  * Lastly, with 3 strings, the first one is shown is reference is zero, the
  * second one if it's one, else the last one is shown.
  *
- * <systemitem>\%a</systemitem> behaves a little differently, in that instead of
- * not showing anything (or the first of the 3 specified strings) when the
- * reference (i.e. number of all rows) is zero, it does so when it is the same
- * as the number of visible rows.
+ * `%a` behaves a little differently, in that instead of not showing anything
+ * (or the first of the 3 specified strings) when the reference (i.e. number of
+ * all rows) is zero, it does so when it is the same as the number of visible
+ * rows.
  * This is to make it easy to show e.g. "23 rows" when all are visible, and
  * "23/42 rows" when some are hidden, using: \%{\%v/}a\%a rows
  *
- * Additionally, you can use option <systemitem>colors</systemitem>
- * (integer:tree-set-colors) to enable the use of (background/foreground) colors.
+ * Additionally, you can use option `colors` (integer:tree-set-colors) to enable
+ * the use of (background/foreground) colors.
  *
- * When set to <systemitem>keys</systemitem> color will be based on the current
- * key mode: if string option
- * <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground</systemitem> is set, it will
- * be used as foreground color. If not, string option
- * <systemitem>key_mode_&lt;KEY-MODE&gt;_foreground-rgba</systemitem> is tried,
- * which can be a string as per gdk_rgba_parse()
+ * When set to `keys` color will be based on the current key mode: if string
+ * option `key_mode_&lt;KEY-MODE&gt;_foreground` is set, it will be used as
+ * foreground color. If not, string option
+ * `key_mode_&lt;KEY-MODE&gt;_foreground-rgba` is tried, which can be a string
+ * as per gdk_rgba_parse()
  * Similarly named options for the background color are also used in the same
  * way.
  *
- * When set to <systemitem>vf</systemitem> options
- * <systemitem>foreground</systemitem> or
- * <systemitem>foreground-rgba</systemitem> (and similarly for background) are
- * then used when a VF is applied.</para></refsect2>
+ * When set to `vf` options `foreground` or `foreground-rgba` (and similarly for
+ * background) are then used when a VF is applied.
  *
- * Finally, the same variables are supported in option
- * <systemitem>format_tooltip</systemitem>, used for the tooltip of the
- * statusbar area (no color support there).
+ * Finally, the same variables are supported in option `format_tooltip`, used
+ * for the tooltip of the statusbar area (no color support there).
  */
 
 enum
@@ -13223,7 +13169,7 @@ donna_tree_view_root_set_child_visual (DonnaTreeView      *tree,
  *
  * Note that when getting the value from the node, it will only return a value
  * if the visual is actually used/shown on @tree (via option
- * <systemitem>node_visuals</systemitem>).
+ * `node_visuals`).
  * IOW when e.g. custom icons are not shown as part of node visuals, an empty
  * string will be returned even if a custom icon is defined on the node as
  * visual, because it isn't used on @tree. If you're looking for the value of
@@ -15534,50 +15480,42 @@ save_row (DonnaTreeView     *tree,
  *
  * A tree file is a simple text file where every line represents a row, and is
  * formatted as such:
- * <systemitem>&lt;LEVEL-INDICATOR&gt;&lt;TREE-VISUALS&gt;&lt;FLAGS&gt;&lt;FULL-LOCATION&gt;</systemitem>;
+ * `&lt;LEVEL-INDICATOR&gt;&lt;TREE-VISUALS&gt;&lt;FLAGS&gt;&lt;FULL-LOCATION&gt;`;
  * Where:
  *
- * - <systemitem>LEVEL-INDICATOR</systemitem> is nothing for roots, or as many
- *   dash as needed to represent the row's level, followed by a space. So
- *   children of a root will have "- " as indicator, while their children have
- *   "-- " and so on.
- * - <systemitem>FLAGS</systemitem> can be one or more of the flags described
- *   below
- * - <systemitem>TREE-VISUALS</systemitem> are the row's tree visuals (if any)
- *   as set in @visuals, which also includes custom click_mode. See below for
- *   syntax.
+ * - `LEVEL-INDICATOR` is nothing for roots, or as many dash as needed to
+ *   represent the row's level, followed by a space. So children of a root will
+ *   have "- " as indicator, while their children have "-- " and so on.
+ * - `FLAGS` can be one or more of the flags described below
+ * - `TREE-VISUALS` are the row's tree visuals (if any) as set in @visuals,
+ *   which also includes custom click_mode. See below for syntax.
  *
  * Supported flags are:
  *
- * - Star (<systemitem>*</systemitem>) to indicate the row was in maxi expand
- *   state (i.e. all children were loaded; doesn't mean it was expanded)
- * - Plus sign (<systemitem>+</systemitem>) to indicate the row was in partial
- *   expand state (i.e. only some children were loaded; doesn't indicate it was
- *   expanded). See #minitree for more.
- * - Less than sign (<systemitem>&lt;</systemitem>) to indicate the row was
- *   expanded
- * - Exclamation point (<systemitem>!</systemitem>) to indicate the current
- *   location
+ * - Star (`*`) to indicate the row was in maxi expand state (i.e. all children
+ *   were loaded; doesn't mean it was expanded)
+ * - Plus sign (`+`) to indicate the row was in partial expand state (i.e. only
+ *   some children were loaded; doesn't indicate it was expanded). See #minitree
+ *   for more.
+ * - Less than sign (`&lt;`) to indicate the row was expanded
+ * - Exclamation point (`!`) to indicate the current location
  *
  * Any tree visual is saved as a string enclosed with signs indicating which
  * tree visual it is, followed by a space:
  *
- * - Custom names are put in between quotes (<systemitem>"..."</systemitem>)
- * - Custom icons are put in between at-sign (<systemitem>@...@</systemitem>). As
- *   usual this will be the full path/name of the file to use, or the name of an
- *   icon to load from the theme
- * - Box class names are put in between brackets
- *   (<systemitem>{...}</systemitem>)
- * - Highlight class names are put in between square brackets
- *   (<systemitem>[...]</systemitem>)
- * - Custom click_mode names are put in between parenthesis
- *   (<systemitem>(...)</systemitem>)
+ * - Custom names are put in between quotes (`"..."`)
+ * - Custom icons are put in between at-sign (`@...@`). As usual this will be
+ *   the full path/name of the file to use, or the name of an icon to load from
+ *   the theme
+ * - Box class names are put in between brackets (`{...}`)
+ * - Highlight class names are put in between square brackets (`[...]`)
+ * - Custom click_mode names are put in between parenthesis (`(...)`)
  *
  * Lastly, a tree can have tree visuals in memory that aren't (yet) applied,
  * because the row isn't loaded on tree (e.g. a parent hasn't been expanded
  * yet), in which case such tree visuals will be features on lines using the
- * same syntax, only with the equal sign (<systemitem>=</systemitem>) as prefix
- * instead of level indicator.
+ * same syntax, only with the equal sign (`=`) as prefix instead of level
+ * indicator.
  * Such tree visuals will then belong in/be linked to the last defined root.
  *
  * Usually you'll want to save every information you might need, since you can
@@ -20089,15 +20027,15 @@ err:
  *
  * If @items is not specified, a few options will be tried to get the items to
  * use. First option
- * <systemitem>tree_views/&lt;TREE-NAME&gt;/context_menu_&lt;DOMAIN&gt;</systemitem>
+ * `tree_views/&lt;TREE-NAME&gt;/context_menu_&lt;DOMAIN&gt;`
  * is tried (where DOMAIN is the domain of the current location).
  * If it doesn't exist, option
- * <systemitem>tree_views/&lt;TREE-NAME&gt;/context_menu</systemitem> is tried.
+ * `tree_views/&lt;TREE-NAME&gt;/context_menu` is tried.
  *
  * Next defaults are tried using the same logic:
- * <systemitem>defaults/&lt;TREE-MODE&gt;/context_menu_&lt;DOMAIN&gt;</systemitem>
+ * `defaults/&lt;TREE-MODE&gt;/context_menu_&lt;DOMAIN&gt;`
  * first, and if it doesn't exist
- * <systemitem>defaults/&lt;TREE-MODE&gt;/context_menu</systemitem> is tried.
+ * `defaults/&lt;TREE-MODE&gt;/context_menu` is tried.
  *
  * If none of those options exist, an error is returned.
  *
@@ -20246,8 +20184,7 @@ donna_tree_view_context_get_nodes (DonnaTreeView      *tree,
  * @rowid, @column and @items are used.
  *
  * If @menus isn't specified, value of treeview option
- * <systemitem>context_menu_menus</systemitem> will be used, following the usual
- * option path.
+ * `context_menu_menus` will be used, following the usual option path.
  *
  * See donna_app_show_menu() for more on how the menu is shown.
  *
@@ -20658,13 +20595,12 @@ save_toggled (GtkToggleButton *btn, struct save_data *data)
  * @elements can be a string, comma-separated list of one or more of the
  * following:
  *
- * - <systemitem>:options</systemitem> : treeview options
- * - <systemitem>:columns</systemitem> : columns (layout); i.e. which columns
- *   are visible, and the order
- * - <systemitem>:sort</systemitem> : (main) sort order
- * - <systemitem>:second_sort</systemitem> : second sort order
- * - <systemitem>:column_options</systemitem> : all column options of all
- *   columns
+ * - `:options` : treeview options
+ * - `:columns` : columns (layout); i.e. which columns are visible, and the
+ *   order
+ * - `:sort` : (main) sort order
+ * - `:second_sort` : second sort order
+ * - `:column_options` : all column options of all columns
  * - or the name of a column, to save all of its options
  *
  * @elements can also be %NULL to ask which elements to save.
@@ -21312,8 +21248,8 @@ donna_tree_view_get_visual_filter (DonnaTreeView      *tree,
  * Refreshes the properties used by @column on the specified rows.
  *
  * This is especially useful with #custom-peroperties and columns with option
- * <systemitem>refresh_properties</systemitem> set to "on_demand" i.e.
- * properties aren't refreshed automatically.
+ * `refresh_properties` set to "on_demand" i.e.  properties aren't refreshed
+ * automatically.
  *
  * Returns: %TRUE on success, else %FALSE. Note that success means refreshing
  * tasks has been started, regardless of their success or not (as they might

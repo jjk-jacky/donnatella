@@ -159,35 +159,32 @@ init_new_pattern (const gchar       *string,
  * The given @string can start with one of the following character to specify
  * which type of matching should be performed:
  *
- * - a double-quote (<systemitem>"</systemitem>) for pattern mode: the given
- *   string can use '*' and '?' as wildchars with similar semantics as the
- *   standard glob() function. See #GPatternSpec for more
- * - a single-quote (<systemitem>'</systemitem>) for search mode: the given
- *   string will be searched (case sensitive) in the matched against string
- * - a caret (<systemitem>^</systemitem>) for begin mode: the matched against
- *   string must begin with the given string to match
- * - a dollar sign (<systemitem>$</systemitem>) for end mode: the matched
- *   against string must end with the given string to match
- * - a tilde sign (<systemitem>~</systemitem>) for case-insensitive matching
- *   mode: the matched against string and the given string must be the same
- *   (case insensitively)
- * - an equal sign (<systemitem>=</systemitem>) for case-sensitive matching
- *   mode: the matched against string and the given string must be the exact
- *   same
- * - a greater than sign (<systemitem>&gt;</systemitem>) for regex mode: the
- *   given string must be Perl-compatible regular expression to be matched
- *   against. See #GRegex for more
+ * - a double-quote (`"`) for pattern mode: the given string can use '*' and '?'
+ *   as wildchars with similar semantics as the standard glob() function. See
+ *   #GPatternSpec for more
+ * - a single-quote (`'`) for search mode: the given string will be searched
+ *   (case sensitive) in the matched against string
+ * - a caret (`^`) for begin mode: the matched against string must begin with
+ *   the given string to match
+ * - a dollar sign (`$`) for end mode: the matched against string must end with
+ *   the given string to match
+ * - a tilde sign (`~`) for case-insensitive matching mode: the matched against
+ *   string and the given string must be the same (case insensitively)
+ * - an equal sign (`=`) for case-sensitive matching mode: the matched against
+ *   string and the given string must be the exact same
+ * - a greater than sign (`&gt;`) for regex mode: the given string must be
+ *   Perl-compatible regular expression to be matched against. See #GRegex for
+ *   more
  *
  * If @string doesn't start with any of those, search mode will be used unless
  * there is at least one wildchars, then pattern mode is used.
  *
- * Note that @string cannot start with one of
- * <systemitem>!@()[]{}-+:%<</systemitem>
+ * Note that @string cannot start with one of `!@()[]{}-+:%<`
  *
- * Additionally, if @string first starts with a pipe character
- * (<systemitem>|</systemitem>) then any other pipe character will be used as a
- * separator (i.e. it cannot be used in any pattern definition), allowing you to
- * specify more than one possible patterns to match.
+ * Additionally, if @string first starts with a pipe character (`|`) then any
+ * other pipe character will be used as a separator (i.e. it cannot be used in
+ * any pattern definition), allowing you to specify more than one possible
+ * patterns to match.
  *
  * When calling donna_pattern_is_match() each of them will be tried, in the
  * same order as they were specifed in, until the first match (if any).

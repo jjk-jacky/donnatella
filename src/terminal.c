@@ -43,42 +43,39 @@
  * First, a terminal must be created and exists in the current layout. It will
  * not be visible unless there's an embedded terminal running.
  *
- * Option <systemitem>always_show_tabs</systemitem> will determine whether the
- * tab bar is visible even if there's only one tab (true), or only when there
- * are at least 2 tabs (false, the default).
+ * Option `always_show_tabs` will determine whether the tab bar is visible even
+ * if there's only one tab (true), or only when there are at least 2 tabs
+ * (false, the default).
  *
  * Double clicking a tab will send the focus to the embedded terminal.
  * By default, clicking in a terminal should also give it focus. Note that this
  * is done via #DonnaEmbedder as (most) terminal emulators do not implement a
  * click-to-focus model.
  * If this is causing issue with your terminal, you can disable it by setting
- * boolean option <systemitem>catch_events</systemitem> to false
+ * boolean option `catch_events` to false
  *
- * Option <systemitem>focusing_click</systemitem> makes it that a left click on
- * the terminal will only focus it, but the click (button press) won't be sent
- * to the terminal. This can be disabled by setting it to false. Also note that
- * this obviously only works when option <systemitem>catch_events</systemitem>
- * is true.
+ * Option `focusing_click` makes it that a left click on the terminal will only
+ * focus it, but the click (button press) won't be sent to the terminal. This
+ * can be disabled by setting it to false. Also note that this obviously only
+ * works when option `catch_events` is true.
  *
- * As usual, options can be set under
- * <systemitem>terminals/&lt;TERMINAL&gt;/</systemitem> for terminal-specific
- * options, or under <systemitem>defaults/terminals</systemitem> for options
- * common to all terminals.
+ * As usual, options can be set under `terminals/&lt;TERMINAL&gt;/` for
+ * terminal-specific options, or under `defaults/terminals` for options common
+ * to all terminals.
  *
  * By default, tabs will use the command line (ran inside the terminal, i.e.
  * argument @cmdline from donna_terminal_add_tab()) as title. donna will then
  * update the title as a window manager would, relying on the properties
- * <systemitem>_NET_WM_NAME</systemitem> (or <systemitem>WM_NAME</systemitem>)
- * set on the window by the emulator.
+ * `_NET_WM_NAME` (or `WM_NAME`) set on the window by the emulator.
  *
  * Starting a new embedded terminal is done by adding a new tab (command
  * terminal_add_tab()) The tab will be automatically removed when the terminal
  * emulator process ends. To keep the window open even after the process has
  * finished, you need to ask the emulator to not close the window; e.g. urxvt
- * has an option <systemitem>-hold</systemitem> for this purpose. In this case,
- * if boolean option <systemitem>cancel_childless</systemitem> is true (the
- * default) then pressing Enter or Esc will automatically cancel the task if the
- * running process (i.e. the terminal emulato) has no child.
+ * has an option `-hold` for this purpose. In this case, if boolean option
+ * `cancel_childless` is true (the default) then pressing Enter or Esc will
+ * automatically cancel the task if the running process (i.e. the terminal
+ * emulator) has no child.
  * Otherwise, you'll have to use command terminal_remove_page() or
  * terminal_remove_tab() to remove the tab; or cancel its running task.
  * Note that this process is handled as a task through the task manager, and can

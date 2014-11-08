@@ -42,50 +42,41 @@
  * Column type to show the icon & name of the node. You will usually want to
  * have only one column of this type in each tree, and one in each lists.
  *
- * <refsect2 id="ct-name-options">
- * <title>Options</title>
- * <para>
+ * # Options # {#ct-name-options}
+ *
  * The only options are regarding sorting capabilities :
  *
- * - <systemitem>locale_based</systemitem> (boolean) : Whether to use a
- *   locale-based sort algorithm or not.  The former is probably better to
- *   account for locales with special character handling, such as accents, but
- *   doesn't provide as many options as donna's own sorting algorithm.
- * - <systemitem>natural_order</systemitem> (boolean) : Whether to use natural
- *   order (1, 2, 11) or not.
- * - <systemitem>dot_first</systemitem> (boolean) : Whether to put "dot files"
- *   (i.e. nodes with a dot as first character in their names) first or not.
+ * - `locale_based` (boolean) : Whether to use a locale-based sort algorithm or
+ *   not.  The former is probably better to account for locales with special
+ *   character handling, such as accents, but doesn't provide as many options as
+ *   donna's own sorting algorithm.
+ * - `natural_order` (boolean) : Whether to use natural order (1, 2, 11) or not.
+ * - `dot_first` (boolean) : Whether to put "dot files" (i.e. nodes with a dot
+ *   as first character in their names) first or not.
  *   Note that even with this option disabled, they might be sorted first - or
  *   before non-dotted names at least - by the sort algorithm.
  *
  * Using the locale-based sort algorithm:
- * - <systemitem>special_first</systemitem> (boolean) : Whether to place nodes
- *   whose names begins with a "special" character first or not. Special here
- *   means non alphanumeric.
+ * - `special_first` (boolean) : Whether to place nodes whose names begins with
+ *   a "special" character first or not. Special here means non alphanumeric.
  *
  * Using donna's own (non locale-based) algorithm:
- * - <systemitem>dot_mixed</systemitem> (boolean) : Alongside
- *   <systemitem>dot_first</systemitem> set to <systemitem>false</systemitem>,
- *   this will have dot files mixed in, i.e. ignoring the dot when sorting.
- * - <systemitem>case_sensitive</systemitem> (boolean) : Whether to be case
- *   sensitive or not. Note that with locale-based sort algorithm, this depends
- *   on the locale.
- * - <systemitem>ignore_spunct</systemitem> (boolean) : Whether to ignore space
- *   and punctuation/symbol characters or not. (Much like
- *   <systemitem>dot_mixed</systemitem> ignores dots.)
+ * - `dot_mixed` (boolean) : Alongside `dot_first` set to `false`, this will
+ *   have dot files mixed in, i.e. ignoring the dot when sorting.
+ * - `case_sensitive` (boolean) : Whether to be case sensitive or not. Note that
+ *   with locale-based sort algorithm, this depends on the locale.
+ * - `ignore_spunct` (boolean) : Whether to ignore space and punctuation/symbol
+ *   characters or not. (Much like `dot_mixed` ignores dots.)
  *
- * </para></refsect2>
  *
- * <refsect2 id="ct-name-filtering">
- * <title>Filtering</title>
- * <para>
+ * # Filtering # {#ct-name-filtering}
+ *
  * If the filter starts with either the plus or minus sign, it must then be
  * followed by either 'c' or 'i' to only match containers or items,
  * respectively.  You can also use 'd' (directory) or 'f' (file) as well.
  *
  * Else, it must be a #DonnaPattern<!-- -->s, which will be matched against the
  * name. See donna_pattern_new() for more.
- * </para></refsect2>
  */
 
 enum

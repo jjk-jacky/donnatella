@@ -44,8 +44,8 @@
  * Instead, one can use its favorite scripting (or not) language of choice, and
  * simply communicate with donnatella via its socket. Any process started from
  * donnatella (e.g. via command exec() or domain 'exec') will have an
- * environment variable <systemitem>DONNATELLA_SOCKET</systemitem> set to the
- * full filename of the socket for donnatella.
+ * environment variable `DONNATELLA_SOCKET` set to the full filename of the
+ * socket for donnatella.
  *
  * #DonnaSocket is a wrapper that handles buffering reading from/writing to a
  * socket, as well as protocol syntax, leaving simply handling of messages to be

@@ -40,25 +40,21 @@
  * that while firstly intended for the configuration, it can actually show the
  * value of any property on the node.
  *
- * <refsect2 id="ct-value-options">
- * <title>Options</title>
- * <para>
+ * # Options # {#ct-value-options}
+ *
  * The following options are available :
  *
- * - <systemitem>show_type</systemitem> (boolean) : Whether to show the type or
- *   value of the option; Defaults to false
- * - <systemitem>property_value</systemitem> (string) : Name of the property
- *   holding the value; Defaults to "option-value"
- * - <systemitem>property_extra</systemitem> (string) : Name of the property
- *   holding the name of the extra; Defaults to "option-extra"
+ * - `show_type` (boolean) : Whether to show the type or value of the option;
+ *   Defaults to false
+ * - `property_value` (string) : Name of the property holding the value;
+ *   Defaults to "option-value"
+ * - `property_extra` (string) : Name of the property holding the name of the
+ *   extra; Defaults to "option-extra"
  *
- * </para></refsect2>
  *
- * <refsect2 id="ct-value-filtering">
- * <title>Filtering</title>
- * <para>
+ * # Filtering # {#ct-value-filtering}
+ *
  * There are no filtering possible on column of this type.
- * </para></refsect2>
  */
 
 enum

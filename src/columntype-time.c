@@ -42,48 +42,44 @@
  *
  * Column type to show a date/time from a property containing a timestamp.
  *
- * <refsect2 id="ct-time-options">
- * <title>Options</title>
- * <para>
+ * # Options # {#ct-time-options}
+ *
  * The following options are available :
  *
- * - <systemitem>property</systemitem> (string) : Name of the property to use.
- *   Defaults to "mtime"
- * - <systemitem>format</systemitem> (string) : A format string on how to show
- *   the date/time. Defaults to "&percnt;f"
- * - <systemitem>align</systemitem> (integer:align) : Where to align the text in
- *   the column, can be "left" (default), "center" or "right"
+ * - `property` (string) : Name of the property to use.  Defaults to "mtime"
+ * - `format` (string) : A format string on how to show the date/time. Defaults
+ *   to "&percnt;f"
+ * - `align` (integer:align) : Where to align the text in the column, can be
+ *   "left" (default), "center" or "right"
  *
  * And a few alternatives used specifically for the tooltip :
  *
- * - <systemitem>property_tooltip</systemitem>; You can use ":property"
- *   (default) to use the same as <systemitem>property</systemitem>
- * - <systemitem>format_tooltip</systemitem>; You can use ":format" to use the
- *   same as <systemitem>format</systemitem>. Defaults to "&percnt;R"
+ * - `property_tooltip`; You can use ":property" (default) to use the same as
+ *   `property`
+ * - `format_tooltip`; You can use ":format" to use the same as `format`.
+ *   Defaults to "&percnt;R"
  *
  * The following options are shared between column and tooltip :
  *
- * - <systemitem>age_span_seconds</systemitem> (integer) : Number of seconds for
- *   &percnt;O If the timestamp is within this span, the age will be used, else
- *   <systemitem>age_fallback_format</systemitem> will be used; Defaults to
- *   7*24*3600 (7 days)
- * - <systemitem>age_fallback_format</systemitem> (string) : Format (using
- *   similar syntax as "format" only without &percnt;o/&percnt;O obviously) that
- *   will be used if not in the <systemitem>age_span_seconds</systemitem>;
- *   Defaults to "&percnt;F &percnt;T"
- * - <systemitem>fluid_time_format</systemitem> (string) : The format to use for
- *   the time when using &percnt;f Note that you cannot use donnatella
- *   extensions here (e.g. &percnt;o) Defaults to "%R"
- * - <systemitem>fluid_date_format</systemitem> (string) : The format to use for
- *   the date when using &percnt;f Note that you cannot use donnatella
- *   extensions here (e.g. &percnt;o) Defaults to "%F"
- * - <systemitem>fluid_short_weekday</systemitem> (boolean) : Whether or not to
- *   use abbreviated version of weekday name when using &percnt;f
+ * - `age_span_seconds` (integer) : Number of seconds for &percnt;O If the
+ *   timestamp is within this span, the age will be used, else
+ *   `age_fallback_format` will be used; Defaults to 7*24*3600 (7 days)
+ * - `age_fallback_format` (string) : Format (using similar syntax as "format"
+ *   only without &percnt;o/&percnt;O obviously) that will be used if not in the
+ *   `age_span_seconds`; Defaults to "&percnt;F &percnt;T"
+ * - `fluid_time_format` (string) : The format to use for the time when using
+ *   &percnt;f Note that you cannot use donnatella extensions here (e.g.
+ *   &percnt;o) Defaults to "%R"
+ * - `fluid_date_format` (string) : The format to use for the date when using
+ *   &percnt;f Note that you cannot use donnatella extensions here (e.g.
+ *   &percnt;o) Defaults to "%F"
+ * - `fluid_short_weekday` (boolean) : Whether or not to use abbreviated version
+ *   of weekday name when using &percnt;f
  *   Specifically, whether "&percnt;a" or "&percnt;A" will be used. Defaults to
  *   false
  *
  * See g_date_time_format() for the supported format specifiers in
- * <systemitem>format</systemitem> and <systemitem>format_tooltip</systemitem>.
+ * `format` and `format_tooltip`.
  * Additionally, donnatella adds the following additional format specifiers:
  *
  * - &percnt;o: the "age." It will show how much time has passed since the
@@ -94,16 +90,13 @@
  *   prefixed with "Yesterday" If it is from one of the last 7 days, the time
  *   format will be used, prefixed by the weekday name. Else the date format
  *   will be used. The time and date formats used are defined via options
- *   <systemitem>fluid_time_format</systemitem> and
- *   <systemitem>fluid_date_format</systemitem> respectively; And whether the
+ *   `fluid_time_format` and `fluid_date_format` respectively; And whether the
  *   weekday names are used in full or abbreviated will be based on option
- *   <systemitem>fluid_short_weekday</systemitem>
+ *   `fluid_short_weekday`
  *
- * </para></refsect2>
  *
- * <refsect2 id="ct-time-filtering">
- * <title>Filtering</title>
- * <para>
+ * # Filtering # {#ct-time-filtering}
+ *
  * You can filter by using the following format:
  * [UNIT] [COMP] VALUE
  *
@@ -151,7 +144,6 @@
  * So for instance, "A0d" will match if the timestamp is from today, and "A=2V"
  * will match if the timestamp is from the week from 2 weeks ago (as in, any
  * time during that week).
- * </para></refsect2>
  */
 
 enum

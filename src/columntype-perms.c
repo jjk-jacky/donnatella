@@ -46,28 +46,26 @@
  *
  * Column type to show user, group and/or permissions.
  *
- * <refsect2 id="ct-perms-options">
- * <title>Options</title>
- * <para>
+ * # Options # {#ct-perms-options}
+ *
  * The following options are available :
  *
- * - <systemitem>format</systemitem> (string) : A format string defining what to
- *   show and how. Defaults to "&percnt;S"
- * - <systemitem>align</systemitem> (integer:align) : Where to align the text in
- *   the column, can be "left" (default), "center" or "right"
- * - <systemitem>format_tooltip</systemitem> (string) : Same as format only for
- *   the tooltip.
- * - <systemitem>color_user</systemitem> (string) : Color used on user name
- *   (&percnt;V) and in &percnt;S
- * - <systemitem>color_group</systemitem> (string) : Color used on group name
- *   (&percnt;H) and in &percnt;S
- * - <systemitem>color_none</systemitem> (string) : Color used in &percnt;S
- * - <systemitem>sort</systemitem> (integer:perms) : Which criteria to sort by
- *   when sorting on the column.
+ * - `format` (string) : A format string defining what to show and how. Defaults
+ *   to "&percnt;S"
+ * - `align` (integer:align) : Where to align the text in the column, can be
+ *   "left" (default), "center" or "right"
+ * - `format_tooltip` (string) : Same as format only for the tooltip.
+ * - `color_user` (string) : Color used on user name (&percnt;V) and in
+ *   &percnt;S
+ * - `color_group` (string) : Color used on group name (&percnt;H) and in
+ *   &percnt;S
+ * - `color_none` (string) : Color used in &percnt;S
+ * - `sort` (integer:perms) : Which criteria to sort by when sorting on the
+ *   column.
  *   Can be one of "perms", "self", "uid", "user", "gid", and "group"
  *
- * The following format specifiers are supported in
- * <systemitem>format</systemitem> and <systemitem>format_tooltip</systemitem>:
+ * The following format specifiers are supported in `format` and
+ * `format_tooltip`:
  *
  * - &percnt;p: Permissions, as classic "rwxrwxrwx" string
  * - &percnt;s: Permissions owned ("self"), as "rwx" string. A letter indicates
@@ -79,31 +77,26 @@
  *   you do. In addition, the color gives an indication about the permission and
  *   who has it:
  *
- *   In <systemitem>color_none</systemitem> if it isn't available to anyone; in
- *   regular color if "other" has it; if <systemitem>color_group</systemitem> if
- *   "user" has it; and in <systemitem>color_user</systemitem> if "user" (owner)
- *   has it.
+ *   In `color_none` if it isn't available to anyone; in regular color if
+ *   "other" has it; if `color_group` if "user" has it; and in `color_user` if
+ *   "user" (owner) has it.
  *
- *   Permissions are checked in that order, meaning that while with
- *   <systemitem>color_user</systemitem> only user (owner) has said permission,
- *   with regular color the permission is available to "other" but might also be
- *   available to "user" and/or "group".
+ *   Permissions are checked in that order, meaning that while with `color_user`
+ *   only user (owner) has said permission, with regular color the permission is
+ *   available to "other" but might also be available to "user" and/or "group".
  * - &percnt;u : User ID
  * - &percnt;U : User name
- * - &percnt;V : Same as &percnt;U but with colors. It will be in
- *   <systemitem>color_user</systemitem> when you are owner.
+ * - &percnt;V : Same as &percnt;U but with colors. It will be in `color_user`
+ *   when you are owner.
  * - &percnt;g : Group ID
  * - &percnt;G : Group name
- * - &percnt;H : Same as &percnt;G but with colors. It will be in
- *   <systemitem>color_group</systemitem> when you are in the group, unless you
- *   are the owner.
+ * - &percnt;H : Same as &percnt;G but with colors. It will be in `color_group`
+ *   when you are in the group, unless you are the owner.
  * - &percnt;o : Permissions as octal number
  *
- * </para></refsect2>
  *
- * <refsect2 id="ct-perms-filtering">
- * <title>Filtering</title>
- * <para>
+ * # Filtering # {#ct-perms-filtering}
+ *
  * You can filter by using the following format:
  * [UNIT] [COMP] VALUE
  *
@@ -136,7 +129,6 @@
  * As you probably guessed, it will match if the node either has the exact
  * specified permissions ('='), if any of the specified permissions are present
  * ('/'), or if at least all the specifed permissions are present ('-').
- * </para></refsect2>
  */
 
 #define SET_PERMS   (1 << 0)

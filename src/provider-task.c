@@ -40,39 +40,35 @@
  *
  * Public tasks in donna (e.g. file IO operations) are handled by the task
  * manager. Every task handled by the task manager is represented by a node,
- * child of the task manager itself, <systemitem>task:/</systemitem>
+ * child of the task manager itself, `task:/`
  *
  * FIXME: write actual doc about how tasks are handled.
  *
  * To interact with tasks, see commands task_* from
  * #donnatella-Commands.description
  *
- * <refsect2 id="taskmanager-status">
- * <title>Task Manager as status provider</title>
- * <para>
+ * # Task Manager as status provider # {#taskmanager-status}
+ *
  * You can use the task manager as source of a statusbar area (See #statusbar
- * for more). In that case, you must specify string option
- * <systemitem>format</systemitem>, defining the format of what to show in the
- * area. The following variable are available:
+ * for more). In that case, you must specify string option `format`, defining
+ * the format of what to show in the area. The following variable are available:
  *
- * - <systemitem>\%t</systemitem> : number of tasks total
- * - <systemitem>\%T</systemitem> : "n task(s) total" or empty string if none
- * - <systemitem>\%w</systemitem> : number of tasks waiting
- * - <systemitem>\%W</systemitem> : "n task(s) waiting" or empty string if none
- * - <systemitem>\%r</systemitem> : number of tasks running
- * - <systemitem>\%R</systemitem> : "n task(s) running" or empty string if none
- * - <systemitem>\%p</systemitem> : number of tasks paused
- * - <systemitem>\%P</systemitem> : "n task(s) paused" or empty string if none
- * - <systemitem>\%d</systemitem> : number of tasks done
- * - <systemitem>\%D</systemitem> : "n task(s) done" or empty string if none
- * - <systemitem>\%c</systemitem> : number of tasks cancelled
- * - <systemitem>\%C</systemitem> : "n task(s) cancelled" or empty string if none
- * - <systemitem>\%f</systemitem> : number of tasks failed
- * - <systemitem>\%F</systemitem> : "n task(s) failed" or empty string if none
- * - <systemitem>\%a</systemitem> : number of active tasks
- * - <systemitem>\%A</systemitem> : "n active task(s)" or empty string if none
- *
- * </para></refsect2>
+ * - `%t` : number of tasks total
+ * - `%T` : "n task(s) total" or empty string if none
+ * - `%w` : number of tasks waiting
+ * - `%W` : "n task(s) waiting" or empty string if none
+ * - `%r` : number of tasks running
+ * - `%R` : "n task(s) running" or empty string if none
+ * - `%p` : number of tasks paused
+ * - `%P` : "n task(s) paused" or empty string if none
+ * - `%d` : number of tasks done
+ * - `%D` : "n task(s) done" or empty string if none
+ * - `%c` : number of tasks cancelled
+ * - `%C` : "n task(s) cancelled" or empty string if none
+ * - `%f` : number of tasks failed
+ * - `%F` : "n task(s) failed" or empty string if none
+ * - `%a` : number of active tasks
+ * - `%A` : "n active task(s)" or empty string if none
  */
 
 enum

@@ -43,65 +43,62 @@
  * The first character of the location can be a prefix, determining which mode
  * of execution is to be used. If it is not then the default mode will be used.
  * All prefixes are configurable as string options (which must only consist of
- * one single character) under <systemitem>providers/exec</systemitem> :
- * - <systemitem>prefix_exec</systemitem> : Prefix for mode "exec" where a
- *   command line is given, to be executed. Output isn't grabbed and donna
- *   doesn't wait for the execution to end.
- * - <systemitem>prefix_exec_and_wait</systemitem> : Prefix for mode "exec and
- *   wait" much like "exec" except that donna will wait for the execution to be
- *   over. Therefore, this will appear as a task in donna's task manager, where
- *   the output of the process can be viewed.
- * - <systemitem>prefix_terminal</systemitem> : Prefix for mode "terminal" where
- *   the specified command line is actually ran inside a terminal (see below for
- *   more)
- * - <systemitem>prefix_embedded_terminal</systemitem> : Prefix for mode
- *   "embedded terminal", much like "terminal" but with, you guessed it, an
- *   embedded terminal (instead of a new/external window)
- * - <systemitem>prefix_parse_output</systemitem> : Prefix for mode "parse
- *   output" or "search results" where the corresponding node will not be an
- *   item (as in every other mode) but a container, so it can be used as
- *   location for a treeview. The output will be parsed, expecting to get the
- *   path to a file (absolute, or relative to working directory) per line.
+ * one single character) under `providers/exec` :
+ * - `prefix_exec` : Prefix for mode "exec" where a command line is given, to be
+ *   executed. Output isn't grabbed and donna doesn't wait for the execution to
+ *   end.
+ * - `prefix_exec_and_wait` : Prefix for mode "exec and wait" much like "exec"
+ *   except that donna will wait for the execution to be over. Therefore, this
+ *   will appear as a task in donna's task manager, where the output of the
+ *   process can be viewed.
+ * - `prefix_terminal` : Prefix for mode "terminal" where the specified command
+ *   line is actually ran inside a terminal (see below for more)
+ * - `prefix_embedded_terminal` : Prefix for mode "embedded terminal", much like
+ *   "terminal" but with, you guessed it, an embedded terminal (instead of a
+ *   new/external window)
+ * - `prefix_parse_output` : Prefix for mode "parse output" or "search results"
+ *   where the corresponding node will not be an item (as in every other mode)
+ *   but a container, so it can be used as location for a treeview. The output
+ *   will be parsed, expecting to get the path to a file (absolute, or relative
+ *   to working directory) per line.
  *   Corresponding nodes (in domain "fs") will be created and used as children.
  *   This allows to use e.g. "find" or your package manager to search for files,
  *   and list results in donna.
- * - <systemitem>prefix_desktop_file</systemitem> : Prefix for mode "desktop
- *   file" where instead of a command line, what follows must be either the name
- *   of a .desktop file to use to start the associated application (with or
- *   without the .desktop suffix/extension), or a full path to a .desktop file
- *   to be used, if it isn't in one of the usual locations.
+ * - `prefix_desktop_file` : Prefix for mode "desktop file" where instead of a
+ *   command line, what follows must be either the name of a .desktop file to
+ *   use to start the associated application (with or without the .desktop
+ *   suffix/extension), or a full path to a .desktop file to be used, if it
+ *   isn't in one of the usual locations.
  *
- * Option <systemitem>default_mode</systemitem> (integer:exec-mode) allows to
- * set the default mode, to be used when no prefix was specified.
+ * Option `default_mode` (integer:exec-mode) allows to set the default mode, to
+ * be used when no prefix was specified.
  *
  * When specifying a command line, you can prefix it (after the mode prefix of
- * course) by either <systemitem>WORKDIR=</systemitem> or simply
- * <systemitem>WD=</systemitem> followed by the directory to be used as working
- * directory (quoted if needed, i.e. contains spaces). If not specified, the
- * current directory (as returned by donna_app_get_current_dirname()) is used.
+ * course) by either `WORKDIR=` or simply `WD=` followed by the directory to be
+ * used as working directory (quoted if needed, i.e. contains spaces). If not
+ * specified, the current directory (as returned by
+ * donna_app_get_current_dirname()) is used.
  *
- * In mode "terminal", string option <systemitem>cmdline</systemitem> under
- * <systemitem>providers/exec/terminal</systemitem> can be used to define the
- * command line to be used as prefix, to start a new terminal emulator.
+ * In mode "terminal", string option `cmdline` under `providers/exec/terminal`
+ * can be used to define the command line to be used as prefix, to start a new
+ * terminal emulator.
  *
  * You can also define "secondary prefixes" to specify which terminal to use.
  * This might be of interest if you'd like to use different terminal emulators
  * from time to time, or to use different options (e.g. whether or not the
  * terminal should automatically close its window after the process ended or
- * not, often an option <systemitem>-hold</systemitem> or similar).
+ * not, often an option `-hold` or similar).
  *
- * To do so, create a subcategory with string options
- * <systemitem>prefix</systemitem> and <systemitem>cmdline</systemitem>, noting
- * that such "subprefixes" can be more than one character long (unlike mode
- * prefixes).
+ * To do so, create a subcategory with string options `prefix` and `cmdline`,
+ * noting that such "subprefixes" can be more than one character long (unlike
+ * mode prefixes).
  *
  * Mode "embedded terminal" works in a very similar way, except that instead of
- * an option <systemitem>cmdline</systemitem> it's an option
- * <systemitem>terminal</systemitem> that is used to set the name of the
- * (embedded) terminal to use, as well as an optional option
- * <systemitem>terminal_cmdline</systemitem> to override the command line to be
- * used to start the terminal emulator. Specifically, it will be used directly
- * as argument term_cmdline for the command terminal_add_tab()
+ * an option `cmdline` it's an option `terminal` that is used to set the name of
+ * the (embedded) terminal to use, as well as an optional option
+ * `terminal_cmdline` to override the command line to be used to start the
+ * terminal emulator. Specifically, it will be used directly as argument
+ * term_cmdline for the command terminal_add_tab()
  *
  *
  * A location in exec, even as a command line, isn't a shell-like command line.
@@ -115,14 +112,13 @@
  * consecutives slashes are removed (so "fs:/tmp///foo" becomes "fs:/tmp/foo").
  *
  * As such, there might be issues with regard to quoting. By default, a variable
- * will be replaced by its value, placed within quotes. So
- * <systemitem>exec:>$SHELL</systemitem> would become
- * <systemitem>exec:>"/bin/bash"</systemitem> (assuming the variable $SHELL
- * resolves to <systemitem>/bin/bash</systemitem> of course). (Any backslash or
- * quote contained within the value will of course be escaped.)
+ * will be replaced by its value, placed within quotes. So `exec:>$SHELL` would
+ * become `exec:>"/bin/bash"` (assuming the variable $SHELL resolves to
+ * `/bin/bash` of course). (Any backslash or quote contained within the value
+ * will of course be escaped.)
  *
  * This should make things work as expected most of the time. Should you need to
- * use the variable as-in, you can then use <systemitem>$"SHELL</systemitem>
+ * use the variable as-in, you can then use `$"SHELL`
  *
  * Only environment variables will be replaced with their values; if the
  * variable doesn't exist, it will be replaced with an empty string.
@@ -131,23 +127,20 @@
  * end of variable name. (Note that shell-like ${VARIABLE} isn't supported.)
  *
  * As a special case, some variables have an hardcoded default, so if $SHELL
- * isn't defined, it will resolve to <systemitem>sh</systemitem>; $EDITOR will
- * then resolve to <systemitem>vi</systemitem>; and $LESS to
- * <systemitem>less</systemitem>
+ * isn't defined, it will resolve to `sh`; $EDITOR will then resolve to `vi`;
+ * and $LESS to `less`
  *
  * There is therefore no support for $0, etc and, since this is a string
  * processing, whether the variable appears within (single) quote or not is
- * irrelevant. In order to include a literal dollar sign, use
- * <systemitem>$$</systemitem>
+ * irrelevant. In order to include a literal dollar sign, use `$$`
  *
  * Lastly, note that donnatella adds a few environement variables of its own,
  * specifically:
- * - <systemitem>DONNATELLA_SOCKET</systemitem> will contains the path to the
- *   socket to communicate with donantella
- * - <systemitem>DONNATELLA_CONFIG_DIR</systemitem> will contain the path of the
- *   current configuration directory
- * - <systemitem>DONNATELLA_EMBEDDED</systemitem> will be set to 1 when running
- *   in an embedded terminal
+ * - `DONNATELLA_SOCKET` will contains the path to the socket to communicate
+ *   with donantella
+ * - `DONNATELLA_CONFIG_DIR` will contain the path of the current configuration
+ *   directory
+ * - `DONNATELLA_EMBEDDED` will be set to 1 when running in an embedded terminal
  */
 
 enum mode

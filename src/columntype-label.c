@@ -41,25 +41,21 @@
  * node will have an integer value, which will be shown as its corresponding
  * label.
  *
- * <refsect2 id="ct-label-options">
- * <title>Options</title>
- * <para>
+ * # Options # {#ct-label-options}
+ *
  * The following options are available :
  *
- * - <systemitem>property</systemitem> (string) : Name of the property; Defaults
- *   to "id"
- * - <systemitem>labels</systemitem> (string) : A coma-separated list of
- *   value=label to use. Defaults to "0=false,1=true"
+ * - `property` (string) : Name of the property; Defaults to "id"
+ * - `labels` (string) : A coma-separated list of value=label to use. Defaults
+ *   to "0=false,1=true"
  *
  * If the property contains a value not featured in the list, it will show as
  * "&lt;unknown id:X&gt;" where X is the integer value of the property.
- * </para></refsect2>
  *
- * <refsect2 id="ct-label-filtering">
- * <title>Filtering</title>
- * <para>
+ *
+ * # Filtering # {#ct-label-filtering}
+ *
  * There are no filtering possible on column of this type.
- * </para></refsect2>
  */
 
 enum

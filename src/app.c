@@ -83,9 +83,8 @@
  * donnatella - donna for short - is a free, open-source GUI file manager for
  * GNU/Linux systems.
  *
- * <refsect2 id="installation">
- * <title>Installation: a patched GTK+3 for full GUI power</title>
- * <para>
+ * # Installation: a patched GTK+3 for full GUI power # {#installation}
+ *
  * donna is built upon GTK+3 and the underlying GLib/GIO libraries. However,
  * because some of the features of donna were not doable using GTK+ as it is,
  * especially when it comes to the treeview, a patchset is available.
@@ -97,38 +96,31 @@
  * bugs), but will unleash the full power of donnatella.
  *
  * Obviously it would be better if this wasn't necessary, and I'd like to see
- * all patches merged upstream. This is a work in process, but unfortunately
+ * all patches merged upstream. This is a work in progress, but unfortunately
  * upstream doesn't seem too eager to review those patches (Seems they don't
  * have much love for the treeview, because client-side decorations are so much
  * more useful... :p).
- * </para></refsect2>
  *
- * <refsect2 id="start">
- * <title>Start</title>
- * <para>
+ * # Start # {#start}
+ *
  * On start, donna will load its configuration (and possibly other data) from
  * its configuration directory, which is
  * <filename>$XDG_CONFIG_HOME/donnatella</filename> (and will default to
  * <filename>~/.config/donnatella</filename>).
  *
  * If you need to you can specify another directory to be used, using
- * command-line option <systemitem>--config-dir</systemitem>
+ * command-line option `--config-dir`
  *
  * Note that when executing command line from donna, a new environment variable
- * <systemitem>DONNATELLA_CONFIG_DIR</systemitem> will be set to the current
- * configuration directory.
+ * `DONNATELLA_CONFIG_DIR` will be set to the current configuration directory.
  * Additionally, the PATH used will be extended to include
- * <systemitem>$DONNATELLA_CONFIG_DIR/bin</systemitem> and, similarly, subfolder
- * "donnatella/bin" of all system config directories
- * (<systemitem>$XDG_CONFIG_DIRS</systemitem>) to e.g. allow easy use of
+ * `$DONNATELLA_CONFIG_DIR/bin` and, similarly, subfolder "donnatella/bin" of
+ * all system config directories (`$XDG_CONFIG_DIRS`) to e.g. allow easy use of
  * donna-specific scripts. You can disable this by setting boolean option
- * <systemitem>donna/extend_path</systemitem> to <systemitem>false</systemitem>
- * if needed.
- * </para></refsect2>
+ * `donna/extend_path` to `false` if needed.
  *
- * <refsect2 id="concept">
- * <title>Concept</title>
- * <para>
+ * # Concept # {#concept}
+ *
  * Usually, a file manager shows you the files & directories of your file
  * system. Things are a little different in donna, though, as it uses a layer of
  * abstraction.
@@ -142,52 +134,41 @@
  * folders" or list search results; It also allows to show nodes that aren't
  * files or directories, like the categories & options of the configuration, or
  * provide interface to other features of donna, e.g. registers or marks.
- * </para></refsect2>
  *
- * <refsect2 id="features">
- * <title>Features</title>
- * <para>
- * <refsect3 id="window">
- * <title>Customize the main window</title>
- * <para>
+ * # Features # {#features}
+ *
+ * ## Customize the main window ## {#window}
+ *
  * On start, donna's main window will be created according to a few options, all
- * found under category <systemitem>donna</systemitem> :
+ * found under category `donna` :
  *
- * - <systemitem>width</systemitem> & <systemitem>height</systemitem> : to
- *   define the initial size of the main window
- * - <systemitem>maximized</systemitem> : A boolean, set to true to have the
- *   window maximized on start.
+ * - `width` & `height` : to define the initial size of the main window
+ * - `maximized` : A boolean, set to true to have the window maximized on start.
  *   In that case, the width & height will be used when unmaximizing the window.
  *   Note that it is also possible to start with a maximized window using
- *   command line option <systemitem>--maximized</systemitem>
- * - <systemitem>active_list</systemitem> : must be the name of a treeview in
- *   mode list, to be the active-list. If not set, the first list created will
- *   be the active-list.
- * - <systemitem>layout</systemitem> : the actual layout; see #layout for more
- * - <systemitem>tile</systemitem> : the title of the window
+ *   command line option `--maximized`
+ * - `active_list` : must be the name of a treeview in mode list, to be the
+ *   active-list. If not set, the first list created will be the active-list.
+ * - `layout` : the actual layout; see #layout for more
+ * - `tile` : the title of the window
  *
  * The following variables are available to use in the window title :
  *
- * - <systemitem>\%a</systemitem> : treeview name of the active list
- * - <systemitem>\%d</systemitem> : current directory; See
- *   donna_app_get_current_dirname() for difference with current location
- * - <systemitem>\%l</systemitem> : full location of the active list's current
- *   location
- * - <systemitem>\%L</systemitem> : active's list current location. What is
- *   actually used depends on the domain of the current location. An option
- *   <systemitem>domain_&lt;DOMAIN&gt;</systemitem> (integer:title-domain) is
- *   looked up, and can be "full", "loc" or "custom"
+ * - `%a` : treeview name of the active list
+ * - `%d` : current directory; See donna_app_get_current_dirname() for
+ *   difference with current location
+ * - `%l` : full location of the active list's current location
+ * - `%L` : active's list current location. What is actually used depends on
+ *   the domain of the current location. An option `domain_&lt;DOMAIN&gt;`
+ *   (integer:title-domain) is looked up, and can be "full", "loc" or "custom"
  *   The first two will have the full location or location used, respectively.
- *   With the later a string option <systemitem>custom_&lt;DOMAIN&gt;</systemitem>
- *   will be looked. If it exists, it is used; else the name of the current
- *   location will be used.
- * - <systemitem>\%v</systemitem> : version number
+ *   With the later a string option `custom_&lt;DOMAIN&gt;` will be looked. If
+ *   it exists, it is used; else the name of the current location will be used.
+ * - `%v` : version number
  *
- * </para></refsect3>
  *
- * <refsect3 id="layout">
- * <title>Layout: Single pane, dual pane, hexapane...</title>
- * <para>
+ * ## Layout: Single pane, dual pane, hexapane... ## {#layout}
+ *
  * donna is made so you can fully customize it to your needs & improve your
  * workflow as best possible. By default, you will have a tree on the left, and
  * a list on the right. Simple, standard, efficient setup.
@@ -198,8 +179,7 @@
  *
  * The actual layout of donna's window is entirely configurable. You can in fact
  * create as many layouts as you need. A layout is define under section
- * <systemitem>[layouts]</systemitem> in the configuration file
- * (<filename>donnatella.conf</filename>).
+ * `[layouts]` in the configuration file (<filename>donnatella.conf</filename>).
  *
  * The basic rule in donna is that most GUI component will have a name: each
  * treeview, each toolbar, etc will have a unique name to identify it. The main
@@ -229,13 +209,11 @@
  *
  * The following GUI compenents are available:
  *
- * - <systemitem>treeview</systemitem> : this is the main component in
- *   donnatella. A treeview will either be a list (by default) or a tree, using
- *   its boolean option <systemitem>is_tree</systemitem>. See #DonnaTreeView for
- *   more.
- * - <systemitem>terminal</systemitem> : A terminal will feature one (or more,
- *   via tabs) embedded terminal emulator within donna. See #DonnaTerminal for
- *   more.
+ * - `treeview` : this is the main component in donnatella. A treeview will
+ *   either be a list (by default) or a tree, using its boolean option
+ *   `is_tree`. See #DonnaTreeView for more.
+ * - `terminal` : A terminal will feature one (or more, via tabs) embedded
+ *   terminal emulator within donna. See #DonnaTerminal for more.
  *
  * You can now create the layout you want for donna. For example, to make a
  * dual-pane with one tree on the left, and two lists on the right, you could
@@ -260,71 +238,62 @@
  * use as examples in order to create your very own.
  *
  * It is also possible to define which layout should be used from the command
- * line, thus "overriding" option donna/layout, using
- * <systemitem>--layout</systemitem>
+ * line, thus "overriding" option donna/layout, using `--layout`
  * Note that it is, however, not possible to change layout while donna is
  * running.
  *
- * </para></refsect3>
  *
- * <refsect3 id="configuration">
- * <title>Configuration</title>
- * <para>
+ * ## Configuration ## {#configuration}
+ *
  * donna's configuration is loaded from a single text file, and then handled via
  * the configuration manager, which is also providing domain "config" as an
  * interface. See #DonnaProviderConfig.description
- * </para></refsect3>
  *
- * <refsect3 id="treeviews">
- * <title>Advanced Treeviews</title>
- * <para>
+ *
+ * ## Advances Treeviews ## {#treeviews}
+ *
  * As you could expect, the main GUI component of donna is the treeview,
  * especially since it will handle both trees & lists.
  *
- * See #DonnaTreeView.description for more about all the many unique options/features both
- * trees & lists offer.
- * </para></refsect3>
+ * See #DonnaTreeView.description for more about all the many unique
+ * options/features both trees & lists offer.
  *
- * <refsect3 id="dynamic-arrangements">
- * <title>Dynamic Arrangements (on Lists)</title>
- * <para>
+ *
+ * ## Dynamic Arrangements (on Lists) ## {#dynamic-arrangements}
+ *
  * donna allows dynamic arrangements to be used on lists, to have specific
  * column layout/options, sort orders or color filters based on the the list's
  * current location.
  * See #arrangements for more.
- * </para></refsect3>
  *
- * <refsect3 id="node-visuals">
- * <title>Node Visuals</title>
- * <para>
+ *
+ * ## Node Visuals ## {#node-visuals}
+ *
  * Trees support #tree-visuals, allowing you to set row-specific name, icon,
  * box or highlight effect. It is also possible not to define those as
  * tree-specific settings, but have them set on the node itself.
  *
- * This is done by simply creating numbered categories under category
- * <systemitem>visuals</systemitem> in the configuration. Each category
- * represents a node visual definition, and must at least contain a string
- * option <systemitem>node</systemitem> which must be the full location of the
- * node on which the following visuals can be set (all string options):
+ * This is done by simply creating numbered categories under category `visuals`
+ * in the configuration. Each category represents a node visual definition, and
+ * must at least contain a string option `node` which must be the full location
+ * of the node on which the following visuals can be set (all string options):
  *
- * - <systemitem>name</systemitem>: custom name to be used. Set as string
- *   property <systemitem>visual-name</systemitem> on nodes.
- * - <systemitem>icon</systemitem>: custom icon to be used. Can be the full path
- *   to a picture file, or the name of an icon to be loaded from the theme.
- *   Set as string property <systemitem>visual-icon</systemitem> on nodes.
- * - <systemitem>box</systemitem>: name of the class for the box effect. Set as
- *   string property <systemitem>visual-box</systemitem> on nodes.
- * - <systemitem>highlight</systemitem>: name of the class for the highlight
- *   effect. Set as string property <systemitem>visual-highlight</systemitem> on
+ * - `name`: custom name to be used. Set as string property `visual-name` on
  *   nodes.
+ * - `icon`: custom icon to be used. Can be the full path to a picture file, or
+ *   the name of an icon to be loaded from the theme.  Set as string property
+ *   `visual-icon` on nodes.
+ * - `box`: name of the class for the box effect. Set as string property
+ *   `visual-box` on nodes.
+ * - `highlight`: name of the class for the highlight effect. Set as string
+ *   property `visual-highlight` on nodes.
  *
  * Which visuals will actually be loaded/used on trees will depend on their
- * option <systemitem>node_visuals</systemitem>.
- * </para></refsect3>
+ * option `node_visuals`.
  *
- * <refsect3 id="user-parsing">
- * <title>Full Location: prefixes, aliases and more</title>
- * <para>
+ *
+ * ## Full location: prefixes, aliases and more ## {#user-parsing}
+ *
  * As you might know, donna uses the concept of nodes (#DonnaNode) to represent
  * both items (e.g. files) & containers (e.g. folders) everywhere in the
  * application, starting with treeviews or menus.
@@ -334,7 +303,7 @@
  * As a result, every location in donna is identified via a "full location." A
  * full location is a string made of the domain & the location within the
  * domain, separated by a colon. For example, when in <filename>/tmp</filename>
- * donna will refer to this as <systemitem>fs:/tmp</systemitem>
+ * donna will refer to this as `fs:/tmp`
  *
  * This can be cumbersome to type, and is why you some facilities are available
  * when dealing with full locations, known as "user parsing" of full locations.
@@ -342,11 +311,10 @@
  * (e.g. in list/tree files), but all user input support this user parsing.
  *
  * See donna_app_parse_fl() for more on user parsing.
- * </para></refsect3>
  *
- * <refsect3 id="custom-properties">
- * <title>Custom Properties</title>
- * <para>
+ *
+ * ## Custom Properties ## {#custom-properties}
+ *
  * Nodes are created by their providers, which handles all the available basic
  * properties such as name, icon, size, etc However, it is possible to add other
  * properties to any node, properties which can then be used as any others in
@@ -359,30 +327,25 @@
  * executed; the output of said process with then be parsed to set the value of
  * properties.
  *
- * First things first: in category <systemitem>custom_properties</systemitem>
- * you can create numbered categories. Each of those should have a string option
- * <systemitem>domain</systemitem> for the target domain. Optionally, a string
- * option <systemitem>filter</systemitem> can be set to the filter to be matched
- * against the node. Note that custom properties are added upon node creation,
- * so basic properties will be set, others might not be. (Custom properties are
- * processed in their defined order, so previous matching custom properties will
- * have been set.)
+ * First things first: in category `custom_properties` you can create numbered
+ * categories. Each of those should have a string option `domain` for the target
+ * domain. Optionally, a string option `filter` can be set to the filter to be
+ * matched against the node. Note that custom properties are added upon node
+ * creation, so basic properties will be set, others might not be. (Custom
+ * properties are processed in their defined order, so previous matching custom
+ * properties will have been set.)
  *
  * To define a custom property, create a subcategory by the name of the
- * property. Optionally, an integer (cp-type) option
- * <systemitem>type</systemitem> can be set to define the type of the property:
- * <systemitem>string</systemitem> for strings, and
- * <systemitem>uint</systemitem> for e.g. sizes or timestamps. A boolean option
- * <systemitem>preload</systemitem> can also be set to
- * <systemitem>true</systemitem> to have the value of the properties preloaded,
- * i.e. a refresh will be queued right after the property has been added. Note
- * that this will refresh properties upon creation, a better choice might be to
- * use column option <systemitem>refresh_properties</systemitem>.
+ * property. Optionally, an integer (cp-type) option `type` can be set to define
+ * the type of the property: `string` for strings, and `uint` for e.g. sizes or
+ * timestamps. A boolean option `preload` can also be set to `true` to have the
+ * value of the properties preloaded, i.e. a refresh will be queued right after
+ * the property has been added. Note that this will refresh properties upon
+ * creation, a better choice might be to use column option `refresh_properties`.
  *
- * And of course, string option <systemitem>cmdline</systemitem> defined the
- * command line to be executed, where specifier
- * <systemitem>&percnt;n</systemitem> will be replaced with the nodes to refresh
- * properties for.
+ * And of course, string option `cmdline` defined the command line to be
+ * executed, where specifier `&percnt;n` will be replaced with the nodes to
+ * refresh properties for.
  * You'll likely have noted the plural, because whenever a request to refresh a
  * custom property is triggered, donna will queue them for a short while
  * (800ms), so a single process can be executed for multiple nodes.
@@ -396,73 +359,63 @@
  * sign, omitting the location, in which case the last/current node/location
  * will be used. This can be useful when used with groups (see below).
  *
- * You can also set boolean option <systemitem>use_nuls</systemitem> to true, in
- * which case the output format is a little different, in that no new line (LF)
- * should be present, and both filenames and property values must be NUL
- * terminated (and can therefore include any character but NUL).
+ * You can also set boolean option `use_nuls` to true, in which case the output
+ * format is a little different, in that no new line (LF) should be present, and
+ * both filenames and property values must be NUL terminated (and can therefore
+ * include any character but NUL).
  *
  * So e.g. to define the filename to use, then a property value, the output
  * shoud be in the forms:
  * &lt;FILENAME&gt;&lt;NUL&gt;|&lt;NUL&gt;|&lt;PROPERTY&gt;|&lt;VALUE&gt;&lt;NUL&gt;
  *
  * Sometimes, you might want to have one process used to refresh multiple
- * properties. This can be handled by setting boolean option
- * <systemitem>is_group</systemitem> to <systemitem>true</systemitem>, in which
- * case the name of the category is the name of the group, and subcategories
- * must be created by the name of the actual properties (option
- * <systemitem>type</systemitem> must then go into this subcategory, obviously).
- * </para></refsect3>
+ * properties. This can be handled by setting boolean option `is_group` to
+ * `true`, in which case the name of the category is the name of the group, and
+ * subcategories must be created by the name of the actual properties (option
+ * `type` must then go into this subcategory, obviously).
  *
- * <refsect3 id="statusbar">
- * <title>Custom statusbar</title>
- * <para>
+ *
+ * ## Custom statusbar ## {#statusbar}
+ *
  * The statusbar, automatically displayed at the bottom of the main window if
  * defined, is made of as many "areas" as needed. You define the content of the
- * statusbar simply via string option <systemitem>statusbar/areas</systemitem>
- * which must simply be a comma-separated list of area names.
+ * statusbar simply via string option `statusbar/areas` which must simply be a
+ * comma-separated list of area names.
  *
- * Said name being the name of a section in configuration, under
- * <systemitem>statusbar</systemitem>
+ * Said name being the name of a section in configuration, under `statusbar`
  * Each area is defined in said section, with at least one required string
- * option, <systemitem>source</systemitem>. The source is the component which
- * will handle the area (drawing, etc), and can be one of the following:
+ * option, `source`. The source is the component which will handle the area
+ * (drawing, etc), and can be one of the following:
  *
- * - <systemitem>:app</systemitem> : donnatella
- * - <systemitem>:task</systemitem> : the task manager, see #taskmanager-status
- * - <systemitem>:active</systemitem> : the treeview currently active-list
- * - <systemitem>:focused</systemitem> : the treeview currently focused
+ * - `:app` : donnatella
+ * - `:task` : the task manager, see #taskmanager-status
+ * - `:active` : the treeview currently active-list
+ * - `:focused` : the treeview currently focused
  *
- * Integer option <systemitem>width</systemitem> can be used to set the
- * (minimum) size of the area, and boolean option
- * <systemitem>expand</systemitem> can bet set to false if you don't want the
- * area to automatically expand when more space is available. By default, all
- * remaining space in the statusbar is distributed amongst all areas; setting
- * <systemitem>expand</systemitem> to false excludes the area, so it remains at
- * the specified size.
+ * Integer option `width` can be used to set the (minimum) size of the area, and
+ * boolean option `expand` can bet set to false if you don't want the area to
+ * automatically expand when more space is available. By default, all remaining
+ * space in the statusbar is distributed amongst all areas; setting `expand` to
+ * false excludes the area, so it remains at the specified size.
  *
  * Other options that can be used in the section depend on its source. For
  * treeviews, refer to #treeview-status.
  *
  * For donna (:app), when a log message (level MESSAGE, INFO, WARNING or
- * CRITICAL) occurs it will be shown. Option <systemitem>timeout</systemitem>
- * determines for how long. When it goes away (or before any log message occurs)
- * what is displayed is based on option <systemitem>format</systemitem>.
+ * CRITICAL) occurs it will be shown. Option `timeout` determines for how long.
+* When it goes away (or before any log message occurs) what is displayed is
+* based on option `format`.
  *
- * - <systemitem>format</systemitem> (string): format to display
- * - <systemitem>format_tooltip</systemitem> (string): format for the tooltip
- * - <systemitem>timeout</systemitem> (integer): numberof seconds an info will
- *   remain; 0 for unlimited
+ * - `format` (string): format to display
+ * - `format_tooltip` (string): format for the tooltip
+ * - `timeout` (integer): numberof seconds an info will remain; 0 for unlimited
  *
  * The same variables are available as for the window title, see #window for
  * more.
  *
- * </para></refsect3>
  *
- * </para></refsect2>
+ * # CSS Customizations # {#css}
  *
- * <refsect2 id="css">
- * <title>CSS Customizations</title>
- * <para>
  * Being a GTK3 application, donna's appearance can be customized the same way
  * any other GTK3 application can, using some CSS.
  *
@@ -471,52 +424,44 @@
  * selector.
  *
  * In some dialogs, such as those of commands ask() or ask_text(), a title and
- * optionally a details text are featured. The former has class
- * <systemitem>title</systemitem> applied, while the later has class
- * <systemitem>details</systemitem>.
+ * optionally a details text are featured. The former has class `title` applied,
+ * while the later has class `details`.
  *
- * <refsect3 id="CSS-treeviews">
- * <title>Treeview-specific CSS</title>
- * <para>
+ *
+ * ## Treeview-specific CSS ## {#css-treeviews}
+ *
  * Treeviews also offer some special classes:
  *
- * - <systemitem>second-arrow</systemitem>: used to draw the arrow for secondary
- *   sort order
- * - <systemitem>focused-row</systemitem>: used on the focused row. Unlike
- *   pseudo-class <systemitem>:focused</systemitem> this one is applied on the
- *   focused row, regardless of the whether the treeview is focused or not.
- * - <systemitem>select-row-underline</systemitem>: used on the row underline
- *   effect, when applicable based on option
- *   <systemitem>select_highlight</systemitem>
+ * - `second-arrow`: used to draw the arrow for secondary sort order
+ * - `focused-row`: used on the focused row. Unlike pseudo-class `:focused` this
+ *   one is applied on the focused row, regardless of the whether the treeview
+ *   is focused or not.
+ * - `select-row-underline`: used on the row underline effect, when applicable
+ *   based on option `select_highlight`
  *
- * </para></refsect3>
  *
- * <refsect3 id="css-trees">
- * <title>Tree-specific CSS</title>
- * <para>
+ * ## Tree-specific CSS ## {#css-trees}
+ *
  * Trees have the following additional classes:
  *
- * - <systemitem>minitree-unknown</systemitem>: used on rows which have never
- *   been expanded
- * - <systemitem>minitree-partial</systemitem>: used on rows in partial expanded
- *   state. See #minitree for more on the expand state, and not that those
- *   classes are used regardless of the value of the
- *   <systemitem>is_minitree</systemitem> option (i.e. on maxitree as well).
+ * - `minitree-unknown`: used on rows which have never been expanded
+ * - `minitree-partial`: used on rows in partial expanded state. See #minitree
+ *   for more on the expand state, and not that those classes are used
+ *   regardless of the value of the `is_minitree` option (i.e. on maxitree as
+ *   well).
  *
  * In addition, trees have some specific CSS that are used to apply the boxed
  * branch & highlight effects from #tree-visuals.
  *
- * For the box effect, a region <systemitem>boxed</systemitem> is created in the
- * expander area, that is meant to always be of the boxed color even when
- * focused/selected. See <filename>donnatella.css</filename> for examples.
+ * For the box effect, a region `boxed` is created in the expander area, that is
+ * meant to always be of the boxed color even when focused/selected. See
+ * <filename>donnatella.css</filename> for examples.
  *
  * For the highlight effect, you can use special option
- * <systemitem>-DonnaTreeView-highlighted-size</systemitem> to define the width
- * by which the highlight effect should extend, making sure it remains visible
- * even when selected.
- * This will be available in CSS as region
- * <systemitem>highlight-overflow</systemitem>; Again you can refer to
- * <filename>donnatella.css</filename> to see how it's done.
+ * `-DonnaTreeView-highlighted-size` to define the width by which the highlight
+ * effect should extend, making sure it remains visible even when selected.
+ * This will be available in CSS as region `highlight-overflow`; Again you can
+ * refer to <filename>donnatella.css</filename> to see how it's done.
  *
  * For both effects, a set of effects/classes are provided, each with a
  * different color. All classes for the box effect are prefixed with "box-"
@@ -524,31 +469,25 @@
  * Classes are available for the following colors: pink, violet, black, white,
  * red, orange, lime, green, yellow, cyan, and blue.
  *
- * </para></refsect3>
  *
- * <refsect3 id="css-lists">
- * <title>List-specific CSS</title>
- * <para>
+ * ## List-specific CSS ## {#css-lists}
+ *
  * Lists also have additional classes applied, based on the domain of their
  * current location. A class by the name of the domain, prefixed with "domain-",
  * will be applied.
  * So e.g. when in the configuration (domain "config"), the class
- * <systemitem>domain-config</systemitem> will be applied to the treeview. By
- * default this is used to have a special background color on certain domains,
- * e.g. orange in config, blue on exec (e.g. search results).
- * </para></refsect3>
+ * `domain-config` will be applied to the treeview. By default this is used to
+ * have a special background color on certain domains, e.g. orange in config,
+ * blue on exec (e.g. search results).
  *
- * <refsect3 id="css-statusbar">
- * <title>Statusbar-specific CSS</title>
- * <para>
+ *
+ * ## Statusbar-specific CSS ## {#css-statusbar}
+ *
  * The statusbar will also have a class applied on each area/section, the name
  * of said section (no prefix). (So it's probably best to use
- * <systemitem>DonnaStatusBar.section</systemitem> as selector) It also makes
- * sure that any font properties are applied, so you can set specific font
- * properties on a per-area basis.
- * </para></refsect3>
- *
- * </para></refsect2>
+ * `DonnaStatusBar.section` as selector) It also makes sure that any font
+ * properties are applied, so you can set specific font properties on a per-area
+ * basis.
  */
 
 enum
@@ -3915,22 +3854,21 @@ enum
  *
  * First of all, prefixes can be defined. A prefix is a string of one or more
  * characters that cannot start with a letter. Defined under numbered categories
- * in <systemitem>donna/prefixes</systemitem> in the configuration, each
- * definition can be made of the following options:
+ * in `donna/prefixes` in the configuration, each definition can be made of the
+ * following options:
  *
- * - <systemitem>prefix</systemitem> (string; required): the actual prefix to
- *   look for at the beginning of the full location.
- * - <systemitem>is_strict</systemitem> (boolean; optional): By default, a match
- *   will be whenever the full location starts with the prefix. When true, it
- *   will also required that the full location contains more than the prefix,
- *   and that the first character after the prefix isn't a space. This is to
- *   allow the use of the same string as alias, and use them all as needed.
- * - <systemitem>replacement</systemitem> (string; required): The string the
- *   prefix will be replaced with in the full location.
- * - <systemitem>is_home_dir</systemitem> (boolean; optional): A special mode,
- *   where if true option <systemitem>replacement</systemitem> will be ignored
- *   (and isn't even in fact needed) and instead the prefix will be replaced
- *   with the user's home dir (prefixed with "fs:").
+ * - `prefix` (string; required): the actual prefix to look for at the beginning
+ *   of the full location.
+ * - `is_strict` (boolean; optional): By default, a match will be whenever the
+ *   full location starts with the prefix. When true, it will also required that
+ *   the full location contains more than the prefix, and that the first
+ *   character after the prefix isn't a space. This is to allow the use of the
+ *   same string as alias, and use them all as needed.
+ * - `replacement` (string; required): The string the prefix will be replaced
+ *   with in the full location.
+ * - `is_home_dir` (boolean; optional): A special mode, where if true option
+ *   `replacement` will be ignored (and isn't even in fact needed) and instead
+ *   the prefix will be replaced with the user's home dir (prefixed with "fs:").
  *
  * When a prefix match if found, replacement occurs and user parsing is
  * completed. (I.e. the result cannot include other prefixes or aliases.)
@@ -3946,19 +3884,18 @@ enum
  *
  * An alias, like a prefix, will consist of replacing it with a replacement.
  * Said replacement will be looked for in
- * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement</systemitem>.
+ * `donna/aliases/&lt;ALIAS&gt;/replacement`.
  * If the full location was nothing else than the alias (i.e. no space after it)
  * then the replacement will first be looked for in
- * <systemitem>donna/aliases/&lt;ALIAS&gt;/replacement_no_args</systemitem>.
+ * `donna/aliases/&lt;ALIAS&gt;/replacement_no_args`.
  *
- * When "arguments" were specified after the alias, i.e. option
- * <systemitem>replacement</systemitem> is used, then a couple more options are
- * available:
- * - <systemitem>include_space</systemitem> (boolean) : If true (default) the
- *   space between the alias (its replacement) and the following "arguments" is
- *   preserved. Set this option to false not to include the space.
- * - <systemitem>suffix</systemitem> (string) : Will be added as suffix, after
- *   the replacement of the alias and context parsing (if any).
+ * When "arguments" were specified after the alias, i.e. option `replacement` is
+ * used, then a couple more options are available:
+ * - `include_space` (boolean) : If true (default) the space between the alias
+ *   (its replacement) and the following "arguments" is preserved. Set this
+ *   option to false not to include the space.
+ * - `suffix` (string) : Will be added as suffix, after the replacement of the
+ *   alias and context parsing (if any).
  *
  * See donna_context_parse() for more on contextual parsing, and @intrefs.
  *
@@ -5402,80 +5339,68 @@ gtk_menu_popup_and_destroy (GtkMenu             *menu,
  * there's no more than one in a row.
  *
  * When the menu is shown, it will use the "menu definition" @menu. This must
- * simply be the name of a category found under <systemitem>menus</systemitem> i
- * config, which will include options for the menu, as well as how to handle the
- * action on click.
+ * simply be the name of a category found under `menus` in config, which will
+ * include options for the menu, as well as how to handle the action on click.
  *
  * Available options are:
  *
- * - <systemitem>show_icons</systemitem> (boolean): Whether to show icons or
- *   not; Defaults to true
- * - <systemitem>use_default_icons</systemitem> (boolean): When showing icons
- *   and there's no icon set on the node, fallback to default file/folder icons
- *   (based on node type). Defaults to true
- * - <systemitem>submenus</systemitem> (integer:enabled): How to handle
- *   containers. If "enabled" they will be submenus (with their
- *   content/children); If "disabled" they will be menuitems (that can be
- *   clicked, same as items); If "combine" then menuitems will be both clickable
- *   and include a submenu.  Defaults to "disabled"
- * - <systemitem>children</systemitem> (integer:node-type): Define which node
- *   type to show on submenus: "item", "container", or "all" Defaults to "all"
- * - <systemitem>children_show_hidden</systemitem> (boolean): Whether or not to
- *   include "hidden"/dot files in submenus (similar to the
- *   <systemitem>show_hidden</systemitem> option of treeviews) Defaults to true
- * - <systemitem>can_children_submenus</systemitem> (boolean): Whether to use
- *   node's <systemitem>menu-submenus</systemitem> property to overwrite option
- *   <systemitem>submenus</systemitem> Defaults to true
- * - <systemitem>can_children_menu</systemitem> (boolean): Whether to use node's
- *   <systemitem>menu-menu</systemitem> property to overwrite @menu
- * - <systemitem>sort</systemitem> (boolean): Whether to sort nodes in menu. See
- *   #ct-name-options for sort-related options. Defaults to false
+ * - `show_icons` (boolean): Whether to show icons or not; Defaults to true
+ * - `use_default_icons` (boolean): When showing icons and there's no icon set
+ *   on the node, fallback to default file/folder icons (based on node type).
+ *   Defaults to true
+ * - `submenus` (integer:enabled): How to handle containers. If "enabled" they
+ *   will be submenus (with their content/children); If "disabled" they will be
+ *   menuitems (that can be clicked, same as items); If "combine" then menuitems
+ *   will be both clickable and include a submenu.  Defaults to "disabled"
+ * - `children` (integer:node-type): Define which node type to show on submenus:
+ *   "item", "container", or "all" Defaults to "all"
+ * - `children_show_hidden` (boolean): Whether or not to include "hidden"/dot
+ *   files in submenus (similar to the `show_hidden` option of treeviews)
+ *   Defaults to true
+ * - `can_children_submenus` (boolean): Whether to use node's `menu-submenus`
+ *   property to overwrite option `submenus` Defaults to true
+ * - `can_children_menu` (boolean): Whether to use node's `menu-menu` property
+ *   to overwrite @menu
+ * - `sort` (boolean): Whether to sort nodes in menu. See #ct-name-options for
+ *   sort-related options. Defaults to false
  *
  *
  * Node properties used in menus are:
  *
- * - <systemitem>name</systemitem>: The label of the menuitem
- * - <systemitem>menu-is-name-markup</systemitem> (boolean): Whether the label
- *   contains markup
- * - <systemitem>desc</systemitem>: The tooltip of the menuitem
- * - <systemitem>menu-is-sensitive</systemitem> (boolean): Whether the menuitem
- *   is sensitive or not
- * - <systemitem>menu-is-combined-sensitive</systemitem> (boolean): If the item
- *   is in "combine" mode (i.e. both a menuitem and submenu), whether only the
- *   item-part is sensitive or not
- * - <systemitem>menu-is-label-bold</systemitem> (boolean): Whether the label
- *   must be in bold or not
- * - <systemitem>menu-submenus</systemitem> (uint): Overwrite
- *   <systemitem>submenus</systemitem> if
- *   <systemitem>can_children_submenus</systemitem> is true
- * - <systemitem>menu-menu</systemitem> (string): Overwrite @menu if
- *   <systemitem>can_children_menu</systemitem> is true
+ * - `name`: The label of the menuitem
+ * - `menu-is-name-markup` (boolean): Whether the label contains markup
+ * - `desc`: The tooltip of the menuitem
+ * - `menu-is-sensitive` (boolean): Whether the menuitem is sensitive or not
+ * - `menu-is-combined-sensitive` (boolean): If the item is in "combine" mode
+ *   (i.e. both a menuitem and submenu), whether only the item-part is sensitive
+ *   or not
+ * - `menu-is-label-bold` (boolean): Whether the label must be in bold or not
+ * - `menu-submenus` (uint): Overwrite `submenus` if `can_children_submenus` is
+ *   true
+ * - `menu-menu` (string): Overwrite @menu if `can_children_menu` is true
  *
- * Additionally, if <systemitem>show_icons</systemitem> is true:
+ * Additionally, if `show_icons` is true:
  *
- * - <systemitem>menu-image-special</systemitem> (uint): A
- *   %DonnaImageMenuItemImageSpecial if the menuitem is a check or radio option
- * - <systemitem>menu-is-active</systemitem>: If check or radio, whether it is
- *   active/checked or not
- * - <systemitem>menu-is-inconsistent</systemitem>: If check, whether it is
- *   inconsistent or not
- * - <systemitem>icon</systemitem>: If image, the actual icon to use
- * - <systemitem>menu-image-selected</systemitem> (icon): If image, the actual
- *   icon to use when the menuitem is selected
+ * - `menu-image-special` (uint): A %DonnaImageMenuItemImageSpecial if the
+ *   menuitem is a check or radio option
+ * - `menu-is-active`: If check or radio, whether it is active/checked or not
+ * - `menu-is-inconsistent`: If check, whether it is inconsistent or not
+ * - `icon`: If image, the actual icon to use
+ * - `menu-image-selected` (icon): If image, the actual icon to use when the
+ *   menuitem is selected
  *
  *
  * When a menuitem is clicked, processing said click happens very much like
- * on treeviews, except instead of using <systemitem>click_modes</systemitem>
- * the triggers are looked for in category @menu under
- * <systemitem>menus</systemitem> (alongside the options).
+ * on treeviews, except instead of using `click_modes` the triggers are looked
+ * for in category @menu under `menus` (alongside the options).
  *
  * Triggers will be parsed using the following variables:
  *
- * - <systemitem>\%N</systemitem>: Location of the clicked node
- * - <systemitem>\%n</systemitem>: The clicked node
+ * - `%N`: Location of the clicked node
+ * - `%n`: The clicked node
  *
  * For both options & clicks/triggers, if nothing if found under @menu then
- * category <systemitem>defaults/menus</systemitem> is used.
+ * category `defaults/menus` is used.
  *
  * Returns: %TRUE is the menu was popped up, else %FALSE
  */
@@ -5987,12 +5912,11 @@ key_press_cb (struct ask_text *data, GdkEventKey *event)
  * This would typically be the fd of the task from which calling
  * donna_app_ask_text()
  *
- * The window will have the CSS id/name <systemitem>ask-text</systemitem> to
- * allow customization. @title will be shown on the dialog, with CSS class
- * <systemitem>title</systemitem>
- * If @details was specified, it will be shown below, using CSS class
- * <systemitem>details</systemitem> If it starts with prefix "markup:" then it
- * will be processed using Pango markup.
+ * The window will have the CSS id/name `ask-text` to allow customization.
+ * @title will be shown on the dialog, with CSS class `title`
+ * If @details was specified, it will be shown below, using CSS class `details`
+ * If it starts with prefix "markup:" then it will be processed using Pango
+ * markup.
  *
  * If specified, @main_default will be featured in the entry. If @other_defaults
  * was specified, the entry will also feature a popdown menu including the given

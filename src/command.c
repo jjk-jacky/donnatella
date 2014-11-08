@@ -51,9 +51,9 @@
  * arguments, you can use either one element (e.g. node), or an array.
  *
  * Some commands allow for a string argument either one of many strings, or a
- * combination of strings (using plus sign (<systemitem>+</systemitem>) as
- * separator). In such cases, you don't have to specify the entire string, but
- * only as many characters as needed to uniquely identify it.
+ * combination of strings (using plus sign (`+`) as separator). In such cases,
+ * you don't have to specify the entire string, but only as many characters as
+ * needed to uniquely identify it.
  *
  * For example, command tv_goto_line() has an argument @set that must be one or
  * more of "scroll", "focus" and "cursor"

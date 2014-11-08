@@ -37,41 +37,35 @@
  *
  * Column type to show a progress bar.
  *
- * <refsect2 id="ct-progress-options">
- * <title>Options</title>
- * <para>
+ * # Options # {#ct-progress-options}
+ *
  * The following options are available :
  *
- * - <systemitem>property</systemitem> (string) : Name of the property holding
- *   the progress value. This must be either an integer value from 0 to 100, or
- *   a double value from 0.0 to 1.0.
+ * - `property` (string) : Name of the property holding the progress value. This
+ *   must be either an integer value from 0 to 100, or a double value from 0.0
+ *   to 1.0.
  *   It can also be -1 to indicate the progress bar should be in pulsating mode.
  *   Defaults to "progress"
- * - <systemitem>label</systemitem> (string) : A format string of what to show
- *   over the progress bar. Will be used if no
- *   <systemitem>property_lbl</systemitem> was set. Defaults to "&percnt;P"
- * - <systemitem>property_lbl</systemitem> (string) : Name of a property holding
- *   the text to show over the progress bar; It can use the same format
- *   specifiers as "label". No default.
- * - <systemitem>property_pulse</systemitem> (string) : Name of a property used
- *   for updating a pulsating progress bar. Must be an integer, incremented to
- *   pulsate the progress bar.
+ * - `label` (string) : A format string of what to show over the progress bar.
+ *   Will be used if no `property_lbl` was set. Defaults to "&percnt;P"
+ * - `property_lbl` (string) : Name of a property holding the text to show over
+ *   the progress bar; It can use the same format specifiers as "label". No
+ *   default.
+ * - `property_pulse` (string) : Name of a property used for updating a
+ *   pulsating progress bar. Must be an integer, incremented to pulsate the
+ *   progress bar.
  *
- * The following format specifiers are supported in
- * <systemitem>label</systemitem>, as well as the value of
- * <systemitem>property_lbl</systemitem>:
+ * The following format specifiers are supported in `label`, as well as the
+ * value of `property_lbl`:
  *
  * - &percnt;p: Current progress value
  * - &percnt;P: Same as &percnt;P but suffixed with a percent sign
  * - &percnt;&percnt;: The '&percnt;' character
  *
- * </para></refsect2>
  *
- * <refsect2 id="ct-progress-filtering">
- * <title>Filtering</title>
- * <para>
+ * # Filtering # {#ct-progress-filtering}
+ *
  * There are no filtering possible on column of this type.
- * </para></refsect2>
  */
 
 enum
