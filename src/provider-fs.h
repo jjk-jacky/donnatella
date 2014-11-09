@@ -79,6 +79,14 @@ gboolean            donna_provider_fs_add_io_engine (DonnaProviderFs    *pfs,
                                                      fs_engine_io_task   engine,
                                                      GError            **error);
 
+DonnaTask *         donna_provider_fs_nodes_io_task (DonnaProviderFs    *pfs,
+                                                     GPtrArray          *nodes,
+                                                     DonnaIoType         io_type,
+                                                     DonnaNode          *dest,
+                                                     const gchar        *new_name,
+                                                     const gchar        *engine,
+                                                     GError            **error);
+
 G_END_DECLS
 
 #endif /* __DONNA_PROVIDER_FS_H__ */

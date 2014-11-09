@@ -29,6 +29,7 @@
 #include "task-manager.h"
 #include "provider.h"
 #include "provider-filter.h"
+#include "provider-fs.h"
 #include "task-process.h"   /* for command exec() */
 #include "util.h"
 #include "macros.h"
@@ -2975,31 +2976,19 @@ cmd_nodes_get_item (DonnaTask *task, DonnaApp *app, gpointer *args)
     return DONNA_TASK_DONE;
 }
 
-/**
- * nodes_io:
- * @nodes: (array): The source nodes for the operation
- * @io_type: The type of IO operation to perform
- * @dest: (allow-none): The destination of the operation
- * @new_name: (allow-none): The new name to use in the operation
- *
- * Performs the specified IO operation
- *
- * @io_type must be one of "copy", "move" or "delete"
- *
- * See donna_app_nodes_io_task() for more.
- *
- * Returns: (array) (allow-none): For copy/move operations, the resulting nodes
- * will be returned. For delete operation, there won't be no return value
- */
 static DonnaTaskState
-cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
+_nodes_io (DonnaTask    *task,
+           DonnaApp     *app,
+           GPtrArray    *nodes,
+           gchar        *io_type,
+           DonnaNode    *dest,
+           gchar        *new_name,
+           gboolean      is_fs,
+           gchar        *engine)
 {
     GError *err = NULL;
-    GPtrArray *nodes = args[0];
-    gchar *io_type = args[1];
-    DonnaNode *dest = args[2]; /* opt */
-    gchar *new_name = args[3]; /* opt */
 
+    const gchar *command = (is_fs) ? "fs_nodes_io" : "nodes_io";
     const gchar *c_io_type[] = { "copy", "move", "delete" };
     DonnaIoType io_types[] = { DONNA_IO_COPY, DONNA_IO_MOVE, DONNA_IO_DELETE };
     gint c_io;
@@ -3017,7 +3006,21 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
         return DONNA_TASK_FAILED;
     }
 
-    t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, new_name, &err);
+    if (is_fs)
+    {
+        DonnaProviderFs *pfs;
+
+        pfs = (DonnaProviderFs *) donna_app_get_provider (app, "fs");
+        if (G_LIKELY (pfs))
+            t = donna_provider_fs_nodes_io_task (pfs, nodes, io_types[c_io],
+                    dest, new_name, engine, &err);
+        else
+            t = NULL;
+        g_object_unref (pfs);
+    }
+    else
+        t = donna_app_nodes_io_task (app, nodes, io_types[c_io], dest, new_name, &err);
+
     if (!t)
     {
         donna_task_take_error (task, err);
@@ -3026,8 +3029,8 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
 
     if (!donna_app_run_task_and_wait (app, g_object_ref (t), task, &err))
     {
-        g_prefix_error (&err, "Command 'nodes_io': "
-                "Failed to run nodes_io task: ");
+        g_prefix_error (&err, "Command '%s': Failed to run nodes_io task: ",
+                command);
         donna_task_take_error (task, err);
         g_object_unref (t);
         return DONNA_TASK_FAILED;
@@ -3052,17 +3055,74 @@ cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
         if (err)
         {
             err = g_error_copy (err);
-            g_prefix_error (&err, "Command 'nodes_io': IO task failed: ");
+            g_prefix_error (&err, "Command '%s': IO task failed: ", command);
             donna_task_take_error (task, err);
         }
         else
             donna_task_set_error (task, DONNA_COMMAND_ERROR,
                     DONNA_COMMAND_ERROR_OTHER,
-                    "Command 'nodes_io': IO task failed without error message");
+                    "Command '%s': IO task failed without error message", command);
     }
 
     g_object_unref (t);
     return state;
+}
+
+/**
+ * nodes_io:
+ * @nodes: (array): The source nodes for the operation
+ * @io_type: The type of IO operation to perform
+ * @dest: (allow-none): The destination of the operation
+ * @new_name: (allow-none): The new name to use in the operation
+ *
+ * Performs the specified IO operation
+ *
+ * @io_type must be one of "copy", "move" or "delete"
+ *
+ * See donna_app_nodes_io_task() for more.
+ *
+ * Returns: (array) (allow-none): For copy/move operations, the resulting nodes
+ * will be returned. For delete operation, there won't be no return value
+ */
+static DonnaTaskState
+cmd_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *nodes = args[0];
+    gchar *io_type = args[1];
+    DonnaNode *dest = args[2]; /* opt */
+    gchar *new_name = args[3]; /* opt */
+
+    return _nodes_io (task, app, nodes, io_type, dest, new_name, FALSE, NULL);
+}
+
+/**
+ * fs_nodes_io:
+ * @nodes: (array): The source nodes for the operation
+ * @io_type: The type of IO operation to perform
+ * @dest: (allow-none): The destination of the operation
+ * @new_name: (allow-none): The new name to use in the operation
+ * @engine: (allow-none): The name of the engine to use for the operation
+ *
+ * Performs the specified IO operation using the specified IO engine
+ *
+ * This is similar to nodes_io(), except obviously only valid for @sources and
+ * @dest in provider 'fs' as it allows you to specify which IO engine to use.
+ *
+ * See nodes_io() for more.
+ *
+ * Returns: (array) (allow-none): For copy/move operations, the resulting nodes
+ * will be returned. For delete operation, there won't be no return value
+ */
+static DonnaTaskState
+cmd_fs_nodes_io (DonnaTask *task, DonnaApp *app, gpointer *args)
+{
+    GPtrArray *nodes = args[0];
+    gchar *io_type = args[1];
+    DonnaNode *dest = args[2]; /* opt */
+    gchar *new_name = args[3]; /* opt */
+    gchar *engine = args[4]; /* opt */
+
+    return _nodes_io (task, app, nodes, io_type, dest, new_name, TRUE, engine);
 }
 
 /**
@@ -6389,6 +6449,15 @@ _donna_add_commands (GHashTable *commands)
     arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
     arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
     add_command (nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
+            DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
+
+    i = -1;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING;
+    arg_type[++i] = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    arg_type[++i] = DONNA_ARG_TYPE_STRING | DONNA_ARG_IS_OPTIONAL;
+    add_command (fs_nodes_io, ++i, DONNA_TASK_VISIBILITY_INTERNAL,
             DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY);
 
     i = -1;

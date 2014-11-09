@@ -417,28 +417,30 @@ get_engine_name (DonnaProviderFs *pfs, DonnaIoType type, gboolean is_fs)
 }
 
 static DonnaTask *
-provider_fs_io_task (DonnaProvider      *provider,
-                     DonnaIoType         type,
-                     gboolean            is_source,
-                     GPtrArray          *sources,
-                     DonnaNode          *dest,
-                     const gchar        *new_name,
-                     GError            **error)
+_io_task (DonnaProviderFs   *pfs,
+          DonnaIoType        type,
+          gboolean           is_source,
+          GPtrArray         *sources,
+          DonnaNode         *dest,
+          const gchar       *new_name,
+          gboolean           is_fs,
+          const gchar       *engine,
+          GError           **error)
 {
-    DonnaProviderFs *pfs = (DonnaProviderFs *) provider;
     GArray *io_engines = pfs->priv->io_engines;
     DonnaTask *task = NULL;
     struct io_engine *ioe;
-    gchar *engine;
+    gchar *free_me = NULL;
     guint i;
 
-    if ((!is_source && donna_node_peek_provider (sources->pdata[0]) != provider)
+    if ((!is_source && donna_node_peek_provider (sources->pdata[0]) != (DonnaProvider *) pfs)
         || (is_source && type != DONNA_IO_DELETE
-            && donna_node_peek_provider (dest) != provider))
+            && donna_node_peek_provider (dest) != (DonnaProvider *) pfs))
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-                "Provider 'fs': Does not support IO operation outside of 'fs'");
+                "Provider '%s': Does not support IO operation outside of '%s'",
+                "fs", "fs");
         return NULL;
     }
 
@@ -446,11 +448,16 @@ provider_fs_io_task (DonnaProvider      *provider,
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-                "Provider 'fs': No IO engine available");
+                "Provider '%s': No IO engine available",
+                "fs");
         return NULL;
     }
 
-    engine = get_engine_name (pfs, type, FALSE);
+    if (!engine)
+    {
+        free_me = get_engine_name (pfs, type, is_fs);
+        engine = (const gchar *) free_me;
+    }
     for (i = 0; i < io_engines->len; ++i)
     {
         ioe = &g_array_index (io_engines, struct io_engine, i);
@@ -462,12 +469,12 @@ provider_fs_io_task (DonnaProvider      *provider,
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-                "Provider 'fs': No IO engine '%s'",
-                engine);
-        g_free (engine);
+                "Provider '%s': No IO engine '%s'",
+                "fs", engine);
+        g_free (free_me);
         return NULL;
     }
-    g_free (engine);
+    g_free (free_me);
 
     task = ioe->io_engine_task (pfs, ((DonnaProviderBase *) pfs)->app,
             type, sources, dest, new_name, parse_cmdline,
@@ -475,6 +482,69 @@ provider_fs_io_task (DonnaProvider      *provider,
     if (G_UNLIKELY (!task))
     {
         g_prefix_error (error, "Provider 'fs': Failed to create IO task: ");
+        return NULL;
+    }
+
+    return task;
+}
+
+static DonnaTask *
+provider_fs_io_task (DonnaProvider      *provider,
+                     DonnaIoType         type,
+                     gboolean            is_source,
+                     GPtrArray          *sources,
+                     DonnaNode          *dest,
+                     const gchar        *new_name,
+                     GError            **error)
+{
+    return _io_task ((DonnaProviderFs *) provider, type, is_source, sources,
+            dest, new_name, FALSE, NULL, error);
+}
+
+DonnaTask *
+donna_provider_fs_nodes_io_task (DonnaProviderFs    *pfs,
+                                 GPtrArray          *nodes,
+                                 DonnaIoType         io_type,
+                                 DonnaNode          *dest,
+                                 const gchar        *new_name,
+                                 const gchar        *engine,
+                                 GError            **error)
+{
+    DonnaTask *task;
+    guint i;
+
+    g_return_val_if_fail (DONNA_IS_PROVIDER_FS (pfs), FALSE);
+    g_return_val_if_fail (nodes != NULL, FALSE);
+    g_return_val_if_fail (io_type == DONNA_IO_COPY || io_type == DONNA_IO_MOVE
+            || io_type == DONNA_IO_DELETE, FALSE);
+    if (io_type != DONNA_IO_DELETE)
+        g_return_val_if_fail (DONNA_IS_NODE (dest), FALSE);
+
+    if (G_UNLIKELY (nodes->len == 0))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOTHING_TO_DO,
+                "Provider '%s': Cannot perform IO operation, no nodes given",
+                "fs");
+        return NULL;
+    }
+
+    /* make sure all nodes are from the same provider */
+    for (i = 0; i < nodes->len; ++i)
+    {
+        if (donna_node_peek_provider (nodes->pdata[i]) != (DonnaProvider *) pfs)
+        {
+            g_set_error (error, DONNA_APP_ERROR, DONNA_APP_ERROR_OTHER,
+                    "Cannot perform IO: nodes are not all from provider 'fs'.");
+            return NULL;
+        }
+    }
+
+    task = _io_task (pfs, io_type, TRUE, nodes, dest,
+            (new_name && nodes->len == 1) ? new_name : NULL, TRUE, engine, error);
+    if (!task)
+    {
+        g_prefix_error (error, "Couldn't to perform IO operation: ");
         return NULL;
     }
 

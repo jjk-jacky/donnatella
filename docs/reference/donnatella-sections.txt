@@ -57,6 +57,7 @@ nodes_add
 nodes_filter
 nodes_get_item
 nodes_io
+fs_nodes_io
 nodes_len
 nodes_remove_from
 strings_get_item
