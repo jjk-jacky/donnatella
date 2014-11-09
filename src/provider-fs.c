@@ -35,6 +35,7 @@
 #include "task.h"
 #include "task-process.h"
 #include "app.h"
+#include "util.h"
 #include "misc.h"
 #include "macros.h"
 
@@ -241,6 +242,7 @@ static gchar *
 parse_cmdline (const gchar        *cmdline,
                GPtrArray          *sources,
                DonnaNode          *dest,
+               const gchar        *new_name,
                GError            **error)
 {
     GString *str;
@@ -280,6 +282,14 @@ parse_cmdline (const gchar        *cmdline,
                 g_string_append (str, qs);
                 g_free (qs);
                 g_free (ss);
+                s += 2;
+                fmt = s;
+                break;
+
+            case 'n':
+                g_string_append_len (str, fmt, s - fmt);
+                if (new_name)
+                    donna_g_string_append_quoted (str, new_name, FALSE);
                 s += 2;
                 fmt = s;
                 break;

@@ -524,24 +524,16 @@ donna_io_engine_basic_io_task (DonnaProviderFs    *pfs,
     switch (type)
     {
         case DONNA_IO_COPY:
-            if (new_name && sources->len == 1)
-            {
-                gchar *ss = g_shell_quote (new_name);
-                cmdline = s = g_strconcat ("cp -irvaT %s %d/", ss, NULL);
-                g_free (ss);
-            }
+            if (new_name)
+                cmdline = (gchar *) "cp -irvaT %s %d/%n";
             else
                 cmdline = (gchar *) "cp -irvat %d %s";
             snprintf (data->prefix, LEN_PREFIX + 1, "cp: ");
             break;
 
         case DONNA_IO_MOVE:
-            if (new_name && sources->len == 1)
-            {
-                gchar *ss = g_shell_quote (new_name);
-                cmdline = s = g_strconcat ("mv -ivT %s %d/", ss, NULL);
-                g_free (ss);
-            }
+            if (new_name)
+                cmdline = (gchar *) "mv -ivT %s %d/%n";
             else
                 cmdline = (gchar *) "mv -ivt %d %s";
             snprintf (data->prefix, LEN_PREFIX + 1, "mv: ");
@@ -561,7 +553,7 @@ donna_io_engine_basic_io_task (DonnaProviderFs    *pfs,
             return NULL;
     }
 
-    cmdline = parser (cmdline, sources, dest, error);
+    cmdline = parser (cmdline, sources, dest, new_name, error);
     if (G_UNLIKELY (!cmdline))
     {
         free_data (data);
