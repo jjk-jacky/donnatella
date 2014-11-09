@@ -115,6 +115,17 @@ DonnaTask *     donna_io_engine_basic_io_task       (DonnaProviderFs    *pfs,
                                                      fs_file_created     created,
                                                      fs_file_deleted     deleted,
                                                      GError            **error);
+/* ioengine-exec.c */
+DonnaTask *     donna_io_engine_exec_io_task        (DonnaProviderFs    *pfs,
+                                                     DonnaApp           *app,
+                                                     DonnaIoType         type,
+                                                     GPtrArray          *sources,
+                                                     DonnaNode          *dest,
+                                                     const gchar        *new_name,
+                                                     fs_parse_cmdline    parser,
+                                                     fs_file_created     file_created,
+                                                     fs_file_deleted     file_deleted,
+                                                     GError            **error);
 
 static void
 provider_fs_provider_init (DonnaProviderInterface *interface)
@@ -159,6 +170,8 @@ donna_provider_fs_init (DonnaProviderFs *provider)
 
     donna_provider_fs_add_io_engine (provider, "basic",
             donna_io_engine_basic_io_task, NULL);
+    donna_provider_fs_add_io_engine (provider, "exec",
+            donna_io_engine_exec_io_task, NULL);
 }
 
 static void

@@ -3375,13 +3375,16 @@ cmd_register_nodes_io (DonnaTask               *task,
     {
         if (io_types[c_io] != DONNA_IO_DELETE)
         {
-            GValue *value;
+            if (g_object_get_data ((GObject *) t, "donna-ioengine-exec") != GUINT_TO_POINTER (1))
+            {
+                GValue *value;
 
-            value = donna_task_grab_return_value (task);
-            g_value_init (value, G_TYPE_PTR_ARRAY);
-            g_value_set_boxed (value,
-                    g_value_get_boxed (donna_task_get_return_value (t)));
-            donna_task_release_return_value (task);
+                value = donna_task_grab_return_value (task);
+                g_value_init (value, G_TYPE_PTR_ARRAY);
+                g_value_set_boxed (value,
+                        g_value_get_boxed (donna_task_get_return_value (t)));
+                donna_task_release_return_value (task);
+            }
         }
     }
     else

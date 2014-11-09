@@ -79,6 +79,7 @@ libdonnatella_la_SOURCES = \
 					 src/imagemenuitem.c \
 					 src/imagemenuitem.h \
 					 src/ioengine-basic.c \
+					 src/ioengine-exec.c \
 					 src/macros.h \
 					 src/misc.c \
 					 src/misc.h \
