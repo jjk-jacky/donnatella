@@ -5687,7 +5687,7 @@ donna_app_nodes_io_task (DonnaApp       *app,
     }
 
     task = donna_provider_io_task (provider, io_type, TRUE, nodes,
-            dest, new_name, error);
+            dest, (new_name && nodes->len == 1) ? new_name : NULL, error);
     if (!task && dest && provider != donna_node_peek_provider (dest))
     {
         g_clear_error (error);
