@@ -255,14 +255,16 @@
 
     <listitem><para>Visual Filters</para>
     <para>A few filters are defined by default, and can be applied using
-    <systemitem>f</systemitem> followed by the filter name, e.g. to only show
+    <systemitem>f</systemitem> followed by the filter alias, e.g. to only show
     images, you can use filter "i" by pressing <systemitem>fi</systemitem>
-    Filters are simply options defined under category <systemitem>filters</systemitem>
-    in configuration. You can also use <systemitem>F</systemitem> to edit said
-    filter first, e.g. pressing <systemitem>Fi</systemitem> will allow you to
-    view/edit the filter before it is applied. You can of course create new filters
-    that way. (Leaving filter "f" undefined allows to use
-    <systemitem>ff</systemitem> to unset any current VF.)</para>
+    Filters are defined in configuration under
+    <systemitem>providers/filter</systemitem> as numbered categories, and
+    currently loaded filters can be listed via full location
+    <systemitem>filter:/</systemitem> They can be assigned a name, icon and/or
+    alias.
+    You can also use <systemitem>F</systemitem> to edit the current visual
+    filter, if any. (Filter aliased "f" is used to mean no filter, and allows to
+    use <systemitem>ff</systemitem> to unset any current VF.)</para>
     <para>You can also filter by age (via column time) using
     <systemitem>q</systemitem>. Alone, it will filter nodes modified today. You
     can of course use a modifier, e.g. <systemitem>1q</systemitem> for nodes

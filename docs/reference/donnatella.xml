@@ -155,6 +155,9 @@
             <listitem><para><systemitem>app</systemitem> : debug messages
                     relating to donna in general.
             </para></listitem>
+            <listitem><para><systemitem>memory</systemitem> : debug messages
+                    relating to memory (to help find leaks).
+            </para></listitem>
             <listitem><para><systemitem>all</systemitem> : all debug messages
                     (same as specifying all the filters above)
             </para></listitem>
