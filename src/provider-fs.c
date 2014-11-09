@@ -103,8 +103,8 @@ static DonnaTaskState   provider_fs_new_child       (DonnaProviderBase  *provide
                                                      DonnaNodeType       type,
                                                      const gchar        *name);
 
-/* fsengine-basic.c */
-DonnaTask *     donna_fs_engine_basic_io_task       (DonnaProviderFs    *pfs,
+/* ioengine-basic.c */
+DonnaTask *     donna_io_engine_basic_io_task       (DonnaProviderFs    *pfs,
                                                      DonnaApp           *app,
                                                      DonnaIoType         type,
                                                      GPtrArray          *sources,
@@ -157,7 +157,7 @@ donna_provider_fs_init (DonnaProviderFs *provider)
             DonnaProviderFsPrivate);
 
     donna_provider_fs_add_io_engine (provider, "basic",
-            donna_fs_engine_basic_io_task, NULL);
+            donna_io_engine_basic_io_task, NULL);
 }
 
 static void

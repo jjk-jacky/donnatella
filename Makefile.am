@@ -74,11 +74,11 @@ libdonnatella_la_SOURCES = \
 					 src/filter.c \
 					 src/filter.h \
 					 src/filter-private.h \
-					 src/fsengine-basic.c \
 					 src/history.c \
 					 src/history.h \
 					 src/imagemenuitem.c \
 					 src/imagemenuitem.h \
+					 src/ioengine-basic.c \
 					 src/macros.h \
 					 src/misc.c \
 					 src/misc.h \

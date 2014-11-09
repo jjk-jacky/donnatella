@@ -1,7 +1,7 @@
 /*
  * donnatella - Copyright (C) 2014 Olivier Brunel
  *
- * fsengine-basic.c
+ * ioengine-basic.c
  * Copyright (C) 2014 Olivier Brunel <jjk@jjacky.com>
  *
  * This file is part of donnatella.
@@ -39,7 +39,7 @@
 #define LEN_PREFIX      4
 
 DonnaTask *
-donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
+donna_io_engine_basic_io_task (DonnaProviderFs    *pfs,
                                DonnaApp           *app,
                                DonnaIoType         type,
                                GPtrArray          *sources,
@@ -234,7 +234,7 @@ pipe_new_line (DonnaTask    *task,
     {
         if (filename)
         {
-            g_warning ("FS Engine 'basic': Failed to get new filename for '%s'; "
+            g_warning ("IO Engine 'basic': Failed to get new filename for '%s'; "
                     "Will be skipped in returned nodes", filename);
             g_hash_table_remove (data->loc_sources, filename);
             if (g_hash_table_size (data->loc_sources) == 0)
@@ -264,7 +264,7 @@ pipe_new_line (DonnaTask    *task,
                 (b) ? b : s, &err);
         if (G_UNLIKELY (!node))
         {
-            g_warning ("FS Engine 'basic': Failed to get node 'fs:%s': %s",
+            g_warning ("IO Engine 'basic': Failed to get node 'fs:%s': %s",
                     (b) ? b : s,
                     (err) ? err->message : "(no error message)");
             g_clear_error (&err);
@@ -491,7 +491,7 @@ set_cmdline (DonnaTaskProcess   *taskp,
 }
 
 DonnaTask *
-donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
+donna_io_engine_basic_io_task (DonnaProviderFs    *pfs,
                                DonnaApp           *app,
                                DonnaIoType         type,
                                GPtrArray          *sources,
@@ -557,7 +557,7 @@ donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
             free_data (data);
             g_set_error (error, DONNA_PROVIDER_ERROR,
                     DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
-                    "FS Engine 'basic': Operation not supported (%d)", type);
+                    "IO Engine 'basic': Operation not supported (%d)", type);
             return NULL;
     }
 
@@ -565,7 +565,7 @@ donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
     if (G_UNLIKELY (!cmdline))
     {
         free_data (data);
-        g_prefix_error (error, "FS Engine 'basic': Failed to parse command line: ");
+        g_prefix_error (error, "IO Engine 'basic': Failed to parse command line: ");
         g_free (s);
         return NULL;
     }
@@ -583,7 +583,7 @@ donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
         free_data (data);
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_OTHER,
-                "FS Engine 'basic': Failed to create new task-process");
+                "IO Engine 'basic': Failed to create new task-process");
         g_free (cmdline);
         return NULL;
     }
@@ -594,7 +594,7 @@ donna_fs_engine_basic_io_task (DonnaProviderFs    *pfs,
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_OTHER,
-                "FS Engine 'basic': Failed to set workdir for task-process");
+                "IO Engine 'basic': Failed to set workdir for task-process");
         g_object_unref (taskp);
         return NULL;
     }
