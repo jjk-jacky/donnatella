@@ -46,7 +46,7 @@ struct io_engine
 
 struct _DonnaProviderFsPrivate
 {
-    GSList *io_engines;
+    GArray *io_engines;
 };
 
 static DonnaNode *      new_node                    (DonnaProviderBase  *_provider,
@@ -161,10 +161,10 @@ donna_provider_fs_init (DonnaProviderFs *provider)
 }
 
 static void
-free_io_engine (struct io_engine *ioe)
+free_io_engine (gpointer data)
 {
+    struct io_engine *ioe = data;
     g_free (ioe->name);
-    g_free (ioe);
 }
 
 static void
@@ -173,7 +173,7 @@ provider_fs_finalize (GObject *object)
     DonnaProviderFsPrivate *priv;
 
     priv = DONNA_PROVIDER_FS (object)->priv;
-    g_slist_free_full (priv->io_engines, (GDestroyNotify) free_io_engine);
+    g_array_free (priv->io_engines, TRUE);
 
     /* chain up */
     G_OBJECT_CLASS (donna_provider_fs_parent_class)->finalize (object);
@@ -201,30 +201,39 @@ donna_provider_fs_add_io_engine (DonnaProviderFs    *pfs,
                                  GError            **error)
 {
     DonnaProviderFsPrivate *priv;
-    GSList *l;
-    struct io_engine *ioe;
+    struct io_engine _ioe;
+    guint i;
 
     g_return_val_if_fail (DONNA_IS_PROVIDER_FS (pfs), FALSE);
     g_return_val_if_fail (name != NULL, FALSE);
     g_return_val_if_fail (engine != NULL, FALSE);
     priv = pfs->priv;
 
-    for (l = priv->io_engines; l; l = l->next)
-    {
-        if (streq (((struct io_engine *) l->data)->name, name))
+    if (priv->io_engines)
+        for (i = 0; i < priv->io_engines->len; ++i)
         {
-            g_set_error (error, DONNA_PROVIDER_ERROR,
-                    DONNA_PROVIDER_ERROR_ALREADY_EXIST,
-                    "Provider 'fs': Cannot add IO engine '%s', there's already one",
-                    name);
-            return FALSE;
+            struct io_engine *ioe;
+
+            ioe = &g_array_index (priv->io_engines, struct io_engine, i);
+            if (streq (ioe->name, name))
+            {
+                g_set_error (error, DONNA_PROVIDER_ERROR,
+                        DONNA_PROVIDER_ERROR_ALREADY_EXIST,
+                        "Provider 'fs': Cannot add IO engine '%s', there's already one",
+                        name);
+                return FALSE;
+            }
         }
+
+    if (!priv->io_engines)
+    {
+        priv->io_engines = g_array_new (FALSE, FALSE, sizeof (struct io_engine));
+        g_array_set_clear_func (priv->io_engines, free_io_engine);
     }
 
-    ioe = g_new (struct io_engine, 1);
-    ioe->name = g_strdup (name);
-    ioe->io_engine_task = engine;
-    priv->io_engines = g_slist_prepend (priv->io_engines, ioe);
+    _ioe.name = g_strdup (name);
+    _ioe.io_engine_task = engine;
+    g_array_append_val (priv->io_engines, _ioe);
     return TRUE;
 }
 
@@ -387,6 +396,46 @@ file_deleted (DonnaProviderFs    *pfs,
     g_object_unref (node);
 }
 
+static const gchar *
+io_type_name (DonnaIoType type)
+{
+    switch (type)
+    {
+        case DONNA_IO_COPY:
+            return "copy";
+        case DONNA_IO_MOVE:
+            return "move";
+        case DONNA_IO_DELETE:
+            return "delete";
+        /* silence warnings -- this isn't possible */
+        case DONNA_IO_UNKNOWN:
+            break;
+    }
+    return "";
+}
+
+static gchar *
+get_engine_name (DonnaProviderFs *pfs, DonnaIoType type, gboolean is_fs)
+{
+    DonnaConfig *config;
+    gchar *s;
+
+    config = donna_app_peek_config (((DonnaProviderBase *) pfs)->app);
+
+    if (is_fs)
+    {
+        if (donna_config_get_string (config, NULL, &s, "providers/fs/fs_engine_%s",
+                    io_type_name (type)))
+            return s;
+    }
+
+    if (donna_config_get_string (config, NULL, &s, "providers/fs/engine_%s",
+                io_type_name (type)))
+        return s;
+
+    return g_strdup ("basic");
+}
+
 static DonnaTask *
 provider_fs_io_task (DonnaProvider      *provider,
                      DonnaIoType         type,
@@ -397,9 +446,11 @@ provider_fs_io_task (DonnaProvider      *provider,
                      GError            **error)
 {
     DonnaProviderFs *pfs = (DonnaProviderFs *) provider;
+    GArray *io_engines = pfs->priv->io_engines;
     DonnaTask *task = NULL;
-    GSList *l;
     struct io_engine *ioe;
+    gchar *engine;
+    guint i;
 
     if ((!is_source && donna_node_peek_provider (sources->pdata[0]) != provider)
         || (is_source && type != DONNA_IO_DELETE
@@ -411,30 +462,39 @@ provider_fs_io_task (DonnaProvider      *provider,
         return NULL;
     }
 
-    for (l = pfs->priv->io_engines; l; l = l->next)
-    {
-        ioe = l->data;
-
-        task = ioe->io_engine_task (pfs, ((DonnaProviderBase *) pfs)->app,
-                type, sources, dest, new_name, parse_cmdline,
-                file_created, file_deleted, error);
-        if (G_UNLIKELY (!task))
-        {
-            if (l->next)
-                g_clear_error (error);
-            else
-            {
-                g_prefix_error (error, "Provider 'fs': Failed to create IO task: ");
-                return NULL;
-            }
-        }
-    }
-
-    if (G_UNLIKELY (!task))
+    if (G_UNLIKELY (!io_engines))
     {
         g_set_error (error, DONNA_PROVIDER_ERROR,
                 DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
                 "Provider 'fs': No IO engine available");
+        return NULL;
+    }
+
+    engine = get_engine_name (pfs, type, FALSE);
+    for (i = 0; i < io_engines->len; ++i)
+    {
+        ioe = &g_array_index (io_engines, struct io_engine, i);
+        if (streq (ioe->name, engine))
+            break;
+    }
+
+    if (G_UNLIKELY (i >= io_engines->len))
+    {
+        g_set_error (error, DONNA_PROVIDER_ERROR,
+                DONNA_PROVIDER_ERROR_NOT_SUPPORTED,
+                "Provider 'fs': No IO engine '%s'",
+                engine);
+        g_free (engine);
+        return NULL;
+    }
+    g_free (engine);
+
+    task = ioe->io_engine_task (pfs, ((DonnaProviderBase *) pfs)->app,
+            type, sources, dest, new_name, parse_cmdline,
+            file_created, file_deleted, error);
+    if (G_UNLIKELY (!task))
+    {
+        g_prefix_error (error, "Provider 'fs': Failed to create IO task: ");
         return NULL;
     }
 
