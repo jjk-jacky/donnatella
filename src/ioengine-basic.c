@@ -505,7 +505,6 @@ donna_io_engine_basic_io_task (DonnaProviderFs    *pfs,
     DonnaTaskProcess *taskp;
     struct data *data;
     gchar *cmdline;
-    gchar *s = NULL;
     guint i;
 
     data = g_slice_new0 (struct data);
@@ -558,10 +557,8 @@ donna_io_engine_basic_io_task (DonnaProviderFs    *pfs,
     {
         free_data (data);
         g_prefix_error (error, "IO Engine 'basic': Failed to parse command line: ");
-        g_free (s);
         return NULL;
     }
-    g_free (s);
 
 
     taskp = (DonnaTaskProcess *) donna_task_process_new_full (
