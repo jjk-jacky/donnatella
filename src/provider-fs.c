@@ -238,81 +238,51 @@ donna_provider_fs_add_io_engine (DonnaProviderFs    *pfs,
     return TRUE;
 }
 
+static gboolean
+conv_cmdline (const gchar     c,
+              gchar          *extra,
+              DonnaArgType   *type,
+              gpointer       *ptr,
+              GDestroyNotify *destroy,
+              gpointer        _data)
+{
+    gpointer **data = (gpointer **) _data;
+
+    switch (c)
+    {
+        case 's':
+            *type = DONNA_ARG_TYPE_NODE | DONNA_ARG_IS_ARRAY;
+            *ptr = data[0];
+            return TRUE;
+
+        case 'd':
+            *type = DONNA_ARG_TYPE_NODE;
+            *ptr = data[1];
+            return TRUE;
+
+        case 'n':
+            *type = DONNA_ARG_TYPE_STRING;
+            *ptr = data[2];
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
 static gchar *
 parse_cmdline (const gchar        *cmdline,
                GPtrArray          *sources,
                DonnaNode          *dest,
                const gchar        *new_name,
+               DonnaApp           *app,
                GError            **error)
 {
-    GString *str;
-    const gchar *fmt;
-    const gchar *s;
+    GString *str = NULL;
+    gpointer data[3] = { sources, dest, (gpointer) new_name };
+    DonnaContext context = { "sdn", FALSE, conv_cmdline, &data };
 
-    s = fmt = cmdline;
-    str = g_string_new (NULL);
-    while ((s = strchr (s, '%')))
-    {
-        gchar *ss;
-        gchar *qs;
-        guint i;
-
-        switch (s[1])
-        {
-            case 's':
-                g_string_append_len (str, fmt, s - fmt);
-                for (i = 0; i < sources->len; ++i)
-                {
-                    ss = donna_node_get_location (sources->pdata[i]);
-                    qs = g_shell_quote (ss);
-                    if (i > 0)
-                        g_string_append_c (str, ' ');
-                    g_string_append (str, qs);
-                    g_free (qs);
-                    g_free (ss);
-                }
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'd':
-                g_string_append_len (str, fmt, s - fmt);
-                ss = donna_node_get_location (dest);
-                qs = g_shell_quote (ss);
-                g_string_append (str, qs);
-                g_free (qs);
-                g_free (ss);
-                s += 2;
-                fmt = s;
-                break;
-
-            case 'n':
-                g_string_append_len (str, fmt, s - fmt);
-                if (new_name)
-                    donna_g_string_append_quoted (str, new_name, FALSE);
-                s += 2;
-                fmt = s;
-                break;
-
-            case '%':
-                g_string_append_len (str, fmt, s - fmt);
-                g_string_append_c (str, '%');
-                s += 2;
-                fmt = s;
-                break;
-
-            default:
-                g_set_error (error, DONNA_PROVIDER_ERROR,
-                        DONNA_PROVIDER_ERROR_OTHER,
-                        "Provider 'fs': Invalid syntax in command line: %s",
-                        cmdline);
-                g_string_free (str, TRUE);
-                return NULL;
-        }
-    }
-    g_string_append (str, fmt);
-
-    return g_string_free (str, FALSE);
+    donna_context_parse (&context, 0, app, cmdline, &str, NULL);
+    return (str) ? g_string_free (str, FALSE) : g_strdup (cmdline);
 }
 
 static void

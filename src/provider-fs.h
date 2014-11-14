@@ -54,6 +54,7 @@ typedef gchar *     (*fs_parse_cmdline)             (const gchar        *cmdline
                                                      GPtrArray          *sources,
                                                      DonnaNode          *dest,
                                                      const gchar        *new_name,
+                                                     DonnaApp           *app,
                                                      GError            **error);
 typedef void        (*fs_file_created)              (DonnaProviderFs    *pfs,
                                                      const gchar        *location);
