@@ -1,4 +1,11 @@
 
+# 2014-12-11, v0.3.1
+
+ !  Fix scripts not installed in subfolder 'bin'
+ +  terminal: Add option `cancel_childless`
+ !  A few other (documentation) fixes; see `git log` for details
+
+
 # 2014-11-05, v0.3.0
 
 +++ Add command exec() See [1] for more
